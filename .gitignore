@@ -18,8 +18,3 @@ build/
 *.framework/
 
 
-# Flutter/Dart build
-.dart_tool/
-build/
-*.dSYM/
-
