@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="pageTitle">Nar24 - Shared Favorites</title>
+    
+    <!-- Open Graph meta tags for rich link previews -->
+    <meta property="og:title" content="Nar24 - Shared Favorites" id="ogTitle">
+    <meta property="og:description" content="Check out these amazing products shared with you!" id="ogDescription">
+    <meta property="og:image" content="https://nar24.app/assets/images/naricon.png" id="ogImage">
+    <meta property="og:url" content="https://nar24.app/shared-favorites/" id="ogUrl">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Nar24">
+    
+    <!-- Twitter Card meta tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Nar24 - Shared Favorites" id="twitterTitle">
+    <meta name="twitter:description" content="Check out these amazing products shared with you!" id="twitterDescription">
+    <meta name="twitter:image" content="https://nar24.app/assets/images/naricon.png" id="twitterImage">
+    
+    <!-- App store meta tags -->
+    <meta name="apple-itunes-app" content="app-id=YOUR_IOS_APP_ID">
+    <meta name="google-play-app" content="app-id=com.cts.emlak">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #00A86B 0%, #00C851 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        
+        .container {
+            text-align: center;
+            max-width: 400px;
+            padding: 40px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        }
+        
+        .app-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 18px;
+            margin: 0 auto 20px;
+            display: block;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .app-name {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .share-title {
+            font-size: 18px;
+            margin-bottom: 8px;
+            opacity: 0.9;
+        }
+        
+        .share-description {
+            font-size: 14px;
+            margin-bottom: 30px;
+            opacity: 0.8;
+        }
+        
+        .download-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            gap: 10px;
+        }
+        
+        .download-btn:hover {
+            background: white;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .open-app-btn {
+            background: #FF6B35;
+            color: white;
+            font-size: 16px;
+            padding: 15px 30px;
+        }
+        
+        .open-app-btn:hover {
+            background: #E55A2B;
+        }
+        
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            opacity: 0.7;
+        }
+        
+        .loading {
+            display: block;
+        }
+        
+        .content {
+            display: none;
+        }
+        
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 3px solid white;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 480px) {
+            .container {
+                margin: 20px;
+                padding: 30px 15px;
+            }
+            
+            .download-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <h2>Loading...</h2>
+        </div>
+        
+        <div class="content" id="content">
+            <img src="https://nar24.app/assets/images/naricon.png" alt="Nar24" class="app-icon">
+            <h1 class="app-name">Nar24</h1>
+            <h2 class="share-title" id="shareTitle">Shared Favorites</h2>
+            <p class="share-description" id="shareDescription">Check out these amazing products!</p>
+            
+            <div class="download-buttons">
+                <a href="#" class="download-btn open-app-btn" id="openAppBtn">
+                    📱 Open in Nar24 App
+                </a>
+                <a href="https://play.google.com/store/apps/details?id=com.cts.emlak" class="download-btn" target="_blank">
+                    📲 Download for Android
+                </a>
+                <a href="https://apps.apple.com/app/YOUR_APP_ID" class="download-btn" target="_blank">
+                    🍎 Download for iOS
+                </a>
+            </div>
+            
+            <div class="footer">
+                <p>Powered by Nar24</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get shareId from URL
+        const pathParts = window.location.pathname.split('/');
+        const shareId = pathParts[pathParts.length - 1];
+        
+        // Function to load share data and update meta tags
+        async function loadShareData() {
+            try {
+                // You'll need to implement this API endpoint
+                const response = await fetch(`/api/shared-favorites/${shareId}`);
+                const data = await response.json();
+                
+                if (data) {
+                    // Update page content
+                    document.getElementById('shareTitle').textContent = data.shareTitle || 'Shared Favorites';
+                    document.getElementById('shareDescription').textContent = data.shareDescription || 'Check out these amazing products!';
+                    
+                    // Update meta tags for better sharing
+                    document.getElementById('pageTitle').textContent = data.shareTitle || 'Nar24 - Shared Favorites';
+                    document.getElementById('ogTitle').setAttribute('content', data.shareTitle || 'Nar24 - Shared Favorites');
+                    document.getElementById('ogDescription').setAttribute('content', data.shareDescription || 'Check out these amazing products!');
+                    document.getElementById('ogUrl').setAttribute('content', window.location.href);
+                    document.getElementById('twitterTitle').setAttribute('content', data.shareTitle || 'Nar24 - Shared Favorites');
+                    document.getElementById('twitterDescription').setAttribute('content', data.shareDescription || 'Check out these amazing products!');
+                }
+            } catch (error) {
+                console.error('Error loading share data:', error);
+            }
+            
+            // Hide loading, show content
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('content').style.display = 'block';
+        }
+        
+        // Function to attempt opening the app
+        function openApp() {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const isAndroid = /Android/.test(navigator.userAgent);
+            
+            if (isIOS) {
+                // Try to open iOS app
+                window.location.href = `nar24app://shared-favorites/${shareId}`;
+                
+                // Fallback to App Store after a delay
+                setTimeout(() => {
+                    window.location.href = 'https://apps.apple.com/app/YOUR_APP_ID';
+                }, 2000);
+            } else if (isAndroid) {
+                // Try to open Android app
+                window.location.href = `nar24app://shared-favorites/${shareId}`;
+                
+                // Fallback to Play Store after a delay
+                setTimeout(() => {
+                    window.location.href = 'https://play.google.com/store/apps/details?id=com.cts.emlak';
+                }, 2000);
+            } else {
+                // Desktop - show QR code or app store links
+                alert('Please download the Nar24 app on your mobile device to view shared favorites.');
+            }
+        }
+        
+        // Set up event listeners
+        document.getElementById('openAppBtn').addEventListener('click', (e) => {
+            e.preventDefault();
+            openApp();
+        });
+        
+        // Load data when page loads
+        loadShareData();
+        
+        // Auto-redirect to app if coming from a mobile device with app installed
+        if (/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+            setTimeout(() => {
+                // Try to open app automatically after 1 second
+                const appUrl = `nar24app://shared-favorites/${shareId}`;
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = appUrl;
+                document.body.appendChild(iframe);
+                
+                // Remove iframe after attempting to open app
+                setTimeout(() => {
+                    document.body.removeChild(iframe);
+                }, 1000);
+            }, 1000);
+        }
+    </script>
+</body>
+</html>

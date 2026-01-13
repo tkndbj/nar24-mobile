@@ -1,0 +1,852 @@
+// lib/models/product.dart
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+class Product {
+  final String id;
+  final String? sourceCollection;
+  final String productName;
+  final String description;
+  final double price;
+  final String currency;
+  final String condition;
+  final String? brandModel;
+  final List<String> imageUrls;
+  final double averageRating;
+  final int reviewCount;
+  final double? originalPrice;
+  final int? discountPercentage;
+  final Map<String, int> colorQuantities;
+  final DocumentReference? reference;
+  final int boostClickCountAtStart;
+  final List<String> availableColors;
+  final String? gender;
+  final List<String> bundleIds;
+  final List<Map<String, dynamic>>? bundleData;
+  final int? maxQuantity;
+  final int? discountThreshold;
+  final int? bulkDiscountPercentage;
+  final List<String> relatedProductIds;
+  final Timestamp? relatedLastUpdated;
+  final int relatedCount;
+
+  final bool? needsUpdate;
+  final String? archiveReason;
+  final bool? archivedByAdmin;
+  final Timestamp? archivedByAdminAt;
+  final String? archivedByAdminId;
+
+  /// The user ID of the seller.
+  final String userId;
+
+  final double rankingScore;
+  final double promotionScore;
+  final String? campaign; // Campaign ID
+
+  /// The owner ID in Firestore.
+  final String ownerId;
+  final String? shopId;
+  final String ilanNo;
+  final Timestamp createdAt;
+  final String sellerName;
+  final String category;
+  final String subcategory;
+  final String subsubcategory;
+  final int quantity;
+  final int? bestSellerRank;
+
+  final int clickCount;
+  final int clickCountAtStart;
+  final int favoritesCount;
+  final int cartCount;
+  final int purchaseCount;
+  final String deliveryOption;
+  final int boostedImpressionCount;
+  final int boostImpressionCountAtStart;
+  final bool isFeatured;
+  final bool isTrending;
+  final bool isBoosted;
+  final Timestamp? boostStartTime;
+  final Timestamp? boostEndTime;
+  final int dailyClickCount;
+  final Timestamp? lastClickDate;
+  final bool paused;
+  final String? campaignName;
+
+  /// Maps color names to their image URLs.
+  final Map<String, List<String>> colorImages;
+
+  /// Video URL (if any) for the product.
+  final String? videoUrl;
+
+  /// *** All of your formerly hard‑coded extras now live here. ***
+  final Map<String, dynamic> attributes;
+
+  Product({
+    required this.id,
+    this.sourceCollection,
+    required this.productName,
+    required this.description,
+    required this.price,
+    this.currency = 'TL',
+    required this.condition,
+    this.brandModel,
+    required this.imageUrls,
+    required this.averageRating,
+    required this.reviewCount,
+    this.originalPrice,
+    this.discountPercentage,
+    this.colorQuantities = const {},
+    this.maxQuantity,
+    this.reference,
+    this.gender,
+    this.bundleIds = const [],
+    this.bundleData,
+    required this.boostClickCountAtStart,
+    this.availableColors = const [],
+    required this.userId,
+    this.discountThreshold,
+    this.bulkDiscountPercentage,
+    this.rankingScore = 0,
+    this.promotionScore = 0,
+    this.campaign,
+    required this.ownerId,
+    this.shopId,
+    required this.ilanNo,
+    required this.createdAt,
+    required this.sellerName,
+    required this.category,
+    required this.subcategory,
+    required this.subsubcategory,
+    required this.quantity,
+    this.bestSellerRank,
+    this.clickCount = 0,
+    this.clickCountAtStart = 0,
+    this.favoritesCount = 0,
+    this.cartCount = 0,
+    this.purchaseCount = 0,
+    this.needsUpdate,
+    this.archiveReason,
+    this.archivedByAdmin,
+    this.archivedByAdminAt,
+    this.archivedByAdminId,
+    required this.deliveryOption,
+    this.boostedImpressionCount = 0,
+    required this.boostImpressionCountAtStart,
+    this.isFeatured = false,
+    this.isTrending = false,
+    this.isBoosted = false,
+    this.boostStartTime,
+    this.boostEndTime,
+    this.dailyClickCount = 0,
+    this.lastClickDate,
+    this.paused = false,
+    this.campaignName,
+    this.colorImages = const {},
+    this.videoUrl,
+    this.attributes = const {},
+    this.relatedProductIds = const [],
+    this.relatedLastUpdated,
+    this.relatedCount = 0,
+  });
+
+  /// ----- SAFE PARSE FACTORY (Firestore) -----
+  factory Product.fromDocument(DocumentSnapshot doc) {
+    if (!doc.exists || doc.data() == null) {
+      throw Exception('Missing product document! ID: ${doc.id}');
+    }
+    final data = doc.data() as Map<String, dynamic>;
+
+    // Helpers
+    double _safeDouble(dynamic v, [double d = 0]) {
+      if (v == null) return d;
+      if (v is double) return v;
+      if (v is int) return v.toDouble();
+      if (v is String) return double.tryParse(v) ?? d;
+      return d;
+    }
+
+    int _safeInt(dynamic v, [int d = 0]) {
+      if (v == null) return d;
+      if (v is int) return v;
+      if (v is double) return v.toInt();
+      if (v is String) return int.tryParse(v) ?? d;
+      return d;
+    }
+
+    String _safeString(dynamic v, [String d = '']) {
+      if (v == null) return d;
+      return v.toString();
+    }
+
+    List<String> _safeStringList(dynamic v) {
+      if (v == null) return [];
+      if (v is List) return v.map((e) => e.toString()).toList();
+      if (v is String) return v.isEmpty ? [] : [v];
+      return [];
+    }
+
+    Map<String, int> _safeColorQty(dynamic v) {
+      if (v is! Map) return {};
+      final m = <String, int>{};
+      v.forEach((k, val) => m[k.toString()] = _safeInt(val));
+      return m;
+    }
+
+    Map<String, List<String>> _safeColorImgs(dynamic v) {
+      if (v is! Map) return {};
+      final m = <String, List<String>>{};
+      v.forEach((k, val) {
+        if (val is List)
+          m[k.toString()] = val.map((e) => e.toString()).toList();
+        else if (val is String && val.isNotEmpty) m[k.toString()] = [val];
+      });
+      return m;
+    }
+
+    Timestamp _safeTs(dynamic v) {
+      if (v is Timestamp) return v;
+      if (v is String) {
+        try {
+          return Timestamp.fromDate(DateTime.parse(v));
+        } catch (_) {
+          return Timestamp.now();
+        }
+      }
+      return Timestamp.now();
+    }
+
+    Timestamp? _safeTsNullable(dynamic v) {
+      if (v == null) return null;
+      if (v is Timestamp) return v;
+      if (v is String) {
+        try {
+          return Timestamp.fromDate(DateTime.parse(v));
+        } catch (_) {
+          return null;
+        }
+      }
+      return null;
+    }
+
+    String? _safeStringNullable(dynamic v) {
+      if (v == null) return null;
+      final str = v.toString().trim();
+      return str.isEmpty ? null : str;
+    }
+
+    List<Map<String, dynamic>>? _safeBundleData(dynamic v) {
+      if (v == null) return null;
+      if (v is! List) return null;
+
+      try {
+        return v.map((item) {
+          if (item is Map<String, dynamic>) {
+            return item;
+          } else if (item is Map) {
+            // Convert Map to Map<String, dynamic>
+            return Map<String, dynamic>.from(item);
+          }
+          return <String, dynamic>{};
+        }).toList();
+      } catch (e) {
+        return null;
+      }
+    }
+
+    String? sourceCollection;
+    if (doc.reference.path.startsWith('products/')) {
+      sourceCollection = 'products';
+    } else if (doc.reference.path.startsWith('shop_products/')) {
+      sourceCollection = 'shop_products';
+    }
+
+    // Extract dynamic attributes
+    final rawAttr = data['attributes'];
+    final Map<String, dynamic> attributes =
+        rawAttr is Map<String, dynamic> ? rawAttr : <String, dynamic>{};
+
+    return Product(
+      id: doc.id,
+      sourceCollection: sourceCollection,
+      productName: _safeString(data['productName'] ?? data['title']),
+      description: _safeString(data['description']),
+      price: _safeDouble(data['price']),
+      currency: _safeString(data['currency'], 'TL'),
+      condition: _safeString(data['condition'], 'Brand New'),
+      brandModel: _safeString(data['brandModel'] ?? data['brand'] ?? ''),
+      imageUrls: _safeStringList(data['imageUrls']),
+      averageRating: _safeDouble(data['averageRating']),
+      reviewCount: _safeInt(data['reviewCount']),
+      gender: _safeStringNullable(data['gender']),
+      bundleIds: _safeStringList(data['bundleIds']),
+      maxQuantity:
+          data['maxQuantity'] != null ? _safeInt(data['maxQuantity']) : null,
+      bundleData: _safeBundleData(data['bundleData']),
+      originalPrice: data['originalPrice'] != null
+          ? _safeDouble(data['originalPrice'])
+          : null,
+      discountPercentage: data['discountPercentage'] != null
+          ? _safeInt(data['discountPercentage'])
+          : null,
+      colorQuantities: _safeColorQty(data['colorQuantities']),
+      reference: doc.reference,
+      boostClickCountAtStart: _safeInt(data['boostClickCountAtStart']),
+      availableColors: _safeStringList(data['availableColors']),
+      userId: _safeString(data['userId']),
+      discountThreshold: data['discountThreshold'] != null
+          ? _safeInt(data['discountThreshold'])
+          : null,
+      bulkDiscountPercentage: data['bulkDiscountPercentage'] != null
+          ? _safeInt(data['bulkDiscountPercentage'])
+          : null,
+      rankingScore: _safeDouble(data['rankingScore']),
+      promotionScore: _safeDouble(data['promotionScore']),
+      campaign: data['campaign']?.toString(),
+      ownerId: _safeString(data['ownerId']),
+      shopId: data['shopId']?.toString(),
+      ilanNo: _safeString(data['ilan_no'] ?? data['id'], 'N/A'),
+      createdAt: _safeTs(data['createdAt']),
+      sellerName: _safeString(data['sellerName'], 'Unknown'),
+      category: _safeString(data['category'], 'Uncategorized'),
+      subcategory: _safeString(data['subcategory']),
+      subsubcategory: _safeString(data['subsubcategory']),
+      needsUpdate: data['needsUpdate'] == true,
+      archiveReason: _safeStringNullable(data['archiveReason']),
+      archivedByAdmin: data['archivedByAdmin'] == true,
+      archivedByAdminAt: _safeTsNullable(data['archivedByAdminAt']),
+      archivedByAdminId: _safeStringNullable(data['archivedByAdminId']),
+      quantity: _safeInt(data['quantity']),
+      relatedProductIds: _safeStringList(data['relatedProductIds']),
+      relatedLastUpdated: _safeTsNullable(data['relatedLastUpdated']),
+      relatedCount: _safeInt(data['relatedCount']),
+      bestSellerRank: data['bestSellerRank'] != null
+          ? _safeInt(data['bestSellerRank'])
+          : null,
+      clickCount: _safeInt(data['clickCount']),
+      clickCountAtStart: _safeInt(data['clickCountAtStart']),
+      favoritesCount: _safeInt(data['favoritesCount']),
+      cartCount: _safeInt(data['cartCount']),
+      purchaseCount: _safeInt(data['purchaseCount']),
+      deliveryOption: _safeString(data['deliveryOption'], 'Self Delivery'),
+      boostedImpressionCount: _safeInt(data['boostedImpressionCount']),
+      boostImpressionCountAtStart:
+          _safeInt(data['boostImpressionCountAtStart']),
+      isFeatured: data['isFeatured'] == true,
+      isTrending: data['isTrending'] == true,
+      isBoosted: data['isBoosted'] == true,
+      boostStartTime: _safeTsNullable(data['boostStartTime']),
+      boostEndTime: _safeTsNullable(data['boostEndTime']),
+      dailyClickCount: _safeInt(data['dailyClickCount']),
+      lastClickDate: _safeTsNullable(data['lastClickDate']),
+      paused: data['paused'] == true,
+      campaignName: data['campaignName']?.toString(),
+      colorImages: _safeColorImgs(data['colorImages']),
+      videoUrl: data['videoUrl']?.toString(),
+      attributes: attributes,
+    );
+  }
+
+  /// ----- SERIALIZATION for Firestore -----
+  Map<String, dynamic> toMap() {
+    final m = <String, dynamic>{
+      'productName': productName,
+      'description': description,
+      'price': price,
+      'currency': currency,
+      'condition': condition,
+      'brandModel': brandModel,
+      'imageUrls': imageUrls,
+      'averageRating': averageRating,
+      'reviewCount': reviewCount,
+      'originalPrice': originalPrice,
+      'discountPercentage': discountPercentage,
+      'colorQuantities': colorQuantities,
+      'bundleIds': bundleIds,
+      'bundleData': bundleData,
+      'maxQuantity': maxQuantity,
+      'boostClickCountAtStart': boostClickCountAtStart,
+      'availableColors': availableColors,
+      'userId': userId,
+      'discountThreshold': discountThreshold,
+      'bulkDiscountPercentage': bulkDiscountPercentage,
+      'rankingScore': rankingScore,
+      'promotionScore': promotionScore,
+      'campaign': campaign,
+      'ownerId': ownerId,
+      'shopId': shopId,
+      'ilan_no': ilanNo,
+      'gender': gender,
+      'needsUpdate': needsUpdate,
+      'archiveReason': archiveReason,
+      'archivedByAdmin': archivedByAdmin,
+      'archivedByAdminAt': archivedByAdminAt,
+      'archivedByAdminId': archivedByAdminId,
+      'createdAt': createdAt,
+      'sellerName': sellerName,
+      'category': category,
+      'subcategory': subcategory,
+      'subsubcategory': subsubcategory,
+      'quantity': quantity,
+      'bestSellerRank': bestSellerRank,
+      'clickCount': clickCount,
+      'clickCountAtStart': clickCountAtStart,
+      'favoritesCount': favoritesCount,
+      'cartCount': cartCount,
+      'purchaseCount': purchaseCount,
+      'deliveryOption': deliveryOption,
+      'boostedImpressionCount': boostedImpressionCount,
+      'boostImpressionCountAtStart': boostImpressionCountAtStart,
+      'isFeatured': isFeatured,
+      'isTrending': isTrending,
+      'isBoosted': isBoosted,
+      'boostStartTime': boostStartTime,
+      'boostEndTime': boostEndTime,
+      'dailyClickCount': dailyClickCount,
+      'lastClickDate': lastClickDate,
+      'paused': paused,
+      'campaignName': campaignName,
+      'colorImages': colorImages,
+      'videoUrl': videoUrl,
+      'relatedProductIds': relatedProductIds,
+      'relatedLastUpdated': relatedLastUpdated,
+      'relatedCount': relatedCount,
+      if (attributes.isNotEmpty) 'attributes': attributes,
+    };
+    // strip out any nulls
+    m.removeWhere((_, v) => v == null);
+    return m;
+  }
+
+  factory Product.fromJson(Map<String, dynamic> json) {
+    return Product(
+      id: json['id'] as String? ?? '',
+      productName: json['productName'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      price: (json['price'] as num?)?.toDouble() ?? 0.0,
+      currency: json['currency'] as String? ?? 'TL',
+      condition: json['condition'] as String? ?? 'Brand New',
+      brandModel: json['brandModel'] as String? ?? '',
+      imageUrls: json['imageUrls'] != null
+          ? List<String>.from(json['imageUrls'] as List)
+          : [],
+      averageRating: (json['averageRating'] as num?)?.toDouble() ?? 0.0,
+      reviewCount: json['reviewCount'] as int? ?? 0,
+      gender: json['gender'] as String?,
+      bundleIds: json['bundleIds'] != null
+          ? List<String>.from(json['bundleIds'] as List)
+          : [],
+      bundleData: json['bundleData'] != null
+          ? (json['bundleData'] as List)
+              .map((item) => item is Map<String, dynamic>
+                  ? item
+                  : Map<String, dynamic>.from(item as Map))
+              .toList()
+          : null,
+      maxQuantity: json['maxQuantity'] as int?,
+      originalPrice: (json['originalPrice'] as num?)?.toDouble(),
+      discountPercentage: json['discountPercentage'] as int?,
+      colorQuantities: json['colorQuantities'] is Map
+          ? (json['colorQuantities'] as Map)
+              .map((k, v) => MapEntry(k.toString(), (v as num).toInt()))
+          : {},
+      reference: null, // JSON won't include a DocumentReference
+      boostClickCountAtStart: json['boostClickCountAtStart'] as int? ?? 0,
+      availableColors: json['availableColors'] != null
+          ? List<String>.from(json['availableColors'] as List)
+          : [],
+      userId: json['userId'] as String? ?? '',
+      discountThreshold: json['discountThreshold'] as int?,
+      relatedProductIds: json['relatedProductIds'] != null
+          ? List<String>.from(json['relatedProductIds'] as List)
+          : [],
+      relatedLastUpdated: _parseTimestamp(json['relatedLastUpdated']),
+      relatedCount: json['relatedCount'] as int? ?? 0,
+      rankingScore: (json['rankingScore'] as num?)?.toDouble() ?? 0.0,
+      promotionScore: (json['promotionScore'] as num?)?.toDouble() ?? 0.0,
+      campaign: json['campaign'] as String?,
+
+      ownerId: json['ownerId'] as String? ?? '',
+      shopId: json['shopId'] as String?,
+      ilanNo: json['ilan_no'] as String? ?? '',
+      needsUpdate: json['needsUpdate'] as bool? ?? false,
+      archiveReason: json['archiveReason'] as String?,
+      archivedByAdmin: json['archivedByAdmin'] as bool? ?? false,
+      archivedByAdminAt: _parseTimestamp(json['archivedByAdminAt']),
+      archivedByAdminId: json['archivedByAdminId'] as String?,
+      createdAt: _parseCreatedAt(json['createdAt']),
+      sellerName: json['sellerName'] as String? ?? '',
+      category: json['category'] as String? ?? '',
+      subcategory: json['subcategory'] as String? ?? '',
+      subsubcategory: json['subsubcategory'] as String? ?? '',
+      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      bestSellerRank: json['bestSellerRank'] as int?,
+
+      clickCount: json['clickCount'] as int? ?? 0,
+      clickCountAtStart: json['clickCountAtStart'] as int? ?? 0,
+      favoritesCount: json['favoritesCount'] as int? ?? 0,
+      cartCount: json['cartCount'] as int? ?? 0,
+      purchaseCount: json['purchaseCount'] as int? ?? 0,
+      deliveryOption: json['deliveryOption'] as String? ?? 'Self Delivery',
+      boostedImpressionCount: json['boostedImpressionCount'] as int? ?? 0,
+      boostImpressionCountAtStart:
+          json['boostImpressionCountAtStart'] as int? ?? 0,
+      isFeatured: json['isFeatured'] as bool? ?? false,
+      isTrending: json['isTrending'] as bool? ?? false,
+      isBoosted: json['isBoosted'] as bool? ?? false,
+      boostStartTime: _parseTimestamp(json['boostStartTime']),
+      boostEndTime: _parseTimestamp(json['boostEndTime']),
+      dailyClickCount: json['dailyClickCount'] as int? ?? 0,
+      lastClickDate: _parseTimestamp(json['lastClickDate']),
+      paused: json['paused'] as bool? ?? false,
+      campaignName: json['campaignName'] as String?,
+      colorImages: json['colorImages'] is Map
+          ? (json['colorImages'] as Map).map(
+              (k, v) => MapEntry(
+                k.toString(),
+                (v as List).map((e) => e.toString()).toList(),
+              ),
+            )
+          : {},
+      videoUrl: json['videoUrl'] as String?,
+      attributes: json['attributes'] is Map<String, dynamic>
+          ? json['attributes'] as Map<String, dynamic>
+          : {},
+    );
+  }
+
+  /// Helper to parse required createdAt field
+  static Timestamp _parseCreatedAt(dynamic value) {
+    if (value is int) {
+      return Timestamp.fromMillisecondsSinceEpoch(value);
+    } else if (value is String) {
+      return Timestamp.fromDate(DateTime.parse(value));
+    } else if (value is Timestamp) {
+      return value;
+    }
+    return Timestamp.now();
+  }
+
+  /// Helper to parse optional Timestamp fields
+  static Timestamp? _parseTimestamp(dynamic value) {
+    if (value is int) {
+      return Timestamp.fromMillisecondsSinceEpoch(value);
+    } else if (value is String) {
+      return Timestamp.fromDate(DateTime.parse(value));
+    } else if (value is Timestamp) {
+      return value;
+    }
+    return null;
+  }
+
+  /// ----- JSON serialization (e.g. Algolia or REST) -----
+  Map<String, dynamic> toJson() {
+    final m = <String, dynamic>{
+      'id': id,
+      'productName': productName,
+      'description': description,
+      'price': price,
+      'currency': currency,
+      'condition': condition,
+      'brandModel': brandModel,
+      'imageUrls': imageUrls,
+      'averageRating': averageRating,
+      'reviewCount': reviewCount,
+      'originalPrice': originalPrice,
+      'discountPercentage': discountPercentage,
+      'discountThreshold': discountThreshold,
+      'maxQuantity': maxQuantity,
+      'boostClickCountAtStart': boostClickCountAtStart,
+      'userId': userId,
+      'ownerId': ownerId,
+      'shopId': shopId,
+      'ilan_no': ilanNo,
+      'gender': gender,
+      'availableColors': availableColors,
+      'needsUpdate': needsUpdate,
+      'archiveReason': archiveReason,
+      'archivedByAdmin': archivedByAdmin,
+      'archivedByAdminAt': archivedByAdminAt?.millisecondsSinceEpoch,
+      'archivedByAdminId': archivedByAdminId,
+      'createdAt': createdAt.millisecondsSinceEpoch,
+      'sellerName': sellerName,
+      'category': category,
+      'subcategory': subcategory,
+      'subsubcategory': subsubcategory,
+      'quantity': quantity,
+      'bestSellerRank': bestSellerRank,
+      'clickCount': clickCount,
+      'clickCountAtStart': clickCountAtStart,
+      'favoritesCount': favoritesCount,
+      'cartCount': cartCount,
+      'purchaseCount': purchaseCount,
+      'deliveryOption': deliveryOption,
+      'relatedProductIds': relatedProductIds,
+      'relatedLastUpdated': relatedLastUpdated?.millisecondsSinceEpoch,
+      'relatedCount': relatedCount,
+      'boostedImpressionCount': boostedImpressionCount,
+      'boostImpressionCountAtStart': boostImpressionCountAtStart,
+      'isFeatured': isFeatured,
+      'isTrending': isTrending,
+      'isBoosted': isBoosted,
+      'boostStartTime': boostStartTime?.millisecondsSinceEpoch,
+      'boostEndTime': boostEndTime?.millisecondsSinceEpoch,
+      'dailyClickCount': dailyClickCount,
+      'lastClickDate': lastClickDate?.millisecondsSinceEpoch,
+      'paused': paused,
+      'promotionScore': promotionScore,
+      'campaign': campaign,
+      'campaignName': campaignName,
+      'colorImages': colorImages,
+      'videoUrl': videoUrl,
+      'attributes': attributes,
+    };
+    m.removeWhere((_, v) => v == null);
+    return m;
+  }
+
+  factory Product.fromAlgolia(Map<String, dynamic> json) {
+    // Extract and normalize the ID
+    String normalizedId = json['objectID']?.toString() ?? '';
+
+    // Remove common Algolia prefixes
+    if (normalizedId.startsWith('products_')) {
+      normalizedId = normalizedId.substring('products_'.length);
+    } else if (normalizedId.startsWith('shop_products_')) {
+      normalizedId = normalizedId.substring('shop_products_'.length);
+    }
+
+    return Product(
+      id: normalizedId, // ← Use normalized ID
+      productName: json['productName']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
+      price: (json['price'] as num?)?.toDouble() ?? 0.0,
+      currency: json['currency']?.toString() ?? 'TL',
+      condition: json['condition']?.toString() ?? 'Brand New',
+      brandModel: json['brandModel']?.toString() ?? '',
+      imageUrls:
+          json['imageUrls'] != null ? List<String>.from(json['imageUrls']) : [],
+      averageRating: (json['averageRating'] as num?)?.toDouble() ?? 0.0,
+      reviewCount: (json['reviewCount'] as num?)?.toInt() ?? 0,
+      gender: json['gender'] as String?,
+      originalPrice: (json['originalPrice'] as num?)?.toDouble(),
+      discountPercentage: (json['discountPercentage'] as num?)?.toInt(),
+      maxQuantity: (json['maxQuantity'] as num?)?.toInt(),
+      colorQuantities: json['colorQuantities'] is Map
+          ? (json['colorQuantities'] as Map).map((k, v) => MapEntry(
+                k.toString(),
+                (v as num).toInt(),
+              ))
+          : {},
+      reference: null,
+      boostClickCountAtStart:
+          (json['boostClickCountAtStart'] as num?)?.toInt() ?? 0,
+      availableColors: json['availableColors'] != null
+          ? List<String>.from(json['availableColors'])
+          : [],
+      userId: json['userId']?.toString() ?? '',
+      discountThreshold: (json['discountThreshold'] as num?)?.toInt(),
+      rankingScore: (json['rankingScore'] as num?)?.toDouble() ?? 0.0,
+      promotionScore: (json['promotionScore'] as num?)?.toDouble() ?? 0.0,
+      campaign: json['campaign']?.toString(),
+      relatedProductIds: json['relatedProductIds'] != null
+          ? List<String>.from(json['relatedProductIds'] as List)
+          : [],
+      relatedLastUpdated: _parseTimestamp(json['relatedLastUpdated']),
+      relatedCount: json['relatedCount'] as int? ?? 0,
+      ownerId: json['ownerId']?.toString() ?? '',
+      shopId: json['shopId']?.toString(),
+      ilanNo: json['ilan_no']?.toString() ?? '',
+      createdAt: _parseCreatedAt(json['createdAt']),
+      sellerName: json['sellerName']?.toString() ?? '',
+      category: json['category']?.toString() ?? '',
+      needsUpdate: json['needsUpdate'] as bool? ?? false,
+      archiveReason: json['archiveReason'] as String?,
+      archivedByAdmin: json['archivedByAdmin'] as bool? ?? false,
+      archivedByAdminAt: _parseTimestamp(json['archivedByAdminAt']),
+      archivedByAdminId: json['archivedByAdminId'] as String?,
+      subcategory: json['subcategory']?.toString() ?? '',
+      subsubcategory: json['subsubcategory']?.toString() ?? '',
+      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      bestSellerRank: (json['bestSellerRank'] as num?)?.toInt(),
+      clickCount: (json['clickCount'] as num?)?.toInt() ?? 0,
+      clickCountAtStart: (json['clickCountAtStart'] as num?)?.toInt() ?? 0,
+      favoritesCount: (json['favoritesCount'] as num?)?.toInt() ?? 0,
+      cartCount: (json['cartCount'] as num?)?.toInt() ?? 0,
+      purchaseCount: (json['purchaseCount'] as num?)?.toInt() ?? 0,
+      deliveryOption: json['deliveryOption']?.toString() ?? 'Self Delivery',
+      boostedImpressionCount:
+          (json['boostedImpressionCount'] as num?)?.toInt() ?? 0,
+      boostImpressionCountAtStart:
+          (json['boostImpressionCountAtStart'] as num?)?.toInt() ?? 0,
+      isFeatured: json['isFeatured'] as bool? ?? false,
+      isTrending: json['isTrending'] as bool? ?? false,
+      isBoosted: json['isBoosted'] as bool? ?? false,
+      boostStartTime: _parseTimestamp(json['boostStartTime']),
+      boostEndTime: _parseTimestamp(json['boostEndTime']),
+      dailyClickCount: (json['dailyClickCount'] as num?)?.toInt() ?? 0,
+      lastClickDate: _parseTimestamp(json['lastClickDate']),
+      paused: json['paused'] as bool? ?? false,
+      campaignName: json['campaignName']?.toString(),
+      colorImages: json['colorImages'] is Map
+          ? (json['colorImages'] as Map).map((k, v) => MapEntry(
+                k.toString(),
+                (v as List).map((e) => e.toString()).toList(),
+              ))
+          : {},
+      videoUrl: json['videoUrl']?.toString(),
+      attributes: json['attributes'] is Map<String, dynamic>
+          ? json['attributes'] as Map<String, dynamic>
+          : {},
+    );
+  }
+
+  /// ----- COPY WITH (including attributes) -----
+  Product copyWith({
+    String? productName,
+    String? description,
+    double? price,
+    String? currency,
+    String? condition,
+    String? brandModel,
+    List<String>? imageUrls,
+    double? averageRating,
+    int? reviewCount,
+    double? originalPrice,
+    int? discountPercentage,
+    Map<String, int>? colorQuantities,
+    List<String>? bundleIds,
+    int? boostClickCountAtStart,
+    List<String>? availableColors,
+    bool? needsUpdate,
+    String? archiveReason,
+    bool? archivedByAdmin,
+    Timestamp? archivedByAdminAt,
+    String? archivedByAdminId,
+    String? userId,
+    int? discountThreshold,
+    int? bulkDiscountPercentage,
+    List<Map<String, dynamic>>? bundleData,
+    double? rankingScore,
+    double? promotionScore,
+    int? maxQuantity,
+    String? campaign,
+    double? campaignDiscount,
+    double? campaignPrice,
+    String? gender,
+    String? ownerId,
+    String? shopId,
+    String? ilanNo,
+    List<String>? relatedProductIds,
+    Timestamp? relatedLastUpdated,
+    int? relatedCount,
+    Timestamp? createdAt,
+    String? sellerName,
+    String? category,
+    String? subcategory,
+    String? subsubcategory,
+    int? quantity,
+    int? bestSellerRank,
+    bool? sold,
+    int? clickCount,
+    int? clickCountAtStart,
+    int? favoritesCount,
+    int? cartCount,
+    int? purchaseCount,
+    String? deliveryOption,
+    int? boostedImpressionCount,
+    int? boostImpressionCountAtStart,
+    bool? isFeatured,
+    bool? isTrending,
+    bool? isBoosted,
+    Timestamp? boostStartTime,
+    Timestamp? boostEndTime,
+    int? dailyClickCount,
+    Timestamp? lastClickDate,
+    bool? paused,
+    String? campaignName,
+    Map<String, List<String>>? colorImages,
+    String? videoUrl,
+    Map<String, dynamic>? attributes,
+    // Add these parameters to explicitly control null setting
+    bool setOriginalPriceNull = false,
+    bool setDiscountPercentageNull = false,
+  }) {
+    return Product(
+      id: id,
+      productName: productName ?? this.productName,
+      description: description ?? this.description,
+      price: price ?? this.price,
+      currency: currency ?? this.currency,
+      condition: condition ?? this.condition,
+      brandModel: brandModel ?? this.brandModel,
+      imageUrls: imageUrls ?? this.imageUrls,
+      averageRating: averageRating ?? this.averageRating,
+      reviewCount: reviewCount ?? this.reviewCount,
+      // Handle originalPrice with explicit null control
+      originalPrice:
+          setOriginalPriceNull ? null : (originalPrice ?? this.originalPrice),
+      // Handle discountPercentage with explicit null control
+      discountPercentage: setDiscountPercentageNull
+          ? null
+          : (discountPercentage ?? this.discountPercentage),
+      colorQuantities: colorQuantities ?? this.colorQuantities,
+      reference: reference,
+      gender: gender ?? this.gender,
+      bundleIds: bundleIds ?? this.bundleIds,
+      bundleData: bundleData ?? this.bundleData,
+      maxQuantity: maxQuantity ?? this.maxQuantity,
+      boostClickCountAtStart:
+          boostClickCountAtStart ?? this.boostClickCountAtStart,
+      availableColors: availableColors ?? this.availableColors,
+      userId: userId ?? this.userId,
+      discountThreshold: discountThreshold ?? this.discountThreshold,
+      bulkDiscountPercentage:
+          bulkDiscountPercentage ?? this.bulkDiscountPercentage,
+      rankingScore: rankingScore ?? this.rankingScore,
+      needsUpdate: needsUpdate ?? this.needsUpdate,
+      archiveReason: archiveReason ?? this.archiveReason,
+      archivedByAdmin: archivedByAdmin ?? this.archivedByAdmin,
+      archivedByAdminAt: archivedByAdminAt ?? this.archivedByAdminAt,
+      archivedByAdminId: archivedByAdminId ?? this.archivedByAdminId,
+      promotionScore: promotionScore ?? this.promotionScore,
+      campaign: campaign ?? this.campaign,
+
+      ownerId: ownerId ?? this.ownerId,
+      shopId: shopId ?? this.shopId,
+      ilanNo: ilanNo ?? this.ilanNo,
+      createdAt: createdAt ?? this.createdAt,
+      sellerName: sellerName ?? this.sellerName,
+      category: category ?? this.category,
+      subcategory: subcategory ?? this.subcategory,
+      subsubcategory: subsubcategory ?? this.subsubcategory,
+      quantity: quantity ?? this.quantity,
+      bestSellerRank: bestSellerRank ?? this.bestSellerRank,
+      clickCount: clickCount ?? this.clickCount,
+      clickCountAtStart: clickCountAtStart ?? this.clickCountAtStart,
+      favoritesCount: favoritesCount ?? this.favoritesCount,
+      cartCount: cartCount ?? this.cartCount,
+      purchaseCount: purchaseCount ?? this.purchaseCount,
+      deliveryOption: deliveryOption ?? this.deliveryOption,
+      boostedImpressionCount:
+          boostedImpressionCount ?? this.boostedImpressionCount,
+      boostImpressionCountAtStart:
+          boostImpressionCountAtStart ?? this.boostImpressionCountAtStart,
+      isFeatured: isFeatured ?? this.isFeatured,
+      isTrending: isTrending ?? this.isTrending,
+      isBoosted: isBoosted ?? this.isBoosted,
+      boostStartTime: boostStartTime ?? this.boostStartTime,
+      boostEndTime: boostEndTime ?? this.boostEndTime,
+      dailyClickCount: dailyClickCount ?? this.dailyClickCount,
+      lastClickDate: lastClickDate ?? this.lastClickDate,
+      paused: paused ?? this.paused,
+      campaignName: campaignName ?? this.campaignName,
+      colorImages: colorImages ?? this.colorImages,
+      videoUrl: videoUrl ?? this.videoUrl,
+      attributes: attributes ?? this.attributes,
+      relatedProductIds: relatedProductIds ?? this.relatedProductIds,
+      relatedLastUpdated: relatedLastUpdated ?? this.relatedLastUpdated,
+      relatedCount: relatedCount ?? this.relatedCount,
+    );
+  }
+}

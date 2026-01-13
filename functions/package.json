@@ -1,0 +1,40 @@
+{
+  "name": "functions",
+  "type": "module",
+  "scripts": {
+    "lint": "eslint . --fix",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.4.6",
+    "@google-cloud/retail": "^3.6.1",
+    "@google-cloud/secret-manager": "^5.6.0",
+    "@google-cloud/tasks": "^6.1.0",
+    "@google-cloud/vision": "^5.3.4",
+    "algoliasearch": "^4.14.2",
+    "firebase-admin": "^13.0.2",
+    "firebase-functions": "^6.3.2",
+    "jimp": "^1.6.0",
+    "node-vibrant": "^4.0.3",
+    "otplib": "^12.0.1",
+    "pdfkit": "^0.17.1",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.34.1",
+    "transliteration": "^2.3.5",
+    "uuid": "^11.0.4"
+  },
+  "devDependencies": {
+    "eslint": "^8.0.0",
+    "eslint-config-google": "^0.14.0",
+    "eslint-plugin-promise": "^6.0.0",
+    "jest": "^30.2.0"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "private": true
+}

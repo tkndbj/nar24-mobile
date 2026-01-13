@@ -1,0 +1,24 @@
+{
+  "name": "functions",
+  "scripts": {
+    "deploy": "firebase deploy --only functions"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "dependencies": {
+    "@google-cloud/retail": "^3.6.1",
+    "@types/pdfkit": "^0.17.2",
+    "algoliasearch": "^5.45.0",
+    "firebase-admin": "^13.4.0",
+    "firebase-functions": "^6.4.0",
+    "google-auth-library": "^9.15.1",
+    "node-fetch": "^3.3.2",
+    "pdfkit": "^0.17.1"
+  },
+  "devDependencies": {
+    "eslint-config-prettier": "^10.1.2",
+    "eslint-plugin-prettier": "^5.2.6",
+    "prettier": "^3.5.3"
+  }
+}

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecting...</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+        }
+        .logo {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">Nar24</div>
+        <div class="spinner"></div>
+        <p>Redirecting you to the appropriate page...</p>
+    </div>
+
+    <script>
+        // Get URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const mode = urlParams.get('mode');
+        
+        // Get the base URL and preserve all query parameters
+        const baseUrl = window.location.origin;
+        const queryString = window.location.search;
+        
+        // Route to appropriate page based on mode
+        switch (mode) {
+            case 'resetPassword':
+                window.location.href = `${baseUrl}/auth/password-reset${queryString}`;
+                break;
+            case 'verifyEmail':
+                window.location.href = `${baseUrl}/auth/email-verify${queryString}`;
+                break;
+            case 'recoverEmail':
+                window.location.href = `${baseUrl}/auth/email-recover${queryString}`;
+                break;
+            default:
+                // Fallback to password reset
+                window.location.href = `${baseUrl}/auth/password-reset${queryString}`;
+        }
+    </script>
+</body>
+</html>

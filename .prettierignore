@@ -1,0 +1,16 @@
+dart_tool/
+.firebase/
+.idea/
+.vscode/
+android/
+assets/
+build/
+ios/
+lib/
+linux/
+macos/
+node_modules/
+public/
+web/
+windows/
+functions/

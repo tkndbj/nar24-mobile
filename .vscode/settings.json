@@ -1,0 +1,6 @@
+{
+  "CodeGPT.apiKey": "CodeGPT Plus Beta",
+  "dart.flutterSdkPath": ".fvm/versions/stable",
+  "git.ignoreLimitWarning": true,
+  "java.configuration.updateBuildConfiguration": "interactive"
+}

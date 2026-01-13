@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Verification - Nar24</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 480px;
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+        }
+
+        .language-selector {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .language-btn {
+            padding: 4px 8px;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+
+        .language-btn:hover {
+            background: #f8f9fa;
+        }
+
+        .language-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 8px;
+        }
+
+        .logo p {
+            color: #6c757d;
+            font-size: 14px;
+        }
+
+        .content {
+            text-align: center;
+        }
+
+        .icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            display: block;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-10px); }
+            60% { transform: translateY(-5px); }
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 12px;
+        }
+
+        .subtitle {
+            color: #6c757d;
+            font-size: 16px;
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s, transform 0.2s;
+            margin-bottom: 15px;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            background: #5a6fd8;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+
+        .btn-secondary:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid transparent;
+            border-top: 2px solid currentColor;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .alert {
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            font-size: 14px;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert-info {
+            background: #cce7ff;
+            color: #004085;
+            border: 1px solid #b8d4f0;
+        }
+
+        .link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .link:hover {
+            text-decoration: underline;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e9ecef;
+            color: #6c757d;
+            font-size: 14px;
+        }
+
+        .loading-screen {
+            display: none;
+            text-align: center;
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        .feature-list {
+            text-align: left;
+            margin: 25px 0;
+            background: #f8f9ff;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .feature-list h4 {
+            color: #333;
+            margin-bottom: 12px;
+            font-size: 16px;
+        }
+
+        .feature-list ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .feature-list li {
+            padding: 6px 0;
+            color: #555;
+            font-size: 14px;
+            position: relative;
+            padding-left: 20px;
+        }
+
+        .feature-list li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .status-verified {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 30px 20px;
+            }
+            
+            .logo h1 {
+                font-size: 28px;
+            }
+            
+            .title {
+                font-size: 24px;
+            }
+            
+            .icon {
+                font-size: 48px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="language-selector">
+            <button class="language-btn active" onclick="changeLanguage('en')">EN</button>
+            <button class="language-btn" onclick="changeLanguage('tr')">TR</button>
+            <button class="language-btn" onclick="changeLanguage('ru')">RU</button>
+        </div>
+
+        <div class="logo">
+            <h1>Nar24</h1>            
+        </div>
+
+        <!-- Loading Screen -->
+        <div class="loading-screen" id="loadingScreen">
+            <div class="loading-spinner"></div>
+            <div class="title" data-key="verifying_title">Verifying Email</div>
+            <div class="subtitle" data-key="verifying_subtitle">Verifying your email address...</div>
+        </div>
+
+        <!-- Verification Success -->
+        <div class="content" id="successContent" style="display: none;">
+            <div class="status-badge status-verified">✓ <span data-key="verified_badge">Verified</span></div>
+            <div class="icon">🎉</div>
+            <div class="title" data-key="success_title">Email Verified Successfully!</div>
+            <div class="subtitle" data-key="success_subtitle">Your email address has been successfully verified.</div>
+            
+            <div class="alert alert-success">
+                <strong data-key="account_activated">🎯 Account Activated</strong><br>
+                <span data-key="account_ready">Your Nar24 account is now fully activated and ready to use!</span>
+            </div>
+
+            <div class="feature-list">
+                <h4 data-key="now_you_can">🚀 Now you can:</h4>
+                <ul>
+                    <li data-key="feature_1">List and browse properties</li>
+                    <li data-key="feature_2">Contact property owners</li>
+                    <li data-key="feature_3">Save favorite listings</li>
+                    <li data-key="feature_4">Receive email notifications</li>
+                    <li data-key="feature_5">Access premium features</li>
+                </ul>
+            </div>
+
+            <div class="alert alert-info">
+                <strong data-key="next_steps">What's next?</strong><br>
+                <span data-key="close_window">You can now close this window and continue using your account.</span>
+            </div>
+        </div>
+
+        <!-- Verification Error -->
+        <div class="content" id="errorContent" style="display: none;">
+            <div class="status-badge status-pending">⏳ <span data-key="pending_badge">Pending</span></div>
+            <div class="icon">❌</div>
+            <div class="title" data-key="error_title">Verification Failed</div>
+            <div class="subtitle" data-key="error_subtitle">The email verification link is invalid or has expired.</div>
+            
+            <div class="alert alert-error" id="errorMessage">
+                <strong data-key="verification_failed">Verification Failed</strong><br>
+                <span data-key="error_message">The link you used is either invalid, expired, or has already been used.</span>
+            </div>
+
+            <button class="btn" onclick="resendVerification()" data-key="resend_btn">
+                <span class="spinner" id="resendSpinner" style="display: none;"></span>
+                Send New Verification Email
+            </button>
+            
+            <a href="#" class="btn btn-secondary" onclick="redirectToLogin()" data-key="login_btn">
+                Go to Login
+            </a>
+
+            <div class="alert alert-info">
+                <strong data-key="need_help">Need help?</strong> <span data-key="contact_support">Contact our support team.</span>
+            </div>
+        </div>
+
+        <!-- Already Verified -->
+        <div class="content" id="alreadyVerifiedContent" style="display: none;">
+            <div class="status-badge status-verified">✓ <span data-key="already_verified_badge">Already Verified</span></div>
+            <div class="icon">✅</div>
+            <div class="title" data-key="already_verified_title">Email Already Verified</div>
+            <div class="subtitle" data-key="already_verified_subtitle">This email address is already verified.</div>
+            
+            <div class="alert alert-info">
+                <strong data-key="good_news">Good News!</strong><br>
+                <span data-key="previously_verified">Your email was verified previously. You can continue using your account normally.</span>
+            </div>
+
+            <a href="#" class="btn" onclick="redirectToApp()" data-key="continue_btn">
+                Continue to Nar24
+            </a>
+        </div>
+
+        <div class="footer">
+            <p>
+                <span data-key="trouble_text">Having trouble?</span> 
+                <a href="#" class="link" data-key="contact_support_link">Contact Support</a>
+            </p>
+            <p>© 2024 Nar24. All rights reserved.</p>
+        </div>
+    </div>
+
+    <script type="module">
+        // Language translations
+        const translations = {
+            en: {
+                verifying_title: "Verifying Email",
+                verifying_subtitle: "Verifying your email address...",
+                verified_badge: "Verified",
+                success_title: "Email Verified Successfully!",
+                success_subtitle: "Your email address has been successfully verified.",
+                account_activated: "🎯 Account Activated",
+                account_ready: "Your Nar24 account is now fully activated and ready to use!",
+                now_you_can: "🚀 Now you can:",
+                feature_1: "List and browse properties",
+                feature_2: "Contact property owners",
+                feature_3: "Save favorite listings",
+                feature_4: "Receive email notifications",
+                feature_5: "Access premium features",
+                next_steps: "What's next?",
+                close_window: "You can now close this window and continue using your account.",
+                pending_badge: "Pending",
+                error_title: "Verification Failed",
+                error_subtitle: "The email verification link is invalid or has expired.",
+                verification_failed: "Verification Failed",
+                error_message: "The link you used is either invalid, expired, or has already been used.",
+                resend_btn: "Send New Verification Email",
+                sending_btn: "Sending...",
+                login_btn: "Go to Login",
+                need_help: "Need help?",
+                contact_support: "Contact our support team.",
+                already_verified_badge: "Already Verified",
+                already_verified_title: "Email Already Verified",
+                already_verified_subtitle: "This email address is already verified.",
+                good_news: "Good News!",
+                previously_verified: "Your email was verified previously. You can continue using your account normally.",
+                continue_btn: "Continue to Nar24",
+                trouble_text: "Having trouble?",
+                contact_support_link: "Contact Support",
+                verification_sent: "Verification email sent! Please check your inbox.",
+                login_first: "Please log in first to resend verification email.",
+                send_error: "Error sending verification email. Please try again later."
+            },
+            tr: {
+                verifying_title: "E-posta Doğrulanıyor",
+                verifying_subtitle: "E-posta adresiniz doğrulanıyor...",
+                verified_badge: "Doğrulandı",
+                success_title: "E-posta Başarıyla Doğrulandı!",
+                success_subtitle: "E-posta adresiniz başarıyla doğrulandı.",
+                account_activated: "🎯 Hesap Etkinleştirildi",
+                account_ready: "Nar24 hesabınız artık tamamen etkinleştirildi ve kullanıma hazır!",
+                now_you_can: "🚀 Artık yapabilirsiniz:",
+                feature_1: "Mülkleri listeleme ve gezinme",
+                feature_2: "Mülk sahipleriyle iletişim kurma",
+                feature_3: "Favori ilanları kaydetme",
+                feature_4: "E-posta bildirimleri alma",
+                feature_5: "Premium özelliklere erişim",
+                next_steps: "Sırada ne var?",
+                close_window: "Artık bu pencereyi kapatabilir ve hesabınızı kullanmaya devam edebilirsiniz.",
+                pending_badge: "Beklemede",
+                error_title: "Doğrulama Başarısız",
+                error_subtitle: "E-posta doğrulama bağlantısı geçersiz veya süresi dolmuş.",
+                verification_failed: "Doğrulama Başarısız",
+                error_message: "Kullandığınız bağlantı geçersiz, süresi dolmuş veya zaten kullanılmış.",
+                resend_btn: "Yeni Doğrulama E-postası Gönder",
+                sending_btn: "Gönderiliyor...",
+                login_btn: "Girişe Git",
+                need_help: "Yardıma mı ihtiyacınız var?",
+                contact_support: "Destek ekibimizle iletişime geçin.",
+                already_verified_badge: "Zaten Doğrulanmış",
+                already_verified_title: "E-posta Zaten Doğrulanmış",
+                already_verified_subtitle: "Bu e-posta adresi zaten doğrulanmış.",
+                good_news: "İyi Haber!",
+                previously_verified: "E-postanız daha önce doğrulanmış. Hesabınızı normal şekilde kullanmaya devam edebilirsiniz.",
+                continue_btn: "Nar24'e Devam Et",
+                trouble_text: "Sorun mu yaşıyorsunuz?",
+                contact_support_link: "Destek ile İletişim",
+                verification_sent: "Doğrulama e-postası gönderildi! Gelen kutunuzu kontrol edin.",
+                login_first: "Doğrulama e-postası göndermek için önce giriş yapın.",
+                send_error: "Doğrulama e-postası gönderilirken hata oluştu. Lütfen daha sonra tekrar deneyin."
+            },
+            ru: {
+                verifying_title: "Проверка электронной почты",
+                verifying_subtitle: "Проверяем ваш адрес электронной почты...",
+                verified_badge: "Проверено",
+                success_title: "Электронная почта успешно подтверждена!",
+                success_subtitle: "Ваш адрес электронной почты был успешно подтвержден.",
+                account_activated: "🎯 Аккаунт активирован",
+                account_ready: "Ваш аккаунт Nar24 теперь полностью активирован и готов к использованию!",
+                now_you_can: "🚀 Теперь вы можете:",
+                feature_1: "Размещать и просматривать недвижимость",
+                feature_2: "Связываться с владельцами недвижимости",
+                feature_3: "Сохранять избранные объявления",
+                feature_4: "Получать уведомления по электронной почте",
+                feature_5: "Получить доступ к премиум-функциям",
+                next_steps: "Что дальше?",
+                close_window: "Теперь вы можете закрыть это окно и продолжить использовать свой аккаунт.",
+                pending_badge: "В ожидании",
+                error_title: "Ошибка подтверждения",
+                error_subtitle: "Ссылка для подтверждения электронной почты недействительна или просрочена.",
+                verification_failed: "Ошибка подтверждения",
+                error_message: "Ссылка, которую вы использовали, недействительна, просрочена или уже использована.",
+                resend_btn: "Отправить новое письмо для подтверждения",
+                sending_btn: "Отправка...",
+                login_btn: "Перейти к входу",
+                need_help: "Нужна помощь?",
+                contact_support: "Свяжитесь с нашей службой поддержки.",
+                already_verified_badge: "Уже подтверждено",
+                already_verified_title: "Электронная почта уже подтверждена",
+                already_verified_subtitle: "Этот адрес электронной почты уже подтвержден.",
+                good_news: "Хорошие новости!",
+                previously_verified: "Ваша электронная почта была подтверждена ранее. Вы можете продолжать использовать свой аккаунт в обычном режиме.",
+                continue_btn: "Продолжить в Nar24",
+                trouble_text: "Возникли проблемы?",
+                contact_support_link: "Связаться с поддержкой",
+                verification_sent: "Письмо для подтверждения отправлено! Проверьте свою почту.",
+                login_first: "Пожалуйста, сначала войдите в систему, чтобы повторно отправить письмо для подтверждения.",
+                send_error: "Ошибка отправки письма для подтверждения. Пожалуйста, попробуйте позже."
+            }
+        };
+
+        let currentLanguage = 'en';
+
+        // Change language function
+        window.changeLanguage = function(lang) {
+            currentLanguage = lang;
+            
+            // Update language buttons
+            document.querySelectorAll('.language-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Update all translatable elements
+            document.querySelectorAll('[data-key]').forEach(element => {
+                const key = element.getAttribute('data-key');
+                if (translations[lang] && translations[lang][key]) {
+                    element.textContent = translations[lang][key];
+                }
+            });
+        };
+
+        // Import Firebase modules
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js';
+        import { getAuth, applyActionCode, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/9.0.0/firebase-auth.js';
+
+        // Your Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCcHWgHHhDR3lj0z80W1cFCn-6nQ4BInEo",
+            authDomain: "emlak-mobile-app.firebaseapp.com",
+            projectId: "emlak-mobile-app",
+            storageBucket: "emlak-mobile-app.appspot.com",
+            messagingSenderId: "373622886371",
+            appId: "1:373622886371:web:25dac7b6de3a98d5225ad6",
+            measurementId: "G-G468FCCEJL"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        // Get URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const oobCode = urlParams.get('oobCode');
+        const continueUrl = urlParams.get('continueUrl');
+
+        // Elements
+        const loadingScreen = document.getElementById('loadingScreen');
+        const successContent = document.getElementById('successContent');
+        const errorContent = document.getElementById('errorContent');
+        const alreadyVerifiedContent = document.getElementById('alreadyVerifiedContent');
+
+        // Initialize the page
+        async function init() {
+            if (!oobCode) {
+                showError('Missing verification code');
+                return;
+            }
+
+            showLoading();
+            
+            try {
+                // Apply the email verification code
+                await applyActionCode(auth, oobCode);
+                
+                // Show success with a small delay for better UX
+                setTimeout(() => {
+                    showSuccess();
+                }, 1500);
+                
+            } catch (error) {
+                console.error('Error verifying email:', error);
+                
+                // Handle specific error cases
+                if (error.code === 'auth/invalid-action-code') {
+                    showError('The verification link is invalid or has expired.');
+                } else if (error.code === 'auth/expired-action-code') {
+                    showError('The verification link has expired. Please request a new one.');
+                } else if (error.code === 'auth/user-disabled') {
+                    showError('This account has been disabled.');
+                } else {
+                    // Check if already verified
+                    if (error.message.includes('already') || error.code === 'auth/email-already-verified') {
+                        showAlreadyVerified();
+                    } else {
+                        showError(error.message || 'An error occurred during verification.');
+                    }
+                }
+            }
+        }
+
+        function showLoading() {
+            hideAllContent();
+            loadingScreen.style.display = 'block';
+        }
+
+        function showSuccess() {
+            hideAllContent();
+            successContent.style.display = 'block';
+            
+            // Trigger confetti effect or celebration animation
+            setTimeout(() => {
+                const icon = successContent.querySelector('.icon');
+                icon.style.transform = 'scale(1.2)';
+                setTimeout(() => {
+                    icon.style.transform = 'scale(1)';
+                }, 200);
+            }, 100);
+        }
+
+        function showError(message) {
+            hideAllContent();
+            errorContent.style.display = 'block';
+            const errorElement = document.getElementById('errorMessage');
+            errorElement.innerHTML = `<strong>${translations[currentLanguage].verification_failed}</strong><br>${message}`;
+        }
+
+        function showAlreadyVerified() {
+            hideAllContent();
+            alreadyVerifiedContent.style.display = 'block';
+        }
+
+        function hideAllContent() {
+            loadingScreen.style.display = 'none';
+            successContent.style.display = 'none';
+            errorContent.style.display = 'none';
+            alreadyVerifiedContent.style.display = 'none';
+        }
+
+        // Global functions
+        window.redirectToApp = function() {
+            window.location.href = continueUrl || 'https://nar24.com/dashboard';
+        };
+
+        window.redirectToProfile = function() {
+            window.location.href = 'https://nar24.com/profile';
+        };
+
+        window.redirectToLogin = function() {
+            window.location.href = 'https://nar24.com/login';
+        };
+
+        window.resendVerification = async function() {
+            const resendBtn = event.target;
+            const spinner = document.getElementById('resendSpinner');
+            
+            resendBtn.disabled = true;
+            spinner.style.display = 'inline-block';
+            resendBtn.textContent = translations[currentLanguage].sending_btn;
+
+            try {
+                const user = auth.currentUser;
+                if (user && !user.emailVerified) {
+                    await sendEmailVerification(user);
+                    alert(translations[currentLanguage].verification_sent);
+                } else {
+                    alert(translations[currentLanguage].login_first);
+                    window.location.href = 'https://nar24.com/login';
+                }
+            } catch (error) {
+                console.error('Error sending verification email:', error);
+                alert(translations[currentLanguage].send_error);
+            } finally {
+                resendBtn.disabled = false;
+                spinner.style.display = 'none';
+                resendBtn.textContent = translations[currentLanguage].resend_btn;
+            }
+        };
+
+        // Start the application
+        init();
+    </script>
+</body>
+</html>

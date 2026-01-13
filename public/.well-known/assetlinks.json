@@ -1,0 +1,13 @@
+[
+    {
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.cts.emlak",
+        "sha256_cert_fingerprints": [
+          "36:3b:9f:11:db:7a:94:74:82:3a:1f:73:dd:ac:fa:3b:c5:64:25:1a:a1:52:d6:1c:70:d2:b6:de:a7:45:a4:e2"
+        ]
+      }
+    }
+  ]
+  

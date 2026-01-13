@@ -1,0 +1,140 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "emlak-mobile-app",
+          "appId": "1:373622886371:android:49911090ac4a7892225ad6",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "emlak-mobile-app",
+          "configurations": {
+            "android": "1:373622886371:android:49911090ac4a7892225ad6",
+            "ios": "1:373622886371:ios:ab53b97e1e7af143225ad6",
+            "macos": "1:373622886371:ios:ab53b97e1e7af143225ad6",
+            "web": "1:373622886371:web:027e9925e1726d2a225ad6",
+            "windows": "1:373622886371:web:ccc361ec5cfbdd49225ad6"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "public",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "headers": [
+      {
+        "source": "/apple-app-site-association",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ]
+      },
+      {
+        "source": "/.well-known/assetlinks.json",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ]
+      },
+      {
+        "source": "/shared-favorites/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=300"
+          }
+        ]
+      },
+      {
+        "source": "/products/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=300"
+          }
+        ]
+      },
+      {
+        "source": "/assets/images/**",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "image/png"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=86400"
+          },
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
+          }
+        ]
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "/shared-favorites/**",
+        "function": "sharedFavoritesRedirect"
+      },
+      {
+        "source": "/api/shared-favorites/**",
+        "function": "getSharedFavorites"
+      },
+      {
+        "source": "/products/**",
+        "function": "productShareRedirect"
+      },
+      {
+        "source": "/properties/**",
+        "function": "dynamicLinkHandler"
+      },
+      {
+        "source": "/cars/**",
+        "function": "dynamicLinkHandler"
+      },
+      {
+        "source": "/auth/action",
+        "destination": "/auth/action.html"
+      },
+      {
+        "source": "/auth/password-reset",
+        "destination": "/auth/password-reset.html"
+      },
+      {
+        "source": "/auth/email-verify",
+        "destination": "/auth/email-verify.html"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "functions":[
+   {
+    "source": "functions",
+    "codebase": "default",
+    "serviceAccount": "emlak-mobile-app@appspot.gserviceaccount.com",
+    "ignore": [
+      "node_modules",
+      ".git",
+      "firebase-debug.log",
+      "firebase-debug.*.log",
+      "*.local"
+    ],
+    "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run lint"],
+    "postdeploy": [
+      "gcloud functions add-invoker-policy-binding expireSingleBoost --region=europe-west3 --member=serviceAccount:emlak-mobile-app@appspot.gserviceaccount.com --quiet"
+    ]
+  }
+]
+}

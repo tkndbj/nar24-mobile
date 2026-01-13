@@ -1,0 +1,78 @@
+{
+  "project_info": {
+    "project_number": "373622886371",
+    "project_id": "emlak-mobile-app",
+    "storage_bucket": "emlak-mobile-app.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:373622886371:android:49911090ac4a7892225ad6",
+        "android_client_info": {
+          "package_name": "com.cts.emlak"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "373622886371-gk1336gjt2k4mqoqffj3ssvjlrke6ob0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cts.emlak",
+            "certificate_hash": "c73606bee0e44eab3610efdb763258dc17a17736"
+          }
+        },
+        {
+          "client_id": "373622886371-ius2lugg804qi8hf3s32v23pbss808rp.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cts.emlak",
+            "certificate_hash": "4b07450bfc9963bdaf51d197714370b141e35b7c"
+          }
+        },
+        {
+          "client_id": "373622886371-jicgmnkau5jpoei6ulhqi8qf14df9ojv.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cts.emlak",
+            "certificate_hash": "42c4c49354f0db991a70ce2b4a29593010cf8cf7"
+          }
+        },
+        {
+          "client_id": "373622886371-upldts20f0f5svmq028qc5e02vt67noi.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cts.emlak",
+            "certificate_hash": "834a18e7691fbca84e58fec96ea20d25cab786a7"
+          }
+        },
+        {
+          "client_id": "373622886371-it8pcemjud8oomjjjn1gel759e627j6m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJtcymfCon8n2lwYtQlR9yv3G1Ez3tlbA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "373622886371-3d461qu8j2topv4v1ep6cu0q6sopk5ql.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "373622886371-j7hl1phlm8fv1kp73m27iuc9rd3m9kj5.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.flutterApplication1"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

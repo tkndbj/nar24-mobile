@@ -1,0 +1,893 @@
+{
+    "kCategories": [
+      { "key": "Women", "image": "women.jpg" },
+      { "key": "Men", "image": "men.jpg" },
+      { "key": "Mother & Child", "image": "mother_child.jpg" },
+      { "key": "Home & Furniture", "image": "home_furniture.jpg" },
+      { "key": "Cosmetics", "image": "cosmetics.jpg" },
+      { "key": "Bags", "image": "bags.jpg" },
+      { "key": "Electronics", "image": "electronics.jpg" },
+      { "key": "Sports & Outdoor", "image": "sports_outdoor.jpg" },
+      { "key": "Books, Stationery & Hobby", "image": "books_stationery_hobby.jpg" }
+    ],
+  
+    "kCategoryKeywordsMap": {
+      "Women": [
+        "clothing",
+        "footwear",
+        "accessories",
+        "underwear",
+        "sleepwear",
+        "sportswear",
+        "swimwear"
+      ],
+      "Men": [
+        "clothing",
+        "footwear",
+        "accessories",
+        "underwear",
+        "sportswear",
+        "swimwear"
+      ],
+      "Mother & Child": [
+        "baby clothing",
+        "kids clothing",
+        "footwear",
+        "toys",
+        "baby care",
+        "maternity",
+        "strollers",
+        "feeding",
+        "safety"
+      ],
+      "Home & Furniture": [
+        "furniture",
+        "bedding",
+        "decor",
+        "kitchen",
+        "bathroom",
+        "lighting",
+        "storage",
+        "textiles",
+        "appliances"
+      ],
+      "Cosmetics": [
+        "skincare",
+        "makeup",
+        "haircare",
+        "fragrances",
+        "personal care",
+        "nail care",
+        "body care"
+      ],
+      "Bags": [
+        "handbags",
+        "backpacks",
+        "tote bags",
+        "crossbody bags",
+        "clutches",
+        "wallets",
+        "luggage",
+        "sport bags"
+      ],
+      "Electronics": [
+        "smartphones",
+        "laptops",
+        "tablets",
+        "headphones",
+        "cameras",
+        "televisions",
+        "smart home",
+        "wearables",
+        "gaming",
+        "home appliances",
+        "personal care appliances"
+      ],
+      "Sports & Outdoor": [
+        "fitness",
+        "camping",
+        "cycling",
+        "team sports",
+        "outdoor gear"
+      ],
+      "Books, Stationery & Hobby": [
+        "books",
+        "stationery",
+        "art supplies",
+        "hobby kits",
+        "games",
+        "puzzles",
+        "music"
+      ]
+    },
+  
+    "kSubcategories": {
+      "Women": [
+        "Clothing",
+        "Footwear",
+        "Accessories",
+        "Underwear & Sleepwear",
+        "Sportswear",
+        "Swimwear"
+      ],
+      "Men": [
+        "Clothing",
+        "Footwear",
+        "Sportswear",
+        "Underwear & Sleepwear",
+        "Accessories",
+        "Swimwear"
+      ],
+      "Mother & Child": [
+        "Baby Clothing",
+        "Kids Clothing",
+        "Footwear",
+        "Toys & Games",
+        "Baby Care",
+        "Maternity",
+        "Strollers & Car Seats",
+        "Feeding",
+        "Safety"
+      ],
+      "Home & Furniture": [
+        "Furniture",
+        "Bedding & Bath",
+        "Home Decor",
+        "Kitchen & Dining",
+        "Bathroom",
+        "Lighting",
+        "Storage & Organization",
+        "Textiles",
+        "Appliances"
+      ],
+      "Cosmetics": [
+        "Skincare",
+        "Makeup",
+        "Haircare",
+        "Fragrances",
+        "Personal Care",
+        "Nail Care",
+        "Body Care"
+      ],
+      "Bags": [
+        "Handbags",
+        "Backpacks",
+        "Tote Bags",
+        "Crossbody Bags",
+        "Clutches",
+        "Wallets",
+        "Luggage",
+        "Sport Bags"
+      ],
+      "Electronics": [
+        "Smartphones & Accessories",
+        "Laptops & Computers",
+        "Tablets & E-Readers",
+        "Audio & Headphones",
+        "Cameras & Photography",
+        "Televisions & Video",
+        "Smart Home Devices",
+        "Wearable Technology",
+        "Gaming Consoles & Accessories",
+        "Home Appliances",
+        "Personal Care Appliances"
+      ],
+      "Sports & Outdoor": [
+        "Exercise & Fitness",
+        "Camping & Hiking",
+        "Cycling",
+        "Team Sports",
+        "Outdoor Recreation"
+      ],
+      "Books, Stationery & Hobby": [
+        "Books",
+        "Stationery",
+        "Art & Craft Supplies",
+        "Hobby Kits",
+        "Games & Puzzles",
+        "Music & Instruments"
+      ]
+    },
+  
+    "kSubSubcategories": {
+      "Women": {
+        "Clothing": [
+          "Dresses",
+          "Shirts",
+          "T-Shirts",
+          "Sweatshirts",
+          "Pants",
+          "Cardigans",
+          "Coats",
+          "Jeans",
+          "Skirts",
+          "Blouses",
+          "Sweaters",
+          "Jackets",
+          "Trench Coats"
+        ],
+        "Footwear": [
+          "Sneakers",
+          "Sandals",
+          "Casual Shoes",
+          "Heels",
+          "Babette",
+          "Slippers",
+          "Boots",
+          "Knee-High Boots",
+          "Loafers"
+        ],
+        "Accessories": [
+          "Watches",
+          "Belts",
+          "Jewelry",
+          "Scarves",
+          "Gloves",
+          "Wallets",
+          "Sunglasses"
+        ],
+        "Underwear & Sleepwear": [
+          "Bras",
+          "Panties",
+          "Sleepwear",
+          "Socks",
+          "Undershirts & Body",
+          "Corsets",
+          "Bustiers",
+          "Bralettes"
+        ],
+        "Sportswear": [
+          "Sports Tops",
+          "Leggings",
+          "Sports Bras",
+          "Shorts",
+          "Tracksuits",
+          "Sportswear Sets"
+        ],
+        "Swimwear": [
+          "Bikinis",
+          "One-Piece Swimsuits",
+          "Cover-Ups"
+        ]
+      },
+      "Men": {
+        "Clothing": [
+          "T-Shirts",
+          "Shirts",
+          "Pants",
+          "Jeans",
+          "Shorts",
+          "Sweatshirts",
+          "Sweaters",
+          "Jackets",
+          "Suits",
+          "Coats",
+          "Cardigans",
+          "Waistcoats",
+          "Trench Coats"
+        ],
+        "Footwear": [
+          "Sneakers",
+          "Casual Shoes",
+          "Boots",
+          "Sandals",
+          "Formal Shoes",
+          "Cleats",
+          "Loafers",
+          "Slippers"
+        ],
+        "Accessories": [
+          "Watches",
+          "Belts",
+          "Jewelry",
+          "Scarves",
+          "Gloves",
+          "Wallets",
+          "Sunglasses",
+          "Ties"
+        ],
+        "Underwear & Sleepwear": [
+          "Boxers",
+          "Sleepwear",
+          "Socks",
+          "Undershirts"
+        ],
+        "Sportswear": [
+          "Sports T-Shirts",
+          "Shorts",
+          "Tracksuits",
+          "Sports Jackets",
+          "Sportswear Sets"
+        ],
+        "Swimwear": [
+          "Swim Shorts"
+        ]
+      },
+      "Mother & Child": {
+        "Baby Clothing": [
+          "Bodysuits",
+          "Rompers",
+          "Sets",
+          "Sleepwear",
+          "Socks"
+        ],
+        "Kids Clothing": [
+          "T-Shirts",
+          "Pants",
+          "Dresses",
+          "Sweatshirts",
+          "Jackets"
+        ],
+        "Footwear": [
+          "Sneakers",
+          "Sandals",
+          "Boots",
+          "School Shoes",
+          "Sports Shoes",
+          "Rain Boots",
+          "Slippers",
+          "Dress Shoes"
+        ],
+        "Toys & Games": [
+          "Educational Toys",
+          "Plush Toys",
+          "Building Sets",
+          "Dolls",
+          "Puzzles"
+        ],
+        "Baby Care": [
+          "Diapers",
+          "Wipes",
+          "Skincare",
+          "Bathing",
+          "Health"
+        ],
+        "Maternity": [
+          "Maternity Clothing",
+          "Nursing Bras",
+          "Maternity Accessories"
+        ],
+        "Strollers & Car Seats": [
+          "Strollers",
+          "Car Seats",
+          "Travel Systems"
+        ],
+        "Feeding": [
+          "Bottles",
+          "Breast Pumps",
+          "Pacifiers",
+          "High Chairs"
+        ],
+        "Safety": [
+          "Monitors",
+          "Safety Gates",
+          "Outlet Covers"
+        ]
+      },
+      "Home & Furniture": {
+        "Furniture": [
+          "Sofas",
+          "Beds",
+          "Tables",
+          "Chairs",
+          "Wardrobes"
+        ],
+        "Bedding & Bath": [
+          "Bed Sheets",
+          "Pillows",
+          "Towels",
+          "Blankets",
+          "Bath Mats"
+        ],
+        "Home Decor": [
+          "Wall Art",
+          "Mirrors",
+          "Candles",
+          "Vases",
+          "Clocks"
+        ],
+        "Kitchen & Dining": [
+          "Cookware",
+          "Utensils",
+          "Dinnerware",
+          "Storage",
+          "Plates",
+          "Bowls",
+          "Cups",
+          "Mugs",
+          "Tumblers"
+        ],
+        "Bathroom": [
+          "Shower Curtains",
+          "Accessories",
+          "Storage",
+          "Mirrors"
+        ],
+        "Lighting": [
+          "Lamps",
+          "Ceiling Lights",
+          "Wall Lights",
+          "String Lights"
+        ],
+        "Storage & Organization": [
+          "Shelves",
+          "Boxes",
+          "Baskets",
+          "Hangers"
+        ],
+        "Textiles": [
+          "Curtains",
+          "Rugs",
+          "Cushions",
+          "Throws"
+        ]
+      },
+      "Cosmetics": {
+        "Skincare": [
+          "Cleansers",
+          "Moisturizers",
+          "Serums",
+          "Masks",
+          "Sunscreen",
+          "Toners",
+          "Eye Creams",
+          "Face Oils",
+          "Exfoliators",
+          "Acne Treatments",
+          "Anti-Aging Products",
+          "Face Mists"
+        ],
+        "Makeup": [
+          "Foundation",
+          "Lipstick",
+          "Eyeshadow",
+          "Mascara",
+          "Blush",
+          "Concealer",
+          "Bronzer",
+          "Highlighter",
+          "Eyeliner",
+          "Lip Gloss",
+          "Setting Spray",
+          "Makeup Brushes"
+        ],
+        "Haircare": [
+          "Shampoo",
+          "Conditioner",
+          "Hair Masks",
+          "Styling Products",
+          "Hair Tools"
+        ],
+        "Fragrances": [
+          "Perfumes",
+          "Body Sprays",
+          "Deodorants"
+        ],
+        "Personal Care": [
+          "Body Wash",
+          "Lotions",
+          "Oral Care",
+          "Shaving",
+          "Deodorants",
+          "Hand Sanitizers",
+          "Feminine Care",
+          "Men's Grooming",
+          "Bath Salts",
+          "Body Scrubs",
+          "Body Oils"
+        ],
+        "Nail Care": [
+          "Nail Polish",
+          "Nail Tools",
+          "Nail Treatments",
+          "Nail Art",
+          "Nail Strengtheners",
+          "Cuticle Care",
+          "Nail Files",
+          "Nail Clippers",
+          "Nail Glue",
+          "Nail Stickers"
+        ],
+        "Body Care": [
+          "Body Scrubs",
+          "Body Oils",
+          "Hand Creams",
+          "Foot Creams",
+          "Body Butter",
+          "Massage Oils",
+          "Body Wash",
+          "Body Lotion",
+          "Body Mist",
+          "Hand Sanitizer",
+          "Body Sprays"
+        ]
+      },
+      "Bags": {
+        "Handbags": [
+          "Evening Bags",
+          "Shoulder Bags",
+          "Satchels",
+          "Hobo Bags",
+          "Tote Bags"
+        ],
+        "Backpacks": [
+          "Casual Backpacks",
+          "Travel Backpacks",
+          "School Backpacks",
+          "Laptop Backpacks",
+          "Hiking Backpacks"
+        ],
+        "Tote Bags": [
+          "Canvas Totes",
+          "Leather Totes",
+          "Shopping Totes",
+          "Beach Totes"
+        ],
+        "Crossbody Bags": [
+          "Messenger Bags",
+          "Sling Bags",
+          "Waist Bags",
+          "Belt Bags"
+        ],
+        "Clutches": [
+          "Evening Clutches",
+          "Wristlet Clutches",
+          "Envelope Clutches",
+          "Box Clutches"
+        ],
+        "Luggage": [
+          "Suitcases",
+          "Travel Bags",
+          "Luggage Sets",
+          "Duffel Bags",
+          "Carry-On Bags"
+        ],
+        "Sport Bags": [
+          "Gym Bags",
+          "Duffel Bags",
+          "Sports Backpacks",
+          "Equipment Bags",
+          "Swim Bags",
+          "Tennis Bags",
+          "Golf Bags",
+          "Yoga Bags"
+        ]
+      },
+      "Electronics": {
+        "Smartphones & Accessories": [
+          "Smartphones",
+          "Cases",
+          "Chargers",
+          "Screen Protectors"
+        ],
+        "Laptops & Computers": [
+          "Laptops",
+          "Desktops",
+          "Monitors",
+          "Keyboards",
+          "Mice",
+          "SSDs",
+          "HDDs",
+          "RAM",
+          "Graphics Cards",
+          "Motherboards",
+          "Processors",
+          "Power Supplies",
+          "Cooling Systems",
+          "Computer Cases",
+          "External Storage",
+          "Networking Equipment",
+          "Printers & Scanners",
+          "Mouse Pads"
+        ],
+        "Tablets & E-Readers": [
+          "Tablets",
+          "E-Readers",
+          "Tablet Accessories"
+        ],
+        "Audio & Headphones": [
+          "Headphones",
+          "Earbuds",
+          "Speakers",
+          "Microphones",
+          "Headphones Accessories",
+          "Headphones Cases"
+        ],
+        "Cameras & Photography": [
+          "Digital Cameras",
+          "DSLR Cameras",
+          "Lenses",
+          "Tripods",
+          "Camera Bags",
+          "Memory Cards",
+          "Camera Filters",
+          "Lighting Equipment",
+          "Camera Straps",
+          "Remote Shutters",
+          "Camera Cleaning Kits",
+          "Camera Batteries",
+          "Camera Accessories"
+        ],
+        "Televisions & Video": [
+          "LED TVs",
+          "OLED TVs",
+          "QLED TVs",
+          "Smart TVs",
+          "Projectors",
+          "Streaming Devices",
+          "TV Mounts",
+          "Soundbars",
+          "TV Cables",
+          "Remote Controls",
+          "TV Antennas",
+          "HDMI Cables",
+          "TV Cleaners"
+        ],
+        "Smart Home Devices": [
+          "Smart Lights",
+          "Smart Plugs",
+          "Security Cameras",
+          "Smart Speakers"
+        ],
+        "Wearable Technology": [
+          "Smartwatches",
+          "Fitness Trackers",
+          "Smart Glasses"
+        ],
+        "Gaming Consoles & Accessories": [
+          "Consoles",
+          "Controllers",
+          "Games",
+          "VR Headsets"
+        ],
+        "Home Appliances": [
+          "Refrigerators",
+          "Ovens",
+          "Microwaves",
+          "Dishwashers",
+          "Washing Machines",
+          "Dryers",
+          "Vacuum Cleaners",
+          "Air Conditioners",
+          "Freezers",
+          "Combi Boilers",
+          "Kettles",
+          "Coffee Makers",
+          "Blenders",
+          "Food Processors",
+          "Toasters",
+          "Electric Kettles",
+          "Rice Cookers",
+          "Air Fryers",
+          "Slow Cookers",
+          "Stand Mixers",
+          "Juicers",
+          "Irons",
+          "Fans",
+          "Dehumidifiers",
+          "Air Purifiers"
+        ],
+        "Personal Care Appliances": [
+          "Hair Dryers",
+          "Hair Straighteners",
+          "Hair Curlers",
+          "Hair Clippers",
+          "Hair Brushes",
+          "Weighing Scales",
+          "Massagers",
+          "Shaving Machines"
+        ]
+      },
+      "Sports & Outdoor": {
+        "Exercise & Fitness": [
+          "Yoga Mats",
+          "Dumbbells",
+          "Resistance Bands",
+          "Treadmills",
+          "Elliptical Machines",
+          "Rowing Machines",
+          "Stationary Bikes",
+          "Strength Training Equipment",
+          "Fitness Accessories",
+          "Fitness Equipment"
+        ],
+        "Camping & Hiking": [
+          "Tents",
+          "Sleeping Bags",
+          "Backpacks",
+          "Camping Stoves",
+          "Camping Chairs",
+          "Camping Tables",
+          "Camping Accessories",
+          "Camping Cookware",
+          "Camping Utensils",
+          "Camping Storage"
+        ],
+        "Cycling": [
+          "Bicycles",
+          "Helmets",
+          "Cycling Gear",
+          "Accessories",
+          "Cycling Clothing",
+          "Cycling Shoes"
+        ],
+        "Team Sports": [
+          "Soccer Balls",
+          "Basketballs",
+          "Volleyballs",
+          "Jerseys"
+        ],
+        "Outdoor Recreation": [
+          "Fishing Gear",
+          "Kayaks",
+          "Skateboards",
+          "Scooters",
+          "Water Sports"
+        ]
+      },
+      "Books, Stationery & Hobby": {
+        "Books": [
+          "Fiction",
+          "Non-Fiction",
+          "Children's Books",
+          "Educational"
+        ],
+        "Stationery": [
+          "Pens",
+          "Notebooks",
+          "Planners",
+          "Sticky Notes"
+        ],
+        "Art & Craft Supplies": [
+          "Paints",
+          "Brushes",
+          "Sketchbooks",
+          "Craft Kits"
+        ],
+        "Hobby Kits": [
+          "Model Kits",
+          "Knitting",
+          "Sewing",
+          "DIY Projects"
+        ],
+        "Games & Puzzles": [
+          "Board Games",
+          "Puzzles",
+          "Card Games",
+          "Chess"
+        ],
+        "Music & Instruments": [
+          "Guitars",
+          "Keyboards",
+          "Accessories",
+          "Sheet Music"
+        ]
+      }
+    },
+  
+    "kCategoryKeywordToSubcategoryMap": {
+      "Women": {
+        "clothing": "Clothing",
+        "footwear": "Footwear",
+        "accessories": "Accessories",
+        "underwear": "Underwear & Sleepwear",
+        "sportswear": "Sportswear",
+        "swimwear": "Swimwear"
+      },
+      "Men": {
+        "clothing": "Clothing",
+        "footwear": "Footwear",
+        "accessories": "Accessories",
+        "underwear": "Underwear & Sleepwear",
+        "sportswear": "Sportswear",
+        "swimwear": "Swimwear"
+      },
+      "Mother & Child": {
+        "baby clothing": "Baby Clothing",
+        "kids clothing": "Kids Clothing",
+        "footwear": "Footwear",
+        "toys": "Toys & Games",
+        "baby care": "Baby Care",
+        "maternity": "Maternity",
+        "strollers": "Strollers & Car Seats",
+        "feeding": "Feeding",
+        "safety": "Safety"
+      },
+      "Home & Furniture": {
+        "furniture": "Furniture",
+        "bedding": "Bedding & Bath",
+        "decor": "Home Decor",
+        "kitchen": "Kitchen & Dining",
+        "bathroom": "Bathroom",
+        "lighting": "Lighting",
+        "storage": "Storage & Organization",
+        "textiles": "Textiles",
+        "appliances": "Appliances"
+      },
+      "Cosmetics": {
+        "skincare": "Skincare",
+        "makeup": "Makeup",
+        "haircare": "Haircare",
+        "fragrances": "Fragrances",
+        "personal care": "Personal Care",
+        "nail care": "Nail Care",
+        "body care": "Body Care"
+      },
+      "Bags": {
+        "handbags": "Handbags",
+        "backpacks": "Backpacks",
+        "tote bags": "Tote Bags",
+        "crossbody bags": "Crossbody Bags",
+        "clutches": "Clutches",
+        "wallets": "Wallets",
+        "luggage": "Luggage",
+        "sport bags": "Sport Bags"
+      },
+      "Electronics": {
+        "smartphones": "Smartphones & Accessories",
+        "laptops": "Laptops & Computers",
+        "tablets": "Tablets & E-Readers",
+        "headphones": "Audio & Headphones",
+        "cameras": "Cameras & Photography",
+        "televisions": "Televisions & Video",
+        "smart home": "Smart Home Devices",
+        "wearables": "Wearable Technology",
+        "gaming": "Gaming Consoles & Accessories",
+        "home appliances": "Home Appliances",
+        "personal care appliances": "Personal Care Appliances"
+      },
+      "Sports & Outdoor": {
+        "fitness": "Exercise & Fitness",
+        "camping": "Camping & Hiking",
+        "cycling": "Cycling",
+        "team sports": "Team Sports",
+        "outdoor gear": "Outdoor Recreation"
+      },
+      "Books, Stationery & Hobby": {
+        "books": "Books",
+        "stationery": "Stationery",
+        "art supplies": "Art & Craft Supplies",
+        "hobby kits": "Hobby Kits",
+        "games": "Games & Puzzles",
+        "puzzles": "Games & Puzzles",
+        "music": "Music & Instruments"
+      }
+    },
+  
+    "kClothingGenders": [
+      "Men",
+      "Women",
+      "Kids",
+      "Unisex"
+    ],
+  
+    "kClothingSizes": [
+      "XXS",
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL",
+      "3XL",
+      "4XL"
+    ],
+  
+    "kClothingFits": [
+      "Slim",
+      "Regular",
+      "Loose",
+      "Oversized"
+    ],
+  
+    "kClothingTypes": [
+      "Cotton",
+      "Polyester",
+      "Wool",
+      "Silk",
+      "Denim",
+      "Leather",
+      "Linen",
+      "Nylon"
+    ]
+  }

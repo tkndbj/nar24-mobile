@@ -1,0 +1,25 @@
+/build/
+/android/app/build/
+/ios/build/
+*.apk
+*.aab
+*.ipa
+kernel_blob.bin
+# Firebase secrets
+**/serviceAccountKey.json
+**/*-adminsdk-*.json
+firestore-metrics-init/
+firestore-migration/
+
+# Flutter/Dart build
+.dart_tool/
+build/
+*.dSYM/
+*.framework/
+
+
+# Flutter/Dart build
+.dart_tool/
+build/
+*.dSYM/
+

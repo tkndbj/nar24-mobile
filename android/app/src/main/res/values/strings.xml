@@ -1,0 +1,5 @@
+<resources>
+    <string name="default_notification_channel_id" translatable="false">default_channel</string>
+    <string name="google_maps_api_key">AIzaSyBhNLpEFJ6URKF0Zggz8_RQzTaKCEdRcrQ</string>
+</resources>
+

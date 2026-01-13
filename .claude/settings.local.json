@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter analyze:*)",
+      "Bash(findstr:*)",
+      "Bash(flutter pub outdated:*)",
+      "Bash(find:*)",
+      "Bash(flutter --version:*)",
+      "Bash(dir:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(wc:*)",
+      "Bash(powershell -Command \"Get-Content lib\\\\l10n\\\\app_tr.arb -Tail 5\")",
+      "Bash(powershell -Command \"Get-Content lib\\\\l10n\\\\app_ru.arb -Tail 5\")",
+      "Bash(powershell -Command \"\\(Get-Content lib\\\\l10n\\\\app_en.arb\\).Count\")",
+      "Bash(flutter gen-l10n:*)",
+      "Bash(powershell -Command \"\\(Get-Content lib\\\\l10n\\\\app_tr.arb\\).Count\")",
+      "Bash(powershell -Command:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
