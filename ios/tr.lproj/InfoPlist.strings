@@ -1,0 +1,7 @@
+"NSCameraUsageDescription" = "Nar24, satmak istediğiniz ürünlerin fotoğraflarını çekmek veya profil resminizi güncellemek için kamera erişimine ihtiyaç duyar.";
+"NSFaceIDUsageDescription" = "Nar24, hesabınızı korumak için hızlı ve güvenli giriş yapmak amacıyla Face ID kullanır.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "Nar24, teslimat adresinizi otomatik olarak doldurmak ve yakınlardaki ürünleri göstermek için konumunuzu kullanır.";
+"NSLocationWhenInUseUsageDescription" = "Nar24, teslimat adresinizi otomatik olarak doldurmak ve yakınlardaki ürünleri göstermek için konumunuzu kullanır.";
+"NSMicrophoneUsageDescription" = "Nar24, satmak istediğiniz ürünlerin videolarını kaydetmek için mikrofon erişimine ihtiyaç duyar.";
+"NSPhotoLibraryUsageDescription" = "Nar24, ürün fotoğraflarını yüklemek için fotoğraf kitaplığınıza erişim gerektirir.";
+"NSUserNotificationUsageDescription" = "Nar24, siparişleriniz ve özel teklifler hakkında bildirim gönderir.";

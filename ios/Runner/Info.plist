@@ -42,9 +42,9 @@
 			<key>CFBundleURLName</key>
 			<string>google-oauth</string>
 			<key>CFBundleURLSchemes</key>
-<array>
-    <string>com.googleusercontent.apps.373622886371-is60pmglj1l79jrk2v8sa2ahcmho0m50</string>
-</array>
+			<array>
+				<string>com.googleusercontent.apps.373622886371-is60pmglj1l79jrk2v8sa2ahcmho0m50</string>
+			</array>
 		</dict>
 		<dict>
 			<key>CFBundleTypeRole</key>
@@ -70,11 +70,13 @@
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>GIDClientID</key>
-<string>373622886371-is60pmglj1l79jrk2v8sa2ahcmho0m50.apps.googleusercontent.com</string>
+	<string>373622886371-is60pmglj1l79jrk2v8sa2ahcmho0m50.apps.googleusercontent.com</string>
 	<key>GIDServerClientID</key>
-<string>373622886371-it8pcemjud8oomjjjn1gel759e627j6m.apps.googleusercontent.com</string>
+	<string>373622886371-it8pcemjud8oomjjjn1gel759e627j6m.apps.googleusercontent.com</string>
 	<key>GoogleMapsAPIKey</key>
 	<string>AIzaSyACRkRYw-K6nIU8Xn0yUHyCNvdAsvOio8s</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>googlegmail</string>
@@ -103,23 +105,23 @@
 		<false/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-<string>Nar24 needs camera access to take photos of products you want to sell or to update your profile picture.</string>
+	<string>Nar24 needs camera access to take photos of products you want to sell or to update your profile picture.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Nar24 uses Face ID for quick and secure login to protect your account.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-<string>Nar24 uses your location to automatically fill in your delivery address and show nearby products.</string>
-<key>NSLocationWhenInUseUsageDescription</key>
-<string>Nar24 uses your location to automatically fill in your delivery address and show nearby products.</string>
+	<string>Nar24 uses your location to automatically fill in your delivery address and show nearby products.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Nar24 uses your location to automatically fill in your delivery address and show nearby products.</string>
 	<key>NSMicrophoneUsageDescription</key>
-<string>Nar24 needs microphone access to record videos of products you want to sell.</string>
+	<string>Nar24 needs microphone access to record videos of products you want to sell.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Nar24 needs access to your photo library to upload product images.</string>	
+	<string>Nar24 needs access to your photo library to upload product images.</string>
 	<key>NSSupportsAutomaticTermination</key>
 	<true/>
 	<key>NSSupportsSuddenTermination</key>
 	<true/>
 	<key>NSUserNotificationUsageDescription</key>
-<string>Nar24 sends notifications about your orders, and special offers.</string>
+	<string>Nar24 sends notifications about your orders, and special offers.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>
@@ -175,13 +177,11 @@
 		</dict>
 	</array>
 	<key>com.apple.developer.associated-domains</key>
-<array>
-    <string>applinks:www.nar24.com</string>
-    <string>applinks:nar24.com</string>
-    <string>applinks:app.nar24.com</string>
-    <string>applinks:emlak-mobile-app.web.app</string>	
-</array>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
+	<array>
+		<string>applinks:www.nar24.com</string>
+		<string>applinks:nar24.com</string>
+		<string>applinks:app.nar24.com</string>
+		<string>applinks:emlak-mobile-app.web.app</string>
+	</array>
 </dict>
 </plist>

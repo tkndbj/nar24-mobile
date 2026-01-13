@@ -1,0 +1,7 @@
+"NSCameraUsageDescription" = "Nar24 needs camera access to take photos of products you want to sell or to update your profile picture.";
+"NSFaceIDUsageDescription" = "Nar24 uses Face ID for quick and secure login to protect your account.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "Nar24 uses your location to automatically fill in your delivery address and show nearby products.";
+"NSLocationWhenInUseUsageDescription" = "Nar24 uses your location to automatically fill in your delivery address and show nearby products.";
+"NSMicrophoneUsageDescription" = "Nar24 needs microphone access to record videos of products you want to sell.";
+"NSPhotoLibraryUsageDescription" = "Nar24 needs access to your photo library to upload product images.";
+"NSUserNotificationUsageDescription" = "Nar24 sends notifications about your orders and special offers.";

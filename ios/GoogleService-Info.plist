@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>373622886371-is60pmglj1l79jrk2v8sa2ahcmho0m50.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.373622886371-is60pmglj1l79jrk2v8sa2ahcmho0m50</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>373622886371-gk1336gjt2k4mqoqffj3ssvjlrke6ob0.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyBuWLIn5pC8YFjIEyXezSkvCA_9aIJHyFk</string>
+	<key>GCM_SENDER_ID</key>
+	<string>373622886371</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.ects.nar24</string>
+	<key>PROJECT_ID</key>
+	<string>emlak-mobile-app</string>
+	<key>STORAGE_BUCKET</key>
+	<string>emlak-mobile-app.appspot.com</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:373622886371:ios:429520ad9a44300f225ad6</string>
+</dict>
+</plist>
