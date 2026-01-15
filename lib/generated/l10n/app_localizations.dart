@@ -23603,6 +23603,30 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Normal Fiyat'**
   String get regularPrice;
+
+  /// No description provided for @adServiceTemporarilyOff.
+  ///
+  /// In tr, this message translates to:
+  /// **'Servis Geçici Olarak Kapalı'**
+  String get adServiceTemporarilyOff;
+
+  /// No description provided for @adServiceDisabledMessage.
+  ///
+  /// In tr, this message translates to:
+  /// **'Reklam başvuruları geçici olarak durdurulmuştur. Devam eden reklamlarınız etkilenmeyecektir. Lütfen daha sonra tekrar deneyin.'**
+  String get adServiceDisabledMessage;
+
+  /// No description provided for @boostServiceTemporarilyOff.
+  ///
+  /// In tr, this message translates to:
+  /// **'Servis Geçici Olarak Kapalı'**
+  String get boostServiceTemporarilyOff;
+
+  /// No description provided for @boostServiceDisabledMessage.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ürün boost işlemleri geçici olarak durdurulmuştur. Aktif boostlarınız çalışmaya devam edecektir. Lütfen daha sonra tekrar deneyin.'**
+  String get boostServiceDisabledMessage;
 }
 
 class _AppLocalizationsDelegate

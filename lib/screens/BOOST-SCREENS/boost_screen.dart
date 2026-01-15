@@ -13,6 +13,78 @@ import 'boost_payment_webview.dart';
 import '../../generated/l10n/app_localizations.dart';
 // Import BoostAnalysisScreen so we can navigate to it
 
+class BoostPricesService {
+  static final BoostPricesService _instance = BoostPricesService._internal();
+  factory BoostPricesService() => _instance;
+  BoostPricesService._internal();
+
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  // Cached values
+  double _pricePerProductPerMinute = 1.0;
+  int _minDuration = 5;
+  int _maxDuration = 35;
+  int _maxProducts = 5;
+  bool _serviceEnabled = true;
+
+  StreamSubscription<DocumentSnapshot>? _subscription;
+  final _configController = StreamController<void>.broadcast();
+
+  // Getters
+  double get pricePerProductPerMinute => _pricePerProductPerMinute;
+  int get minDuration => _minDuration;
+  int get maxDuration => _maxDuration;
+  int get maxProducts => _maxProducts;
+  bool get serviceEnabled => _serviceEnabled;
+  Stream<void> get configStream => _configController.stream;
+
+  // Generate duration options dynamically
+  List<int> get durationOptions {
+    final List<int> options = [];
+    for (int i = _minDuration; i <= _maxDuration; i += 5) {
+      options.add(i);
+    }
+    if (options.isEmpty) options.add(_minDuration);
+    return options;
+  }
+
+  void startListening() {
+    if (_subscription != null) return;
+
+    _subscription = _firestore
+        .collection('app_config')
+        .doc('boost_prices')
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.exists) {
+        final data = snapshot.data() as Map<String, dynamic>;
+        _pricePerProductPerMinute = (data['pricePerProductPerMinute'] ?? 1.0).toDouble();
+        _minDuration = (data['minDuration'] ?? 5).toInt();
+        _maxDuration = (data['maxDuration'] ?? 35).toInt();
+        _maxProducts = (data['maxProducts'] ?? 5).toInt();
+        _serviceEnabled = data['serviceEnabled'] ?? true;
+        _configController.add(null);
+      } else {
+        // Use defaults
+        _pricePerProductPerMinute = 1.0;
+        _minDuration = 5;
+        _maxDuration = 35;
+        _maxProducts = 5;
+        _serviceEnabled = true;
+        _configController.add(null);
+      }
+    }, onError: (e) {
+      debugPrint('Error listening to boost prices: $e');
+      _configController.add(null);
+    });
+  }
+
+  void stopListening() {
+    _subscription?.cancel();
+    _subscription = null;
+  }
+}
+
 class BoostScreen extends StatefulWidget {
   final String? productId;
   final bool isShopContext;
@@ -44,6 +116,9 @@ class _BoostScreenState extends State<BoostScreen>
   int boostDuration = 5; // in minutes (default)
   double totalPrice = 5.0; // boostDuration * basePricePerProduct * (item count)
 
+   final BoostPricesService _boostPricesService = BoostPricesService();
+  StreamSubscription<void>? _pricesSubscription;
+
   // Although bulk boost previously used a TabBar (with one tab),
   // we are now removing the l10n.product tab.
   // We keep _tabController here to preserve similar code structure.
@@ -59,7 +134,7 @@ class _BoostScreenState extends State<BoostScreen>
   final Color jadeGreen = const Color(0xFF00A86B);
 
   // Boost duration options: now in minutes from 5 to 35.
-  final List<int> boostDurationOptions = [5, 10, 15, 20, 25, 30, 35];
+  
   int selectedDurationIndex = 0; // default to index 0 => 5 minutes
 
   @override
@@ -67,21 +142,30 @@ class _BoostScreenState extends State<BoostScreen>
     super.initState();
     _determineItemType();
 
-    // Initialize TabController for 1 tab even though we removed the product tab.
+    // ADD: Start listening to boost prices
+    _boostPricesService.startListening();
+    _pricesSubscription = _boostPricesService.configStream.listen((_) {
+      if (mounted) {
+        // Update duration options if current selection is out of range
+        final options = _boostPricesService.durationOptions;
+        if (selectedDurationIndex >= options.length) {
+          selectedDurationIndex = 0;
+        }
+        boostDuration = options[selectedDurationIndex];
+        _updateTotalPrice();
+        setState(() {});
+      }
+    });
+
     _tabController = TabController(length: 1, vsync: this);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Start both fetch operations in parallel
       final futures = <Future>[];
-
       if (_itemType != null) {
         futures.add(_fetchItemData());
       }
       futures.add(_fetchUnboostedItems());
-
-      // Wait for all operations to complete
       await Future.wait(futures);
-
       _updateTotalPrice();
     });
   }
@@ -89,6 +173,7 @@ class _BoostScreenState extends State<BoostScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _pricesSubscription?.cancel(); // ADD this
     super.dispose();
   }
 
@@ -216,6 +301,7 @@ class _BoostScreenState extends State<BoostScreen>
 
   /// Check if user has any products to boost
   bool get hasProductsToBoost {
+    if (!_boostPricesService.serviceEnabled) return false; // ADD this check
     return (_itemType != null) ||
         _unboostedProducts.isNotEmpty ||
         selectedItemIds.isNotEmpty;
@@ -400,7 +486,7 @@ class _BoostScreenState extends State<BoostScreen>
     // Calculate total items that would be selected
     final int totalItemsCount =
         (_itemType != null ? 1 : 0) + selectedItemIds.length;
-    final bool canSelectMore = totalItemsCount < 5;
+    final bool canSelectMore = totalItemsCount < _boostPricesService.maxProducts;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8.0),
@@ -699,14 +785,14 @@ class _BoostScreenState extends State<BoostScreen>
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
-            color: totalSelected >= 5
-                ? Colors.orange.withOpacity(0.1)
-                : jadeGreen.withOpacity(0.1),
+            color: totalSelected >= _boostPricesService.maxProducts
+    ? Colors.orange.withOpacity(0.1)
+    : jadeGreen.withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: totalSelected >= 5
-                  ? Colors.orange.withOpacity(0.3)
-                  : jadeGreen.withOpacity(0.3),
+              color: totalSelected >= _boostPricesService.maxProducts
+    ? Colors.orange.withOpacity(0.1)
+    : jadeGreen.withOpacity(0.1),
             ),
           ),
           child: Row(
@@ -721,7 +807,7 @@ class _BoostScreenState extends State<BoostScreen>
               ),
               const SizedBox(width: 8),
               Text(
-                '$totalSelected / 5',
+                '$totalSelected / ${_boostPricesService.maxProducts}',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -784,12 +870,10 @@ class _BoostScreenState extends State<BoostScreen>
     );
   }
 
-  /// Calculates the total price.
-  /// If a main product exists, counts it as 1; otherwise only counts selected items.
   void _updateTotalPrice() {
     final int itemCount = (_itemType != null ? 1 : 0) + selectedItemIds.length;
     setState(() {
-      totalPrice = boostDuration * basePricePerProduct * itemCount;
+      totalPrice = boostDuration * _boostPricesService.pricePerProductPerMinute * itemCount;
     });
   }
 
@@ -1135,11 +1219,11 @@ class _BoostScreenState extends State<BoostScreen>
                   // Info banner at the top
                   _buildInfoBanner(),
 
-                  // Check if user has products to boost
-                  if (!hasProductsToBoost) ...[
-                    // Empty state
-                    _buildEmptyState(),
-                  ] else ...[
+                  if (!_boostPricesService.serviceEnabled) ...[
+  _buildServiceDisabledState(),
+] else if (!hasProductsToBoost) ...[
+  _buildEmptyState(),
+] else ...[
                     // Single boost section
                     _buildSingleBoostSection(),
 
@@ -1200,33 +1284,29 @@ class _BoostScreenState extends State<BoostScreen>
                           ),
                           const SizedBox(height: 16),
                           SliderTheme(
-                            data: SliderTheme.of(context).copyWith(
-                              activeTrackColor: jadeGreen,
-                              inactiveTrackColor: Colors.grey[300],
-                              thumbColor: jadeGreen,
-                              overlayColor: jadeGreen.withOpacity(0.2),
-                              thumbShape: const RoundSliderThumbShape(
-                                  enabledThumbRadius: 10),
-                              overlayShape: const RoundSliderOverlayShape(
-                                  overlayRadius: 20),
-                            ),
-                            child: Slider(
-                              value: selectedDurationIndex.toDouble(),
-                              min: 0,
-                              max: (boostDurationOptions.length - 1).toDouble(),
-                              divisions: boostDurationOptions.length - 1,
-                              label: _getDurationLabel(
-                                  boostDurationOptions[selectedDurationIndex]),
-                              onChanged: (double value) {
-                                setState(() {
-                                  selectedDurationIndex = value.toInt();
-                                  boostDuration = boostDurationOptions[
-                                      selectedDurationIndex];
-                                  _updateTotalPrice();
-                                });
-                              },
-                            ),
-                          ),
+  data: SliderTheme.of(context).copyWith(
+    activeTrackColor: jadeGreen,
+    inactiveTrackColor: Colors.grey[300],
+    thumbColor: jadeGreen,
+    overlayColor: jadeGreen.withOpacity(0.2),
+    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+    overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
+  ),
+  child: Slider(
+    value: selectedDurationIndex.toDouble(),
+    min: 0,
+    max: (_boostPricesService.durationOptions.length - 1).toDouble(),
+    divisions: _boostPricesService.durationOptions.length - 1,
+    label: _getDurationLabel(_boostPricesService.durationOptions[selectedDurationIndex]),
+    onChanged: (double value) {
+      setState(() {
+        selectedDurationIndex = value.toInt();
+        boostDuration = _boostPricesService.durationOptions[selectedDurationIndex];
+        _updateTotalPrice();
+      });
+    },
+  ),
+),
                           Center(
                             child: Container(
                               padding: const EdgeInsets.symmetric(
@@ -1338,4 +1418,53 @@ class _BoostScreenState extends State<BoostScreen>
       ),
     );
   }
+  Widget _buildServiceDisabledState() {
+  final l10n = AppLocalizations.of(context);
+  final isLightMode = Theme.of(context).brightness == Brightness.light;
+
+  return Center(
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Icon(
+              Icons.pause_circle_outline_rounded,
+              size: 64,
+              color: Colors.orange,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            l10n.boostServiceTemporarilyOff,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: isLightMode ? Colors.grey[800] : Colors.grey[200],
+              fontFamily: 'Inter',
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            l10n.boostServiceDisabledMessage,
+            style: TextStyle(
+              fontSize: 14,
+              color: isLightMode ? Colors.grey[600] : Colors.grey[400],
+              fontFamily: 'Inter',
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    ),
+  );
+}
 }

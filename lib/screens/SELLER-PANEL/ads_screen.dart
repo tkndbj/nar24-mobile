@@ -11,6 +11,7 @@ import '../../generated/l10n/app_localizations.dart';
 import '../../utils/image_compression_utils.dart';
 import '../../models/product.dart';
 import 'ad_analytics_screen.dart';
+import 'dart:async';
 
 enum AdType { topBanner, thinBanner, marketBanner }
 
@@ -133,6 +134,96 @@ class AdSubmission {
   }
 }
 
+/// Service class to manage ad prices with caching
+class AdPricesService {
+  static final AdPricesService _instance = AdPricesService._internal();
+  factory AdPricesService() => _instance;
+  AdPricesService._internal();
+  bool _serviceEnabled = true;
+bool get serviceEnabled => _serviceEnabled;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  
+  Map<AdType, Map<AdDuration, double>>? _cachedPrices;
+  StreamSubscription<DocumentSnapshot>? _subscription;
+  final _pricesController = StreamController<Map<AdType, Map<AdDuration, double>>>.broadcast();
+
+  Stream<Map<AdType, Map<AdDuration, double>>> get pricesStream => _pricesController.stream;
+
+  Map<AdType, Map<AdDuration, double>> get defaultPrices => {
+    AdType.topBanner: {
+      AdDuration.oneWeek: 4000.0,
+      AdDuration.twoWeeks: 7500.0,
+      AdDuration.oneMonth: 14000.0,
+    },
+    AdType.thinBanner: {
+      AdDuration.oneWeek: 2000.0,
+      AdDuration.twoWeeks: 3500.0,
+      AdDuration.oneMonth: 6500.0,
+    },
+    AdType.marketBanner: {
+      AdDuration.oneWeek: 2500.0,
+      AdDuration.twoWeeks: 4500.0,
+      AdDuration.oneMonth: 8500.0,
+    },
+  };
+
+  void startListening() {
+    if (_subscription != null) return;
+
+  _subscription = _firestore
+    .collection('app_config')
+    .doc('ad_prices')
+    .snapshots()
+    .listen((snapshot) {
+  if (snapshot.exists) {
+    final data = snapshot.data() as Map<String, dynamic>;
+    _serviceEnabled = data['serviceEnabled'] ?? true;  // Add this line
+    _cachedPrices = _parsePrices(data);
+    _pricesController.add(_cachedPrices!);
+  } else {
+    _serviceEnabled = true;  // Add this line
+    _cachedPrices = defaultPrices;
+    _pricesController.add(_cachedPrices!);
+  }
+}, onError: (e) {
+  debugPrint('Error listening to ad prices: $e');
+  _serviceEnabled = true;  // Add this line
+  _cachedPrices ??= defaultPrices;
+  _pricesController.add(_cachedPrices!);
+});
+  }
+
+  Map<AdType, Map<AdDuration, double>> _parsePrices(Map<String, dynamic> data) {
+    _serviceEnabled = data['serviceEnabled'] ?? true;
+    return {
+      AdType.topBanner: {
+        AdDuration.oneWeek: (data['topBanner']?['oneWeek'] ?? 4000).toDouble(),
+        AdDuration.twoWeeks: (data['topBanner']?['twoWeeks'] ?? 7500).toDouble(),
+        AdDuration.oneMonth: (data['topBanner']?['oneMonth'] ?? 14000).toDouble(),
+      },
+      AdType.thinBanner: {
+        AdDuration.oneWeek: (data['thinBanner']?['oneWeek'] ?? 2000).toDouble(),
+        AdDuration.twoWeeks: (data['thinBanner']?['twoWeeks'] ?? 3500).toDouble(),
+        AdDuration.oneMonth: (data['thinBanner']?['oneMonth'] ?? 6500).toDouble(),
+      },
+      AdType.marketBanner: {
+        AdDuration.oneWeek: (data['marketBanner']?['oneWeek'] ?? 2500).toDouble(),
+        AdDuration.twoWeeks: (data['marketBanner']?['twoWeeks'] ?? 4500).toDouble(),
+        AdDuration.oneMonth: (data['marketBanner']?['oneMonth'] ?? 8500).toDouble(),
+      },
+    };
+  }
+
+  double getPrice(AdType adType, AdDuration duration) {
+    return _cachedPrices?[adType]?[duration] ?? defaultPrices[adType]![duration]!;
+  }
+
+  void stopListening() {
+    _subscription?.cancel();
+    _subscription = null;
+  }
+}
+
 class AdsScreen extends StatefulWidget {
   final String shopId;
   final String shopName;
@@ -154,20 +245,29 @@ class _AdsScreenState extends State<AdsScreen>
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final ImagePicker _picker = ImagePicker();
 
+  final AdPricesService _pricesService = AdPricesService();
+  StreamSubscription<Map<AdType, Map<AdDuration, double>>>? _pricesSubscription;
+
   TabController? _tabController;
   List<AdSubmission> _submissions = [];
   bool _isLoading = true;
   bool _isUploading = false;
   bool _isViewer = false;
+
+
   bool _isCheckingRole = true;
 
   // State for ad type selection
   AdType? _selectedAdType;
   AdDuration _selectedDuration = AdDuration.oneWeek;
 
-  @override
+ @override
   void initState() {
     super.initState();
+    _pricesService.startListening();
+    _pricesSubscription = _pricesService.pricesStream.listen((_) {
+      if (mounted) setState(() {});
+    });
     _checkUserRole();
     _loadSubmissions();
   }
@@ -205,9 +305,10 @@ class _AdsScreenState extends State<AdsScreen>
     );
   }
 
-  @override
+ @override
   void dispose() {
     _tabController?.dispose();
+    _pricesSubscription?.cancel();
     super.dispose();
   }
 
@@ -233,49 +334,11 @@ class _AdsScreenState extends State<AdsScreen>
     }
   }
 
-  // double _getPrice(AdType adType, AdDuration duration) {
-  //   const prices = {
-  //     AdType.topBanner: {
-  //       AdDuration.oneWeek: 4000.0,
-  //       AdDuration.twoWeeks: 7500.0,
-  //       AdDuration.oneMonth: 14000.0,
-  //     },
-  //     AdType.marketBanner: {
-  //       AdDuration.oneWeek: 2500.0,
-  //       AdDuration.twoWeeks: 4500.0,
-  //       AdDuration.oneMonth: 8500.0,
-  //     },
-  //     AdType.thinBanner: {
-  //       AdDuration.oneWeek: 2000.0,
-  //       AdDuration.twoWeeks: 3500.0,
-  //       AdDuration.oneMonth: 6500.0,
-  //     },
-  //   };
-
-  //   return prices[adType]?[duration] ?? 0.0;
-  // }
-
   double _getPrice(AdType adType, AdDuration duration) {
-    const prices = {
-      AdType.topBanner: {
-        AdDuration.oneWeek: 1.0,
-        AdDuration.twoWeeks: 1.0,
-        AdDuration.oneMonth: 1.0,
-      },
-      AdType.marketBanner: {
-        AdDuration.oneWeek: 1.0,
-        AdDuration.twoWeeks: 1.0,
-        AdDuration.oneMonth: 1.0,
-      },
-      AdType.thinBanner: {
-        AdDuration.oneWeek: 1.0,
-        AdDuration.twoWeeks: 1.0,
-        AdDuration.oneMonth: 1.0,
-      },
-    };
-
-    return prices[adType]?[duration] ?? 0.0;
+    return _pricesService.getPrice(adType, duration);
   }
+
+ 
 
   void _showDurationSelectionSheet(AdType adType) {
     final l10n = AppLocalizations.of(context);
@@ -390,7 +453,7 @@ class _AdsScreenState extends State<AdsScreen>
                     ),
                   ),
                 ),
-                SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
+                SizedBox(height: MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom),
               ],
             ),
           );
@@ -970,6 +1033,9 @@ class _AdsScreenState extends State<AdsScreen>
   }
 
   Widget _buildCreateAdTab(AppLocalizations l10n, bool isDark) {
+      if (!_pricesService.serviceEnabled) {
+    return _buildServiceDisabledState(l10n, isDark);
+  }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1072,6 +1138,51 @@ class _AdsScreenState extends State<AdsScreen>
       ),
     );
   }
+
+  Widget _buildServiceDisabledState(AppLocalizations l10n, bool isDark) {
+  return Center(
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFFED8936).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Icon(
+              Icons.pause_circle_outline_rounded,
+              size: 64,
+              color: Color(0xFFED8936),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            l10n.adServiceTemporarilyOff,
+            style: GoogleFonts.figtree(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: isDark ? Colors.white : const Color(0xFF1A202C),
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            l10n.adServiceDisabledMessage,
+            style: GoogleFonts.figtree(
+              fontSize: 14,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
   Widget _buildAdTypeCard(
     AppLocalizations l10n,
@@ -2677,6 +2788,7 @@ class _AdLinkSelectionSheetState extends State<AdLinkSelectionSheet> {
               ),
             ),
           ),
+          SizedBox(height: MediaQuery.of(context).padding.bottom),
         ],
       ),
     );

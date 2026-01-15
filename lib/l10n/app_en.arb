@@ -5457,5 +5457,9 @@
   "bundleStatus": "Bundle Status",
   "bundleWasPrice": "Was (Bundle)",
   "nowRegularPrice": "Now (Regular)",
-  "regularPrice": "Regular Price"
+  "regularPrice": "Regular Price",
+  "adServiceTemporarilyOff": "Service Temporarily Unavailable",
+"adServiceDisabledMessage": "Ad submissions are temporarily paused. Your ongoing boosts will not be affected. Please check back later.",
+"boostServiceTemporarilyOff": "Service Temporarily Unavailable",
+"boostServiceDisabledMessage": "Product boosting is temporarily paused. Your active boosts will continue running. Please check back later."
 }

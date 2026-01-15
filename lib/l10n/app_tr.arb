@@ -5434,5 +5434,9 @@
 "bundleStatus": "Paket Durumu",
 "bundleWasPrice": "Önceki (Paket)",
 "nowRegularPrice": "Şimdi (Normal)",
-"regularPrice": "Normal Fiyat"
+"regularPrice": "Normal Fiyat",
+"adServiceTemporarilyOff": "Servis Geçici Olarak Kapalı",
+"adServiceDisabledMessage": "Reklam başvuruları geçici olarak durdurulmuştur. Devam eden reklamlarınız etkilenmeyecektir. Lütfen daha sonra tekrar deneyin.",
+"boostServiceTemporarilyOff": "Servis Geçici Olarak Kapalı",
+"boostServiceDisabledMessage": "Ürün boost işlemleri geçici olarak durdurulmuştur. Aktif boostlarınız çalışmaya devam edecektir. Lütfen daha sonra tekrar deneyin."
 }

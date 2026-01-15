@@ -1,6 +1,7 @@
 // lib/utils/memory_manager.dart
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:Nar24/providers/product_detail_provider.dart';
 import 'package:Nar24/screens/PRODUCT-SCREENS/product_detail_screen.dart';
 
@@ -12,6 +13,10 @@ class MemoryManager {
   // ✅ PROVEN: 30MB limit is industry best practice for mobile apps
   static const int maxImageCacheSize = 30 * 1024 * 1024; // 30MB
   static const int warningImageCacheSize = 25 * 1024 * 1024; // 25MB
+
+  // Track last clear time to prevent excessive clearing
+  DateTime? _lastClearTime;
+  static const Duration _minClearInterval = Duration(seconds: 30);
 
   void setupMemoryManagement() {
     // Listen for system memory warnings
@@ -27,6 +32,12 @@ class MemoryManager {
     final imageCache = PaintingBinding.instance.imageCache;
 
     if (imageCache.currentSizeBytes > maxImageCacheSize) {
+      // Prevent clearing too frequently
+      if (_lastClearTime != null &&
+          DateTime.now().difference(_lastClearTime!) < _minClearInterval) {
+        return;
+      }
+
       debugPrint(
           '⚠️ Image cache exceeds limit: ${imageCache.currentSizeBytes ~/ 1024 ~/ 1024}MB');
       clearImageCache();
@@ -42,6 +53,9 @@ class MemoryManager {
 
     // Clear image caches
     clearImageCache();
+
+    // Clear CachedNetworkImage disk cache on memory pressure
+    DefaultCacheManager().emptyCache();
   }
 
   void clearImageCache() {
@@ -51,6 +65,19 @@ class MemoryManager {
     imageCache.clear();
     imageCache.clearLiveImages();
 
+    _lastClearTime = DateTime.now();
+
     debugPrint('✅ Image cache cleared: ${sizeBefore ~/ 1024 ~/ 1024}MB freed');
+  }
+
+  /// Get current memory stats for debugging
+  Map<String, dynamic> getMemoryStats() {
+    final imageCache = PaintingBinding.instance.imageCache;
+    return {
+      'imageCacheSizeBytes': imageCache.currentSizeBytes,
+      'imageCacheSizeMB': imageCache.currentSizeBytes ~/ 1024 ~/ 1024,
+      'imageCacheCount': imageCache.currentSize,
+      'lastClearTime': _lastClearTime?.toIso8601String(),
+    };
   }
 }

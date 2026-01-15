@@ -1039,9 +1039,19 @@ class _ImageSection extends StatelessWidget {
   }
 
   Widget _buildImageWidget(String imageUrl, double height) {
+    // ✅ MEMORY OPTIMIZATION: Limit decoded image size to prevent GPU buffer overflow
+    // Calculate cache dimensions based on actual display size
+    final double displayWidth = mediaQuery.size.width / 2; // Grid is 2 columns
+    final double dpr = mediaQuery.devicePixelRatio;
+    // Cap at reasonable max to prevent memory issues on high-DPI devices
+    final int cacheWidth = (displayWidth * dpr).round().clamp(100, 500);
+    final int cacheHeight = (height * dpr).round().clamp(100, 600);
+
     return CachedNetworkImage(
       imageUrl: imageUrl,
       fit: BoxFit.cover,
+      memCacheWidth: cacheWidth,
+      memCacheHeight: cacheHeight,
       placeholder: (context, url) =>
           _buildImagePlaceholder(effectiveScaleFactor),
       errorWidget: (context, url, error) =>

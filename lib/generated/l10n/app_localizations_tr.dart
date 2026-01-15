@@ -12370,4 +12370,18 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get regularPrice => 'Normal Fiyat';
+
+  @override
+  String get adServiceTemporarilyOff => 'Servis Geçici Olarak Kapalı';
+
+  @override
+  String get adServiceDisabledMessage =>
+      'Reklam başvuruları geçici olarak durdurulmuştur. Devam eden reklamlarınız etkilenmeyecektir. Lütfen daha sonra tekrar deneyin.';
+
+  @override
+  String get boostServiceTemporarilyOff => 'Servis Geçici Olarak Kapalı';
+
+  @override
+  String get boostServiceDisabledMessage =>
+      'Ürün boost işlemleri geçici olarak durdurulmuştur. Aktif boostlarınız çalışmaya devam edecektir. Lütfen daha sonra tekrar deneyin.';
 }

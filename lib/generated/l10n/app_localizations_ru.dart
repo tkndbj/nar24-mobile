@@ -12440,4 +12440,18 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get regularPrice => 'Обычная цена';
+
+  @override
+  String get adServiceTemporarilyOff => 'Сервис временно недоступен';
+
+  @override
+  String get adServiceDisabledMessage =>
+      'Подача рекламы временно приостановлена. Ваши текущие рекламные акции не будут затронуты. Пожалуйста, проверьте позже.';
+
+  @override
+  String get boostServiceTemporarilyOff => 'Сервис временно недоступен';
+
+  @override
+  String get boostServiceDisabledMessage =>
+      'Продвижение товаров временно приостановлено. Ваши активные продвижения продолжат работать. Пожалуйста, проверьте позже.';
 }

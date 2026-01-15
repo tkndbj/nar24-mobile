@@ -12345,4 +12345,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get regularPrice => 'Regular Price';
+
+  @override
+  String get adServiceTemporarilyOff => 'Service Temporarily Unavailable';
+
+  @override
+  String get adServiceDisabledMessage =>
+      'Ad submissions are temporarily paused. Your ongoing boosts will not be affected. Please check back later.';
+
+  @override
+  String get boostServiceTemporarilyOff => 'Service Temporarily Unavailable';
+
+  @override
+  String get boostServiceDisabledMessage =>
+      'Product boosting is temporarily paused. Your active boosts will continue running. Please check back later.';
 }
