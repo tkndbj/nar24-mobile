@@ -58,7 +58,8 @@ class BoostPricesService {
         .listen((snapshot) {
       if (snapshot.exists) {
         final data = snapshot.data() as Map<String, dynamic>;
-        _pricePerProductPerMinute = (data['pricePerProductPerMinute'] ?? 1.0).toDouble();
+        _pricePerProductPerMinute =
+            (data['pricePerProductPerMinute'] ?? 1.0).toDouble();
         _minDuration = (data['minDuration'] ?? 5).toInt();
         _maxDuration = (data['maxDuration'] ?? 35).toInt();
         _maxProducts = (data['maxProducts'] ?? 5).toInt();
@@ -116,7 +117,7 @@ class _BoostScreenState extends State<BoostScreen>
   int boostDuration = 5; // in minutes (default)
   double totalPrice = 5.0; // boostDuration * basePricePerProduct * (item count)
 
-   final BoostPricesService _boostPricesService = BoostPricesService();
+  final BoostPricesService _boostPricesService = BoostPricesService();
   StreamSubscription<void>? _pricesSubscription;
 
   // Although bulk boost previously used a TabBar (with one tab),
@@ -134,7 +135,7 @@ class _BoostScreenState extends State<BoostScreen>
   final Color jadeGreen = const Color(0xFF00A86B);
 
   // Boost duration options: now in minutes from 5 to 35.
-  
+
   int selectedDurationIndex = 0; // default to index 0 => 5 minutes
 
   @override
@@ -388,84 +389,84 @@ class _BoostScreenState extends State<BoostScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-          Container(
-            padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(
-              color: isLightMode
-                  ? Colors.grey[100]
-                  : const Color.fromARGB(255, 45, 43, 61),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.inventory_2_rounded,
-              size: 64,
-              color: Colors.grey[400],
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            l10n.noProductsToBoostTitle,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: isLightMode ? Colors.grey[800] : Colors.grey[200],
-              fontFamily: 'Inter',
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            l10n.noProductsToBoostDescription,
-            style: TextStyle(
-              fontSize: 14,
-              color: isLightMode ? Colors.grey[600] : Colors.grey[400],
-              fontFamily: 'Inter',
-              height: 1.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 32),
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [jadeGreen, jadeGreen.withOpacity(0.8)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: isLightMode
+                    ? Colors.grey[100]
+                    : const Color.fromARGB(255, 45, 43, 61),
+                shape: BoxShape.circle,
               ),
-              borderRadius: BorderRadius.circular(12),
+              child: Icon(
+                Icons.inventory_2_rounded,
+                size: 64,
+                color: Colors.grey[400],
+              ),
             ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
+            const SizedBox(height: 24),
+            Text(
+              l10n.noProductsToBoostTitle,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: isLightMode ? Colors.grey[800] : Colors.grey[200],
+                fontFamily: 'Inter',
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              l10n.noProductsToBoostDescription,
+              style: TextStyle(
+                fontSize: 14,
+                color: isLightMode ? Colors.grey[600] : Colors.grey[400],
+                fontFamily: 'Inter',
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [jadeGreen, jadeGreen.withOpacity(0.8)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 borderRadius: BorderRadius.circular(12),
-                onTap: () {
-                  Navigator.pop(context);
-                },
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.add_rounded,
-                          color: Colors.white, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        l10n.addProductFirst,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontFamily: 'Inter',
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    Navigator.pop(context);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.add_rounded,
+                            color: Colors.white, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          l10n.addProductFirst,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontFamily: 'Inter',
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -486,7 +487,8 @@ class _BoostScreenState extends State<BoostScreen>
     // Calculate total items that would be selected
     final int totalItemsCount =
         (_itemType != null ? 1 : 0) + selectedItemIds.length;
-    final bool canSelectMore = totalItemsCount < _boostPricesService.maxProducts;
+    final bool canSelectMore =
+        totalItemsCount < _boostPricesService.maxProducts;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8.0),
@@ -777,6 +779,8 @@ class _BoostScreenState extends State<BoostScreen>
     final isLightMode = Theme.of(context).brightness == Brightness.light;
     final int totalSelected =
         (_itemType != null ? 1 : 0) + selectedItemIds.length;
+    final int maxProducts =
+        _boostPricesService.maxProducts; // Add this for cleaner code
 
     return Column(
       children: [
@@ -785,33 +789,34 @@ class _BoostScreenState extends State<BoostScreen>
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
-            color: totalSelected >= _boostPricesService.maxProducts
-    ? Colors.orange.withOpacity(0.1)
-    : jadeGreen.withOpacity(0.1),
+            color: totalSelected >= maxProducts
+                ? Colors.orange.withOpacity(0.1)
+                : jadeGreen.withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: totalSelected >= _boostPricesService.maxProducts
-    ? Colors.orange.withOpacity(0.1)
-    : jadeGreen.withOpacity(0.1),
+              color: totalSelected >= maxProducts
+                  ? Colors.orange.withOpacity(0.3) // ← Also fix this (was 0.1)
+                  : jadeGreen.withOpacity(0.3),
             ),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                totalSelected >= 5
+                totalSelected >= maxProducts
                     ? Icons.warning_amber_rounded
                     : Icons.check_circle_outline,
                 size: 16,
-                color: totalSelected >= 5 ? Colors.orange : jadeGreen,
+                color: totalSelected >= maxProducts ? Colors.orange : jadeGreen,
               ),
               const SizedBox(width: 8),
               Text(
-                '$totalSelected / ${_boostPricesService.maxProducts}',
+                '$totalSelected / $maxProducts',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: totalSelected >= 5 ? Colors.orange : jadeGreen,
+                  color:
+                      totalSelected >= maxProducts ? Colors.orange : jadeGreen,
                   fontFamily: 'Figtree',
                 ),
               ),
@@ -873,7 +878,9 @@ class _BoostScreenState extends State<BoostScreen>
   void _updateTotalPrice() {
     final int itemCount = (_itemType != null ? 1 : 0) + selectedItemIds.length;
     setState(() {
-      totalPrice = boostDuration * _boostPricesService.pricePerProductPerMinute * itemCount;
+      totalPrice = boostDuration *
+          _boostPricesService.pricePerProductPerMinute *
+          itemCount;
     });
   }
 
@@ -1220,10 +1227,10 @@ class _BoostScreenState extends State<BoostScreen>
                   _buildInfoBanner(),
 
                   if (!_boostPricesService.serviceEnabled) ...[
-  _buildServiceDisabledState(),
-] else if (!hasProductsToBoost) ...[
-  _buildEmptyState(),
-] else ...[
+                    _buildServiceDisabledState(),
+                  ] else if (!hasProductsToBoost) ...[
+                    _buildEmptyState(),
+                  ] else ...[
                     // Single boost section
                     _buildSingleBoostSection(),
 
@@ -1284,29 +1291,37 @@ class _BoostScreenState extends State<BoostScreen>
                           ),
                           const SizedBox(height: 16),
                           SliderTheme(
-  data: SliderTheme.of(context).copyWith(
-    activeTrackColor: jadeGreen,
-    inactiveTrackColor: Colors.grey[300],
-    thumbColor: jadeGreen,
-    overlayColor: jadeGreen.withOpacity(0.2),
-    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
-    overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
-  ),
-  child: Slider(
-    value: selectedDurationIndex.toDouble(),
-    min: 0,
-    max: (_boostPricesService.durationOptions.length - 1).toDouble(),
-    divisions: _boostPricesService.durationOptions.length - 1,
-    label: _getDurationLabel(_boostPricesService.durationOptions[selectedDurationIndex]),
-    onChanged: (double value) {
-      setState(() {
-        selectedDurationIndex = value.toInt();
-        boostDuration = _boostPricesService.durationOptions[selectedDurationIndex];
-        _updateTotalPrice();
-      });
-    },
-  ),
-),
+                            data: SliderTheme.of(context).copyWith(
+                              activeTrackColor: jadeGreen,
+                              inactiveTrackColor: Colors.grey[300],
+                              thumbColor: jadeGreen,
+                              overlayColor: jadeGreen.withOpacity(0.2),
+                              thumbShape: const RoundSliderThumbShape(
+                                  enabledThumbRadius: 10),
+                              overlayShape: const RoundSliderOverlayShape(
+                                  overlayRadius: 20),
+                            ),
+                            child: Slider(
+                              value: selectedDurationIndex.toDouble(),
+                              min: 0,
+                              max: (_boostPricesService.durationOptions.length -
+                                      1)
+                                  .toDouble(),
+                              divisions:
+                                  _boostPricesService.durationOptions.length -
+                                      1,
+                              label: _getDurationLabel(_boostPricesService
+                                  .durationOptions[selectedDurationIndex]),
+                              onChanged: (double value) {
+                                setState(() {
+                                  selectedDurationIndex = value.toInt();
+                                  boostDuration = _boostPricesService
+                                      .durationOptions[selectedDurationIndex];
+                                  _updateTotalPrice();
+                                });
+                              },
+                            ),
+                          ),
                           Center(
                             child: Container(
                               padding: const EdgeInsets.symmetric(
@@ -1418,53 +1433,54 @@ class _BoostScreenState extends State<BoostScreen>
       ),
     );
   }
-  Widget _buildServiceDisabledState() {
-  final l10n = AppLocalizations.of(context);
-  final isLightMode = Theme.of(context).brightness == Brightness.light;
 
-  return Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
+  Widget _buildServiceDisabledState() {
+    final l10n = AppLocalizations.of(context);
+    final isLightMode = Theme.of(context).brightness == Brightness.light;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(
+                Icons.pause_circle_outline_rounded,
+                size: 64,
+                color: Colors.orange,
+              ),
             ),
-            child: const Icon(
-              Icons.pause_circle_outline_rounded,
-              size: 64,
-              color: Colors.orange,
+            const SizedBox(height: 24),
+            Text(
+              l10n.boostServiceTemporarilyOff,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: isLightMode ? Colors.grey[800] : Colors.grey[200],
+                fontFamily: 'Inter',
+              ),
+              textAlign: TextAlign.center,
             ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            l10n.boostServiceTemporarilyOff,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: isLightMode ? Colors.grey[800] : Colors.grey[200],
-              fontFamily: 'Inter',
+            const SizedBox(height: 12),
+            Text(
+              l10n.boostServiceDisabledMessage,
+              style: TextStyle(
+                fontSize: 14,
+                color: isLightMode ? Colors.grey[600] : Colors.grey[400],
+                fontFamily: 'Inter',
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
             ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            l10n.boostServiceDisabledMessage,
-            style: TextStyle(
-              fontSize: 14,
-              color: isLightMode ? Colors.grey[600] : Colors.grey[400],
-              fontFamily: 'Inter',
-              height: 1.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 }
