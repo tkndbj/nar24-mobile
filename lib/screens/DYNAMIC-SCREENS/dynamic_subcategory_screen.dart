@@ -73,9 +73,11 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
           limit: 20,
         );
       } else {
+        // ✅ FIX: Pass gender parameter for Women/Men View All navigation
         _specialFilterProvider.fetchSubcategoryProducts(
           widget.category,
           widget.subcategoryId,
+          gender: widget.gender,
         );
       }
     });
@@ -91,9 +93,11 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
 
   Future<void> _refreshProducts() async {
     _subsubcategoryCache.clear();
+    // ✅ FIX: Pass gender parameter for Women/Men View All refresh
     await _specialFilterProvider.fetchSubcategoryProducts(
       widget.category,
       widget.subcategoryId,
+      gender: widget.gender,
     );
   }
 
@@ -120,8 +124,10 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
     }
     _isFetchingMoreForSubsubcategory = true;
     try {
+      // ✅ FIX: Pass gender to getter methods
       while (_specialFilterProvider.hasMoreSubcategory(
-          widget.category, widget.subcategoryId)) {
+          widget.category, widget.subcategoryId,
+          gender: widget.gender)) {
         await _specialFilterProvider.fetchMoreSubcategoryProducts(
           widget.category,
           widget.subcategoryId,
@@ -129,6 +135,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
         final products = _specialFilterProvider.getSubcategoryProductsById(
           widget.category,
           widget.subcategoryId,
+          gender: widget.gender,
         );
         final cacheKey =
             '${widget.category}|${widget.subcategoryId}|$_dynamicSubsubcategory';
@@ -154,9 +161,11 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
       colors: _dynamicColors,
       subsubcategory: _dynamicSubsubcategory,
     );
+    // ✅ FIX: Pass gender parameter for Women/Men View All filter
     await _specialFilterProvider.fetchSubcategoryProducts(
       widget.category,
       widget.subcategoryId,
+      gender: widget.gender,
     );
   }
 
@@ -272,9 +281,11 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
         if (widget.isGenderFilter == true) {
           allProducts = prov.getProducts(widget.category);
         } else {
+          // ✅ FIX: Pass gender for Women/Men View All
           allProducts = prov.getSubcategoryProductsById(
             widget.category,
             widget.subcategoryId,
+            gender: widget.gender,
           );
         }
 
@@ -306,18 +317,22 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
         final displayProducts = filteredProducts;
         final boosted = displayProducts.where((p) => p.isBoosted).toList();
         final normal = displayProducts.where((p) => !p.isBoosted).toList();
+        // ✅ FIX: Pass gender for Women/Men View All
         final hasMore = prov.hasMoreSubcategory(
           widget.category,
           widget.subcategoryId,
+          gender: widget.gender,
         );
 
         return NotificationListener<ScrollNotification>(
           onNotification: (notif) {
             if (notif is ScrollEndNotification &&
                 hasMore &&
+                // ✅ FIX: Pass gender for Women/Men View All
                 !prov.isLoadingMoreSubcategory(
                   widget.category,
                   widget.subcategoryId,
+                  gender: widget.gender,
                 ) &&
                 notif.metrics.pixels >= notif.metrics.maxScrollExtent * 0.9) {
               _debounceTimer?.cancel();
@@ -329,9 +344,11 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                 )
                     .then((_) {
                   if (_dynamicSubsubcategory != null) {
+                    // ✅ FIX: Pass gender for Women/Men View All
                     final updatedProducts = prov.getSubcategoryProductsById(
                       widget.category,
                       widget.subcategoryId,
+                      gender: widget.gender,
                     );
                     final cacheKey =
                         '${widget.category}|${widget.subcategoryId}|$_dynamicSubsubcategory';
@@ -356,9 +373,11 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                     boostedProducts: boosted,
                     hasMore: hasMore,
                     screenName: 'dynamic_subcategory_screen',
+                    // ✅ FIX: Pass gender for Women/Men View All
                     isLoadingMore: prov.isLoadingMoreSubcategory(
                       widget.category,
                       widget.subcategoryId,
+                      gender: widget.gender,
                     ),
                     selectedColor:
                         _dynamicColors.isNotEmpty ? _dynamicColors.first : null,
@@ -515,9 +534,11 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
             colors: [],
             subsubcategory: null,
           );
+          // ✅ FIX: Pass gender for Women/Men View All
           _specialFilterProvider.fetchSubcategoryProducts(
             widget.category,
             widget.subcategoryId,
+            gender: widget.gender,
           );
           Navigator.of(context).pop();
         },
@@ -528,9 +549,11 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
       ),
       body: Consumer<SpecialFilterProviderMarket>(
         builder: (context, prov, _) {
+          // ✅ FIX: Pass gender for Women/Men View All
           final isLoading = prov.isLoadingSubcategory(
             widget.category,
             widget.subcategoryId,
+            gender: widget.gender,
           );
 
           if (isLoading) {

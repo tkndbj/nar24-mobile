@@ -215,11 +215,6 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       _lastDocuments.remove(key);
       _isFiltering.remove(key);
     }
-
-    if (keysToRemove.isNotEmpty) {
-      debugPrint(
-          '🧹 Cleaned up data for ${keysToRemove.length} orphaned filters');
-    }
   }
 
   Future<void> setQuickFilter(String? filterKey) async {
@@ -533,7 +528,6 @@ class SpecialFilterProviderMarket with ChangeNotifier {
 
         if (newProducts.length > MAX_PRODUCTS_PER_FILTER) {
           newProducts = newProducts.take(MAX_PRODUCTS_PER_FILTER).toList();
-          debugPrint('Warning: Truncated products to prevent memory overflow');
         }
 
         _updatePaginationState(snapshot, filterType, page);
@@ -629,7 +623,6 @@ class SpecialFilterProviderMarket with ChangeNotifier {
         return query.orderBy('createdAt', descending: true);
       }
     } catch (e) {
-      debugPrint('Warning: Failed to apply sorting, using default: $e');
       return query.orderBy('createdAt', descending: true);
     }
   }
@@ -655,8 +648,6 @@ class SpecialFilterProviderMarket with ChangeNotifier {
               .orderBy('createdAt', descending: true);
       }
     } catch (e) {
-      debugPrint(
-          'Warning: Failed to apply subcategory sorting, using default: $e');
       return query
           .orderBy('promotionScore', descending: true)
           .orderBy('createdAt', descending: true);
@@ -727,14 +718,10 @@ class SpecialFilterProviderMarket with ChangeNotifier {
 
   Future<void> _handleFetchFailure(
       String filterType, int page, dynamic error) async {
-    debugPrint('Error: Max retries exceeded for $filterType: $error');
-
     final cacheKey = '$filterType|$page';
     final fallbackProducts = _productCache[cacheKey];
 
     if (fallbackProducts != null && fallbackProducts.isNotEmpty) {
-      debugPrint('Using cached fallback data for $filterType');
-
       if (page == 0) {
         _filterProducts[filterType] = [];
         _filterProductIds[filterType] = <String>{};
@@ -834,23 +821,187 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     _updateFilterHasMoreState(filterType, newProducts.length >= limit);
   }
 
+  /// Check if product is suitable for a specific gender
+  /// Uses explicit gender field if available, otherwise falls back to keyword detection
+  bool _isProductSuitableForGender(Product product, String gender) {
+    // First check if product has an explicit gender field
+    if (product.gender != null && product.gender!.isNotEmpty) {
+      final productGender = product.gender!.toLowerCase();
+      final targetGender = gender.toLowerCase();
+      return productGender == targetGender ||
+          productGender == 'unisex' ||
+          productGender == 'both';
+    }
+
+    // Fallback to keyword-based logic
+    final productName = product.productName.toLowerCase();
+    final description = product.description.toLowerCase();
+    final brandModel = product.brandModel?.toLowerCase() ?? '';
+
+    if (gender == 'Women') {
+      // Check for women-specific keywords
+      final hasWomenKeywords = productName.contains('women') ||
+          productName.contains('female') ||
+          productName.contains('ladies') ||
+          productName.contains('woman') ||
+          productName.contains('kadın') ||
+          productName.contains('bayan') ||
+          description.contains('women') ||
+          description.contains('female') ||
+          description.contains('ladies') ||
+          description.contains('kadın') ||
+          description.contains('bayan') ||
+          brandModel.contains('women') ||
+          brandModel.contains('ladies');
+
+      // Exclude men-specific products
+      final hasMenKeywords = productName.contains('men\'s') ||
+          productName.contains('erkek') ||
+          productName.contains('male') ||
+          productName.contains('gentlemen');
+
+      return hasWomenKeywords || !hasMenKeywords;
+    } else if (gender == 'Men') {
+      // Check for men-specific keywords
+      final hasMenKeywords = productName.contains('men') ||
+          productName.contains('male') ||
+          productName.contains('gentlemen') ||
+          productName.contains('man') ||
+          productName.contains('erkek') ||
+          productName.contains('bay') ||
+          description.contains('men') ||
+          description.contains('male') ||
+          description.contains('gentlemen') ||
+          description.contains('erkek') ||
+          brandModel.contains('men') ||
+          brandModel.contains('male');
+
+      // Exclude women-specific products
+      final hasWomenKeywords = productName.contains('women') ||
+          productName.contains('kadın') ||
+          productName.contains('bayan') ||
+          productName.contains('female') ||
+          productName.contains('ladies');
+
+      return hasMenKeywords || !hasWomenKeywords;
+    }
+
+    // If no gender indicators found, include the product (could be unisex)
+    return true;
+  }
+
+  /// Buyer subcategory to product category mapping for Women/Men
+  static const Map<String, Map<String, String>>
+      _kBuyerToProductCategoryMapping = {
+    'Women': {
+      'Fashion': 'Clothing & Fashion',
+      'Shoes': 'Footwear',
+      'Accessories': 'Accessories',
+      'Bags': 'Bags & Luggage',
+      'Self Care': 'Beauty & Personal Care',
+    },
+    'Men': {
+      'Fashion': 'Clothing & Fashion',
+      'Shoes': 'Footwear',
+      'Accessories': 'Accessories',
+      'Bags': 'Bags & Luggage',
+      'Self Care': 'Beauty & Personal Care',
+    },
+  };
+
+  /// Buyer subcategories for Women/Men
+  static const Map<String, List<String>> _kBuyerSubcategories = {
+    'Women': ['Fashion', 'Shoes', 'Accessories', 'Bags', 'Self Care'],
+    'Men': ['Fashion', 'Shoes', 'Accessories', 'Bags', 'Self Care'],
+  };
+
+  /// Fetch products for Women/Men buyer categories
+  /// Each buyer subcategory maps to a product category
+  Future<void> _fetchBuyerCategoryProducts(
+      String filterType, int page, int limit) async {
+    final buyerSubcategories = _kBuyerSubcategories[filterType] ?? [];
+    final categoryMapping = _kBuyerToProductCategoryMapping[filterType] ?? {};
+
+    if (buyerSubcategories.isEmpty) return;
+
+    final List<Map<String, dynamic>> subcategoryData = [];
+    final List<Product> allProducts = [];
+    final Set<String> allProductIds = <String>{};
+
+    // Fetch products for each buyer subcategory (mapped to product category)
+    for (var buyerSubcat in buyerSubcategories) {
+      final productCategory = categoryMapping[buyerSubcat];
+      if (productCategory == null) continue;
+
+      try {
+        // Query products from the mapped category, filtered by gender
+        // Products have gender field: "Women", "Men", or "Unisex"
+
+        Query query = _firestore
+            .collection('shop_products')
+            .where('category', isEqualTo: productCategory)
+            .where('gender', whereIn: [filterType, 'Unisex'])
+            .orderBy('promotionScore', descending: true)
+            .limit(10); // Get up to 10 products per category
+
+        final snapshot = await query.get();
+
+        final products =
+            snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
+
+        if (products.isNotEmpty) {
+          subcategoryData.add({
+            'subcategoryId':
+                productCategory, // Use product category as ID for View All
+            'subcategoryName': buyerSubcat, // Display buyer subcategory name
+            'products': products,
+          });
+
+          for (var product in products) {
+            if (allProductIds.add(product.id)) {
+              allProducts.add(product);
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint(
+            '❌ Error fetching $filterType > $buyerSubcat ($productCategory): $e');
+      }
+    }
+
+    // Update state
+
+    _filterProducts[filterType] = allProducts;
+    _filterProductIds[filterType] = allProductIds;
+    _subcategoryProducts[filterType] = subcategoryData;
+
+    final cacheKey = '$filterType|$page';
+    _productCache[cacheKey] = List.from(allProducts);
+    _cacheTimestamps[cacheKey] = DateTime.now();
+
+    if (filterType == specialFilter) {
+      _productIdsSubject.add(allProducts.map((p) => p.id).toList());
+    }
+
+    // For Women/Men, we fetch all subcategories at once, so no more pages
+    _updateFilterHasMoreState(filterType, false);
+  }
+
   Future<void> _fetchSubcategoryProducts(
       String filterType, int page, int limit) async {
-    Query productsQuery;
-
     if (['Women', 'Men'].contains(filterType)) {
-      productsQuery = _firestore
-          .collection('shop_products')
-          .where('gender', whereIn: [filterType, 'Unisex'])
-          .orderBy('promotionScore', descending: true)
-          .orderBy('createdAt', descending: true);
-    } else {
-      productsQuery = _firestore
-          .collection('shop_products')
-          .where('category', isEqualTo: filterType)
-          .orderBy('subcategory', descending: false)
-          .orderBy('promotionScore', descending: true);
+      // ✅ For Women/Men: Fetch products from each mapped category separately
+      // Buyer subcategories (Fashion, Shoes, etc.) map to product categories
+      await _fetchBuyerCategoryProducts(filterType, page, limit);
+      return;
     }
+
+    // For other category filters (Electronics, Home & Furniture, etc.)
+    Query productsQuery = _firestore
+        .collection('shop_products')
+        .where('category', isEqualTo: filterType)
+        .orderBy('subcategory', descending: false)
+        .orderBy('promotionScore', descending: true);
 
     if (dynamicBrand != null) {
       productsQuery =
@@ -867,99 +1018,15 @@ class SpecialFilterProviderMarket with ChangeNotifier {
           productsQuery.startAfterDocument(_lastDocuments[filterType]!);
     }
 
-    // ✅ CHANGE: Use reasonable limit based on expected subcategories
-    // If you expect 5 subcategories, limit * 5 is enough
-    final fetchLimit =
-        ['Women', 'Men'].contains(filterType) ? limit * 2 : limit * 3;
+    final fetchLimit = limit * 3;
     productsQuery = productsQuery.limit(fetchLimit);
 
     final productsSnapshot = await productsQuery.get();
-    var allProducts =
+    final allProducts =
         productsSnapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
 
     if (productsSnapshot.docs.isNotEmpty) {
       _lastDocuments[filterType] = productsSnapshot.docs.last;
-    }
-
-    if (['Women', 'Men'].contains(filterType)) {
-      final Map<String, List<Product>> categoryMap = {};
-      final Set<String> processedProductIds = <String>{};
-
-      for (var product in allProducts) {
-        if (processedProductIds.contains(product.id)) continue;
-        processedProductIds.add(product.id);
-
-        final category = product.category;
-        if (category.isNotEmpty) {
-          categoryMap.putIfAbsent(category, () => []).add(product);
-        }
-      }
-
-      final List<Map<String, dynamic>> categoryData = [];
-      final categories = categoryMap.keys.toList()..sort();
-      final startIndex = page * limit;
-      final endIndex = (page + 1) * limit;
-      final paginatedCategories =
-          categories.skip(startIndex).take(limit).toList();
-
-      for (var category in paginatedCategories) {
-        final products = categoryMap[category] ?? [];
-
-        products.sort((a, b) {
-          final aScore = a.promotionScore ?? 0;
-          final bScore = b.promotionScore ?? 0;
-          return bScore.compareTo(aScore);
-        });
-
-        final selectedProducts = products.take(10).toList();
-
-        if (selectedProducts.isNotEmpty) {
-          categoryData.add({
-            'subcategoryId': category,
-            'subcategoryName': category,
-            'products': selectedProducts,
-          });
-        }
-      }
-
-      final currentProducts = _filterProducts[filterType] ?? [];
-      final currentProductIds = _filterProductIds[filterType] ?? <String>{};
-      final currentSubcategoryProducts = _subcategoryProducts[filterType] ?? [];
-
-      final existingCategoryIds = currentSubcategoryProducts
-          .map((cat) => cat['subcategoryId'] as String)
-          .toSet();
-
-      for (var catData in categoryData) {
-        final categoryId = catData['subcategoryId'] as String;
-
-        if (!existingCategoryIds.contains(categoryId)) {
-          currentSubcategoryProducts.add(catData);
-          existingCategoryIds.add(categoryId);
-        }
-
-        final products = catData['products'] as List<Product>;
-        for (var product in products) {
-          if (currentProductIds.add(product.id)) {
-            currentProducts.add(product);
-          }
-        }
-      }
-
-      _filterProducts[filterType] = currentProducts;
-      _filterProductIds[filterType] = currentProductIds;
-      _subcategoryProducts[filterType] = currentSubcategoryProducts;
-
-      final cacheKey = '$filterType|$page';
-      _productCache[cacheKey] = List.from(currentProducts);
-      _cacheTimestamps[cacheKey] = DateTime.now();
-
-      if (filterType == specialFilter) {
-        _productIdsSubject.add(currentProducts.map((p) => p.id).toList());
-      }
-      _updateFilterHasMoreState(filterType, categories.length > endIndex);
-
-      return;
     }
 
     final Map<String, List<Product>> subcategoryMap = {};
@@ -1034,8 +1101,6 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     _filterLoadingMoreNotifiers.remove(filterType);
     _filterHasMoreNotifiers[filterType]?.dispose();
     _filterHasMoreNotifiers.remove(filterType);
-
-    debugPrint('🗑️ Cleaned up notifiers for: $filterType');
   }
 
   /// Remove subcategory ValueNotifiers
@@ -1047,8 +1112,6 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     _subcategoryLoadingMoreNotifiers.remove(key);
     _subcategoryHasMoreNotifiers[key]?.dispose();
     _subcategoryHasMoreNotifiers.remove(key);
-
-    debugPrint('🗑️ Cleaned up subcategory notifiers for: $key');
   }
 
   /// Cleanup old dynamic filter notifiers that are no longer active
@@ -1102,9 +1165,6 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       _subcategoryHasMoreNotifiers[key]?.dispose();
       _subcategoryHasMoreNotifiers.remove(key);
     }
-
-    debugPrint(
-        '🧹 Cleaned up ${filterKeysToRemove.length + subcategoryKeysToRemove.length} notifiers');
   }
 
   // Enhanced setSpecialFilter method to handle dynamic filters
@@ -1189,8 +1249,6 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       limit: 20,
       dynamicFilter: dynamicFilter,
     );
-
-    debugPrint('🔄 Refreshed products for filter: $filterType');
   }
 
   void clearFilterCache(String filterType) {
@@ -1202,16 +1260,23 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       _cacheTimestamps.remove(key);
     }
     _lastFetched.remove(filterType);
-    debugPrint('🗑️ Cleared cache for: $filterType');
   }
 
+  // Store current gender filter for pagination
+  String? _currentGender;
+
   Future<void> fetchSubcategoryProducts(String category, String subcategoryId,
-      {String? selectedFilter}) async {
+      {String? selectedFilter, String? gender}) async {
     _currentCategory = category;
     _currentSubcategoryId = subcategoryId;
+    _currentGender = gender;
     _selectedFilterNotifier.value = selectedFilter;
 
-    final key = '$category|$subcategoryId';
+    // ✅ FIX: Include gender in key to prevent cache conflicts
+    // Women's Accessories and Men's Accessories should have different keys
+    final key = gender != null && gender.isNotEmpty
+        ? '$category|$subcategoryId|$gender'
+        : '$category|$subcategoryId';
 
     _specificSubcategoryProducts[key] ??= [];
     _specificSubcategoryProductIds[key] ??= <String>{};
@@ -1261,6 +1326,11 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       // This handles the case where subcategoryId == category (top-level navigation)
       if (subcategoryId.isNotEmpty && subcategoryId != category) {
         query = query.where('subcategory', isEqualTo: subcategoryId);
+      }
+
+      // ✅ FIX: Add gender filter for Women/Men View All navigation
+      if (gender != null && gender.isNotEmpty) {
+        query = query.where('gender', whereIn: [gender, 'Unisex']);
       }
 
       if (selectedFilter != null && selectedFilter.isNotEmpty) {
@@ -1334,6 +1404,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       print('🔍 Fetching products for $key');
       print('   category: $category');
       print('   subcategoryId: $subcategoryId');
+      print('   gender: $gender');
       print('   filters:');
       print('      brand: $dynamicBrand');
       print('      colors: $dynamicColors');
@@ -1359,7 +1430,6 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       _cacheTimestamps[cacheKey] = now;
       _updateSubcategoryHasMoreState(key, products.length >= 20);
     } catch (e) {
-      debugPrint('❌ Error fetching products for $key: $e');
       _updateSubcategoryHasMoreState(key, false);
     } finally {
       _updateSubcategoryLoadingState(key, false);
@@ -1370,7 +1440,10 @@ class SpecialFilterProviderMarket with ChangeNotifier {
   Future<void> fetchMoreSubcategoryProducts(
       String category, String subcategoryId,
       {String? selectedFilter}) async {
-    final key = '$category|$subcategoryId';
+    // ✅ FIX: Use same key format as fetchSubcategoryProducts (include gender)
+    final key = _currentGender != null && _currentGender!.isNotEmpty
+        ? '$category|$subcategoryId|$_currentGender'
+        : '$category|$subcategoryId';
     if (_specificSubcategoryLoadingMore[key] ?? false) return;
     if (!(_specificSubcategoryHasMore[key] ?? false)) return;
 
@@ -1413,6 +1486,11 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       // ✅ FIX: Same logic for pagination
       if (subcategoryId.isNotEmpty && subcategoryId != category) {
         query = query.where('subcategory', isEqualTo: subcategoryId);
+      }
+
+      // ✅ FIX: Add gender filter for pagination (use stored _currentGender)
+      if (_currentGender != null && _currentGender!.isNotEmpty) {
+        query = query.where('gender', whereIn: [_currentGender, 'Unisex']);
       }
 
       if (selectedFilter != null && selectedFilter.isNotEmpty) {
@@ -1484,7 +1562,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
         query = query.startAfterDocument(_specificSubcategoryLastDocs[key]!);
       }
 
-      print('🔍 Fetching MORE products for $key');
+      print('🔍 Fetching MORE products for $key (gender: $_currentGender)');
 
       final snapshot = await query.get();
       var newProducts =
@@ -1510,7 +1588,6 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       _cacheTimestamps[cacheKey] = now;
       _updateSubcategoryHasMoreState(key, newProducts.length >= 20);
     } catch (e) {
-      debugPrint('❌ Error fetching more products for $key: $e');
       _updateSubcategoryHasMoreState(key, false);
     } finally {
       _updateSubcategoryLoadingMoreState(key, false);
@@ -1518,31 +1595,42 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     }
   }
 
+  // ✅ Helper to generate consistent key
+  String _getSubcategoryKey(String category, String subcategoryId,
+      {String? gender}) {
+    final effectiveGender = gender ?? _currentGender;
+    return effectiveGender != null && effectiveGender.isNotEmpty
+        ? '$category|$subcategoryId|$effectiveGender'
+        : '$category|$subcategoryId';
+  }
+
   List<Product> getSubcategoryProductsById(
-      String category, String subcategoryId) {
-    final key = '$category|$subcategoryId';
+      String category, String subcategoryId,
+      {String? gender}) {
+    final key = _getSubcategoryKey(category, subcategoryId, gender: gender);
     return _specificSubcategoryProducts[key] ?? [];
   }
 
-  bool isLoadingSubcategory(String category, String subcategoryId) {
-    final key = '$category|$subcategoryId';
+  bool isLoadingSubcategory(String category, String subcategoryId,
+      {String? gender}) {
+    final key = _getSubcategoryKey(category, subcategoryId, gender: gender);
     return _specificSubcategoryLoading[key] ?? false;
   }
 
-  bool isLoadingMoreSubcategory(String category, String subcategoryId) {
-    final key = '$category|$subcategoryId';
+  bool isLoadingMoreSubcategory(String category, String subcategoryId,
+      {String? gender}) {
+    final key = _getSubcategoryKey(category, subcategoryId, gender: gender);
     return _specificSubcategoryLoadingMore[key] ?? false;
   }
 
-  bool hasMoreSubcategory(String category, String subcategoryId) {
-    final key = '$category|$subcategoryId';
+  bool hasMoreSubcategory(String category, String subcategoryId,
+      {String? gender}) {
+    final key = _getSubcategoryKey(category, subcategoryId, gender: gender);
     return _specificSubcategoryHasMore[key] ?? false;
   }
 
   @override
   void dispose() {
-    debugPrint('🗑️ SpecialFilterProviderMarket: Starting disposal...');
-
     // 1. Cancel stream subscription
     _productsStreamSubscription?.cancel();
     _productsStreamSubscription = null;
@@ -1620,7 +1708,6 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     _currentCategory = null;
     _currentSubcategoryId = null;
 
-    debugPrint('✅ SpecialFilterProviderMarket: Disposal complete');
     super.dispose();
   }
 }
