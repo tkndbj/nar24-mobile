@@ -914,6 +914,9 @@ String _localizeValidationMessage(Map<String, dynamic> message, AppLocalizations
         final oldDiscount = _safeInt('oldDiscount', 0);
         final newDiscount = _safeInt('newDiscount', 0);
         return l10n.discountUpdated(oldDiscount, newDiscount);
+
+      case 'bundle_no_longer_available':
+  return l10n.bundleNoLongerAvailable;
         
       case 'discount_threshold_changed':
         final oldThreshold = _safeInt('oldThreshold', 0);
@@ -989,6 +992,17 @@ Map<String, String>? _parseLocalizedWarning(
           'oldValue': '$oldDiscount%',
           'newValue': '$newDiscount%',
         };
+
+      case 'bundle_no_longer_available':
+  final currency = _safeString('currency', 'TL');
+  final bundlePrice = _safeString('bundlePrice', '0.00');
+  final regularPrice = _safeString('regularPrice', '0.00');
+  
+  return {
+    'label': l10n.bundleNoLongerAvailableTitle,
+    'oldValue': '$bundlePrice $currency',
+    'newValue': '$regularPrice $currency',
+  };
       
       case 'discount_threshold_changed':
         final oldThreshold = _safeString('oldThreshold', '0');

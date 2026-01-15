@@ -12348,4 +12348,23 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get nameRequiredMessage => 'Devam etmek için lütfen adınızı girin.';
+
+  @override
+  String get bundleNoLongerAvailable =>
+      'Paket artık mevcut değil. Normal fiyat uygulanacak.';
+
+  @override
+  String get bundleNoLongerAvailableTitle => 'Paket Mevcut Değil';
+
+  @override
+  String get bundleStatus => 'Paket Durumu';
+
+  @override
+  String get bundleWasPrice => 'Önceki (Paket)';
+
+  @override
+  String get nowRegularPrice => 'Şimdi (Normal)';
+
+  @override
+  String get regularPrice => 'Normal Fiyat';
 }

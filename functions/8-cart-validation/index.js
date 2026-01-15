@@ -278,16 +278,32 @@ if (product.bundleData && Array.isArray(product.bundleData) && product.bundleDat
   currentBundlePrice = product.bundleData[0].bundlePrice;
 }
 
-// ✅ Check 6: Bundle price changes (SAFE)
-if (hasPriceChanged(cachedBundlePrice, currentBundlePrice)) {
-  validationResults.warnings[productId] = {
-    key: 'bundle_price_changed',
-    params: {
-      currency: product.currency || 'TL',
-      oldPrice: safePrice(cachedBundlePrice),
-      newPrice: safePrice(currentBundlePrice),
-    },
-  };
+// ✅ Check 6: Bundle availability & price changes (IMPROVED)
+if (cachedBundlePrice !== undefined && cachedBundlePrice !== null && cachedBundlePrice > 0) {
+  // User HAD bundle pricing when they added to cart
+  
+  if (currentBundlePrice === null || currentBundlePrice === undefined || currentBundlePrice <= 0) {
+    // ✅ BUNDLE NO LONGER AVAILABLE
+    // Happens when: bundle deleted, product removed from bundle, or bundle deactivated
+    validationResults.warnings[productId] = {
+      key: 'bundle_no_longer_available',
+      params: {
+        currency: product.currency || 'TL',
+        bundlePrice: safePrice(cachedBundlePrice),
+        regularPrice: safePrice(product.price),
+      },
+    };
+  } else if (hasPriceChanged(cachedBundlePrice, currentBundlePrice)) {
+    // ✅ BUNDLE PRICE CHANGED (price updated but bundle still exists)
+    validationResults.warnings[productId] = {
+      key: 'bundle_price_changed',
+      params: {
+        currency: product.currency || 'TL',
+        oldPrice: safePrice(cachedBundlePrice),
+        newPrice: safePrice(currentBundlePrice),
+      },
+    };
+  }
 }
 
       // ✅ Check 7: Discount percentage changes (SAFE)

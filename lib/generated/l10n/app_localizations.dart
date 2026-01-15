@@ -23561,6 +23561,42 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Devam etmek için lütfen adınızı girin.'**
   String get nameRequiredMessage;
+
+  /// No description provided for @bundleNoLongerAvailable.
+  ///
+  /// In tr, this message translates to:
+  /// **'Paket artık mevcut değil. Normal fiyat uygulanacak.'**
+  String get bundleNoLongerAvailable;
+
+  /// No description provided for @bundleNoLongerAvailableTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Paket Mevcut Değil'**
+  String get bundleNoLongerAvailableTitle;
+
+  /// No description provided for @bundleStatus.
+  ///
+  /// In tr, this message translates to:
+  /// **'Paket Durumu'**
+  String get bundleStatus;
+
+  /// No description provided for @bundleWasPrice.
+  ///
+  /// In tr, this message translates to:
+  /// **'Önceki (Paket)'**
+  String get bundleWasPrice;
+
+  /// No description provided for @nowRegularPrice.
+  ///
+  /// In tr, this message translates to:
+  /// **'Şimdi (Normal)'**
+  String get nowRegularPrice;
+
+  /// No description provided for @regularPrice.
+  ///
+  /// In tr, this message translates to:
+  /// **'Normal Fiyat'**
+  String get regularPrice;
 }
 
 class _AppLocalizationsDelegate

@@ -5145,5 +5145,11 @@
 "firstNameRequired": "Имя обязательно",
 "lastNameRequired": "Фамилия обязательна",
 "nameTooShort": "Имя слишком короткое",
-"nameRequiredMessage": "Пожалуйста, укажите ваше имя, чтобы продолжить."
+"nameRequiredMessage": "Пожалуйста, укажите ваше имя, чтобы продолжить.",
+"bundleNoLongerAvailable": "Комплект больше не доступен. Будет применена обычная цена.",
+"bundleNoLongerAvailableTitle": "Комплект недоступен",
+"bundleStatus": "Статус комплекта",
+"bundleWasPrice": "Было (Комплект)",
+"nowRegularPrice": "Сейчас (Обычная)",
+"regularPrice": "Обычная цена"
 }

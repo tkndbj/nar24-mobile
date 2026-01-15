@@ -12417,4 +12417,23 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get nameRequiredMessage =>
       'Пожалуйста, укажите ваше имя, чтобы продолжить.';
+
+  @override
+  String get bundleNoLongerAvailable =>
+      'Комплект больше не доступен. Будет применена обычная цена.';
+
+  @override
+  String get bundleNoLongerAvailableTitle => 'Комплект недоступен';
+
+  @override
+  String get bundleStatus => 'Статус комплекта';
+
+  @override
+  String get bundleWasPrice => 'Было (Комплект)';
+
+  @override
+  String get nowRegularPrice => 'Сейчас (Обычная)';
+
+  @override
+  String get regularPrice => 'Обычная цена';
 }

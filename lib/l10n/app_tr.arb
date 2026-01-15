@@ -5427,5 +5427,11 @@
 "firstNameRequired": "Ad gerekli",
 "lastNameRequired": "Soyad gerekli",
 "nameTooShort": "İsim çok kısa",
-"nameRequiredMessage": "Devam etmek için lütfen adınızı girin."
+"nameRequiredMessage": "Devam etmek için lütfen adınızı girin.",
+"bundleNoLongerAvailable": "Paket artık mevcut değil. Normal fiyat uygulanacak.",
+"bundleNoLongerAvailableTitle": "Paket Mevcut Değil",
+"bundleStatus": "Paket Durumu",
+"bundleWasPrice": "Önceki (Paket)",
+"nowRegularPrice": "Şimdi (Normal)",
+"regularPrice": "Normal Fiyat"
 }

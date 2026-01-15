@@ -5450,5 +5450,11 @@
 "firstNameRequired": "First name is required",
 "lastNameRequired": "Last name is required",
 "nameTooShort": "Name is too short",
-"nameRequiredMessage": "Please provide your name to continue."
+"nameRequiredMessage": "Please provide your name to continue.",
+ "bundleNoLongerAvailable": "Bundle no longer available. Regular price will be applied.",
+  "bundleNoLongerAvailableTitle": "Bundle Unavailable",
+  "bundleStatus": "Bundle Status",
+  "bundleWasPrice": "Was (Bundle)",
+  "nowRegularPrice": "Now (Regular)",
+  "regularPrice": "Regular Price"
 }

@@ -12323,4 +12323,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get nameRequiredMessage => 'Please provide your name to continue.';
+
+  @override
+  String get bundleNoLongerAvailable =>
+      'Bundle no longer available. Regular price will be applied.';
+
+  @override
+  String get bundleNoLongerAvailableTitle => 'Bundle Unavailable';
+
+  @override
+  String get bundleStatus => 'Bundle Status';
+
+  @override
+  String get bundleWasPrice => 'Was (Bundle)';
+
+  @override
+  String get nowRegularPrice => 'Now (Regular)';
+
+  @override
+  String get regularPrice => 'Regular Price';
 }
