@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../models/product.dart';
+import '../../providers/seller_panel_provider.dart';
 import 'seller_panel_campaign_success_screen.dart';
 
 class SellerPanelCampaignDiscountScreen extends StatefulWidget {
@@ -441,13 +443,13 @@ FocusNode _getFocusNode(String productId) {
     }
 
     await batch.commit();
-    
-    // Optional: Update progress indicator
+
+    // Update campaign participation status immediately for UI feedback
     if (mounted) {
-      setState(() {
-        // You can add a progress variable here if you want to show progress
-        // _saveProgress = end / totalProducts;
-      });
+      final campaignId = widget.campaign['id'] as String?;
+      if (campaignId != null) {
+        context.read<SellerPanelProvider>().setCampaignParticipation(campaignId, true);
+      }
     }
   }
 }

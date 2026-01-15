@@ -10,6 +10,7 @@ import '../../generated/l10n/app_localizations.dart';
 import '../../auth_service.dart';
 import '../login_modal.dart';
 import '../product_option_selector.dart';
+import '../../services/sales_config_service.dart';
 
 class ProductDetailButtons extends StatefulWidget {
   final Product product;
@@ -24,6 +25,7 @@ class ProductDetailButtons extends StatefulWidget {
 class _ProductDetailButtonsState extends State<ProductDetailButtons> {
   bool? _localCartState; // Local state for instant UI update
   bool _isPending = false; // Prevent double-taps
+  final SalesConfigService _salesConfigService = SalesConfigService();
 
   void _showSnackbar(BuildContext context, String message) {
     if (!context.mounted) return;
@@ -373,131 +375,160 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                   const SizedBox(width: 10),
 
                   Expanded(
-                    child: ElevatedButton(
-                      onPressed: isOutOfStock
-                          ? null
-                          : () async {
-                              try {
-                                final user = FirebaseAuth.instance.currentUser;
-                                if (user == null) {
-                                  await _showAuthModal(context);
-                                  return;
-                                }
+                    child: ValueListenableBuilder<SalesConfig>(
+                      valueListenable: _salesConfigService.configNotifier,
+                      builder: (context, salesConfig, _) {
+                        final isSalesPaused = salesConfig.salesPaused;
+                        final isDisabled = isOutOfStock || isSalesPaused;
 
-                                if (!context.mounted) return;
+                        return ElevatedButton(
+                          onPressed: isDisabled
+                              ? null
+                              : () async {
+                                  try {
+                                    final user = FirebaseAuth.instance.currentUser;
+                                    if (user == null) {
+                                      await _showAuthModal(context);
+                                      return;
+                                    }
 
-                                Map<String, dynamic>? selections;
-                                if (hasOptions) {
-                                  selections = await showCupertinoModalPopup<
-                                      Map<String, dynamic>?>(
-                                    context: context,
-                                    builder: (_) => ProductOptionSelector(
-                                      product: widget.product,
-                                      isBuyNow: true,
-                                    ),
-                                  );
+                                    if (!context.mounted) return;
 
-                                  if (selections == null || !context.mounted)
-                                    return;
-                                } else {
-                                  selections = {'quantity': 1};
-                                }
+                                    Map<String, dynamic>? selections;
+                                    if (hasOptions) {
+                                      selections = await showCupertinoModalPopup<
+                                          Map<String, dynamic>?>(
+                                        context: context,
+                                        builder: (_) => ProductOptionSelector(
+                                          product: widget.product,
+                                          isBuyNow: true,
+                                        ),
+                                      );
 
-                                final qty = selections['quantity'] as int? ?? 1;
+                                      if (selections == null || !context.mounted)
+                                        return;
+                                    } else {
+                                      selections = {'quantity': 1};
+                                    }
 
-                                // ✅ NEW: Build selectedAttributes map (excluding quantity)
-                                final Map<String, dynamic> selectedAttributes =
-                                    {};
+                                    final qty = selections['quantity'] as int? ?? 1;
 
-                                selections.forEach((key, value) {
-                                  if (key != 'quantity' &&
-                                      value != null &&
-                                      value != '' &&
-                                      (value is! List ||
-                                          (value).isNotEmpty)) {
-                                    selectedAttributes[key] = value;
+                                    // ✅ NEW: Build selectedAttributes map (excluding quantity)
+                                    final Map<String, dynamic> selectedAttributes =
+                                        {};
+
+                                    selections.forEach((key, value) {
+                                      if (key != 'quantity' &&
+                                          value != null &&
+                                          value != '' &&
+                                          (value is! List ||
+                                              (value).isNotEmpty)) {
+                                        selectedAttributes[key] = value;
+                                      }
+                                    });
+
+                                    if (!context.mounted) return;
+
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ProductPaymentScreen(
+                                          items: [
+                                            {
+                                              'product': widget.product,
+                                              'quantity': qty,
+                                              // ✅ CRITICAL: Wrap in selectedAttributes
+                                              if (selectedAttributes.isNotEmpty)
+                                                'selectedAttributes':
+                                                    selectedAttributes,
+                                            }
+                                          ],
+                                          totalPrice: widget.product.price * qty,
+                                        ),
+                                      ),
+                                    );
+                                  } catch (e) {
+                                    debugPrint('Buy now error: $e');
+                                    if (context.mounted) {
+                                      _showSnackbar(context, 'Operation failed');
+                                    }
                                   }
-                                });
-
-                                if (!context.mounted) return;
-
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => ProductPaymentScreen(
-                                      items: [
-                                        {
-                                          'product': widget.product,
-                                          'quantity': qty,
-                                          // ✅ CRITICAL: Wrap in selectedAttributes
-                                          if (selectedAttributes.isNotEmpty)
-                                            'selectedAttributes':
-                                                selectedAttributes,
-                                        }
-                                      ],
-                                      totalPrice: widget.product.price * qty,
-                                    ),
-                                  ),
-                                );
-                              } catch (e) {
-                                debugPrint('Buy now error: $e');
-                                if (context.mounted) {
-                                  _showSnackbar(context, 'Operation failed');
-                                }
-                              }
-                            },
-                      style: ElevatedButton.styleFrom(
-                        fixedSize: const Size.fromHeight(40),
-                        backgroundColor: isOutOfStock
-                            ? Colors.grey
-                            : const Color(0xFF00A36C),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8.0),
-                        ),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            isOutOfStock
-                                ? localizations.outOfStock
-                                : localizations.buyItNow,
-                            style: const TextStyle(
-                              fontFamily: 'Figtree',
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                              color: Colors.white,
+                                },
+                          style: ElevatedButton.styleFrom(
+                            fixedSize: const Size.fromHeight(40),
+                            backgroundColor: isOutOfStock
+                                ? Colors.grey
+                                : (isSalesPaused
+                                    ? Colors.grey
+                                    : const Color(0xFF00A36C)),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8.0),
                             ),
                           ),
-                          if (!isOutOfStock && widget.product.quantity > 0 && widget.product.quantity <= 10)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2.0),
-                              child: Row(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(
-                                    Icons.access_time,
-                                    size: 12,
-                                    color: Colors.white,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    localizations
-                                        .lastProducts(widget.product.quantity),
-                                    style: const TextStyle(
-                                      fontFamily: 'Figtree',
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 10,
+                                  if (isSalesPaused && !isOutOfStock) ...[
+                                    const Icon(
+                                      Icons.pause_circle_outline,
                                       color: Colors.white,
+                                      size: 14,
+                                    ),
+                                    const SizedBox(width: 4),
+                                  ],
+                                  Flexible(
+                                    child: Text(
+                                      isOutOfStock
+                                          ? localizations.outOfStock
+                                          : (isSalesPaused
+                                              ? localizations.checkoutPaused
+                                              : localizations.buyItNow),
+                                      style: const TextStyle(
+                                        fontFamily: 'Figtree',
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 12,
+                                        color: Colors.white,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                        ],
-                      ),
+                              if (!isOutOfStock && !isSalesPaused && widget.product.quantity > 0 && widget.product.quantity <= 10)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2.0),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.access_time,
+                                        size: 12,
+                                        color: Colors.white,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        localizations
+                                            .lastProducts(widget.product.quantity),
+                                        style: const TextStyle(
+                                          fontFamily: 'Figtree',
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 10,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],

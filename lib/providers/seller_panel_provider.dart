@@ -671,6 +671,13 @@ class SellerPanelProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Optimistically update campaign participation status for immediate UI feedback.
+  /// Call this after successfully saving products to a campaign.
+  void setCampaignParticipation(String campaignId, bool participated) {
+    _campaignParticipationStatus[campaignId] = participated;
+    notifyListeners();
+  }
+
   Map<String, dynamic>? get currentCampaign {
     if (_activeCampaigns.isEmpty ||
         _currentCampaignIndex >= _activeCampaigns.length) {
