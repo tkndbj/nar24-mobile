@@ -546,29 +546,32 @@ class _DynamicSubcategoryFilterScreenState
             ),
           ),
           // Apply Button
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context, {
-                    'brand': _selectedBrand,
-                    'colors': _selectedColors,
-                    'subsubcategory': _selectedSubsubcategory,
-                  });
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context, {
+                      'brand': _selectedBrand,
+                      'colors': _selectedColors,
+                      'subsubcategory': _selectedSubsubcategory,
+                    });
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: Text(
-                  '${l10n.apply} (${_getTotalSelected()})',
-                  style: const TextStyle(fontSize: 16),
+                  child: Text(
+                    '${l10n.apply} (${_getTotalSelected()})',
+                    style: const TextStyle(fontSize: 16),
+                  ),
                 ),
               ),
             ),

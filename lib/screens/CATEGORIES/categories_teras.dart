@@ -466,10 +466,10 @@ class _CategoriesTerasScreenState extends State<CategoriesTerasScreen>
             ? 16.0
             : (isTablet ? 6.0 : 18.0);
 
-        // Image height: tablet portrait 40% taller (238px), tablet landscape compact (120px), mobile unchanged (140px)
+        // Image height: increased for better tall/narrow image display
         final double imageHeight = isTabletPortrait
-            ? 238.0
-            : (isTablet ? 120.0 : 140.0);
+            ? 262.0  // Increased from 238
+            : (isTablet ? 132.0 : 155.0);  // Increased from 120/140
 
         // For tablet portrait, use MaxCrossAxisExtent with explicit mainAxisExtent for precise control
         if (isTabletPortrait) {
@@ -501,7 +501,7 @@ class _CategoriesTerasScreenState extends State<CategoriesTerasScreen>
 
         // Mobile and tablet landscape: use original approach
         final int crossAxisCount = isTablet ? 5 : 2;
-        final double childAspectRatio = isTablet ? 0.54 : 0.5;
+        final double childAspectRatio = isTablet ? 0.50 : 0.46;  // Decreased for taller cards
 
         return GridView.builder(
           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -542,10 +542,10 @@ else if (_displayProducts.isNotEmpty)
             ? 16.0
             : (isTablet ? 6.0 : 18.0);
 
-        // Image height: tablet portrait 40% taller (238px), tablet landscape compact (120px), mobile unchanged (140px)
+        // Image height: increased for better tall/narrow image display
         final double imageHeight = isTabletPortrait
-            ? 238.0
-            : (isTablet ? 120.0 : 140.0);
+            ? 262.0  // Increased from 238
+            : (isTablet ? 132.0 : 155.0);  // Increased from 120/140
 
         // For tablet portrait, use MaxCrossAxisExtent with explicit mainAxisExtent for precise control
         if (isTabletPortrait) {
@@ -581,7 +581,7 @@ else if (_displayProducts.isNotEmpty)
 
         // Mobile and tablet landscape: use original approach
         final int crossAxisCount = isTablet ? 5 : 2;
-        final double childAspectRatio = isTablet ? 0.54 : 0.5;
+        final double childAspectRatio = isTablet ? 0.50 : 0.46;  // Decreased for taller cards
 
         return GridView.builder(
           padding: const EdgeInsets.symmetric(horizontal: 8),

@@ -113,7 +113,7 @@ class _BoostScreenState extends State<BoostScreen>
   // _itemType remains null if no main item is provided.
 
   // Pricing: now the base price is 150 TL per product per day.
-  double basePricePerProduct = 1.0;
+
   int boostDuration = 5; // in minutes (default)
   double totalPrice = 5.0; // boostDuration * basePricePerProduct * (item count)
 
@@ -233,10 +233,9 @@ class _BoostScreenState extends State<BoostScreen>
       setState(() {
         itemData = data;
         itemData!['imageUrl'] = imageUrl;
-        itemData!['collection'] = collection; // Add collection information
-        // Update total price for main item.
-        totalPrice = boostDuration * basePricePerProduct;
+        itemData!['collection'] = collection;
       });
+      _updateTotalPrice();
     } catch (e) {
       final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(

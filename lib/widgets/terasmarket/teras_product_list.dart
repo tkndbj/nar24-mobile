@@ -96,7 +96,7 @@ class _TerasProductListState extends State<TerasProductList>
   Widget _buildShimmerState(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final screenHeight = MediaQuery.of(context).size.height;
-    final portraitImageHeight = screenHeight * 0.30;
+    final portraitImageHeight = screenHeight * 0.33; // Increased from 0.30 for taller images
 
     return SliverMainAxisGroup(
       slivers: [

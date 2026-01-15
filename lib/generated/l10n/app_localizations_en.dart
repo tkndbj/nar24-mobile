@@ -12359,4 +12359,206 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get boostServiceDisabledMessage =>
       'Product boosting is temporarily paused. Your active boosts will continue running. Please check back later.';
+
+  @override
+  String get subSubcategoryBrakeComponents => 'Brake Components';
+
+  @override
+  String get subSubcategoryTransmissionParts => 'Transmission Parts';
+
+  @override
+  String get subSubcategoryExhaustSystems => 'Exhaust Systems';
+
+  @override
+  String get subSubcategoryFiltersAuto => 'Filters';
+
+  @override
+  String get subSubcategoryBeltsHoses => 'Belts & Hoses';
+
+  @override
+  String get subSubcategoryCarAudio => 'Car Audio';
+
+  @override
+  String get subSubcategoryDashCams => 'Dash Cams';
+
+  @override
+  String get subSubcategoryBluetoothAdapters => 'Bluetooth Adapters';
+
+  @override
+  String get subSubcategoryBackupCameras => 'Backup Cameras';
+
+  @override
+  String get subSubcategoryMotorOil => 'Motor Oil';
+
+  @override
+  String get subSubcategoryCarCleaners => 'Car Cleaners';
+
+  @override
+  String get subSubcategoryMaintenanceTools => 'Maintenance Tools';
+
+  @override
+  String get subSubcategoryFluidsAuto => 'Fluids';
+
+  @override
+  String get subSubcategoryTires => 'Tires';
+
+  @override
+  String get subSubcategoryWheels => 'Wheels';
+
+  @override
+  String get subSubcategoryTireAccessories => 'Tire Accessories';
+
+  @override
+  String get subSubcategoryWheelCovers => 'Wheel Covers';
+
+  @override
+  String get subSubcategoryTirePressureMonitors => 'Tire Pressure Monitors';
+
+  @override
+  String get subSubcategorySeatCovers => 'Seat Covers';
+
+  @override
+  String get subSubcategoryFloorMats => 'Floor Mats';
+
+  @override
+  String get subSubcategorySteeringWheelCovers => 'Steering Wheel Covers';
+
+  @override
+  String get subSubcategoryAirFresheners => 'Air Fresheners';
+
+  @override
+  String get subSubcategoryInteriorOrganizers => 'Interior Organizers';
+
+  @override
+  String get subSubcategorySunshades => 'Sunshades';
+
+  @override
+  String get subSubcategoryCarCovers => 'Car Covers';
+
+  @override
+  String get subSubcategoryRoofRacks => 'Roof Racks';
+
+  @override
+  String get subSubcategoryRunningBoards => 'Running Boards';
+
+  @override
+  String get subSubcategoryMudFlaps => 'Mud Flaps';
+
+  @override
+  String get subSubcategoryLicensePlateFrames => 'License Plate Frames';
+
+  @override
+  String get subSubcategoryDecals => 'Decals';
+
+  @override
+  String get subSubcategoryJumpStarters => 'Jump Starters';
+
+  @override
+  String get subSubcategoryTireGauges => 'Tire Gauges';
+
+  @override
+  String get subSubcategoryMechanicsTools => 'Mechanics Tools';
+
+  @override
+  String get subSubcategoryCarJacks => 'Car Jacks';
+
+  @override
+  String get subSubcategoryEmergencyKitsAuto => 'Emergency Kits';
+
+  @override
+  String get subSubcategoryMotorcyclePartsGeneral => 'Motorcycle Parts';
+
+  @override
+  String get subSubcategoryMotorcycleAccessoriesGeneral =>
+      'Motorcycle Accessories';
+
+  @override
+  String get subSubcategoryMotorcycleGear => 'Motorcycle Gear';
+
+  @override
+  String get subSubcategoryHelmets => 'Helmets';
+
+  @override
+  String get subSubcategoryProtectiveClothing => 'Protective Clothing';
+
+  @override
+  String get subSubcategoryBVitamins => 'B Vitamins';
+
+  @override
+  String get subSubcategoryHerbalSupplements => 'Herbal Supplements';
+
+  @override
+  String get subSubcategoryMedicalScales => 'Medical Scales';
+
+  @override
+  String get subSubcategorySafetyEquipment => 'Safety Equipment';
+
+  @override
+  String get subSubcategoryHomeGymEquipment => 'Home Gym Equipment';
+
+  @override
+  String get subSubcategoryCardioMachines => 'Cardio Machines';
+
+  @override
+  String get subSubcategoryWeightsDumbbells => 'Weights & Dumbbells';
+
+  @override
+  String get subSubcategoryResistanceBands => 'Resistance Bands';
+
+  @override
+  String get subSubcategoryYogaMats => 'Yoga Mats';
+
+  @override
+  String get subSubcategoryExerciseBikes => 'Exercise Bikes';
+
+  @override
+  String get subSubcategorySmartScales => 'Smart Scales';
+
+  @override
+  String get subSubcategoryHeartRateMonitors => 'Heart Rate Monitors';
+
+  @override
+  String get subSubcategorySleepTrackers => 'Sleep Trackers';
+
+  @override
+  String get subSubcategoryHealthApps => 'Health Apps';
+
+  @override
+  String get subSubcategoryMobilityAidsGeneral => 'Mobility Aids';
+
+  @override
+  String get subSubcategoryGrabBars => 'Grab Bars';
+
+  @override
+  String get subSubcategorySeatCushions => 'Seat Cushions';
+
+  @override
+  String get subSubcategoryDailyLivingAids => 'Daily Living Aids';
+
+  @override
+  String get subSubcategoryMassageTools => 'Massage Tools';
+
+  @override
+  String get subSubcategoryAcupuncture => 'Acupuncture';
+
+  @override
+  String get subSubcategoryNaturalRemedies => 'Natural Remedies';
+
+  @override
+  String get subSubcategoryOralCare => 'Oral Care';
+
+  @override
+  String get subSubcategoryIncontinenceCare => 'Incontinence Care';
+
+  @override
+  String get subSubcategoryHearingAids => 'Hearing Aids';
+
+  @override
+  String get subSubcategoryVisionCare => 'Vision Care';
+
+  @override
+  String get subSubcategorySkinCareHealth => 'Skin Care';
+
+  @override
+  String get subSubcategoryGPSAndNavigation => 'GPS & Navigation';
 }

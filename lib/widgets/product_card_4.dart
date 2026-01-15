@@ -49,11 +49,11 @@ class ProductCard4 extends StatefulWidget {
 
 class _ProductCard4State extends State<ProductCard4>
     with AutomaticKeepAliveClientMixin {
-  // ✅ OPTIMIZATION 1: Cache computed values
-  late final String _displayImageUrl;
-  late final bool _hasValidImage;
-  late final bool _hasActiveDiscount;
-  late final bool _hasBrandModel;
+  // Cache computed values (non-final to allow updates when props change)
+  late String _displayImageUrl;
+  late bool _hasValidImage;
+  late bool _hasActiveDiscount;
+  late bool _hasBrandModel;
 
   // ✅ OPTIMIZATION 2: Keep widget alive to avoid rebuilds when scrolling
   @override
@@ -63,6 +63,21 @@ class _ProductCard4State extends State<ProductCard4>
   void initState() {
     super.initState();
     _initializeData();
+  }
+
+  @override
+  void didUpdateWidget(ProductCard4 oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Recalculate cached values when relevant props change
+    if (oldWidget.imageUrl != widget.imageUrl ||
+        oldWidget.selectedColor != widget.selectedColor ||
+        oldWidget.colorImages != widget.colorImages ||
+        oldWidget.originalPrice != widget.originalPrice ||
+        oldWidget.discountPercentage != widget.discountPercentage ||
+        oldWidget.price != widget.price ||
+        oldWidget.brandModel != widget.brandModel) {
+      _initializeData();
+    }
   }
 
   void _initializeData() {

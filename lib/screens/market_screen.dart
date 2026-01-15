@@ -2135,7 +2135,7 @@ class MarketScreenState extends State<MarketScreen>
     // Tablets: wider cards, shorter height
     final double cardWidth = isTablet ? 185.0 : 160.0;
     final double portraitImageHeight =
-        isTablet ? screenHeight * 0.22 : screenHeight * 0.30;
+        isTablet ? screenHeight * 0.24 : screenHeight * 0.33; // Increased for taller images
 
     return SafeArea(
       top: false,

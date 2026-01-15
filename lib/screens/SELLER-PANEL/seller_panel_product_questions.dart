@@ -7,7 +7,6 @@ import 'package:shimmer/shimmer.dart';
 import '../../widgets/product_card_4.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
-import '../FILTER-SCREENS/seller_panel_questions_filter_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -800,13 +799,6 @@ if (ctx.mounted) {
     }
   }
 
-  int _getActiveFiltersCount() {
-    int count = 0;
-    if (_currentProductFilter != null) count++;
-    if (_currentStartDate != null || _currentEndDate != null) count++;
-    return count;
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -851,65 +843,6 @@ if (ctx.mounted) {
           child: Column(
             children: [
               _buildModernTabBar(),
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: TextButton.icon(
-                  style: TextButton.styleFrom(
-                    backgroundColor: _getActiveFiltersCount() > 0
-                        ? Colors.orange
-                        : Colors.transparent,
-                    side: BorderSide(
-                      color: _getActiveFiltersCount() > 0
-                          ? Colors.orange
-                          : Colors.grey.shade300,
-                    ),
-                    shape: const StadiumBorder(),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  ),
-                  icon: Icon(
-                    Icons.filter_list,
-                    color: _getActiveFiltersCount() > 0
-                        ? Colors.white
-                        : (isDarkMode ? Colors.white : Colors.black),
-                  ),
-                  label: Text(
-                    _getActiveFiltersCount() > 0
-                        ? '${l10n.filter} (${_getActiveFiltersCount()})'
-                        : l10n.filter,
-                    style: TextStyle(
-                      color: _getActiveFiltersCount() > 0
-                          ? Colors.white
-                          : (isDarkMode ? Colors.white : Colors.black),
-                    ),
-                  ),
-                  onPressed: () async {
-                    final result = await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => DynamicQuestionsFilterScreen(
-                          sellerId: widget.shopId,
-                          isShopProduct: true,
-                          initialProductId: _currentProductFilter,
-                        ),
-                      ),
-                    );
-                    if (result != null) {
-                      setState(() {
-                        _currentProductFilter = result['productId'];
-                        _unansweredDocs.clear();
-                        _unansweredLastDoc = null;
-                        _unansweredHasMore = true;
-                        _answeredDocs.clear();
-                        _answeredLastDoc = null;
-                        _answeredHasMore = true;
-                      });
-                      await _fetchUnansweredPage();
-                      await _fetchAnsweredPage();
-                    }
-                  },
-                ),
-              ),
               Expanded(
                 child: TabBarView(
                   controller: _tabController,

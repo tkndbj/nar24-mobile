@@ -129,21 +129,21 @@ class _AdsTabState extends State<AdsTab> {
             child: SafeArea(
               top: false,
               child: Consumer<SellerPanelProvider>(
-              builder: (context, provider, _) {
-                // Determine which products to show based on search mode
-                return ValueListenableBuilder<bool>(
-                  valueListenable: provider.isSearchingNotifier,
-                  builder: (context, isSearching, _) {
-                    if (provider.isSearchMode) {
-                      return _buildSearchModeContent(
-                          context, provider, isSearching);
-                    } else {
-                      return _buildRegularModeContent(context, provider);
-                    }
-                  },
-                );
-              },
-            ),
+                builder: (context, provider, _) {
+                  // Determine which products to show based on search mode
+                  return ValueListenableBuilder<bool>(
+                    valueListenable: provider.isSearchingNotifier,
+                    builder: (context, isSearching, _) {
+                      if (provider.isSearchMode) {
+                        return _buildSearchModeContent(
+                            context, provider, isSearching);
+                      } else {
+                        return _buildRegularModeContent(context, provider);
+                      }
+                    },
+                  );
+                },
+              ),
             ),
           ),
         ],
@@ -791,19 +791,6 @@ class _FilterSection extends StatelessWidget {
                   : (isDark ? Colors.grey.shade600 : Colors.grey.shade300),
               width: 1,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: isSelected
-                    ? (isDark
-                        ? Colors.tealAccent.withOpacity(0.3)
-                        : Colors.teal.withOpacity(0.3))
-                    : (isDark
-                        ? Colors.black26
-                        : Colors.black.withOpacity(0.05)),
-                blurRadius: isSelected ? 6 : 3,
-                offset: const Offset(0, 1),
-              ),
-            ],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,

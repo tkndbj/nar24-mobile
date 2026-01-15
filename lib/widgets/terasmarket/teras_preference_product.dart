@@ -182,7 +182,7 @@ class _TerasPreferenceProductState extends State<TerasPreferenceProduct> {
 
     // Tablet landscape: increase info area height to prevent overlap with TerasProductList
     // Other views remain unchanged
-    final double portraitImageHeight = isTablet ? screenHeight * 0.22 : screenHeight * 0.30;
+    final double portraitImageHeight = isTablet ? screenHeight * 0.24 : screenHeight * 0.33; // Increased for taller images
     final double infoAreaHeight = isTabletLandscape ? 110.0 : (isTablet ? 95.0 : 80.0);
     final double rowHeight = portraitImageHeight + infoAreaHeight;
 

@@ -12384,4 +12384,206 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get boostServiceDisabledMessage =>
       'Ürün boost işlemleri geçici olarak durdurulmuştur. Aktif boostlarınız çalışmaya devam edecektir. Lütfen daha sonra tekrar deneyin.';
+
+  @override
+  String get subSubcategoryBrakeComponents => 'Fren Parçaları';
+
+  @override
+  String get subSubcategoryTransmissionParts => 'Şanzıman Parçaları';
+
+  @override
+  String get subSubcategoryExhaustSystems => 'Egzoz Sistemleri';
+
+  @override
+  String get subSubcategoryFiltersAuto => 'Filtreler';
+
+  @override
+  String get subSubcategoryBeltsHoses => 'Kayış ve Hortumlar';
+
+  @override
+  String get subSubcategoryCarAudio => 'Araç Ses Sistemleri';
+
+  @override
+  String get subSubcategoryDashCams => 'Araç Kameraları';
+
+  @override
+  String get subSubcategoryBluetoothAdapters => 'Bluetooth Adaptörleri';
+
+  @override
+  String get subSubcategoryBackupCameras => 'Geri Görüş Kameraları';
+
+  @override
+  String get subSubcategoryMotorOil => 'Motor Yağı';
+
+  @override
+  String get subSubcategoryCarCleaners => 'Araç Temizleyicileri';
+
+  @override
+  String get subSubcategoryMaintenanceTools => 'Bakım Aletleri';
+
+  @override
+  String get subSubcategoryFluidsAuto => 'Sıvılar';
+
+  @override
+  String get subSubcategoryTires => 'Lastikler';
+
+  @override
+  String get subSubcategoryWheels => 'Jantlar';
+
+  @override
+  String get subSubcategoryTireAccessories => 'Lastik Aksesuarları';
+
+  @override
+  String get subSubcategoryWheelCovers => 'Jant Kapakları';
+
+  @override
+  String get subSubcategoryTirePressureMonitors => 'Lastik Basınç Monitörleri';
+
+  @override
+  String get subSubcategorySeatCovers => 'Koltuk Kılıfları';
+
+  @override
+  String get subSubcategoryFloorMats => 'Paspaslar';
+
+  @override
+  String get subSubcategorySteeringWheelCovers => 'Direksiyon Kılıfları';
+
+  @override
+  String get subSubcategoryAirFresheners => 'Oto Kokuları';
+
+  @override
+  String get subSubcategoryInteriorOrganizers => 'İç Mekan Düzenleyicileri';
+
+  @override
+  String get subSubcategorySunshades => 'Güneşlikler';
+
+  @override
+  String get subSubcategoryCarCovers => 'Araç Örtüleri';
+
+  @override
+  String get subSubcategoryRoofRacks => 'Tavan Bagajları';
+
+  @override
+  String get subSubcategoryRunningBoards => 'Kapı Basamakları';
+
+  @override
+  String get subSubcategoryMudFlaps => 'Çamurluklar';
+
+  @override
+  String get subSubcategoryLicensePlateFrames => 'Plaka Çerçeveleri';
+
+  @override
+  String get subSubcategoryDecals => 'Çıkartmalar';
+
+  @override
+  String get subSubcategoryJumpStarters => 'Akü Takviye Cihazları';
+
+  @override
+  String get subSubcategoryTireGauges => 'Lastik Basınç Ölçerler';
+
+  @override
+  String get subSubcategoryMechanicsTools => 'Mekanik Aletleri';
+
+  @override
+  String get subSubcategoryCarJacks => 'Araba Krikoları';
+
+  @override
+  String get subSubcategoryEmergencyKitsAuto => 'Acil Durum Setleri';
+
+  @override
+  String get subSubcategoryMotorcyclePartsGeneral => 'Motosiklet Parçaları';
+
+  @override
+  String get subSubcategoryMotorcycleAccessoriesGeneral =>
+      'Motosiklet Aksesuarları';
+
+  @override
+  String get subSubcategoryMotorcycleGear => 'Motosiklet Ekipmanları';
+
+  @override
+  String get subSubcategoryHelmets => 'Kasklar';
+
+  @override
+  String get subSubcategoryProtectiveClothing => 'Koruyucu Giysi';
+
+  @override
+  String get subSubcategoryBVitamins => 'B Vitaminleri';
+
+  @override
+  String get subSubcategoryHerbalSupplements => 'Bitkisel Takviyeler';
+
+  @override
+  String get subSubcategoryMedicalScales => 'Medikal Tartılar';
+
+  @override
+  String get subSubcategorySafetyEquipment => 'Güvenlik Ekipmanları';
+
+  @override
+  String get subSubcategoryHomeGymEquipment => 'Ev Spor Aletleri';
+
+  @override
+  String get subSubcategoryCardioMachines => 'Kardiyo Makineleri';
+
+  @override
+  String get subSubcategoryWeightsDumbbells => 'Ağırlıklar ve Dambıllar';
+
+  @override
+  String get subSubcategoryResistanceBands => 'Direnç Bantları';
+
+  @override
+  String get subSubcategoryYogaMats => 'Yoga Matları';
+
+  @override
+  String get subSubcategoryExerciseBikes => 'Egzersiz Bisikletleri';
+
+  @override
+  String get subSubcategorySmartScales => 'Akıllı Tartılar';
+
+  @override
+  String get subSubcategoryHeartRateMonitors => 'Kalp Atış Hızı Monitörleri';
+
+  @override
+  String get subSubcategorySleepTrackers => 'Uyku Takipçileri';
+
+  @override
+  String get subSubcategoryHealthApps => 'Sağlık Uygulamaları';
+
+  @override
+  String get subSubcategoryMobilityAidsGeneral => 'Hareket Yardımcıları';
+
+  @override
+  String get subSubcategoryGrabBars => 'Tutunma Barları';
+
+  @override
+  String get subSubcategorySeatCushions => 'Oturma Minderleri';
+
+  @override
+  String get subSubcategoryDailyLivingAids => 'Günlük Yaşam Yardımcıları';
+
+  @override
+  String get subSubcategoryMassageTools => 'Masaj Aletleri';
+
+  @override
+  String get subSubcategoryAcupuncture => 'Akupunktur';
+
+  @override
+  String get subSubcategoryNaturalRemedies => 'Doğal İlaçlar';
+
+  @override
+  String get subSubcategoryOralCare => 'Ağız Bakımı';
+
+  @override
+  String get subSubcategoryIncontinenceCare => 'İdrar Kaçırma Bakımı';
+
+  @override
+  String get subSubcategoryHearingAids => 'İşitme Cihazları';
+
+  @override
+  String get subSubcategoryVisionCare => 'Göz Bakımı';
+
+  @override
+  String get subSubcategorySkinCareHealth => 'Cilt Bakımı';
+
+  @override
+  String get subSubcategoryGPSAndNavigation => 'GPS & Navigasyon';
 }

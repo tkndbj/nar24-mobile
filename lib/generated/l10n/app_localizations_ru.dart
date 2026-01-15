@@ -1848,7 +1848,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get subSubcategorySmartwatchesWearable => 'Смарт часы';
 
   @override
-  String get subSubcategoryFitnessTrackers => 'Фитнес трекеры';
+  String get subSubcategoryFitnessTrackers => 'Фитнес-трекеры';
 
   @override
   String get subSubcategorySmartGlasses => 'Умные очки';
@@ -12454,4 +12454,207 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get boostServiceDisabledMessage =>
       'Продвижение товаров временно приостановлено. Ваши активные продвижения продолжат работать. Пожалуйста, проверьте позже.';
+
+  @override
+  String get subSubcategoryBrakeComponents => 'Тормозные компоненты';
+
+  @override
+  String get subSubcategoryTransmissionParts => 'Детали трансмиссии';
+
+  @override
+  String get subSubcategoryExhaustSystems => 'Выхлопные системы';
+
+  @override
+  String get subSubcategoryFiltersAuto => 'Фильтры';
+
+  @override
+  String get subSubcategoryBeltsHoses => 'Ремни и шланги';
+
+  @override
+  String get subSubcategoryCarAudio => 'Автомобильная аудиосистема';
+
+  @override
+  String get subSubcategoryDashCams => 'Видеорегистраторы';
+
+  @override
+  String get subSubcategoryBluetoothAdapters => 'Bluetooth адаптеры';
+
+  @override
+  String get subSubcategoryBackupCameras => 'Камеры заднего вида';
+
+  @override
+  String get subSubcategoryMotorOil => 'Моторное масло';
+
+  @override
+  String get subSubcategoryCarCleaners => 'Очистители для авто';
+
+  @override
+  String get subSubcategoryMaintenanceTools => 'Инструменты для обслуживания';
+
+  @override
+  String get subSubcategoryFluidsAuto => 'Автомобильные жидкости';
+
+  @override
+  String get subSubcategoryTires => 'Шины';
+
+  @override
+  String get subSubcategoryWheels => 'Диски';
+
+  @override
+  String get subSubcategoryTireAccessories => 'Аксессуары для шин';
+
+  @override
+  String get subSubcategoryWheelCovers => 'Колпаки на колёса';
+
+  @override
+  String get subSubcategoryTirePressureMonitors => 'Датчики давления в шинах';
+
+  @override
+  String get subSubcategorySeatCovers => 'Чехлы на сиденья';
+
+  @override
+  String get subSubcategoryFloorMats => 'Коврики';
+
+  @override
+  String get subSubcategorySteeringWheelCovers => 'Чехлы на руль';
+
+  @override
+  String get subSubcategoryAirFresheners => 'Автомобильные освежители воздуха';
+
+  @override
+  String get subSubcategoryInteriorOrganizers => 'Органайзеры для салона';
+
+  @override
+  String get subSubcategorySunshades => 'Солнцезащитные шторки';
+
+  @override
+  String get subSubcategoryCarCovers => 'Чехлы для автомобиля';
+
+  @override
+  String get subSubcategoryRoofRacks => 'Багажники на крышу';
+
+  @override
+  String get subSubcategoryRunningBoards => 'Пороги';
+
+  @override
+  String get subSubcategoryMudFlaps => 'Брызговики';
+
+  @override
+  String get subSubcategoryLicensePlateFrames => 'Рамки для номерных знаков';
+
+  @override
+  String get subSubcategoryDecals => 'Наклейки';
+
+  @override
+  String get subSubcategoryJumpStarters => 'Пуско-зарядные устройства';
+
+  @override
+  String get subSubcategoryTireGauges => 'Манометры для шин';
+
+  @override
+  String get subSubcategoryMechanicsTools => 'Инструменты механика';
+
+  @override
+  String get subSubcategoryCarJacks => 'Домкраты';
+
+  @override
+  String get subSubcategoryEmergencyKitsAuto => 'Аварийные наборы';
+
+  @override
+  String get subSubcategoryMotorcyclePartsGeneral => 'Запчасти для мотоциклов';
+
+  @override
+  String get subSubcategoryMotorcycleAccessoriesGeneral =>
+      'Аксессуары для мотоциклов';
+
+  @override
+  String get subSubcategoryMotorcycleGear => 'Мотоэкипировка';
+
+  @override
+  String get subSubcategoryHelmets => 'Шлемы';
+
+  @override
+  String get subSubcategoryProtectiveClothing => 'Защитная одежда';
+
+  @override
+  String get subSubcategoryBVitamins => 'Витамины группы B';
+
+  @override
+  String get subSubcategoryHerbalSupplements => 'Растительные добавки';
+
+  @override
+  String get subSubcategoryMedicalScales => 'Медицинские весы';
+
+  @override
+  String get subSubcategorySafetyEquipment => 'Средства безопасности';
+
+  @override
+  String get subSubcategoryHomeGymEquipment =>
+      'Домашнее спортивное оборудование';
+
+  @override
+  String get subSubcategoryCardioMachines => 'Кардиотренажёры';
+
+  @override
+  String get subSubcategoryWeightsDumbbells => 'Гантели и гири';
+
+  @override
+  String get subSubcategoryResistanceBands => 'Эспандеры';
+
+  @override
+  String get subSubcategoryYogaMats => 'Коврики для йоги';
+
+  @override
+  String get subSubcategoryExerciseBikes => 'Велотренажёры';
+
+  @override
+  String get subSubcategorySmartScales => 'Умные весы';
+
+  @override
+  String get subSubcategoryHeartRateMonitors => 'Мониторы сердечного ритма';
+
+  @override
+  String get subSubcategorySleepTrackers => 'Трекеры сна';
+
+  @override
+  String get subSubcategoryHealthApps => 'Приложения для здоровья';
+
+  @override
+  String get subSubcategoryMobilityAidsGeneral => 'Средства передвижения';
+
+  @override
+  String get subSubcategoryGrabBars => 'Поручни';
+
+  @override
+  String get subSubcategorySeatCushions => 'Подушки для сидения';
+
+  @override
+  String get subSubcategoryDailyLivingAids => 'Средства для повседневной жизни';
+
+  @override
+  String get subSubcategoryMassageTools => 'Массажные инструменты';
+
+  @override
+  String get subSubcategoryAcupuncture => 'Акупунктура';
+
+  @override
+  String get subSubcategoryNaturalRemedies => 'Натуральные средства';
+
+  @override
+  String get subSubcategoryOralCare => 'Уход за полостью рта';
+
+  @override
+  String get subSubcategoryIncontinenceCare => 'Средства при недержании';
+
+  @override
+  String get subSubcategoryHearingAids => 'Слуховые аппараты';
+
+  @override
+  String get subSubcategoryVisionCare => 'Уход за зрением';
+
+  @override
+  String get subSubcategorySkinCareHealth => 'Уход за кожей';
+
+  @override
+  String get subSubcategoryGPSAndNavigation => 'GPS и навигация';
 }

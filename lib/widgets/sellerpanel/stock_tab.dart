@@ -294,11 +294,18 @@ class _StockTabState extends State<StockTab> with TickerProviderStateMixin {
                 if (index == products.length) {
                   return _buildLoadingIndicator(isSearchMode, isDark);
                 }
+                final product = products[index];
                 return RepaintBoundary(
+                  key: ValueKey(product.id),
                   child: AnimatedContainer(
                     duration: Duration(milliseconds: 200 + (index * 30)),
                     curve: Curves.easeOutBack,
-                    child: _ProductRow(product: products[index], index: index, isViewer: isViewer),
+                    child: _ProductRow(
+                      key: ValueKey('row_${product.id}'),
+                      product: product,
+                      index: index,
+                      isViewer: isViewer,
+                    ),
                   ),
                 );
               },
@@ -632,23 +639,15 @@ class _FilterRow extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+      child: Container(
         padding: EdgeInsets.symmetric(
           horizontal: isSecondary ? 8 : 12,
           vertical: 8,
         ),
         decoration: BoxDecoration(
-          gradient: isSelected
-              ? LinearGradient(
-                  colors: isDark
-                      ? [Colors.tealAccent.shade400, Colors.teal.shade600]
-                      : [Colors.teal.shade400, Colors.teal.shade600],
-                )
-              : null,
-          color: !isSelected
-              ? (isDark ? const Color(0xFF2A2D3A) : Colors.white)
-              : null,
+          color: isSelected
+              ? (isDark ? Colors.teal.shade400 : Colors.teal)
+              : (isDark ? const Color(0xFF2A2D3A) : Colors.white),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: isSelected
@@ -656,7 +655,6 @@ class _FilterRow extends StatelessWidget {
                 : (isDark ? Colors.grey.shade600 : Colors.grey.shade300),
             width: 1,
           ),
-         
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -708,7 +706,10 @@ class _FilterRow extends StatelessWidget {
               },
               child: Text(
                 l10n.none,
-                style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+                style: GoogleFonts.inter(
+                  color: isDarkMode ? Colors.white : Colors.black,
+                  fontSize: 14,
+                ),
               ),
             ),
             ...AllInOneCategoryData.kCategories.map((category) {
@@ -720,8 +721,10 @@ class _FilterRow extends StatelessWidget {
                 child: Text(
                   AllInOneCategoryData.localizeCategoryKey(
                       category['key']!, l10n),
-                  style:
-                      TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+                  style: GoogleFonts.inter(
+                    color: isDarkMode ? Colors.white : Colors.black,
+                    fontSize: 14,
+                  ),
                 ),
               );
             }),
@@ -730,7 +733,11 @@ class _FilterRow extends StatelessWidget {
             onPressed: () => Navigator.pop(context),
             child: Text(
               l10n.cancel,
-              style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+              style: GoogleFonts.inter(
+                color: isDarkMode ? Colors.white : Colors.black,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         );
@@ -773,7 +780,10 @@ class _FilterRow extends StatelessWidget {
               },
               child: Text(
                 l10n.none,
-                style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+                style: GoogleFonts.inter(
+                  color: isDarkMode ? Colors.white : Colors.black,
+                  fontSize: 14,
+                ),
               ),
             ),
             ...subcategories.map((subcategory) {
@@ -785,8 +795,10 @@ class _FilterRow extends StatelessWidget {
                 child: Text(
                   AllInOneCategoryData.localizeSubcategoryKey(
                       provider.stockCategory!, subcategory, l10n),
-                  style:
-                      TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+                  style: GoogleFonts.inter(
+                    color: isDarkMode ? Colors.white : Colors.black,
+                    fontSize: 14,
+                  ),
                 ),
               );
             }),
@@ -795,7 +807,11 @@ class _FilterRow extends StatelessWidget {
             onPressed: () => Navigator.pop(context),
             child: Text(
               l10n.cancel,
-              style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+              style: GoogleFonts.inter(
+                color: isDarkMode ? Colors.white : Colors.black,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         );
@@ -896,7 +912,12 @@ class _ProductRow extends StatelessWidget {
   final int index;
   final bool isViewer;
 
-  const _ProductRow({required this.product, required this.index, this.isViewer = false});
+  const _ProductRow({
+    Key? key,
+    required this.product,
+    required this.index,
+    this.isViewer = false,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {

@@ -66,18 +66,18 @@ class ProductListSliver extends StatelessWidget {
     final crossAxisCount = _calculateCrossAxisCount(context);
     final isTablet = _isTablet(context);
 
-    // Image height calculation
+    // Image height calculation - slightly taller for better tall/narrow image display
     double imageHeight;
     if (isTablet) {
       // For tablets, use a smaller percentage to fit more content
       final orientation = mediaQuery.orientation;
       if (orientation == Orientation.portrait) {
-        imageHeight = screenHeight * 0.22; // Reduced from 0.30
+        imageHeight = screenHeight * 0.24; // Increased from 0.22 for taller images
       } else {
-        imageHeight = screenHeight * 0.28; // Landscape needs slightly more
+        imageHeight = screenHeight * 0.31; // Increased from 0.28 for taller images
       }
     } else {
-      imageHeight = screenHeight * 0.30; // Keep original mobile size
+      imageHeight = screenHeight * 0.33; // Increased from 0.30 for taller images
     }
 
     // Info area height - increased for tablets to prevent info section from being obscured

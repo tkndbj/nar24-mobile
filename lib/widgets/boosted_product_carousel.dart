@@ -15,7 +15,7 @@ class BoostedProductsCarousel extends StatelessWidget {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final screenHeight = MediaQuery.of(context).size.height;
 
-    final double portraitImageHeight = screenHeight * 0.30;
+    final double portraitImageHeight = screenHeight * 0.33; // Increased from 0.30 for taller images
     const double infoAreaHeight = 80.0;
     final double rowHeight = portraitImageHeight + infoAreaHeight;
 

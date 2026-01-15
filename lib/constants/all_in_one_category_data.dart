@@ -4381,6 +4381,14 @@ class AllInOneCategoryData {
                 return l10n.subSubcategoryTireCare ?? 'Tire Care';
               case 'Glass Cleaners':
                 return l10n.subSubcategoryGlassCleaners ?? 'Glass Cleaners';
+              case 'Motor Oil':
+                return l10n.subSubcategoryMotorOil ?? 'Motor Oil';
+              case 'Car Cleaners':
+                return l10n.subSubcategoryCarCleaners ?? 'Car Cleaners';
+              case 'Maintenance Tools':
+                return l10n.subSubcategoryMaintenanceTools ?? 'Maintenance Tools';
+              case 'Fluids':
+                return l10n.subSubcategoryFluidsAuto ?? 'Fluids';
             }
             break;
           case 'Tires & Wheels':
@@ -4401,6 +4409,16 @@ class AllInOneCategoryData {
               case 'Wheel Accessories':
                 return l10n.subSubcategoryWheelAccessories ??
                     'Wheel Accessories';
+              case 'Tires':
+                return l10n.subSubcategoryTires ?? 'Tires';
+              case 'Wheels':
+                return l10n.subSubcategoryWheels ?? 'Wheels';
+              case 'Tire Accessories':
+                return l10n.subSubcategoryTireAccessories ?? 'Tire Accessories';
+              case 'Wheel Covers':
+                return l10n.subSubcategoryWheelCovers ?? 'Wheel Covers';
+              case 'Tire Pressure Monitors':
+                return l10n.subSubcategoryTirePressureMonitors ?? 'Tire Pressure Monitors';
             }
             break;
           case 'Car Electronics':
@@ -4417,6 +4435,16 @@ class AllInOneCategoryData {
                 return l10n.subSubcategoryCarSpeakers ?? 'Car Speakers';
               case 'Car Amplifiers':
                 return l10n.subSubcategoryCarAmplifiers ?? 'Car Amplifiers';
+              case 'Car Audio':
+                return l10n.subSubcategoryCarAudio ?? 'Car Audio';
+              case 'GPS & Navigation':
+                return l10n.subSubcategoryGPSAndNavigation ?? 'GPS & Navigation';
+              case 'Dash Cams':
+                return l10n.subSubcategoryDashCams ?? 'Dash Cams';
+              case 'Bluetooth Adapters':
+                return l10n.subSubcategoryBluetoothAdapters ?? 'Bluetooth Adapters';
+              case 'Backup Cameras':
+                return l10n.subSubcategoryBackupCameras ?? 'Backup Cameras';
             }
             break;
           case 'Motorcycle Parts':
@@ -4438,6 +4466,16 @@ class AllInOneCategoryData {
               case 'Motorcycle Body Parts':
                 return l10n.subSubcategoryMotorcycleBodyParts ??
                     'Motorcycle Body Parts';
+              case 'Motorcycle Parts':
+                return l10n.subSubcategoryMotorcyclePartsGeneral ?? 'Motorcycle Parts';
+              case 'Motorcycle Accessories':
+                return l10n.subSubcategoryMotorcycleAccessoriesGeneral ?? 'Motorcycle Accessories';
+              case 'Motorcycle Gear':
+                return l10n.subSubcategoryMotorcycleGear ?? 'Motorcycle Gear';
+              case 'Helmets':
+                return l10n.subSubcategoryHelmets ?? 'Helmets';
+              case 'Protective Clothing':
+                return l10n.subSubcategoryProtectiveClothing ?? 'Protective Clothing';
             }
             break;
           case 'Motorcycle Accessories':
@@ -4494,6 +4532,72 @@ class AllInOneCategoryData {
                     'Windshield Washer Fluid';
             }
             break;
+          case 'Car Parts & Components':
+            switch (subSubKey) {
+              case 'Engine Parts':
+                return l10n.subSubcategoryEngineParts ?? 'Engine Parts';
+              case 'Brake Components':
+                return l10n.subSubcategoryBrakeComponents ?? 'Brake Components';
+              case 'Suspension Parts':
+                return l10n.subSubcategorySuspensionParts ?? 'Suspension Parts';
+              case 'Transmission Parts':
+                return l10n.subSubcategoryTransmissionParts ?? 'Transmission Parts';
+              case 'Exhaust Systems':
+                return l10n.subSubcategoryExhaustSystems ?? 'Exhaust Systems';
+              case 'Filters':
+                return l10n.subSubcategoryFiltersAuto ?? 'Filters';
+              case 'Belts & Hoses':
+                return l10n.subSubcategoryBeltsHoses ?? 'Belts & Hoses';
+            }
+            break;
+          case 'Interior Accessories':
+            switch (subSubKey) {
+              case 'Seat Covers':
+                return l10n.subSubcategorySeatCovers ?? 'Seat Covers';
+              case 'Floor Mats':
+                return l10n.subSubcategoryFloorMats ?? 'Floor Mats';
+              case 'Steering Wheel Covers':
+                return l10n.subSubcategorySteeringWheelCovers ?? 'Steering Wheel Covers';
+              case 'Air Fresheners':
+                return l10n.subSubcategoryAirFresheners ?? 'Air Fresheners';
+              case 'Interior Organizers':
+                return l10n.subSubcategoryInteriorOrganizers ?? 'Interior Organizers';
+              case 'Sunshades':
+                return l10n.subSubcategorySunshades ?? 'Sunshades';
+            }
+            break;
+          case 'Exterior Accessories':
+            switch (subSubKey) {
+              case 'Car Covers':
+                return l10n.subSubcategoryCarCovers ?? 'Car Covers';
+              case 'Roof Racks':
+                return l10n.subSubcategoryRoofRacks ?? 'Roof Racks';
+              case 'Running Boards':
+                return l10n.subSubcategoryRunningBoards ?? 'Running Boards';
+              case 'Mud Flaps':
+                return l10n.subSubcategoryMudFlaps ?? 'Mud Flaps';
+              case 'License Plate Frames':
+                return l10n.subSubcategoryLicensePlateFrames ?? 'License Plate Frames';
+              case 'Decals':
+                return l10n.subSubcategoryDecals ?? 'Decals';
+            }
+            break;
+          case 'Tools & Equipment':
+            switch (subSubKey) {
+              case 'Jump Starters':
+                return l10n.subSubcategoryJumpStarters ?? 'Jump Starters';
+              case 'Tire Gauges':
+                return l10n.subSubcategoryTireGauges ?? 'Tire Gauges';
+              case 'Mechanics Tools':
+                return l10n.subSubcategoryMechanicsTools ?? 'Mechanics Tools';
+              case 'Car Jacks':
+                return l10n.subSubcategoryCarJacks ?? 'Car Jacks';
+              case 'Emergency Kits':
+                return l10n.subSubcategoryEmergencyKitsAuto ?? 'Emergency Kits';
+              case 'Diagnostic Tools':
+                return l10n.subSubcategoryDiagnosticTools ?? 'Diagnostic Tools';
+            }
+            break;
         }
         break;
       case 'Health & Wellness':
@@ -4517,6 +4621,10 @@ class AllInOneCategoryData {
                     'Protein Supplements';
               case 'Probiotics':
                 return l10n.subSubcategoryProbiotics ?? 'Probiotics';
+              case 'B Vitamins':
+                return l10n.subSubcategoryBVitamins ?? 'B Vitamins';
+              case 'Herbal Supplements':
+                return l10n.subSubcategoryHerbalSupplements ?? 'Herbal Supplements';
             }
             break;
           case 'Medical Devices':
@@ -4605,6 +4713,12 @@ class AllInOneCategoryData {
               case 'Natural Supplements':
                 return l10n.subSubcategoryNaturalSupplements ??
                     'Natural Supplements';
+              case 'Massage Tools':
+                return l10n.subSubcategoryMassageTools ?? 'Massage Tools';
+              case 'Acupuncture':
+                return l10n.subSubcategoryAcupuncture ?? 'Acupuncture';
+              case 'Natural Remedies':
+                return l10n.subSubcategoryNaturalRemedies ?? 'Natural Remedies';
             }
             break;
           case 'Fitness & Nutrition':
@@ -4641,6 +4755,96 @@ class AllInOneCategoryData {
               case 'Enhancement Products':
                 return l10n.subSubcategoryEnhancementProducts ??
                     'Enhancement Products';
+            }
+            break;
+          case 'Medical Equipment':
+            switch (subSubKey) {
+              case 'Blood Pressure Monitors':
+                return l10n.subSubcategoryBloodPressureMonitors ?? 'Blood Pressure Monitors';
+              case 'Thermometers':
+                return l10n.subSubcategoryThermometers ?? 'Thermometers';
+              case 'Glucose Meters':
+                return l10n.subSubcategoryGlucoseMeters ?? 'Glucose Meters';
+              case 'Pulse Oximeters':
+                return l10n.subSubcategoryPulseOximeters ?? 'Pulse Oximeters';
+              case 'Stethoscopes':
+                return l10n.subSubcategoryStethoscopes ?? 'Stethoscopes';
+              case 'Medical Scales':
+                return l10n.subSubcategoryMedicalScales ?? 'Medical Scales';
+            }
+            break;
+          case 'First Aid & Safety':
+            switch (subSubKey) {
+              case 'First Aid Kits':
+                return l10n.subSubcategoryFirstAidKits ?? 'First Aid Kits';
+              case 'Bandages':
+                return l10n.subSubcategoryBandages ?? 'Bandages';
+              case 'Antiseptics':
+                return l10n.subSubcategoryAntiseptics ?? 'Antiseptics';
+              case 'Pain Relief':
+                return l10n.subSubcategoryPainRelief ?? 'Pain Relief';
+              case 'Emergency Supplies':
+                return l10n.subSubcategoryEmergencySupplies ?? 'Emergency Supplies';
+              case 'Safety Equipment':
+                return l10n.subSubcategorySafetyEquipment ?? 'Safety Equipment';
+            }
+            break;
+          case 'Fitness & Exercise Equipment':
+            switch (subSubKey) {
+              case 'Home Gym Equipment':
+                return l10n.subSubcategoryHomeGymEquipment ?? 'Home Gym Equipment';
+              case 'Cardio Machines':
+                return l10n.subSubcategoryCardioMachines ?? 'Cardio Machines';
+              case 'Weights & Dumbbells':
+                return l10n.subSubcategoryWeightsDumbbells ?? 'Weights & Dumbbells';
+              case 'Resistance Bands':
+                return l10n.subSubcategoryResistanceBands ?? 'Resistance Bands';
+              case 'Yoga Mats':
+                return l10n.subSubcategoryYogaMats ?? 'Yoga Mats';
+              case 'Exercise Bikes':
+                return l10n.subSubcategoryExerciseBikes ?? 'Exercise Bikes';
+            }
+            break;
+          case 'Health Monitoring':
+            switch (subSubKey) {
+              case 'Fitness Trackers':
+                return l10n.subSubcategoryFitnessTrackers ?? 'Fitness Trackers';
+              case 'Smart Scales':
+                return l10n.subSubcategorySmartScales ?? 'Smart Scales';
+              case 'Heart Rate Monitors':
+                return l10n.subSubcategoryHeartRateMonitors ?? 'Heart Rate Monitors';
+              case 'Sleep Trackers':
+                return l10n.subSubcategorySleepTrackers ?? 'Sleep Trackers';
+              case 'Health Apps':
+                return l10n.subSubcategoryHealthApps ?? 'Health Apps';
+            }
+            break;
+          case 'Mobility & Daily Living':
+            switch (subSubKey) {
+              case 'Mobility Aids':
+                return l10n.subSubcategoryMobilityAidsGeneral ?? 'Mobility Aids';
+              case 'Grab Bars':
+                return l10n.subSubcategoryGrabBars ?? 'Grab Bars';
+              case 'Bath Safety':
+                return l10n.subSubcategoryBathSafety ?? 'Bath Safety';
+              case 'Seat Cushions':
+                return l10n.subSubcategorySeatCushions ?? 'Seat Cushions';
+              case 'Daily Living Aids':
+                return l10n.subSubcategoryDailyLivingAids ?? 'Daily Living Aids';
+            }
+            break;
+          case 'Personal Care':
+            switch (subSubKey) {
+              case 'Oral Care':
+                return l10n.subSubcategoryOralCare ?? 'Oral Care';
+              case 'Incontinence Care':
+                return l10n.subSubcategoryIncontinenceCare ?? 'Incontinence Care';
+              case 'Hearing Aids':
+                return l10n.subSubcategoryHearingAids ?? 'Hearing Aids';
+              case 'Vision Care':
+                return l10n.subSubcategoryVisionCare ?? 'Vision Care';
+              case 'Skin Care':
+                return l10n.subSubcategorySkinCareHealth ?? 'Skin Care';
             }
             break;
         }

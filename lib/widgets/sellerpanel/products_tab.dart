@@ -345,7 +345,10 @@ class FilterBar extends StatelessWidget {
                       _buildFilterButton(
                         context,
                         l10n.productApplications,
-                        hasShop ? () => context.push('/seller_panel_pending_applications/$shopId') : () {},
+                        hasShop
+                            ? () => context.push(
+                                '/seller_panel_pending_applications/$shopId')
+                            : () {},
                         isSelected: false,
                       ),
                     ],
@@ -549,21 +552,6 @@ class FilterBar extends StatelessWidget {
                       : (isDark ? Colors.grey.shade600 : Colors.grey.shade300),
                   width: 1,
                 ),
-          boxShadow: isActionButton
-              ? null // Remove shadow for action buttons
-              : [
-                  BoxShadow(
-                    color: isSelected
-                        ? (isDark
-                            ? Colors.tealAccent.withOpacity(0.3)
-                            : Colors.teal.withOpacity(0.3))
-                        : (isDark
-                            ? Colors.black26
-                            : Colors.black.withOpacity(0.05)),
-                    blurRadius: isSelected ? 6 : 3,
-                    offset: const Offset(0, 1),
-                  ),
-                ],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -900,110 +888,111 @@ class ProductsList extends StatelessWidget {
     );
   }
 
- Widget _buildProductGrid(BuildContext context, List<Product> products,
-    {required bool isSearchMode}) {
-  final l10n = AppLocalizations.of(context);
-  final isDark = Theme.of(context).brightness == Brightness.dark;
-  const jadeGreen = Color(0xFF00A86B);
-  final isViewer = _isUserViewer(context.read<SellerPanelProvider>().selectedShop);
+  Widget _buildProductGrid(BuildContext context, List<Product> products,
+      {required bool isSearchMode}) {
+    final l10n = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    const jadeGreen = Color(0xFF00A86B);
+    final isViewer =
+        _isUserViewer(context.read<SellerPanelProvider>().selectedShop);
 
-  return CustomScrollView(
-    controller: scrollController,
-    slivers: [
-      // Search results header
-      if (isSearchMode) ...[
-        SliverToBoxAdapter(
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color:
-                  (isDark ? Colors.tealAccent : Colors.teal).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: (isDark ? Colors.tealAccent : Colors.teal)
-                    .withOpacity(0.3),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.search_rounded,
-                  size: 16,
-                  color: isDark ? Colors.tealAccent : Colors.teal,
+    return CustomScrollView(
+      controller: scrollController,
+      slivers: [
+        // Search results header
+        if (isSearchMode) ...[
+          SliverToBoxAdapter(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color:
+                    (isDark ? Colors.tealAccent : Colors.teal).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: (isDark ? Colors.tealAccent : Colors.teal)
+                      .withOpacity(0.3),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  l10n.searchResultsCount(products.length.toString()),
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.search_rounded,
+                    size: 16,
                     color: isDark ? Colors.tealAccent : Colors.teal,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Text(
+                    l10n.searchResultsCount(products.length.toString()),
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.tealAccent : Colors.teal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final product = products[index];
+                final productId = product.id;
+                final imageUrl =
+                    product.imageUrls.isNotEmpty ? product.imageUrls[0] : '';
+
+                // Use individual RepaintBoundary for each product card
+                return RepaintBoundary(
+                  key: ValueKey('product_$productId'),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6.0),
+                    child: _ProductListItem(
+                      product: product,
+                      productId: productId,
+                      imageUrl: imageUrl,
+                      l10n: l10n,
+                      isDark: isDark,
+                      jadeGreen: jadeGreen,
+                      isViewer: isViewer,
+                      onPauseProduct: () => _pauseProductWithModal(
+                        context,
+                        productId,
+                        product.productName,
+                      ),
+                      onDeleteProduct: () => _deleteProductWithModal(
+                        context,
+                        productId,
+                        product.productName,
+                      ),
+                    ),
+                  ),
+                );
+              },
+              childCount: products.length,
+              // Add find/remove optimizations
+              findChildIndexCallback: (Key key) {
+                if (key is ValueKey<String>) {
+                  final valueKey = key.value;
+                  if (valueKey.startsWith('product_')) {
+                    final productId = valueKey.substring(8);
+                    final index = products.indexWhere((p) => p.id == productId);
+                    return index >= 0 ? index : null;
+                  }
+                }
+                return null;
+              },
             ),
           ),
         ),
+        _buildLoadingIndicator(context, isSearchMode, isDark),
       ],
-
-      SliverPadding(
-        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
-        sliver: SliverList(
-          delegate: SliverChildBuilderDelegate(
-            (context, index) {
-              final product = products[index];
-              final productId = product.id;
-              final imageUrl =
-                  product.imageUrls.isNotEmpty ? product.imageUrls[0] : '';
-
-              // Use individual RepaintBoundary for each product card
-              return RepaintBoundary(
-                key: ValueKey('product_$productId'),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6.0),
-                  child: _ProductListItem(
-                    product: product,
-                    productId: productId,
-                    imageUrl: imageUrl,
-                    l10n: l10n,
-                    isDark: isDark,
-                    jadeGreen: jadeGreen,
-                    isViewer: isViewer,
-                    onPauseProduct: () => _pauseProductWithModal(
-                      context,
-                      productId,
-                      product.productName,
-                    ),
-                    onDeleteProduct: () => _deleteProductWithModal(
-                      context,
-                      productId,
-                      product.productName,
-                    ),
-                  ),
-                ),
-              );
-            },
-            childCount: products.length,
-            // Add find/remove optimizations
-            findChildIndexCallback: (Key key) {
-  if (key is ValueKey<String>) {
-    final valueKey = key.value;
-    if (valueKey.startsWith('product_')) {
-      final productId = valueKey.substring(8);
-      final index = products.indexWhere((p) => p.id == productId);
-      return index >= 0 ? index : null;
-    }
+    );
   }
-  return null;
-},
-          ),
-        ),
-      ),
-      _buildLoadingIndicator(context, isSearchMode, isDark),
-    ],
-  );
-}
 
   Widget _buildLoadingIndicator(
       BuildContext context, bool isSearchMode, bool isDark) {
@@ -1055,187 +1044,187 @@ class ProductsList extends StatelessWidget {
         },
       );
     }
-  }  
+  }
 
-Future<void> _pauseProductWithModal(
-    BuildContext context, String productId, String productName) async {
-  final l10n = AppLocalizations.of(context);
+  Future<void> _pauseProductWithModal(
+      BuildContext context, String productId, String productName) async {
+    final l10n = AppLocalizations.of(context);
 
-  final confirmed = await _showPauseConfirmation(context, productName);
-  if (!confirmed) return;
+    final confirmed = await _showPauseConfirmation(context, productName);
+    if (!confirmed) return;
 
-  if (!context.mounted) return;
-  
-  // ✅ CAPTURE the dialog context
-  BuildContext? dialogContext;
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (BuildContext ctx) {
-      dialogContext = ctx; // ← Save the dialog's context
-      return Dialog(
-        backgroundColor: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? const Color.fromARGB(255, 33, 31, 49)
-                : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0.0, end: 1.0),
-                duration: const Duration(milliseconds: 1500),
-                builder: (context, value, child) {
-                  return Transform.rotate(
-                    angle: value * 2 * 3.14159,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Colors.orange, Colors.deepOrange],
+    if (!context.mounted) return;
+
+    // ✅ CAPTURE the dialog context
+    BuildContext? dialogContext;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext ctx) {
+        dialogContext = ctx; // ← Save the dialog's context
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color.fromARGB(255, 33, 31, 49)
+                  : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 1500),
+                  builder: (context, value, child) {
+                    return Transform.rotate(
+                      angle: value * 2 * 3.14159,
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Colors.orange, Colors.deepOrange],
+                          ),
+                          borderRadius: BorderRadius.circular(50),
                         ),
-                        borderRadius: BorderRadius.circular(50),
+                        child: const Icon(
+                          Icons.archive_rounded,
+                          color: Colors.white,
+                          size: 32,
+                        ),
                       ),
-                      child: const Icon(
-                        Icons.archive_rounded,
-                        color: Colors.white,
-                        size: 32,
-                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  l10n.archivingProduct ?? 'Archiving product...',
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.black87,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  productName,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white70
+                        : Colors.grey.shade600,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 20),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    height: 8,
+                    width: double.infinity,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey.shade700
+                        : Colors.grey.shade200,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(seconds: 2),
+                      builder: (context, value, child) {
+                        return LinearProgressIndicator(
+                          value: value,
+                          backgroundColor: Colors.transparent,
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                              Colors.orange),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
-              const SizedBox(height: 20),
-              Text(
-                l10n.archivingProduct ?? 'Archiving product...',
-                style: GoogleFonts.inter(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white
-                      : Colors.black87,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                productName,
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white70
-                      : Colors.grey.shade600,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 20),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  height: 8,
-                  width: double.infinity,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.grey.shade700
-                      : Colors.grey.shade200,
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    duration: const Duration(seconds: 2),
-                    builder: (context, value, child) {
-                      return LinearProgressIndicator(
-                        value: value,
-                        backgroundColor: Colors.transparent,
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                            Colors.orange),
-                      );
-                    },
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
 
-  try {
-    final provider = context.read<SellerPanelProvider>();
-    await provider.toggleProductPauseStatus(productId, true);
+    try {
+      final provider = context.read<SellerPanelProvider>();
+      await provider.toggleProductPauseStatus(productId, true);
 
-    // ✅ Use the captured dialog context to close ONLY the dialog
-    if (dialogContext != null && dialogContext!.mounted) {
-      Navigator.of(dialogContext!).pop();
-    }
-    
-    await Future.delayed(const Duration(milliseconds: 100));
-    
-    if (context.mounted) {
-      final currentFiltered = provider.filteredProductsNotifier.value;
-      provider.filteredProductsNotifier.value =
-          currentFiltered.where((p) => p.id != productId).toList();
-
-      if (provider.isSearchMode) {
-        final currentSearch = provider.searchResultsNotifier.value;
-        provider.searchResultsNotifier.value =
-            currentSearch.where((p) => p.id != productId).toList();
+      // ✅ Use the captured dialog context to close ONLY the dialog
+      if (dialogContext != null && dialogContext!.mounted) {
+        Navigator.of(dialogContext!).pop();
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                  child: Text(l10n.productArchivedSuccess ??
-                      'Product has been successfully archived')),
-            ],
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      if (context.mounted) {
+        final currentFiltered = provider.filteredProductsNotifier.value;
+        provider.filteredProductsNotifier.value =
+            currentFiltered.where((p) => p.id != productId).toList();
+
+        if (provider.isSearchMode) {
+          final currentSearch = provider.searchResultsNotifier.value;
+          provider.searchResultsNotifier.value =
+              currentSearch.where((p) => p.id != productId).toList();
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: Text(l10n.productArchivedSuccess ??
+                        'Product has been successfully archived')),
+              ],
+            ),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            duration: const Duration(seconds: 3),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-          backgroundColor: Colors.orange,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          duration: const Duration(seconds: 3),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      );
-    }
-  } catch (e) {
-    if (dialogContext != null && dialogContext!.mounted) {
-      Navigator.of(dialogContext!).pop();
-    }
-    
-    await Future.delayed(const Duration(milliseconds: 100));
-    
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                  child: Text(l10n.productArchiveError ??
-                      'Failed to archive product. Please try again.')),
-            ],
+        );
+      }
+    } catch (e) {
+      if (dialogContext != null && dialogContext!.mounted) {
+        Navigator.of(dialogContext!).pop();
+      }
+
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: Text(l10n.productArchiveError ??
+                        'Failed to archive product. Please try again.')),
+              ],
+            ),
+            backgroundColor: Colors.red.shade500,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            duration: const Duration(seconds: 3),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-          backgroundColor: Colors.red.shade500,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          duration: const Duration(seconds: 3),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      );
+        );
+      }
     }
   }
-}
 
   Future<bool> _showPauseConfirmation(
       BuildContext context, String productName) async {
@@ -1492,187 +1481,187 @@ Future<void> _pauseProductWithModal(
     );
   }
 
-Future<void> _deleteProductWithModal(
-    BuildContext context, String productId, String productName) async {
-  final l10n = AppLocalizations.of(context);
+  Future<void> _deleteProductWithModal(
+      BuildContext context, String productId, String productName) async {
+    final l10n = AppLocalizations.of(context);
 
-  final confirmed = await _showDeleteConfirmation(context, productName);
-  if (!confirmed) return;
+    final confirmed = await _showDeleteConfirmation(context, productName);
+    if (!confirmed) return;
 
-  if (!context.mounted) return;
-  
-  // ✅ CAPTURE the dialog context
-  BuildContext? dialogContext;
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (BuildContext ctx) {
-      dialogContext = ctx; // ← Save the dialog's context
-      return Dialog(
-        backgroundColor: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? const Color.fromARGB(255, 33, 31, 49)
-                : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0.0, end: 1.0),
-                duration: const Duration(milliseconds: 1500),
-                builder: (context, value, child) {
-                  return Transform.rotate(
-                    angle: value * 2 * 3.14159,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Colors.red, Colors.redAccent],
+    if (!context.mounted) return;
+
+    // ✅ CAPTURE the dialog context
+    BuildContext? dialogContext;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext ctx) {
+        dialogContext = ctx; // ← Save the dialog's context
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color.fromARGB(255, 33, 31, 49)
+                  : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 1500),
+                  builder: (context, value, child) {
+                    return Transform.rotate(
+                      angle: value * 2 * 3.14159,
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Colors.red, Colors.redAccent],
+                          ),
+                          borderRadius: BorderRadius.circular(50),
                         ),
-                        borderRadius: BorderRadius.circular(50),
+                        child: const Icon(
+                          Icons.delete_forever_rounded,
+                          color: Colors.white,
+                          size: 32,
+                        ),
                       ),
-                      child: const Icon(
-                        Icons.delete_forever_rounded,
-                        color: Colors.white,
-                        size: 32,
-                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  l10n.deletingProduct ?? 'Deleting product...',
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.black87,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  productName,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white70
+                        : Colors.grey.shade600,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 20),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    height: 8,
+                    width: double.infinity,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey.shade700
+                        : Colors.grey.shade200,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(seconds: 2),
+                      builder: (context, value, child) {
+                        return LinearProgressIndicator(
+                          value: value,
+                          backgroundColor: Colors.transparent,
+                          valueColor:
+                              const AlwaysStoppedAnimation<Color>(Colors.red),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
-              const SizedBox(height: 20),
-              Text(
-                l10n.deletingProduct ?? 'Deleting product...',
-                style: GoogleFonts.inter(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white
-                      : Colors.black87,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                productName,
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white70
-                      : Colors.grey.shade600,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 20),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  height: 8,
-                  width: double.infinity,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.grey.shade700
-                      : Colors.grey.shade200,
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    duration: const Duration(seconds: 2),
-                    builder: (context, value, child) {
-                      return LinearProgressIndicator(
-                        value: value,
-                        backgroundColor: Colors.transparent,
-                        valueColor:
-                            const AlwaysStoppedAnimation<Color>(Colors.red),
-                      );
-                    },
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
 
-  try {
-    final provider = context.read<SellerPanelProvider>();
-    await provider.removeProduct(productId);
+    try {
+      final provider = context.read<SellerPanelProvider>();
+      await provider.removeProduct(productId);
 
-    // ✅ Use the captured dialog context
-    if (dialogContext != null && dialogContext!.mounted) {
-      Navigator.of(dialogContext!).pop();
-    }
-    
-    await Future.delayed(const Duration(milliseconds: 100));
-    
-    if (context.mounted) {
-      final currentFiltered = provider.filteredProductsNotifier.value;
-      provider.filteredProductsNotifier.value =
-          currentFiltered.where((p) => p.id != productId).toList();
-
-      if (provider.isSearchMode) {
-        final currentSearch = provider.searchResultsNotifier.value;
-        provider.searchResultsNotifier.value =
-            currentSearch.where((p) => p.id != productId).toList();
+      // ✅ Use the captured dialog context
+      if (dialogContext != null && dialogContext!.mounted) {
+        Navigator.of(dialogContext!).pop();
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(l10n.productDeletedSuccess ??
-                    'Product has been successfully deleted'),
-              ),
-            ],
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      if (context.mounted) {
+        final currentFiltered = provider.filteredProductsNotifier.value;
+        provider.filteredProductsNotifier.value =
+            currentFiltered.where((p) => p.id != productId).toList();
+
+        if (provider.isSearchMode) {
+          final currentSearch = provider.searchResultsNotifier.value;
+          provider.searchResultsNotifier.value =
+              currentSearch.where((p) => p.id != productId).toList();
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(l10n.productDeletedSuccess ??
+                      'Product has been successfully deleted'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red.shade600,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            duration: const Duration(seconds: 3),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-          backgroundColor: Colors.red.shade600,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          duration: const Duration(seconds: 3),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      );
-    }
-  } catch (e) {
-    if (dialogContext != null && dialogContext!.mounted) {
-      Navigator.of(dialogContext!).pop();
-    }
-    
-    await Future.delayed(const Duration(milliseconds: 100));
-    
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(l10n.productDeleteError ??
-                    'Failed to delete product. Please try again.'),
-              ),
-            ],
+        );
+      }
+    } catch (e) {
+      if (dialogContext != null && dialogContext!.mounted) {
+        Navigator.of(dialogContext!).pop();
+      }
+
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(l10n.productDeleteError ??
+                      'Failed to delete product. Please try again.'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            duration: const Duration(seconds: 3),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-          backgroundColor: Colors.red.shade700,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          duration: const Duration(seconds: 3),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      );
+        );
+      }
     }
   }
-}
 
   Future<bool> _showDeleteConfirmation(
       BuildContext context, String productName) async {
@@ -1927,8 +1916,9 @@ Future<void> _deleteProductWithModal(
         ),
       ),
     );
-  }  
+  }
 }
+
 class _ProductListItem extends StatelessWidget {
   final Product product;
   final String productId;
@@ -1956,9 +1946,7 @@ class _ProductListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: isDark
-            ? const Color.fromARGB(255, 33, 31, 49)
-            : Colors.white,
+        color: isDark ? const Color.fromARGB(255, 33, 31, 49) : Colors.white,
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
@@ -1979,10 +1967,7 @@ class _ProductListItem extends StatelessWidget {
                 onTap: () {
                   context.push(
                     '/seller_panel_product_detail',
-                    extra: {
-                      'product': product,
-                      'productId': productId
-                    },
+                    extra: {'product': product, 'productId': productId},
                   );
                 },
                 child: ProductCard4(
@@ -2024,7 +2009,8 @@ class _ProductListItem extends StatelessWidget {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Failed to update product status'),
+                                    content:
+                                        Text('Failed to update product status'),
                                   ),
                                 );
                               }

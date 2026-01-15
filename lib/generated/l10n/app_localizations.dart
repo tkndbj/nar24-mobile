@@ -23627,6 +23627,408 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Ürün boost işlemleri geçici olarak durdurulmuştur. Aktif boostlarınız çalışmaya devam edecektir. Lütfen daha sonra tekrar deneyin.'**
   String get boostServiceDisabledMessage;
+
+  /// No description provided for @subSubcategoryBrakeComponents.
+  ///
+  /// In tr, this message translates to:
+  /// **'Fren Parçaları'**
+  String get subSubcategoryBrakeComponents;
+
+  /// No description provided for @subSubcategoryTransmissionParts.
+  ///
+  /// In tr, this message translates to:
+  /// **'Şanzıman Parçaları'**
+  String get subSubcategoryTransmissionParts;
+
+  /// No description provided for @subSubcategoryExhaustSystems.
+  ///
+  /// In tr, this message translates to:
+  /// **'Egzoz Sistemleri'**
+  String get subSubcategoryExhaustSystems;
+
+  /// No description provided for @subSubcategoryFiltersAuto.
+  ///
+  /// In tr, this message translates to:
+  /// **'Filtreler'**
+  String get subSubcategoryFiltersAuto;
+
+  /// No description provided for @subSubcategoryBeltsHoses.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kayış ve Hortumlar'**
+  String get subSubcategoryBeltsHoses;
+
+  /// No description provided for @subSubcategoryCarAudio.
+  ///
+  /// In tr, this message translates to:
+  /// **'Araç Ses Sistemleri'**
+  String get subSubcategoryCarAudio;
+
+  /// No description provided for @subSubcategoryDashCams.
+  ///
+  /// In tr, this message translates to:
+  /// **'Araç Kameraları'**
+  String get subSubcategoryDashCams;
+
+  /// No description provided for @subSubcategoryBluetoothAdapters.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bluetooth Adaptörleri'**
+  String get subSubcategoryBluetoothAdapters;
+
+  /// No description provided for @subSubcategoryBackupCameras.
+  ///
+  /// In tr, this message translates to:
+  /// **'Geri Görüş Kameraları'**
+  String get subSubcategoryBackupCameras;
+
+  /// No description provided for @subSubcategoryMotorOil.
+  ///
+  /// In tr, this message translates to:
+  /// **'Motor Yağı'**
+  String get subSubcategoryMotorOil;
+
+  /// No description provided for @subSubcategoryCarCleaners.
+  ///
+  /// In tr, this message translates to:
+  /// **'Araç Temizleyicileri'**
+  String get subSubcategoryCarCleaners;
+
+  /// No description provided for @subSubcategoryMaintenanceTools.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bakım Aletleri'**
+  String get subSubcategoryMaintenanceTools;
+
+  /// No description provided for @subSubcategoryFluidsAuto.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sıvılar'**
+  String get subSubcategoryFluidsAuto;
+
+  /// No description provided for @subSubcategoryTires.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lastikler'**
+  String get subSubcategoryTires;
+
+  /// No description provided for @subSubcategoryWheels.
+  ///
+  /// In tr, this message translates to:
+  /// **'Jantlar'**
+  String get subSubcategoryWheels;
+
+  /// No description provided for @subSubcategoryTireAccessories.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lastik Aksesuarları'**
+  String get subSubcategoryTireAccessories;
+
+  /// No description provided for @subSubcategoryWheelCovers.
+  ///
+  /// In tr, this message translates to:
+  /// **'Jant Kapakları'**
+  String get subSubcategoryWheelCovers;
+
+  /// No description provided for @subSubcategoryTirePressureMonitors.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lastik Basınç Monitörleri'**
+  String get subSubcategoryTirePressureMonitors;
+
+  /// No description provided for @subSubcategorySeatCovers.
+  ///
+  /// In tr, this message translates to:
+  /// **'Koltuk Kılıfları'**
+  String get subSubcategorySeatCovers;
+
+  /// No description provided for @subSubcategoryFloorMats.
+  ///
+  /// In tr, this message translates to:
+  /// **'Paspaslar'**
+  String get subSubcategoryFloorMats;
+
+  /// No description provided for @subSubcategorySteeringWheelCovers.
+  ///
+  /// In tr, this message translates to:
+  /// **'Direksiyon Kılıfları'**
+  String get subSubcategorySteeringWheelCovers;
+
+  /// No description provided for @subSubcategoryAirFresheners.
+  ///
+  /// In tr, this message translates to:
+  /// **'Oto Kokuları'**
+  String get subSubcategoryAirFresheners;
+
+  /// No description provided for @subSubcategoryInteriorOrganizers.
+  ///
+  /// In tr, this message translates to:
+  /// **'İç Mekan Düzenleyicileri'**
+  String get subSubcategoryInteriorOrganizers;
+
+  /// No description provided for @subSubcategorySunshades.
+  ///
+  /// In tr, this message translates to:
+  /// **'Güneşlikler'**
+  String get subSubcategorySunshades;
+
+  /// No description provided for @subSubcategoryCarCovers.
+  ///
+  /// In tr, this message translates to:
+  /// **'Araç Örtüleri'**
+  String get subSubcategoryCarCovers;
+
+  /// No description provided for @subSubcategoryRoofRacks.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tavan Bagajları'**
+  String get subSubcategoryRoofRacks;
+
+  /// No description provided for @subSubcategoryRunningBoards.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kapı Basamakları'**
+  String get subSubcategoryRunningBoards;
+
+  /// No description provided for @subSubcategoryMudFlaps.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çamurluklar'**
+  String get subSubcategoryMudFlaps;
+
+  /// No description provided for @subSubcategoryLicensePlateFrames.
+  ///
+  /// In tr, this message translates to:
+  /// **'Plaka Çerçeveleri'**
+  String get subSubcategoryLicensePlateFrames;
+
+  /// No description provided for @subSubcategoryDecals.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çıkartmalar'**
+  String get subSubcategoryDecals;
+
+  /// No description provided for @subSubcategoryJumpStarters.
+  ///
+  /// In tr, this message translates to:
+  /// **'Akü Takviye Cihazları'**
+  String get subSubcategoryJumpStarters;
+
+  /// No description provided for @subSubcategoryTireGauges.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lastik Basınç Ölçerler'**
+  String get subSubcategoryTireGauges;
+
+  /// No description provided for @subSubcategoryMechanicsTools.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mekanik Aletleri'**
+  String get subSubcategoryMechanicsTools;
+
+  /// No description provided for @subSubcategoryCarJacks.
+  ///
+  /// In tr, this message translates to:
+  /// **'Araba Krikoları'**
+  String get subSubcategoryCarJacks;
+
+  /// No description provided for @subSubcategoryEmergencyKitsAuto.
+  ///
+  /// In tr, this message translates to:
+  /// **'Acil Durum Setleri'**
+  String get subSubcategoryEmergencyKitsAuto;
+
+  /// No description provided for @subSubcategoryMotorcyclePartsGeneral.
+  ///
+  /// In tr, this message translates to:
+  /// **'Motosiklet Parçaları'**
+  String get subSubcategoryMotorcyclePartsGeneral;
+
+  /// No description provided for @subSubcategoryMotorcycleAccessoriesGeneral.
+  ///
+  /// In tr, this message translates to:
+  /// **'Motosiklet Aksesuarları'**
+  String get subSubcategoryMotorcycleAccessoriesGeneral;
+
+  /// No description provided for @subSubcategoryMotorcycleGear.
+  ///
+  /// In tr, this message translates to:
+  /// **'Motosiklet Ekipmanları'**
+  String get subSubcategoryMotorcycleGear;
+
+  /// No description provided for @subSubcategoryHelmets.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kasklar'**
+  String get subSubcategoryHelmets;
+
+  /// No description provided for @subSubcategoryProtectiveClothing.
+  ///
+  /// In tr, this message translates to:
+  /// **'Koruyucu Giysi'**
+  String get subSubcategoryProtectiveClothing;
+
+  /// No description provided for @subSubcategoryBVitamins.
+  ///
+  /// In tr, this message translates to:
+  /// **'B Vitaminleri'**
+  String get subSubcategoryBVitamins;
+
+  /// No description provided for @subSubcategoryHerbalSupplements.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bitkisel Takviyeler'**
+  String get subSubcategoryHerbalSupplements;
+
+  /// No description provided for @subSubcategoryMedicalScales.
+  ///
+  /// In tr, this message translates to:
+  /// **'Medikal Tartılar'**
+  String get subSubcategoryMedicalScales;
+
+  /// No description provided for @subSubcategorySafetyEquipment.
+  ///
+  /// In tr, this message translates to:
+  /// **'Güvenlik Ekipmanları'**
+  String get subSubcategorySafetyEquipment;
+
+  /// No description provided for @subSubcategoryHomeGymEquipment.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ev Spor Aletleri'**
+  String get subSubcategoryHomeGymEquipment;
+
+  /// No description provided for @subSubcategoryCardioMachines.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kardiyo Makineleri'**
+  String get subSubcategoryCardioMachines;
+
+  /// No description provided for @subSubcategoryWeightsDumbbells.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ağırlıklar ve Dambıllar'**
+  String get subSubcategoryWeightsDumbbells;
+
+  /// No description provided for @subSubcategoryResistanceBands.
+  ///
+  /// In tr, this message translates to:
+  /// **'Direnç Bantları'**
+  String get subSubcategoryResistanceBands;
+
+  /// No description provided for @subSubcategoryYogaMats.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yoga Matları'**
+  String get subSubcategoryYogaMats;
+
+  /// No description provided for @subSubcategoryExerciseBikes.
+  ///
+  /// In tr, this message translates to:
+  /// **'Egzersiz Bisikletleri'**
+  String get subSubcategoryExerciseBikes;
+
+  /// No description provided for @subSubcategorySmartScales.
+  ///
+  /// In tr, this message translates to:
+  /// **'Akıllı Tartılar'**
+  String get subSubcategorySmartScales;
+
+  /// No description provided for @subSubcategoryHeartRateMonitors.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kalp Atış Hızı Monitörleri'**
+  String get subSubcategoryHeartRateMonitors;
+
+  /// No description provided for @subSubcategorySleepTrackers.
+  ///
+  /// In tr, this message translates to:
+  /// **'Uyku Takipçileri'**
+  String get subSubcategorySleepTrackers;
+
+  /// No description provided for @subSubcategoryHealthApps.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sağlık Uygulamaları'**
+  String get subSubcategoryHealthApps;
+
+  /// No description provided for @subSubcategoryMobilityAidsGeneral.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hareket Yardımcıları'**
+  String get subSubcategoryMobilityAidsGeneral;
+
+  /// No description provided for @subSubcategoryGrabBars.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tutunma Barları'**
+  String get subSubcategoryGrabBars;
+
+  /// No description provided for @subSubcategorySeatCushions.
+  ///
+  /// In tr, this message translates to:
+  /// **'Oturma Minderleri'**
+  String get subSubcategorySeatCushions;
+
+  /// No description provided for @subSubcategoryDailyLivingAids.
+  ///
+  /// In tr, this message translates to:
+  /// **'Günlük Yaşam Yardımcıları'**
+  String get subSubcategoryDailyLivingAids;
+
+  /// No description provided for @subSubcategoryMassageTools.
+  ///
+  /// In tr, this message translates to:
+  /// **'Masaj Aletleri'**
+  String get subSubcategoryMassageTools;
+
+  /// No description provided for @subSubcategoryAcupuncture.
+  ///
+  /// In tr, this message translates to:
+  /// **'Akupunktur'**
+  String get subSubcategoryAcupuncture;
+
+  /// No description provided for @subSubcategoryNaturalRemedies.
+  ///
+  /// In tr, this message translates to:
+  /// **'Doğal İlaçlar'**
+  String get subSubcategoryNaturalRemedies;
+
+  /// No description provided for @subSubcategoryOralCare.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ağız Bakımı'**
+  String get subSubcategoryOralCare;
+
+  /// No description provided for @subSubcategoryIncontinenceCare.
+  ///
+  /// In tr, this message translates to:
+  /// **'İdrar Kaçırma Bakımı'**
+  String get subSubcategoryIncontinenceCare;
+
+  /// No description provided for @subSubcategoryHearingAids.
+  ///
+  /// In tr, this message translates to:
+  /// **'İşitme Cihazları'**
+  String get subSubcategoryHearingAids;
+
+  /// No description provided for @subSubcategoryVisionCare.
+  ///
+  /// In tr, this message translates to:
+  /// **'Göz Bakımı'**
+  String get subSubcategoryVisionCare;
+
+  /// No description provided for @subSubcategorySkinCareHealth.
+  ///
+  /// In tr, this message translates to:
+  /// **'Cilt Bakımı'**
+  String get subSubcategorySkinCareHealth;
+
+  /// No description provided for @subSubcategoryGPSAndNavigation.
+  ///
+  /// In tr, this message translates to:
+  /// **'GPS & Navigasyon'**
+  String get subSubcategoryGPSAndNavigation;
 }
 
 class _AppLocalizationsDelegate

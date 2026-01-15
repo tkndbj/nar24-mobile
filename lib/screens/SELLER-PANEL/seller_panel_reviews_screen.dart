@@ -6,7 +6,6 @@ import 'package:shimmer/shimmer.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../widgets/product_card_4.dart';
 import 'package:go_router/go_router.dart';
-import '../FILTER-SCREENS/seller_panel_reviews_filter_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class SellerPanelReviewsScreen extends StatefulWidget {
@@ -334,13 +333,6 @@ class _SellerPanelReviewsScreenState extends State<SellerPanelReviewsScreen>
     }
   }
 
-  int _getActiveFiltersCount() {
-    int count = 0;
-    if (_currentProductFilter != null) count++;
-    if (_currentStartDate != null || _currentEndDate != null) count++;
-    return count;
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -382,68 +374,6 @@ class _SellerPanelReviewsScreenState extends State<SellerPanelReviewsScreen>
           bottom: true,
           child: Column(
             children: [
-              // Filter button
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: TextButton.icon(
-                  style: TextButton.styleFrom(
-                    backgroundColor: _getActiveFiltersCount() > 0
-                        ? Colors.orange
-                        : Colors.transparent,
-                    side: BorderSide(
-                      color: _getActiveFiltersCount() > 0
-                          ? Colors.orange
-                          : Colors.grey.shade300,
-                    ),
-                    shape: const StadiumBorder(),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  ),
-                  icon: Icon(
-                    Icons.filter_list,
-                    color: _getActiveFiltersCount() > 0
-                        ? Colors.white
-                        : (isDarkMode ? Colors.white : Colors.black),
-                  ),
-                  label: Text(
-                    _getActiveFiltersCount() > 0
-                        ? '${l10n.filter} (${_getActiveFiltersCount()})'
-                        : l10n.filter,
-                    style: TextStyle(
-                      color: _getActiveFiltersCount() > 0
-                          ? Colors.white
-                          : (isDarkMode ? Colors.white : Colors.black),
-                    ),
-                  ),
-                  onPressed: () async {
-                    final result = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => DynamicReviewsFilterScreen(
-                          sellerId: widget.shopId,
-                          isShopProduct: true,
-                          initialProductId: _currentProductFilter,
-                        ),
-                      ),
-                    );
-                    if (result != null) {
-                      setState(() {
-                        _currentProductFilter = result['productId'];
-                        // reset product-reviews pagination:
-                        _prodDocs.clear();
-                        _prodLastDoc = null;
-                        _prodHasMore = true;
-                        // reset shop-reviews pagination:
-                        _shopDocs.clear();
-                        _shopLastDoc = null;
-                        _shopHasMore = true;
-                      });
-                      await _fetchProdReviews();
-                      await _fetchShopReviews();
-                    }
-                  },
-                ),
-              ),
-
               // TabBarView
               Expanded(
                 child: TabBarView(

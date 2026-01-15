@@ -354,9 +354,10 @@ class _ProductListSectionState extends State<_ProductListSection> {
 
     // Tablets: shorter image height, larger info area for visibility
     // Landscape tablets need even more info area due to shorter viewport
+    // Image heights increased for better tall/narrow image display
     final double portraitImageHeight = isTablet
-        ? (isLandscape ? screenHeight * 0.28 : screenHeight * 0.22)
-        : screenHeight * 0.30;
+        ? (isLandscape ? screenHeight * 0.31 : screenHeight * 0.24)
+        : screenHeight * 0.33;
     final double infoAreaHeight = isTablet
         ? (isLandscape ? 105.0 : 100.0)  // More space for info on tablets
         : 80.0;
