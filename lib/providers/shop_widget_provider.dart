@@ -16,6 +16,8 @@ class ShopWidgetProvider with ChangeNotifier {
   // 1️⃣  Auth & favorite‐shops tracking
   Set<String> _favoriteShopIds = {};
   bool _userOwnsShop = false;
+  bool _isCheckingMembership = false;
+  List<String> _userShopIds = []; // User's actual shop IDs (from memberOfShops)
   StreamSubscription<User?>? _authSub;
   StreamSubscription<QuerySnapshot>? _favSub;
 
@@ -30,6 +32,8 @@ class ShopWidgetProvider with ChangeNotifier {
       _favSub?.cancel();
       _favoriteShopIds.clear();
       _userOwnsShop = false;
+      _userShopIds = [];
+      _isCheckingMembership = false;
       notifyListeners();
 
       if (user != null) {
@@ -51,6 +55,15 @@ class ShopWidgetProvider with ChangeNotifier {
 
   /// Has at least one shop where user is owner/co‐owner/editor/viewer?
   bool get userOwnsShop => _userOwnsShop;
+
+  /// Whether we're currently checking user's shop membership
+  bool get isCheckingMembership => _isCheckingMembership;
+
+  /// User's actual shop IDs (from memberOfShops map)
+  List<String> get userShopIds => List.unmodifiable(_userShopIds);
+
+  /// First shop ID that the user has access to (safe getter, returns null if none)
+  String? get firstUserShopId => _userShopIds.isNotEmpty ? _userShopIds.first : null;
 
   /// The featured shops to show
   List<QueryDocumentSnapshot> get shops => List.unmodifiable(_shops);
@@ -129,12 +142,18 @@ class ShopWidgetProvider with ChangeNotifier {
   }
 
   Future<void> _checkUserMembership(String uid) async {
+    // Prevent concurrent calls
+    if (_isCheckingMembership) return;
+    _isCheckingMembership = true;
+    notifyListeners();
+
     try {
       // 1. Direct lookup on user document
       final userDoc = await _firestore.collection('users').doc(uid).get();
 
       if (!userDoc.exists) {
         _userOwnsShop = false;
+        _userShopIds = [];
         notifyListeners();
         return;
       }
@@ -145,12 +164,14 @@ class ShopWidgetProvider with ChangeNotifier {
 
       if (memberOfShops.isEmpty) {
         _userOwnsShop = false;
+        _userShopIds = [];
         notifyListeners();
         return;
       }
 
       // 2. Check ALL shop memberships, not just the first one
       bool hasValidMembership = false;
+      List<String> validShopIds = [];
       List<String> shopsToCleanup = [];
 
       for (final entry in memberOfShops.entries) {
@@ -173,7 +194,7 @@ class ShopWidgetProvider with ChangeNotifier {
 
           if (stillMember) {
             hasValidMembership = true;
-            // Don't break here - we still want to cleanup invalid memberships
+            validShopIds.add(shopId);
           } else {
             // User is no longer member of this shop, mark for cleanup
             shopsToCleanup.add(shopId);
@@ -182,23 +203,26 @@ class ShopWidgetProvider with ChangeNotifier {
           debugPrint('Error checking shop $shopId: $e');
           // On error, assume shop is still valid to avoid false negatives
           hasValidMembership = true;
+          validShopIds.add(shopId);
         }
       }
 
-      // 3. Clean up invalid memberships
+      // 3. Clean up invalid memberships (fire and forget, don't block UI)
       if (shopsToCleanup.isNotEmpty) {
-        await _cleanupMultipleShopsFromUser(uid, shopsToCleanup);
+        _cleanupMultipleShopsFromUser(uid, shopsToCleanup);
       }
 
-      // 4. Update the state
-      if (hasValidMembership != _userOwnsShop) {
-        _userOwnsShop = hasValidMembership;
-        notifyListeners();
-      }
+      // 4. Update state atomically
+      _userShopIds = validShopIds;
+      _userOwnsShop = hasValidMembership;
+      notifyListeners();
     } catch (e) {
       debugPrint('Error checking shop membership: $e');
       // Fallback to old method if new approach fails
       await _checkUserMembershipFallback(uid);
+    } finally {
+      _isCheckingMembership = false;
+      notifyListeners();
     }
   }
 
@@ -246,33 +270,42 @@ class ShopWidgetProvider with ChangeNotifier {
         _firestore
             .collection('shops')
             .where('ownerId', isEqualTo: uid)
-            .limit(1)
+            .limit(5)
             .get(),
         _firestore
             .collection('shops')
             .where('coOwners', arrayContains: uid)
-            .limit(1)
+            .limit(5)
             .get(),
         _firestore
             .collection('shops')
             .where('editors', arrayContains: uid)
-            .limit(1)
+            .limit(5)
             .get(),
         _firestore
             .collection('shops')
             .where('viewers', arrayContains: uid)
-            .limit(1)
+            .limit(5)
             .get(),
       ];
       final results = await Future.wait(futures);
-      final owns = results.any((r) => r.docs.isNotEmpty);
-      if (owns != _userOwnsShop) {
-        _userOwnsShop = owns;
-        notifyListeners();
+
+      // Collect all shop IDs from results
+      final shopIds = <String>{};
+      for (final result in results) {
+        for (final doc in result.docs) {
+          shopIds.add(doc.id);
+        }
       }
+
+      final owns = shopIds.isNotEmpty;
+      _userShopIds = shopIds.toList();
+      _userOwnsShop = owns;
+      notifyListeners();
     } catch (e) {
       debugPrint('Fallback membership check failed: $e');
       _userOwnsShop = false;
+      _userShopIds = [];
       notifyListeners();
     }
   }

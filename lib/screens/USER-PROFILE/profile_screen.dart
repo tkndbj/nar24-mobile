@@ -790,11 +790,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: userOwnsShop
+                        child: (userOwnsShop && shopProvider.firstUserShopId != null)
                             ? _buildSellerPanelButton(
                                 label: localization.sellerPanel,
                                 onTap: () => context.push(
-                                    '/seller-panel?shopId=${shopProvider.shops.first.id}'),
+                                    '/seller-panel?shopId=${shopProvider.firstUserShopId}'),
                                 theme: theme,
                               )
                             : _buildRectButton(

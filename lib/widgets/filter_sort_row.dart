@@ -63,12 +63,11 @@ class _FilterSortRowState extends State<FilterSortRow> {
   }
 
   // OPTIMIZATION 3: Build cache key from provider states
-  // OPTIMIZED: Only invalidate on structural changes, not content changes
+  // Include userShopId to invalidate cache when shop data becomes available
   String _buildCacheKey(bool userHasShop, bool isLoading, bool hasError,
-      List<DynamicFilter> activeFilters) {
-    // Only cache based on count and shop status - NOT individual filter IDs
-    // This dramatically improves cache hit rate
-    return '$userHasShop|${activeFilters.length}';
+      List<DynamicFilter> activeFilters, {String? userShopId}) {
+    // Cache based on shop status, shop ID availability, and filter count
+    return '$userHasShop|${userShopId != null}|${activeFilters.length}';
   }
 
   bool _isLightColor(Color color) {
@@ -79,9 +78,11 @@ class _FilterSortRowState extends State<FilterSortRow> {
 }
 
   // OPTIMIZATION 4: Cached filter building
-  List<FilterItem> _buildFilters(bool userHasShop,
+  // Now takes shopId to ensure seller panel button has access to it
+  List<FilterItem> _buildFilters(bool userHasShop, String? userShopId,
       List<DynamicFilter> activeFilters, DynamicFilterProvider dynamicProv) {
-    final cacheKey = _buildCacheKey(userHasShop, false, false, activeFilters);
+    final cacheKey = _buildCacheKey(
+      userHasShop, false, false, activeFilters, userShopId: userShopId);
 
     if (_cachedFilters != null && _lastCacheKey == cacheKey) {
       return _cachedFilters!;
@@ -90,8 +91,8 @@ class _FilterSortRowState extends State<FilterSortRow> {
     final l10n = _l10n!;
     final filters = <FilterItem>[];
 
-    // Add seller panel if user has shop
-    if (userHasShop) {
+    // Add seller panel if user has shop AND we have the shop ID
+    if (userHasShop && userShopId != null) {
       filters.add(FilterItem(label: l10n.sellerPanel, type: 'SellerPanel'));
     }
 
@@ -138,57 +139,68 @@ class _FilterSortRowState extends State<FilterSortRow> {
       curve: Curves.easeInOut,
       color: widget.backgroundColor,
       padding: const EdgeInsets.only(bottom: 8.0),
-      // OPTIMIZED: Use Selector instead of Consumer3 to only rebuild on relevant changes
-      child: Selector<DynamicFilterProvider, (bool, String?, int)>(
-        selector: (_, prov) => (
-          prov.isLoading,
-          prov.error,
-          prov.activeFilters.length,
-        ),
-        builder: (context, dynamicState, _) {
-          final (isLoading, error, _) = dynamicState;
+      // Listen to ShopWidgetProvider for seller panel button
+      child: Selector<ShopWidgetProvider, (bool, String?)>(
+        selector: (_, prov) => (prov.userOwnsShop, prov.firstUserShopId),
+        builder: (context, shopState, _) {
+          final (userOwnsShop, firstUserShopId) = shopState;
 
-          // OPTIMIZATION 5: Early returns for loading/error states
-          if (isLoading) {
-            return _buildLoadingState();
-          }
+          // Then listen to DynamicFilterProvider
+          return Selector<DynamicFilterProvider, (bool, String?, int)>(
+            selector: (_, prov) => (
+              prov.isLoading,
+              prov.error,
+              prov.activeFilters.length,
+            ),
+            builder: (context, dynamicState, _) {
+              final (isLoading, error, _) = dynamicState;
 
-          if (error != null) {
-            final dynamicProv = Provider.of<DynamicFilterProvider>(context, listen: false);
-            return _buildErrorState(dynamicProv);
-          }
+              // Early returns for loading/error states
+              if (isLoading) {
+                return _buildLoadingState();
+              }
 
-          // Get providers without listening (we use Selector for targeted listening)
-          final shopProv = Provider.of<ShopWidgetProvider>(context, listen: false);
-          final specialProv = Provider.of<SpecialFilterProviderMarket>(context, listen: false);
-          final dynamicProv = Provider.of<DynamicFilterProvider>(context, listen: false);
+              if (error != null) {
+                final dynamicProv =
+                    Provider.of<DynamicFilterProvider>(context, listen: false);
+                return _buildErrorState(dynamicProv);
+              }
 
-          // OPTIMIZATION 6: Use cached filter building
-          final filters = _buildFilters(
-            shopProv.userOwnsShop,
-            dynamicProv.activeFilters,
-            dynamicProv,
-          );
+              // Get providers without listening (we use Selector for targeted listening)
+              final specialProv =
+                  Provider.of<SpecialFilterProviderMarket>(context, listen: false);
+              final dynamicProv =
+                  Provider.of<DynamicFilterProvider>(context, listen: false);
 
-          // Use nested Selector for filterType to avoid rebuilds when unrelated data changes
-          return Selector<SpecialFilterProviderMarket, String?>(
-            selector: (_, prov) => prov.specialFilter,
-            builder: (context, filterType, _) {
-              return SizedBox(
-                height: 30,
-                child: ListView.separated(
-                  controller: widget.scrollController,
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.only(left: 16.0),
-                  separatorBuilder: (_, __) => const SizedBox(width: 4),
-                  itemCount: filters.length,
-                  itemBuilder: (ctx, i) {
-                    final f = filters[i];
-                    final sel = f.type == filterType;
-                    return _buildFilterButton(f, sel, specialProv);
-                  },
-                ),
+              // Use cached filter building with user's shop ID
+              final filters = _buildFilters(
+                userOwnsShop,
+                firstUserShopId,
+                dynamicProv.activeFilters,
+                dynamicProv,
+              );
+
+              // Use nested Selector for filterType to avoid rebuilds when unrelated data changes
+              return Selector<SpecialFilterProviderMarket, String?>(
+                selector: (_, prov) => prov.specialFilter,
+                builder: (context, filterType, _) {
+                  return SizedBox(
+                    height: 30,
+                    child: ListView.separated(
+                      controller: widget.scrollController,
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.only(left: 16.0),
+                      separatorBuilder: (_, __) => const SizedBox(width: 4),
+                      itemCount: filters.length,
+                      itemBuilder: (ctx, i) {
+                        final f = filters[i];
+                        final sel = f.type == filterType;
+                        return _buildFilterButton(f, sel, specialProv);
+                      },
+                    ),
+                  );
+                },
               );
             },
           );
@@ -309,14 +321,14 @@ class _FilterSortRowState extends State<FilterSortRow> {
             ),
             child: TextButton(
               onPressed: () {
-                // Pass initial shop ID if available
+                // Use firstUserShopId - the actual shop ID the user has access to
                 final shopProv =
                     Provider.of<ShopWidgetProvider>(context, listen: false);
-                if (shopProv.userOwnsShop && shopProv.shops.isNotEmpty) {
-                  // Navigate with shop ID parameter
-                  context
-                      .push('/seller-panel?shopId=${shopProv.shops.first.id}');
+                final shopId = shopProv.firstUserShopId;
+                if (shopId != null) {
+                  context.push('/seller-panel?shopId=$shopId');
                 } else {
+                  // Fallback without shop ID (seller panel will auto-select)
                   context.push('/seller-panel');
                 }
               },

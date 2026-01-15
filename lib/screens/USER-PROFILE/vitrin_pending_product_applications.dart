@@ -170,6 +170,9 @@ class _VitrinPendingProductApplicationsState
   // Track which tabs have been loaded (for lazy loading)
   final Set<VitrinApplicationTab> _loadedTabs = {};
 
+  // Track tabs currently being loaded to prevent duplicate fetches
+  final Set<VitrinApplicationTab> _tabsBeingLoaded = {};
+
   Map<VitrinApplicationTab, int> _counts = {
     VitrinApplicationTab.all: 0,
     VitrinApplicationTab.pending: 0,
@@ -180,6 +183,9 @@ class _VitrinPendingProductApplicationsState
   VitrinApplicationTab _activeTab = VitrinApplicationTab.all;
   static const int _pageSize = 10;
 
+  // Track last known tab index for animation listener
+  int _lastTabIndex = 0;
+
   String? get _currentUserId => _auth.currentUser?.uid;
 
   @override
@@ -187,6 +193,8 @@ class _VitrinPendingProductApplicationsState
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(_onTabChanged);
+    // Add animation listener for detecting swipes in progress
+    _tabController.animation?.addListener(_onTabAnimation);
 
     // Initialize per-tab state for all tabs
     for (final tab in VitrinApplicationTab.values) {
@@ -209,6 +217,24 @@ class _VitrinPendingProductApplicationsState
     _loadTabDataIfNeeded(VitrinApplicationTab.all);
   }
 
+  /// Animation listener to detect tab changes during swipe gestures
+  /// This ensures data is loaded as soon as the user starts swiping to a new tab
+  void _onTabAnimation() {
+    final animation = _tabController.animation;
+    if (animation == null) return;
+
+    // Get the current animation value (can be fractional during swipes)
+    final animValue = animation.value;
+    final targetIndex = animValue.round();
+
+    // If we're swiping towards a new tab, start loading its data
+    if (targetIndex != _lastTabIndex && targetIndex >= 0 && targetIndex < 4) {
+      _lastTabIndex = targetIndex;
+      final targetTab = VitrinApplicationTab.values[targetIndex];
+      _loadTabDataIfNeeded(targetTab);
+    }
+  }
+
   void _setupAuthListener() {
     _authSubscription = _auth.authStateChanges().listen((User? user) {
       final newUserId = user?.uid;
@@ -221,6 +247,7 @@ class _VitrinPendingProductApplicationsState
           // Reset all per-tab state
           setState(() {
             _loadedTabs.clear();
+            _tabsBeingLoaded.clear();
             for (final tab in VitrinApplicationTab.values) {
               _tabApplications[tab] = [];
               _tabLastNewAppDoc[tab] = null;
@@ -251,6 +278,7 @@ class _VitrinPendingProductApplicationsState
   @override
   void dispose() {
     _authSubscription?.cancel();
+    _tabController.animation?.removeListener(_onTabAnimation);
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     for (final controller in _scrollControllers.values) {
@@ -284,11 +312,24 @@ class _VitrinPendingProductApplicationsState
   }
 
   /// Lazy loading: only fetch data when tab is first visited
+  /// Uses _tabsBeingLoaded to prevent duplicate concurrent fetches
   void _loadTabDataIfNeeded(VitrinApplicationTab tab) {
-    if (!_loadedTabs.contains(tab)) {
-      _loadedTabs.add(tab);
-      _fetchApplications(tab: tab);
+    // Skip if already loaded or currently being loaded
+    if (_loadedTabs.contains(tab) || _tabsBeingLoaded.contains(tab)) {
+      return;
     }
+
+    // Mark as being loaded to prevent duplicate fetches
+    _tabsBeingLoaded.add(tab);
+
+    // Set loading state immediately via setState for proper UI update
+    if (mounted) {
+      setState(() {
+        _tabIsLoading[tab] = true;
+      });
+    }
+
+    _fetchApplications(tab: tab);
   }
 
   Future<void> _fetchCounts() async {
@@ -356,10 +397,13 @@ class _VitrinPendingProductApplicationsState
   }) async {
     final userId = _currentUserId;
     if (userId == null) {
-      setState(() {
-        _tabIsLoading[tab] = false;
-        _tabApplications[tab] = [];
-      });
+      _tabsBeingLoaded.remove(tab);
+      if (mounted) {
+        setState(() {
+          _tabIsLoading[tab] = false;
+          _tabApplications[tab] = [];
+        });
+      }
       return;
     }
 
@@ -367,20 +411,22 @@ class _VitrinPendingProductApplicationsState
       // Don't fetch if there's nothing more from either collection
       if (!(_tabHasMoreNewApps[tab] ?? false) &&
           !(_tabHasMoreEditApps[tab] ?? false)) {
-        setState(() => _tabHasMore[tab] = false);
+        if (mounted) {
+          setState(() => _tabHasMore[tab] = false);
+        }
         return;
       }
-      setState(() => _tabIsLoadingMore[tab] = true);
+      if (mounted) {
+        setState(() => _tabIsLoadingMore[tab] = true);
+      }
     } else {
-      setState(() {
-        _tabIsLoading[tab] = true;
-        _tabApplications[tab] = [];
-        _tabLastNewAppDoc[tab] = null;
-        _tabLastEditAppDoc[tab] = null;
-        _tabHasMoreNewApps[tab] = true;
-        _tabHasMoreEditApps[tab] = true;
-        _tabHasMore[tab] = true;
-      });
+      // For initial load, reset pagination state but loading state is already set
+      _tabApplications[tab] = [];
+      _tabLastNewAppDoc[tab] = null;
+      _tabLastEditAppDoc[tab] = null;
+      _tabHasMoreNewApps[tab] = true;
+      _tabHasMoreEditApps[tab] = true;
+      _tabHasMore[tab] = true;
     }
 
     try {
@@ -388,27 +434,41 @@ class _VitrinPendingProductApplicationsState
       final List<Future<QuerySnapshot>> futures = [];
       final List<String> futureTypes = [];
 
+      // Determine if this is a filtered tab (requires different query approach)
+      final bool isFilteredTab = tab != VitrinApplicationTab.all;
+
       // Build query for vitrin_product_applications (only if there might be more)
       if (_tabHasMoreNewApps[tab] ?? false) {
         Query newAppsQuery = _firestore
             .collection('vitrin_product_applications')
             .where('userId', isEqualTo: userId);
 
-        if (tab != VitrinApplicationTab.all) {
+        if (isFilteredTab) {
+          // For filtered tabs: query by status without orderBy to avoid composite index
+          // We'll sort results client-side
           newAppsQuery = newAppsQuery.where('status', isEqualTo: tab.name);
+          // Note: Pagination for filtered tabs loads all matching documents
+          // since we can't use startAfterDocument without orderBy
+          if (!isLoadMore) {
+            futures.add(newAppsQuery.get());
+            futureTypes.add('new');
+          }
+          // For filtered tabs, we load all at once (no pagination)
+          _tabHasMoreNewApps[tab] = false;
+        } else {
+          // For "All" tab: use orderBy with pagination
+          newAppsQuery = newAppsQuery.orderBy('createdAt', descending: true);
+
+          // Use cursor for pagination
+          if (isLoadMore && _tabLastNewAppDoc[tab] != null) {
+            newAppsQuery =
+                newAppsQuery.startAfterDocument(_tabLastNewAppDoc[tab]!);
+          }
+
+          newAppsQuery = newAppsQuery.limit(_pageSize);
+          futures.add(newAppsQuery.get());
+          futureTypes.add('new');
         }
-
-        newAppsQuery = newAppsQuery.orderBy('createdAt', descending: true);
-
-        // Use cursor for pagination
-        if (isLoadMore && _tabLastNewAppDoc[tab] != null) {
-          newAppsQuery =
-              newAppsQuery.startAfterDocument(_tabLastNewAppDoc[tab]!);
-        }
-
-        newAppsQuery = newAppsQuery.limit(_pageSize);
-        futures.add(newAppsQuery.get());
-        futureTypes.add('new');
       }
 
       // Build query for vitrin_product_edit_applications (only if there might be more)
@@ -417,25 +477,35 @@ class _VitrinPendingProductApplicationsState
             .collection('vitrin_product_edit_applications')
             .where('userId', isEqualTo: userId);
 
-        if (tab != VitrinApplicationTab.all) {
+        if (isFilteredTab) {
+          // For filtered tabs: query by status without orderBy
           editAppsQuery = editAppsQuery.where('status', isEqualTo: tab.name);
+          if (!isLoadMore) {
+            futures.add(editAppsQuery.get());
+            futureTypes.add('edit');
+          }
+          // For filtered tabs, we load all at once (no pagination)
+          _tabHasMoreEditApps[tab] = false;
+        } else {
+          // For "All" tab: use orderBy with pagination
+          editAppsQuery = editAppsQuery.orderBy('submittedAt', descending: true);
+
+          // Use cursor for pagination
+          if (isLoadMore && _tabLastEditAppDoc[tab] != null) {
+            editAppsQuery =
+                editAppsQuery.startAfterDocument(_tabLastEditAppDoc[tab]!);
+          }
+
+          editAppsQuery = editAppsQuery.limit(_pageSize);
+          futures.add(editAppsQuery.get());
+          futureTypes.add('edit');
         }
-
-        editAppsQuery = editAppsQuery.orderBy('submittedAt', descending: true);
-
-        // Use cursor for pagination
-        if (isLoadMore && _tabLastEditAppDoc[tab] != null) {
-          editAppsQuery =
-              editAppsQuery.startAfterDocument(_tabLastEditAppDoc[tab]!);
-        }
-
-        editAppsQuery = editAppsQuery.limit(_pageSize);
-        futures.add(editAppsQuery.get());
-        futureTypes.add('edit');
       }
 
       // No more data to fetch
       if (futures.isEmpty) {
+        _tabsBeingLoaded.remove(tab);
+        _loadedTabs.add(tab);
         if (mounted) {
           setState(() {
             _tabHasMore[tab] = false;
@@ -458,30 +528,38 @@ class _VitrinPendingProductApplicationsState
             newBatch
                 .add(VitrinProductApplication.fromDocument(doc, isEdit: false));
           }
-          // Update cursor and hasMore flag
-          if (snapshot.docs.isNotEmpty) {
-            _tabLastNewAppDoc[tab] = snapshot.docs.last;
+          // Update cursor and hasMore flag (only for "All" tab with pagination)
+          if (!isFilteredTab) {
+            if (snapshot.docs.isNotEmpty) {
+              _tabLastNewAppDoc[tab] = snapshot.docs.last;
+            }
+            _tabHasMoreNewApps[tab] = snapshot.docs.length == _pageSize;
           }
-          _tabHasMoreNewApps[tab] = snapshot.docs.length == _pageSize;
         } else if (type == 'edit') {
           for (final doc in snapshot.docs) {
             newBatch
                 .add(VitrinProductApplication.fromDocument(doc, isEdit: true));
           }
-          // Update cursor and hasMore flag
-          if (snapshot.docs.isNotEmpty) {
-            _tabLastEditAppDoc[tab] = snapshot.docs.last;
+          // Update cursor and hasMore flag (only for "All" tab with pagination)
+          if (!isFilteredTab) {
+            if (snapshot.docs.isNotEmpty) {
+              _tabLastEditAppDoc[tab] = snapshot.docs.last;
+            }
+            _tabHasMoreEditApps[tab] = snapshot.docs.length == _pageSize;
           }
-          _tabHasMoreEditApps[tab] = snapshot.docs.length == _pageSize;
         }
       }
 
-      // Sort combined results by submittedAt descending
+      // Sort combined results by submittedAt descending (client-side sorting)
       newBatch.sort((a, b) => b.submittedAt.compareTo(a.submittedAt));
 
       // Update overall hasMore for this tab
       _tabHasMore[tab] =
           (_tabHasMoreNewApps[tab] ?? false) || (_tabHasMoreEditApps[tab] ?? false);
+
+      // Mark tab as loaded
+      _tabsBeingLoaded.remove(tab);
+      _loadedTabs.add(tab);
 
       if (mounted) {
         setState(() {
@@ -495,7 +573,10 @@ class _VitrinPendingProductApplicationsState
         });
       }
     } catch (e) {
-      debugPrint('Error fetching applications: $e');
+      debugPrint('Error fetching applications for tab $tab: $e');
+      // Mark as loaded even on error to prevent infinite loading state
+      _tabsBeingLoaded.remove(tab);
+      _loadedTabs.add(tab);
       if (mounted) {
         setState(() {
           _tabIsLoading[tab] = false;
@@ -589,20 +670,24 @@ class _VitrinPendingProductApplicationsState
   Widget _buildTabContent(
       VitrinApplicationTab tab, bool isDark, AppLocalizations l10n) {
     final isLoading = _tabIsLoading[tab] ?? false;
+    final isBeingLoaded = _tabsBeingLoaded.contains(tab);
     final applications = _tabApplications[tab] ?? [];
     final hasLoaded = _loadedTabs.contains(tab);
 
-    // If tab hasn't been loaded yet, show loading indicator
-    // This triggers lazy loading when the tab is first swiped to
-    if (!hasLoaded) {
-      // Schedule loading after build
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _loadTabDataIfNeeded(tab);
-      });
-      return _buildLoadingSkeleton(isDark);
-    }
-
-    if (isLoading) {
+    // Show loading skeleton if:
+    // 1. Tab is currently loading
+    // 2. Tab is being loaded (fetch in progress)
+    // 3. Tab hasn't been loaded yet (will be triggered by animation listener)
+    if (isLoading || isBeingLoaded || !hasLoaded) {
+      // Trigger loading if not already in progress
+      // This is a safety net in case animation listener didn't trigger
+      if (!hasLoaded && !isBeingLoaded && !isLoading) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _loadTabDataIfNeeded(tab);
+          }
+        });
+      }
       return _buildLoadingSkeleton(isDark);
     }
 
@@ -860,8 +945,15 @@ class _VitrinPendingProductApplicationsState
     return RefreshIndicator(
       onRefresh: () async {
         await _fetchCounts();
-        // Reset tab state and reload
+        // Reset tab state completely for fresh reload
         _loadedTabs.remove(tab);
+        _tabsBeingLoaded.remove(tab);
+        _tabApplications[tab] = [];
+        _tabLastNewAppDoc[tab] = null;
+        _tabLastEditAppDoc[tab] = null;
+        _tabHasMoreNewApps[tab] = true;
+        _tabHasMoreEditApps[tab] = true;
+        _tabHasMore[tab] = true;
         _loadTabDataIfNeeded(tab);
       },
       color: const Color(0xFF667EEA),
