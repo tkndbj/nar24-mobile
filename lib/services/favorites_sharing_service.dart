@@ -183,7 +183,7 @@ class FavoritesSharingService {
         key;
   }
 
- static Future<void> shareWithRichContent({
+ static Future<ShareResult?> shareWithRichContent({
   required String shareTitle,
   required String shareUrl,
   required String senderName,
@@ -220,10 +220,12 @@ class FavoritesSharingService {
       subject: sanitizedTitle,
       sharePositionOrigin: sharePositionOrigin,
     );
-    
+
     if (kDebugMode) {
       debugPrint('✅ Share completed with status: ${result.status}');
     }
+
+    return result;
 
   } on PlatformException catch (e) {
     if (kDebugMode) {
@@ -232,6 +234,7 @@ class FavoritesSharingService {
     if (context != null && context.mounted) {
       await _handleShareError(shareUrl, shareTitle, context);
     }
+    return null;
   } catch (e, stackTrace) {
     if (kDebugMode) {
       debugPrint('❌ Share error: $e\n$stackTrace');
@@ -239,6 +242,7 @@ class FavoritesSharingService {
     if (context != null && context.mounted) {
       await _handleShareError(shareUrl, shareTitle, context);
     }
+    return null;
   }
 }
 

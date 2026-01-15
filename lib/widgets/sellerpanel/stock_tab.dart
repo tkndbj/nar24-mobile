@@ -656,17 +656,7 @@ class _FilterRow extends StatelessWidget {
                 : (isDark ? Colors.grey.shade600 : Colors.grey.shade300),
             width: 1,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: isSelected
-                  ? (isDark
-                      ? Colors.tealAccent.withOpacity(0.3)
-                      : Colors.teal.withOpacity(0.3))
-                  : (isDark ? Colors.black26 : Colors.black.withOpacity(0.05)),
-              blurRadius: isSelected ? 6 : 3,
-              offset: const Offset(0, 1),
-            ),
-          ],
+         
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -847,8 +837,7 @@ class _OutOfStockButton extends StatelessWidget {
               provider.setOutOfStockFilter(state._outOfStock);
             });
           },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
+          child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               gradient: outOfStock
@@ -869,17 +858,7 @@ class _OutOfStockButton extends StatelessWidget {
                     : (isDark ? Colors.grey.shade600 : Colors.grey.shade300),
                 width: 1,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: outOfStock
-                      ? Colors.orange.withOpacity(0.3)
-                      : (isDark
-                          ? Colors.black26
-                          : Colors.black.withOpacity(0.05)),
-                  blurRadius: outOfStock ? 6 : 3,
-                  offset: const Offset(0, 1),
-                ),
-              ],
+            
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -936,17 +915,7 @@ class _ProductRow extends StatelessWidget {
                 width: 1.5,
               )
             : null,
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black26
-                : (isZeroQty
-                    ? Colors.red.withOpacity(0.1)
-                    : Colors.black.withOpacity(0.06)),
-            blurRadius: isZeroQty ? 8 : 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),

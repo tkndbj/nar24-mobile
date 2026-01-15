@@ -780,117 +780,120 @@ final validCartItems = _prepareItemsForPayment(rawValidCartItems);
       child: Column(
         children: [
           // Product info
-          InkWell(
-            onTap: () {
-              setState(() {
-                _selectedProducts[product.id] = !isSelected;                
-              });
-              _updateTotalsForCurrentSelection();
-            },
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Checkbox
-                  Transform.scale(
-                    scale: 0.9,
-                    child: Checkbox(
-                      value: isSelected,
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedProducts[product.id] = value ?? false;
-                        });
-                        _updateTotalsForCurrentSelection();
-                      },
-                      activeColor: Colors.orange,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Checkbox - toggles selection
+                Transform.scale(
+                  scale: 0.9,
+                  child: Checkbox(
+                    value: isSelected,
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedProducts[product.id] = value ?? false;
+                      });
+                      _updateTotalsForCurrentSelection();
+                    },
+                    activeColor: Colors.orange,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  const SizedBox(width: 8),
+                ),
+                const SizedBox(width: 8),
 
-                  // Product image - FIX: Use CachedNetworkImage for instant loading
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: CachedNetworkImage(
-                      imageUrl:
-                          item['selectedColorImage'] ?? product.imageUrls.first,
-                      width: 70,
-                      height: 70,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => Container(
-                        width: 70,
-                        height: 70,
-                        color: Colors.grey[200],
-                        child: const Center(
-                          child: SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.grey),
-                            ),
-                          ),
-                        ),
-                      ),
-                      errorWidget: (context, url, error) => Container(
-                        width: 70,
-                        height: 70,
-                        color: Colors.grey[300],
-                        child: const Icon(Icons.image_not_supported, size: 24),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-
-                  // Product details
-                  Expanded(
-                    child: Column(
+                // Product image & details - navigates to product detail
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => context.push('/product/${product.id}'),
+                    behavior: HitTestBehavior.opaque,
+                    child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          product.productName,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${product.price.toStringAsFixed(2)} ${product.currency}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: Colors.orange,
-                          ),
-                        ),
-                        if (availableStock < 10)
-                          Text(
-                            AppLocalizations.of(context)
-                                .onlyLeft(availableStock),
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: Colors.red,
+                        // Product image
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: CachedNetworkImage(
+                            imageUrl:
+                                item['selectedColorImage'] ?? product.imageUrls.first,
+                            width: 70,
+                            height: 70,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              width: 70,
+                              height: 70,
+                              color: Colors.grey[200],
+                              child: const Center(
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor:
+                                        AlwaysStoppedAnimation<Color>(Colors.grey),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              width: 70,
+                              height: 70,
+                              color: Colors.grey[300],
+                              child: const Icon(Icons.image_not_supported, size: 24),
                             ),
                           ),
+                        ),
+                        const SizedBox(width: 10),
+
+                        // Product details
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                product.productName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${product.price.toStringAsFixed(2)} ${product.currency}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: Colors.orange,
+                                ),
+                              ),
+                              if (availableStock < 10)
+                                Text(
+                                  AppLocalizations.of(context)
+                                      .onlyLeft(availableStock),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.red,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
+                ),
 
-                  // Delete button
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 20),
-                    onPressed: () => _removeItem(product.id),
-                    color: Colors.red,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                ],
-              ),
+                // Delete button
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                  onPressed: () => _removeItem(product.id),
+                  color: Colors.red,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
             ),
           ),
 

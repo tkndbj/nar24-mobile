@@ -3706,6 +3706,7 @@
   "refundFormSelectOrder": "Выбрать заказ",
   "homeImages": "Изображения главной страницы",
   "coverImages": "Изображения обложки",
+  "pleaseSelectCoverImage": "Пожалуйста, выберите изображение обложки",
   "noProductsToLink": "Товары для связи не найдены.",
   "selectProductToLink": "Выберите товар для связи.",
   "linkedSuccessfully": "Успешно связано.",

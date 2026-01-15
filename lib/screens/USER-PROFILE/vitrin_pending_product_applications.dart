@@ -7,6 +7,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../generated/l10n/app_localizations.dart';
+import '../../constants/all_in_one_category_data.dart';
 import 'dart:async';
 
 /// Model for vitrin product applications
@@ -1125,8 +1126,8 @@ class _VitrinApplicationCard extends StatelessWidget {
     required this.onTap,
   });
 
-  String _formatDate(DateTime date) {
-    return DateFormat.yMMMd().add_Hm().format(date);
+  String _formatDate(DateTime date, String localeCode) {
+    return DateFormat.yMMMd(localeCode).add_Hm().format(date);
   }
 
   String _formatPrice(double price) {
@@ -1137,8 +1138,41 @@ class _VitrinApplicationCard extends StatelessWidget {
     ).format(price);
   }
 
+  String _getLocalizedCategoryPath(BuildContext context) {
+    final localizedCategory = AllInOneCategoryData.localizeCategoryKey(
+      application.category,
+      l10n,
+    );
+
+    String localizedSubcategory = '';
+    if (application.subcategory.isNotEmpty) {
+      localizedSubcategory = AllInOneCategoryData.localizeSubcategoryKey(
+        application.category,
+        application.subcategory,
+        l10n,
+      );
+    }
+
+    String localizedSubSubcategory = '';
+    if (application.subsubcategory.isNotEmpty) {
+      localizedSubSubcategory = AllInOneCategoryData.localizeSubSubcategoryKey(
+        application.category,
+        application.subcategory,
+        application.subsubcategory,
+        l10n,
+      );
+    }
+
+    return [
+      localizedCategory,
+      if (localizedSubcategory.isNotEmpty) localizedSubcategory,
+      if (localizedSubSubcategory.isNotEmpty) localizedSubSubcategory,
+    ].join(' > ');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final localeCode = Localizations.localeOf(context).languageCode;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1323,13 +1357,7 @@ class _VitrinApplicationCard extends StatelessWidget {
 
                     // Category path
                     Text(
-                      [
-                        application.category,
-                        if (application.subcategory.isNotEmpty)
-                          application.subcategory,
-                        if (application.subsubcategory.isNotEmpty)
-                          application.subsubcategory,
-                      ].join(' > '),
+                      _getLocalizedCategoryPath(context),
                       style: GoogleFonts.inter(
                         fontSize: 9,
                         color: isDark ? Colors.grey[500] : Colors.grey[600],
@@ -1375,7 +1403,7 @@ class _VitrinApplicationCard extends StatelessWidget {
                         const SizedBox(width: 3),
                         Expanded(
                           child: Text(
-                            _formatDate(application.submittedAt),
+                            _formatDate(application.submittedAt, localeCode),
                             style: GoogleFonts.inter(
                               fontSize: 9,
                               color:
@@ -1385,10 +1413,10 @@ class _VitrinApplicationCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const Icon(
+                        Icon(
                           Icons.arrow_forward_ios_rounded,
                           size: 10,
-                          color: Color(0xFF667EEA),
+                          color: const Color(0xFF667EEA),
                         ),
                       ],
                     ),
@@ -1428,8 +1456,8 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
     required this.l10n,
   });
 
-  String _formatDate(DateTime date) {
-    return DateFormat.yMMMMd().add_Hm().format(date);
+  String _formatDate(DateTime date, String localeCode) {
+    return DateFormat.yMMMMd(localeCode).add_Hm().format(date);
   }
 
   String _formatPrice(double price) {
@@ -1440,8 +1468,41 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
     ).format(price);
   }
 
+  String _getLocalizedCategoryPath() {
+    final localizedCategory = AllInOneCategoryData.localizeCategoryKey(
+      application.category,
+      l10n,
+    );
+
+    String localizedSubcategory = '';
+    if (application.subcategory.isNotEmpty) {
+      localizedSubcategory = AllInOneCategoryData.localizeSubcategoryKey(
+        application.category,
+        application.subcategory,
+        l10n,
+      );
+    }
+
+    String localizedSubSubcategory = '';
+    if (application.subsubcategory.isNotEmpty) {
+      localizedSubSubcategory = AllInOneCategoryData.localizeSubSubcategoryKey(
+        application.category,
+        application.subcategory,
+        application.subsubcategory,
+        l10n,
+      );
+    }
+
+    return [
+      localizedCategory,
+      if (localizedSubcategory.isNotEmpty) localizedSubcategory,
+      if (localizedSubSubcategory.isNotEmpty) localizedSubSubcategory,
+    ].join(' > ');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final localeCode = Localizations.localeOf(context).languageCode;
     return Container(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.9,
@@ -1792,7 +1853,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              _formatDate(application.submittedAt),
+                              _formatDate(application.submittedAt, localeCode),
                               style: GoogleFonts.inter(
                                 fontSize: 12,
                                 color: isDark
@@ -1816,7 +1877,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                                 ),
                               ),
                               Text(
-                                _formatDate(application.reviewedAt!),
+                                _formatDate(application.reviewedAt!, localeCode),
                                 style: GoogleFonts.inter(
                                   fontSize: 12,
                                   color: isDark
@@ -1886,13 +1947,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
             Expanded(
               child: _buildDetailItem(
                 l10n.category,
-                [
-                  application.category,
-                  if (application.subcategory.isNotEmpty)
-                    application.subcategory,
-                  if (application.subsubcategory.isNotEmpty)
-                    application.subsubcategory,
-                ].join(' > '),
+                _getLocalizedCategoryPath(),
               ),
             ),
           ],

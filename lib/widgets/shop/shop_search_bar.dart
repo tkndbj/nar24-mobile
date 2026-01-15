@@ -119,6 +119,11 @@ class ShopSearchBarState extends State<ShopSearchBar> {
 
       if (!mounted) return;
 
+      // Bail out early if user has changed/cleared search
+      if (_searchController.text.trim() != query) {
+        return;
+      }
+
       // Extract shop IDs from Algolia results
       final shopIds = algoliaResults
           .map((hit) =>
@@ -159,6 +164,13 @@ class ShopSearchBarState extends State<ShopSearchBar> {
         final indexB = shopIds.indexOf(b.id);
         return indexA.compareTo(indexB);
       });
+
+      if (!mounted) return;
+
+      // Check if user has changed/cleared search - don't update with stale results
+      if (_searchController.text.trim() != query) {
+        return;
+      }
 
       setState(() {
         _isLoading = false;

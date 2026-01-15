@@ -11868,6 +11868,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get coverImages => 'Изображения обложки';
 
   @override
+  String get pleaseSelectCoverImage =>
+      'Пожалуйста, выберите изображение обложки';
+
+  @override
   String get noProductsToLink => 'Товары для связи не найдены.';
 
   @override

@@ -22590,6 +22590,12 @@ abstract class AppLocalizations {
   /// **'Kapak Görselleri'**
   String get coverImages;
 
+  /// No description provided for @pleaseSelectCoverImage.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lütfen bir kapak görseli seçin'**
+  String get pleaseSelectCoverImage;
+
   /// No description provided for @noProductsToLink.
   ///
   /// In tr, this message translates to:

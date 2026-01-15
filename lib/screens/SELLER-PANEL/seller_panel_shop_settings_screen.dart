@@ -992,76 +992,145 @@ Future<void> _pickAndUpload({
                                   ),
                                 ],
                               ),
-                              child: SizedBox(
-                                height: 100,
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    for (int i = 0; i < coverUrls.length; i++)
-                                      Expanded(
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 4.0),
-                                          child: _buildDottedSquareNetwork(
-                                            imageUrl: coverUrls[i],
-                                            borderColor: isDarkMode
-                                                ? Colors.white
-                                                : Colors.black,
-                                            onTap: () => _pickAndUpload(
-                                              shopId: widget.shopId,
-                                              field: 'coverImageUrls',
-                                              index: i,
-                                            ),
-                                            onEdit: () => _pickAndUpload(
-                                              shopId: widget.shopId,
-                                              field: 'coverImageUrls',
-                                              index: i,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    Expanded(
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 4.0),
-                                        child: DottedBorder(
-                                          color: isDarkMode
-                                              ? Colors.white
-                                              : Colors.black,
-                                          strokeWidth: 2,
-                                          dashPattern: const [6, 3],
-                                          borderType: BorderType.RRect,
-                                          radius: const Radius.circular(8),
-                                          child: GestureDetector(
-                                            onTap: () => _pickAndUpload(
-                                              shopId: widget.shopId,
-                                              field: 'coverImageUrls',
-                                            ),
-                                            child: Container(
-                                              width: double.infinity,
-                                              height: 100,
-                                              decoration: BoxDecoration(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                                color: Colors.transparent,
-                                              ),
-                                              child: Center(
-                                                child: Icon(
-                                                  Icons.add,
-                                                  size: 40,
-                                                  color: isDarkMode
-                                                      ? Colors.white
-                                                      : Colors.black,
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final isTablet = constraints.maxWidth > 600;
+                                  final boxWidth = isTablet ? 120.0 : null;
+
+                                  return SizedBox(
+                                    height: 100,
+                                    child: Row(
+                                      mainAxisAlignment: isTablet
+                                          ? MainAxisAlignment.start
+                                          : MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        for (int i = 0; i < coverUrls.length; i++)
+                                          isTablet
+                                              ? Padding(
+                                                  padding: const EdgeInsets.only(right: 12.0),
+                                                  child: SizedBox(
+                                                    width: boxWidth,
+                                                    child: _buildDottedSquareNetwork(
+                                                      imageUrl: coverUrls[i],
+                                                      borderColor: isDarkMode
+                                                          ? Colors.white
+                                                          : Colors.black,
+                                                      onTap: () => _pickAndUpload(
+                                                        shopId: widget.shopId,
+                                                        field: 'coverImageUrls',
+                                                        index: i,
+                                                      ),
+                                                      onEdit: () => _pickAndUpload(
+                                                        shopId: widget.shopId,
+                                                        field: 'coverImageUrls',
+                                                        index: i,
+                                                      ),
+                                                      fixedWidth: boxWidth,
+                                                    ),
+                                                  ),
+                                                )
+                                              : Expanded(
+                                                  child: Padding(
+                                                    padding: const EdgeInsets.symmetric(
+                                                        horizontal: 4.0),
+                                                    child: _buildDottedSquareNetwork(
+                                                      imageUrl: coverUrls[i],
+                                                      borderColor: isDarkMode
+                                                          ? Colors.white
+                                                          : Colors.black,
+                                                      onTap: () => _pickAndUpload(
+                                                        shopId: widget.shopId,
+                                                        field: 'coverImageUrls',
+                                                        index: i,
+                                                      ),
+                                                      onEdit: () => _pickAndUpload(
+                                                        shopId: widget.shopId,
+                                                        field: 'coverImageUrls',
+                                                        index: i,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                        isTablet
+                                            ? Padding(
+                                                padding: const EdgeInsets.only(right: 12.0),
+                                                child: GestureDetector(
+                                                  onTap: () => _pickAndUpload(
+                                                    shopId: widget.shopId,
+                                                    field: 'coverImageUrls',
+                                                  ),
+                                                  child: DottedBorder(
+                                                    color: isDarkMode
+                                                        ? Colors.white
+                                                        : Colors.black,
+                                                    strokeWidth: 2,
+                                                    dashPattern: const [6, 3],
+                                                    borderType: BorderType.RRect,
+                                                    radius: const Radius.circular(8),
+                                                    child: Container(
+                                                      width: boxWidth,
+                                                      height: 100,
+                                                      decoration: BoxDecoration(
+                                                        borderRadius:
+                                                            BorderRadius.circular(8),
+                                                        color: Colors.transparent,
+                                                      ),
+                                                      child: Center(
+                                                        child: Icon(
+                                                          Icons.add,
+                                                          size: 40,
+                                                          color: isDarkMode
+                                                              ? Colors.white
+                                                              : Colors.black,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              )
+                                            : Expanded(
+                                                child: Padding(
+                                                  padding: const EdgeInsets.symmetric(
+                                                      horizontal: 4.0),
+                                                  child: DottedBorder(
+                                                    color: isDarkMode
+                                                        ? Colors.white
+                                                        : Colors.black,
+                                                    strokeWidth: 2,
+                                                    dashPattern: const [6, 3],
+                                                    borderType: BorderType.RRect,
+                                                    radius: const Radius.circular(8),
+                                                    child: GestureDetector(
+                                                      onTap: () => _pickAndUpload(
+                                                        shopId: widget.shopId,
+                                                        field: 'coverImageUrls',
+                                                      ),
+                                                      child: Container(
+                                                        width: double.infinity,
+                                                        height: 100,
+                                                        decoration: BoxDecoration(
+                                                          borderRadius:
+                                                              BorderRadius.circular(8),
+                                                          color: Colors.transparent,
+                                                        ),
+                                                        child: Center(
+                                                          child: Icon(
+                                                            Icons.add,
+                                                            size: 40,
+                                                            color: isDarkMode
+                                                                ? Colors.white
+                                                                : Colors.black,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
+                                      ],
                                     ),
-                                  ],
-                                ),
+                                  );
+                                },
                               ),
                             ),
                             const SizedBox(height: 8),

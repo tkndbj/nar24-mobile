@@ -11773,6 +11773,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get coverImages => 'Cover Images';
 
   @override
+  String get pleaseSelectCoverImage => 'Please select a cover image';
+
+  @override
   String get noProductsToLink => 'No products to link.';
 
   @override

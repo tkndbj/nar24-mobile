@@ -5103,6 +5103,7 @@
   "selectGender": "Cinsiyet Seçin",
    "homeImages": "Anasayfa Görselleri",
   "coverImages": "Kapak Görselleri",
+  "pleaseSelectCoverImage": "Lütfen bir kapak görseli seçin",
   "noProductsToLink": "Bağlanacak ürün bulunamadı.",
   "selectProductToLink": "Bağlamak için bir ürün seçin.",
   "linkedSuccessfully": "Başarıyla bağlandı.",

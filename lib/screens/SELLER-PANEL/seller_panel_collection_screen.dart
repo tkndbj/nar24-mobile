@@ -1035,22 +1035,37 @@ class _SellerPanelCollectionScreenState
                             const SizedBox(width: 16),
                             Expanded(
                               child: CupertinoButton(
-                                color: controller.text.trim().isNotEmpty
+                                color: (controller.text.trim().isNotEmpty && selectedImage != null)
                                     ? (isDark ? Colors.tealAccent : Colors.teal)
                                     : CupertinoColors.inactiveGray,
                                 onPressed: controller.text.trim().isNotEmpty
                                     ? () async {
+                                        // Check if image is selected
+                                        if (selectedImage == null) {
+                                          ScaffoldMessenger.of(this.context).showSnackBar(
+                                            SnackBar(
+                                              content: Row(
+                                                children: [
+                                                  const Icon(Icons.image_not_supported, color: Colors.white, size: 20),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(child: Text(l10n.pleaseSelectCoverImage ?? 'Please select a cover image')),
+                                                ],
+                                              ),
+                                              backgroundColor: Colors.orange,
+                                              behavior: SnackBarBehavior.floating,
+                                              margin: const EdgeInsets.all(16),
+                                            ),
+                                          );
+                                          return;
+                                        }
+
                                         final name = controller.text.trim();
                                         Navigator.pop(context);
 
                                         // ✅ Show modal IMMEDIATELY
                                         _showCreatingCollectionModal();
 
-                                        String? imageUrl;
-                                        if (selectedImage != null) {
-                                          imageUrl = await _uploadImage(
-                                              selectedImage!);
-                                        }
+                                        final imageUrl = await _uploadImage(selectedImage!);
                                         await _createCollection(name,
                                             imageUrl: imageUrl);
                                       }
@@ -1841,7 +1856,11 @@ class _SellerPanelCollectionScreenState
                     ? _buildEmptyState()
                     : ListView.builder(
                         controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: EdgeInsets.only(
+                          left: 16,
+                          right: 16,
+                          bottom: MediaQuery.of(context).padding.bottom + 16,
+                        ),
                         itemCount: _collections.length,
                         itemBuilder: (context, index) {
                           final collection = _collections[index];

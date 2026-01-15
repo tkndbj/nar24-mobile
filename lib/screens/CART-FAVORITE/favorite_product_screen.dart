@@ -848,7 +848,7 @@ Future<void> _showTransferBasketDialog() async {
               ? renderBox.localToGlobal(Offset.zero) & renderBox.size
               : null;
 
-          await FavoritesSharingService.shareWithRichContent(
+          final shareResult = await FavoritesSharingService.shareWithRichContent(
             shareTitle: shareTitle,
             shareUrl: shareUrl,
             senderName:
@@ -860,14 +860,16 @@ Future<void> _showTransferBasketDialog() async {
             context: context,
           );
 
-          if (mounted) {
+          // Only show success if user actually shared (not dismissed)
+          if (mounted && shareResult?.status == ShareResultStatus.success) {
             _showSuccessSnackbar(
                 l10n.favoritesShared ?? 'Favorites shared successfully!');
           }
         } else {
           // Fallback
-          await Share.share(shareUrl);
-          if (mounted) {
+          final shareResult = await Share.share(shareUrl);
+          // Only show success if user actually shared (not dismissed)
+          if (mounted && shareResult.status == ShareResultStatus.success) {
             _showSuccessSnackbar(
                 l10n.favoritesShared ?? 'Favorites shared successfully!');
           }

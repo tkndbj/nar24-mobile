@@ -11795,6 +11795,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get coverImages => 'Kapak Görselleri';
 
   @override
+  String get pleaseSelectCoverImage => 'Lütfen bir kapak görseli seçin';
+
+  @override
   String get noProductsToLink => 'Bağlanacak ürün bulunamadı.';
 
   @override
