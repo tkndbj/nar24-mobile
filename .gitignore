@@ -16,5 +16,6 @@ firestore-migration/
 build/
 *.dSYM/
 *.framework/
+.flutter-plugins-dependencies
 
 
