@@ -1304,9 +1304,15 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     final isCacheValid =
         cachedTime != null && now.difference(cachedTime) < _cacheTTL;
 
+    // ✅ FIX: Skip cache when any filters are applied (brand, colors, subsubcategory)
+    final hasFilters = selectedFilter != null ||
+        (dynamicBrand != null && dynamicBrand!.isNotEmpty) ||
+        dynamicColors.isNotEmpty ||
+        (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty);
+
     if (isCacheValid &&
         _productCache.containsKey(cacheKey) &&
-        selectedFilter == null) {
+        !hasFilters) {
       final cachedProducts = _productCache[cacheKey]!;
       _specificSubcategoryProducts[key] = List.from(cachedProducts);
       _specificSubcategoryProductIds[key] =
@@ -1375,12 +1381,14 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       // ✅ IMPORTANT: When filtering by subsubcategory from top-level category
       // The subsubcategory in the filter is actually a subcategory in the database
       if (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty) {
-        // Check if we're on a top-level category (subcategoryId == category)
-        if (subcategoryId == category) {
-          // This means user selected "Dresses" from filter, which is a subcategory
+        // Check if we're on a top-level category:
+        // - subcategoryId == category (explicitly set to category)
+        // - subcategoryId is empty (navigated from gender filter like Women/Men)
+        if (subcategoryId == category || subcategoryId.isEmpty) {
+          // Top-level: user selected "Dresses" which is a subcategory in DB
           query = query.where('subcategory', isEqualTo: dynamicSubsubcategory);
         } else {
-          // Regular case: filtering actual subsubcategory
+          // Regular subcategory view: filter by actual subsubcategory
           query =
               query.where('subsubcategory', isEqualTo: dynamicSubsubcategory);
         }
@@ -1426,8 +1434,12 @@ class SpecialFilterProviderMarket with ChangeNotifier {
 
       _specificSubcategoryProducts[key] = products;
       _specificSubcategoryProductIds[key] = products.map((p) => p.id).toSet();
-      _productCache[cacheKey] = List.from(products);
-      _cacheTimestamps[cacheKey] = now;
+
+      // ✅ FIX: Only cache unfiltered results to avoid returning filtered data when filters are cleared
+      if (!hasFilters) {
+        _productCache[cacheKey] = List.from(products);
+        _cacheTimestamps[cacheKey] = now;
+      }
       _updateSubcategoryHasMoreState(key, products.length >= 20);
     } catch (e) {
       _updateSubcategoryHasMoreState(key, false);
@@ -1459,7 +1471,13 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     final isCacheValid =
         cachedTime != null && now.difference(cachedTime) < _cacheTTL;
 
-    if (isCacheValid && _productCache.containsKey(cacheKey)) {
+    // ✅ FIX: Skip cache when any filters are applied
+    final hasFilters = (selectedFilter != null && selectedFilter.isNotEmpty) ||
+        (dynamicBrand != null && dynamicBrand!.isNotEmpty) ||
+        dynamicColors.isNotEmpty ||
+        (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty);
+
+    if (isCacheValid && _productCache.containsKey(cacheKey) && !hasFilters) {
       final cachedProducts = _productCache[cacheKey]!;
 
       final currentProducts = _specificSubcategoryProducts[key] ?? [];
@@ -1534,7 +1552,8 @@ class SpecialFilterProviderMarket with ChangeNotifier {
 
       // ✅ IMPORTANT: Same logic for subsubcategory filtering
       if (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty) {
-        if (subcategoryId == category) {
+        // Top-level if subcategoryId == category OR subcategoryId is empty
+        if (subcategoryId == category || subcategoryId.isEmpty) {
           query = query.where('subcategory', isEqualTo: dynamicSubsubcategory);
         } else {
           query =
@@ -1584,8 +1603,11 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       _specificSubcategoryProducts[key] = currentProducts;
       _specificSubcategoryProductIds[key] = currentProductIds;
 
-      _productCache[cacheKey] = List.from(newProducts);
-      _cacheTimestamps[cacheKey] = now;
+      // ✅ FIX: Only cache unfiltered results
+      if (!hasFilters) {
+        _productCache[cacheKey] = List.from(newProducts);
+        _cacheTimestamps[cacheKey] = now;
+      }
       _updateSubcategoryHasMoreState(key, newProducts.length >= 20);
     } catch (e) {
       _updateSubcategoryHasMoreState(key, false);

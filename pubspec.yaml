@@ -1,7 +1,7 @@
 name: Nar24
 description: Kuzey Kıbrıs'ın En Gelişmiş E-Ticaret Platformu.
 publish_to: none
-version: 1.0.1+54
+version: 1.0.2+55
 
 environment:
   sdk: '>=3.5.3 <4.0.0'

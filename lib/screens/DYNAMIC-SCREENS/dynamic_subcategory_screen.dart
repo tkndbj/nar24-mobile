@@ -44,8 +44,6 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
   List<String> _dynamicColors = [];
   String? _dynamicSubsubcategory;
   String _searchTerm = '';
-  final Map<String, List<Product>> _subsubcategoryCache = {};
-  bool _isFetchingMoreForSubsubcategory = false;
   bool _isSearching = false;
   late final MarketProvider _marketProvider;
   String _selectedSortOption = 'None';
@@ -92,7 +90,6 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
   }
 
   Future<void> _refreshProducts() async {
-    _subsubcategoryCache.clear();
     // ✅ FIX: Pass gender parameter for Women/Men View All refresh
     await _specialFilterProvider.fetchSubcategoryProducts(
       widget.category,
@@ -108,7 +105,6 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
 
     setState(() {
       _searchTerm = term;
-      _subsubcategoryCache.clear();
     });
 
     _marketProvider.recordSearchTerm(term);
@@ -118,43 +114,11 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
     context.push('/search_results', extra: {'query': term});
   }
 
-  Future<void> _fetchAllSubsubcategoryProducts() async {
-    if (_dynamicSubsubcategory == null || _isFetchingMoreForSubsubcategory) {
-      return;
-    }
-    _isFetchingMoreForSubsubcategory = true;
-    try {
-      // ✅ FIX: Pass gender to getter methods
-      while (_specialFilterProvider.hasMoreSubcategory(
-          widget.category, widget.subcategoryId,
-          gender: widget.gender)) {
-        await _specialFilterProvider.fetchMoreSubcategoryProducts(
-          widget.category,
-          widget.subcategoryId,
-        );
-        final products = _specialFilterProvider.getSubcategoryProductsById(
-          widget.category,
-          widget.subcategoryId,
-          gender: widget.gender,
-        );
-        final cacheKey =
-            '${widget.category}|${widget.subcategoryId}|$_dynamicSubsubcategory';
-        _subsubcategoryCache[cacheKey] = products
-            .where((p) => p.subsubcategory == _dynamicSubsubcategory)
-            .toList();
-        setState(() {});
-      }
-    } finally {
-      _isFetchingMoreForSubsubcategory = false;
-    }
-  }
-
   Future<void> _handleDynamicFilterApplied(Map<String, dynamic> filters) async {
     setState(() {
       _dynamicBrand = filters['brand'] as String?;
       _dynamicColors = List<String>.from(filters['colors'] as List<dynamic>);
       _dynamicSubsubcategory = filters['subsubcategory'] as String?;
-      _subsubcategoryCache.clear();
     });
     _specialFilterProvider.setDynamicFilter(
       brand: _dynamicBrand,
@@ -289,32 +253,9 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
           );
         }
 
-        List<Product> filteredProducts = allProducts;
-
-        if (_dynamicBrand != null && _dynamicBrand!.isNotEmpty) {
-          filteredProducts = filteredProducts
-              .where((p) => p.brandModel == _dynamicBrand)
-              .toList();
-        }
-
-        if (_dynamicColors.isNotEmpty) {
-          filteredProducts = filteredProducts.where((p) {
-            if (p.availableColors.isEmpty) {
-              return false;
-            }
-            return _dynamicColors.any(
-                (selectedColor) => p.availableColors.contains(selectedColor));
-          }).toList();
-        }
-
-        if (_dynamicSubsubcategory != null &&
-            _dynamicSubsubcategory!.isNotEmpty) {
-          filteredProducts = filteredProducts
-              .where((p) => p.subsubcategory == _dynamicSubsubcategory)
-              .toList();
-        }
-
-        final displayProducts = filteredProducts;
+        // ✅ Server-side filtering is already applied by the provider
+        // No client-side filtering needed - Firestore query handles all filters
+        final displayProducts = allProducts;
         final boosted = displayProducts.where((p) => p.isBoosted).toList();
         final normal = displayProducts.where((p) => !p.isBoosted).toList();
         // ✅ FIX: Pass gender for Women/Men View All
@@ -337,28 +278,11 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                 notif.metrics.pixels >= notif.metrics.maxScrollExtent * 0.9) {
               _debounceTimer?.cancel();
               _debounceTimer = Timer(const Duration(milliseconds: 200), () {
-                prov
-                    .fetchMoreSubcategoryProducts(
+                // Server-side filtering is already applied - just fetch more
+                prov.fetchMoreSubcategoryProducts(
                   widget.category,
                   widget.subcategoryId,
-                )
-                    .then((_) {
-                  if (_dynamicSubsubcategory != null) {
-                    // ✅ FIX: Pass gender for Women/Men View All
-                    final updatedProducts = prov.getSubcategoryProductsById(
-                      widget.category,
-                      widget.subcategoryId,
-                      gender: widget.gender,
-                    );
-                    final cacheKey =
-                        '${widget.category}|${widget.subcategoryId}|$_dynamicSubsubcategory';
-                    _subsubcategoryCache[cacheKey] = updatedProducts
-                        .where(
-                            (p) => p.subsubcategory == _dynamicSubsubcategory)
-                        .toList();
-                    setState(() {});
-                  }
-                });
+                );
               });
             }
             return false;
@@ -585,8 +509,10 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                       Builder(
                         builder: (context) {
                           final l10n = AppLocalizations.of(context);
+                          // ✅ FIX: Include category filter in count
                           final appliedCount = (_dynamicBrand != null ? 1 : 0) +
-                              _dynamicColors.length;
+                              _dynamicColors.length +
+                              (_dynamicSubsubcategory != null && _dynamicSubsubcategory!.isNotEmpty ? 1 : 0);
                           final hasApplied = appliedCount > 0;
                           final filterLabel = hasApplied
                               ? '${l10n.filter} ($appliedCount)'

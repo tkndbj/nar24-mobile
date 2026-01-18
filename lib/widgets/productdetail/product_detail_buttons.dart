@@ -27,16 +27,6 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
   bool _isPending = false; // Prevent double-taps
   final SalesConfigService _salesConfigService = SalesConfigService();
 
-  void _showSnackbar(BuildContext context, String message) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
   Future<void> _showAuthModal(BuildContext context) async {
     if (!context.mounted) return;
     try {
@@ -75,15 +65,17 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
     );
   }
 
-  Future<void> _handleCartResult(BuildContext context, String result) async {
+  void _showErrorSnackbar(BuildContext context, String message) {
     if (!context.mounted) return;
-    if (result == 'Please log in') {
-      await _showAuthModal(context);
-    } else if (result != 'Added to cart' &&
-        result != 'Removed from cart' &&
-        result != 'Operation in progress') {
-      _showSnackbar(context, result);
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red.shade600,
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   @override
@@ -190,7 +182,16 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                               : () async {
                                   final isAdding = !isInCart;
 
-                                  // Handle options modal FIRST if needed
+                                  // ✅ STEP 1: Check authentication FIRST (before any UI updates)
+                                  if (isAdding) {
+                                    final user = FirebaseAuth.instance.currentUser;
+                                    if (user == null) {
+                                      await _showAuthModal(context);
+                                      return;
+                                    }
+                                  }
+
+                                  // ✅ STEP 2: Handle options modal if needed
                                   Map<String, dynamic>? selections;
                                   if (isAdding && hasOptions) {
                                     selections = await showCupertinoModalPopup<
@@ -202,75 +203,60 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                                       ),
                                     );
 
-                                    if (selections == null ||
-                                        !context.mounted) {
+                                    if (selections == null || !context.mounted) {
                                       return; // User cancelled
                                     }
                                   }
 
-                                  // NOW apply instant visual update
+                                  // ✅ STEP 3: Apply optimistic UI update
                                   setState(() {
                                     _localCartState = isAdding;
                                     _isPending = true;
                                   });
 
-                                  // Haptic feedback
                                   HapticFeedback.lightImpact();
 
-                                  // Show success snackbar ONLY for adding to cart
+                                  // ✅ STEP 4: Show success snackbar (user is authenticated at this point)
                                   if (isAdding) {
                                     _showInstantSuccessSnackbar(context, true);
                                   }
 
                                   try {
-                                    final cartProvider =
-                                        Provider.of<CartProvider>(
+                                    final cartProvider = Provider.of<CartProvider>(
                                       context,
                                       listen: false,
                                     );
 
                                     if (!context.mounted) return;
 
-                                    // ✅ Execute the actual cart operation based on state
+                                    // ✅ STEP 5: Execute cart operation
                                     String result;
 
                                     if (isAdding) {
-                                      // Adding to cart - need selections
-                                      final qty =
-                                          selections?['quantity'] as int? ?? 1;
-                                      final selectedColor =
-                                          selections?['selectedColor']
-                                              as String?;
+                                      final qty = selections?['quantity'] as int? ?? 1;
+                                      final selectedColor = selections?['selectedColor'] as String?;
                                       final attrs = selections != null
-                                          ? (Map<String, dynamic>.from(
-                                              selections)
+                                          ? (Map<String, dynamic>.from(selections)
                                             ..remove('quantity')
                                             ..remove('selectedColor'))
                                           : null;
 
-                                      result =
-                                          await cartProvider.addProductToCart(
+                                      result = await cartProvider.addProductToCart(
                                         widget.product,
                                         quantity: qty,
                                         selectedColor: selectedColor,
-                                        attributes: attrs?.isNotEmpty == true
-                                            ? attrs
-                                            : null,
+                                        attributes: attrs?.isNotEmpty == true ? attrs : null,
                                       );
                                     } else {
-                                      // ✅ Removing from cart - no selections needed
-                                      result = await cartProvider
-                                          .removeFromCart(widget.product.id);
+                                      result = await cartProvider.removeFromCart(widget.product.id);
                                     }
 
-                                    // Handle errors only
+                                    // ✅ STEP 6: Handle actual errors (not auth - already checked)
                                     if (context.mounted &&
                                         result != 'Added to cart' &&
                                         result != 'Removed from cart' &&
                                         result != 'Operation in progress') {
-                                      await _handleCartResult(context, result);
-
-                                      // Revert on error
+                                      _showErrorSnackbar(context, result);
                                       setState(() {
                                         _localCartState = null;
                                         _isPending = false;
@@ -279,20 +265,15 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                                   } catch (e) {
                                     debugPrint('Cart operation error: $e');
                                     if (context.mounted) {
-                                      _showSnackbar(
-                                          context, 'Operation failed');
+                                      _showErrorSnackbar(context, 'Operation failed');
                                     }
-                                    // Revert on error
                                     setState(() {
                                       _localCartState = null;
                                       _isPending = false;
                                     });
                                   } finally {
-                                    // Release pending lock after operation completes
                                     if (mounted) {
-                                      Future.delayed(
-                                          const Duration(milliseconds: 300),
-                                          () {
+                                      Future.delayed(const Duration(milliseconds: 300), () {
                                         if (mounted) {
                                           setState(() => _isPending = false);
                                         }
@@ -450,7 +431,7 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                                   } catch (e) {
                                     debugPrint('Buy now error: $e');
                                     if (context.mounted) {
-                                      _showSnackbar(context, 'Operation failed');
+                                      _showErrorSnackbar(context, 'Operation failed');
                                     }
                                   }
                                 },

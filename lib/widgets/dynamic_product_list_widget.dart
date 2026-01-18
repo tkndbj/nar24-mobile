@@ -352,19 +352,38 @@ class _ProductListSectionState extends State<_ProductListSection> {
     final bool isTablet = screenWidth >= 600;
     final bool isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
 
+    // ✅ FIX: Calculate effective scale factor matching ProductCard's logic
+    // This ensures the info area height scales consistently with card content
+    double effectiveScaleFactor = (screenWidth / 375).clamp(0.8, 1.2);
+    if (isLandscape && effectiveScaleFactor > 1.0) {
+      effectiveScaleFactor = 1.0;
+    }
+
     // Tablets: shorter image height, larger info area for visibility
     // Landscape tablets need even more info area due to shorter viewport
     // Image heights increased for better tall/narrow image display
     final double portraitImageHeight = isTablet
         ? (isLandscape ? screenHeight * 0.31 : screenHeight * 0.24)
         : screenHeight * 0.33;
+
+    // ✅ FIX: Calculate info area height dynamically based on ProductCard's content
+    // ProductCard info section includes: padding(5) + productName(18) + rotatingText(18) +
+    // spacing(2) + ratingRow(16) + priceRow(20) ≈ 79px base, scaled by effectiveScaleFactor
+    // Added 8px buffer for iOS font rendering differences
+    final double baseInfoHeight = 87.0; // Base height at scale 1.0 with buffer
     final double infoAreaHeight = isTablet
-        ? (isLandscape ? 105.0 : 100.0)  // More space for info on tablets
-        : 80.0;
+        ? (isLandscape ? 105.0 : 100.0)  // Tablets: keep existing values
+        : (baseInfoHeight * effectiveScaleFactor).clamp(80.0, 105.0);
+
     final double rowHeight = portraitImageHeight + infoAreaHeight;
 
     // Card width - wider on tablets
     final double cardWidth = isTablet ? 195.0 : 170.0;
+
+    // ✅ FIX: Calculate header area height properly
+    // Header consists of: Padding(vertical: 6) * 2 = 12 + title(~24) + SizedBox(8) = ~44px
+    // Add buffer for safe rendering across different iOS devices
+    final double headerAreaHeight = 48.0;
 
     return VisibilityDetector(
       key: Key('visibility_${widget.listId}'),
@@ -375,7 +394,9 @@ class _ProductListSectionState extends State<_ProductListSection> {
       child: Container(
         margin: const EdgeInsets.only(bottom: 8.0),
         width: double.infinity,
-        height: rowHeight + (Platform.isIOS ? 45 : 20) + (isTablet ? (isLandscape ? 16 : 10) : 0),
+        // ✅ FIX: Use calculated header height instead of magic numbers
+        // Total = rowHeight (image + info) + header area + platform buffer
+        height: rowHeight + headerAreaHeight + (isTablet ? (isLandscape ? 8 : 4) : 0),
         clipBehavior: Clip.none,
         child: Stack(
           children: [
