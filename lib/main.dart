@@ -130,22 +130,22 @@ Future<void> main() async {
         androidProvider:
             kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
         appleProvider:
-            kDebugMode ? AppleProvider.debug : AppleProvider.appAttest,
+            kDebugMode ? AppleProvider.debug : AppleProvider.deviceCheck,
       );
 
       // ✅ ADD CRASHLYTICS HERE
       if (!kIsWeb) {
-  FlutterError.onError = (details) {
-    FirebaseCrashlytics.instance.recordFlutterError(details);
-    Sentry.captureException(details.exception, stackTrace: details.stack);
-  };
+        FlutterError.onError = (details) {
+          FirebaseCrashlytics.instance.recordFlutterError(details);
+          Sentry.captureException(details.exception, stackTrace: details.stack);
+        };
 
-  PlatformDispatcher.instance.onError = (error, stack) {
-    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-    Sentry.captureException(error, stackTrace: stack);
-    return true;
-  };
-}
+        PlatformDispatcher.instance.onError = (error, stack) {
+          FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+          Sentry.captureException(error, stackTrace: stack);
+          return true;
+        };
+      }
 
       if (kDebugMode) {
         print('Firebase initialized with europe-west3 Functions.');
@@ -168,9 +168,9 @@ Future<void> main() async {
     }
 
     SalesConfigService().initialize();
-if (kDebugMode) {
-  debugPrint('✅ SalesConfigService initialized');
-}
+    if (kDebugMode) {
+      debugPrint('✅ SalesConfigService initialized');
+    }
 
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('ic_notification');
@@ -250,85 +250,90 @@ if (kDebugMode) {
 
   MemoryManager().setupMemoryManagement();
 
-  await SentryFlutter.init(
-  (options) {
-    options.dsn = 'https://a08336b4ac08df701c201cd4d7bac209@o4510244091985920.ingest.de.sentry.io/4510544590340177'; 
+  await SentryFlutter.init((options) {
+    options.dsn =
+        'https://a08336b4ac08df701c201cd4d7bac209@o4510244091985920.ingest.de.sentry.io/4510544590340177';
     options.tracesSampleRate = 0.0;
     options.environment = kDebugMode ? 'development' : 'production';
   },
-  appRunner: () => runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider<LocaleProvider>(
-          create: (_) => LocaleProvider(
-            localeCode != null ? Locale(localeCode) : const Locale('tr'),
-          ),
-        ),
-        ChangeNotifierProvider<ThemeProvider>(
-          create: (_) => ThemeProvider(isDarkMode: isDarkMode),
-        ),
-        ChangeNotifierProvider<UserProvider>(create: (_) => UserProvider()),
-        ChangeNotifierProvider<BadgeProvider>(create: (_) => BadgeProvider()),
-        ChangeNotifierProvider<MarketProvider>(
-          create: (_) =>
-              MarketProvider(Provider.of<UserProvider>(_, listen: false)),
-        ),
-        ChangeNotifierProvider<BoostedRotationProvider>(
-          create: (_) => BoostedRotationProvider()..initialize(),
-          lazy: false, // Add this - critical!
-        ),
-        ChangeNotifierProvider(create: (_) => MarketBannerProvider()),
-        ChangeNotifierProvider(create: (_) => DynamicFilterProvider()),
-        ChangeNotifierProvider(
-          create: (context) => SpecialFilterProviderMarket(
-            Provider.of<UserProvider>(context, listen: false),
-          ),
-        ),
-        ChangeNotifierProvider(
-          create: (context) => SpecialFilterProviderTeras(
-            Provider.of<UserProvider>(context, listen: false),
-          ),
-        ),
-        ChangeNotifierProvider(create: (_) => ShopWidgetProvider()),
-        ChangeNotifierProvider<StatProvider>(create: (_) => StatProvider()),
-        Provider<FirebaseAuth>(create: (_) => FirebaseAuth.instance),
-        Provider<FirebaseFirestore>(create: (_) => FirebaseFirestore.instance),
-        Provider<AuthService>(
-          create: (_) => AuthService(
-            googleServerClientId: FirebaseConfig.googleServerClientId,
-            iosClientId: FirebaseConfig.googleIosClientId,
-          ),
-        ),
-        ChangeNotifierProvider(
-          create: (context) => CartProvider(
-            context.read<FirebaseAuth>(),
-            context.read<FirebaseFirestore>(),
-          ),
-        ),
-        ChangeNotifierProvider(
-          create: (context) => FavoriteProvider(
-            context.read<FirebaseAuth>(),
-            context.read<FirebaseFirestore>(),
-          ),
-        ),
-        ChangeNotifierProvider<TerasProvider>(
-          create: (_) =>
-              TerasProvider(Provider.of<UserProvider>(_, listen: false)),
-        ),
-        Provider<ProductRepository>(
-          create: (_) => ProductRepository(FirebaseFirestore.instance),
-        ),
-        ChangeNotifierProvider<MarketLayoutService>(
-          create: (_) => MarketLayoutService(),
-        ),
-        ChangeNotifierProvider<ProfileProvider>(
-          create: (_) => ProfileProvider(),
-        ),
-      ],
-      child: const MyApp(),
-    ),
-  )
-  );
+      appRunner: () => runApp(
+            MultiProvider(
+              providers: [
+                ChangeNotifierProvider<LocaleProvider>(
+                  create: (_) => LocaleProvider(
+                    localeCode != null
+                        ? Locale(localeCode)
+                        : const Locale('tr'),
+                  ),
+                ),
+                ChangeNotifierProvider<ThemeProvider>(
+                  create: (_) => ThemeProvider(isDarkMode: isDarkMode),
+                ),
+                ChangeNotifierProvider<UserProvider>(
+                    create: (_) => UserProvider()),
+                ChangeNotifierProvider<BadgeProvider>(
+                    create: (_) => BadgeProvider()),
+                ChangeNotifierProvider<MarketProvider>(
+                  create: (_) => MarketProvider(
+                      Provider.of<UserProvider>(_, listen: false)),
+                ),
+                ChangeNotifierProvider<BoostedRotationProvider>(
+                  create: (_) => BoostedRotationProvider()..initialize(),
+                  lazy: false, // Add this - critical!
+                ),
+                ChangeNotifierProvider(create: (_) => MarketBannerProvider()),
+                ChangeNotifierProvider(create: (_) => DynamicFilterProvider()),
+                ChangeNotifierProvider(
+                  create: (context) => SpecialFilterProviderMarket(
+                    Provider.of<UserProvider>(context, listen: false),
+                  ),
+                ),
+                ChangeNotifierProvider(
+                  create: (context) => SpecialFilterProviderTeras(
+                    Provider.of<UserProvider>(context, listen: false),
+                  ),
+                ),
+                ChangeNotifierProvider(create: (_) => ShopWidgetProvider()),
+                ChangeNotifierProvider<StatProvider>(
+                    create: (_) => StatProvider()),
+                Provider<FirebaseAuth>(create: (_) => FirebaseAuth.instance),
+                Provider<FirebaseFirestore>(
+                    create: (_) => FirebaseFirestore.instance),
+                Provider<AuthService>(
+                  create: (_) => AuthService(
+                    googleServerClientId: FirebaseConfig.googleServerClientId,
+                    iosClientId: FirebaseConfig.googleIosClientId,
+                  ),
+                ),
+                ChangeNotifierProvider(
+                  create: (context) => CartProvider(
+                    context.read<FirebaseAuth>(),
+                    context.read<FirebaseFirestore>(),
+                  ),
+                ),
+                ChangeNotifierProvider(
+                  create: (context) => FavoriteProvider(
+                    context.read<FirebaseAuth>(),
+                    context.read<FirebaseFirestore>(),
+                  ),
+                ),
+                ChangeNotifierProvider<TerasProvider>(
+                  create: (_) => TerasProvider(
+                      Provider.of<UserProvider>(_, listen: false)),
+                ),
+                Provider<ProductRepository>(
+                  create: (_) => ProductRepository(FirebaseFirestore.instance),
+                ),
+                ChangeNotifierProvider<MarketLayoutService>(
+                  create: (_) => MarketLayoutService(),
+                ),
+                ChangeNotifierProvider<ProfileProvider>(
+                  create: (_) => ProfileProvider(),
+                ),
+              ],
+              child: const MyApp(),
+            ),
+          ));
 }
 
 Future<void> _requestPushPermission() async {
