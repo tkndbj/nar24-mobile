@@ -51,6 +51,7 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
   bool _isSearching = false;
   bool _isInitialized = false;
   String _selectedSortOption = 'None';
+  VoidCallback? _searchTextListener; 
 
   // Dynamic filter state
   List<String> _dynamicBrands = [];
@@ -174,11 +175,16 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
     super.dispose();
   }
 
-  void _disposeControllers() {
-    _scrollController.dispose();
-    _searchController.dispose();
-    _searchFocusNode.dispose();
+ void _disposeControllers() {
+  // Remove search listener if exists
+  if (_searchTextListener != null) {
+    _searchController.removeListener(_searchTextListener!);
+    _searchTextListener = null;
   }
+  _scrollController.dispose();
+  _searchController.dispose();
+  _searchFocusNode.dispose();
+}
 
   void _onScroll() {
     if (!_isInitialized || !mounted) return;
@@ -386,9 +392,9 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
           return _buildEmptyState();
         }
 
-        // Check if viewport needs more content after loading completes
-        // (for tablets/large screens)
-        _checkViewportAndLoadMoreIfNeeded();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+  if (mounted) _checkViewportAndLoadMoreIfNeeded();
+});
 
         return _buildProductsList(
           displayProducts,
@@ -973,24 +979,34 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
     context.pop();
   }
 
-  void _handleSearchStateChanged(bool searching) {
-    if (!mounted) return;
+ void _handleSearchStateChanged(bool searching) {
+  if (!mounted) return;
 
-    setState(() => _isSearching = searching);
+  setState(() => _isSearching = searching);
 
-    if (!searching) {
-      _searchController.clear();
-      _searchFocusNode.unfocus();
-    } else {
-      // Setup search listener when entering search mode
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-
-        void onTextChanged() {
-          // Handle search text changes if needed
-        }
-        _searchController.addListener(onTextChanged);
-      });
+  if (!searching) {
+    // Remove listener when exiting search
+    if (_searchTextListener != null) {
+      _searchController.removeListener(_searchTextListener!);
+      _searchTextListener = null;
     }
+    _searchController.clear();
+    _searchFocusNode.unfocus();
+  } else {
+    // Setup search listener when entering search mode
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      
+      // Remove old listener if exists
+      if (_searchTextListener != null) {
+        _searchController.removeListener(_searchTextListener!);
+      }
+      
+      _searchTextListener = () {
+        // Handle search text changes if needed
+      };
+      _searchController.addListener(_searchTextListener!);
+    });
   }
+}
 }

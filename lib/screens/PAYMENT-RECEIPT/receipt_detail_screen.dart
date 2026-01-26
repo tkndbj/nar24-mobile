@@ -86,17 +86,19 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
       builder: (BuildContext context) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
-            return Container(
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color.fromARGB(255, 33, 31, 49)
-                    : Colors.white,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(24),
-                  topRight: Radius.circular(24),
+            return SafeArea(
+              top: false,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color.fromARGB(255, 33, 31, 49)
+                      : Colors.white,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(24),
+                    topRight: Radius.circular(24),
+                  ),
                 ),
-              ),
-              child: SingleChildScrollView(
+                child: SingleChildScrollView(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(
@@ -493,6 +495,7 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
                   ),
                 ),
               ),
+            ),
             );
           },
         );
@@ -645,20 +648,22 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
       builder: (BuildContext context) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
-            return Container(
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color.fromARGB(255, 33, 31, 49)
-                    : Colors.white,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(24),
-                  topRight: Radius.circular(24),
+            return SafeArea(
+              top: false,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color.fromARGB(255, 33, 31, 49)
+                      : Colors.white,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(24),
+                    topRight: Radius.circular(24),
+                  ),
                 ),
-              ),
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: SingleChildScrollView(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: SingleChildScrollView(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(
@@ -989,6 +994,7 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
                   ),
                 ),
               ),
+            ),
             );
           },
         );

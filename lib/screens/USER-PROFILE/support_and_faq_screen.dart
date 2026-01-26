@@ -109,11 +109,13 @@ class _SupportAndFaqScreenState extends State<SupportAndFaqScreen> {
               final screenHeight = MediaQuery.of(context).size.height;
               final isTablet = screenWidth >= 600;
 
-              return Padding(
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(context).viewInsets.bottom,
-                ),
-                child: Container(
+              return SafeArea(
+                top: false,
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.of(context).viewInsets.bottom,
+                  ),
+                  child: Container(
                   // Tablet: use constraints with max height, Mobile: fixed 75% height
                   height: isTablet ? null : screenHeight * 0.75,
                   constraints: isTablet
@@ -778,6 +780,7 @@ class _SupportAndFaqScreenState extends State<SupportAndFaqScreen> {
                     ],
                   ),
                 ),
+              ),
               );
             },
           );

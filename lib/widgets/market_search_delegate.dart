@@ -1333,46 +1333,38 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
       builder: (context, historyProv, child) {
         final isDeleting = historyProv.isDeletingEntry(entry.id);
 
-        // Show loading indicator when deleting
-        if (isDeleting) {
-          return SizedBox(
-            width: 48,
-            height: 48,
-            child: Center(
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    isDark ? Colors.white30 : Colors.grey.shade400,
-                  ),
-                ),
+        // Use Material + InkWell to reliably capture taps and prevent
+        // gesture competition with the parent ListTile's onTap handler.
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: isDeleting
+                ? null
+                : () => _handleDeleteEntry(context, entry.id),
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: Center(
+                child: isDeleting
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            isDark ? Colors.white30 : Colors.grey.shade400,
+                          ),
+                        ),
+                      )
+                    : Icon(
+                        Icons.delete_outline,
+                        size: 20,
+                        color: isDark ? Colors.white30 : Colors.grey.shade400,
+                      ),
               ),
             ),
-          );
-        }
-
-        // Use IconButton with explicit constraints for proper Material feedback
-        // Removed AnimatedSwitcher which was causing gesture detection issues
-        return IconButton(
-          icon: Icon(
-            Icons.delete_outline,
-            size: 20,
-            color: isDark ? Colors.white30 : Colors.grey.shade400,
           ),
-          onPressed: () {
-            // Prevent multiple taps by checking if already deleting
-            if (!historyProv.isDeletingEntry(entry.id)) {
-              _handleDeleteEntry(context, entry.id);
-            }
-          },
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(
-            minWidth: 48,
-            minHeight: 48,
-          ),
-          splashRadius: 24,
         );
       },
     );
