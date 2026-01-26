@@ -87,6 +87,78 @@ async function getIsbankConfig() {
   return isbankConfig;
 }
 
+async function validateAndMarkDiscounts(tx, db, userId, couponId, benefitId, orderId, cartTotal) {
+  let couponDiscount = 0;
+  let freeShippingApplied = false;
+  let couponCode = null;
+
+  // Validate and mark coupon
+  if (couponId) {
+    const couponRef = db.collection('users').doc(userId).collection('coupons').doc(couponId);
+    const couponDoc = await tx.get(couponRef);
+
+    if (!couponDoc.exists) {
+      throw new HttpsError('not-found', 'Coupon not found');
+    }
+
+    const coupon = couponDoc.data();
+
+    if (coupon.isUsed) {
+      throw new HttpsError('failed-precondition', 'Coupon has already been used');
+    }
+
+    if (coupon.expiresAt && coupon.expiresAt.toDate() < new Date()) {
+      throw new HttpsError('failed-precondition', 'Coupon has expired');
+    }
+
+    // Cap discount at cart total
+    couponDiscount = Math.min(coupon.amount || 0, cartTotal);
+    couponCode = coupon.code || null;
+
+    // Mark as used (atomic within transaction)
+    tx.update(couponRef, {
+      isUsed: true,
+      usedAt: admin.firestore.FieldValue.serverTimestamp(),
+      orderId: orderId,
+    });
+
+    console.log(`Coupon ${couponId} validated and marked as used for order ${orderId}`);
+  }
+
+  // Validate and mark free shipping benefit
+  if (benefitId) {
+    const benefitRef = db.collection('users').doc(userId).collection('benefits').doc(benefitId);
+    const benefitDoc = await tx.get(benefitRef);
+
+    if (!benefitDoc.exists) {
+      throw new HttpsError('not-found', 'Free shipping benefit not found');
+    }
+
+    const benefit = benefitDoc.data();
+
+    if (benefit.isUsed) {
+      throw new HttpsError('failed-precondition', 'Free shipping has already been used');
+    }
+
+    if (benefit.expiresAt && benefit.expiresAt.toDate() < new Date()) {
+      throw new HttpsError('failed-precondition', 'Free shipping benefit has expired');
+    }
+
+    freeShippingApplied = true;
+
+    // Mark as used (atomic within transaction)
+    tx.update(benefitRef, {
+      isUsed: true,
+      usedAt: admin.firestore.FieldValue.serverTimestamp(),
+      orderId: orderId,
+    });
+
+    console.log(`Benefit ${benefitId} validated and marked as used for order ${orderId}`);
+  }
+
+  return { couponDiscount, freeShippingApplied, couponCode };
+}
+
 // Add this function to create the cart clearing task
 async function createCartClearTask(buyerId, purchasedProductIds, orderId) {
   const project = 'emlak-mobile-app';
@@ -388,6 +460,9 @@ async function createOrderTransaction(buyerId, requestData) {
     deliveryOption = 'normal',
     saveAddress = false,
     paymentOrderId,
+    couponId = null,
+    freeShippingBenefitId = null,
+    clientDeliveryPrice = 0,
   } = requestData;
 
   // Validate required fields
@@ -457,6 +532,30 @@ async function createOrderTransaction(buyerId, requestData) {
     const buyerData = buyerSnap.data() || {};
     const buyerName = buyerData.displayName || buyerData.name || 'Unknown Buyer';
     const userLanguage = buyerData.languageCode || 'en';
+
+    const orderRef = db.collection('orders').doc(); // Create ref early for orderId
+    finalOrderId = orderRef.id;
+    
+    let discountResult = { couponDiscount: 0, freeShippingApplied: false, couponCode: null };
+    
+    if (couponId || freeShippingBenefitId) {
+      discountResult = await validateAndMarkDiscounts(
+        tx,
+        db,
+        buyerId,
+        couponId,
+        freeShippingBenefitId,
+        finalOrderId,
+        cartCalculatedTotal || 0
+      );
+    }
+
+    // ✅ ADD: SERVER-SIDE PRICE CALCULATION
+    const serverDeliveryPrice = discountResult.freeShippingApplied ? 0 : (clientDeliveryPrice || 0);
+    const serverCouponDiscount = discountResult.couponDiscount;
+    const serverFinalTotal = Math.max(0, (cartCalculatedTotal || 0) - serverCouponDiscount) + serverDeliveryPrice;
+
+    console.log(`Price calculation - Subtotal: ${cartCalculatedTotal}, Coupon: -${serverCouponDiscount}, Delivery: ${serverDeliveryPrice}, Final: ${serverFinalTotal}`);
 
     // BATCH FETCH PRODUCTS
     productsMeta = await batchFetchProducts(tx, db, items);
@@ -549,22 +648,26 @@ async function createOrderTransaction(buyerId, requestData) {
       });
     }
 
-    // WRITE ORDER HEADER
-    const orderRef = db.collection('orders').doc();
-    finalOrderId = orderRef.id;
+    
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
 
     const orderDocument = {
       buyerId,
       buyerName,
-      totalPrice,
+      totalPrice: serverFinalTotal,
       totalQuantity,
-      deliveryPrice: requestData.deliveryPrice || 0,
+      deliveryPrice: serverDeliveryPrice,
       paymentMethod,
       paymentOrderId: paymentOrderId || null,
       deliveryOption,
       timestamp,
       itemCount: items.length,
+      couponId: couponId || null,
+      couponCode: discountResult.couponCode || null,
+      couponDiscount: serverCouponDiscount,
+      freeShippingApplied: discountResult.freeShippingApplied,
+      freeShippingBenefitId: freeShippingBenefitId || null,
+      itemsSubtotal: cartCalculatedTotal || 0, 
     };
 
     if (deliveryOption === 'pickup') {
@@ -808,12 +911,15 @@ async function createOrderTransaction(buyerId, requestData) {
         buyerName,
         items: receiptItems,
         sellerGroups: Array.from(sellerGroups.values()),
-        totalPrice: totalPrice + (requestData.deliveryPrice || 0),
+        totalPrice: serverFinalTotal,
         itemsSubtotal: totalPrice,
         currency: 'TL',
         paymentMethod,
         deliveryOption,
-        deliveryPrice: requestData.deliveryPrice || 0,
+        deliveryPrice: serverDeliveryPrice,
+        couponDiscount: serverCouponDiscount,
+        couponCode: discountResult.couponCode,
+        freeShippingApplied: discountResult.freeShippingApplied,
         language: userLanguage,
         status: 'pending',
         pickupPoint: deliveryOption === 'pickup' ? {
@@ -13581,3 +13687,10 @@ export {updatePersonalizedFeeds, cleanupOldFeeds} from './13-personalized-feed/i
 export {adminToggleProductArchiveStatus, approveArchivedProductEdit} from './14-admin-actions/index.js';
 export {translateText, translateBatch} from './15-openai-translation/index.js';
 export {processQRCodeGeneration, verifyQRCode, markQRScanned, retryQRGeneration} from './16-qr-for-orders/index.js';
+export {
+  grantUserCoupon,
+  grantFreeShipping,
+  getUserCouponsAndBenefits,
+  revokeCoupon,
+  revokeBenefit,
+} from './17-coupons/index.js';

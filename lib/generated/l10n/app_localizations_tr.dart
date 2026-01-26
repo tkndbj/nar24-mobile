@@ -8354,7 +8354,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get boosted => 'Öne Çıkarıldı';
 
   @override
-  String get days => 'Gün';
+  String get days => 'gün';
 
   @override
   String get hours => 'Saat';
@@ -9348,7 +9348,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get favoritesVehicles => 'Favori Araçlar';
 
   @override
-  String get used => '2. El';
+  String get used => 'Kullanıldı';
 
   @override
   String helloInterestedInCar(Object carName) {
@@ -12586,4 +12586,76 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get subSubcategoryGPSAndNavigation => 'GPS & Navigasyon';
+
+  @override
+  String get couponsAndBenefits => 'Kuponlar ve Avantajlar';
+
+  @override
+  String get freeShipping => 'Ücretsiz Kargo';
+
+  @override
+  String get discountCoupons => 'İndirim Kuponları';
+
+  @override
+  String get useFreeShipping => 'Ücretsiz Kargo Kullan';
+
+  @override
+  String get freeShippingDescription => 'Kargo ücretiniz alınmayacak';
+
+  @override
+  String get noCoupon => 'Kupon Yok';
+
+  @override
+  String get proceedWithoutDiscount => 'İndirimsiz devam et';
+
+  @override
+  String get willDeduct => 'İndirim';
+
+  @override
+  String get discountCouponDesc => 'İndirim kuponu';
+
+  @override
+  String get noCouponsAvailable => 'Kullanılabilir kupon yok';
+
+  @override
+  String get coupon => 'Kupon';
+
+  @override
+  String get addCouponOrBenefit => 'Kupon veya avantaj ekle';
+
+  @override
+  String get couponApplied => 'Kupon uygulandı';
+
+  @override
+  String get freeShippingApplied => 'Ücretsiz kargo uygulandı';
+
+  @override
+  String get youSave => 'Kazancınız';
+
+  @override
+  String get expiresIn => 'Geçerlilik';
+
+  @override
+  String get expired => 'Süresi doldu';
+
+  @override
+  String get applied => 'uygulandı';
+
+  @override
+  String get couponAlreadyUsed => 'Bu kupon zaten kullanılmış';
+
+  @override
+  String get couponExpired => 'Bu kuponun süresi dolmuş';
+
+  @override
+  String get couponNotFound => 'Kupon bulunamadı';
+
+  @override
+  String get freeShippingAlreadyUsed => 'Ücretsiz kargo zaten kullanılmış';
+
+  @override
+  String get freeShippingExpired => 'Ücretsiz kargo süresı dolmuş';
+
+  @override
+  String get stockIssue => 'Stok sorunu. Lütfen tekrar deneyin.';
 }

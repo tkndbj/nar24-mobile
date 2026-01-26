@@ -7,6 +7,9 @@ import 'package:collection/collection.dart';
 import '../generated/l10n/app_localizations.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../screens/PAYMENT-RECEIPT/isbank_payment_screen.dart';
+import '../models/coupon.dart';
+import '../models/user_benefit.dart';
+import '../services/coupon_service.dart';
 
 final FirebaseFunctions _functions =
     FirebaseFunctions.instanceFor(region: 'europe-west3');
@@ -38,14 +41,55 @@ class ProductPaymentProvider with ChangeNotifier {
   final double cartCalculatedTotal;
   LatLng? selectedLocation;
 
+  final Coupon? appliedCoupon;
+  final bool useFreeShipping;
+  double couponDiscount = 0.0;
+  UserBenefit? _usedFreeShippingBenefit;
+
   final List<Map<String, dynamic>> items;
 
   ProductPaymentProvider({
     required this.items,
     required this.cartCalculatedTotal,
+    this.appliedCoupon, // Add this
+    this.useFreeShipping = false, // Add this
   }) {
+    _calculateCouponDiscount(); // Add this
+    _findFreeShippingBenefit(); // Add this
     fetchSavedAddresses();
     _fetchDeliverySettings();
+  }
+
+  void _calculateCouponDiscount() {
+    if (appliedCoupon != null && appliedCoupon!.isValid) {
+      couponDiscount = appliedCoupon!.amount > cartCalculatedTotal
+          ? cartCalculatedTotal
+          : appliedCoupon!.amount;
+    } else {
+      couponDiscount = 0.0;
+    }
+  }
+
+  /// Find the free shipping benefit to use
+  void _findFreeShippingBenefit() {
+    if (useFreeShipping) {
+      _usedFreeShippingBenefit = CouponService().availableFreeShipping;
+    }
+  }
+
+  /// Get the effective delivery price (0 if free shipping benefit is used)
+  double getEffectiveDeliveryPrice() {
+    if (useFreeShipping && _usedFreeShippingBenefit != null) {
+      return 0.0;
+    }
+    return getDeliveryPrice();
+  }
+
+  /// Calculate the final total after all discounts
+  double get finalTotal {
+    final subtotalAfterCoupon = cartCalculatedTotal - couponDiscount;
+    final shipping = getEffectiveDeliveryPrice();
+    return subtotalAfterCoupon + shipping;
   }
 
   /// Fetch delivery settings from Firestore
@@ -277,17 +321,23 @@ class ProductPaymentProvider with ChangeNotifier {
         'items': itemsPayload,
         'cartCalculatedTotal': cartCalculatedTotal,
         'deliveryOption': selectedDeliveryOption ?? 'normal',
-        'deliveryPrice': getDeliveryPrice(),
+        'deliveryPrice':
+            getEffectiveDeliveryPrice(), // Changed from getDeliveryPrice()
         'address': addressPayload,
         'paymentMethod': 'Card',
         'saveAddress': saveAddress,
+        'couponId': appliedCoupon?.id,
+        'freeShippingBenefitId':
+            useFreeShipping ? _usedFreeShippingBenefit?.id : null,
+        'clientDeliveryPrice': getDeliveryPrice(),
       };
 
       // Initialize İşbank payment
       final HttpsCallable initPayment =
           _functions.httpsCallable('initializeIsbankPayment');
       final initResponse = await initPayment.call({
-        'amount': cartCalculatedTotal + getDeliveryPrice(),
+        'amount':
+            finalTotal, // Changed from cartCalculatedTotal + getDeliveryPrice()
         'orderNumber': orderNumber,
         'customerName': customerName,
         'customerEmail': customerEmail,
@@ -346,8 +396,20 @@ class ProductPaymentProvider with ChangeNotifier {
         } else if (e.code == 'invalid-argument') {
           errorMessage = 'Geçersiz bilgi. Lütfen kontrol edin.';
         } else if (e.code == 'failed-precondition') {
-          errorMessage =
-              e.message ?? 'Ürün stok sorunu. Lütfen tekrar deneyin.';
+          final msg = e.message ?? '';
+          if (msg.contains('Coupon has already been used')) {
+            errorMessage = AppLocalizations.of(context).couponAlreadyUsed;
+          } else if (msg.contains('Coupon has expired')) {
+            errorMessage = AppLocalizations.of(context).couponExpired;
+          } else if (msg.contains('Free shipping has already been used')) {
+            errorMessage = AppLocalizations.of(context).freeShippingAlreadyUsed;
+          } else if (msg.contains('Free shipping benefit has expired')) {
+            errorMessage = AppLocalizations.of(context).freeShippingExpired;
+          } else if (msg.contains('Coupon not found')) {
+            errorMessage = AppLocalizations.of(context).couponNotFound;
+          } else {
+            errorMessage = e.message ?? AppLocalizations.of(context).stockIssue;
+          }
         }
 
         if (context.mounted) {

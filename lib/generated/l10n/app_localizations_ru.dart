@@ -8393,7 +8393,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get boosted => 'Усилено';
 
   @override
-  String get days => 'Дни';
+  String get days => 'дней';
 
   @override
   String get hours => 'Часы';
@@ -9398,7 +9398,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get favoritesVehicles => 'Избранные автомобили';
 
   @override
-  String get used => 'Подержанный';
+  String get used => 'Использован';
 
   @override
   String helloInterestedInCar(Object carName) {
@@ -12657,4 +12657,76 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get subSubcategoryGPSAndNavigation => 'GPS и навигация';
+
+  @override
+  String get couponsAndBenefits => 'Купоны и бонусы';
+
+  @override
+  String get freeShipping => 'Бесплатная доставка';
+
+  @override
+  String get discountCoupons => 'Скидочные купоны';
+
+  @override
+  String get useFreeShipping => 'Использовать бесплатную доставку';
+
+  @override
+  String get freeShippingDescription => 'Стоимость доставки будет отменена';
+
+  @override
+  String get noCoupon => 'Без купона';
+
+  @override
+  String get proceedWithoutDiscount => 'Продолжить без скидки';
+
+  @override
+  String get willDeduct => 'Скидка';
+
+  @override
+  String get discountCouponDesc => 'Скидочный купон';
+
+  @override
+  String get noCouponsAvailable => 'Нет доступных купонов';
+
+  @override
+  String get coupon => 'Купон';
+
+  @override
+  String get addCouponOrBenefit => 'Добавить купон или бонус';
+
+  @override
+  String get couponApplied => 'Купон применён';
+
+  @override
+  String get freeShippingApplied => 'Бесплатная доставка применена';
+
+  @override
+  String get youSave => 'Вы экономите';
+
+  @override
+  String get expiresIn => 'Истекает через';
+
+  @override
+  String get expired => 'Истёк';
+
+  @override
+  String get applied => 'применено';
+
+  @override
+  String get couponAlreadyUsed => 'Этот купон уже использован';
+
+  @override
+  String get couponExpired => 'Срок действия купона истёк';
+
+  @override
+  String get couponNotFound => 'Купон не найден';
+
+  @override
+  String get freeShippingAlreadyUsed => 'Бесплатная доставка уже использована';
+
+  @override
+  String get freeShippingExpired => 'Срок бесплатной доставки истёк';
+
+  @override
+  String get stockIssue => 'Проблема с наличием. Попробуйте снова.';
 }

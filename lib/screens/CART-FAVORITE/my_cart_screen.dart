@@ -17,6 +17,10 @@ import '../../widgets/cart_validation_bottom_sheet.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../services/sales_config_service.dart';
 import 'package:shimmer/shimmer.dart';
+import '../../services/coupon_service.dart';
+import '../../models/coupon.dart';
+import '../../widgets/coupon_selection_sheet.dart';
+import '../../models/user_benefit.dart';
 
 class MyCartScreen extends StatefulWidget {
   const MyCartScreen({Key? key}) : super(key: key);
@@ -32,6 +36,10 @@ class _MyCartScreenState extends State<MyCartScreen>
   bool _isValidating = false;
   CartProvider? _cartProvider;
   final SalesConfigService _salesConfigService = SalesConfigService();
+
+  final CouponService _couponService = CouponService();
+  Coupon? _selectedCoupon;
+  bool _useFreeShipping = false;
 
   // Pull-to-refresh cooldown (30 seconds)
   static const Duration _refreshCooldown = Duration(seconds: 30);
@@ -112,7 +120,8 @@ class _MyCartScreenState extends State<MyCartScreen>
       final elapsed = now.difference(_lastRefreshTime!);
       if (elapsed < _refreshCooldown) {
         final remaining = _refreshCooldown - elapsed;
-        final seconds = remaining.inSeconds + 1; // +1 for user-friendly rounding
+        final seconds =
+            remaining.inSeconds + 1; // +1 for user-friendly rounding
         if (mounted) {
           final l10n = AppLocalizations.of(context);
           _showSnackBar(
@@ -200,38 +209,41 @@ class _MyCartScreenState extends State<MyCartScreen>
     }
   }
 
-  List<Map<String, dynamic>> _prepareItemsForPayment(List<Map<String, dynamic>> cartItems) {
-  return cartItems.map((item) {
-    final result = Map<String, dynamic>.from(item);
-    
-    // Build selectedAttributes from cartData (same format as "buy it now")
-    final cartData = item['cartData'] as Map<String, dynamic>?;
-    final Map<String, dynamic> selectedAttributes = {};
-    
-    // Add selectedColor if present
-    final selectedColor = item['selectedColor'] ?? cartData?['selectedColor'];
-    if (selectedColor != null && selectedColor != '') {
-      selectedAttributes['selectedColor'] = selectedColor;
-    }
-    
-    // Add dynamic attributes from cartData['attributes']
-    if (cartData?['attributes'] is Map) {
-      final attrs = cartData!['attributes'] as Map<String, dynamic>;
-      attrs.forEach((key, value) {
-        if (value != null && value != '' && (value is! List || (value).isNotEmpty)) {
-          selectedAttributes[key] = value;
-        }
-      });
-    }
-    
-    // Set selectedAttributes (matching "buy it now" structure)
-    if (selectedAttributes.isNotEmpty) {
-      result['selectedAttributes'] = selectedAttributes;
-    }
-    
-    return result;
-  }).toList();
-}
+  List<Map<String, dynamic>> _prepareItemsForPayment(
+      List<Map<String, dynamic>> cartItems) {
+    return cartItems.map((item) {
+      final result = Map<String, dynamic>.from(item);
+
+      // Build selectedAttributes from cartData (same format as "buy it now")
+      final cartData = item['cartData'] as Map<String, dynamic>?;
+      final Map<String, dynamic> selectedAttributes = {};
+
+      // Add selectedColor if present
+      final selectedColor = item['selectedColor'] ?? cartData?['selectedColor'];
+      if (selectedColor != null && selectedColor != '') {
+        selectedAttributes['selectedColor'] = selectedColor;
+      }
+
+      // Add dynamic attributes from cartData['attributes']
+      if (cartData?['attributes'] is Map) {
+        final attrs = cartData!['attributes'] as Map<String, dynamic>;
+        attrs.forEach((key, value) {
+          if (value != null &&
+              value != '' &&
+              (value is! List || (value).isNotEmpty)) {
+            selectedAttributes[key] = value;
+          }
+        });
+      }
+
+      // Set selectedAttributes (matching "buy it now" structure)
+      if (selectedAttributes.isNotEmpty) {
+        result['selectedAttributes'] = selectedAttributes;
+      }
+
+      return result;
+    }).toList();
+  }
 
   Future<void> _proceedToCheckout() async {
     if (_cartProvider == null) return;
@@ -254,21 +266,21 @@ class _MyCartScreenState extends State<MyCartScreen>
 
     try {
       try {
-      final salesConfig = await _salesConfigService.refreshConfig();
-      if (salesConfig.salesPaused) {
-        if (mounted) {
-          setState(() {
-            _isValidating = false;
-          });
+        final salesConfig = await _salesConfigService.refreshConfig();
+        if (salesConfig.salesPaused) {
+          if (mounted) {
+            setState(() {
+              _isValidating = false;
+            });
+          }
+          _showSalesPausedDialog(salesConfig.pauseReason);
+          return;
         }
-        _showSalesPausedDialog(salesConfig.pauseReason);
-        return;
+      } catch (e) {
+        debugPrint('⚠️ Could not verify sales status: $e');
+        // Continue with checkout - fail-open approach
+        // Change to return here if you want fail-closed
       }
-    } catch (e) {
-      debugPrint('⚠️ Could not verify sales status: $e');
-      // Continue with checkout - fail-open approach
-      // Change to return here if you want fail-closed
-    }
       // ✅ Validate with Cloud Function (fresh data)
       final validation = await _cartProvider!.validateForPayment(
         selectedIds,
@@ -302,8 +314,9 @@ class _MyCartScreenState extends State<MyCartScreen>
         // ✅ No issues - proceed directly to payment
         final totals = await _cartProvider!
             .calculateCartTotals(selectedProductIds: selectedIds);
-        final rawItems = await _cartProvider!.fetchAllSelectedItems(selectedIds);
-final items = _prepareItemsForPayment(rawItems);
+        final rawItems =
+            await _cartProvider!.fetchAllSelectedItems(selectedIds);
+        final items = _prepareItemsForPayment(rawItems);
 
         if (mounted) {
           Navigator.push(
@@ -312,6 +325,8 @@ final items = _prepareItemsForPayment(rawItems);
               builder: (context) => ProductPaymentScreen(
                 items: items,
                 totalPrice: totals.total,
+                appliedCoupon: _selectedCoupon, // Add this
+                useFreeShipping: _useFreeShipping, // Add this
               ),
             ),
           );
@@ -322,8 +337,9 @@ final items = _prepareItemsForPayment(rawItems);
         final warnings = validation['warnings'] as Map<String, dynamic>;
         final validatedItems =
             validation['validatedItems'] as List<dynamic>? ?? [];
-        final rawItems = await _cartProvider!.fetchAllSelectedItems(selectedIds);
-final items = _prepareItemsForPayment(rawItems);
+        final rawItems =
+            await _cartProvider!.fetchAllSelectedItems(selectedIds);
+        final items = _prepareItemsForPayment(rawItems);
 
         if (mounted) {
           showModalBottomSheet(
@@ -331,7 +347,7 @@ final items = _prepareItemsForPayment(rawItems);
             isScrollControlled: true,
             backgroundColor: Colors.transparent,
             isDismissible: false,
-            builder: (bottomSheetContext) => CartValidationBottomSheet( 
+            builder: (bottomSheetContext) => CartValidationBottomSheet(
               errors: errors,
               warnings: warnings,
               validatedItems: validatedItems.cast<Map<String, dynamic>>(),
@@ -369,8 +385,10 @@ final items = _prepareItemsForPayment(rawItems);
 
                 if (validIds.isNotEmpty) {
                   // ✅ Get fresh items after cache update
-                  final rawValidCartItems = await _cartProvider!.fetchAllSelectedItems(validIds);
-final validCartItems = _prepareItemsForPayment(rawValidCartItems);
+                  final rawValidCartItems =
+                      await _cartProvider!.fetchAllSelectedItems(validIds);
+                  final validCartItems =
+                      _prepareItemsForPayment(rawValidCartItems);
 
                   // ✅ Calculate totals from validated items (which have fresh prices)
                   final totals = await _cartProvider!
@@ -384,6 +402,8 @@ final validCartItems = _prepareItemsForPayment(rawValidCartItems);
                         builder: (context) => ProductPaymentScreen(
                           items: validCartItems,
                           totalPrice: totals.total,
+                          appliedCoupon: _selectedCoupon, // ADD
+                          useFreeShipping: _useFreeShipping, // ADD
                         ),
                       ),
                     );
@@ -417,77 +437,77 @@ final validCartItems = _prepareItemsForPayment(rawValidCartItems);
   }
 
   void _updateTotalsForCurrentSelection() {
-  final selectedIds = _selectedProducts.entries
-      .where((entry) => entry.value)
-      .map((entry) => entry.key)
-      .toList();
-  _cartProvider?.updateTotalsForSelection(selectedIds);
-}
+    final selectedIds = _selectedProducts.entries
+        .where((entry) => entry.value)
+        .map((entry) => entry.key)
+        .toList();
+    _cartProvider?.updateTotalsForSelection(selectedIds);
+  }
 
   void _showSalesPausedDialog(String? reason) {
-  final l10n = AppLocalizations.of(context);
-  
-  showDialog(
-    context: context,
-    barrierDismissible: true,
-    builder: (context) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      icon: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.orange.withValues(alpha: 0.1),
-          shape: BoxShape.circle,
+    final l10n = AppLocalizations.of(context);
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        icon: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.orange.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.pause_circle_outline,
+            color: Colors.orange,
+            size: 48,
+          ),
         ),
-        child: const Icon(
-          Icons.pause_circle_outline,
-          color: Colors.orange,
-          size: 48,
+        title: Text(
+          l10n.salesPausedTitle ?? 'Sales Temporarily Paused',
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
         ),
-      ),
-      title: Text(
-        l10n.salesPausedTitle ?? 'Sales Temporarily Paused',
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          fontWeight: FontWeight.bold,
-          fontSize: 18,
+        content: Text(
+          reason?.isNotEmpty == true
+              ? reason!
+              : (l10n.salesPausedMessage ??
+                  'We are currently not accepting orders. Please try again later.'),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.grey[600],
+            fontSize: 14,
+          ),
         ),
-      ),
-      content: Text(
-        reason?.isNotEmpty == true
-            ? reason!
-            : (l10n.salesPausedMessage ?? 
-               'We are currently not accepting orders. Please try again later.'),
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: Colors.grey[600],
-          fontSize: 14,
-        ),
-      ),
-      actions: [
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 12),
               ),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-            child: Text(
-              l10n.understood ?? 'Understood',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
+              child: Text(
+                l10n.understood ?? 'Understood',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 
   void _showSnackBar(String message, {bool isError = false}) {
     if (!mounted) return;
@@ -505,40 +525,40 @@ final validCartItems = _prepareItemsForPayment(rawValidCartItems);
   }
 
   Widget _buildTotalsShimmer(AppLocalizations l10n, int itemCount) {
-  final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-  return Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.total,
-            style: const TextStyle(fontSize: 14, color: Colors.grey),
-          ),
-          const SizedBox(height: 4),
-          Shimmer.fromColors(
-            baseColor: isDark ? Colors.grey[800]! : Colors.grey[300]!,
-            highlightColor: isDark ? Colors.grey[700]! : Colors.grey[100]!,
-            child: Container(
-              width: 120,
-              height: 28,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(4),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              l10n.total,
+              style: const TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+            const SizedBox(height: 4),
+            Shimmer.fromColors(
+              baseColor: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+              highlightColor: isDark ? Colors.grey[700]! : Colors.grey[100]!,
+              child: Container(
+                width: 120,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(4),
+                ),
               ),
             ),
-          ),
-        ],
-      ),
-      Text(
-        '$itemCount ${l10n.items}',
-        style: const TextStyle(fontSize: 14, color: Colors.grey),
-      ),
-    ],
-  );
-}
+          ],
+        ),
+        Text(
+          '$itemCount ${l10n.items}',
+          style: const TextStyle(fontSize: 14, color: Colors.grey),
+        ),
+      ],
+    );
+  }
 
   // ========================================================================
   // UI BUILDERS
@@ -615,7 +635,8 @@ final validCartItems = _prepareItemsForPayment(rawValidCartItems);
                 SliverPadding(
                   padding: const EdgeInsets.all(12),
                   sliver: SliverGrid(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 12,
@@ -639,9 +660,11 @@ final validCartItems = _prepareItemsForPayment(rawValidCartItems);
                         final item = items[index];
 
                         // ✅ Calculate seller header dynamically for reliability
-                        final currentSellerId = item['sellerId'] as String? ?? '';
+                        final currentSellerId =
+                            item['sellerId'] as String? ?? '';
                         final showSellerHeader = index == 0 ||
-                            currentSellerId != (items[index - 1]['sellerId'] as String? ?? '');
+                            currentSellerId !=
+                                (items[index - 1]['sellerId'] as String? ?? '');
 
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -770,10 +793,13 @@ final validCartItems = _prepareItemsForPayment(rawValidCartItems);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: isDark ? const Color.fromARGB(255, 33, 31, 49) : Theme.of(context).cardColor,
+        color: isDark
+            ? const Color.fromARGB(255, 33, 31, 49)
+            : Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isSelected ? Colors.orange : Colors.grey.withValues(alpha: 0.2),
+          color:
+              isSelected ? Colors.orange : Colors.grey.withValues(alpha: 0.2),
           width: isSelected ? 1 : 1,
         ),
       ),
@@ -814,8 +840,8 @@ final validCartItems = _prepareItemsForPayment(rawValidCartItems);
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8),
                           child: CachedNetworkImage(
-                            imageUrl:
-                                item['selectedColorImage'] ?? product.imageUrls.first,
+                            imageUrl: item['selectedColorImage'] ??
+                                product.imageUrls.first,
                             width: 70,
                             height: 70,
                             fit: BoxFit.cover,
@@ -829,8 +855,8 @@ final validCartItems = _prepareItemsForPayment(rawValidCartItems);
                                   height: 16,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    valueColor:
-                                        AlwaysStoppedAnimation<Color>(Colors.grey),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.grey),
                                   ),
                                 ),
                               ),
@@ -839,7 +865,8 @@ final validCartItems = _prepareItemsForPayment(rawValidCartItems);
                               width: 70,
                               height: 70,
                               color: Colors.grey[300],
-                              child: const Icon(Icons.image_not_supported, size: 24),
+                              child: const Icon(Icons.image_not_supported,
+                                  size: 24),
                             ),
                           ),
                         ),
@@ -1015,220 +1042,330 @@ final validCartItems = _prepareItemsForPayment(rawValidCartItems);
     );
   }
 
- Widget _buildCheckoutButton(AppLocalizations l10n) {
-  if (_cartProvider == null) {
-    return const SizedBox.shrink();
-  }
+  Widget _buildCheckoutButton(AppLocalizations l10n) {
+    if (_cartProvider == null) {
+      return const SizedBox.shrink();
+    }
 
-  return ValueListenableBuilder<List<Map<String, dynamic>>>(
-    valueListenable: _cartProvider!.cartItemsNotifier,
-    builder: (context, items, _) {
-      final selectedIds = _selectedProducts.entries
-          .where((entry) => entry.value)
-          .map((entry) => entry.key)
-          .toList();
+    return ValueListenableBuilder<List<Map<String, dynamic>>>(
+      valueListenable: _cartProvider!.cartItemsNotifier,
+      builder: (context, items, _) {
+        final selectedIds = _selectedProducts.entries
+            .where((entry) => entry.value)
+            .map((entry) => entry.key)
+            .toList();
 
-      final isDark = Theme.of(context).brightness == Brightness.dark;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
 
-      return ValueListenableBuilder<SalesConfig>(
-        valueListenable: _salesConfigService.configNotifier,
-        builder: (context, salesConfig, _) {
-          final isSalesPaused = salesConfig.salesPaused;
+        return ValueListenableBuilder<SalesConfig>(
+          valueListenable: _salesConfigService.configNotifier,
+          builder: (context, salesConfig, _) {
+            final isSalesPaused = salesConfig.salesPaused;
 
-          return Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? const Color(0xFF1C1A29)
-                  : Theme.of(context).cardColor,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -5),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // ✅ ADD: Sales paused banner
-                  if (isSalesPaused)
-                    Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: Colors.orange.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.info_outline,
-                            color: Colors.orange,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              salesConfig.pauseReason?.isNotEmpty == true
-                                  ? salesConfig.pauseReason!
-                                  : (l10n.salesTemporarilyPaused ??
-                                      'Sales are temporarily paused'),
-                              style: const TextStyle(
-                                color: Colors.orange,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  // Total section (unchanged)
-                 ValueListenableBuilder<bool>(
-  valueListenable: _cartProvider!.isTotalsLoadingNotifier,
-  builder: (context, isLoading, _) {
-    return ValueListenableBuilder<CartTotals?>(
-      valueListenable: _cartProvider!.cartTotalsNotifier,
-      builder: (context, totals, _) {
-        if (isLoading || (totals == null && selectedIds.isNotEmpty)) {
-          return _buildTotalsShimmer(l10n, selectedIds.length);
-        }
-
-        if (totals == null || selectedIds.isEmpty) {
-          return const SizedBox.shrink();
-        }
-
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.total,
-                  style: const TextStyle(fontSize: 14, color: Colors.grey),
-                ),
-                Text(
-                  '${totals.total.toStringAsFixed(2)} ${totals.currency}',
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.orange,
-                  ),
-                ),
-              ],
-            ),
-            Text(
-              '${selectedIds.length} ${l10n.items}',
-              style: const TextStyle(fontSize: 14, color: Colors.grey),
-            ),
-          ],
-        );
-      },
-    );
-  },
-),
-                  const SizedBox(height: 16),
-
-                  // Checkout button - now considers sales paused state
-                  Builder(
-                    builder: (context) {
-                      final screenWidth = MediaQuery.of(context).size.width;
-                      final isTablet = screenWidth >= 600;
-
-                      // Button disabled when sales paused
-                      final isDisabled = selectedIds.isEmpty ||
-                          _isValidating ||
-                          isSalesPaused;
-
-                      final button = SizedBox(
-                        width: isTablet ? screenWidth * 0.5 : double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: isDisabled ? null : _proceedToCheckout,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                isSalesPaused ? Colors.grey : Colors.orange,
-                            disabledBackgroundColor: Colors.grey[300],
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(0),
-                            ),
-                          ),
-                          child: _isValidating
-                              ? Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                                Colors.white),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Text(
-                                      l10n.validating ?? 'Validating...',
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    if (isSalesPaused) ...[
-                                      const Icon(
-                                        Icons.pause_circle_outline,
-                                        color: Colors.white,
-                                        size: 20,
-                                      ),
-                                      const SizedBox(width: 8),
-                                    ],
-                                    Text(
-                                      isSalesPaused
-                                          ? (l10n.checkoutPaused ??
-                                              'Checkout Paused')
-                                          : l10n.proceedToPayment,
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                        ),
-                      );
-
-                      return isTablet ? Center(child: button) : button;
-                    },
+            return Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF1C1A29)
+                    : Theme.of(context).cardColor,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, -5),
                   ),
                 ],
               ),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // ✅ ADD: Sales paused banner
+                    if (isSalesPaused)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.orange.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.info_outline,
+                              color: Colors.orange,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                salesConfig.pauseReason?.isNotEmpty == true
+                                    ? salesConfig.pauseReason!
+                                    : (l10n.salesTemporarilyPaused ??
+                                        'Sales are temporarily paused'),
+                                style: const TextStyle(
+                                  color: Colors.orange,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    // Compact Total + Coupons Section
+                    // Compact Total + Coupons Section
+                    ValueListenableBuilder<bool>(
+                      valueListenable: _cartProvider!.isTotalsLoadingNotifier,
+                      builder: (context, isLoading, _) {
+                        return ValueListenableBuilder<CartTotals?>(
+                          valueListenable: _cartProvider!.cartTotalsNotifier,
+                          builder: (context, totals, _) {
+                            if (isLoading ||
+                                (totals == null && selectedIds.isNotEmpty)) {
+                              return _buildTotalsShimmer(
+                                  l10n, selectedIds.length);
+                            }
+
+                            if (totals == null || selectedIds.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+
+                            // Listen to BOTH coupons and benefits
+                            return ValueListenableBuilder<List<Coupon>>(
+                              valueListenable: _couponService.couponsNotifier,
+                              builder: (context, coupons, _) {
+                                return ValueListenableBuilder<
+                                    List<UserBenefit>>(
+                                  valueListenable:
+                                      _couponService.benefitsNotifier,
+                                  builder: (context, benefits, _) {
+                                    final hasAnyCouponsOrBenefits = coupons
+                                            .any((c) => c.isValid) ||
+                                        benefits.any((b) =>
+                                            b.isValid &&
+                                            b.type == BenefitType.freeShipping);
+
+                                    return Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        // Compact total row
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
+                                          children: [
+                                            Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  '${selectedIds.length} ${l10n.items}',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey[500],
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  '${totals.total.toStringAsFixed(2)} ${totals.currency}',
+                                                  style: const TextStyle(
+                                                    fontSize: 22,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.orange,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            // Only show coupon button if user has any
+                                            if (hasAnyCouponsOrBenefits)
+                                              _buildCompactCouponButton(
+                                                  l10n, isDark),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+                                      ],
+                                    );
+                                  },
+                                );
+                              },
+                            );
+                          },
+                        );
+                      },
+                    ),
+
+                    // Checkout button - now considers sales paused state
+                    Builder(
+                      builder: (context) {
+                        final screenWidth = MediaQuery.of(context).size.width;
+                        final isTablet = screenWidth >= 600;
+
+                        // Button disabled when sales paused
+                        final isDisabled = selectedIds.isEmpty ||
+                            _isValidating ||
+                            isSalesPaused;
+
+                        final button = SizedBox(
+                          width: isTablet ? screenWidth * 0.5 : double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            onPressed: isDisabled ? null : _proceedToCheckout,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor:
+                                  isSalesPaused ? Colors.grey : Colors.orange,
+                              disabledBackgroundColor: Colors.grey[300],
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(0),
+                              ),
+                            ),
+                            child: _isValidating
+                                ? Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                  Colors.white),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        l10n.validating ?? 'Validating...',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      if (isSalesPaused) ...[
+                                        const Icon(
+                                          Icons.pause_circle_outline,
+                                          color: Colors.white,
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 8),
+                                      ],
+                                      Text(
+                                        isSalesPaused
+                                            ? (l10n.checkoutPaused ??
+                                                'Checkout Paused')
+                                            : l10n.proceedToPayment,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
+                        );
+
+                        return isTablet ? Center(child: button) : button;
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildCompactCouponButton(AppLocalizations l10n, bool isDark) {
+    final hasSelection = _selectedCoupon != null || _useFreeShipping;
+
+    return GestureDetector(
+      onTap: _showCouponSheet,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: hasSelection
+              ? Colors.green.withOpacity(0.1)
+              : Colors.orange.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: hasSelection
+                ? Colors.green.withOpacity(0.3)
+                : Colors.orange.withOpacity(0.3),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              hasSelection ? Icons.check_circle : Icons.local_offer_outlined,
+              size: 16,
+              color: hasSelection ? Colors.green : Colors.orange,
             ),
-          );
-        },
-      );
-    },
-  );
-}
+            const SizedBox(width: 6),
+            Text(
+              hasSelection
+                  ? (_selectedCoupon != null && _useFreeShipping
+                      ? '2 ${l10n.applied ?? "applied"}'
+                      : '1 ${l10n.applied ?? "applied"}')
+                  : l10n.addCouponOrBenefit ?? 'Add discount',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: hasSelection ? Colors.green : Colors.orange,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCouponSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        builder: (_, controller) => CouponSelectionSheet(
+          cartTotal: _cartProvider?.cartTotalsNotifier.value?.total ?? 0,
+          selectedCoupon: _selectedCoupon,
+          useFreeShipping: _useFreeShipping,
+          onCouponSelected: (coupon) {
+            setState(() {
+              _selectedCoupon = coupon;
+            });
+          },
+          onFreeShippingToggled: (use) {
+            setState(() {
+              _useFreeShipping = use;
+            });
+          },
+        ),
+      ),
+    );
+  }
 
   Widget _buildLoadingState() {
     return ListView.builder(
@@ -1397,5 +1534,4 @@ final validCartItems = _prepareItemsForPayment(rawValidCartItems);
       ),
     );
   }
-
 }

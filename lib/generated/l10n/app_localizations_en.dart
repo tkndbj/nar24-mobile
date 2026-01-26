@@ -12561,4 +12561,76 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get subSubcategoryGPSAndNavigation => 'GPS & Navigation';
+
+  @override
+  String get couponsAndBenefits => 'Coupons & Benefits';
+
+  @override
+  String get freeShipping => 'Free Shipping';
+
+  @override
+  String get discountCoupons => 'Discount Coupons';
+
+  @override
+  String get useFreeShipping => 'Use Free Shipping';
+
+  @override
+  String get freeShippingDescription => 'Your shipping fee will be waived';
+
+  @override
+  String get noCoupon => 'No Coupon';
+
+  @override
+  String get proceedWithoutDiscount => 'Proceed without discount';
+
+  @override
+  String get willDeduct => 'Will deduct';
+
+  @override
+  String get discountCouponDesc => 'Discount coupon';
+
+  @override
+  String get noCouponsAvailable => 'No coupons available';
+
+  @override
+  String get coupon => 'Coupon';
+
+  @override
+  String get addCouponOrBenefit => 'Add coupon or benefit';
+
+  @override
+  String get couponApplied => 'Coupon applied';
+
+  @override
+  String get freeShippingApplied => 'Free shipping applied';
+
+  @override
+  String get youSave => 'You save';
+
+  @override
+  String get expiresIn => 'Expires in';
+
+  @override
+  String get expired => 'Expired';
+
+  @override
+  String get applied => 'applied';
+
+  @override
+  String get couponAlreadyUsed => 'This coupon has already been used';
+
+  @override
+  String get couponExpired => 'This coupon has expired';
+
+  @override
+  String get couponNotFound => 'Coupon not found';
+
+  @override
+  String get freeShippingAlreadyUsed => 'Free shipping has already been used';
+
+  @override
+  String get freeShippingExpired => 'Free shipping benefit has expired';
+
+  @override
+  String get stockIssue => 'Stock issue. Please try again.';
 }

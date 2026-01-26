@@ -57,6 +57,7 @@ import 'services/version_check_service.dart';
 import 'widgets/version_check_modal.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'services/sales_config_service.dart';
+import 'services/coupon_service.dart';
 
 /// Background message handler for FCM.
 ///
@@ -105,9 +106,9 @@ Future<void> main() async {
   SharedPreferences prefs = await SharedPreferences.getInstance();
   String? localeCode = prefs.getString('locale');
   if (localeCode == null) {
-  localeCode = 'tr'; // Your default language
-  await prefs.setString('locale', localeCode);
-}
+    localeCode = 'tr'; // Your default language
+    await prefs.setString('locale', localeCode);
+  }
   bool isDarkMode = prefs.getBool('isDarkMode') ?? false;
   bool _firebaseInitialized = false;
 
@@ -159,6 +160,11 @@ Future<void> main() async {
           debugPrint('⚠️ VersionCheckService initialization failed: $e');
         }
       });
+    }
+
+    CouponService().initialize();
+    if (kDebugMode) {
+      debugPrint('✅ CouponService initialized');
     }
 
     await ClickTrackingService.instance.initialize();

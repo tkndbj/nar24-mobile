@@ -8,15 +8,20 @@ import '../../widgets/productpayment/address_section_widget.dart';
 import '../../widgets/productpayment/complete_payment_button.dart';
 import '../../widgets/productpayment/delivery_options_widget.dart';
 import '../AGREEMENTS/mesafeli_satis_sozlesmesi.dart';
+import '../../models/coupon.dart';
 
 class ProductPaymentScreen extends StatefulWidget {
   final List<Map<String, dynamic>> items;
   final double totalPrice;
+  final Coupon? appliedCoupon;
+  final bool useFreeShipping;
 
   const ProductPaymentScreen({
     Key? key,
     required this.items,
     required this.totalPrice,
+    this.appliedCoupon,
+    this.useFreeShipping = false,
   }) : super(key: key);
 
   @override
@@ -81,20 +86,20 @@ class _ProductPaymentScreenState extends State<ProductPaymentScreen> {
   }
 
   String _getFreeDeliveryText(
-  ProductPaymentProvider provider,
-  double cartTotal,
-  AppLocalizations l10n,
-  bool isDark,
-) {
-  final deliveryOption = provider.selectedDeliveryOption;
-  final deliveryPrice = provider.getDeliveryPrice();
-  
-  if (deliveryPrice == 0.0) {
-    return '${l10n.cargoPrice}: ${l10n.free}';
+    ProductPaymentProvider provider,
+    double cartTotal,
+    AppLocalizations l10n,
+    bool isDark,
+  ) {
+    final deliveryOption = provider.selectedDeliveryOption;
+    final deliveryPrice = provider.getDeliveryPrice();
+
+    if (deliveryPrice == 0.0) {
+      return '${l10n.cargoPrice}: ${l10n.free}';
+    }
+
+    return '${l10n.cargoPrice}: ${deliveryPrice.toStringAsFixed(2)} TL';
   }
-  
-  return '${l10n.cargoPrice}: ${deliveryPrice.toStringAsFixed(2)} TL';
-}
 
   @override
   Widget build(BuildContext context) {
@@ -105,7 +110,10 @@ class _ProductPaymentScreenState extends State<ProductPaymentScreen> {
 
     return ChangeNotifierProvider(
       create: (_) => ProductPaymentProvider(
-          items: _items, cartCalculatedTotal: widget.totalPrice),
+          items: _items,
+          cartCalculatedTotal: widget.totalPrice,
+          appliedCoupon: widget.appliedCoupon,
+          useFreeShipping: widget.useFreeShipping),
       child: Consumer<ProductPaymentProvider>(
         builder: (context, provider, _) {
           return Scaffold(
@@ -196,8 +204,6 @@ class _ProductPaymentScreenState extends State<ProductPaymentScreen> {
                                     return const SizedBox.shrink();
                                   },
                                 ),
-
-                                
                               ],
                             )),
                       ),
@@ -224,43 +230,156 @@ class _ProductPaymentScreenState extends State<ProductPaymentScreen> {
                           top: false,
                           child: Column(
                             children: [
-                              Row(
-  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  children: [
-    Text(
-      l10n.total,
-      style: TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.w600,
-        color: isDark ? Colors.white : Colors.grey,
-      ),
-    ),
-    Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        // Show cargo price
-        Text(
-  _getFreeDeliveryText(provider, widget.totalPrice, l10n, isDark),
-  style: TextStyle(
-    fontSize: 12,
-    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-  ),
-),
-        const SizedBox(height: 4),
-        // Show total with cargo
-        Text(
-          '${(widget.totalPrice + provider.getDeliveryPrice()).toStringAsFixed(2)} '
-          '${_items.first['product'].currency}',
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF00A86B),
-          ),
-        ),
-      ],
-    ),
-  ],
-),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  // Subtotal
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        l10n.subtotal,
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: isDark
+                                              ? Colors.grey.shade400
+                                              : Colors.grey.shade600,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${widget.totalPrice.toStringAsFixed(2)} ${_items.first['product'].currency}',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: isDark
+                                              ? Colors.grey.shade400
+                                              : Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+
+                                  // Coupon discount (if applied)
+                                  if (provider.appliedCoupon != null &&
+                                      provider.couponDiscount > 0) ...[
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.local_offer,
+                                                size: 16, color: Colors.green),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              l10n.coupon,
+                                              style: const TextStyle(
+                                                  fontSize: 14,
+                                                  color: Colors.green),
+                                            ),
+                                          ],
+                                        ),
+                                        Text(
+                                          '-${provider.couponDiscount.toStringAsFixed(2)} ${_items.first['product'].currency}',
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.green,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                  ],
+
+                                  // Shipping
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.local_shipping_outlined,
+                                            size: 16,
+                                            color: provider.useFreeShipping
+                                                ? Colors.green
+                                                : (isDark
+                                                    ? Colors.grey.shade400
+                                                    : Colors.grey.shade600),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            l10n.shipping,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: provider.useFreeShipping
+                                                  ? Colors.green
+                                                  : (isDark
+                                                      ? Colors.grey.shade400
+                                                      : Colors.grey.shade600),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      Text(
+                                        provider.useFreeShipping
+                                            ? l10n.free
+                                            : '${provider.getDeliveryPrice().toStringAsFixed(2)} ${_items.first['product'].currency}',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: provider.useFreeShipping
+                                              ? Colors.green
+                                              : (isDark
+                                                  ? Colors.grey.shade400
+                                                  : Colors.grey.shade600),
+                                          fontWeight: provider.useFreeShipping
+                                              ? FontWeight.w600
+                                              : FontWeight.normal,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                    child: Divider(
+                                      height: 1,
+                                      color: isDark
+                                          ? Colors.grey.shade700
+                                          : Colors.grey.shade300,
+                                    ),
+                                  ),
+
+                                  // Final Total
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        l10n.total,
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: isDark
+                                              ? Colors.white
+                                              : Colors.black87,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${provider.finalTotal.toStringAsFixed(2)} ${_items.first['product'].currency}',
+                                        style: const TextStyle(
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF00A86B),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                               const SizedBox(height: 16),
                               // Distance selling agreement checkbox
                               Consumer<ProductPaymentProvider>(
@@ -268,18 +387,24 @@ class _ProductPaymentScreenState extends State<ProductPaymentScreen> {
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: 12),
                                     child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
                                       children: [
                                         SizedBox(
                                           width: 24,
                                           height: 24,
                                           child: Checkbox(
-                                            value: provider.hasAcceptedAgreement,
+                                            value:
+                                                provider.hasAcceptedAgreement,
                                             onChanged: (value) {
-                                              provider.setAgreementAccepted(value ?? false);
+                                              provider.setAgreementAccepted(
+                                                  value ?? false);
                                             },
-                                            activeColor: const Color(0xFF00A86B),
-                                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                            activeColor:
+                                                const Color(0xFF00A86B),
+                                            materialTapTargetSize:
+                                                MaterialTapTargetSize
+                                                    .shrinkWrap,
                                           ),
                                         ),
                                         const SizedBox(width: 8),
@@ -289,7 +414,8 @@ class _ProductPaymentScreenState extends State<ProductPaymentScreen> {
                                               Navigator.push(
                                                 context,
                                                 MaterialPageRoute(
-                                                  builder: (context) => const SalesContractScreen(),
+                                                  builder: (context) =>
+                                                      const SalesContractScreen(),
                                                 ),
                                               );
                                             },
@@ -300,16 +426,21 @@ class _ProductPaymentScreenState extends State<ProductPaymentScreen> {
                                                     text: l10n.iAccept,
                                                     style: TextStyle(
                                                       fontSize: 13,
-                                                      color: isDark ? Colors.white70 : Colors.grey[700],
+                                                      color: isDark
+                                                          ? Colors.white70
+                                                          : Colors.grey[700],
                                                     ),
                                                   ),
                                                   TextSpan(
-                                                    text: ' ${l10n.distanceSellingAgreement}',
+                                                    text:
+                                                        ' ${l10n.distanceSellingAgreement}',
                                                     style: const TextStyle(
                                                       fontSize: 13,
                                                       color: Color(0xFF00A86B),
-                                                      fontWeight: FontWeight.w600,
-                                                      decoration: TextDecoration.underline,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      decoration: TextDecoration
+                                                          .underline,
                                                     ),
                                                   ),
                                                 ],

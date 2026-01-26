@@ -25,6 +25,6 @@ module.exports = {
     'linebreak-style': 'off',
     'no-trailing-spaces': 'off',
     'object-curly-spacing': 'off',
-    'no-multi-spaces': 'off',
+    'no-multi-spaces': 'off',    
   },
 };

@@ -15986,7 +15986,7 @@ abstract class AppLocalizations {
   /// No description provided for @days.
   ///
   /// In tr, this message translates to:
-  /// **'Gün'**
+  /// **'gün'**
   String get days;
 
   /// No description provided for @hours.
@@ -17865,7 +17865,7 @@ abstract class AppLocalizations {
   /// No description provided for @used.
   ///
   /// In tr, this message translates to:
-  /// **'2. El'**
+  /// **'Kullanıldı'**
   String get used;
 
   /// No description provided for @helloInterestedInCar.
@@ -24029,6 +24029,150 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'GPS & Navigasyon'**
   String get subSubcategoryGPSAndNavigation;
+
+  /// No description provided for @couponsAndBenefits.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kuponlar ve Avantajlar'**
+  String get couponsAndBenefits;
+
+  /// No description provided for @freeShipping.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ücretsiz Kargo'**
+  String get freeShipping;
+
+  /// No description provided for @discountCoupons.
+  ///
+  /// In tr, this message translates to:
+  /// **'İndirim Kuponları'**
+  String get discountCoupons;
+
+  /// No description provided for @useFreeShipping.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ücretsiz Kargo Kullan'**
+  String get useFreeShipping;
+
+  /// No description provided for @freeShippingDescription.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kargo ücretiniz alınmayacak'**
+  String get freeShippingDescription;
+
+  /// No description provided for @noCoupon.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kupon Yok'**
+  String get noCoupon;
+
+  /// No description provided for @proceedWithoutDiscount.
+  ///
+  /// In tr, this message translates to:
+  /// **'İndirimsiz devam et'**
+  String get proceedWithoutDiscount;
+
+  /// No description provided for @willDeduct.
+  ///
+  /// In tr, this message translates to:
+  /// **'İndirim'**
+  String get willDeduct;
+
+  /// No description provided for @discountCouponDesc.
+  ///
+  /// In tr, this message translates to:
+  /// **'İndirim kuponu'**
+  String get discountCouponDesc;
+
+  /// No description provided for @noCouponsAvailable.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kullanılabilir kupon yok'**
+  String get noCouponsAvailable;
+
+  /// No description provided for @coupon.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kupon'**
+  String get coupon;
+
+  /// No description provided for @addCouponOrBenefit.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kupon veya avantaj ekle'**
+  String get addCouponOrBenefit;
+
+  /// No description provided for @couponApplied.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kupon uygulandı'**
+  String get couponApplied;
+
+  /// No description provided for @freeShippingApplied.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ücretsiz kargo uygulandı'**
+  String get freeShippingApplied;
+
+  /// No description provided for @youSave.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kazancınız'**
+  String get youSave;
+
+  /// No description provided for @expiresIn.
+  ///
+  /// In tr, this message translates to:
+  /// **'Geçerlilik'**
+  String get expiresIn;
+
+  /// No description provided for @expired.
+  ///
+  /// In tr, this message translates to:
+  /// **'Süresi doldu'**
+  String get expired;
+
+  /// No description provided for @applied.
+  ///
+  /// In tr, this message translates to:
+  /// **'uygulandı'**
+  String get applied;
+
+  /// No description provided for @couponAlreadyUsed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bu kupon zaten kullanılmış'**
+  String get couponAlreadyUsed;
+
+  /// No description provided for @couponExpired.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bu kuponun süresi dolmuş'**
+  String get couponExpired;
+
+  /// No description provided for @couponNotFound.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kupon bulunamadı'**
+  String get couponNotFound;
+
+  /// No description provided for @freeShippingAlreadyUsed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ücretsiz kargo zaten kullanılmış'**
+  String get freeShippingAlreadyUsed;
+
+  /// No description provided for @freeShippingExpired.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ücretsiz kargo süresı dolmuş'**
+  String get freeShippingExpired;
+
+  /// No description provided for @stockIssue.
+  ///
+  /// In tr, this message translates to:
+  /// **'Stok sorunu. Lütfen tekrar deneyin.'**
+  String get stockIssue;
 }
 
 class _AppLocalizationsDelegate
