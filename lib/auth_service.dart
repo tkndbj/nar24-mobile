@@ -226,6 +226,40 @@ class AuthService {
   // BACKGROUND TASK PROCESSING
   // ============================================================
 
+  Future<void> _syncLanguageToFirestore(String userId) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final localLanguage = prefs.getString('locale');
+    
+    if (localLanguage == null || localLanguage.isEmpty) return;
+    
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .get(const GetOptions(source: Source.server))
+        .timeout(const Duration(seconds: 5));
+    
+    if (!doc.exists) return;
+    
+    final currentLanguage = doc.data()?['languageCode'] as String?;
+    
+    // Only write if different
+    if (currentLanguage != localLanguage) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .update({'languageCode': localLanguage})
+          .timeout(const Duration(seconds: 5));
+      
+      if (kDebugMode) {
+        debugPrint('🌍 Language synced: $currentLanguage → $localLanguage');
+      }
+    }
+  } catch (e) {
+    if (kDebugMode) debugPrint('⚠️ Language sync failed: $e');
+  }
+}
+
   Future<void> _processBackgroundTasks() async {
     if (_isDisposed || _isProcessingBackground || _backgroundTasks.isEmpty) {
       return;
@@ -466,6 +500,7 @@ class AuthService {
 
       // Background FCM registration
       _queueBackgroundTask(() => _registerFcmToken(user.uid));
+      _queueBackgroundTask(() => _syncLanguageToFirestore(user.uid));
 
       return {
         'user': user,
@@ -665,6 +700,7 @@ class AuthService {
       if (isNewUser) {
         await _createUserDocument(user);
         _queueBackgroundTask(() => _registerFcmToken(user.uid));
+        _queueBackgroundTask(() => _syncLanguageToFirestore(user.uid));
 
         return {
           'user': user,
@@ -684,6 +720,7 @@ class AuthService {
       final needs2FA = results[1] as bool;
 
       _queueBackgroundTask(() => _registerFcmToken(user.uid));
+      _queueBackgroundTask(() => _syncLanguageToFirestore(user.uid));
 
       return {
         'user': user,
@@ -821,6 +858,7 @@ class AuthService {
         }
 
         _queueBackgroundTask(() => _registerFcmToken(user.uid));
+        _queueBackgroundTask(() => _syncLanguageToFirestore(user.uid));
 
         final hasValidName = displayName != null &&
             displayName.isNotEmpty &&
@@ -862,6 +900,7 @@ class AuthService {
       }
 
       _queueBackgroundTask(() => _registerFcmToken(user.uid));
+      _queueBackgroundTask(() => _syncLanguageToFirestore(user.uid)); 
 
       return {
         'user': user,

@@ -176,32 +176,34 @@ class UserProvider with ChangeNotifier, LifecycleAwareMixin {
 
   @override
   Future<void> onResume(Duration pauseDuration) async {
-    await super.onResume(pauseDuration);
-    _isResuming = true;
+  await super.onResume(pauseDuration);
+  _isResuming = true;
 
-    try {
-      if (_user != null && _profileComplete == null) {
-        final prefs = await SharedPreferences.getInstance();
-        final cachedValue = prefs.getBool(_profileCompleteKey);
-        if (cachedValue != null) {
-          _profileComplete = cachedValue;
-          notifyListeners();
-        }
+  try {
+    if (_user != null && _profileComplete == null) {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedValue = prefs.getBool(_profileCompleteKey);
+      if (cachedValue != null) {
+        _profileComplete = cachedValue;
+        notifyListeners();
       }
-
-      if (_user != null) {
-        if (shouldFullRefresh(pauseDuration)) {
-          if (kDebugMode) {
-            debugPrint(
-                '🔄 UserProvider: Long pause detected, background syncing...');
-          }
-          _backgroundFetchUserData();
-        }
-      }
-    } finally {
-      _isResuming = false;
     }
+
+    if (_user != null) {
+      // ✅ Always sync language on resume (uses cached data, minimal reads)
+      _syncLanguageToFirestore(_user!.uid, _profileData);
+      
+      if (shouldFullRefresh(pauseDuration)) {
+        if (kDebugMode) {
+          debugPrint('🔄 UserProvider: Long pause detected, background syncing...');
+        }
+        _backgroundFetchUserData();
+      }
+    }
+  } finally {
+    _isResuming = false;
   }
+}
 
   User? get user => _user;
   bool get isLoading => _isLoading;
@@ -320,35 +322,46 @@ class UserProvider with ChangeNotifier, LifecycleAwareMixin {
     }
   }
 
-  void _syncLanguageToFirestore(String uid, Map<String, dynamic>? userData) {
-    Future<void>(() async {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final localLanguage = prefs.getString('locale');
-        final firestoreLanguage = userData?['languageCode'] as String?;
+ Future<void> _syncLanguageToFirestore(String uid, [Map<String, dynamic>? userData]) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final localLanguage = prefs.getString('locale');
+    
+    if (localLanguage == null || localLanguage.isEmpty) return;
+    
+    // If we already have the data, use it; otherwise fetch
+    String? firestoreLanguage = userData?['languageCode'] as String?;
+    
+    if (userData == null) {
+      // Need to fetch current value
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get(const GetOptions(source: Source.server))
+          .timeout(const Duration(seconds: 5));
+      
+      if (!doc.exists) return;
+      firestoreLanguage = doc.data()?['languageCode'] as String?;
+    }
 
-        if (_user?.uid != uid) {
-          if (kDebugMode) debugPrint('⚠️ User changed, skipping language sync');
-          return;
-        }
+    if (_user?.uid != uid) return;
 
-        if (localLanguage != null && localLanguage != firestoreLanguage) {
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(uid)
-              .update({'languageCode': localLanguage}).timeout(
-                  const Duration(seconds: 5));
+    // Only write if different
+    if (localLanguage != firestoreLanguage) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .update({'languageCode': localLanguage})
+          .timeout(const Duration(seconds: 5));
 
-          if (kDebugMode) {
-            debugPrint(
-                '🌍 Synced language to Firestore: $firestoreLanguage → $localLanguage');
-          }
-        }
-      } catch (e) {
-        if (kDebugMode) debugPrint('⚠️ Failed to sync language: $e');
+      if (kDebugMode) {
+        debugPrint('🌍 Synced language to Firestore: $firestoreLanguage → $localLanguage');
       }
-    });
+    }
+  } catch (e) {
+    if (kDebugMode) debugPrint('⚠️ Failed to sync language: $e');
   }
+}
 
   void _updateUserDataFromDoc(DocumentSnapshot doc) {
     // ✅ FIX: Skip updates during name save to prevent race conditions

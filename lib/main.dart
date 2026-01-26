@@ -104,6 +104,10 @@ Future<void> main() async {
   timeago.setLocaleMessages('ru', RuMessages());
   SharedPreferences prefs = await SharedPreferences.getInstance();
   String? localeCode = prefs.getString('locale');
+  if (localeCode == null) {
+  localeCode = 'tr'; // Your default language
+  await prefs.setString('locale', localeCode);
+}
   bool isDarkMode = prefs.getBool('isDarkMode') ?? false;
   bool _firebaseInitialized = false;
 
