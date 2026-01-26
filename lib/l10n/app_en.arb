@@ -5561,5 +5561,8 @@
 "couponNotFound": "Coupon not found",
 "freeShippingAlreadyUsed": "Free shipping has already been used",
 "freeShippingExpired": "Free shipping benefit has expired",
-"stockIssue": "Stock issue. Please try again."
+"stockIssue": "Stock issue. Please try again.",
+"couponDiscount": "Coupon Discount",
+"freeShippingBenefit": "Free Shipping Benefit",
+"youSaved": "You Saved"
 }

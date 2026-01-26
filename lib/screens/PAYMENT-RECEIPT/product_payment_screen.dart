@@ -15,6 +15,7 @@ class ProductPaymentScreen extends StatefulWidget {
   final double totalPrice;
   final Coupon? appliedCoupon;
   final bool useFreeShipping;
+  final String? selectedBenefitId;
 
   const ProductPaymentScreen({
     Key? key,
@@ -22,6 +23,7 @@ class ProductPaymentScreen extends StatefulWidget {
     required this.totalPrice,
     this.appliedCoupon,
     this.useFreeShipping = false,
+    this.selectedBenefitId,
   }) : super(key: key);
 
   @override
@@ -113,7 +115,8 @@ class _ProductPaymentScreenState extends State<ProductPaymentScreen> {
           items: _items,
           cartCalculatedTotal: widget.totalPrice,
           appliedCoupon: widget.appliedCoupon,
-          useFreeShipping: widget.useFreeShipping),
+          useFreeShipping: widget.useFreeShipping,
+          selectedBenefitId: widget.selectedBenefitId),
       child: Consumer<ProductPaymentProvider>(
         builder: (context, provider, _) {
           return Scaffold(

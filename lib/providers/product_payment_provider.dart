@@ -10,6 +10,7 @@ import '../screens/PAYMENT-RECEIPT/isbank_payment_screen.dart';
 import '../models/coupon.dart';
 import '../models/user_benefit.dart';
 import '../services/coupon_service.dart';
+import '../services/discount_selection_service.dart';
 
 final FirebaseFunctions _functions =
     FirebaseFunctions.instanceFor(region: 'europe-west3');
@@ -45,6 +46,7 @@ class ProductPaymentProvider with ChangeNotifier {
   final bool useFreeShipping;
   double couponDiscount = 0.0;
   UserBenefit? _usedFreeShippingBenefit;
+  final String? selectedBenefitId;
 
   final List<Map<String, dynamic>> items;
 
@@ -53,6 +55,7 @@ class ProductPaymentProvider with ChangeNotifier {
     required this.cartCalculatedTotal,
     this.appliedCoupon, // Add this
     this.useFreeShipping = false, // Add this
+    this.selectedBenefitId,
   }) {
     _calculateCouponDiscount(); // Add this
     _findFreeShippingBenefit(); // Add this
@@ -73,7 +76,16 @@ class ProductPaymentProvider with ChangeNotifier {
   /// Find the free shipping benefit to use
   void _findFreeShippingBenefit() {
     if (useFreeShipping) {
-      _usedFreeShippingBenefit = CouponService().availableFreeShipping;
+      // ✅ Use the specific benefit ID if provided, otherwise fall back to first available
+      if (selectedBenefitId != null) {
+        _usedFreeShippingBenefit = CouponService()
+            .benefitsNotifier
+            .value
+            .where((b) => b.id == selectedBenefitId && b.isValid)
+            .firstOrNull;
+      }
+      // Fallback to first available if specific one not found
+      _usedFreeShippingBenefit ??= CouponService().availableFreeShipping;
     }
   }
 
@@ -370,6 +382,8 @@ class ProductPaymentProvider with ChangeNotifier {
       if (paymentResult == true) {
         if (!context.mounted) return false;
 
+        await DiscountSelectionService().clearAllSelections();
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Ödeme başarılı! Siparişiniz oluşturuldu.'),
@@ -397,16 +411,27 @@ class ProductPaymentProvider with ChangeNotifier {
           errorMessage = 'Geçersiz bilgi. Lütfen kontrol edin.';
         } else if (e.code == 'failed-precondition') {
           final msg = e.message ?? '';
-          if (msg.contains('Coupon has already been used')) {
-            errorMessage = AppLocalizations.of(context).couponAlreadyUsed;
-          } else if (msg.contains('Coupon has expired')) {
-            errorMessage = AppLocalizations.of(context).couponExpired;
-          } else if (msg.contains('Free shipping has already been used')) {
-            errorMessage = AppLocalizations.of(context).freeShippingAlreadyUsed;
-          } else if (msg.contains('Free shipping benefit has expired')) {
-            errorMessage = AppLocalizations.of(context).freeShippingExpired;
-          } else if (msg.contains('Coupon not found')) {
-            errorMessage = AppLocalizations.of(context).couponNotFound;
+
+          // ✅ ADD: Clear invalid coupon/benefit from local storage
+          final discountService = DiscountSelectionService();
+
+          if (msg.contains('Coupon has already been used') ||
+              msg.contains('Coupon has expired') ||
+              msg.contains('Coupon not found')) {
+            errorMessage = msg.contains('already been used')
+                ? AppLocalizations.of(context).couponAlreadyUsed
+                : msg.contains('expired')
+                    ? AppLocalizations.of(context).couponExpired
+                    : AppLocalizations.of(context).couponNotFound;
+            // Clear the invalid coupon selection
+            discountService.selectCoupon(null);
+          } else if (msg.contains('Free shipping has already been used') ||
+              msg.contains('Free shipping benefit has expired')) {
+            errorMessage = msg.contains('already been used')
+                ? AppLocalizations.of(context).freeShippingAlreadyUsed
+                : AppLocalizations.of(context).freeShippingExpired;
+            // Clear the invalid free shipping selection
+            discountService.setFreeShipping(false);
           } else {
             errorMessage = e.message ?? AppLocalizations.of(context).stockIssue;
           }

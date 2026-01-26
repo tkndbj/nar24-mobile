@@ -942,6 +942,7 @@ async function createOrderTransaction(buyerId, requestData) {
         couponDiscount: serverCouponDiscount,
         couponCode: discountResult.couponCode,
         freeShippingApplied: discountResult.freeShippingApplied,
+        originalDeliveryPrice: clientDeliveryPrice || 0,
         language: userLanguage,
         status: 'pending',
         pickupPoint: deliveryOption === 'pickup' ? {
@@ -5919,6 +5920,12 @@ export const generateReceiptBackground = onDocumentCreated(
         currency: taskData.currency,
         paymentMethod: taskData.paymentMethod,
         deliveryOption: taskData.deliveryOption || 'normal',
+        couponCode: taskData.couponCode || null,
+        couponDiscount: taskData.couponDiscount || 0,
+        freeShippingApplied: taskData.freeShippingApplied || false,
+        originalDeliveryPrice: taskData.originalDeliveryPrice || 0,
+        totalSavings: (taskData.couponDiscount || 0) + 
+          (taskData.freeShippingApplied ? (taskData.originalDeliveryPrice || 0) : 0),
         filePath,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       };
@@ -6021,6 +6028,8 @@ async function generateReceipt(data) {
         subtotal: 'Subtotal',
         free: 'Free',
         pickupName: 'Pickup Point',
+        couponDiscount: 'Coupon Discount',
+    freeShippingBenefit: 'Free Shipping Benefit',    
         pickupAddress: 'Address',
         pickupPhone: 'Contact Phone',
         pickupHours: 'Operating Hours',
@@ -6057,6 +6066,8 @@ async function generateReceipt(data) {
         free: 'Ücretsiz',
         pickupName: 'Gel-Al Noktası',
         pickupAddress: 'Adres',
+        couponDiscount: 'Kupon İndirimi',
+        freeShippingBenefit: 'Ücretsiz Kargo Avantajı',
         pickupPhone: 'İletişim Telefonu',
         pickupHours: 'Çalışma Saatleri',
         pickupContact: 'İletişim Kişisi',
@@ -6087,6 +6098,8 @@ async function generateReceipt(data) {
         phone: 'Телефон',
         address: 'Адрес',
         city: 'Город',
+        couponDiscount: 'Скидка по купону',
+        freeShippingBenefit: 'Бесплатная доставка',
         pickupName: 'Пункт выдачи',
         pickupAddress: 'Адрес',
         pickupPhone: 'Контактный телефон',
@@ -6470,9 +6483,12 @@ doc.fillColor('#666')
     yPosition += 15;
 
     // Calculate values FIRST
-    const deliveryPrice = data.deliveryPrice || 0;
-    const subtotal = data.itemsSubtotal || (data.totalPrice - deliveryPrice);
-    const grandTotal = subtotal + deliveryPrice;
+    const originalDeliveryPrice = data.originalDeliveryPrice || data.deliveryPrice || 0;
+const deliveryPrice = data.deliveryPrice || 0;
+const couponDiscount = data.couponDiscount || 0;
+const freeShippingApplied = data.freeShippingApplied || false;
+const subtotal = data.itemsSubtotal || (data.totalPrice - deliveryPrice + couponDiscount);
+const grandTotal = data.totalPrice;
 
     // Subtotal row
     doc.font(titleFont)
@@ -6484,35 +6500,82 @@ doc.fillColor('#666')
 
     yPosition += 20;
 
-   // Delivery price row - Only show for regular orders, not boost receipts
-if (data.receiptType !== 'boost') {
-  const deliveryText = deliveryPrice === 0 ? t.free : `${deliveryPrice.toFixed(0)} ${data.currency}`;
-  const deliveryColor = deliveryPrice === 0 ? '#00A86B' : '#333';
+    if (couponDiscount > 0) {
+      doc.font(titleFont)
+        .fontSize(11)
+        .fillColor('#666')
+        .text(`${t.couponDiscount}:`, 390, yPosition)
+        .fillColor('#00A86B')
+        .text(`-${couponDiscount.toFixed(0)} ${data.currency}`, 460, yPosition, {width: 80, align: 'right'});
+    
+      yPosition += 20;
+    }
 
-  doc.font(titleFont)
-    .fontSize(11)
-    .fillColor('#666')
-    .text(`${t.deliveryPrice}:`, 390, yPosition)
-    .fillColor(deliveryColor)
-    .text(deliveryText, 460, yPosition, {width: 80, align: 'right'});
-
-  yPosition += 25;
-}
-
+    if (data.receiptType !== 'boost') {
+      // ✅ UPDATED: Show free shipping benefit
+      if (freeShippingApplied && originalDeliveryPrice > 0) {
+        // Show original price struck through and "Free" 
+        doc.font(titleFont)
+          .fontSize(11)
+          .fillColor('#666')
+          .text(`${t.deliveryPrice}:`, 390, yPosition);
+        
+        // Show original price with strikethrough effect (gray)
+        doc.fillColor('#999')
+          .text(`${originalDeliveryPrice.toFixed(0)}`, 460, yPosition, {width: 40, align: 'right'});
+        
+        // Draw strikethrough line
+        const textWidth = doc.widthOfString(`${originalDeliveryPrice.toFixed(0)}`);
+        doc.moveTo(500 - textWidth, yPosition + 5)
+          .lineTo(502, yPosition + 5)
+          .strokeColor('#999')
+          .lineWidth(1)
+          .stroke();
+        
+        // Show "Free" in green
+        doc.fillColor('#00A86B')
+          .text(t.free, 505, yPosition, {width: 35, align: 'right'});
+        
+        yPosition += 18;
+        
+        // Show benefit label
+        doc.fontSize(9)
+          .fillColor('#00A86B')
+          .text(`✓ ${t.freeShippingBenefit}`, 390, yPosition);
+        
+        yPosition += 20;
+      } else {
+        // Normal delivery display (no free shipping benefit)
+        const deliveryText = deliveryPrice === 0 ? t.free : `${deliveryPrice.toFixed(0)} ${data.currency}`;
+        const deliveryColor = deliveryPrice === 0 ? '#00A86B' : '#333';
+    
+        doc.font(titleFont)
+          .fontSize(11)
+          .fillColor('#666')
+          .text(`${t.deliveryPrice}:`, 390, yPosition)
+          .fillColor(deliveryColor)
+          .text(deliveryText, 460, yPosition, {width: 80, align: 'right'});
+    
+        yPosition += 25;
+      }
+    }
+    
+    yPosition += 5;
+    
     // Divider line
     doc.moveTo(380, yPosition - 5)
       .lineTo(550, yPosition - 5)
       .strokeColor('#333')
       .lineWidth(1.5)
       .stroke();
-
+    
     yPosition += 10;
-
-    // Total with background - USE grandTotal here
+    
+    // Total with background
     doc.rect(380, yPosition - 10, 170, 35)
       .fillColor('#f0f8f0')
       .fill();
-
+    
     doc.font(titleFont)
       .fontSize(14)
       .fillColor('#333')

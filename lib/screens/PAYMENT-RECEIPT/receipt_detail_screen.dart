@@ -99,403 +99,410 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
                   ),
                 ),
                 child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      // Modal handle
-                      Center(
-                        child: Container(
-                          width: 40,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.grey[600] : Colors.grey[300],
-                            borderRadius: BorderRadius.circular(2),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Modal handle
+                        Center(
+                          child: Container(
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color:
+                                  isDark ? Colors.grey[600] : Colors.grey[300],
+                              borderRadius: BorderRadius.circular(2),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
+                        const SizedBox(height: 24),
 
-                      // Icon and title
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Colors.orange, Colors.pink],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
+                        // Icon and title
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Colors.orange, Colors.pink],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              borderRadius: BorderRadius.circular(12),
+                              child: const Icon(
+                                FeatherIcons.grid,
+                                color: Colors.white,
+                                size: 20,
+                              ),
                             ),
-                            child: const Icon(
-                              FeatherIcons.grid,
-                              color: Colors.white,
-                              size: 20,
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    l10n.deliveryQRCode ?? 'Delivery QR Code',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color:
+                                          isDark ? Colors.white : Colors.black,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    l10n.showThisToDelivery ??
+                                        'Show this to the delivery person',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: isDark
+                                          ? Colors.grey[400]
+                                          : Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Order info badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.orange.withOpacity(0.1),
+                                Colors.pink.withOpacity(0.1),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.orange.withOpacity(0.3),
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  l10n.deliveryQRCode ?? 'Delivery QR Code',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                    color: isDark ? Colors.white : Colors.black,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                FeatherIcons.package,
+                                size: 16,
+                                color: Colors.orange,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${l10n.orders ?? "Order"} #${widget.receipt.orderId.substring(0, 8).toUpperCase()}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.orange,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // QR Code Display
+                        if (hasQR) ...[
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.network(
+                                _deliveryQRUrl!,
+                                width: 250,
+                                height: 250,
+                                fit: BoxFit.contain,
+                                loadingBuilder:
+                                    (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return SizedBox(
+                                    width: 250,
+                                    height: 250,
+                                    child: Center(
+                                      child: CircularProgressIndicator(
+                                        value: loadingProgress
+                                                    .expectedTotalBytes !=
+                                                null
+                                            ? loadingProgress
+                                                    .cumulativeBytesLoaded /
+                                                loadingProgress
+                                                    .expectedTotalBytes!
+                                            : null,
+                                        color: Colors.orange,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) {
+                                  return SizedBox(
+                                    width: 250,
+                                    height: 250,
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          FeatherIcons.alertCircle,
+                                          size: 48,
+                                          color: Colors.red[300],
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Text(
+                                          l10n.failedToLoadQR ??
+                                              'Failed to load QR code',
+                                          style: TextStyle(
+                                            color: Colors.grey[600],
+                                            fontSize: 14,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                        const SizedBox(height: 12),
+                                        TextButton.icon(
+                                          onPressed: () {
+                                            setModalState(() {});
+                                          },
+                                          icon: const Icon(
+                                              FeatherIcons.refreshCw,
+                                              size: 16),
+                                          label: Text(l10n.retry ?? 'Retry'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+
+                          // Share button
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: _isSharingQR
+                                    ? null
+                                    : const LinearGradient(
+                                        colors: [Colors.orange, Colors.pink],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                color: _isSharingQR ? Colors.grey : null,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: _isSharingQR
+                                      ? null
+                                      : () async {
+                                          setModalState(() {
+                                            _isSharingQR = true;
+                                          });
+
+                                          await _shareQRCode();
+
+                                          setModalState(() {
+                                            _isSharingQR = false;
+                                          });
+                                        },
+                                  child: Center(
+                                    child: _isSharingQR
+                                        ? const SizedBox(
+                                            height: 20,
+                                            width: 20,
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              const Icon(
+                                                FeatherIcons.share2,
+                                                color: Colors.white,
+                                                size: 18,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                l10n.shareQRCode ??
+                                                    'Share QR Code',
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 15,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                   ),
                                 ),
-                                const SizedBox(height: 4),
+                              ),
+                            ),
+                          ),
+                        ] else ...[
+                          // QR not available state
+                          Container(
+                            padding: const EdgeInsets.all(32),
+                            decoration: BoxDecoration(
+                              color:
+                                  isDark ? Colors.grey[800] : Colors.grey[100],
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Column(
+                              children: [
+                                Icon(
+                                  qrStatus == 'processing'
+                                      ? FeatherIcons.loader
+                                      : qrStatus == 'failed'
+                                          ? FeatherIcons.alertCircle
+                                          : FeatherIcons.clock,
+                                  size: 64,
+                                  color: qrStatus == 'failed'
+                                      ? Colors.red[400]
+                                      : Colors.orange,
+                                ),
+                                const SizedBox(height: 16),
                                 Text(
-                                  l10n.showThisToDelivery ??
-                                      'Show this to the delivery person',
+                                  qrStatus == 'processing'
+                                      ? (l10n.qrGenerating ??
+                                          'Generating QR Code...')
+                                      : qrStatus == 'failed'
+                                          ? (l10n.qrGenerationFailed ??
+                                              'QR generation failed')
+                                          : (l10n.qrNotReady ??
+                                              'QR Code not ready yet'),
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color:
+                                        isDark ? Colors.white : Colors.black87,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  qrStatus == 'processing'
+                                      ? (l10n.pleaseWaitQR ??
+                                          'Please wait a moment...')
+                                      : qrStatus == 'failed'
+                                          ? (l10n.tapToRetryQR ??
+                                              'Tap to retry')
+                                          : (l10n.qrWillBeReady ??
+                                              'It will be ready shortly'),
                                   style: TextStyle(
                                     fontSize: 13,
                                     color: isDark
                                         ? Colors.grey[400]
                                         : Colors.grey[600],
                                   ),
+                                  textAlign: TextAlign.center,
                                 ),
+                                if (qrStatus == 'failed') ...[
+                                  const SizedBox(height: 16),
+                                  TextButton.icon(
+                                    onPressed: _isQRLoading
+                                        ? null
+                                        : () async {
+                                            setModalState(() {
+                                              _isQRLoading = true;
+                                            });
+
+                                            await _retryQRGeneration();
+
+                                            setModalState(() {
+                                              _isQRLoading = false;
+                                            });
+
+                                            Navigator.pop(context);
+                                          },
+                                    icon: _isQRLoading
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.orange,
+                                            ),
+                                          )
+                                        : const Icon(FeatherIcons.refreshCw,
+                                            size: 16),
+                                    label: Text(_isQRLoading
+                                        ? (l10n.retrying ?? 'Retrying...')
+                                        : (l10n.retry ?? 'Retry')),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: Colors.orange,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 24),
+                        const SizedBox(height: 16),
 
-                      // Order info badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.orange.withOpacity(0.1),
-                              Colors.pink.withOpacity(0.1),
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.orange.withOpacity(0.3),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              FeatherIcons.package,
-                              size: 16,
-                              color: Colors.orange,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '${l10n.orders ?? "Order"} #${widget.receipt.orderId.substring(0, 8).toUpperCase()}',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.orange,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // QR Code Display
-                      if (hasQR) ...[
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.network(
-                              _deliveryQRUrl!,
-                              width: 250,
-                              height: 250,
-                              fit: BoxFit.contain,
-                              loadingBuilder:
-                                  (context, child, loadingProgress) {
-                                if (loadingProgress == null) return child;
-                                return SizedBox(
-                                  width: 250,
-                                  height: 250,
-                                  child: Center(
-                                    child: CircularProgressIndicator(
-                                      value:
-                                          loadingProgress.expectedTotalBytes !=
-                                                  null
-                                              ? loadingProgress
-                                                      .cumulativeBytesLoaded /
-                                                  loadingProgress
-                                                      .expectedTotalBytes!
-                                              : null,
-                                      color: Colors.orange,
-                                    ),
-                                  ),
-                                );
-                              },
-                              errorBuilder: (context, error, stackTrace) {
-                                return SizedBox(
-                                  width: 250,
-                                  height: 250,
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        FeatherIcons.alertCircle,
-                                        size: 48,
-                                        color: Colors.red[300],
-                                      ),
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        l10n.failedToLoadQR ??
-                                            'Failed to load QR code',
-                                        style: TextStyle(
-                                          color: Colors.grey[600],
-                                          fontSize: 14,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                      const SizedBox(height: 12),
-                                      TextButton.icon(
-                                        onPressed: () {
-                                          setModalState(() {});
-                                        },
-                                        icon: const Icon(FeatherIcons.refreshCw,
-                                            size: 16),
-                                        label: Text(l10n.retry ?? 'Retry'),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Share button
+                        // Close button
                         SizedBox(
                           width: double.infinity,
                           height: 50,
                           child: Container(
                             decoration: BoxDecoration(
-                              gradient: _isSharingQR
-                                  ? null
-                                  : const LinearGradient(
-                                      colors: [Colors.orange, Colors.pink],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                              color: _isSharingQR ? Colors.grey : null,
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.grey[600]!
+                                    : Colors.grey[300]!,
+                              ),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Material(
                               color: Colors.transparent,
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(12),
-                                onTap: _isSharingQR
-                                    ? null
-                                    : () async {
-                                        setModalState(() {
-                                          _isSharingQR = true;
-                                        });
-
-                                        await _shareQRCode();
-
-                                        setModalState(() {
-                                          _isSharingQR = false;
-                                        });
-                                      },
+                                onTap: () => Navigator.pop(context),
                                 child: Center(
-                                  child: _isSharingQR
-                                      ? const SizedBox(
-                                          height: 20,
-                                          width: 20,
-                                          child: CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            const Icon(
-                                              FeatherIcons.share2,
-                                              color: Colors.white,
-                                              size: 18,
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              l10n.shareQRCode ??
-                                                  'Share QR Code',
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: 15,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
+                                  child: Text(
+                                    l10n.close ?? 'Close',
+                                    style: TextStyle(
+                                      color: isDark
+                                          ? Colors.grey[300]
+                                          : Colors.grey[700],
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ),
-                      ] else ...[
-                        // QR not available state
-                        Container(
-                          padding: const EdgeInsets.all(32),
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.grey[800] : Colors.grey[100],
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Column(
-                            children: [
-                              Icon(
-                                qrStatus == 'processing'
-                                    ? FeatherIcons.loader
-                                    : qrStatus == 'failed'
-                                        ? FeatherIcons.alertCircle
-                                        : FeatherIcons.clock,
-                                size: 64,
-                                color: qrStatus == 'failed'
-                                    ? Colors.red[400]
-                                    : Colors.orange,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                qrStatus == 'processing'
-                                    ? (l10n.qrGenerating ??
-                                        'Generating QR Code...')
-                                    : qrStatus == 'failed'
-                                        ? (l10n.qrGenerationFailed ??
-                                            'QR generation failed')
-                                        : (l10n.qrNotReady ??
-                                            'QR Code not ready yet'),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark ? Colors.white : Colors.black87,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                qrStatus == 'processing'
-                                    ? (l10n.pleaseWaitQR ??
-                                        'Please wait a moment...')
-                                    : qrStatus == 'failed'
-                                        ? (l10n.tapToRetryQR ?? 'Tap to retry')
-                                        : (l10n.qrWillBeReady ??
-                                            'It will be ready shortly'),
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: isDark
-                                      ? Colors.grey[400]
-                                      : Colors.grey[600],
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              if (qrStatus == 'failed') ...[
-                                const SizedBox(height: 16),
-                                TextButton.icon(
-                                  onPressed: _isQRLoading
-                                      ? null
-                                      : () async {
-                                          setModalState(() {
-                                            _isQRLoading = true;
-                                          });
-
-                                          await _retryQRGeneration();
-
-                                          setModalState(() {
-                                            _isQRLoading = false;
-                                          });
-
-                                          Navigator.pop(context);
-                                        },
-                                  icon: _isQRLoading
-                                      ? const SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.orange,
-                                          ),
-                                        )
-                                      : const Icon(FeatherIcons.refreshCw,
-                                          size: 16),
-                                  label: Text(_isQRLoading
-                                      ? (l10n.retrying ?? 'Retrying...')
-                                      : (l10n.retry ?? 'Retry')),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: Colors.orange,
-                                  ),
-                                ),
-                              ],
-                            ],
                           ),
                         ),
                       ],
-                      const SizedBox(height: 16),
-
-                      // Close button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: isDark
-                                  ? Colors.grey[600]!
-                                  : Colors.grey[300]!,
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: () => Navigator.pop(context),
-                              child: Center(
-                                child: Text(
-                                  l10n.close ?? 'Close',
-                                  style: TextStyle(
-                                    color: isDark
-                                        ? Colors.grey[300]
-                                        : Colors.grey[700],
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
             );
           },
         );
@@ -664,175 +671,66 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
                   bottom: MediaQuery.of(context).viewInsets.bottom,
                 ),
                 child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Modal handle
-                      Center(
-                        child: Container(
-                          width: 40,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.grey[600] : Colors.grey[300],
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Icon and title
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Modal handle
+                        Center(
+                          child: Container(
+                            width: 40,
+                            height: 4,
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Colors.orange, Colors.pink],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              FeatherIcons.mail,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  l10n.sendReceiptByEmail ??
-                                      'Send Receipt by Email',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                    color: isDark ? Colors.white : Colors.black,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  l10n.receiptWillBeSentToEmail ??
-                                      'Your receipt will be sent to the email below',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: isDark
-                                        ? Colors.grey[400]
-                                        : Colors.grey[600],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Email input field
-                      Text(
-                        l10n.emailAddress ?? 'Email Address',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white : Colors.black,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: isDark ? Colors.grey[800] : Colors.grey[100],
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: TextField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          style: TextStyle(
-                            color: isDark ? Colors.white : Colors.black,
-                            fontSize: 15,
-                          ),
-                          decoration: InputDecoration(
-                            hintText:
-                                l10n.enterEmailAddress ?? 'Enter email address',
-                            hintStyle: TextStyle(
                               color:
-                                  isDark ? Colors.grey[500] : Colors.grey[400],
-                            ),
-                            prefixIcon: Icon(
-                              FeatherIcons.mail,
-                              color:
-                                  isDark ? Colors.grey[400] : Colors.grey[600],
-                              size: 18,
-                            ),
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 14,
+                                  isDark ? Colors.grey[600] : Colors.grey[300],
+                              borderRadius: BorderRadius.circular(2),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
+                        const SizedBox(height: 24),
 
-                      // Receipt preview
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.orange.withOpacity(0.1),
-                              Colors.pink.withOpacity(0.1),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.orange.withOpacity(0.3),
-                          ),
-                        ),
-                        child: Row(
+                        // Icon and title
+                        Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.all(8),
+                              padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 gradient: const LinearGradient(
                                   colors: [Colors.orange, Colors.pink],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Icon(
-                                FeatherIcons.fileText,
+                                FeatherIcons.mail,
                                 color: Colors.white,
-                                size: 16,
+                                size: 20,
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 16),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '${l10n.receipt ?? "Receipt"} #${widget.receipt.receiptId.substring(0, 8).toUpperCase()}',
+                                    l10n.sendReceiptByEmail ??
+                                        'Send Receipt by Email',
                                     style: TextStyle(
-                                      fontSize: 14,
+                                      fontSize: 18,
                                       fontWeight: FontWeight.w600,
                                       color:
                                           isDark ? Colors.white : Colors.black,
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
+                                  const SizedBox(height: 4),
                                   Text(
-                                    '${l10n.orders ?? "Order"} #${widget.receipt.orderId.substring(0, 8).toUpperCase()}',
+                                    l10n.receiptWillBeSentToEmail ??
+                                        'Your receipt will be sent to the email below',
                                     style: TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 13,
                                       color: isDark
                                           ? Colors.grey[400]
                                           : Colors.grey[600],
@@ -841,160 +739,276 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
                                 ],
                               ),
                             ),
-                            Text(
-                              '${widget.receipt.totalPrice.toStringAsFixed(0)} ${widget.receipt.currency}',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.green,
-                              ),
-                            ),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: 24),
+                        const SizedBox(height: 24),
 
-                      // Action buttons
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              height: 50,
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: isDark
-                                      ? Colors.grey[600]!
-                                      : Colors.grey[300]!,
-                                ),
-                                borderRadius: BorderRadius.circular(12),
+                        // Email input field
+                        Text(
+                          l10n.emailAddress ?? 'Email Address',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white : Colors.black,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.grey[800] : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: TextField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black,
+                              fontSize: 15,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: l10n.enterEmailAddress ??
+                                  'Enter email address',
+                              hintStyle: TextStyle(
+                                color: isDark
+                                    ? Colors.grey[500]
+                                    : Colors.grey[400],
                               ),
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(12),
-                                  onTap: _isSendingEmail
-                                      ? null
-                                      : () => Navigator.pop(context),
-                                  child: Center(
-                                    child: Text(
-                                      l10n.cancel ?? 'Cancel',
+                              prefixIcon: Icon(
+                                FeatherIcons.mail,
+                                color: isDark
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600],
+                                size: 18,
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Receipt preview
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.orange.withOpacity(0.1),
+                                Colors.pink.withOpacity(0.1),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.orange.withOpacity(0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Colors.orange, Colors.pink],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  FeatherIcons.fileText,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${l10n.receipt ?? "Receipt"} #${widget.receipt.receiptId.substring(0, 8).toUpperCase()}',
                                       style: TextStyle(
-                                        color: isDark
-                                            ? Colors.grey[300]
-                                            : Colors.grey[700],
+                                        fontSize: 14,
                                         fontWeight: FontWeight.w600,
+                                        color: isDark
+                                            ? Colors.white
+                                            : Colors.black,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${l10n.orders ?? "Order"} #${widget.receipt.orderId.substring(0, 8).toUpperCase()}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isDark
+                                            ? Colors.grey[400]
+                                            : Colors.grey[600],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                '${widget.receipt.totalPrice.toStringAsFixed(0)} ${widget.receipt.currency}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.green,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Action buttons
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Container(
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: isDark
+                                        ? Colors.grey[600]!
+                                        : Colors.grey[300]!,
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(12),
+                                    onTap: _isSendingEmail
+                                        ? null
+                                        : () => Navigator.pop(context),
+                                    child: Center(
+                                      child: Text(
+                                        l10n.cancel ?? 'Cancel',
+                                        style: TextStyle(
+                                          color: isDark
+                                              ? Colors.grey[300]
+                                              : Colors.grey[700],
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Container(
-                              height: 50,
-                              decoration: BoxDecoration(
-                                gradient: _isSendingEmail
-                                    ? null
-                                    : const LinearGradient(
-                                        colors: [Colors.orange, Colors.pink],
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      ),
-                                color: _isSendingEmail ? Colors.grey : null,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(12),
-                                  onTap: _isSendingEmail
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Container(
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  gradient: _isSendingEmail
                                       ? null
-                                      : () async {
-                                          if (_emailController.text.isEmpty) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              SnackBar(
-                                                content: Text(l10n
-                                                        .pleaseEnterEmail ??
-                                                    'Please enter an email address'),
-                                                backgroundColor: Colors.orange,
-                                                behavior:
-                                                    SnackBarBehavior.floating,
-                                              ),
-                                            );
-                                            return;
-                                          }
-
-                                          setModalState(() {
-                                            _isSendingEmail = true;
-                                          });
-
-                                          final success =
-                                              await _sendReceiptByEmail(
-                                                  _emailController.text);
-
-                                          setModalState(() {
-                                            _isSendingEmail = false;
-                                          });
-
-                                          if (success) {
-                                            Navigator.pop(context);
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              SnackBar(
-                                                content: Text(l10n
-                                                        .receiptSentSuccessfully ??
-                                                    'Receipt sent successfully!'),
-                                                backgroundColor: Colors.green,
-                                                behavior:
-                                                    SnackBarBehavior.floating,
-                                              ),
-                                            );
-                                          }
-                                        },
-                                  child: Center(
-                                    child: _isSendingEmail
-                                        ? const SizedBox(
-                                            height: 20,
-                                            width: 20,
-                                            child: CircularProgressIndicator(
-                                              color: Colors.white,
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              const Icon(
-                                                FeatherIcons.send,
-                                                color: Colors.white,
-                                                size: 18,
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                l10n.sendEmail ?? 'Send Email',
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.w600,
+                                      : const LinearGradient(
+                                          colors: [Colors.orange, Colors.pink],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                  color: _isSendingEmail ? Colors.grey : null,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(12),
+                                    onTap: _isSendingEmail
+                                        ? null
+                                        : () async {
+                                            if (_emailController.text.isEmpty) {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                SnackBar(
+                                                  content: Text(l10n
+                                                          .pleaseEnterEmail ??
+                                                      'Please enter an email address'),
+                                                  backgroundColor:
+                                                      Colors.orange,
+                                                  behavior:
+                                                      SnackBarBehavior.floating,
                                                 ),
+                                              );
+                                              return;
+                                            }
+
+                                            setModalState(() {
+                                              _isSendingEmail = true;
+                                            });
+
+                                            final success =
+                                                await _sendReceiptByEmail(
+                                                    _emailController.text);
+
+                                            setModalState(() {
+                                              _isSendingEmail = false;
+                                            });
+
+                                            if (success) {
+                                              Navigator.pop(context);
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                SnackBar(
+                                                  content: Text(l10n
+                                                          .receiptSentSuccessfully ??
+                                                      'Receipt sent successfully!'),
+                                                  backgroundColor: Colors.green,
+                                                  behavior:
+                                                      SnackBarBehavior.floating,
+                                                ),
+                                              );
+                                            }
+                                          },
+                                    child: Center(
+                                      child: _isSendingEmail
+                                          ? const SizedBox(
+                                              height: 20,
+                                              width: 20,
+                                              child: CircularProgressIndicator(
+                                                color: Colors.white,
+                                                strokeWidth: 2,
                                               ),
-                                            ],
-                                          ),
+                                            )
+                                          : Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                const Icon(
+                                                  FeatherIcons.send,
+                                                  color: Colors.white,
+                                                  size: 18,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  l10n.sendEmail ??
+                                                      'Send Email',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
             );
           },
         );
@@ -1101,33 +1115,33 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
                 )
               : SingleChildScrollView(
                   child: Column(
-                  children: [
-                    _buildReceiptHeader(context, isDark, l10n, theme),
-                    const SizedBox(height: 24),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Column(
-                        children: [
-                          _buildOrderInfo(context, isDark, l10n, theme),
-                          const SizedBox(height: 16),
-                          if (_orderData != null &&
-                              _orderData!['address'] != null)
-                            _buildDeliveryInfo(context, isDark, l10n, theme),
-                          if (_orderData != null &&
-                              _orderData!['address'] != null)
+                    children: [
+                      _buildReceiptHeader(context, isDark, l10n, theme),
+                      const SizedBox(height: 24),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Column(
+                          children: [
+                            _buildOrderInfo(context, isDark, l10n, theme),
                             const SizedBox(height: 16),
-                          if (_orderItems.isNotEmpty)
-                            _buildItemsList(context, isDark, l10n, theme),
-                          if (_orderItems.isNotEmpty)
-                            const SizedBox(height: 16),
-                          _buildPriceSummary(context, isDark, l10n, theme),
-                          const SizedBox(height: 32),
-                        ],
+                            if (_orderData != null &&
+                                _orderData!['address'] != null)
+                              _buildDeliveryInfo(context, isDark, l10n, theme),
+                            if (_orderData != null &&
+                                _orderData!['address'] != null)
+                              const SizedBox(height: 16),
+                            if (_orderItems.isNotEmpty)
+                              _buildItemsList(context, isDark, l10n, theme),
+                            if (_orderItems.isNotEmpty)
+                              const SizedBox(height: 16),
+                            _buildPriceSummary(context, isDark, l10n, theme),
+                            const SizedBox(height: 32),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
         ),
       ),
     );
@@ -1655,10 +1669,19 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
 
   Widget _buildPriceSummary(BuildContext context, bool isDark,
       AppLocalizations l10n, ThemeData theme) {
-    final theme = Theme.of(context);
     final subtotal = widget.receipt.itemsSubtotal;
     final deliveryPrice = widget.receipt.deliveryPrice;
     final grandTotal = widget.receipt.totalPrice;
+
+    // Get coupon/benefit data
+    final couponCode = widget.receipt.couponCode;
+    final couponDiscount = widget.receipt.couponDiscount;
+    final freeShippingApplied = widget.receipt.freeShippingApplied;
+    final originalDeliveryPrice = widget.receipt.originalDeliveryPrice;
+
+    // Calculate total savings
+    final shippingSavings = freeShippingApplied ? originalDeliveryPrice : 0.0;
+    final totalSavings = couponDiscount + shippingSavings;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1675,6 +1698,7 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
       ),
       child: Column(
         children: [
+          // Header
           Row(
             children: [
               Container(
@@ -1705,6 +1729,8 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
             ],
           ),
           const SizedBox(height: 16),
+
+          // Subtotal row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1725,31 +1751,188 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
               ),
             ],
           ),
+
+          // Coupon discount row (if applied)
+          if (couponDiscount > 0) ...[
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      FeatherIcons.tag,
+                      size: 14,
+                      color: Colors.green[600],
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      couponCode != null && couponCode.isNotEmpty
+                          ? '${l10n.coupon ?? "Coupon"} ($couponCode)'
+                          : l10n.couponDiscount ?? 'Coupon Discount',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color:
+                            theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  '-${couponDiscount.toStringAsFixed(0)} ${widget.receipt.currency}',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.green[600],
+                  ),
+                ),
+              ],
+            ),
+          ],
+
           const SizedBox(height: 12),
+
+          // Delivery row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                l10n.delivery ?? 'Delivery',
-                style: TextStyle(
-                  fontSize: 15,
-                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
-                ),
+              Row(
+                children: [
+                  if (freeShippingApplied) ...[
+                    Icon(
+                      FeatherIcons.gift,
+                      size: 14,
+                      color: Colors.green[600],
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  Text(
+                    l10n.delivery ?? 'Delivery',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color:
+                          theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                deliveryPrice == 0
-                    ? l10n.free ?? 'Free'
-                    : '${deliveryPrice.toStringAsFixed(0)} ${widget.receipt.currency}',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: deliveryPrice == 0
-                      ? Colors.green
-                      : theme.textTheme.bodyMedium?.color,
-                ),
+              Row(
+                children: [
+                  // Show original price struck through if free shipping applied
+                  if (freeShippingApplied && originalDeliveryPrice > 0) ...[
+                    Text(
+                      '${originalDeliveryPrice.toStringAsFixed(0)} ${widget.receipt.currency}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color:
+                            theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+                        decoration: TextDecoration.lineThrough,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Text(
+                    deliveryPrice == 0
+                        ? l10n.free ?? 'Free'
+                        : '${deliveryPrice.toStringAsFixed(0)} ${widget.receipt.currency}',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: deliveryPrice == 0
+                          ? Colors.green[600]
+                          : theme.textTheme.bodyMedium?.color,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
+
+          // Free shipping benefit label
+          if (freeShippingApplied) ...[
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      FeatherIcons.check,
+                      size: 12,
+                      color: Colors.green[600],
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      l10n.freeShippingBenefit ?? 'Free Shipping Benefit',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.green[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
+          // Total savings row (if any discounts applied)
+          if (totalSavings > 0) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.green.withOpacity(0.15),
+                    Colors.green.withOpacity(0.05),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Colors.green.withOpacity(0.3),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        FeatherIcons.percent,
+                        size: 16,
+                        color: Colors.green[600],
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        l10n.youSaved ?? 'You Saved',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.green[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    '${totalSavings.toStringAsFixed(0)} ${widget.receipt.currency}',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Divider(
@@ -1757,6 +1940,8 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
               height: 1,
             ),
           ),
+
+          // Grand total
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(

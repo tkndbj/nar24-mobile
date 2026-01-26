@@ -5,6 +5,7 @@ import '../models/coupon.dart';
 import '../models/user_benefit.dart';
 import '../services/coupon_service.dart';
 import '../generated/l10n/app_localizations.dart';
+import '../services/discount_selection_service.dart';
 
 /// Bottom sheet for selecting coupons and free shipping during checkout
 class CouponSelectionSheet extends StatefulWidget {
@@ -28,6 +29,7 @@ class CouponSelectionSheet extends StatefulWidget {
 }
 
 class _CouponSelectionSheetState extends State<CouponSelectionSheet> {
+  final DiscountSelectionService _discountService = DiscountSelectionService();
   final CouponService _couponService = CouponService();
   Coupon? _tempSelectedCoupon;
   bool _tempUseFreeShipping = false;

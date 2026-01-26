@@ -21,6 +21,7 @@ import '../../services/coupon_service.dart';
 import '../../models/coupon.dart';
 import '../../widgets/coupon_selection_sheet.dart';
 import '../../models/user_benefit.dart';
+import '../../services/discount_selection_service.dart';
 
 class MyCartScreen extends StatefulWidget {
   const MyCartScreen({Key? key}) : super(key: key);
@@ -37,9 +38,8 @@ class _MyCartScreenState extends State<MyCartScreen>
   CartProvider? _cartProvider;
   final SalesConfigService _salesConfigService = SalesConfigService();
 
+  final DiscountSelectionService _discountService = DiscountSelectionService();
   final CouponService _couponService = CouponService();
-  Coupon? _selectedCoupon;
-  bool _useFreeShipping = false;
 
   // Pull-to-refresh cooldown (30 seconds)
   static const Duration _refreshCooldown = Duration(seconds: 30);
@@ -50,6 +50,7 @@ class _MyCartScreenState extends State<MyCartScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
+    _discountService.initialize();
   }
 
   @override
@@ -89,15 +90,15 @@ class _MyCartScreenState extends State<MyCartScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
-    // ✅ Keep lifecycle management (battery optimization)
     if (state == AppLifecycleState.paused) {
       _cartProvider?.disableLiveUpdates();
     } else if (state == AppLifecycleState.resumed) {
-      // ✅ Re-enable listener on resume
       if (FirebaseAuth.instance.currentUser != null &&
           _cartProvider?.isInitialized == true) {
         _cartProvider?.enableLiveUpdates();
       }
+      // Revalidate discount selections
+      _discountService.revalidateSelections();
     }
   }
 
@@ -325,8 +326,10 @@ class _MyCartScreenState extends State<MyCartScreen>
               builder: (context) => ProductPaymentScreen(
                 items: items,
                 totalPrice: totals.total,
-                appliedCoupon: _selectedCoupon, // Add this
-                useFreeShipping: _useFreeShipping, // Add this
+                appliedCoupon: _discountService.selectedCoupon, // CHANGED
+                useFreeShipping: _discountService.useFreeShipping, // CHANGED
+                selectedBenefitId:
+                    _discountService.selectedBenefit?.id, // ADD if needed
               ),
             ),
           );
@@ -402,8 +405,12 @@ class _MyCartScreenState extends State<MyCartScreen>
                         builder: (context) => ProductPaymentScreen(
                           items: validCartItems,
                           totalPrice: totals.total,
-                          appliedCoupon: _selectedCoupon, // ADD
-                          useFreeShipping: _useFreeShipping, // ADD
+                          appliedCoupon:
+                              _discountService.selectedCoupon, // CHANGED
+                          useFreeShipping:
+                              _discountService.useFreeShipping, // CHANGED
+                          selectedBenefitId: _discountService
+                              .selectedBenefit?.id, // ADD if needed
                         ),
                       ),
                     );
@@ -1070,7 +1077,7 @@ class _MyCartScreenState extends State<MyCartScreen>
                     : Theme.of(context).cardColor,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
+                    color: Colors.black.withOpacity(0.05),
                     blurRadius: 10,
                     offset: const Offset(0, -5),
                   ),
@@ -1080,7 +1087,7 @@ class _MyCartScreenState extends State<MyCartScreen>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // ✅ ADD: Sales paused banner
+                    // Sales paused banner
                     if (isSalesPaused)
                       Container(
                         width: double.infinity,
@@ -1090,10 +1097,10 @@ class _MyCartScreenState extends State<MyCartScreen>
                           vertical: 10,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.1),
+                          color: Colors.orange.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: Colors.orange.withValues(alpha: 0.3),
+                            color: Colors.orange.withOpacity(0.3),
                           ),
                         ),
                         child: Row(
@@ -1121,169 +1128,12 @@ class _MyCartScreenState extends State<MyCartScreen>
                         ),
                       ),
 
-                    // Compact Total + Coupons Section
-                    // Compact Total + Coupons Section
-                    ValueListenableBuilder<bool>(
-                      valueListenable: _cartProvider!.isTotalsLoadingNotifier,
-                      builder: (context, isLoading, _) {
-                        return ValueListenableBuilder<CartTotals?>(
-                          valueListenable: _cartProvider!.cartTotalsNotifier,
-                          builder: (context, totals, _) {
-                            if (isLoading ||
-                                (totals == null && selectedIds.isNotEmpty)) {
-                              return _buildTotalsShimmer(
-                                  l10n, selectedIds.length);
-                            }
+                    // ✅ NEW: Totals section with discount reflection
+                    _buildTotalsSection(l10n, selectedIds, isDark),
 
-                            if (totals == null || selectedIds.isEmpty) {
-                              return const SizedBox.shrink();
-                            }
-
-                            // Listen to BOTH coupons and benefits
-                            return ValueListenableBuilder<List<Coupon>>(
-                              valueListenable: _couponService.couponsNotifier,
-                              builder: (context, coupons, _) {
-                                return ValueListenableBuilder<
-                                    List<UserBenefit>>(
-                                  valueListenable:
-                                      _couponService.benefitsNotifier,
-                                  builder: (context, benefits, _) {
-                                    final hasAnyCouponsOrBenefits = coupons
-                                            .any((c) => c.isValid) ||
-                                        benefits.any((b) =>
-                                            b.isValid &&
-                                            b.type == BenefitType.freeShipping);
-
-                                    return Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        // Compact total row
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.end,
-                                          children: [
-                                            Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Text(
-                                                  '${selectedIds.length} ${l10n.items}',
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    color: Colors.grey[500],
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 2),
-                                                Text(
-                                                  '${totals.total.toStringAsFixed(2)} ${totals.currency}',
-                                                  style: const TextStyle(
-                                                    fontSize: 22,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Colors.orange,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            // Only show coupon button if user has any
-                                            if (hasAnyCouponsOrBenefits)
-                                              _buildCompactCouponButton(
-                                                  l10n, isDark),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 12),
-                                      ],
-                                    );
-                                  },
-                                );
-                              },
-                            );
-                          },
-                        );
-                      },
-                    ),
-
-                    // Checkout button - now considers sales paused state
-                    Builder(
-                      builder: (context) {
-                        final screenWidth = MediaQuery.of(context).size.width;
-                        final isTablet = screenWidth >= 600;
-
-                        // Button disabled when sales paused
-                        final isDisabled = selectedIds.isEmpty ||
-                            _isValidating ||
-                            isSalesPaused;
-
-                        final button = SizedBox(
-                          width: isTablet ? screenWidth * 0.5 : double.infinity,
-                          height: 50,
-                          child: ElevatedButton(
-                            onPressed: isDisabled ? null : _proceedToCheckout,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  isSalesPaused ? Colors.grey : Colors.orange,
-                              disabledBackgroundColor: Colors.grey[300],
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(0),
-                              ),
-                            ),
-                            child: _isValidating
-                                ? Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                                  Colors.white),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Text(
-                                        l10n.validating ?? 'Validating...',
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ],
-                                  )
-                                : Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      if (isSalesPaused) ...[
-                                        const Icon(
-                                          Icons.pause_circle_outline,
-                                          color: Colors.white,
-                                          size: 20,
-                                        ),
-                                        const SizedBox(width: 8),
-                                      ],
-                                      Text(
-                                        isSalesPaused
-                                            ? (l10n.checkoutPaused ??
-                                                'Checkout Paused')
-                                            : l10n.proceedToPayment,
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                          ),
-                        );
-
-                        return isTablet ? Center(child: button) : button;
-                      },
-                    ),
+                    // Checkout button
+                    _buildCheckoutButtonWidget(
+                        l10n, selectedIds, isSalesPaused),
                   ],
                 ),
               ),
@@ -1294,8 +1144,254 @@ class _MyCartScreenState extends State<MyCartScreen>
     );
   }
 
+  /// NEW: Extracted totals section with discount support
+  Widget _buildTotalsSection(
+      AppLocalizations l10n, List<String> selectedIds, bool isDark) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: _cartProvider!.isTotalsLoadingNotifier,
+      builder: (context, isLoading, _) {
+        return ValueListenableBuilder<CartTotals?>(
+          valueListenable: _cartProvider!.cartTotalsNotifier,
+          builder: (context, totals, _) {
+            if (isLoading || (totals == null && selectedIds.isNotEmpty)) {
+              return _buildTotalsShimmer(l10n, selectedIds.length);
+            }
+
+            if (totals == null || selectedIds.isEmpty) {
+              return const SizedBox.shrink();
+            }
+
+            // Listen to discount selections
+            return ValueListenableBuilder<Coupon?>(
+              valueListenable: _discountService.selectedCouponNotifier,
+              builder: (context, selectedCoupon, _) {
+                return ValueListenableBuilder<bool>(
+                  valueListenable: _discountService.useFreeShippingNotifier,
+                  builder: (context, useFreeShipping, _) {
+                    // Calculate discounts
+                    final subtotal = totals.total;
+                    final couponDiscount =
+                        _discountService.calculateCouponDiscount(subtotal);
+                    final finalTotal =
+                        _discountService.calculateFinalTotal(subtotal);
+                    final hasDiscount = couponDiscount > 0 || useFreeShipping;
+
+                    // Check if user has any available coupons/benefits
+                    return ValueListenableBuilder<List<Coupon>>(
+                      valueListenable: _couponService.couponsNotifier,
+                      builder: (context, coupons, _) {
+                        return ValueListenableBuilder<List<UserBenefit>>(
+                          valueListenable: _couponService.benefitsNotifier,
+                          builder: (context, benefits, _) {
+                            final hasAnyCouponsOrBenefits =
+                                coupons.any((c) => c.isValid) ||
+                                    benefits.any((b) =>
+                                        b.isValid &&
+                                        b.type == BenefitType.freeShipping);
+
+                            return Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Price breakdown when discount applied
+                                if (hasDiscount) ...[
+                                  _buildPriceBreakdown(
+                                    l10n: l10n,
+                                    subtotal: subtotal,
+                                    couponDiscount: couponDiscount,
+                                    useFreeShipping: useFreeShipping,
+                                    currency: totals.currency,
+                                    isDark: isDark,
+                                  ),
+                                  const SizedBox(height: 8),
+                                ],
+
+                                // Main total row
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          '${selectedIds.length} ${l10n.items}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey[500],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
+                                          children: [
+                                            // Show original price struck through if discounted
+                                            if (couponDiscount > 0) ...[
+                                              Text(
+                                                '${subtotal.toStringAsFixed(2)} ${totals.currency}',
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: Colors.grey[500],
+                                                  decoration: TextDecoration
+                                                      .lineThrough,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                            ],
+                                            Text(
+                                              '${finalTotal.toStringAsFixed(2)} ${totals.currency}',
+                                              style: TextStyle(
+                                                fontSize: 22,
+                                                fontWeight: FontWeight.bold,
+                                                color: hasDiscount
+                                                    ? Colors.green
+                                                    : Colors.orange,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                    // Coupon button
+                                    if (hasAnyCouponsOrBenefits)
+                                      _buildCompactCouponButton(l10n, isDark),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+                            );
+                          },
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// NEW: Price breakdown widget showing discount details
+  Widget _buildPriceBreakdown({
+    required AppLocalizations l10n,
+    required double subtotal,
+    required double couponDiscount,
+    required bool useFreeShipping,
+    required String currency,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.green.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: Colors.green.withOpacity(0.2),
+        ),
+      ),
+      child: Column(
+        children: [
+          // Subtotal row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                l10n.subtotal ?? 'Subtotal',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+              ),
+              Text(
+                '${subtotal.toStringAsFixed(2)} $currency',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+
+          // Coupon discount row
+          if (couponDiscount > 0) ...[
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.local_offer,
+                        size: 14, color: Colors.green),
+                    const SizedBox(width: 4),
+                    Text(
+                      _discountService.selectedCoupon?.code ??
+                          (l10n.coupon ?? 'Coupon'),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.green,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  '-${couponDiscount.toStringAsFixed(2)} $currency',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.green,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          // Free shipping row
+          if (useFreeShipping) ...[
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.local_shipping,
+                        size: 14, color: Colors.green),
+                    const SizedBox(width: 4),
+                    Text(
+                      l10n.freeShipping ?? 'Free Shipping',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.green,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  l10n.applied ?? 'Applied',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.green,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Updated compact coupon button
   Widget _buildCompactCouponButton(AppLocalizations l10n, bool isDark) {
-    final hasSelection = _selectedCoupon != null || _useFreeShipping;
+    final hasSelection = _discountService.hasAnyDiscount;
 
     return GestureDetector(
       onTap: _showCouponSheet,
@@ -1323,7 +1419,8 @@ class _MyCartScreenState extends State<MyCartScreen>
             const SizedBox(width: 6),
             Text(
               hasSelection
-                  ? (_selectedCoupon != null && _useFreeShipping
+                  ? (_discountService.selectedCoupon != null &&
+                          _discountService.useFreeShipping
                       ? '2 ${l10n.applied ?? "applied"}'
                       : '1 ${l10n.applied ?? "applied"}')
                   : l10n.addCouponOrBenefit ?? 'Add discount',
@@ -1339,6 +1436,77 @@ class _MyCartScreenState extends State<MyCartScreen>
     );
   }
 
+  /// Extracted checkout button widget
+  Widget _buildCheckoutButtonWidget(
+      AppLocalizations l10n, List<String> selectedIds, bool isSalesPaused) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isTablet = screenWidth >= 600;
+    final isDisabled = selectedIds.isEmpty || _isValidating || isSalesPaused;
+
+    final button = SizedBox(
+      width: isTablet ? screenWidth * 0.5 : double.infinity,
+      height: 50,
+      child: ElevatedButton(
+        onPressed: isDisabled ? null : _proceedToCheckout,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isSalesPaused ? Colors.grey : Colors.orange,
+          disabledBackgroundColor: Colors.grey[300],
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(0),
+          ),
+        ),
+        child: _isValidating
+            ? Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    l10n.validating ?? 'Validating...',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (isSalesPaused) ...[
+                    const Icon(
+                      Icons.pause_circle_outline,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Text(
+                    isSalesPaused
+                        ? (l10n.checkoutPaused ?? 'Checkout Paused')
+                        : l10n.proceedToPayment,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+
+    return isTablet ? Center(child: button) : button;
+  }
+
   void _showCouponSheet() {
     showModalBottomSheet(
       context: context,
@@ -1350,17 +1518,19 @@ class _MyCartScreenState extends State<MyCartScreen>
         maxChildSize: 0.9,
         builder: (_, controller) => CouponSelectionSheet(
           cartTotal: _cartProvider?.cartTotalsNotifier.value?.total ?? 0,
-          selectedCoupon: _selectedCoupon,
-          useFreeShipping: _useFreeShipping,
+          selectedCoupon: _discountService.selectedCoupon, // CHANGED
+          useFreeShipping: _discountService.useFreeShipping, // CHANGED
           onCouponSelected: (coupon) {
-            setState(() {
-              _selectedCoupon = coupon;
-            });
+            _discountService.selectCoupon(coupon); // CHANGED
+            setState(() {}); // Trigger rebuild
           },
           onFreeShippingToggled: (use) {
-            setState(() {
-              _useFreeShipping = use;
-            });
+            // Find the first valid free shipping benefit
+            final benefit = _couponService.benefitsNotifier.value
+                .where((b) => b.isValid && b.type == BenefitType.freeShipping)
+                .firstOrNull;
+            _discountService.setFreeShipping(use, benefit: benefit); // CHANGED
+            setState(() {}); // Trigger rebuild
           },
         ),
       ),

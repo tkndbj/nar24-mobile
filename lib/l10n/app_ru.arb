@@ -5256,5 +5256,8 @@
 "couponNotFound": "Купон не найден",
 "freeShippingAlreadyUsed": "Бесплатная доставка уже использована",
 "freeShippingExpired": "Срок бесплатной доставки истёк",
-"stockIssue": "Проблема с наличием. Попробуйте снова."
+"stockIssue": "Проблема с наличием. Попробуйте снова.",
+"couponDiscount": "Скидка по купону",
+"freeShippingBenefit": "Бесплатная доставка",
+"youSaved": "Вы сэкономили"
 }

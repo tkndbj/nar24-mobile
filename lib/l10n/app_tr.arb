@@ -5538,5 +5538,8 @@
 "couponNotFound": "Kupon bulunamadı",
 "freeShippingAlreadyUsed": "Ücretsiz kargo zaten kullanılmış",
 "freeShippingExpired": "Ücretsiz kargo süresı dolmuş",
-"stockIssue": "Stok sorunu. Lütfen tekrar deneyin."
+"stockIssue": "Stok sorunu. Lütfen tekrar deneyin.",
+"couponDiscount": "Kupon İndirimi",
+"freeShippingBenefit": "Ücretsiz Kargo Avantajı",
+"youSaved": "Tasarrufunuz"
 }

@@ -24173,6 +24173,24 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Stok sorunu. Lütfen tekrar deneyin.'**
   String get stockIssue;
+
+  /// No description provided for @couponDiscount.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kupon İndirimi'**
+  String get couponDiscount;
+
+  /// No description provided for @freeShippingBenefit.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ücretsiz Kargo Avantajı'**
+  String get freeShippingBenefit;
+
+  /// No description provided for @youSaved.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tasarrufunuz'**
+  String get youSaved;
 }
 
 class _AppLocalizationsDelegate

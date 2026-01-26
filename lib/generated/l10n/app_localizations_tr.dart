@@ -12658,4 +12658,13 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get stockIssue => 'Stok sorunu. Lütfen tekrar deneyin.';
+
+  @override
+  String get couponDiscount => 'Kupon İndirimi';
+
+  @override
+  String get freeShippingBenefit => 'Ücretsiz Kargo Avantajı';
+
+  @override
+  String get youSaved => 'Tasarrufunuz';
 }

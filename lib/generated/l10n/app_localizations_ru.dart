@@ -12729,4 +12729,13 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get stockIssue => 'Проблема с наличием. Попробуйте снова.';
+
+  @override
+  String get couponDiscount => 'Скидка по купону';
+
+  @override
+  String get freeShippingBenefit => 'Бесплатная доставка';
+
+  @override
+  String get youSaved => 'Вы сэкономили';
 }

@@ -12633,4 +12633,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get stockIssue => 'Stock issue. Please try again.';
+
+  @override
+  String get couponDiscount => 'Coupon Discount';
+
+  @override
+  String get freeShippingBenefit => 'Free Shipping Benefit';
+
+  @override
+  String get youSaved => 'You Saved';
 }
