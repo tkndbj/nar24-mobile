@@ -42,6 +42,8 @@ class ProductPaymentProvider with ChangeNotifier {
   final double cartCalculatedTotal;
   LatLng? selectedLocation;
 
+  bool get isExpressAvailable => !useFreeShipping;
+
   final Coupon? appliedCoupon;
   final bool useFreeShipping;
   double couponDiscount = 0.0;
@@ -59,6 +61,9 @@ class ProductPaymentProvider with ChangeNotifier {
   }) {
     _calculateCouponDiscount(); // Add this
     _findFreeShippingBenefit(); // Add this
+    if (useFreeShipping) {
+      selectedDeliveryOption = 'normal';
+    }
     fetchSavedAddresses();
     _fetchDeliverySettings();
   }
@@ -151,6 +156,10 @@ class ProductPaymentProvider with ChangeNotifier {
   }
 
   void setDeliveryOption(String? option) {
+    // Prevent express selection when free shipping is active
+    if (useFreeShipping && option == 'express') {
+      return;
+    }
     selectedDeliveryOption = option;
     notifyListeners();
   }

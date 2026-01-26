@@ -24203,6 +24203,12 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Sepetinizde sizi bekleyen özel bir indirim var!'**
   String get couponWaitingForYou;
+
+  /// No description provided for @expressDisabledWithBenefit.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ücretsiz kargo avantajı ile ekspres teslimat seçilemez'**
+  String get expressDisabledWithBenefit;
 }
 
 class _AppLocalizationsDelegate

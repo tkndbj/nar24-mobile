@@ -12649,4 +12649,8 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get couponWaitingForYou =>
       'A special discount is waiting for you in your cart!';
+
+  @override
+  String get expressDisabledWithBenefit =>
+      'Express delivery not available with free shipping benefit';
 }

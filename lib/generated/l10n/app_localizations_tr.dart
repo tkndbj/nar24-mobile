@@ -12674,4 +12674,8 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get couponWaitingForYou =>
       'Sepetinizde sizi bekleyen özel bir indirim var!';
+
+  @override
+  String get expressDisabledWithBenefit =>
+      'Ücretsiz kargo avantajı ile ekspres teslimat seçilemez';
 }

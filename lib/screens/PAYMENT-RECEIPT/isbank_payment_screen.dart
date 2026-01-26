@@ -30,7 +30,7 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
   String? _errorMessage;
   bool _isNavigating = false;
   String? _completedOrderId;
-  
+
   // ✅ Real-time listener instead of polling
   StreamSubscription<DocumentSnapshot>? _paymentListener;
   Timer? _timeoutTimer;
@@ -46,57 +46,56 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
   /// ✅ Real-time Firestore listener - instant response
   void _startPaymentListener() {
     print('🔴 Starting payment status listener for ${widget.orderNumber}');
-    
+
     _paymentListener = FirebaseFirestore.instance
         .collection('pendingPayments')
         .doc(widget.orderNumber)
         .snapshots()
         .listen(
-          (snapshot) {
-            if (!mounted || _isNavigating) return;
-            if (!snapshot.exists) return;
-            
-            final data = snapshot.data()!;
-            final status = data['status'] as String?;
-            final orderId = data['orderId'] as String?;
-            final errorMessage = data['errorMessage'] as String?;
-            
-            print('🔔 Payment status changed: $status');
-            
-            switch (status) {
-              case 'completed':
-                if (orderId != null) {
-                  _completedOrderId = orderId;
-                  _handlePaymentSuccess();
-                }
-                break;
-                
-              case 'payment_failed':
-              case 'hash_verification_failed':
-                _handlePaymentFailure(errorMessage ?? 'Payment failed');
-                break;
-                
-              case 'payment_succeeded_order_failed':
-                _handlePaymentFailure(
-                  'Payment was successful but order creation failed. '
-                  'Please contact support with reference: ${widget.orderNumber}'
-                );
-                break;
-                
-              case 'processing':
-              case 'payment_verified_processing_order':
-                // Payment is being processed - just wait
-                print('⏳ Payment processing...');
-                break;
-                
-              // 'awaiting_3d' is the initial state - do nothing
+      (snapshot) {
+        if (!mounted || _isNavigating) return;
+        if (!snapshot.exists) return;
+
+        final data = snapshot.data()!;
+        final status = data['status'] as String?;
+        final orderId = data['orderId'] as String?;
+        final errorMessage = data['errorMessage'] as String?;
+
+        print('🔔 Payment status changed: $status');
+
+        switch (status) {
+          case 'completed':
+            if (orderId != null) {
+              _completedOrderId = orderId;
+              _handlePaymentSuccess();
             }
-          },
-          onError: (error) {
-            print('❌ Payment listener error: $error');
-            // Don't fail - WebView URL scheme is backup
-          },
-        );
+            break;
+
+          case 'payment_failed':
+          case 'hash_verification_failed':
+            _handlePaymentFailure(errorMessage ?? 'Payment failed');
+            break;
+
+          case 'payment_succeeded_order_failed':
+            _handlePaymentFailure(
+                'Payment was successful but order creation failed. '
+                'Please contact support with reference: ${widget.orderNumber}');
+            break;
+
+          case 'processing':
+          case 'payment_verified_processing_order':
+            // Payment is being processed - just wait
+            print('⏳ Payment processing...');
+            break;
+
+          // 'awaiting_3d' is the initial state - do nothing
+        }
+      },
+      onError: (error) {
+        print('❌ Payment listener error: $error');
+        // Don't fail - WebView URL scheme is backup
+      },
+    );
   }
 
   void _startTimeoutTimer() {
@@ -114,7 +113,8 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
           title: const Text('Payment Timeout'),
-          content: const Text('The payment session has expired. Please try again.'),
+          content:
+              const Text('The payment session has expired. Please try again.'),
           actions: [
             TextButton(
               onPressed: () {
@@ -141,6 +141,7 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
     try {
       final cartProvider = Provider.of<CartProvider>(context, listen: false);
       cartProvider.clearLocalCache();
+      cartProvider.refresh();
     } catch (e) {
       debugPrint('Could not clear cart cache: $e');
     }
@@ -212,7 +213,8 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
 
             // ✅ Backup: Custom URL scheme (in case Firestore listener misses)
             if (request.url.startsWith('payment-success://')) {
-              final orderId = request.url.replaceFirst('payment-success://', '');
+              final orderId =
+                  request.url.replaceFirst('payment-success://', '');
               if (orderId.isNotEmpty) {
                 _completedOrderId = orderId;
               }
@@ -224,7 +226,7 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
               _handlePaymentFailure(error);
               return NavigationDecision.prevent;
             }
-            
+
             return NavigationDecision.navigate;
           },
         ),
@@ -443,7 +445,6 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
       body: Stack(
         children: [
           WebViewWidget(controller: _controller),
-
           if (_isLoading)
             Container(
               color: isDark ? const Color(0xFF1C1A29) : Colors.white,
@@ -469,7 +470,6 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
                 ),
               ),
             ),
-
           if (_errorMessage != null && !_isLoading)
             Container(
               color: isDark ? const Color(0xFF1C1A29) : Colors.white,

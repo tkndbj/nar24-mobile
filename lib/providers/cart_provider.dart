@@ -71,10 +71,10 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
   Timer? _cleanupTimer;
 
   final ValueNotifier<CartTotals?> cartTotalsNotifier = ValueNotifier(null);
-final ValueNotifier<bool> isTotalsLoadingNotifier = ValueNotifier(false);
+  final ValueNotifier<bool> isTotalsLoadingNotifier = ValueNotifier(false);
 
-Set<String> _currentTotalsProductIds = {};
-Timer? _totalsVerificationTimer;
+  Set<String> _currentTotalsProductIds = {};
+  Timer? _totalsVerificationTimer;
 
   // Optimistic updates cache (for instant UI feedback)
   final Map<String, Map<String, dynamic>> _optimisticCache = {};
@@ -284,6 +284,12 @@ Timer? _totalsVerificationTimer;
   }
 
   void _handleRealtimeUpdate(QuerySnapshot snapshot) {
+    debugPrint(
+        '📥 Snapshot: ${snapshot.docs.length} docs, isFromCache: ${snapshot.metadata.isFromCache}, changes: ${snapshot.docChanges.length}');
+
+    for (final change in snapshot.docChanges) {
+      debugPrint('  → ${change.type}: ${change.doc.id}');
+    }
     if (_isInitializing) {
       debugPrint('⏭️ Skipping listener (initializing)');
       return;
@@ -322,86 +328,89 @@ Timer? _totalsVerificationTimer;
   }
 
   CartTotals _calculateOptimisticTotals(List<String> selectedProductIds) {
-  final items = cartItemsNotifier.value
-      .where((item) => selectedProductIds.contains(item['productId']))
-      .toList();
+    final items = cartItemsNotifier.value
+        .where((item) => selectedProductIds.contains(item['productId']))
+        .toList();
 
-  if (items.isEmpty) {
-    return CartTotals(total: 0, items: [], currency: 'TL');
-  }
-
-  double total = 0;
-  String currency = 'TL';
-  final itemTotals = <CartItemTotal>[];
-
-  for (final item in items) {
-    final productId = item['productId'] as String;
-    final quantity = item['quantity'] as int? ?? 1;
-    final cartData = item['cartData'] as Map<String, dynamic>? ?? {};
-    
-    // Get price from cart data (denormalized)
-    double unitPrice = (cartData['unitPrice'] as num?)?.toDouble() ?? 
-                       (cartData['cachedPrice'] as num?)?.toDouble() ?? 0;
-    
-    // Apply bulk discount if applicable
-    final discountThreshold = cartData['discountThreshold'] as int? ?? 
-                              cartData['cachedDiscountThreshold'] as int?;
-    final bulkDiscountPercentage = cartData['bulkDiscountPercentage'] as int? ?? 
-                                   cartData['cachedBulkDiscountPercentage'] as int?;
-    
-    if (discountThreshold != null && 
-        bulkDiscountPercentage != null && 
-        quantity >= discountThreshold) {
-      unitPrice = unitPrice * (1 - bulkDiscountPercentage / 100);
+    if (items.isEmpty) {
+      return CartTotals(total: 0, items: [], currency: 'TL');
     }
-    
-    final itemTotal = unitPrice * quantity;
-    total += itemTotal;
-    currency = cartData['currency'] as String? ?? 'TL';
-    
-    itemTotals.add(CartItemTotal(
-      productId: productId,
-      unitPrice: unitPrice,
-      total: itemTotal,
-      quantity: quantity,
-    ));
-  }
 
-  return CartTotals(
-    total: (total * 100).round() / 100, // Round to 2 decimals
-    items: itemTotals,
-    currency: currency,
-  );
-}
+    double total = 0;
+    String currency = 'TL';
+    final itemTotals = <CartItemTotal>[];
 
-Future<void> updateTotalsForSelection(List<String> selectedProductIds) async {
-  if (selectedProductIds.isEmpty) {
-    cartTotalsNotifier.value = CartTotals(total: 0, items: [], currency: 'TL');
-    _currentTotalsProductIds = {};
-    return;
-  }
+    for (final item in items) {
+      final productId = item['productId'] as String;
+      final quantity = item['quantity'] as int? ?? 1;
+      final cartData = item['cartData'] as Map<String, dynamic>? ?? {};
 
-  _currentTotalsProductIds = selectedProductIds.toSet();
+      // Get price from cart data (denormalized)
+      double unitPrice = (cartData['unitPrice'] as num?)?.toDouble() ??
+          (cartData['cachedPrice'] as num?)?.toDouble() ??
+          0;
 
-  // Step 1: Immediate optimistic update (instant UI feedback)
-  final optimistic = _calculateOptimisticTotals(selectedProductIds);
-  cartTotalsNotifier.value = optimistic;
+      // Apply bulk discount if applicable
+      final discountThreshold = cartData['discountThreshold'] as int? ??
+          cartData['cachedDiscountThreshold'] as int?;
+      final bulkDiscountPercentage =
+          cartData['bulkDiscountPercentage'] as int? ??
+              cartData['cachedBulkDiscountPercentage'] as int?;
 
-  // Step 2: Show loading for server verification
-  isTotalsLoadingNotifier.value = true;  // ✅ Always show loading
+      if (discountThreshold != null &&
+          bulkDiscountPercentage != null &&
+          quantity >= discountThreshold) {
+        unitPrice = unitPrice * (1 - bulkDiscountPercentage / 100);
+      }
 
-  try {
-    final serverTotals = await calculateCartTotals(
-      selectedProductIds: selectedProductIds,
+      final itemTotal = unitPrice * quantity;
+      total += itemTotal;
+      currency = cartData['currency'] as String? ?? 'TL';
+
+      itemTotals.add(CartItemTotal(
+        productId: productId,
+        unitPrice: unitPrice,
+        total: itemTotal,
+        quantity: quantity,
+      ));
+    }
+
+    return CartTotals(
+      total: (total * 100).round() / 100, // Round to 2 decimals
+      items: itemTotals,
+      currency: currency,
     );
-    
-    cartTotalsNotifier.value = serverTotals;
-  } catch (e) {
-    debugPrint('⚠️ Server totals failed, using optimistic: $e');
-  } finally {
-    isTotalsLoadingNotifier.value = false;
   }
-}
+
+  Future<void> updateTotalsForSelection(List<String> selectedProductIds) async {
+    if (selectedProductIds.isEmpty) {
+      cartTotalsNotifier.value =
+          CartTotals(total: 0, items: [], currency: 'TL');
+      _currentTotalsProductIds = {};
+      return;
+    }
+
+    _currentTotalsProductIds = selectedProductIds.toSet();
+
+    // Step 1: Immediate optimistic update (instant UI feedback)
+    final optimistic = _calculateOptimisticTotals(selectedProductIds);
+    cartTotalsNotifier.value = optimistic;
+
+    // Step 2: Show loading for server verification
+    isTotalsLoadingNotifier.value = true; // ✅ Always show loading
+
+    try {
+      final serverTotals = await calculateCartTotals(
+        selectedProductIds: selectedProductIds,
+      );
+
+      cartTotalsNotifier.value = serverTotals;
+    } catch (e) {
+      debugPrint('⚠️ Server totals failed, using optimistic: $e');
+    } finally {
+      isTotalsLoadingNotifier.value = false;
+    }
+  }
 
   Future<void> _processCartChanges(List<DocumentChange> changes) async {
     final itemsMap = <String, Map<String, dynamic>>{};
@@ -821,48 +830,48 @@ Future<void> updateTotalsForSelection(List<String> selectedProductIds) async {
     }
   }
 
-void _applyOptimisticAdd(
-    String productId, Map<String, dynamic> productData, int quantity) {
-  _clearOptimisticUpdate(productId);
+  void _applyOptimisticAdd(
+      String productId, Map<String, dynamic> productData, int quantity) {
+    _clearOptimisticUpdate(productId);
 
-  final existingItems = cartItemsNotifier.value
-      .where((item) => item['productId'] != productId)
-      .toList();
+    final existingItems = cartItemsNotifier.value
+        .where((item) => item['productId'] != productId)
+        .toList();
 
-  // ✅ FIX: Create enriched productData with quantity FIRST
-  final enrichedProductData = {
-    ...productData,
-    'quantity': quantity,
-  };
+    // ✅ FIX: Create enriched productData with quantity FIRST
+    final enrichedProductData = {
+      ...productData,
+      'quantity': quantity,
+    };
 
-  _optimisticCache[productId] = {
-    ...enrichedProductData,
-    '_optimistic': true,
-  };
+    _optimisticCache[productId] = {
+      ...enrichedProductData,
+      '_optimistic': true,
+    };
 
-  final newIds = Set<String>.from(cartProductIdsNotifier.value)
-    ..add(productId);
-  cartProductIdsNotifier.value = newIds;
-  cartCountNotifier.value = newIds.length;
+    final newIds = Set<String>.from(cartProductIdsNotifier.value)
+      ..add(productId);
+    cartProductIdsNotifier.value = newIds;
+    cartCountNotifier.value = newIds.length;
 
-  // ✅ FIX: Use enrichedProductData (with quantity)
-  final optimisticProduct = _buildProductFromCartData(enrichedProductData);
-  final optimisticItem = {
-    ..._createCartItem(productId, enrichedProductData, optimisticProduct),
-    'isOptimistic': true,
-  };
+    // ✅ FIX: Use enrichedProductData (with quantity)
+    final optimisticProduct = _buildProductFromCartData(enrichedProductData);
+    final optimisticItem = {
+      ..._createCartItem(productId, enrichedProductData, optimisticProduct),
+      'isOptimistic': true,
+    };
 
-  existingItems.insert(0, optimisticItem);
-  cartItemsNotifier.value = existingItems;
+    existingItems.insert(0, optimisticItem);
+    cartItemsNotifier.value = existingItems;
 
-  _optimisticTimeouts[productId]?.cancel();
-  _optimisticTimeouts[productId] = Timer(Duration(seconds: 3), () {
-    if (_optimisticCache.containsKey(productId)) {
-      debugPrint('⚠️ Optimistic timeout: $productId');
-      _clearOptimisticUpdate(productId);
-    }
-  });
-}
+    _optimisticTimeouts[productId]?.cancel();
+    _optimisticTimeouts[productId] = Timer(Duration(seconds: 3), () {
+      if (_optimisticCache.containsKey(productId)) {
+        debugPrint('⚠️ Optimistic timeout: $productId');
+        _clearOptimisticUpdate(productId);
+      }
+    });
+  }
 
   void _rollbackOptimisticUpdate(String productId) {
     _optimisticCache.remove(productId);
@@ -988,80 +997,82 @@ void _applyOptimisticAdd(
   // ========================================================================
 
   Future<String> updateQuantity(String productId, int newQuantity) async {
-  final user = _auth.currentUser;
-  if (user == null) return 'Please log in first';
+    final user = _auth.currentUser;
+    if (user == null) return 'Please log in first';
 
-  if (newQuantity < 1) {
-    return removeFromCart(productId);
-  }
-
-  if (!_quantityLimiter.canProceed('qty_$productId')) {
-    return 'Please wait';
-  }
-
-  if (_quantityUpdateLocks.containsKey(productId)) {
-    return await _quantityUpdateLocks[productId]!.future;
-  }
-
-  final completer = Completer<String>();
-  _quantityUpdateLocks[productId] = completer;
-
-  try {
-    // Step 1: Optimistic UI update
-    _applyOptimisticQuantityChange(productId, newQuantity);
-
-    // Step 2: Immediately recalculate totals (optimistic)
-    if (_currentTotalsProductIds.isNotEmpty) {
-      final optimistic = _calculateOptimisticTotals(_currentTotalsProductIds.toList());
-      cartTotalsNotifier.value = optimistic;
+    if (newQuantity < 1) {
+      return removeFromCart(productId);
     }
 
-    // Step 3: Persist to Firestore
-    await _firestore
-        .collection('users')
-        .doc(user.uid)
-        .collection('cart')
-        .doc(productId)
-        .update({
-      'quantity': newQuantity,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    if (!_quantityLimiter.canProceed('qty_$productId')) {
+      return 'Please wait';
+    }
 
-    debugPrint('✅ Updated quantity: $productId = $newQuantity');
+    if (_quantityUpdateLocks.containsKey(productId)) {
+      return await _quantityUpdateLocks[productId]!.future;
+    }
 
-    // Step 4: Invalidate cache & verify with server (non-blocking)
-    _totalsCache.invalidateForUser(user.uid);
-    
-    // Debounced server verification (prevents spam during rapid +/- taps)
-    _debouncedTotalsVerification();
+    final completer = Completer<String>();
+    _quantityUpdateLocks[productId] = completer;
 
-    completer.complete('Quantity updated');
-    return 'Quantity updated';
-  } catch (e) {
-    debugPrint('❌ Update quantity error: $e');
-    completer.complete('Failed to update quantity');
-    return 'Failed to update quantity';
-  } finally {
-    _quantityUpdateLocks.remove(productId);
-  }
-}
-
-void _debouncedTotalsVerification() {
-  _totalsVerificationTimer?.cancel();
-  _totalsVerificationTimer = Timer(const Duration(milliseconds: 500), () async {
-    if (_currentTotalsProductIds.isEmpty) return;
-    
     try {
-      final serverTotals = await calculateCartTotals(
-        selectedProductIds: _currentTotalsProductIds.toList(),
-      );
-      cartTotalsNotifier.value = serverTotals;
-      debugPrint('✅ Server verified totals: ${serverTotals.total}');
+      // Step 1: Optimistic UI update
+      _applyOptimisticQuantityChange(productId, newQuantity);
+
+      // Step 2: Immediately recalculate totals (optimistic)
+      if (_currentTotalsProductIds.isNotEmpty) {
+        final optimistic =
+            _calculateOptimisticTotals(_currentTotalsProductIds.toList());
+        cartTotalsNotifier.value = optimistic;
+      }
+
+      // Step 3: Persist to Firestore
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('cart')
+          .doc(productId)
+          .update({
+        'quantity': newQuantity,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      debugPrint('✅ Updated quantity: $productId = $newQuantity');
+
+      // Step 4: Invalidate cache & verify with server (non-blocking)
+      _totalsCache.invalidateForUser(user.uid);
+
+      // Debounced server verification (prevents spam during rapid +/- taps)
+      _debouncedTotalsVerification();
+
+      completer.complete('Quantity updated');
+      return 'Quantity updated';
     } catch (e) {
-      debugPrint('⚠️ Server verification failed: $e');
+      debugPrint('❌ Update quantity error: $e');
+      completer.complete('Failed to update quantity');
+      return 'Failed to update quantity';
+    } finally {
+      _quantityUpdateLocks.remove(productId);
     }
-  });
-}
+  }
+
+  void _debouncedTotalsVerification() {
+    _totalsVerificationTimer?.cancel();
+    _totalsVerificationTimer =
+        Timer(const Duration(milliseconds: 500), () async {
+      if (_currentTotalsProductIds.isEmpty) return;
+
+      try {
+        final serverTotals = await calculateCartTotals(
+          selectedProductIds: _currentTotalsProductIds.toList(),
+        );
+        cartTotalsNotifier.value = serverTotals;
+        debugPrint('✅ Server verified totals: ${serverTotals.total}');
+      } catch (e) {
+        debugPrint('⚠️ Server verification failed: $e');
+      }
+    });
+  }
 
   void _applyOptimisticQuantityChange(String productId, int newQuantity) {
     final items = List<Map<String, dynamic>>.from(cartItemsNotifier.value);
@@ -1800,9 +1811,9 @@ void _debouncedTotalsVerification() {
 
     disableLiveUpdates();
     _authSubscription?.cancel();
-      for (final timer in _optimisticTimeouts.values) {
-    timer.cancel();
-  }
+    for (final timer in _optimisticTimeouts.values) {
+      timer.cancel();
+    }
     _optimisticTimeouts.clear();
     _optimisticCache.clear();
     _quantityUpdateLocks.clear();

@@ -60,6 +60,8 @@ class DeliveryOptionsWidget extends StatelessWidget {
                             provider.expressFreeThreshold
                         ? l10n.free
                         : '${provider.expressPrice.toStringAsFixed(0)} TL',
+                    isDisabled: !provider.isExpressAvailable, // ADD
+                    disabledReason: l10n.expressDisabledWithBenefit, // ADD
                   ),
                 ],
               ),
@@ -79,6 +81,8 @@ class _DeliveryCard extends StatelessWidget {
   final ValueChanged<String?> onChanged;
   final bool isDark;
   final String price;
+  final bool isDisabled; // ADD
+  final String? disabledReason;
 
   const _DeliveryCard({
     Key? key,
@@ -89,6 +93,8 @@ class _DeliveryCard extends StatelessWidget {
     required this.onChanged,
     required this.isDark,
     required this.price,
+    this.isDisabled = false, // ADD
+    this.disabledReason,
   }) : super(key: key);
 
   @override
@@ -96,67 +102,80 @@ class _DeliveryCard extends StatelessWidget {
     final isSelected = selectedValue == value;
 
     return GestureDetector(
-      onTap: () => onChanged(value),
-      child: Container(
-        width: 160,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? Colors.orange : Colors.grey.withOpacity(0.3),
-            width: isSelected ? 2 : 1,
+      onTap: isDisabled ? null : () => onChanged(value), // MODIFY
+      child: Opacity(
+        // ADD wrapper
+        opacity: isDisabled ? 0.5 : 1.0,
+        child: Container(
+          width: 160,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDisabled
+                  ? Colors.grey.withOpacity(0.3) // ADD
+                  : (isSelected ? Colors.orange : Colors.grey.withOpacity(0.3)),
+              width: isSelected && !isDisabled ? 2 : 1, // MODIFY
+            ),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Radio<String>(
-                  value: value,
-                  groupValue: selectedValue,
-                  onChanged: onChanged,
-                  activeColor: Colors.orange,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.orange,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Radio<String>(
+                    value: value,
+                    groupValue: selectedValue,
+                    onChanged: isDisabled ? null : onChanged, // MODIFY
+                    activeColor: Colors.orange,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color:
+                            isDisabled ? Colors.grey : Colors.orange, // MODIFY
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: Text(
+                  isDisabled && disabledReason != null // ADD conditional
+                      ? disabledReason!
+                      : description,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDisabled
+                        ? Colors.orange.shade700 // ADD
+                        : (isDark ? Colors.white : Colors.black),
+                    fontStyle:
+                        isDisabled ? FontStyle.italic : FontStyle.normal, // ADD
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: Text(
-                description,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                price,
                 style: TextStyle(
-                  fontSize: 12,
-                  color: isDark ? Colors.white : Colors.black,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: isDisabled ? Colors.grey : Colors.orange, // MODIFY
                 ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              price,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.orange,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

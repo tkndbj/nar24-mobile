@@ -12745,4 +12745,8 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get couponWaitingForYou =>
       'В вашей корзине вас ждёт специальная скидка!';
+
+  @override
+  String get expressDisabledWithBenefit =>
+      'Экспресс-доставка недоступна при использовании бесплатной доставки';
 }

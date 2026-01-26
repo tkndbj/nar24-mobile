@@ -5543,5 +5543,6 @@
 "freeShippingBenefit": "Ücretsiz Kargo Avantajı",
 "youSaved": "Tasarrufunuz",
 "youHaveACoupon": "🎉 Kuponunuz var!",
-"couponWaitingForYou": "Sepetinizde sizi bekleyen özel bir indirim var!"
+"couponWaitingForYou": "Sepetinizde sizi bekleyen özel bir indirim var!",
+"expressDisabledWithBenefit": "Ücretsiz kargo avantajı ile ekspres teslimat seçilemez"
 }
