@@ -12738,4 +12738,11 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get youSaved => 'Вы сэкономили';
+
+  @override
+  String get youHaveACoupon => '🎉 У вас есть купон!';
+
+  @override
+  String get couponWaitingForYou =>
+      'В вашей корзине вас ждёт специальная скидка!';
 }

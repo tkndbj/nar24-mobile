@@ -5541,5 +5541,7 @@
 "stockIssue": "Stok sorunu. Lütfen tekrar deneyin.",
 "couponDiscount": "Kupon İndirimi",
 "freeShippingBenefit": "Ücretsiz Kargo Avantajı",
-"youSaved": "Tasarrufunuz"
+"youSaved": "Tasarrufunuz",
+"youHaveACoupon": "🎉 Kuponunuz var!",
+"couponWaitingForYou": "Sepetinizde sizi bekleyen özel bir indirim var!"
 }

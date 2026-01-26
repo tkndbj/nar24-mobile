@@ -12667,4 +12667,11 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get youSaved => 'Tasarrufunuz';
+
+  @override
+  String get youHaveACoupon => '🎉 Kuponunuz var!';
+
+  @override
+  String get couponWaitingForYou =>
+      'Sepetinizde sizi bekleyen özel bir indirim var!';
 }

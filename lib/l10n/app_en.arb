@@ -5564,5 +5564,7 @@
 "stockIssue": "Stock issue. Please try again.",
 "couponDiscount": "Coupon Discount",
 "freeShippingBenefit": "Free Shipping Benefit",
-"youSaved": "You Saved"
+"youSaved": "You Saved",
+"youHaveACoupon": "🎉 You have a coupon!",
+"couponWaitingForYou": "A special discount is waiting for you in your cart!"
 }

@@ -24191,6 +24191,18 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Tasarrufunuz'**
   String get youSaved;
+
+  /// No description provided for @youHaveACoupon.
+  ///
+  /// In tr, this message translates to:
+  /// **'🎉 Kuponunuz var!'**
+  String get youHaveACoupon;
+
+  /// No description provided for @couponWaitingForYou.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sepetinizde sizi bekleyen özel bir indirim var!'**
+  String get couponWaitingForYou;
 }
 
 class _AppLocalizationsDelegate

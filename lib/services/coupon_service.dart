@@ -37,6 +37,8 @@ class CouponService {
   List<Coupon> get coupons => couponsNotifier.value;
   List<UserBenefit> get benefits => benefitsNotifier.value;
   bool get isLoading => isLoadingNotifier.value;
+  bool get isInitialized => _initialized;
+  List<Coupon> get userCoupons => coupons;
 
   /// Get only active (unused, non-expired) coupons
   List<Coupon> get activeCoupons => coupons.where((c) => c.isValid).toList()

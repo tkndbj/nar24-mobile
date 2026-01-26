@@ -12642,4 +12642,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get youSaved => 'You Saved';
+
+  @override
+  String get youHaveACoupon => '🎉 You have a coupon!';
+
+  @override
+  String get couponWaitingForYou =>
+      'A special discount is waiting for you in your cart!';
 }

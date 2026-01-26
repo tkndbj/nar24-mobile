@@ -41,6 +41,7 @@ import '../widgets/dynamic_product_list_widget.dart';
 import '../services/market_layout_service.dart';
 import 'DYNAMIC-SCREENS/market_screen_dynamic_filters_screen.dart';
 import '../widgets/boosted_product_carousel.dart';
+import '../widgets/coupon_celebration_overlay.dart';
 
 class _HomeLayoutState {
   final String? error;
@@ -141,7 +142,7 @@ class MarketScreenState extends State<MarketScreen>
   late final PageController _pageController;
   late final ValueNotifier<Color> _adsBannerBgColor;
   late final GlobalKey<TerasMarketState> _terasKey;
-
+  bool _couponOverlayChecked = false;
   // Providers - lazy loaded
   MarketProvider? _marketProvider;
   SpecialFilterProviderMarket? _specialFilterProvider;
@@ -277,7 +278,6 @@ class MarketScreenState extends State<MarketScreen>
 
   /// Async provider initialization
   Future<void> _initializeProvidersAsync() async {
-
     try {
       // Phase 1: CRITICAL DATA ONLY (blocks UI ~200ms)
       _marketProvider = Provider.of<MarketProvider>(context, listen: false);
@@ -329,6 +329,43 @@ class MarketScreenState extends State<MarketScreen>
 
     // Check and show agreement modal for Google users who haven't accepted
     _checkAndShowAgreementModal();
+
+    _checkAndShowCouponCelebration();
+  }
+
+  Future<void> _checkAndShowCouponCelebration() async {
+    // Prevent multiple checks
+    if (_couponOverlayChecked) return;
+    _couponOverlayChecked = true;
+
+    try {
+      // Wait a bit for the app to settle and agreement modal to finish
+      await Future.delayed(const Duration(milliseconds: 1500));
+
+      if (!mounted) return;
+
+      // Check if agreement modal is still showing (don't overlap)
+      if (_agreementModalShown) {
+        // Wait for agreement modal to be dismissed
+        await Future.delayed(const Duration(seconds: 2));
+      }
+
+      if (!mounted) return;
+
+      // Only show on market tab (index 0)
+      if (_selectedIndex != 0) return;
+
+      // Show the coupon celebration if eligible
+      final shown = await CouponCelebrationOverlay.showIfEligible(context);
+
+      if (shown && kDebugMode) {
+        debugPrint('🎟️ Coupon celebration overlay was shown');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('🎟️ Error showing coupon celebration: $e');
+      }
+    }
   }
 
   /// Check if user needs to accept agreements and show modal if needed.
@@ -359,14 +396,16 @@ class MarketScreenState extends State<MarketScreen>
       if (!userProvider.isSocialUser) return;
 
       // Check local storage first (this is the primary source)
-      final hasAcceptedLocally = await AgreementModal.hasAcceptedAgreements(firebaseUser.uid);
+      final hasAcceptedLocally =
+          await AgreementModal.hasAcceptedAgreements(firebaseUser.uid);
       if (hasAcceptedLocally) return;
 
       // Wait for profile state to be ready (max 3 seconds)
       // This prevents showing modal before we know if they've already accepted
       int waitAttempts = 0;
       const maxWaitAttempts = 30; // 30 * 100ms = 3 seconds max
-      while (!userProvider.isProfileStateReady && waitAttempts < maxWaitAttempts) {
+      while (
+          !userProvider.isProfileStateReady && waitAttempts < maxWaitAttempts) {
         await Future.delayed(const Duration(milliseconds: 100));
         waitAttempts++;
         if (!mounted) return;
@@ -391,7 +430,8 @@ class MarketScreenState extends State<MarketScreen>
 
       // Final auth check before showing modal
       if (FirebaseAuth.instance.currentUser == null) {
-        _agreementModalShown = false; // Reset so it can show later if they login
+        _agreementModalShown =
+            false; // Reset so it can show later if they login
         return;
       }
 
@@ -2134,8 +2174,9 @@ class MarketScreenState extends State<MarketScreen>
 
     // Tablets: wider cards, shorter height
     final double cardWidth = isTablet ? 185.0 : 160.0;
-    final double portraitImageHeight =
-        isTablet ? screenHeight * 0.24 : screenHeight * 0.33; // Increased for taller images
+    final double portraitImageHeight = isTablet
+        ? screenHeight * 0.24
+        : screenHeight * 0.33; // Increased for taller images
 
     return SafeArea(
       top: false,
@@ -2307,7 +2348,8 @@ class MarketScreenState extends State<MarketScreen>
 
       final homeIndex = _filterTabIndices['Home'] ?? 0;
       if (_pageController.hasClients) _pageController.jumpToPage(homeIndex);
-      if (_filterScrollController.hasClients) _filterScrollController.jumpTo(0.0);
+      if (_filterScrollController.hasClients)
+        _filterScrollController.jumpTo(0.0);
 
       setState(() {
         _isSearching = false;

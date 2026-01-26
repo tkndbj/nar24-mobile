@@ -1230,185 +1230,308 @@ class _ShipmentStatusScreenState extends State<ShipmentStatusScreen>
 
   // Add these helper methods to the _ShipmentStatusScreenState class:
 
-String _getLocalizedDeliveryOption(String option, AppLocalizations l10n) {
-  switch (option) {
-    case 'gelal':
-      return l10n.deliveryOption1 ?? 'Gel Al (Pick Up)';
-    case 'express':
-      return l10n.deliveryOption2 ?? 'Express Delivery';
-    case 'normal':
-    default:
-      return l10n.deliveryOption3 ?? 'Normal Delivery';
+  String _getLocalizedDeliveryOption(String option, AppLocalizations l10n) {
+    switch (option) {
+      case 'gelal':
+        return l10n.deliveryOption1 ?? 'Gel Al (Pick Up)';
+      case 'express':
+        return l10n.deliveryOption2 ?? 'Express Delivery';
+      case 'normal':
+      default:
+        return l10n.deliveryOption3 ?? 'Normal Delivery';
+    }
   }
-}
 
-Color _getDeliveryOptionColor(String deliveryOption) {
-  switch (deliveryOption) {
-    case 'express':
-      return Colors.orange;
-    case 'gelal':
-      return Colors.blue;
-    case 'normal':
-    default:
-      return const Color(0xFF10B981);
+  Color _getDeliveryOptionColor(String deliveryOption) {
+    switch (deliveryOption) {
+      case 'express':
+        return Colors.orange;
+      case 'gelal':
+        return Colors.blue;
+      case 'normal':
+      default:
+        return const Color(0xFF10B981);
+    }
   }
-}
 
-Widget _buildOrderSummary(bool isDark) {
-  if (_orderData == null) return const SizedBox.shrink();
+  Widget _buildOrderSummary(bool isDark) {
+    if (_orderData == null) return const SizedBox.shrink();
 
-  final l10n = AppLocalizations.of(context);
-  final subtotal = (_orderData!['totalPrice'] ?? 0).toDouble();
-  final deliveryPrice = (_orderData!['deliveryPrice'] ?? 0).toDouble();
-  final grandTotal = subtotal + deliveryPrice;
-  final currency = _orderData!['currency'] ?? 'TL';
-  final deliveryOption = _orderData!['deliveryOption'] as String? ?? 'normal';
+    final l10n = AppLocalizations.of(context);
 
-  return Container(
-    margin: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: isDark ? const Color.fromARGB(255, 33, 31, 49) : Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(
-        color: isDark
-            ? Colors.white.withOpacity(0.05)
-            : Colors.grey.withOpacity(0.1),
-      ),
-      boxShadow: [
-        BoxShadow(
+    // Get pricing data
+    final itemsSubtotal =
+        (_orderData!['itemsSubtotal'] ?? _orderData!['totalPrice'] ?? 0)
+            .toDouble();
+    final deliveryPrice = (_orderData!['deliveryPrice'] ?? 0).toDouble();
+    final totalPrice = (_orderData!['totalPrice'] ?? 0).toDouble();
+    final currency = _orderData!['currency'] ?? 'TL';
+    final deliveryOption = _orderData!['deliveryOption'] as String? ?? 'normal';
+
+    // Get coupon/benefit data
+    final couponCode = _orderData!['couponCode'] as String?;
+    final couponDiscount = (_orderData!['couponDiscount'] ?? 0).toDouble();
+    final freeShippingApplied =
+        _orderData!['freeShippingApplied'] as bool? ?? false;
+    final originalDeliveryPrice =
+        (_orderData!['originalDeliveryPrice'] ?? deliveryPrice).toDouble();
+
+    return Container(
+      margin: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color.fromARGB(255, 33, 31, 49) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
           color: isDark
-              ? Colors.black.withOpacity(0.2)
-              : Colors.black.withOpacity(0.04),
-          blurRadius: 10,
-          offset: const Offset(0, 2),
+              ? Colors.white.withOpacity(0.05)
+              : Colors.grey.withOpacity(0.1),
         ),
-      ],
-    ),
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  color: const Color(0xFF6366F1).withOpacity(0.1),
-                  border: Border.all(
-                    color: const Color(0xFF6366F1).withOpacity(0.2),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.2)
+                : Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    color: const Color(0xFF6366F1).withOpacity(0.1),
+                    border: Border.all(
+                      color: const Color(0xFF6366F1).withOpacity(0.2),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.receipt,
+                    color: Color(0xFF6366F1),
+                    size: 20,
                   ),
                 ),
-                child: const Icon(
-                  Icons.receipt,
-                  color: Color(0xFF6366F1),
-                  size: 20,
+                const SizedBox(width: 12),
+                Text(
+                  l10n.orderSummary ?? 'Order Summary',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                l10n.orderSummary ?? 'Order Summary',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withOpacity(0.05)
-                  : const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(8),
+              ],
             ),
-            child: Column(
-              children: [
-                // Subtotal row
-                _buildSummaryRow(
-                  l10n.subtotal ?? 'Subtotal',
-                  '${_formatCurrency(subtotal)} $currency',
-                  isDark,
-                ),
-                const SizedBox(height: 8),
-                // Delivery option row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
+            const SizedBox(height: 12),
+
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withOpacity(0.05)
+                    : const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  // Subtotal row
+                  _buildSummaryRow(
+                    l10n.subtotal ?? 'Subtotal',
+                    '${_formatCurrency(itemsSubtotal)} $currency',
+                    isDark,
+                  ),
+
+                  // Coupon discount row (if applied)
+                  if (couponDiscount > 0) ...[
+                    const SizedBox(height: 8),
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.local_offer,
+                              size: 14,
+                              color: const Color(0xFF10B981),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              l10n.couponDiscount ?? 'Coupon Discount',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isDark
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
                         Text(
-                          l10n.delivery ?? 'Delivery',
-                          style: TextStyle(
+                          '-${_formatCurrency(couponDiscount)} $currency',
+                          style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: isDark ? Colors.grey[400] : Colors.grey[600],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _getDeliveryOptionColor(deliveryOption)
-                                .withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            _getLocalizedDeliveryOption(deliveryOption, l10n),
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w600,
-                              color: _getDeliveryOptionColor(deliveryOption),
-                            ),
+                            color: Color(0xFF10B981),
                           ),
                         ),
                       ],
                     ),
-                    Text(
-                      deliveryPrice == 0
-                          ? l10n.free ?? 'Free'
-                          : '${_formatCurrency(deliveryPrice)} $currency',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: deliveryPrice == 0
-                            ? const Color(0xFF10B981)
-                            : (isDark ? Colors.white : const Color(0xFF1A1A1A)),
+                  ],
+
+                  const SizedBox(height: 8),
+
+                  // Delivery row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          if (freeShippingApplied) ...[
+                            Icon(
+                              Icons.card_giftcard,
+                              size: 14,
+                              color: const Color(0xFF10B981),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          Text(
+                            l10n.delivery ?? 'Delivery',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color:
+                                  isDark ? Colors.grey[400] : Colors.grey[600],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _getDeliveryOptionColor(deliveryOption)
+                                  .withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              _getLocalizedDeliveryOption(deliveryOption, l10n),
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
+                                color: _getDeliveryOptionColor(deliveryOption),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          // Show original price struck through if free shipping applied
+                          if (freeShippingApplied &&
+                              originalDeliveryPrice > 0) ...[
+                            Text(
+                              '${_formatCurrency(originalDeliveryPrice)} $currency',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                                color: isDark
+                                    ? Colors.grey[500]
+                                    : Colors.grey[400],
+                                decoration: TextDecoration.lineThrough,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          Text(
+                            deliveryPrice == 0
+                                ? l10n.free ?? 'Free'
+                                : '${_formatCurrency(deliveryPrice)} $currency',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: deliveryPrice == 0
+                                  ? const Color(0xFF10B981)
+                                  : (isDark
+                                      ? Colors.white
+                                      : const Color(0xFF1A1A1A)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  // Free shipping benefit label
+                  if (freeShippingApplied) ...[
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.check,
+                              size: 12,
+                              color: Color(0xFF10B981),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              l10n.freeShippingBenefit ??
+                                  'Free Shipping Benefit',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF10B981),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  height: 1,
-                  color: isDark
-                      ? Colors.white.withOpacity(0.1)
-                      : Colors.grey.withOpacity(0.2),
-                ),
-                const SizedBox(height: 12),
-                // Total row
-                _buildSummaryRow(
-                  l10n.total ?? 'Total',
-                  '${_formatCurrency(grandTotal)} $currency',
-                  isDark,
-                  isTotal: true,
-                ),
-              ],
+
+                  const SizedBox(height: 12),
+                  Container(
+                    height: 1,
+                    color: isDark
+                        ? Colors.white.withOpacity(0.1)
+                        : Colors.grey.withOpacity(0.2),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Total row
+                  _buildSummaryRow(
+                    l10n.total ?? 'Total',
+                    '${_formatCurrency(totalPrice)} $currency',
+                    isDark,
+                    isTotal: true,
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildSummaryRow(
     String label,
