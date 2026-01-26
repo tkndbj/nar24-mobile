@@ -10853,7 +10853,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get searchError => 'Arama başarısız oldu. Lütfen tekrar deneyin.';
 
   @override
-  String get invalidPhoneNumber => 'Invalid phone number';
+  String get invalidPhoneNumber => 'Geçersiz telefon numarası';
 
   @override
   String get contactBuyer => 'Alıcıyla İletişime Geç';
@@ -12678,4 +12678,13 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get expressDisabledWithBenefit =>
       'Ücretsiz kargo avantajı ile ekspres teslimat seçilemez';
+
+  @override
+  String get pleaseSelectColor => 'Lütfen bir renk seçin';
+
+  @override
+  String get pleaseSelectAnOption => 'Lütfen bir seçenek seçin';
+
+  @override
+  String get pleaseEnterValidDimensions => 'Lütfen geçerli ölçüler girin';
 }

@@ -12749,4 +12749,14 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get expressDisabledWithBenefit =>
       'Экспресс-доставка недоступна при использовании бесплатной доставки';
+
+  @override
+  String get pleaseSelectColor => 'Пожалуйста, выберите цвет';
+
+  @override
+  String get pleaseSelectAnOption => 'Пожалуйста, выберите вариант';
+
+  @override
+  String get pleaseEnterValidDimensions =>
+      'Пожалуйста, введите корректные размеры';
 }

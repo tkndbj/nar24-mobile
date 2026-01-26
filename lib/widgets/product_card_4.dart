@@ -7,6 +7,14 @@ import 'package:flutter_feather_icons/flutter_feather_icons.dart';
 import '../providers/cart_provider.dart';
 import '../providers/favorite_product_provider.dart';
 
+/// Production-grade ProductCard4 with optimized image rendering
+///
+/// Key fixes for image glitching:
+/// 1. Fixed cache dimensions (not reactive to mediaQuery changes)
+/// 2. Disabled fade animations to prevent flicker
+/// 3. RepaintBoundary for isolated rendering
+/// 4. Proper key management for widget identity
+/// 5. Selector pattern for minimal rebuilds
 class ProductCard4 extends StatefulWidget {
   final String imageUrl;
   final Map<String, List<String>> colorImages;
@@ -49,13 +57,12 @@ class ProductCard4 extends StatefulWidget {
 
 class _ProductCard4State extends State<ProductCard4>
     with AutomaticKeepAliveClientMixin {
-  // Cache computed values (non-final to allow updates when props change)
+  // Cached computed values
   late String _displayImageUrl;
   late bool _hasValidImage;
   late bool _hasActiveDiscount;
   late bool _hasBrandModel;
 
-  // ✅ OPTIMIZATION 2: Keep widget alive to avoid rebuilds when scrolling
   @override
   bool get wantKeepAlive => true;
 
@@ -68,10 +75,10 @@ class _ProductCard4State extends State<ProductCard4>
   @override
   void didUpdateWidget(ProductCard4 oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Recalculate cached values when relevant props change
+    // Only recalculate if relevant props actually changed
     if (oldWidget.imageUrl != widget.imageUrl ||
         oldWidget.selectedColor != widget.selectedColor ||
-        oldWidget.colorImages != widget.colorImages ||
+        !mapEquals(oldWidget.colorImages, widget.colorImages) ||
         oldWidget.originalPrice != widget.originalPrice ||
         oldWidget.discountPercentage != widget.discountPercentage ||
         oldWidget.price != widget.price ||
@@ -87,11 +94,8 @@ class _ProductCard4State extends State<ProductCard4>
     _hasBrandModel = widget.brandModel.isNotEmpty;
   }
 
-  /// Validates if a URL is valid for network image loading
   bool _isValidImageUrl(String? url) {
-    if (url == null || url.trim().isEmpty) {
-      return false;
-    }
+    if (url == null || url.trim().isEmpty) return false;
 
     try {
       final uri = Uri.parse(url.trim());
@@ -106,7 +110,6 @@ class _ProductCard4State extends State<ProductCard4>
     }
   }
 
-  /// Check if product has an active discount
   bool _checkActiveDiscount() {
     return widget.originalPrice != null &&
         widget.discountPercentage != null &&
@@ -115,112 +118,100 @@ class _ProductCard4State extends State<ProductCard4>
   }
 
   String _getDisplayImageUrl() {
-    if (widget.selectedColor != null &&
-        widget.colorImages.containsKey(widget.selectedColor) &&
-        widget.colorImages[widget.selectedColor]!.isNotEmpty) {
-      return widget.colorImages[widget.selectedColor]!.first;
+    final color = widget.selectedColor;
+    if (color != null &&
+        widget.colorImages.containsKey(color) &&
+        widget.colorImages[color]!.isNotEmpty) {
+      return widget.colorImages[color]!.first;
     }
     return widget.imageUrl;
   }
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    super.build(context);
 
-    // Debug logging (only in debug mode)
-    if (kDebugMode && widget.productId != null) {
-      debugPrint(
-          'ProductCard4 Build - Product: ${widget.productName} (ID: ${widget.productId})');
-      debugPrint('  originalPrice: ${widget.originalPrice}');
-      debugPrint('  discountPercentage: ${widget.discountPercentage}');
-      debugPrint('  price: ${widget.price}');
-      debugPrint('  hasActiveDiscount: $_hasActiveDiscount');
-    }
-
-    // ✅ OPTIMIZATION 3: Cache MediaQuery and Theme
-    final mediaQuery = MediaQuery.of(context);
-    final theme = Theme.of(context);
-
-    return _ProductCard4Content(
-      state: this,
-      widget: widget,
-      mediaQuery: mediaQuery,
-      theme: theme,
-    );
-  }
-}
-
-// ✅ OPTIMIZATION 4: Split into separate widget to reduce rebuild scope
-class _ProductCard4Content extends StatelessWidget {
-  final _ProductCard4State state;
-  final ProductCard4 widget;
-  final MediaQueryData mediaQuery;
-  final ThemeData theme;
-
-  const _ProductCard4Content({
-    Key? key,
-    required this.state,
-    required this.widget,
-    required this.mediaQuery,
-    required this.theme,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final isDarkMode = theme.brightness == Brightness.dark;
-    final textColor = theme.colorScheme.onSurface;
-    final priceColor = isDarkMode ? Colors.orangeAccent : Colors.redAccent;
-
-    // Override system textScaleFactor so it never scales
-    final fixedMq = mediaQuery.copyWith(textScaler: TextScaler.noScaling);
-
-    return MediaQuery(
-      data: fixedMq,
-      child: _CardContent(
-        state: state,
-        widget: widget,
-        textColor: textColor,
-        priceColor: priceColor,
-        mediaQuery: fixedMq,
+    // FIX 1: RepaintBoundary isolates rendering
+    return RepaintBoundary(
+      child: _ProductCardContent(
+        key: widget.productId != null
+            ? ValueKey('product_card_${widget.productId}')
+            : null,
+        displayImageUrl: _displayImageUrl,
+        hasValidImage: _hasValidImage,
+        hasActiveDiscount: _hasActiveDiscount,
+        hasBrandModel: _hasBrandModel,
+        productName: widget.productName,
+        brandModel: widget.brandModel,
+        price: widget.price,
+        currency: widget.currency,
+        averageRating: widget.averageRating,
+        originalPrice: widget.originalPrice,
+        showOverlayIcons: widget.showOverlayIcons,
+        productId: widget.productId,
+        onFavoriteToggled: widget.onFavoriteToggled,
       ),
     );
   }
 }
 
-// ✅ OPTIMIZATION 5: Extract card content
-class _CardContent extends StatelessWidget {
-  final _ProductCard4State state;
-  final ProductCard4 widget;
-  final Color textColor;
-  final Color priceColor;
-  final MediaQueryData mediaQuery;
+/// Stateless content widget - receives all data as parameters
+class _ProductCardContent extends StatelessWidget {
+  final String displayImageUrl;
+  final bool hasValidImage;
+  final bool hasActiveDiscount;
+  final bool hasBrandModel;
+  final String productName;
+  final String brandModel;
+  final double price;
+  final String currency;
+  final double averageRating;
+  final double? originalPrice;
+  final bool showOverlayIcons;
+  final String? productId;
+  final VoidCallback? onFavoriteToggled;
 
-  // ✅ OPTIMIZATION 6: Use const values for dimensions
+  // Fixed dimensions - prevents rebuilds from mediaQuery changes
   static const double imageHeight = 80.0;
   static const double imageWidth = 90.0;
   static const double borderRadius = 8.0;
   static const double paddingAll = 4.0;
-  static const double spacingTiny = 1.0;
-  static const double spacingSmall = 2.0;
-  static const double spacingMid = 4.0;
-  static const double fontLarge = 14.0;
-  static const double fontMedium = 12.0;
-  static const double fontSmall = 10.0;
-  static const double iconSize = 16.0;
-  static const double placeholderIconSize = 25.0;
-  static const Color jadeGreen = Color(0xFF00A86B);
 
-  const _CardContent({
+  const _ProductCardContent({
     Key? key,
-    required this.state,
-    required this.widget,
-    required this.textColor,
-    required this.priceColor,
-    required this.mediaQuery,
+    required this.displayImageUrl,
+    required this.hasValidImage,
+    required this.hasActiveDiscount,
+    required this.hasBrandModel,
+    required this.productName,
+    required this.brandModel,
+    required this.price,
+    required this.currency,
+    required this.averageRating,
+    required this.originalPrice,
+    required this.showOverlayIcons,
+    required this.productId,
+    required this.onFavoriteToggled,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+    final textColor = theme.colorScheme.onSurface;
+    final priceColor = isDarkMode ? Colors.orangeAccent : Colors.redAccent;
+
+    // FIX 2: Use MediaQuery.withNoTextScaling for consistent sizing
+    return MediaQuery.withNoTextScaling(
+      child: _buildCardContent(context, textColor, priceColor),
+    );
+  }
+
+  Widget _buildCardContent(
+    BuildContext context,
+    Color textColor,
+    Color priceColor,
+  ) {
     final cardContent = Container(
       height: imageHeight,
       decoration: BoxDecoration(
@@ -230,16 +221,23 @@ class _CardContent extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ProductImage(
-            state: state,
-            mediaQuery: mediaQuery,
+          _OptimizedProductImage(
+            key: ValueKey('img_${displayImageUrl.hashCode}'),
+            imageUrl: displayImageUrl,
+            hasValidImage: hasValidImage,
           ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(paddingAll),
               child: _ProductDetails(
-                state: state,
-                widget: widget,
+                productName: productName,
+                brandModel: brandModel,
+                hasBrandModel: hasBrandModel,
+                price: price,
+                currency: currency,
+                averageRating: averageRating,
+                originalPrice: originalPrice,
+                hasActiveDiscount: hasActiveDiscount,
                 textColor: textColor,
                 priceColor: priceColor,
               ),
@@ -249,8 +247,8 @@ class _CardContent extends StatelessWidget {
       ),
     );
 
-    // ✅ OPTIMIZATION 7: Only wrap with Stack if overlay icons are needed
-    if (widget.showOverlayIcons && widget.productId != null) {
+    // Only wrap with Stack if overlay icons are needed
+    if (showOverlayIcons && productId != null) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(borderRadius),
         clipBehavior: Clip.hardEdge,
@@ -258,11 +256,11 @@ class _CardContent extends StatelessWidget {
           children: [
             cardContent,
             Positioned(
-              bottom: spacingMid,
-              right: spacingMid,
+              bottom: 4,
+              right: 4,
               child: _OverlayIcons(
-                productId: widget.productId!,
-                onFavoriteToggled: widget.onFavoriteToggled,
+                productId: productId!,
+                onFavoriteToggled: onFavoriteToggled,
               ),
             ),
           ],
@@ -274,20 +272,23 @@ class _CardContent extends StatelessWidget {
   }
 }
 
-// ✅ OPTIMIZATION 8: Extract product image section
-class _ProductImage extends StatelessWidget {
-  final _ProductCard4State state;
-  final MediaQueryData mediaQuery;
+/// Optimized product image with stable caching
+class _OptimizedProductImage extends StatelessWidget {
+  final String imageUrl;
+  final bool hasValidImage;
 
+  // FIX 3: Fixed cache dimensions - not reactive to devicePixelRatio
+  // Using 3x for high-DPI displays (covers most devices)
+  static const int _cacheHeight = 240; // 80 * 3
+  static const int _cacheWidth = 270; // 90 * 3
   static const double imageHeight = 80.0;
   static const double imageWidth = 90.0;
   static const double borderRadius = 8.0;
-  static const double placeholderIconSize = 25.0;
 
-  const _ProductImage({
+  const _OptimizedProductImage({
     Key? key,
-    required this.state,
-    required this.mediaQuery,
+    required this.imageUrl,
+    required this.hasValidImage,
   }) : super(key: key);
 
   @override
@@ -297,87 +298,116 @@ class _ProductImage extends StatelessWidget {
         topLeft: Radius.circular(borderRadius),
         bottomLeft: Radius.circular(borderRadius),
       ),
-      child: SizedBox(
-        width: imageWidth,
-        height: imageHeight,
-        child: state._hasValidImage
-            ? CachedNetworkImage(
-                imageUrl: state._displayImageUrl,
-                fit: BoxFit.cover,
-                // ✅ OPTIMIZATION 9: Cache network images with size constraints
-                memCacheHeight:
-                    (imageHeight * mediaQuery.devicePixelRatio).round(),
-                maxHeightDiskCache:
-                    (imageHeight * mediaQuery.devicePixelRatio).round(),
-                memCacheWidth:
-                    (imageWidth * mediaQuery.devicePixelRatio).round(),
-                maxWidthDiskCache:
-                    (imageWidth * mediaQuery.devicePixelRatio).round(),
-                placeholder: (_, __) => _buildImagePlaceholder(),
-                errorWidget: (_, __, ___) => _buildImageErrorWidget(),
-              )
-            : _buildImagePlaceholder(),
-      ),
-    );
-  }
-
-  Widget _buildImagePlaceholder() {
-    return Container(
-      color: Colors.grey[200],
-      alignment: Alignment.center,
-      child: Image.asset(
-        'assets/images/narsiyah.png',
-        width: placeholderIconSize * 3,
-        height: placeholderIconSize * 3,
-        fit: BoxFit.contain,
-        // ✅ OPTIMIZATION 10: Cache asset images
-        cacheWidth:
-            (placeholderIconSize * 3 * mediaQuery.devicePixelRatio).round(),
-        cacheHeight:
-            (placeholderIconSize * 3 * mediaQuery.devicePixelRatio).round(),
-        errorBuilder: (context, error, stackTrace) {
-          return const Icon(
-            Icons.image,
-            size: placeholderIconSize,
-            color: Colors.grey,
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildImageErrorWidget() {
-    return Container(
-      color: Colors.grey[200],
-      alignment: Alignment.center,
-      child: const Icon(
-        Icons.broken_image,
-        size: placeholderIconSize,
-        color: Colors.grey,
+      // FIX 4: RepaintBoundary for image isolation
+      child: RepaintBoundary(
+        child: SizedBox(
+          width: imageWidth,
+          height: imageHeight,
+          child: hasValidImage
+              ? CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.cover,
+                  width: imageWidth,
+                  height: imageHeight,
+                  // FIX 5: Fixed cache dimensions for stability
+                  memCacheHeight: _cacheHeight,
+                  memCacheWidth: _cacheWidth,
+                  maxHeightDiskCache: _cacheHeight,
+                  maxWidthDiskCache: _cacheWidth,
+                  // FIX 6: Disable fade animations to prevent flicker
+                  fadeInDuration: Duration.zero,
+                  fadeOutDuration: Duration.zero,
+                  // FIX 7: Stable cache key based on URL hash
+                  cacheKey: 'product_img_${imageUrl.hashCode}',
+                  // FIX 8: Keep old image while loading new one
+                  useOldImageOnUrlChange: true,
+                  // FIX 9: Medium quality filtering for smoother rendering
+                  filterQuality: FilterQuality.medium,
+                  placeholder: (_, __) => const _ImagePlaceholder(),
+                  errorWidget: (_, __, ___) => const _ImageErrorWidget(),
+                )
+              : const _ImagePlaceholder(),
+        ),
       ),
     );
   }
 }
 
-// ✅ OPTIMIZATION 11: Extract product details section
+/// Image loading placeholder
+class _ImagePlaceholder extends StatelessWidget {
+  static const double _placeholderSize = 75.0; // 25 * 3
+  static const int _assetCacheSize = 150; // 75 * 2 for retina
+
+  const _ImagePlaceholder({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.grey.shade200,
+      child: Center(
+        child: Image.asset(
+          'assets/images/narsiyah.png',
+          width: _placeholderSize,
+          height: _placeholderSize,
+          fit: BoxFit.contain,
+          // FIX 10: Fixed asset cache size
+          cacheWidth: _assetCacheSize,
+          cacheHeight: _assetCacheSize,
+          filterQuality: FilterQuality.low,
+          isAntiAlias: false,
+          errorBuilder: (_, __, ___) => Icon(
+            Icons.image_outlined,
+            size: 25,
+            color: Colors.grey.shade400,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Image error widget
+class _ImageErrorWidget extends StatelessWidget {
+  const _ImageErrorWidget({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.grey.shade200,
+      child: Center(
+        child: Icon(
+          Icons.broken_image_outlined,
+          size: 25,
+          color: Colors.grey.shade400,
+        ),
+      ),
+    );
+  }
+}
+
+/// Product details section
 class _ProductDetails extends StatelessWidget {
-  final _ProductCard4State state;
-  final ProductCard4 widget;
+  final String productName;
+  final String brandModel;
+  final bool hasBrandModel;
+  final double price;
+  final String currency;
+  final double averageRating;
+  final double? originalPrice;
+  final bool hasActiveDiscount;
   final Color textColor;
   final Color priceColor;
 
-  static const double spacingTiny = 1.0;
-  static const double spacingSmall = 2.0;
-  static const double spacingMid = 4.0;
-  static const double fontLarge = 14.0;
-  static const double fontMedium = 12.0;
-  static const double fontSmall = 10.0;
-  static const Color jadeGreen = Color(0xFF00A86B);
-
   const _ProductDetails({
     Key? key,
-    required this.state,
-    required this.widget,
+    required this.productName,
+    required this.brandModel,
+    required this.hasBrandModel,
+    required this.price,
+    required this.currency,
+    required this.averageRating,
+    required this.originalPrice,
+    required this.hasActiveDiscount,
     required this.textColor,
     required this.priceColor,
   }) : super(key: key);
@@ -390,22 +420,20 @@ class _ProductDetails extends StatelessWidget {
       children: [
         Flexible(
           child: _ProductTitle(
-            brandModel: widget.brandModel,
-            productName: widget.productName,
+            brandModel: brandModel,
+            productName: productName,
             textColor: textColor,
-            hasBrandModel: state._hasBrandModel,
+            hasBrandModel: hasBrandModel,
           ),
         ),
-        const SizedBox(height: spacingTiny),
-        _RatingRow(
-          rating: widget.averageRating,
-        ),
-        const SizedBox(height: spacingTiny),
+        const SizedBox(height: 1),
+        _RatingRow(rating: averageRating),
+        const SizedBox(height: 1),
         _PriceRow(
-          price: widget.price,
-          currency: widget.currency,
-          originalPrice: widget.originalPrice,
-          hasActiveDiscount: state._hasActiveDiscount,
+          price: price,
+          currency: currency,
+          originalPrice: originalPrice,
+          hasActiveDiscount: hasActiveDiscount,
           priceColor: priceColor,
         ),
       ],
@@ -413,14 +441,15 @@ class _ProductDetails extends StatelessWidget {
   }
 }
 
-// ✅ OPTIMIZATION 12: Extract product title
+/// Product title with brand
 class _ProductTitle extends StatelessWidget {
   final String brandModel;
   final String productName;
   final Color textColor;
   final bool hasBrandModel;
 
-  static const double fontLarge = 14.0;
+  static const double _fontSize = 14.0;
+  static const Color _brandColor = Color.fromARGB(255, 66, 140, 201);
 
   const _ProductTitle({
     Key? key,
@@ -438,9 +467,9 @@ class _ProductTitle extends StatelessWidget {
           Text(
             '$brandModel ',
             style: const TextStyle(
-              fontSize: fontLarge,
+              fontSize: _fontSize,
               fontWeight: FontWeight.w600,
-              color: Color.fromARGB(255, 66, 140, 201),
+              color: _brandColor,
             ),
             overflow: TextOverflow.ellipsis,
           ),
@@ -449,7 +478,7 @@ class _ProductTitle extends StatelessWidget {
           child: Text(
             productName.isNotEmpty ? productName : 'Unknown Product',
             style: TextStyle(
-              fontSize: fontLarge,
+              fontSize: _fontSize,
               fontWeight: FontWeight.w600,
               color: textColor,
             ),
@@ -462,12 +491,12 @@ class _ProductTitle extends StatelessWidget {
   }
 }
 
-// ✅ OPTIMIZATION 13: Extract rating row
+/// Rating display row
 class _RatingRow extends StatelessWidget {
   final double rating;
 
-  static const double spacingSmall = 2.0;
-  static const double fontSmall = 10.0;
+  static const double _starSize = 10.0;
+  static const double _fontSize = 10.0;
 
   const _RatingRow({
     Key? key,
@@ -477,20 +506,21 @@ class _RatingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         RatingBarIndicator(
           rating: rating,
           itemBuilder: (_, __) => const Icon(Icons.star, color: Colors.amber),
           itemCount: 5,
-          itemSize: fontSmall,
+          itemSize: _starSize,
           unratedColor: Colors.grey,
           direction: Axis.horizontal,
         ),
-        const SizedBox(width: spacingSmall),
+        const SizedBox(width: 2),
         Text(
           rating.toStringAsFixed(1),
           style: const TextStyle(
-            fontSize: fontSmall,
+            fontSize: _fontSize,
             color: Colors.grey,
           ),
         ),
@@ -499,7 +529,7 @@ class _RatingRow extends StatelessWidget {
   }
 }
 
-// ✅ OPTIMIZATION 14: Extract price row
+/// Price display row with discount support
 class _PriceRow extends StatelessWidget {
   final double price;
   final String currency;
@@ -507,9 +537,8 @@ class _PriceRow extends StatelessWidget {
   final bool hasActiveDiscount;
   final Color priceColor;
 
-  static const double spacingMid = 4.0;
-  static const double fontMedium = 12.0;
-  static const Color jadeGreen = Color(0xFF00A86B);
+  static const double _fontSize = 12.0;
+  static const Color _discountColor = Color(0xFF00A86B);
 
   const _PriceRow({
     Key? key,
@@ -520,8 +549,8 @@ class _PriceRow extends StatelessWidget {
     required this.priceColor,
   }) : super(key: key);
 
-  String formatPrice(num price) {
-    double rounded = double.parse(price.toStringAsFixed(2));
+  String _formatPrice(num price) {
+    final rounded = double.parse(price.toStringAsFixed(2));
     if (rounded == rounded.truncateToDouble()) {
       return rounded.toInt().toString();
     }
@@ -530,40 +559,36 @@ class _PriceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ SAFE: Check both hasActiveDiscount AND originalPrice is not null
     if (hasActiveDiscount && originalPrice != null) {
       return Row(
         children: [
-          // Original price with strikethrough
           Text(
-            '${formatPrice(originalPrice!)} $currency',
+            '${_formatPrice(originalPrice!)} $currency',
             style: const TextStyle(
-              fontSize: fontMedium,
+              fontSize: _fontSize,
               color: Colors.grey,
               decoration: TextDecoration.lineThrough,
               decorationColor: Colors.grey,
               decorationThickness: 2.0,
             ),
           ),
-          const SizedBox(width: spacingMid),
-          // Discounted price in green
+          const SizedBox(width: 4),
           Text(
-            '${formatPrice(price)} $currency',
+            '${_formatPrice(price)} $currency',
             style: const TextStyle(
-              fontSize: fontMedium,
+              fontSize: _fontSize,
               fontWeight: FontWeight.bold,
-              color: jadeGreen,
+              color: _discountColor,
             ),
           ),
         ],
       );
     }
 
-    // Regular price (no discount)
     return Text(
-      '${formatPrice(price)} $currency',
+      '${_formatPrice(price)} $currency',
       style: TextStyle(
-        fontSize: fontMedium,
+        fontSize: _fontSize,
         fontWeight: FontWeight.bold,
         color: priceColor,
       ),
@@ -571,7 +596,7 @@ class _PriceRow extends StatelessWidget {
   }
 }
 
-// ✅ OPTIMIZATION 15: Extract overlay icons with state management
+/// Overlay icons with optimized state management
 class _OverlayIcons extends StatefulWidget {
   final String productId;
   final VoidCallback? onFavoriteToggled;
@@ -590,48 +615,49 @@ class _OverlayIconsState extends State<_OverlayIcons> {
   bool _isFavoriteProcessing = false;
   bool _isCartProcessing = false;
 
-  static const double spacingMid = 4.0;
-  static const double iconSize = 16.0;
-
   @override
   Widget build(BuildContext context) {
-    return Consumer2<FavoriteProvider, CartProvider>(
-      builder: (context, favProv, cartProv, child) {
-        final isFavorited =
-            favProv.favoriteProductIds.contains(widget.productId);
-        final isInCart = cartProv.cartProductIds.contains(widget.productId);
-
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _ActionIcon(
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // FIX 11: Use Selector for minimal rebuilds on favorite
+        Selector<FavoriteProvider, bool>(
+          selector: (_, provider) =>
+              provider.favoriteProductIds.contains(widget.productId),
+          builder: (context, isFavorited, _) {
+            return _ActionIcon(
               icon: FeatherIcons.heart,
               color: isFavorited ? Colors.red : Colors.white,
               isProcessing: _isFavoriteProcessing,
-              onTap: _isFavoriteProcessing
-                  ? null
-                  : () => _handleFavoriteToggle(favProv),
-            ),
-            const SizedBox(width: spacingMid),
-            _ActionIcon(
+              onTap: _isFavoriteProcessing ? null : _handleFavoriteToggle,
+            );
+          },
+        ),
+        const SizedBox(width: 4),
+        // FIX 12: Use Selector for minimal rebuilds on cart
+        Selector<CartProvider, bool>(
+          selector: (_, provider) =>
+              provider.cartProductIds.contains(widget.productId),
+          builder: (context, isInCart, _) {
+            return _ActionIcon(
               icon: FeatherIcons.shoppingCart,
               color: isInCart ? Colors.orange : Colors.white,
               isProcessing: _isCartProcessing,
-              onTap:
-                  _isCartProcessing ? null : () => _handleAddToCart(cartProv),
-            ),
-          ],
-        );
-      },
+              onTap: _isCartProcessing ? null : _handleAddToCart,
+            );
+          },
+        ),
+      ],
     );
   }
 
-  Future<void> _handleFavoriteToggle(FavoriteProvider favProv) async {
+  Future<void> _handleFavoriteToggle() async {
     if (_isFavoriteProcessing) return;
 
     setState(() => _isFavoriteProcessing = true);
 
     try {
+      final favProv = context.read<FavoriteProvider>();
       await favProv.addToFavorites(widget.productId, context: context);
       widget.onFavoriteToggled?.call();
     } catch (e) {
@@ -645,19 +671,22 @@ class _OverlayIconsState extends State<_OverlayIcons> {
     }
   }
 
-  Future<void> _handleAddToCart(CartProvider cartProv) async {
+  Future<void> _handleAddToCart() async {
     if (_isCartProcessing) return;
 
     setState(() => _isCartProcessing = true);
 
     try {
+      final cartProv = context.read<CartProvider>();
       final msg = await cartProv.addToCartById(widget.productId);
+
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(msg),
           duration: const Duration(seconds: 1),
+          behavior: SnackBarBehavior.floating,
         ),
       );
     } catch (e) {
@@ -672,14 +701,14 @@ class _OverlayIconsState extends State<_OverlayIcons> {
   }
 }
 
-// ✅ OPTIMIZATION 16: Reusable action icon widget
+/// Reusable action icon button
 class _ActionIcon extends StatelessWidget {
   final IconData icon;
   final Color color;
   final bool isProcessing;
   final VoidCallback? onTap;
 
-  static const double iconSize = 16.0;
+  static const double _iconSize = 16.0;
 
   const _ActionIcon({
     Key? key,
@@ -691,24 +720,29 @@ class _ActionIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.all(2.0),
-        child: isProcessing
-            ? SizedBox(
-                width: iconSize,
-                height: iconSize,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(color),
+    // FIX 13: Use Material + InkWell for proper touch feedback
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Padding(
+          padding: const EdgeInsets.all(4.0),
+          child: isProcessing
+              ? SizedBox(
+                  width: _iconSize,
+                  height: _iconSize,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(color),
+                  ),
+                )
+              : Icon(
+                  icon,
+                  size: _iconSize,
+                  color: color,
                 ),
-              )
-            : Icon(
-                icon,
-                size: iconSize,
-                color: color,
-              ),
+        ),
       ),
     );
   }

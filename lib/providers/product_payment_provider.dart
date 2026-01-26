@@ -41,6 +41,7 @@ class ProductPaymentProvider with ChangeNotifier {
   bool isAddressExpanded = true;
   final double cartCalculatedTotal;
   LatLng? selectedLocation;
+  bool attemptedPayment = false;
 
   bool get isExpressAvailable => !useFreeShipping;
 
@@ -266,6 +267,10 @@ class ProductPaymentProvider with ChangeNotifier {
   }
 
   Future<bool> confirmPayment(BuildContext context) async {
+    // Mark that user attempted payment (for showing validation feedback)
+    attemptedPayment = true;
+    notifyListeners();
+
     User? user = _auth.currentUser;
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(

@@ -12653,4 +12653,13 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get expressDisabledWithBenefit =>
       'Express delivery not available with free shipping benefit';
+
+  @override
+  String get pleaseSelectColor => 'Please select a color';
+
+  @override
+  String get pleaseSelectAnOption => 'Please select an option';
+
+  @override
+  String get pleaseEnterValidDimensions => 'Please enter valid dimensions';
 }

@@ -4579,7 +4579,7 @@
   "errorUserDisabled": "Error user",
   "searchTimeout": "Arama zaman aşımına uğradı. Lütfen tekrar deneyin.",
     "searchError": "Arama başarısız oldu. Lütfen tekrar deneyin.",
-  "invalidPhoneNumber": "Invalid phone number",
+  "invalidPhoneNumber": "Geçersiz telefon numarası",
   "contactBuyer": "Alıcıyla İletişime Geç",
   "cannotContactBuyer": "Şu anda alıcıyla iletişime geçilemiyor.",
   "phoneNumber": "Telefon Numarası",
@@ -5545,4 +5545,8 @@
 "youHaveACoupon": "🎉 Kuponunuz var!",
 "couponWaitingForYou": "Sepetinizde sizi bekleyen özel bir indirim var!",
 "expressDisabledWithBenefit": "Ücretsiz kargo avantajı ile ekspres teslimat seçilemez"
+,
+"pleaseSelectColor": "Lütfen bir renk seçin",
+"pleaseSelectAnOption": "Lütfen bir seçenek seçin",
+"pleaseEnterValidDimensions": "Lütfen geçerli ölçüler girin"
 }

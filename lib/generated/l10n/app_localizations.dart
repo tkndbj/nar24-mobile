@@ -20787,7 +20787,7 @@ abstract class AppLocalizations {
   /// No description provided for @invalidPhoneNumber.
   ///
   /// In tr, this message translates to:
-  /// **'Invalid phone number'**
+  /// **'Geçersiz telefon numarası'**
   String get invalidPhoneNumber;
 
   /// No description provided for @contactBuyer.
@@ -24209,6 +24209,24 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Ücretsiz kargo avantajı ile ekspres teslimat seçilemez'**
   String get expressDisabledWithBenefit;
+
+  /// No description provided for @pleaseSelectColor.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lütfen bir renk seçin'**
+  String get pleaseSelectColor;
+
+  /// No description provided for @pleaseSelectAnOption.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lütfen bir seçenek seçin'**
+  String get pleaseSelectAnOption;
+
+  /// No description provided for @pleaseEnterValidDimensions.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lütfen geçerli ölçüler girin'**
+  String get pleaseEnterValidDimensions;
 }
 
 class _AppLocalizationsDelegate

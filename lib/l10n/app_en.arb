@@ -5568,4 +5568,8 @@
 "youHaveACoupon": "🎉 You have a coupon!",
 "couponWaitingForYou": "A special discount is waiting for you in your cart!",
 "expressDisabledWithBenefit": "Express delivery not available with free shipping benefit"
+,
+"pleaseSelectColor": "Please select a color",
+"pleaseSelectAnOption": "Please select an option",
+"pleaseEnterValidDimensions": "Please enter valid dimensions"
 }

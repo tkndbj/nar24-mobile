@@ -7,6 +7,14 @@ import '../../providers/shop_widget_provider.dart';
 import '../../screens/SHOP-SCREENS/shop_detail_screen.dart';
 import '../../providers/shop_provider.dart';
 
+/// Production-grade ShopCardWidget with optimized image rendering
+///
+/// Key fixes for image glitching:
+/// 1. Stable PageController lifecycle management
+/// 2. Fixed cache dimensions (not reactive to mediaQuery changes)
+/// 3. Disabled fade animations to prevent flicker
+/// 4. RepaintBoundary for isolated rendering
+/// 5. Proper key management for widget identity
 class ShopCardWidget extends StatefulWidget {
   final Map<String, dynamic> shop;
   final String shopId;
@@ -25,75 +33,80 @@ class ShopCardWidget extends StatefulWidget {
 
 class _ShopCardWidgetState extends State<ShopCardWidget>
     with AutomaticKeepAliveClientMixin {
-  // ✅ CRITICAL: Prevent concurrent navigation spam
+  // Navigation throttle to prevent spam
   static DateTime? _lastNavigationTime;
   static const _navigationThrottle = Duration(milliseconds: 500);
 
-  // ✅ OPTIMIZATION 1: Cache computed values
-  late String _shopName;
-  late List<String> _coverImageList;
-  late String _profileImageUrl;
-  late String _ownerId;
-  late bool _hasCoverImages;
+  // Cached computed values - initialized once
+  late final String _shopName;
+  late final List<String> _coverImageList;
+  late final String _profileImageUrl;
+  late final String _ownerId;
+  late final bool _hasCoverImages;
 
-  // ✅ Track initialization to avoid re-running
-  bool _isInitialized = false;
+  // FIX 1: Stable PageController - created once, disposed properly
+  PageController? _pageController;
 
-  // ✅ OPTIMIZATION 2: Keep widget alive to avoid rebuilds when scrolling
   @override
   bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
-    // ✅ Initialize data that doesn't depend on context
-    _initializeContextFreeData();
+    _initializeData();
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // ✅ Initialize data that depends on context (like AppLocalizations)
-    if (!_isInitialized) {
-      _initializeContextDependentData();
-      _isInitialized = true;
-    }
+  void dispose() {
+    _pageController?.dispose();
+    super.dispose();
   }
 
-  /// Data that doesn't need context - safe in initState
-  void _initializeContextFreeData() {
-    // Parse cover images once
+  void _initializeData() {
+    // Parse cover images once and make immutable
     if (widget.shop['coverImageUrls'] is List) {
-      _coverImageList = List<String>.from(widget.shop['coverImageUrls']);
+      _coverImageList = List<String>.unmodifiable(
+        (widget.shop['coverImageUrls'] as List).cast<String>(),
+      );
     } else if ((widget.shop['coverImageUrl'] as String?)?.isNotEmpty == true) {
-      _coverImageList = [widget.shop['coverImageUrl']];
+      _coverImageList =
+          List<String>.unmodifiable([widget.shop['coverImageUrl']]);
     } else {
-      _coverImageList = [];
+      _coverImageList = const [];
     }
 
     _hasCoverImages = _coverImageList.isNotEmpty;
     _profileImageUrl = widget.shop['profileImageUrl'] as String? ?? '';
     _ownerId = widget.shop['ownerId'] as String? ?? '';
-  }
+    _shopName = widget.shop['name'] as String? ?? '';
 
-  /// Data that needs context - must be in didChangeDependencies
-  void _initializeContextDependentData() {
-    final l10n = AppLocalizations.of(context);
-    _shopName = widget.shop['name'] as String? ?? l10n.noName;
+    // Initialize PageController only if needed
+    if (_coverImageList.length > 1) {
+      _pageController = PageController();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
 
-    final mediaQuery = MediaQuery.of(context);
-    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final displayName = _shopName.isNotEmpty ? _shopName : l10n.noName;
 
-    return _ShopCardContent(
-      state: this,
-      widget: widget,
-      mediaQuery: mediaQuery,
-      theme: theme,
+    // FIX 2: RepaintBoundary isolates this widget's rendering
+    return RepaintBoundary(
+      child: _ShopCardContent(
+        key: ValueKey('shop_card_${widget.shopId}'),
+        shopId: widget.shopId,
+        shopName: displayName,
+        averageRating: widget.averageRating,
+        coverImageList: _coverImageList,
+        hasCoverImages: _hasCoverImages,
+        profileImageUrl: _profileImageUrl,
+        ownerId: _ownerId,
+        pageController: _pageController,
+        onNavigate: _navigateToShopDetail,
+      ),
     );
   }
 
@@ -111,12 +124,11 @@ class _ShopCardWidgetState extends State<ShopCardWidget>
       },
       transitionDuration: const Duration(milliseconds: 200),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        final tween = Tween<Offset>(
-          begin: const Offset(1, 0),
-          end: Offset.zero,
-        ).chain(CurveTween(curve: Curves.easeOut));
         return SlideTransition(
-          position: animation.drive(tween),
+          position: animation.drive(
+            Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+                .chain(CurveTween(curve: Curves.easeOut)),
+          ),
           child: child,
         );
       },
@@ -138,301 +150,405 @@ class _ShopCardWidgetState extends State<ShopCardWidget>
     _lastNavigationTime = now;
 
     if (!isOwner) {
-      widgetProv
-          .incrementClickCount(widget.shopId)
-          .catchError((e) => debugPrint('Click count error: $e'));
+      // Fire and forget - don't await
+      widgetProv.incrementClickCount(widget.shopId).catchError(
+            (e) => debugPrint('Click count error: $e'),
+          );
     }
 
-    Navigator.of(context).push(_shopDetailRoute(widget.shopId));
+    if (context.mounted) {
+      Navigator.of(context).push(_shopDetailRoute(widget.shopId));
+    }
   }
 }
 
-// ✅ OPTIMIZATION 4: Split into separate widget to reduce rebuild scope
+/// Stateless content widget - receives all data as parameters
+/// This prevents rebuilds from propagating unnecessarily
 class _ShopCardContent extends StatelessWidget {
-  final _ShopCardWidgetState state;
-  final ShopCardWidget widget;
-  final MediaQueryData mediaQuery;
-  final ThemeData theme;
+  final String shopId;
+  final String shopName;
+  final double averageRating;
+  final List<String> coverImageList;
+  final bool hasCoverImages;
+  final String profileImageUrl;
+  final String ownerId;
+  final PageController? pageController;
+  final Future<void> Function(BuildContext, ShopWidgetProvider, bool)
+      onNavigate;
 
   const _ShopCardContent({
     Key? key,
-    required this.state,
-    required this.widget,
-    required this.mediaQuery,
-    required this.theme,
+    required this.shopId,
+    required this.shopName,
+    required this.averageRating,
+    required this.coverImageList,
+    required this.hasCoverImages,
+    required this.profileImageUrl,
+    required this.ownerId,
+    required this.pageController,
+    required this.onNavigate,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     final widgetProv = context.read<ShopWidgetProvider>();
-    final l10n = AppLocalizations.of(context);
-    final currentUser = widgetProv.currentUser;
-
+    final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final mainTextColor = isDark ? Colors.white : Colors.black;
     final secondaryTextColor =
         isDark ? Colors.grey.shade300 : Colors.grey.shade700;
 
-    final isOwner = currentUser?.uid == state._ownerId;
+    final currentUser = widgetProv.currentUser;
+    final isOwner = currentUser?.uid == ownerId;
 
-    // Detect tablet for shorter card height
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final isTablet = screenWidth >= 600;
 
-    return InkWell(
-      onTap: () => state._navigateToShopDetail(context, widgetProv, isOwner),
-      splashColor: Colors.transparent,
-      highlightColor: Colors.transparent,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade300, width: 1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          // Tablet: minimize height to content, Mobile: expand to fill
-          mainAxisSize: isTablet ? MainAxisSize.min : MainAxisSize.max,
-          children: [
-            _CoverSection(
-              state: state,
-              widgetProv: widgetProv,
-              secondaryTextColor: secondaryTextColor,
-              l10n: l10n,
-              mediaQuery: mediaQuery,
-            ),
-            _ShopInfo(
-              shopName: state._shopName,
-              averageRating: widget.averageRating,
-              mainTextColor: mainTextColor,
-              secondaryTextColor: secondaryTextColor,
-            ),
-          ],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => onNavigate(context, widgetProv, isOwner),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300, width: 1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: isTablet ? MainAxisSize.min : MainAxisSize.max,
+            children: [
+              _CoverSection(
+                shopId: shopId,
+                shopName: shopName,
+                coverImageList: coverImageList,
+                hasCoverImages: hasCoverImages,
+                profileImageUrl: profileImageUrl,
+                pageController: pageController,
+                secondaryTextColor: secondaryTextColor,
+              ),
+              _ShopInfoSection(
+                shopName: shopName,
+                averageRating: averageRating,
+                mainTextColor: mainTextColor,
+                secondaryTextColor: secondaryTextColor,
+                isTablet: isTablet,
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-// ✅ OPTIMIZATION 5: Extract cover section to avoid rebuilds
+/// Cover section with images and action buttons
 class _CoverSection extends StatelessWidget {
-  final _ShopCardWidgetState state;
-  final ShopWidgetProvider widgetProv;
+  final String shopId;
+  final String shopName;
+  final List<String> coverImageList;
+  final bool hasCoverImages;
+  final String profileImageUrl;
+  final PageController? pageController;
   final Color secondaryTextColor;
-  final AppLocalizations l10n;
-  final MediaQueryData mediaQuery;
+
+  // FIX 3: Fixed cache dimensions - not reactive to screen changes
+  // Using 3x for high-DPI displays (covers most devices)
+  static const int _imageCacheHeight = 360; // 120 * 3
+  static const int _imageCacheWidth = 540; // Approximate 16:9 aspect
 
   const _CoverSection({
     Key? key,
-    required this.state,
-    required this.widgetProv,
+    required this.shopId,
+    required this.shopName,
+    required this.coverImageList,
+    required this.hasCoverImages,
+    required this.profileImageUrl,
+    required this.pageController,
     required this.secondaryTextColor,
-    required this.l10n,
-    required this.mediaQuery,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
+    return SizedBox(
+      height: 138, // 120 + space for avatar overflow
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Cover image container
+          Positioned.fill(
+            bottom: 18, // Leave space for avatar
+            child: ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(12)),
+              // FIX 4: RepaintBoundary for image section
+              child: RepaintBoundary(
+                child: hasCoverImages
+                    ? _buildCoverImages()
+                    : const _NoCoverPlaceholder(),
+              ),
+            ),
+          ),
+          // Action buttons
+          Positioned(
+            top: 8,
+            right: 4,
+            child: _ActionButtonsRow(
+              shopId: shopId,
+              shopName: shopName,
+              secondaryTextColor: secondaryTextColor,
+            ),
+          ),
+          // Profile avatar
+          Positioned(
+            right: 16,
+            bottom: 0,
+            child: _ProfileAvatar(
+              key: ValueKey('avatar_$shopId'),
+              profileImageUrl: profileImageUrl,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoverImages() {
+    // Single image - no PageView needed
+    if (coverImageList.length == 1) {
+      return _OptimizedCoverImage(
+        key: ValueKey('cover_${coverImageList[0].hashCode}'),
+        imageUrl: coverImageList[0],
+        cacheHeight: _imageCacheHeight,
+        cacheWidth: _imageCacheWidth,
+      );
+    }
+
+    // Multiple images - use PageView with stable controller
+    return PageView.builder(
+      controller: pageController,
+      itemCount: coverImageList.length,
+      // FIX 5: Keep only adjacent pages in memory
+      allowImplicitScrolling: false,
+      itemBuilder: (context, index) {
+        return _OptimizedCoverImage(
+          key: ValueKey('cover_${coverImageList[index].hashCode}'),
+          imageUrl: coverImageList[index],
+          cacheHeight: _imageCacheHeight,
+          cacheWidth: _imageCacheWidth,
+        );
+      },
+    );
+  }
+}
+
+/// Optimized cover image with stable caching
+class _OptimizedCoverImage extends StatelessWidget {
+  final String imageUrl;
+  final int cacheHeight;
+  final int cacheWidth;
+
+  const _OptimizedCoverImage({
+    Key? key,
+    required this.imageUrl,
+    required this.cacheHeight,
+    required this.cacheWidth,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return CachedNetworkImage(
+      imageUrl: imageUrl,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
+      // FIX 6: Fixed cache dimensions for stability
+      memCacheHeight: cacheHeight,
+      memCacheWidth: cacheWidth,
+      maxHeightDiskCache: cacheHeight,
+      maxWidthDiskCache: cacheWidth,
+      // FIX 7: Disable fade animations to prevent flicker
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
+      // FIX 8: Use placeholder that matches final size
+      placeholder: (context, url) => const _ImageLoadingPlaceholder(),
+      errorWidget: (context, url, error) => const _ImageErrorPlaceholder(),
+      // FIX 9: Use memory cache key based on URL hash for stability
+      cacheKey: 'shop_cover_${imageUrl.hashCode}',
+      // FIX 10: Enable image filtering for smoother rendering
+      filterQuality: FilterQuality.medium,
+      useOldImageOnUrlChange: true,
+    );
+  }
+}
+
+/// Loading placeholder with consistent appearance
+class _ImageLoadingPlaceholder extends StatelessWidget {
+  const _ImageLoadingPlaceholder({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.grey.shade200,
+      child: Center(
+        child: Image.asset(
+          'assets/images/narsiyah.png',
+          width: 80,
+          height: 80,
+          fit: BoxFit.contain,
+          cacheWidth: 160, // 2x for retina
+          cacheHeight: 160,
+          // FIX 11: Ensure asset loading doesn't throw
+          errorBuilder: (context, error, stackTrace) => Icon(
+            Icons.image,
+            size: 40,
+            color: Colors.grey.shade400,
+          ),
+          // Disable animations on asset image
+          filterQuality: FilterQuality.low,
+          isAntiAlias: false,
+        ),
+      ),
+    );
+  }
+}
+
+/// Error placeholder
+class _ImageErrorPlaceholder extends StatelessWidget {
+  const _ImageErrorPlaceholder({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.grey.shade200,
+      child: Icon(
+        Icons.broken_image_outlined,
+        size: 40,
+        color: Colors.grey.shade400,
+      ),
+    );
+  }
+}
+
+/// No cover image placeholder
+class _NoCoverPlaceholder extends StatelessWidget {
+  const _NoCoverPlaceholder({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.grey.shade200,
+      child: Icon(
+        Icons.image_not_supported_outlined,
+        size: 40,
+        color: Colors.grey.shade400,
+      ),
+    );
+  }
+}
+
+/// Action buttons with optimized state management
+class _ActionButtonsRow extends StatelessWidget {
+  final String shopId;
+  final String shopName;
+  final Color secondaryTextColor;
+
+  const _ActionButtonsRow({
+    Key? key,
+    required this.shopId,
+    required this.shopName,
+    required this.secondaryTextColor,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: SizedBox(
-            height: 120,
-            width: double.infinity,
-            child: state._hasCoverImages
-                ? _CoverImageCarousel(
-                    coverImages: state._coverImageList,
-                    mediaQuery: mediaQuery,
-                  )
-                : _NoCoverImage(),
-          ),
+        _FavoriteButton(
+          shopId: shopId,
+          secondaryTextColor: secondaryTextColor,
         ),
-        Positioned(
-          top: 8,
-          right: 4,
-          child: _ActionButtons(
-            shopId: state.widget.shopId,
-            shopName: state._shopName,
-            widgetProv: widgetProv,
-            secondaryTextColor: secondaryTextColor,
-            l10n: l10n,
-          ),
-        ),
-        Positioned(
-          right: 16,
-          bottom: -18,
-          child: _ProfileAvatar(
-            profileImageUrl: state._profileImageUrl,
-          ),
+        const SizedBox(width: 4),
+        _ShareButton(
+          shopName: shopName,
+          secondaryTextColor: secondaryTextColor,
         ),
       ],
     );
   }
 }
 
-// ✅ OPTIMIZATION 6: Separate carousel widget with optimizations
-class _CoverImageCarousel extends StatelessWidget {
-  final List<String> coverImages;
-  final MediaQueryData mediaQuery;
-
-  const _CoverImageCarousel({
-    Key? key,
-    required this.coverImages,
-    required this.mediaQuery,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    // ✅ Single image optimization - no PageView needed
-    if (coverImages.length == 1) {
-      return _buildCoverImage(coverImages[0]);
-    }
-
-    return PageView.builder(
-      itemCount: coverImages.length,
-      // ✅ OPTIMIZATION 7: Limit pre-cached pages for memory efficiency
-      controller: PageController(viewportFraction: 1.0),
-      itemBuilder: (ctx, i) => _buildCoverImage(coverImages[i]),
-    );
-  }
-
-  Widget _buildCoverImage(String imageUrl) {
-    return CachedNetworkImage(
-      imageUrl: imageUrl,
-      fit: BoxFit.cover,
-      // ✅ OPTIMIZATION 8: Cache network images with size constraints
-      memCacheHeight: (120 * mediaQuery.devicePixelRatio).round(),
-      maxHeightDiskCache: (120 * mediaQuery.devicePixelRatio).round(),
-      placeholder: (context, url) => _buildPlaceholder(),
-      errorWidget: (_, __, ___) => _buildErrorWidget(),
-    );
-  }
-
-  Widget _buildPlaceholder() {
-    return Container(
-      color: Colors.grey.shade200,
-      alignment: Alignment.center,
-      child: Image.asset(
-        'assets/images/narsiyah.png',
-        width: 80,
-        height: 80,
-        fit: BoxFit.contain,
-        // ✅ OPTIMIZATION 9: Cache asset images
-        cacheWidth: 80,
-        cacheHeight: 80,
-        errorBuilder: (context, error, stackTrace) {
-          return const Icon(
-            Icons.image,
-            size: 40,
-            color: Colors.grey,
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildErrorWidget() {
-    return Container(
-      color: Colors.grey.shade200,
-      child: const Icon(
-        Icons.broken_image,
-        size: 40,
-        color: Colors.grey,
-      ),
-    );
-  }
-}
-
-// ✅ OPTIMIZATION 10: Extract static no-cover widget
-class _NoCoverImage extends StatelessWidget {
-  const _NoCoverImage({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: Colors.grey.shade200,
-      child: const Icon(Icons.image_not_supported),
-    );
-  }
-}
-
-// ✅ OPTIMIZATION 11: Extract action buttons
-class _ActionButtons extends StatefulWidget {
+/// Favorite button with selector for minimal rebuilds
+class _FavoriteButton extends StatefulWidget {
   final String shopId;
-  final String shopName;
-  final ShopWidgetProvider widgetProv;
   final Color secondaryTextColor;
-  final AppLocalizations l10n;
 
-  const _ActionButtons({
+  const _FavoriteButton({
     Key? key,
     required this.shopId,
-    required this.shopName,
-    required this.widgetProv,
     required this.secondaryTextColor,
-    required this.l10n,
   }) : super(key: key);
 
   @override
-  State<_ActionButtons> createState() => _ActionButtonsState();
+  State<_FavoriteButton> createState() => _FavoriteButtonState();
 }
 
-class _ActionButtonsState extends State<_ActionButtons> {
+class _FavoriteButtonState extends State<_FavoriteButton> {
   bool _isProcessing = false;
 
   @override
   Widget build(BuildContext context) {
-    final isFavorite =
-        widget.widgetProv.favoriteShopIds.contains(widget.shopId);
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _ActionButton(
+    // FIX 12: Use Selector for minimal rebuilds
+    return Selector<ShopWidgetProvider, bool>(
+      selector: (_, provider) =>
+          provider.favoriteShopIds.contains(widget.shopId),
+      builder: (context, isFavorite, child) {
+        return _CircularIconButton(
           icon: isFavorite ? Icons.favorite : Icons.favorite_border,
           color: isFavorite ? Colors.red : widget.secondaryTextColor,
-          isProcessing: _isProcessing,
-          onPressed: _isProcessing ? null : _handleFavoriteToggle,
-        ),
-        const SizedBox(width: 2),
-        _ActionButton(
-          icon: Icons.share,
-          color: widget.secondaryTextColor,
-          onPressed: _handleShare,
-        ),
-      ],
+          isLoading: _isProcessing,
+          onPressed: _isProcessing ? null : () => _handleToggle(context),
+        );
+      },
     );
   }
 
-  Future<void> _handleFavoriteToggle() async {
+  Future<void> _handleToggle(BuildContext context) async {
     if (_isProcessing) return;
 
     setState(() => _isProcessing = true);
 
     try {
-      await widget.widgetProv.toggleFavorite(widget.shopId);
+      final provider = context.read<ShopWidgetProvider>();
+      await provider.toggleFavorite(widget.shopId);
+
       if (!mounted) return;
+
+      final l10n = AppLocalizations.of(context);
+      final isFavorite = provider.favoriteShopIds.contains(widget.shopId);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            widget.widgetProv.favoriteShopIds.contains(widget.shopId)
-                ? widget.l10n.addedToFavorites
-                : widget.l10n.removedFromFavorites,
+            isFavorite ? l10n.addedToFavorites : l10n.removedFromFavorites,
           ),
           duration: const Duration(seconds: 1),
+          behavior: SnackBarBehavior.floating,
         ),
       );
     } catch (e) {
-      debugPrint('Fav error: $e');
+      debugPrint('Favorite toggle error: $e');
+
       if (!mounted) return;
 
+      final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(widget.l10n.errorTogglingFavorite),
+          content: Text(l10n.errorTogglingFavorite),
           duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
         ),
       );
     } finally {
@@ -441,55 +557,72 @@ class _ActionButtonsState extends State<_ActionButtons> {
       }
     }
   }
-
-  void _handleShare() {
-    Share.share(widget.shopName);
-  }
 }
 
-// ✅ OPTIMIZATION 12: Reusable action button widget
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final VoidCallback? onPressed;
-  final bool isProcessing;
+/// Share button - stateless since it doesn't need state
+class _ShareButton extends StatelessWidget {
+  final String shopName;
+  final Color secondaryTextColor;
 
-  const _ActionButton({
+  const _ShareButton({
     Key? key,
-    required this.icon,
-    required this.color,
-    this.onPressed,
-    this.isProcessing = false,
+    required this.shopName,
+    required this.secondaryTextColor,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 24,
-      height: 24,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        color: Color(0xFFFFFDD0),
-      ),
-      child: isProcessing
-          ? Padding(
-              padding: const EdgeInsets.all(4),
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(color),
-              ),
-            )
-          : IconButton(
-              iconSize: 14,
-              padding: EdgeInsets.zero,
-              icon: Icon(icon, color: color),
-              onPressed: onPressed,
-            ),
+    return _CircularIconButton(
+      icon: Icons.share_outlined,
+      color: secondaryTextColor,
+      onPressed: () => Share.share(shopName),
     );
   }
 }
 
-// ✅ OPTIMIZATION 13: Extract profile avatar
+/// Reusable circular icon button
+class _CircularIconButton extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onPressed;
+  final bool isLoading;
+
+  const _CircularIconButton({
+    Key? key,
+    required this.icon,
+    required this.color,
+    this.onPressed,
+    this.isLoading = false,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.circle,
+      color: const Color(0xFFFFFDD0),
+      elevation: 0,
+      child: InkWell(
+        onTap: onPressed,
+        customBorder: const CircleBorder(),
+        child: SizedBox(
+          width: 28,
+          height: 28,
+          child: isLoading
+              ? Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(color),
+                  ),
+                )
+              : Icon(icon, color: color, size: 16),
+        ),
+      ),
+    );
+  }
+}
+
+/// Profile avatar with optimized image loading
 class _ProfileAvatar extends StatelessWidget {
   final String profileImageUrl;
 
@@ -502,11 +635,33 @@ class _ProfileAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasImage = profileImageUrl.isNotEmpty;
 
-    return CircleAvatar(
-      radius: 24,
-      backgroundImage:
-          hasImage ? CachedNetworkImageProvider(profileImageUrl) : null,
-      backgroundColor: hasImage ? Colors.transparent : Colors.grey.shade200,
+    // FIX 13: Use Container with DecorationImage for more stable rendering
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.grey.shade200,
+        border: Border.all(color: Colors.white, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+        image: hasImage
+            ? DecorationImage(
+                image: CachedNetworkImageProvider(
+                  profileImageUrl,
+                  maxHeight: 144, // 48 * 3 for retina
+                  maxWidth: 144,
+                  cacheKey: 'profile_${profileImageUrl.hashCode}',
+                ),
+                fit: BoxFit.cover,
+              )
+            : null,
+      ),
       child: hasImage
           ? null
           : const Icon(Icons.person, color: Colors.white, size: 24),
@@ -514,81 +669,62 @@ class _ProfileAvatar extends StatelessWidget {
   }
 }
 
-// ✅ OPTIMIZATION 14: Extract shop info section
-class _ShopInfo extends StatelessWidget {
+/// Shop info section
+class _ShopInfoSection extends StatelessWidget {
   final String shopName;
   final double averageRating;
   final Color mainTextColor;
   final Color secondaryTextColor;
+  final bool isTablet;
 
-  const _ShopInfo({
+  const _ShopInfoSection({
     Key? key,
     required this.shopName,
     required this.averageRating,
     required this.mainTextColor,
     required this.secondaryTextColor,
+    required this.isTablet,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isTablet = screenWidth >= 600;
-
-    // Tablet: reduce top spacing to prevent excessive empty gap
-    final double topSpacing = isTablet ? 8.0 : 16.0;
-
     return Padding(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(height: topSpacing),
           Text(
             shopName,
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
               color: mainTextColor,
+              height: 1.2,
             ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
           if (averageRating > 0) ...[
-            const SizedBox(height: 2),
-            _RatingRow(
-              rating: averageRating,
-              textColor: secondaryTextColor,
+            const SizedBox(height: 4),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.star_rounded, color: Colors.amber, size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  averageRating.toStringAsFixed(1),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: secondaryTextColor,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
           ],
         ],
       ),
-    );
-  }
-}
-
-// ✅ OPTIMIZATION 15: Extract rating widget
-class _RatingRow extends StatelessWidget {
-  final double rating;
-  final Color textColor;
-
-  const _RatingRow({
-    Key? key,
-    required this.rating,
-    required this.textColor,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Icon(Icons.star, color: Colors.amber, size: 14),
-        const SizedBox(width: 4),
-        Text(
-          rating.toStringAsFixed(1),
-          style: TextStyle(fontSize: 11, color: textColor),
-        ),
-      ],
     );
   }
 }

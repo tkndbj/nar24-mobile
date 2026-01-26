@@ -107,7 +107,7 @@ class _DeliveryCard extends StatelessWidget {
         // ADD wrapper
         opacity: isDisabled ? 0.5 : 1.0,
         child: Container(
-          width: 160,
+          width: isDisabled ? 190 : 160,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: Colors.transparent,
@@ -154,14 +154,14 @@ class _DeliveryCard extends StatelessWidget {
                       ? disabledReason!
                       : description,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: isDisabled ? 10 : 12,
                     color: isDisabled
                         ? Colors.orange.shade700 // ADD
                         : (isDark ? Colors.white : Colors.black),
                     fontStyle:
                         isDisabled ? FontStyle.italic : FontStyle.normal, // ADD
                   ),
-                  maxLines: 3,
+                  maxLines: isDisabled ? 5 : 3,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),

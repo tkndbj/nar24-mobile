@@ -44,6 +44,9 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
   bool _isLoadingProduct = true;
   String? _loadError;
 
+  // Track if user attempted to confirm without selecting all options
+  bool _attemptedConfirm = false;
+
   // ✅ Use fresh product with fallback
   Product get _currentProduct => _freshProduct ?? widget.product;
 
@@ -460,6 +463,8 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
                 _buildSectionTitle(l10n.selectColor, txtColor),
                 const SizedBox(height: 8),
                 _buildColorSelector(txtColor, l10n),
+                if (_attemptedConfirm && selectedColor == null)
+                  _buildFeedbackText(l10n.pleaseSelectColor),
                 const SizedBox(height: 16),
               ],
               for (final entry in selectableAttrs.entries) ...[
@@ -469,10 +474,17 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
                     txtColor),
                 const SizedBox(height: 8),
                 _buildAttributeSelector(entry.key, entry.value, txtColor, l10n),
+                if (_attemptedConfirm && _selections[entry.key] == null)
+                  _buildFeedbackText(l10n.pleaseSelectAnOption),
                 const SizedBox(height: 16),
               ],
               if (isCurtain) ...[
                 _buildCurtainDimensionsInput(l10n, txtColor),
+                if (_attemptedConfirm &&
+                    !_validateCurtainDimensions() &&
+                    (_widthController.text.isEmpty ||
+                        _heightController.text.isEmpty))
+                  _buildFeedbackText(l10n.pleaseEnterValidDimensions),
               ] else ...[
                 _buildSectionTitle(l10n.quantity, txtColor),
                 const SizedBox(height: 8),
@@ -514,6 +526,9 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
                 }
 
                 Navigator.of(context).pop(result);
+              } else {
+                // Show feedback for missing selections
+                setState(() => _attemptedConfirm = true);
               }
             },
             child: Text(
@@ -773,6 +788,21 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
           fontWeight: FontWeight.bold,
           fontSize: 16,
         ),
+      ),
+    );
+  }
+
+  Widget _buildFeedbackText(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: Colors.red.shade400,
+          fontSize: 12,
+          fontWeight: FontWeight.w400,
+        ),
+        textAlign: TextAlign.center,
       ),
     );
   }
