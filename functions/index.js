@@ -87,14 +87,16 @@ async function getIsbankConfig() {
   return isbankConfig;
 }
 
-async function validateAndMarkDiscounts(tx, db, userId, couponId, benefitId, orderId, cartTotal) {
+async function validateDiscounts(tx, db, userId, couponId, benefitId, cartTotal) {
   let couponDiscount = 0;
   let freeShippingApplied = false;
   let couponCode = null;
+  let couponRef = null;
+  let benefitRef = null;
 
-  // Validate and mark coupon
+  // Validate coupon (READ ONLY)
   if (couponId) {
-    const couponRef = db.collection('users').doc(userId).collection('coupons').doc(couponId);
+    couponRef = db.collection('users').doc(userId).collection('coupons').doc(couponId);
     const couponDoc = await tx.get(couponRef);
 
     if (!couponDoc.exists) {
@@ -114,20 +116,11 @@ async function validateAndMarkDiscounts(tx, db, userId, couponId, benefitId, ord
     // Cap discount at cart total
     couponDiscount = Math.min(coupon.amount || 0, cartTotal);
     couponCode = coupon.code || null;
-
-    // Mark as used (atomic within transaction)
-    tx.update(couponRef, {
-      isUsed: true,
-      usedAt: admin.firestore.FieldValue.serverTimestamp(),
-      orderId: orderId,
-    });
-
-    console.log(`Coupon ${couponId} validated and marked as used for order ${orderId}`);
   }
 
-  // Validate and mark free shipping benefit
+  // Validate free shipping benefit (READ ONLY)
   if (benefitId) {
-    const benefitRef = db.collection('users').doc(userId).collection('benefits').doc(benefitId);
+    benefitRef = db.collection('users').doc(userId).collection('benefits').doc(benefitId);
     const benefitDoc = await tx.get(benefitRef);
 
     if (!benefitDoc.exists) {
@@ -145,18 +138,38 @@ async function validateAndMarkDiscounts(tx, db, userId, couponId, benefitId, ord
     }
 
     freeShippingApplied = true;
+  }
 
-    // Mark as used (atomic within transaction)
+  return { 
+    couponDiscount, 
+    freeShippingApplied, 
+    couponCode,
+    couponRef,  // Pass ref for later write
+    benefitRef, // Pass ref for later write
+  };
+}
+
+// STEP 2: Mark discounts as used (WRITES ONLY - call after all reads)
+function markDiscountsAsUsed(tx, discountResult, orderId) {
+  const { couponRef, benefitRef } = discountResult;
+
+  if (couponRef) {
+    tx.update(couponRef, {
+      isUsed: true,
+      usedAt: admin.firestore.FieldValue.serverTimestamp(),
+      orderId: orderId,
+    });
+    console.log(`Coupon marked as used for order ${orderId}`);
+  }
+
+  if (benefitRef) {
     tx.update(benefitRef, {
       isUsed: true,
       usedAt: admin.firestore.FieldValue.serverTimestamp(),
       orderId: orderId,
     });
-
-    console.log(`Benefit ${benefitId} validated and marked as used for order ${orderId}`);
+    console.log(`Benefit marked as used for order ${orderId}`);
   }
-
-  return { couponDiscount, freeShippingApplied, couponCode };
 }
 
 // Add this function to create the cart clearing task
@@ -536,16 +549,21 @@ async function createOrderTransaction(buyerId, requestData) {
     const orderRef = db.collection('orders').doc(); // Create ref early for orderId
     finalOrderId = orderRef.id;
     
-    let discountResult = { couponDiscount: 0, freeShippingApplied: false, couponCode: null };
+    let discountResult = { 
+      couponDiscount: 0, 
+      freeShippingApplied: false, 
+      couponCode: null,
+      couponRef: null,
+      benefitRef: null,
+    };
     
     if (couponId || freeShippingBenefitId) {
-      discountResult = await validateAndMarkDiscounts(
+      discountResult = await validateDiscounts(
         tx,
         db,
         buyerId,
         couponId,
         freeShippingBenefitId,
-        finalOrderId,
         cartCalculatedTotal || 0
       );
     }
@@ -696,6 +714,10 @@ async function createOrderTransaction(buyerId, requestData) {
           address.location.longitude,
         ),
       };
+    }
+
+    if (couponId || freeShippingBenefitId) {
+      markDiscountsAsUsed(tx, discountResult, finalOrderId);
     }
 
     tx.set(orderRef, orderDocument);
