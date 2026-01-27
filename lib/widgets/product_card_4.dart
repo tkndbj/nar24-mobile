@@ -309,19 +309,11 @@ class _OptimizedProductImage extends StatelessWidget {
                   fit: BoxFit.cover,
                   width: imageWidth,
                   height: imageHeight,
-                  // FIX 5: Fixed cache dimensions for stability
                   memCacheHeight: _cacheHeight,
                   memCacheWidth: _cacheWidth,
-                  maxHeightDiskCache: _cacheHeight,
-                  maxWidthDiskCache: _cacheWidth,
-                  // FIX 6: Disable fade animations to prevent flicker
                   fadeInDuration: Duration.zero,
                   fadeOutDuration: Duration.zero,
-                  // FIX 7: Stable cache key based on URL hash
-                  cacheKey: 'product_img_${imageUrl.hashCode}',
-                  // FIX 8: Keep old image while loading new one
                   useOldImageOnUrlChange: true,
-                  // FIX 9: Medium quality filtering for smoother rendering
                   filterQuality: FilterQuality.medium,
                   placeholder: (_, __) => const _ImagePlaceholder(),
                   errorWidget: (_, __, ___) => const _ImageErrorWidget(),

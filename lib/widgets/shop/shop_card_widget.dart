@@ -363,20 +363,12 @@ class _OptimizedCoverImage extends StatelessWidget {
       fit: BoxFit.cover,
       width: double.infinity,
       height: double.infinity,
-      // FIX 6: Fixed cache dimensions for stability
       memCacheHeight: cacheHeight,
       memCacheWidth: cacheWidth,
-      maxHeightDiskCache: cacheHeight,
-      maxWidthDiskCache: cacheWidth,
-      // FIX 7: Disable fade animations to prevent flicker
       fadeInDuration: Duration.zero,
       fadeOutDuration: Duration.zero,
-      // FIX 8: Use placeholder that matches final size
       placeholder: (context, url) => const _ImageLoadingPlaceholder(),
       errorWidget: (context, url, error) => const _ImageErrorPlaceholder(),
-      // FIX 9: Use memory cache key based on URL hash for stability
-      cacheKey: 'shop_cover_${imageUrl.hashCode}',
-      // FIX 10: Enable image filtering for smoother rendering
       filterQuality: FilterQuality.medium,
       useOldImageOnUrlChange: true,
     );
@@ -656,7 +648,6 @@ class _ProfileAvatar extends StatelessWidget {
                   profileImageUrl,
                   maxHeight: 144, // 48 * 3 for retina
                   maxWidth: 144,
-                  cacheKey: 'profile_${profileImageUrl.hashCode}',
                 ),
                 fit: BoxFit.cover,
               )

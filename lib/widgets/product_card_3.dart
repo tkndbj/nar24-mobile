@@ -328,16 +328,9 @@ class _ProductImage extends StatelessWidget {
           child: CachedNetworkImage(
             imageUrl: state._displayImageUrl,
             fit: BoxFit.cover,
-            // FIX: Fixed cache dimensions
             memCacheHeight: _cacheHeight,
             memCacheWidth: _cacheWidth,
-            maxHeightDiskCache: _cacheHeight,
-            maxWidthDiskCache: _cacheWidth,
-            // FIX: Stable cache key
-            cacheKey: 'product3_${state._displayImageUrl.hashCode}',
-            // FIX: Keep old image during URL change
             useOldImageOnUrlChange: true,
-            // FIX: Medium quality for smoother scaling
             filterQuality: FilterQuality.medium,
             placeholder: (_, __) => _buildShimmerPlaceholder(),
             errorWidget: (_, __, ___) => _buildError(),

@@ -180,10 +180,20 @@ class _TerasPreferenceProductState extends State<TerasPreferenceProduct> {
     final bool isLandscape = screenWidth > screenHeight;
     final bool isTabletLandscape = isTablet && isLandscape;
 
+    // Calculate effective scale factor matching ProductCard's logic
+    // This ensures the info area height scales consistently with card content
+    double effectiveScaleFactor = (screenWidth / 375).clamp(0.8, 1.2);
+    if (isLandscape && effectiveScaleFactor > 1.0) {
+      effectiveScaleFactor = 1.0;
+    }
+
     // Tablet landscape: increase info area height to prevent overlap with TerasProductList
-    // Other views remain unchanged
+    // Mobile: use dynamic calculation based on screen width for consistent sizing
     final double portraitImageHeight = isTablet ? screenHeight * 0.24 : screenHeight * 0.33; // Increased for taller images
-    final double infoAreaHeight = isTabletLandscape ? 110.0 : (isTablet ? 95.0 : 80.0);
+    final double baseInfoHeight = 87.0;
+    final double infoAreaHeight = isTabletLandscape
+        ? 110.0
+        : (isTablet ? 95.0 : (baseInfoHeight * effectiveScaleFactor).clamp(80.0, 105.0));
     final double rowHeight = portraitImageHeight + infoAreaHeight;
 
     // Card width - wider on tablets

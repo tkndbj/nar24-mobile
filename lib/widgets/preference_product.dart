@@ -178,15 +178,26 @@ class _PreferenceProductState extends State<PreferenceProduct> {
     final bool isTablet = screenWidth >= 600;
     final bool isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
 
+    // Calculate effective scale factor matching ProductCard's logic
+    // This ensures the info area height scales consistently with card content
+    double effectiveScaleFactor = (screenWidth / 375).clamp(0.8, 1.2);
+    if (isLandscape && effectiveScaleFactor > 1.0) {
+      effectiveScaleFactor = 1.0;
+    }
+
     // Tablets: shorter image height, larger info area for visibility
     // Landscape tablets need even more info area due to shorter viewport
     // Image heights increased for better tall/narrow image display
     final double portraitImageHeight = isTablet
         ? (isLandscape ? screenHeight * 0.31 : screenHeight * 0.24)
         : screenHeight * 0.33;
+
+    // Calculate info area height dynamically based on ProductCard's content
+    // Base height at scale 1.0 with buffer for iOS font rendering differences
+    final double baseInfoHeight = 87.0;
     final double infoAreaHeight = isTablet
         ? (isLandscape ? 105.0 : 100.0)  // More space for info on tablets
-        : 80.0;
+        : (baseInfoHeight * effectiveScaleFactor).clamp(80.0, 105.0);
     final double rowHeight = portraitImageHeight + infoAreaHeight;
 
     // Card width - wider on tablets

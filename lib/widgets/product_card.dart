@@ -1050,29 +1050,16 @@ class _ImageSection extends StatelessWidget {
   }
 
   Widget _buildImageWidget(String imageUrl, double height) {
-    // FIX: Use fixed cache dimensions for stability
-    // 500px width covers most grid layouts at 2-3x DPR
-    const int fixedCacheWidth = 500;
-    // Calculate proportional height based on typical card aspect ratio
-    final int fixedCacheHeight = (height * 3).round().clamp(300, 800);
-
     return RepaintBoundary(
       child: CachedNetworkImage(
         imageUrl: imageUrl,
         fit: BoxFit.cover,
-        // FIX: Fixed cache dimensions - not reactive to screen changes
-        memCacheWidth: fixedCacheWidth,
-        memCacheHeight: fixedCacheHeight,
-        maxWidthDiskCache: fixedCacheWidth,
-        maxHeightDiskCache: fixedCacheHeight,
-        // FIX: Disable fade animations to prevent flicker
+        // Only constrain width - height scales proportionally to preserve aspect ratio
+        // 500px width is sufficient for grid cards at 2-3x DPR
+        memCacheWidth: 500,
         fadeInDuration: Duration.zero,
         fadeOutDuration: Duration.zero,
-        // FIX: Keep old image while new one loads (color change)
         useOldImageOnUrlChange: true,
-        // FIX: Stable cache key based on URL
-        cacheKey: 'product_${imageUrl.hashCode}',
-        // FIX: Medium quality for smoother scaling
         filterQuality: FilterQuality.medium,
         placeholder: (context, url) =>
             _buildImagePlaceholder(effectiveScaleFactor),
