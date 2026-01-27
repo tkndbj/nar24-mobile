@@ -249,9 +249,13 @@ class _ProductCardState extends State<ProductCard>
       }
     }
 
+    final bool isShopProduct =
+        widget.product.sourceCollection == 'shop_products';
+
     market.incrementClickCount(
       widget.product.id,
       shopId: widget.product.shopId,
+      isShopProduct: isShopProduct,
       productName: widget.product.productName,
       category: widget.product.category,
       subcategory: widget.product.subcategory,

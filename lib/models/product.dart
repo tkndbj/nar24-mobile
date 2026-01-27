@@ -419,8 +419,16 @@ class Product {
   }
 
   factory Product.fromJson(Map<String, dynamic> json) {
+    String? sourceCollection = json['sourceCollection'] as String?;
+    if (sourceCollection == null || sourceCollection.isEmpty) {
+      sourceCollection =
+          (json['shopId'] != null && json['shopId'].toString().isNotEmpty)
+              ? 'shop_products'
+              : 'products';
+    }
     return Product(
       id: json['id'] as String? ?? '',
+      sourceCollection: sourceCollection,
       productName: json['productName'] as String? ?? '',
       description: json['description'] as String? ?? '',
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
@@ -543,6 +551,7 @@ class Product {
   Map<String, dynamic> toJson() {
     final m = <String, dynamic>{
       'id': id,
+      'sourceCollection': sourceCollection,
       'productName': productName,
       'description': description,
       'price': price,
@@ -609,15 +618,24 @@ class Product {
     // Extract and normalize the ID
     String normalizedId = json['objectID']?.toString() ?? '';
 
-    // Remove common Algolia prefixes
+    String? sourceCollection;
     if (normalizedId.startsWith('products_')) {
+      sourceCollection = 'products';
       normalizedId = normalizedId.substring('products_'.length);
     } else if (normalizedId.startsWith('shop_products_')) {
+      sourceCollection = 'shop_products';
       normalizedId = normalizedId.substring('shop_products_'.length);
+    } else {
+      // ✅ Fallback: Check if shopId exists to determine collection
+      sourceCollection =
+          (json['shopId'] != null && json['shopId'].toString().isNotEmpty)
+              ? 'shop_products'
+              : 'products';
     }
 
     return Product(
       id: normalizedId, // ← Use normalized ID
+      sourceCollection: sourceCollection,
       productName: json['productName']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
@@ -703,6 +721,7 @@ class Product {
 
   /// ----- COPY WITH (including attributes) -----
   Product copyWith({
+    String? sourceCollection,
     String? productName,
     String? description,
     double? price,
@@ -774,6 +793,7 @@ class Product {
   }) {
     return Product(
       id: id,
+      sourceCollection: sourceCollection ?? this.sourceCollection,
       productName: productName ?? this.productName,
       description: description ?? this.description,
       price: price ?? this.price,
