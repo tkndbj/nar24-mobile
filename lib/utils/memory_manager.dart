@@ -19,6 +19,15 @@ class MemoryManager {
   static const Duration _minClearInterval = Duration(seconds: 30);
 
   void setupMemoryManagement() {
+    // ═══════════════════════════════════════════════════════
+    // ADD THIS: Actually set the limits (not just check them)
+    // ═══════════════════════════════════════════════════════
+    final imageCache = PaintingBinding.instance.imageCache;
+    imageCache.maximumSize = 100; // Max 50 images in memory
+    imageCache.maximumSizeBytes = maxImageCacheSize; // 30 MB limit
+
+    debugPrint('🖼️ Image cache limits set: 50 images, 30 MB');
+
     // Listen for system memory warnings
     SystemChannels.system.setMessageHandler((message) async {
       if (message == 'memoryPressure') {

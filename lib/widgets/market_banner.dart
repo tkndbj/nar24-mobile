@@ -118,7 +118,8 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
 
       try {
         // Only constrain width - height scales proportionally
-        final provider = CachedNetworkImageProvider(url, maxWidth: _imageCacheWidth);
+        final provider =
+            CachedNetworkImageProvider(url, maxWidth: _imageCacheWidth);
         precacheImage(provider, context).catchError((_) {
           _prefetchedUrls.remove(url);
         });
@@ -430,8 +431,7 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
                 imageUrl: item.url,
                 width: double.infinity,
                 fit: BoxFit.fitWidth,
-                // Only constrain width - height scales proportionally
-                memCacheWidth: _imageCacheWidth,
+
                 fadeInDuration: Duration.zero,
                 fadeOutDuration: Duration.zero,
                 useOldImageOnUrlChange: true,

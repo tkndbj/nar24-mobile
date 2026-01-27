@@ -381,8 +381,6 @@ class _AdsBannerWidgetState extends State<AdsBannerWidget>
                         ),
                         fadeInDuration: Duration.zero,
                         fadeOutDuration: Duration.zero,
-                        // Fixed width constraint - height scales proportionally
-                        memCacheWidth: 1200,
                         useOldImageOnUrlChange: true,
                         filterQuality: FilterQuality.medium,
                       ),

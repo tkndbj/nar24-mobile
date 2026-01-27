@@ -247,11 +247,6 @@ class _CoverSection extends StatelessWidget {
   final String profileImageUrl;
   final PageController? pageController;
 
-  // FIX 3: Fixed cache dimensions - not reactive to screen changes
-  // Using 3x for high-DPI displays (covers most devices)
-  static const int _imageCacheHeight = 360; // 120 * 3
-  static const int _imageCacheWidth = 540; // Approximate 16:9 aspect
-
   const _CoverSection({
     Key? key,
     required this.shopName,
@@ -302,8 +297,6 @@ class _CoverSection extends StatelessWidget {
       return _OptimizedCoverImage(
         key: ValueKey('cover_${coverImageList[0].hashCode}'),
         imageUrl: coverImageList[0],
-        cacheHeight: _imageCacheHeight,
-        cacheWidth: _imageCacheWidth,
       );
     }
 
@@ -317,8 +310,6 @@ class _CoverSection extends StatelessWidget {
         return _OptimizedCoverImage(
           key: ValueKey('cover_${coverImageList[index].hashCode}'),
           imageUrl: coverImageList[index],
-          cacheHeight: _imageCacheHeight,
-          cacheWidth: _imageCacheWidth,
         );
       },
     );
@@ -328,14 +319,10 @@ class _CoverSection extends StatelessWidget {
 /// Optimized cover image with stable caching
 class _OptimizedCoverImage extends StatelessWidget {
   final String imageUrl;
-  final int cacheHeight;
-  final int cacheWidth;
 
   const _OptimizedCoverImage({
     Key? key,
     required this.imageUrl,
-    required this.cacheHeight,
-    required this.cacheWidth,
   }) : super(key: key);
 
   @override
@@ -345,8 +332,6 @@ class _OptimizedCoverImage extends StatelessWidget {
       fit: BoxFit.cover,
       width: double.infinity,
       height: double.infinity,
-      memCacheHeight: cacheHeight,
-      memCacheWidth: cacheWidth,
       fadeInDuration: Duration.zero,
       fadeOutDuration: Duration.zero,
       placeholder: (context, url) => const _ImageLoadingPlaceholder(),

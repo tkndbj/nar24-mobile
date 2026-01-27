@@ -32,7 +32,9 @@ class ThinBannerItem {
 }
 
 class _MarketThinBannerState extends State<MarketThinBanner>
-    with AutomaticKeepAliveClientMixin<MarketThinBanner>, SingleTickerProviderStateMixin {
+    with
+        AutomaticKeepAliveClientMixin<MarketThinBanner>,
+        SingleTickerProviderStateMixin {
   final Set<String> _cachedUrls = {};
   List<ThinBannerItem> _banners = [];
   StreamSubscription<QuerySnapshot>? _subscription;
@@ -78,7 +80,9 @@ class _MarketThinBannerState extends State<MarketThinBanner>
   }
 
   void _onAutoPlayStatus(AnimationStatus status) {
-    if (status == AnimationStatus.completed && mounted && widget.shouldAutoPlay) {
+    if (status == AnimationStatus.completed &&
+        mounted &&
+        widget.shouldAutoPlay) {
       // ✅ Always move forward for infinite right-to-left scroll
       final currentPage = _pageController?.page?.round() ?? _kMiddlePage;
       _pageController?.animateToPage(
@@ -220,8 +224,6 @@ class _MarketThinBannerState extends State<MarketThinBanner>
                     const Center(child: Icon(Icons.error)),
                 fadeInDuration: Duration.zero,
                 fadeOutDuration: Duration.zero,
-                // Only constrain height - width scales proportionally
-                memCacheHeight: 150,
                 useOldImageOnUrlChange: true,
                 filterQuality: FilterQuality.medium,
               ),

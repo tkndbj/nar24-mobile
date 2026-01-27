@@ -1058,9 +1058,6 @@ class _ImageSection extends StatelessWidget {
       child: CachedNetworkImage(
         imageUrl: imageUrl,
         fit: BoxFit.cover,
-        // Only constrain width - height scales proportionally to preserve aspect ratio
-        // 500px width is sufficient for grid cards at 2-3x DPR
-        memCacheWidth: 500,
         fadeInDuration: Duration.zero,
         fadeOutDuration: Duration.zero,
         useOldImageOnUrlChange: true,
