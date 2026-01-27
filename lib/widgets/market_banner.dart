@@ -117,13 +117,8 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
       if (!mounted) return;
 
       try {
-        // FIX 3: Use fixed cache width for prefetch
-        final provider = CachedNetworkImageProvider(
-          url,
-          maxWidth: _imageCacheWidth,
-          maxHeight: _imageCacheHeight,
-          cacheKey: 'banner_${url.hashCode}',
-        );
+        // Only constrain width - height scales proportionally
+        final provider = CachedNetworkImageProvider(url, maxWidth: _imageCacheWidth);
         precacheImage(provider, context).catchError((_) {
           _prefetchedUrls.remove(url);
         });
@@ -431,29 +426,15 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
             child: GestureDetector(
               onTap: () => _handleBannerTap(item),
               child: CachedNetworkImage(
-                // FIX 6: Stable cache key
                 key: ValueKey('banner_${item.id}'),
                 imageUrl: item.url,
                 width: double.infinity,
                 fit: BoxFit.fitWidth,
-
-                // FIX 7: Fixed cache dimensions
+                // Only constrain width - height scales proportionally
                 memCacheWidth: _imageCacheWidth,
-                memCacheHeight: _imageCacheHeight,
-                maxWidthDiskCache: _imageCacheWidth,
-                maxHeightDiskCache: _imageCacheHeight,
-
-                // FIX 8: Stable cache key for CachedNetworkImage
-                cacheKey: 'banner_${item.url.hashCode}',
-
-                // FIX 9: Disable ALL fade animations
                 fadeInDuration: Duration.zero,
                 fadeOutDuration: Duration.zero,
-
-                // FIX 10: Keep old image during reload
                 useOldImageOnUrlChange: true,
-
-                // FIX 11: Medium quality for smoother scaling
                 filterQuality: FilterQuality.medium,
 
                 // Placeholder while loading

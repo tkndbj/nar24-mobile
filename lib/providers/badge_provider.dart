@@ -12,7 +12,6 @@ class BadgeProvider extends ChangeNotifier with LifecycleAwareMixin {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  StreamSubscription<DocumentSnapshot>? _userDocSubscription;
   StreamSubscription<QuerySnapshot>? _notificationsSubscription;
   StreamSubscription<User?>? _authSubscription;
 
@@ -83,17 +82,6 @@ class BadgeProvider extends ChangeNotifier with LifecycleAwareMixin {
   void _setupFirestoreListeners(String userId) {
     _cancelSubscriptions();
 
-    // (A) Listen to user document if needed.
-    _userDocSubscription = _firestore
-        .collection('users')
-        .doc(userId)
-        .snapshots()
-        .listen((snapshot) {
-      // If you need to access other fields from the user document, do so here.
-    }, onError: (error) {
-      debugPrint('Error listening to user doc: $error');
-    });
-
     // (B) Listen to the 'notifications' subcollection.
     _notificationsSubscription = _firestore
         .collection('users')
@@ -112,7 +100,6 @@ class BadgeProvider extends ChangeNotifier with LifecycleAwareMixin {
 
   /// Cancel all previously attached listeners.
   void _cancelSubscriptions() {
-    _userDocSubscription?.cancel();
     _notificationsSubscription?.cancel();
   }
 

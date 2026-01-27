@@ -11,15 +11,14 @@ import '../services/click_tracking_service.dart';
 class ShopWidgetProvider with ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static const int _maxShopBufferSize = 500;
+
   // ————————————————————————————————————————————
   // 1️⃣  Auth & favorite‐shops tracking
-  Set<String> _favoriteShopIds = {};
+
   bool _userOwnsShop = false;
   bool _isCheckingMembership = false;
   List<String> _userShopIds = []; // User's actual shop IDs (from memberOfShops)
   StreamSubscription<User?>? _authSub;
-  StreamSubscription<QuerySnapshot>? _favSub;
 
   // ————————————————————————————————————————————
   // 2️⃣  Featured‐shops list (for horizontal carousel)
@@ -29,15 +28,12 @@ class ShopWidgetProvider with ChangeNotifier {
   ShopWidgetProvider() {
     // Listen for sign‐in / sign‐out:
     _authSub = _auth.authStateChanges().listen((user) {
-      _favSub?.cancel();
-      _favoriteShopIds.clear();
       _userOwnsShop = false;
       _userShopIds = [];
       _isCheckingMembership = false;
       notifyListeners();
 
       if (user != null) {
-        _listenToFavorites(user.uid);
         _checkUserMembership(user.uid);
       }
     });
@@ -50,9 +46,6 @@ class ShopWidgetProvider with ChangeNotifier {
   /// Currently signed in
   User? get currentUser => _auth.currentUser;
 
-  /// IDs of shops this user has favorited
-  Set<String> get favoriteShopIds => _favoriteShopIds;
-
   /// Has at least one shop where user is owner/co‐owner/editor/viewer?
   bool get userOwnsShop => _userOwnsShop;
 
@@ -63,7 +56,8 @@ class ShopWidgetProvider with ChangeNotifier {
   List<String> get userShopIds => List.unmodifiable(_userShopIds);
 
   /// First shop ID that the user has access to (safe getter, returns null if none)
-  String? get firstUserShopId => _userShopIds.isNotEmpty ? _userShopIds.first : null;
+  String? get firstUserShopId =>
+      _userShopIds.isNotEmpty ? _userShopIds.first : null;
 
   /// The featured shops to show
   List<QueryDocumentSnapshot> get shops => List.unmodifiable(_shops);
@@ -97,48 +91,6 @@ class ShopWidgetProvider with ChangeNotifier {
 
   Future<void> incrementClickCount(String shopId) async {
     await ClickTrackingService.instance.trackShopClick(shopId);
-  }
-
-  /// Follow/unfollow a shop
-  Future<void> toggleFavorite(String shopId) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-    final favDoc = _firestore
-        .collection('users')
-        .doc(user.uid)
-        .collection('favoriteShops')
-        .doc(shopId);
-    final shopRef = _firestore.collection('shops').doc(shopId);
-
-    try {
-      if (_favoriteShopIds.contains(shopId)) {
-        await favDoc.delete();
-        await shopRef.update({'followerCount': FieldValue.increment(-1)});
-      } else {
-        await favDoc.set({'shopId': shopId});
-        await shopRef.update({'followerCount': FieldValue.increment(1)});
-      }
-    } catch (e) {
-      debugPrint('Error toggling favorite: $e');
-      rethrow;
-    }
-  }
-
-  // ————————————————————————————————————————————
-  // 🔒  Internal listeners
-
-  void _listenToFavorites(String uid) {
-    _favSub = _firestore
-        .collection('users')
-        .doc(uid)
-        .collection('favoriteShops')
-        .snapshots()
-        .listen((snap) {
-      _favoriteShopIds = snap.docs.map((d) => d.id).toSet();
-      notifyListeners();
-    }, onError: (e) {
-      debugPrint('Error listening to favorites: $e');
-    });
   }
 
   Future<void> _checkUserMembership(String uid) async {
@@ -262,7 +214,6 @@ class ShopWidgetProvider with ChangeNotifier {
     }
   }
 
-
   // Fallback to original method if optimized approach fails
   Future<void> _checkUserMembershipFallback(String uid) async {
     try {
@@ -313,7 +264,6 @@ class ShopWidgetProvider with ChangeNotifier {
   @override
   void dispose() {
     _authSub?.cancel();
-    _favSub?.cancel();
     super.dispose();
   }
 }

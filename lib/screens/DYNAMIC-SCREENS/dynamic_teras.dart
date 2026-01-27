@@ -13,7 +13,6 @@ import '../../route_observer.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../widgets/market_search_delegate.dart';
 import '../../providers/search_history_provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../../utils/color_localization.dart';
 import '../../constants/all_in_one_category_data.dart';
 
@@ -46,6 +45,7 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
   late final ScrollController _scrollController;
   late final TextEditingController _searchController;
   late final FocusNode _searchFocusNode;
+  VoidCallback? _searchTextListener;
 
   bool _isSearching = false;
   bool _isInitialized = false;
@@ -76,6 +76,27 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
         _setupProvidersAndLoad();
       }
     });
+  }
+
+  void _setupSearchListener(SearchProvider searchProv) {
+    _removeSearchListener();
+
+    _searchTextListener = () {
+      if (searchProv.mounted) {
+        searchProv.updateTerm(
+          _searchController.text,
+          l10n: AppLocalizations.of(context),
+        );
+      }
+    };
+    _searchController.addListener(_searchTextListener!);
+  }
+
+  void _removeSearchListener() {
+    if (_searchTextListener != null) {
+      _searchController.removeListener(_searchTextListener!);
+      _searchTextListener = null;
+    }
   }
 
   void _initializeControllers() {
@@ -175,6 +196,7 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
   }
 
   void _disposeControllers() {
+    _removeSearchListener();
     _scrollController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
@@ -216,7 +238,9 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
       if (!_scrollController.hasClients) return;
 
       final terasProv = context.read<DynamicTerasProvider>();
-      if (terasProv.isLoading || terasProv.isLoadingMore || !terasProv.hasMore) {
+      if (terasProv.isLoading ||
+          terasProv.isLoadingMore ||
+          !terasProv.hasMore) {
         return;
       }
 
@@ -889,16 +913,11 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
       return MultiProvider(
         providers: [
           ChangeNotifierProvider<SearchProvider>(
-              create: (_) => SearchProvider()),
+            create: (_) => SearchProvider(),
+          ),
+          // ✅ FIXED: Provider handles auth internally
           ChangeNotifierProvider<SearchHistoryProvider>(
-            create: (_) {
-              final provider = SearchHistoryProvider();
-              final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                provider.fetchSearchHistory(uid);
-              });
-              return provider;
-            },
+            create: (_) => SearchHistoryProvider(),
           ),
         ],
         child: Consumer2<SearchProvider, SearchHistoryProvider>(
@@ -912,7 +931,9 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
                 onSubmitSearch: _submitSearch,
                 onBackPressed: _handleBackPressed,
                 isSearching: _isSearching,
-                onSearchStateChanged: _handleSearchStateChanged,
+                onSearchStateChanged: (searching) {
+                  _handleSearchStateChanged(searching, searchProv);
+                },
               ),
               body: SafeArea(
                 top: false,
@@ -962,23 +983,21 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
     context.pop();
   }
 
-  void _handleSearchStateChanged(bool searching) {
+  void _handleSearchStateChanged(bool searching, [SearchProvider? searchProv]) {
     if (!mounted) return;
 
     setState(() => _isSearching = searching);
 
     if (!searching) {
+      _removeSearchListener();
       _searchController.clear();
       _searchFocusNode.unfocus();
-    } else {
-      // Setup search listener when entering search mode
+      searchProv?.clear();
+    } else if (searchProv != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-
-        void onTextChanged() {
-          // Handle search text changes if needed
+        if (mounted) {
+          _setupSearchListener(searchProv);
         }
-        _searchController.addListener(onTextChanged);
       });
     }
   }

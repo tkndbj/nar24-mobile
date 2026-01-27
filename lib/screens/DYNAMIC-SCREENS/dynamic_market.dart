@@ -13,7 +13,6 @@ import '../../route_observer.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../widgets/market_search_delegate.dart';
 import '../../providers/search_history_provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../../utils/color_localization.dart';
 import '../../constants/all_in_one_category_data.dart';
 
@@ -51,7 +50,7 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
   bool _isSearching = false;
   bool _isInitialized = false;
   String _selectedSortOption = 'None';
-  VoidCallback? _searchTextListener; 
+  VoidCallback? _searchTextListener;
 
   // Dynamic filter state
   List<String> _dynamicBrands = [];
@@ -83,6 +82,27 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
     _searchController = TextEditingController();
     _searchFocusNode = FocusNode();
     _scrollController = ScrollController()..addListener(_onScroll);
+  }
+
+  void _setupSearchListener(SearchProvider searchProv) {
+    _removeSearchListener();
+
+    _searchTextListener = () {
+      if (searchProv.mounted) {
+        searchProv.updateTerm(
+          _searchController.text,
+          l10n: AppLocalizations.of(context),
+        );
+      }
+    };
+    _searchController.addListener(_searchTextListener!);
+  }
+
+  void _removeSearchListener() {
+    if (_searchTextListener != null) {
+      _searchController.removeListener(_searchTextListener!);
+      _searchTextListener = null;
+    }
   }
 
   // Separate method for provider setup to avoid build-time issues
@@ -175,16 +195,12 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
     super.dispose();
   }
 
- void _disposeControllers() {
-  // Remove search listener if exists
-  if (_searchTextListener != null) {
-    _searchController.removeListener(_searchTextListener!);
-    _searchTextListener = null;
+  void _disposeControllers() {
+    _removeSearchListener(); // ✅ Use helper method
+    _scrollController.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
   }
-  _scrollController.dispose();
-  _searchController.dispose();
-  _searchFocusNode.dispose();
-}
 
   void _onScroll() {
     if (!_isInitialized || !mounted) return;
@@ -393,8 +409,8 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
         }
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
-  if (mounted) _checkViewportAndLoadMoreIfNeeded();
-});
+          if (mounted) _checkViewportAndLoadMoreIfNeeded();
+        });
 
         return _buildProductsList(
           displayProducts,
@@ -906,16 +922,11 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
       return MultiProvider(
         providers: [
           ChangeNotifierProvider<SearchProvider>(
-              create: (_) => SearchProvider()),
+            create: (_) => SearchProvider(),
+          ),
+          // ✅ FIXED: Provider handles auth internally
           ChangeNotifierProvider<SearchHistoryProvider>(
-            create: (_) {
-              final provider = SearchHistoryProvider();
-              final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                provider.fetchSearchHistory(uid);
-              });
-              return provider;
-            },
+            create: (_) => SearchHistoryProvider(),
           ),
         ],
         child: Consumer2<SearchProvider, SearchHistoryProvider>(
@@ -929,7 +940,9 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
                 onSubmitSearch: _submitSearch,
                 onBackPressed: _handleBackPressed,
                 isSearching: _isSearching,
-                onSearchStateChanged: _handleSearchStateChanged,
+                onSearchStateChanged: (searching) {
+                  _handleSearchStateChanged(searching, searchProv);
+                },
               ),
               body: SafeArea(
                 top: false,
@@ -979,34 +992,22 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
     context.pop();
   }
 
- void _handleSearchStateChanged(bool searching) {
-  if (!mounted) return;
+  void _handleSearchStateChanged(bool searching, [SearchProvider? searchProv]) {
+    if (!mounted) return;
 
-  setState(() => _isSearching = searching);
+    setState(() => _isSearching = searching);
 
-  if (!searching) {
-    // Remove listener when exiting search
-    if (_searchTextListener != null) {
-      _searchController.removeListener(_searchTextListener!);
-      _searchTextListener = null;
+    if (!searching) {
+      _removeSearchListener();
+      _searchController.clear();
+      _searchFocusNode.unfocus();
+      searchProv?.clear();
+    } else if (searchProv != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _setupSearchListener(searchProv);
+        }
+      });
     }
-    _searchController.clear();
-    _searchFocusNode.unfocus();
-  } else {
-    // Setup search listener when entering search mode
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      
-      // Remove old listener if exists
-      if (_searchTextListener != null) {
-        _searchController.removeListener(_searchTextListener!);
-      }
-      
-      _searchTextListener = () {
-        // Handle search text changes if needed
-      };
-      _searchController.addListener(_searchTextListener!);
-    });
   }
-}
 }

@@ -2632,31 +2632,23 @@ class MarketScreenState extends State<MarketScreen>
     Widget bottomNav,
     bool isDarkMode,
   ) {
-    // ✅ REACTIVE: When searching, always use fallback color (no dynamic color)
     final fallbackColor = isDarkMode ? const Color(0xFF1C1A29) : Colors.white;
 
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<SearchProvider>(create: (_) => SearchProvider()),
+        // ✅ SIMPLIFIED: Provider handles auth internally, delegate calls ensureLoaded()
         ChangeNotifierProvider<SearchHistoryProvider>(
-          create: (_) {
-            final provider = SearchHistoryProvider();
-            final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              provider.fetchSearchHistory(uid);
-            });
-            return provider;
-          },
+          create: (_) => SearchHistoryProvider(),
         ),
       ],
       child: Consumer2<SearchProvider, SearchHistoryProvider>(
         builder: (ctx, searchProv, historyProv, _) {
           return Scaffold(
             appBar: _buildAppBar(
-              // ✅ REACTIVE: Pass fallback directly when searching
               ValueNotifier<Color>(fallbackColor),
-              false, // Never on home filter when searching
-              false, // Never use white colors when searching
+              false,
+              false,
               isSearching: true,
               onSearchStateChanged: (searching) {
                 if (!searching) {

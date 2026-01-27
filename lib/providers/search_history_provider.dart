@@ -6,295 +6,453 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../models/search_entry.dart';
 
+/// Production-ready SearchHistoryProvider using optimistic local-first pattern.
+///
+/// Key features:
+/// - One-time fetch instead of real-time listener (saves reads)
+/// - Optimistic UI updates for instant feedback
+/// - Session caching to avoid redundant fetches
+/// - Proper error handling with rollback
+/// - Deduplication of search terms
 class SearchHistoryProvider with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  StreamSubscription<QuerySnapshot>? _historySubscription;
-  StreamSubscription<User?>? _authSubscription;
+  // ==================== CONFIGURATION ====================
+  static const int _maxHistoryItems = 20;
+  static const int _batchDeleteSize = 500;
+  static const Duration _deleteTimeout = Duration(seconds: 10);
+  static const int _maxDeleteRetries = 3;
 
-  List<SearchEntry> _searchEntriesSearches = [];
-  List<SearchEntry> _searchEntries = [];
-  List<SearchEntry> get searchEntries => _searchEntries;
+  // ==================== STATE ====================
+  List<SearchEntry> _entries = [];
+  List<SearchEntry> get searchEntries => List.unmodifiable(_entries);
 
   String? _currentUserId;
-
-  // Loading state for history
   bool _isLoadingHistory = false;
   bool get isLoadingHistory => _isLoadingHistory;
 
-  // Track items being deleted with more granular control
-  final Map<String, Completer<void>> _deletingEntries =
-      <String, Completer<void>>{};
-  final Set<String> _optimisticallyDeleted = <String>{};
+  /// Tracks if we've fetched history this session (avoids redundant fetches)
+  bool _hasFetchedThisSession = false;
 
-  bool isDeletingEntry(String docId) => _deletingEntries.containsKey(docId);
+  /// Track items being deleted (for UI loading indicators)
+  final Set<String> _deletingEntryIds = <String>{};
+
+  /// Track optimistically deleted items (hidden from UI immediately)
+  final Set<String> _optimisticallyDeletedIds = <String>{};
+
+  /// Auth subscription for login/logout handling
+  StreamSubscription<User?>? _authSubscription;
+
+  // ==================== CONSTRUCTOR ====================
 
   SearchHistoryProvider() {
     _initAuthListener();
   }
 
+  // ==================== PUBLIC GETTERS ====================
+
+  bool isDeletingEntry(String docId) => _deletingEntryIds.contains(docId);
+
+  bool get hasEntries => _entries.isNotEmpty;
+
+  int get entryCount => _entries.length;
+
+  // ==================== AUTH HANDLING ====================
+
   void _initAuthListener() {
-    // Check current user immediately when provider is created
+    // Check current user immediately
     final currentUser = _auth.currentUser;
     _currentUserId = currentUser?.uid;
 
-    if (_currentUserId != null) {
-      // Clear any stale data before fetching
-      _searchEntriesSearches = [];
-      _searchEntries = [];
-      _isLoadingHistory = true;
-      notifyListeners();
-      fetchSearchHistory(_currentUserId!);
-    } else {
-      clearHistory(); // Clear immediately if no user
-    }
-
-    // Then listen for future auth changes
-    _authSubscription = _auth.authStateChanges().listen((User? user) {
-      final newUserId = user?.uid;
-
-      // If user changed (login/logout/switch), clear and reload
-      if (newUserId != _currentUserId) {
-        _currentUserId = newUserId;
-
-        if (newUserId != null) {
-          // Clear any stale data before fetching new user's history
-          // This prevents briefly showing old/cached data while loading
-          _searchEntriesSearches = [];
-          _searchEntries = [];
-          _isLoadingHistory = true;
-          notifyListeners();
-          fetchSearchHistory(newUserId);
-        } else {
-          clearHistory();
-        }
-      }
-    });
+    // Listen for auth changes (login/logout/switch account)
+    _authSubscription = _auth.authStateChanges().listen(_handleAuthChange);
   }
 
-  void fetchSearchHistory(String userId) {
-    _historySubscription?.cancel();
+  void _handleAuthChange(User? user) {
+    final newUserId = user?.uid;
 
-    _historySubscription = _firestore
-        .collection('searches')
-        .where('userId', isEqualTo: userId)
-        .orderBy('timestamp', descending: true)
-        .snapshots()
-        .listen((snapshot) {
-      _searchEntriesSearches =
-          snapshot.docs.map((doc) => SearchEntry.fromFirestore(doc)).toList();
-      _isLoadingHistory = false;
+    // Only react if user actually changed
+    if (newUserId == _currentUserId) return;
 
-      // Remove any optimistically deleted items that are confirmed deleted
-      _cleanupOptimisticDeletes(snapshot.docs.map((doc) => doc.id).toSet());
+    _currentUserId = newUserId;
 
-      _updateCombinedEntries();
-    }, onError: (error) {
-      if (kDebugMode) {
-        debugPrint('Error fetching search history: $error');
-      }
-      _isLoadingHistory = false;
-      notifyListeners();
-    });
-  }
-
-  void _cleanupOptimisticDeletes(Set<String> existingDocIds) {
-    // Remove optimistically deleted items that are confirmed deleted from Firestore
-    final toRemove = _optimisticallyDeleted
-        .where((id) => !existingDocIds.contains(id))
-        .toList();
-    for (final id in toRemove) {
-      _optimisticallyDeleted.remove(id);
-    }
-  }
-
-  void insertLocalEntry(SearchEntry entry) {
-    // Only insert if we have a current user
-    if (_currentUserId != null) {
-      _searchEntriesSearches.insert(0, entry);
-      _updateCombinedEntries();
-    }
-  }
-
-  void _updateCombinedEntries() {
-    // Filter out optimistically deleted entries
-    final filteredEntries = _searchEntriesSearches
-        .where((entry) => !_optimisticallyDeleted.contains(entry.id))
-        .toList();
-
-    final combinedEntries = [...filteredEntries];
-    final Map<String, SearchEntry> uniqueMap = {};
-
-    for (var entry in combinedEntries) {
-      if (!uniqueMap.containsKey(entry.searchTerm)) {
-        uniqueMap[entry.searchTerm] = entry;
-      }
-    }
-
-    _searchEntries = uniqueMap.values.toList()
-      ..sort((a, b) => (b.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0))
-          .compareTo(a.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0)));
-    notifyListeners();
-  }
-
-  void clearHistory() {
-    _historySubscription?.cancel();
-    _historySubscription = null;
-    _searchEntriesSearches = [];
-    _searchEntries = [];
+    // Clear all state for user change
+    _entries = [];
+    _hasFetchedThisSession = false;
+    _deletingEntryIds.clear();
+    _optimisticallyDeletedIds.clear();
     _isLoadingHistory = false;
-    _deletingEntries.clear();
-    _optimisticallyDeleted.clear();
+
     notifyListeners();
   }
 
-  Future<void> deleteEntry(String docId) async {
-    // If already deleting, wait for that operation to complete
-    if (_deletingEntries.containsKey(docId)) {
-      if (kDebugMode) {
-        debugPrint('Delete already in progress for entry: $docId, waiting...');
-      }
-      await _deletingEntries[docId]!.future;
+  // ==================== FETCH HISTORY ====================
+
+  /// Ensures history is loaded. Call this when search UI opens.
+  /// Uses session caching - only fetches once per session unless forced.
+  Future<void> ensureLoaded({bool forceRefresh = false}) async {
+    // Guard: No user logged in
+    if (_currentUserId == null) {
+      _entries = [];
+      notifyListeners();
       return;
     }
 
-    // Create a completer for this delete operation
-    final completer = Completer<void>();
-    _deletingEntries[docId] = completer;
+    // Guard: Already loaded this session (unless forcing refresh)
+    if (_hasFetchedThisSession && !forceRefresh) {
+      return;
+    }
+
+    // Guard: Already loading
+    if (_isLoadingHistory) return;
+
+    _isLoadingHistory = true;
+    notifyListeners();
 
     try {
+      final snapshot = await _firestore
+          .collection('searches')
+          .where('userId', isEqualTo: _currentUserId)
+          .orderBy('timestamp', descending: true)
+          .limit(_maxHistoryItems)
+          .get();
+
+      // Parse and deduplicate entries
+      final fetchedEntries =
+          snapshot.docs.map((doc) => SearchEntry.fromFirestore(doc)).toList();
+
+      _entries = _deduplicateEntries(fetchedEntries);
+      _hasFetchedThisSession = true;
+
+      // Clear optimistic deletes that are confirmed
+      _cleanupConfirmedDeletes(snapshot.docs.map((d) => d.id).toSet());
+
       if (kDebugMode) {
-        debugPrint('Starting delete operation for entry: $docId');
+        debugPrint('✅ Loaded ${_entries.length} search history entries');
       }
-
-      // Step 1: Immediately hide from UI (optimistic update)
-      _optimisticallyDeleted.add(docId);
-      _updateCombinedEntries(); // This will filter out the deleted item
-
-      // Step 2: Delete from Firestore with timeout
-      await _deleteFromFirestore(docId).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw TimeoutException(
-              'Delete operation timed out', const Duration(seconds: 10));
-        },
-      );
-
-      if (kDebugMode) {
-        debugPrint('Successfully deleted search entry: $docId');
-      }
-      completer.complete();
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('Error deleting search entry $docId: $e');
+        debugPrint('❌ Error fetching search history: $e');
       }
-
-      // Rollback: restore the item in UI
-      _optimisticallyDeleted.remove(docId);
-      _updateCombinedEntries();
-
-      completer.completeError(e);
-      rethrow;
+      // Keep existing entries on error (don't clear user's view)
     } finally {
-      // Always clean up
-      _deletingEntries.remove(docId);
-      notifyListeners(); // Update UI to remove loading indicator
+      _isLoadingHistory = false;
+      notifyListeners();
     }
   }
 
-  Future<void> _deleteFromFirestore(String docId) async {
-    // Retry logic for network issues
-    int retryCount = 0;
-    const maxRetries = 3;
+  /// Force refresh history from server
+  Future<void> refresh() async {
+    await ensureLoaded(forceRefresh: true);
+  }
 
-    while (retryCount < maxRetries) {
+  // ==================== ADD SEARCH ====================
+
+  /// Adds a search term with optimistic local update.
+  /// Writes to Firestore in background (fire-and-forget).
+  void addSearch(String term) {
+    final trimmedTerm = term.trim();
+
+    // Guard: Empty term or no user
+    if (trimmedTerm.isEmpty || _currentUserId == null) return;
+
+    // Check if term already exists (case-insensitive)
+    final existingIndex = _entries.indexWhere(
+      (e) => e.searchTerm.toLowerCase() == trimmedTerm.toLowerCase(),
+    );
+
+    if (existingIndex != -1) {
+      // Move existing entry to top (update timestamp locally)
+      final existing = _entries.removeAt(existingIndex);
+      final updated = SearchEntry(
+        id: existing.id,
+        searchTerm: existing.searchTerm,
+        timestamp: DateTime.now(),
+        userId: existing.userId,
+      );
+      _entries.insert(0, updated);
+      notifyListeners();
+
+      // Update timestamp in Firestore (fire-and-forget)
+      _updateTimestampInFirestore(existing.id);
+      return;
+    }
+
+    // Create new entry with temporary local ID
+    final localId = 'local_${DateTime.now().millisecondsSinceEpoch}';
+    final newEntry = SearchEntry(
+      id: localId,
+      searchTerm: trimmedTerm,
+      timestamp: DateTime.now(),
+      userId: _currentUserId!,
+    );
+
+    // Optimistic local update (instant UI)
+    _entries.insert(0, newEntry);
+
+    // Enforce max items limit
+    if (_entries.length > _maxHistoryItems) {
+      _entries = _entries.take(_maxHistoryItems).toList();
+    }
+
+    notifyListeners();
+
+    // Fire-and-forget write to Firestore
+    _addToFirestore(trimmedTerm, localId);
+  }
+
+  Future<void> _addToFirestore(String term, String localId) async {
+    try {
+      final docRef = await _firestore.collection('searches').add({
+        'userId': _currentUserId,
+        'searchTerm': term,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      // Update local entry with real Firestore ID
+      final index = _entries.indexWhere((e) => e.id == localId);
+      if (index != -1) {
+        _entries[index] = SearchEntry(
+          id: docRef.id,
+          searchTerm: _entries[index].searchTerm,
+          timestamp: _entries[index].timestamp,
+          userId: _entries[index].userId,
+        );
+        // No need to notify - ID change is invisible to user
+      }
+
+      if (kDebugMode) {
+        debugPrint('✅ Search term saved: $term');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ Failed to save search term (offline?): $e');
+      }
+      // Keep local entry even if Firestore write fails
+      // It will be visible until next refresh
+    }
+  }
+
+  Future<void> _updateTimestampInFirestore(String docId) async {
+    // Skip local IDs
+    if (docId.startsWith('local_')) return;
+
+    try {
+      await _firestore.collection('searches').doc(docId).update({
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ Failed to update timestamp: $e');
+      }
+    }
+  }
+
+  // ==================== DELETE SINGLE ENTRY ====================
+
+  /// Deletes a single entry with optimistic UI update and rollback on failure.
+  Future<void> deleteEntry(String docId) async {
+    // Guard: Already deleting this entry
+    if (_deletingEntryIds.contains(docId)) {
+      if (kDebugMode) {
+        debugPrint('Delete already in progress for: $docId');
+      }
+      return;
+    }
+
+    // Find entry for potential rollback
+    final index = _entries.indexWhere((e) => e.id == docId);
+    if (index == -1) return; // Entry not found
+
+    final entryBackup = _entries[index];
+
+    // Mark as deleting (for UI loading indicator)
+    _deletingEntryIds.add(docId);
+
+    // Optimistic removal (instant UI update)
+    _optimisticallyDeletedIds.add(docId);
+    _entries.removeAt(index);
+    notifyListeners();
+
+    try {
+      // Skip Firestore delete for local-only entries
+      if (!docId.startsWith('local_')) {
+        await _deleteFromFirestoreWithRetry(docId);
+      }
+
+      // Success - clean up tracking
+      _optimisticallyDeletedIds.remove(docId);
+
+      if (kDebugMode) {
+        debugPrint('✅ Deleted search entry: $docId');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Failed to delete entry: $e');
+      }
+
+      // Rollback: restore entry to original position
+      _optimisticallyDeletedIds.remove(docId);
+      if (index <= _entries.length) {
+        _entries.insert(index, entryBackup);
+      } else {
+        _entries.add(entryBackup);
+      }
+      notifyListeners();
+
+      rethrow;
+    } finally {
+      _deletingEntryIds.remove(docId);
+      notifyListeners();
+    }
+  }
+
+  Future<void> _deleteFromFirestoreWithRetry(String docId) async {
+    int attempts = 0;
+
+    while (attempts < _maxDeleteRetries) {
       try {
-        await _firestore.collection('searches').doc(docId).delete();
-        return; // Success, exit retry loop
+        await _firestore
+            .collection('searches')
+            .doc(docId)
+            .delete()
+            .timeout(_deleteTimeout);
+        return; // Success
       } catch (e) {
-        retryCount++;
-        if (retryCount >= maxRetries) {
-          throw e; // Give up after max retries
+        attempts++;
+
+        if (attempts >= _maxDeleteRetries) {
+          rethrow;
         }
 
         if (kDebugMode) {
-          debugPrint('Delete attempt $retryCount failed, retrying: $e');
+          debugPrint('Delete attempt $attempts failed, retrying...');
         }
-        // Wait before retrying (exponential backoff)
-        await Future.delayed(Duration(milliseconds: 200 * retryCount));
+
+        // Exponential backoff
+        await Future.delayed(Duration(milliseconds: 200 * attempts));
       }
     }
   }
 
+  // ==================== DELETE ALL ====================
+
+  /// Clears all search history for current user.
   Future<void> deleteAllForCurrentUser() async {
-    final currentUser = _auth.currentUser;
-    if (currentUser != null) {
-      await deleteAllForUser(currentUser.uid);
-    }
-  }
+    if (_currentUserId == null) return;
 
-  Future<void> deleteAllForUser(String userId) async {
+    // Backup for rollback
+    final entriesBackup = List<SearchEntry>.from(_entries);
+
+    // Optimistic clear (instant UI)
+    _entries = [];
+    _optimisticallyDeletedIds.clear();
+    notifyListeners();
+
     try {
-      // Optimistically clear the UI first
-      final originalEntries = List<SearchEntry>.from(_searchEntriesSearches);
-      _searchEntriesSearches.clear();
-      _searchEntries.clear();
-      _optimisticallyDeleted.clear();
-      notifyListeners();
-
-      // Then delete from Firestore
+      // Fetch all user's search docs
       final snapshot = await _firestore
           .collection('searches')
-          .where('userId', isEqualTo: userId)
+          .where('userId', isEqualTo: _currentUserId)
           .get();
-      final docs = snapshot.docs;
 
-      const batchSize = 500;
-      for (var i = 0; i < docs.length; i += batchSize) {
+      if (snapshot.docs.isEmpty) return;
+
+      // Batch delete (Firestore limit is 500 per batch)
+      for (var i = 0; i < snapshot.docs.length; i += _batchDeleteSize) {
         final batch = _firestore.batch();
-        for (var doc in docs.skip(i).take(batchSize)) {
+        final chunk = snapshot.docs.skip(i).take(_batchDeleteSize);
+
+        for (final doc in chunk) {
           batch.delete(doc.reference);
         }
+
         await batch.commit();
       }
 
       if (kDebugMode) {
-        debugPrint('Successfully deleted all search history for user: $userId');
+        debugPrint(
+            '✅ Deleted all search history (${snapshot.docs.length} entries)');
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('Error deleting all search history: $e');
+        debugPrint('❌ Failed to delete all history: $e');
       }
-      // The Firestore listener will restore the correct state
+
+      // Rollback on failure
+      _entries = entriesBackup;
+      notifyListeners();
+
       rethrow;
     }
   }
 
-  @override
-  void dispose() {
-    _historySubscription?.cancel();
-    _authSubscription?.cancel();
+  // ==================== LOCAL ENTRY (for external insertion) ====================
 
-    // Complete any pending delete operations
-    for (final completer in _deletingEntries.values) {
-      if (!completer.isCompleted) {
-        completer.completeError('Provider disposed');
+  /// Inserts a local entry directly (used by search delegate for immediate feedback).
+  /// Prefer using addSearch() which handles deduplication and Firestore write.
+  void insertLocalEntry(SearchEntry entry) {
+    if (_currentUserId == null) return;
+
+    // Remove duplicate if exists
+    _entries.removeWhere(
+      (e) => e.searchTerm.toLowerCase() == entry.searchTerm.toLowerCase(),
+    );
+
+    _entries.insert(0, entry);
+
+    if (_entries.length > _maxHistoryItems) {
+      _entries = _entries.take(_maxHistoryItems).toList();
+    }
+
+    notifyListeners();
+  }
+
+  // ==================== HELPERS ====================
+
+  /// Removes duplicate search terms, keeping the most recent.
+  List<SearchEntry> _deduplicateEntries(List<SearchEntry> entries) {
+    final seen = <String>{};
+    final result = <SearchEntry>[];
+
+    for (final entry in entries) {
+      final normalizedTerm = entry.searchTerm.toLowerCase();
+      if (!seen.contains(normalizedTerm)) {
+        seen.add(normalizedTerm);
+        result.add(entry);
       }
     }
 
-    _deletingEntries.clear();
-    _optimisticallyDeleted.clear();
-    super.dispose();
+    return result;
   }
-}
 
-class TimeoutException implements Exception {
-  final String message;
-  final Duration timeout;
+  /// Cleans up optimistic deletes that are confirmed deleted from Firestore.
+  void _cleanupConfirmedDeletes(Set<String> existingDocIds) {
+    _optimisticallyDeletedIds.removeWhere((id) => !existingDocIds.contains(id));
+  }
 
-  const TimeoutException(this.message, this.timeout);
+  /// Clears all local state (called on logout).
+  void clearHistory() {
+    _entries = [];
+    _hasFetchedThisSession = false;
+    _deletingEntryIds.clear();
+    _optimisticallyDeletedIds.clear();
+    _isLoadingHistory = false;
+    notifyListeners();
+  }
+
+  // ==================== DISPOSE ====================
 
   @override
-  String toString() => 'TimeoutException: $message after ${timeout.inSeconds}s';
+  void dispose() {
+    _authSubscription?.cancel();
+    _authSubscription = null;
+
+    _entries = [];
+    _deletingEntryIds.clear();
+    _optimisticallyDeletedIds.clear();
+
+    super.dispose();
+  }
 }

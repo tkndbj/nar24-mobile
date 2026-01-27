@@ -3,7 +3,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../generated/l10n/app_localizations.dart';
 import '../screens/DYNAMIC-SCREENS/dynamic_category_boxes_screen.dart';
 import '../providers/dynamic_category_boxes_provider.dart';
@@ -14,11 +13,9 @@ import '../providers/search_provider.dart';
 import '../screens/market_screen.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
-import '../models/search_entry.dart';
 import 'package:flutter/cupertino.dart';
 import '../utils/connectivity_helper.dart';
 import '../models/category_suggestion.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../screens/DYNAMIC-SCREENS/market_screen_dynamic_filters_screen.dart';
 import '../providers/market_dynamic_filter_provider.dart';
 import 'animated_filter_chip.dart';
@@ -30,7 +27,7 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
   final SearchHistoryProvider historyProv;
   final SearchProvider searchProv;
   final AppLocalizations l10n;
-    ScrollController? _scrollController;
+  ScrollController? _scrollController;
   static const double _loadMoreThreshold = 200.0;
 
   MarketSearchDelegate({
@@ -44,22 +41,24 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
           textInputAction: TextInputAction.search,
         );
 
-   ScrollController _getScrollController(BuildContext context) {
+  ScrollController _getScrollController(BuildContext context) {
     if (_scrollController == null) {
       _scrollController = ScrollController();
       _scrollController!.addListener(() => _onScroll(context));
     }
     return _scrollController!;
   }
+
   void _onScroll(BuildContext context) {
     if (_scrollController == null) return;
-    
+
     final maxScroll = _scrollController!.position.maxScrollExtent;
     final currentScroll = _scrollController!.position.pixels;
-    
+
     // Check if we're near the bottom
     if (maxScroll - currentScroll <= _loadMoreThreshold) {
-      final searchProvider = Provider.of<SearchProvider>(context, listen: false);
+      final searchProvider =
+          Provider.of<SearchProvider>(context, listen: false);
       if (searchProvider.hasMoreProducts && !searchProvider.isLoadingMore) {
         searchProvider.loadMoreSuggestions(l10n: l10n);
       }
@@ -114,50 +113,14 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
     }
   }
 
-  /// Save search term - auth aware but doesn't affect search functionality.
-  /// This method is designed to be called fire-and-forget and handles all
-  /// errors internally to prevent unhandled exceptions.
-  Future<void> _saveSearchTerm(BuildContext context, String searchTerm,
-      {bool refreshSuggestions = true}) async {
+  void _saveSearchTerm(BuildContext context, String searchTerm) {
+    if (searchTerm.trim().isEmpty) return;
+
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) return;
-
-      final userId = currentUser.uid;
-      final now = DateTime.now();
-      final placeholderId = UniqueKey().toString();
-
-      historyProv.insertLocalEntry(
-        SearchEntry(
-          id: placeholderId,
-          searchTerm: searchTerm,
-          timestamp: now,
-          userId: userId,
-        ),
-      );
-
-      try {
-        await FirebaseFirestore.instance.collection('searches').add({
-          'userId': userId,
-          'searchTerm': searchTerm,
-          'timestamp': FieldValue.serverTimestamp(),
-        });
-      } catch (e) {
-        // Firebase write failed - rollback the optimistic local entry
-        try {
-          await historyProv.deleteEntry(placeholderId);
-        } catch (_) {
-          // Provider may be disposed - ignore rollback failure
-        }
-        if (kDebugMode) {
-          debugPrint('Error saving search term: $e');
-        }
-      }
+      historyProv.addSearch(searchTerm.trim());
     } catch (e) {
-      // Catch-all for any unexpected errors (e.g., provider disposed)
-      // This ensures fire-and-forget calls never throw unhandled exceptions
       if (kDebugMode) {
-        debugPrint('Unexpected error in _saveSearchTerm: $e');
+        debugPrint('Error saving search term: $e');
       }
     }
   }
@@ -181,11 +144,9 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
   @override
   Widget buildSuggestions(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    // Use Listener instead of GestureDetector for keyboard dismissal.
-    // Listener doesn't participate in the gesture arena, so it won't
-    // compete with child widgets like IconButton, ensuring all taps work
-    // on the first attempt.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      historyProv.ensureLoaded();
+    });
     return Listener(
       onPointerDown: (_) => _dismissKeyboard(context),
       behavior: HitTestBehavior.translucent,
@@ -349,480 +310,478 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
     );
   }
 
- Widget _buildSearchSuggestions(
-  BuildContext context,
-  bool isDark,
-  List<CategorySuggestion> categorySuggestions,
-  List<Suggestion> productSuggestions,
-  List<ShopSuggestion> shopSuggestions, {
-  bool isLoading = false,
-}) {
-  return CustomScrollView(
-    controller: _getScrollController(context), // ADD THIS
-    slivers: [
-      // Loading indicator at top if still loading
-      if (isLoading)
-        const SliverToBoxAdapter(
-          child: SizedBox(
-            height: 2,
-            child: LinearProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6B35)),
+  Widget _buildSearchSuggestions(
+    BuildContext context,
+    bool isDark,
+    List<CategorySuggestion> categorySuggestions,
+    List<Suggestion> productSuggestions,
+    List<ShopSuggestion> shopSuggestions, {
+    bool isLoading = false,
+  }) {
+    return CustomScrollView(
+      controller: _getScrollController(context), // ADD THIS
+      slivers: [
+        // Loading indicator at top if still loading
+        if (isLoading)
+          const SliverToBoxAdapter(
+            child: SizedBox(
+              height: 2,
+              child: LinearProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6B35)),
+              ),
             ),
           ),
-        ),
 
-      // Shops section (unchanged)
-      if (shopSuggestions.isNotEmpty) ...[
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 20, 18, 12),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.store_rounded,
-                  color: isDark ? Colors.white70 : Colors.grey.shade600,
-                  size: 18,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  l10n.shops ?? 'Shops',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white70 : Colors.grey.shade700,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFF6B35).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '${shopSuggestions.length}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFFFF6B35),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        SliverList(
-          delegate: SliverChildBuilderDelegate(
-            (context, index) {
-              final shop = shopSuggestions[index];
-              return Container(
-                margin:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color.fromARGB(255, 33, 31, 49)
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark
-                        ? Colors.white.withOpacity(0.08)
-                        : Colors.grey.shade200,
-                  ),
-                ),
-                child: ListTile(
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  leading: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(22),
-                      color: Colors.grey.shade200,
-                    ),
-                    child: shop.profileImageUrl != null
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(22),
-                            child: Image.network(
-                              shop.profileImageUrl!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Icon(
-                                  Icons.store_rounded,
-                                  size: 20,
-                                  color: Colors.grey.shade600,
-                                );
-                              },
-                            ),
-                          )
-                        : Icon(
-                            Icons.store_rounded,
-                            size: 20,
-                            color: Colors.grey.shade600,
-                          ),
-                  ),
-                  title: Text(
-                    shop.name,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white70 : Colors.black87,
-                    ),
-                  ),
-                  subtitle: Text(
-                    shop.categoriesDisplay,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? Colors.white60 : Colors.grey.shade600,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: Icon(
-                    Icons.chevron_right_rounded,
-                    size: 20,
-                    color: isDark ? Colors.white30 : Colors.grey.shade400,
-                  ),
-                  onTap: () {
-                    _dismissKeyboard(context);
-                    final term = query.trim();
-                    if (term.isNotEmpty) {
-                      _saveSearchTerm(context, term,
-                          refreshSuggestions: false);
-                    }
-                    _safelyClearSearchProvider(context);
-                    final marketState =
-                        context.findAncestorStateOfType<MarketScreenState>();
-                    marketState?.exitSearchMode();
-                    context.push('/shop_detail/${shop.id}');
-                  },
-                ),
-              );
-            },
-            childCount: shopSuggestions.length > 3
-                ? 3
-                : shopSuggestions.length,
-          ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 16)),
-      ],
-
-      // Categories section (unchanged)
-      if (categorySuggestions.isNotEmpty) ...[
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 20, 18, 12),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.category_rounded,
-                  color: isDark ? Colors.white70 : Colors.grey.shade600,
-                  size: 18,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  l10n.categories,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white70 : Colors.grey.shade700,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFF6B35).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text(
-                    'AI',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFFFF6B35),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        SliverToBoxAdapter(
-          child: SizedBox(
-            height: 70,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              itemCount: categorySuggestions.length,
-              itemBuilder: (context, index) {
-                final categoryMatch = categorySuggestions[index];
-                return _buildCategoryCard(context, isDark, categoryMatch);
-              },
-            ),
-          ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 20)),
-      ],
-
-      // Products section header
-      if (productSuggestions.isNotEmpty) ...[
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.inventory_2_rounded,
-                  color: isDark ? Colors.white70 : Colors.grey.shade600,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  l10n.products,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white70 : Colors.grey.shade700,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFF6B35).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${productSuggestions.length}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFFFF6B35),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        // Products list
-        SliverList(
-          delegate: SliverChildBuilderDelegate(
-            (context, index) {
-              final suggestion = productSuggestions[index];
-              return Container(
-                margin:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color.fromARGB(255, 33, 31, 49)
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark
-                        ? Colors.white.withOpacity(0.08)
-                        : Colors.grey.shade200,
-                  ),
-                ),
-                child: ListTile(
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  leading: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.white.withOpacity(0.1)
-                          : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: suggestion.imageUrl != null
-                          ? Image.network(
-                              suggestion.imageUrl!,
-                              width: 44,
-                              height: 44,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Icon(
-                                  Icons.shopping_bag_rounded,
-                                  size: 20,
-                                  color: isDark
-                                      ? Colors.white60
-                                      : Colors.grey.shade600,
-                                );
-                              },
-                              loadingBuilder:
-                                  (context, child, loadingProgress) {
-                                if (loadingProgress == null) return child;
-                                return Center(
-                                  child: SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        isDark
-                                            ? Colors.white30
-                                            : Colors.grey.shade400,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            )
-                          : Icon(
-                              Icons.shopping_bag_rounded,
-                              size: 20,
-                              color: isDark
-                                  ? Colors.white60
-                                  : Colors.grey.shade600,
-                            ),
-                    ),
-                  ),
-                  title: Text(
-                    suggestion.name,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white70 : Colors.black87,
-                    ),
-                  ),
-                  subtitle: Text(
-                    l10n.product,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? Colors.white60 : Colors.grey.shade600,
-                    ),
-                  ),
-                  trailing: Icon(
-                    Icons.north_west_rounded,
-                    size: 16,
-                    color: isDark ? Colors.white30 : Colors.grey.shade400,
-                  ),
-                  onTap: () {
-                    _dismissKeyboard(context);
-                    final term = query.trim();
-                    if (term.isNotEmpty) {
-                      _saveSearchTerm(context, term,
-                          refreshSuggestions: false);
-                    }
-                    _safelyClearSearchProvider(context);
-                    final marketState =
-                        context.findAncestorStateOfType<MarketScreenState>();
-                    marketState?.exitSearchMode();
-                    final cleanId = _normalizeProductId(suggestion.id);
-                    context.push('/product/$cleanId');
-                  },
-                ),
-              );
-            },
-            childCount: productSuggestions.length,
-          ),
-        ),
-      ],
-
-      // ADD: Load more indicator at bottom
-      SliverToBoxAdapter(
-        child: Consumer<SearchProvider>(
-          builder: (context, provider, _) {
-            if (provider.isLoadingMore) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Center(
-                  child: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        Color(0xFFFF6B35),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }
-
-            // Show "Load more" hint if there's more to load
-            if (provider.hasMoreProducts && productSuggestions.isNotEmpty) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Center(
-                  child: Text(
-                    'Scroll for more',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? Colors.white30 : Colors.grey.shade400,
-                    ),
-                  ),
-                ),
-              );
-            }
-
-            return const SizedBox(height: 20);
-          },
-        ),
-      ),
-
-      // No results state (unchanged)
-      if (categorySuggestions.isEmpty &&
-          productSuggestions.isEmpty &&
-          shopSuggestions.isEmpty &&
-          !isLoading) ...[
-        SliverFillRemaining(
-          child: Center(
+        // Shops section (unchanged)
+        if (shopSuggestions.isNotEmpty) ...[
+          SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+              padding: const EdgeInsets.fromLTRB(18, 20, 18, 12),
+              child: Row(
                 children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? const Color.fromARGB(255, 33, 31, 49)
-                          : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(40),
-                    ),
-                    child: Icon(
-                      Icons.search_off_rounded,
-                      size: 40,
-                      color: isDark ? Colors.white30 : Colors.grey.shade400,
-                    ),
+                  Icon(
+                    Icons.store_rounded,
+                    color: isDark ? Colors.white70 : Colors.grey.shade600,
+                    size: 18,
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(width: 6),
                   Text(
-                    l10n.noResultsFound,
+                    l10n.shops ?? 'Shops',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 15,
                       fontWeight: FontWeight.w600,
                       color: isDark ? Colors.white70 : Colors.grey.shade700,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.tryDifferentKeywords,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: isDark ? Colors.white30 : Colors.grey.shade500,
+                  const SizedBox(width: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF6B35).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${shopSuggestions.length}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFFF6B35),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
           ),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final shop = shopSuggestions[index];
+                return Container(
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color.fromARGB(255, 33, 31, 49)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.white.withOpacity(0.08)
+                          : Colors.grey.shade200,
+                    ),
+                  ),
+                  child: ListTile(
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    leading: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(22),
+                        color: Colors.grey.shade200,
+                      ),
+                      child: shop.profileImageUrl != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(22),
+                              child: Image.network(
+                                shop.profileImageUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Icon(
+                                    Icons.store_rounded,
+                                    size: 20,
+                                    color: Colors.grey.shade600,
+                                  );
+                                },
+                              ),
+                            )
+                          : Icon(
+                              Icons.store_rounded,
+                              size: 20,
+                              color: Colors.grey.shade600,
+                            ),
+                    ),
+                    title: Text(
+                      shop.name,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white70 : Colors.black87,
+                      ),
+                    ),
+                    subtitle: Text(
+                      shop.categoriesDisplay,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white60 : Colors.grey.shade600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: Icon(
+                      Icons.chevron_right_rounded,
+                      size: 20,
+                      color: isDark ? Colors.white30 : Colors.grey.shade400,
+                    ),
+                    onTap: () {
+                      _dismissKeyboard(context);
+                      final term = query.trim();
+                      if (term.isNotEmpty) {
+                        _saveSearchTerm(context, term);
+                      }
+                      _safelyClearSearchProvider(context);
+                      final marketState =
+                          context.findAncestorStateOfType<MarketScreenState>();
+                      marketState?.exitSearchMode();
+                      context.push('/shop_detail/${shop.id}');
+                    },
+                  ),
+                );
+              },
+              childCount:
+                  shopSuggestions.length > 3 ? 3 : shopSuggestions.length,
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+        ],
+
+        // Categories section (unchanged)
+        if (categorySuggestions.isNotEmpty) ...[
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 20, 18, 12),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.category_rounded,
+                    color: isDark ? Colors.white70 : Colors.grey.shade600,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    l10n.categories,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white70 : Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF6B35).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'AI',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFFF6B35),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 70,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                itemCount: categorySuggestions.length,
+                itemBuilder: (context, index) {
+                  final categoryMatch = categorySuggestions[index];
+                  return _buildCategoryCard(context, isDark, categoryMatch);
+                },
+              ),
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 20)),
+        ],
+
+        // Products section header
+        if (productSuggestions.isNotEmpty) ...[
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.inventory_2_rounded,
+                    color: isDark ? Colors.white70 : Colors.grey.shade600,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    l10n.products,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white70 : Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF6B35).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${productSuggestions.length}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFFF6B35),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Products list
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final suggestion = productSuggestions[index];
+                return Container(
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color.fromARGB(255, 33, 31, 49)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.white.withOpacity(0.08)
+                          : Colors.grey.shade200,
+                    ),
+                  ),
+                  child: ListTile(
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    leading: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withOpacity(0.1)
+                            : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: suggestion.imageUrl != null
+                            ? Image.network(
+                                suggestion.imageUrl!,
+                                width: 44,
+                                height: 44,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Icon(
+                                    Icons.shopping_bag_rounded,
+                                    size: 20,
+                                    color: isDark
+                                        ? Colors.white60
+                                        : Colors.grey.shade600,
+                                  );
+                                },
+                                loadingBuilder:
+                                    (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return Center(
+                                    child: SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                          isDark
+                                              ? Colors.white30
+                                              : Colors.grey.shade400,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              )
+                            : Icon(
+                                Icons.shopping_bag_rounded,
+                                size: 20,
+                                color: isDark
+                                    ? Colors.white60
+                                    : Colors.grey.shade600,
+                              ),
+                      ),
+                    ),
+                    title: Text(
+                      suggestion.name,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white70 : Colors.black87,
+                      ),
+                    ),
+                    subtitle: Text(
+                      l10n.product,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white60 : Colors.grey.shade600,
+                      ),
+                    ),
+                    trailing: Icon(
+                      Icons.north_west_rounded,
+                      size: 16,
+                      color: isDark ? Colors.white30 : Colors.grey.shade400,
+                    ),
+                    onTap: () {
+                      _dismissKeyboard(context);
+                      final term = query.trim();
+                      if (term.isNotEmpty) {
+                        _saveSearchTerm(context, term);
+                      }
+                      _safelyClearSearchProvider(context);
+                      final marketState =
+                          context.findAncestorStateOfType<MarketScreenState>();
+                      marketState?.exitSearchMode();
+                      final cleanId = _normalizeProductId(suggestion.id);
+                      context.push('/product/$cleanId');
+                    },
+                  ),
+                );
+              },
+              childCount: productSuggestions.length,
+            ),
+          ),
+        ],
+
+        // ADD: Load more indicator at bottom
+        SliverToBoxAdapter(
+          child: Consumer<SearchProvider>(
+            builder: (context, provider, _) {
+              if (provider.isLoadingMore) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Center(
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          Color(0xFFFF6B35),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              // Show "Load more" hint if there's more to load
+              if (provider.hasMoreProducts && productSuggestions.isNotEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Center(
+                    child: Text(
+                      'Scroll for more',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white30 : Colors.grey.shade400,
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              return const SizedBox(height: 20);
+            },
+          ),
         ),
+
+        // No results state (unchanged)
+        if (categorySuggestions.isEmpty &&
+            productSuggestions.isEmpty &&
+            shopSuggestions.isEmpty &&
+            !isLoading) ...[
+          SliverFillRemaining(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color.fromARGB(255, 33, 31, 49)
+                            : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(40),
+                      ),
+                      child: Icon(
+                        Icons.search_off_rounded,
+                        size: 40,
+                        color: isDark ? Colors.white30 : Colors.grey.shade400,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      l10n.noResultsFound,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white70 : Colors.grey.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      l10n.tryDifferentKeywords,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isDark ? Colors.white30 : Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ],
-    ],
-  );
-}
+    );
+  }
 
   // Helper methods remain the same...
   Widget _buildCategoryCard(
@@ -873,7 +832,7 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
             _dismissKeyboard(context);
             final term = query.trim();
             if (term.isNotEmpty) {
-              _saveSearchTerm(context, term, refreshSuggestions: false);
+              _saveSearchTerm(context, term);
             }
 
             _safelyClearSearchProvider(context);
@@ -1310,8 +1269,7 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
                   trailing: _buildDeleteButton(context, entry, isDark),
                   onTap: () {
                     _dismissKeyboard(context);
-                    _saveSearchTerm(context, entry.searchTerm,
-                        refreshSuggestions: false);
+                    _saveSearchTerm(context, entry.searchTerm);
                     _safelyClearSearchProvider(context);
                     final marketState =
                         context.findAncestorStateOfType<MarketScreenState>();
@@ -1339,9 +1297,8 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
           color: Colors.transparent,
           child: InkWell(
             customBorder: const CircleBorder(),
-            onTap: isDeleting
-                ? null
-                : () => _handleDeleteEntry(context, entry.id),
+            onTap:
+                isDeleting ? null : () => _handleDeleteEntry(context, entry.id),
             child: SizedBox(
               width: 48,
               height: 48,
@@ -1411,7 +1368,7 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
       // This prevents UI stutter on lower-end devices while ensuring the search
       // history is still saved reliably. Errors are handled internally.
       if (term.isNotEmpty) {
-        _saveSearchTerm(context, term, refreshSuggestions: false);
+        _saveSearchTerm(context, term);
       }
 
       _safelyClearSearchProvider(context);

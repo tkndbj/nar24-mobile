@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../providers/shop_widget_provider.dart';
 import '../../screens/SHOP-SCREENS/shop_detail_screen.dart';
@@ -220,19 +219,16 @@ class _ShopCardContent extends StatelessWidget {
             mainAxisSize: isTablet ? MainAxisSize.min : MainAxisSize.max,
             children: [
               _CoverSection(
-                shopId: shopId,
                 shopName: shopName,
                 coverImageList: coverImageList,
                 hasCoverImages: hasCoverImages,
                 profileImageUrl: profileImageUrl,
                 pageController: pageController,
-                secondaryTextColor: secondaryTextColor,
               ),
               _ShopInfoSection(
                 shopName: shopName,
                 averageRating: averageRating,
                 mainTextColor: mainTextColor,
-                secondaryTextColor: secondaryTextColor,
                 isTablet: isTablet,
               ),
             ],
@@ -245,13 +241,11 @@ class _ShopCardContent extends StatelessWidget {
 
 /// Cover section with images and action buttons
 class _CoverSection extends StatelessWidget {
-  final String shopId;
   final String shopName;
   final List<String> coverImageList;
   final bool hasCoverImages;
   final String profileImageUrl;
   final PageController? pageController;
-  final Color secondaryTextColor;
 
   // FIX 3: Fixed cache dimensions - not reactive to screen changes
   // Using 3x for high-DPI displays (covers most devices)
@@ -260,13 +254,11 @@ class _CoverSection extends StatelessWidget {
 
   const _CoverSection({
     Key? key,
-    required this.shopId,
     required this.shopName,
     required this.coverImageList,
     required this.hasCoverImages,
     required this.profileImageUrl,
     required this.pageController,
-    required this.secondaryTextColor,
   }) : super(key: key);
 
   @override
@@ -290,22 +282,12 @@ class _CoverSection extends StatelessWidget {
               ),
             ),
           ),
-          // Action buttons
-          Positioned(
-            top: 8,
-            right: 4,
-            child: _ActionButtonsRow(
-              shopId: shopId,
-              shopName: shopName,
-              secondaryTextColor: secondaryTextColor,
-            ),
-          ),
+
           // Profile avatar
           Positioned(
             right: 16,
             bottom: 0,
             child: _ProfileAvatar(
-              key: ValueKey('avatar_$shopId'),
               profileImageUrl: profileImageUrl,
             ),
           ),
@@ -440,180 +422,6 @@ class _NoCoverPlaceholder extends StatelessWidget {
   }
 }
 
-/// Action buttons with optimized state management
-class _ActionButtonsRow extends StatelessWidget {
-  final String shopId;
-  final String shopName;
-  final Color secondaryTextColor;
-
-  const _ActionButtonsRow({
-    Key? key,
-    required this.shopId,
-    required this.shopName,
-    required this.secondaryTextColor,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _FavoriteButton(
-          shopId: shopId,
-          secondaryTextColor: secondaryTextColor,
-        ),
-        const SizedBox(width: 4),
-        _ShareButton(
-          shopName: shopName,
-          secondaryTextColor: secondaryTextColor,
-        ),
-      ],
-    );
-  }
-}
-
-/// Favorite button with selector for minimal rebuilds
-class _FavoriteButton extends StatefulWidget {
-  final String shopId;
-  final Color secondaryTextColor;
-
-  const _FavoriteButton({
-    Key? key,
-    required this.shopId,
-    required this.secondaryTextColor,
-  }) : super(key: key);
-
-  @override
-  State<_FavoriteButton> createState() => _FavoriteButtonState();
-}
-
-class _FavoriteButtonState extends State<_FavoriteButton> {
-  bool _isProcessing = false;
-
-  @override
-  Widget build(BuildContext context) {
-    // FIX 12: Use Selector for minimal rebuilds
-    return Selector<ShopWidgetProvider, bool>(
-      selector: (_, provider) =>
-          provider.favoriteShopIds.contains(widget.shopId),
-      builder: (context, isFavorite, child) {
-        return _CircularIconButton(
-          icon: isFavorite ? Icons.favorite : Icons.favorite_border,
-          color: isFavorite ? Colors.red : widget.secondaryTextColor,
-          isLoading: _isProcessing,
-          onPressed: _isProcessing ? null : () => _handleToggle(context),
-        );
-      },
-    );
-  }
-
-  Future<void> _handleToggle(BuildContext context) async {
-    if (_isProcessing) return;
-
-    setState(() => _isProcessing = true);
-
-    try {
-      final provider = context.read<ShopWidgetProvider>();
-      await provider.toggleFavorite(widget.shopId);
-
-      if (!mounted) return;
-
-      final l10n = AppLocalizations.of(context);
-      final isFavorite = provider.favoriteShopIds.contains(widget.shopId);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isFavorite ? l10n.addedToFavorites : l10n.removedFromFavorites,
-          ),
-          duration: const Duration(seconds: 1),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } catch (e) {
-      debugPrint('Favorite toggle error: $e');
-
-      if (!mounted) return;
-
-      final l10n = AppLocalizations.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.errorTogglingFavorite),
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isProcessing = false);
-      }
-    }
-  }
-}
-
-/// Share button - stateless since it doesn't need state
-class _ShareButton extends StatelessWidget {
-  final String shopName;
-  final Color secondaryTextColor;
-
-  const _ShareButton({
-    Key? key,
-    required this.shopName,
-    required this.secondaryTextColor,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return _CircularIconButton(
-      icon: Icons.share_outlined,
-      color: secondaryTextColor,
-      onPressed: () => Share.share(shopName),
-    );
-  }
-}
-
-/// Reusable circular icon button
-class _CircularIconButton extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final VoidCallback? onPressed;
-  final bool isLoading;
-
-  const _CircularIconButton({
-    Key? key,
-    required this.icon,
-    required this.color,
-    this.onPressed,
-    this.isLoading = false,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      type: MaterialType.circle,
-      color: const Color(0xFFFFFDD0),
-      elevation: 0,
-      child: InkWell(
-        onTap: onPressed,
-        customBorder: const CircleBorder(),
-        child: SizedBox(
-          width: 28,
-          height: 28,
-          child: isLoading
-              ? Padding(
-                  padding: const EdgeInsets.all(6),
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(color),
-                  ),
-                )
-              : Icon(icon, color: color, size: 16),
-        ),
-      ),
-    );
-  }
-}
-
 /// Profile avatar with optimized image loading
 class _ProfileAvatar extends StatelessWidget {
   final String profileImageUrl;
@@ -665,7 +473,7 @@ class _ShopInfoSection extends StatelessWidget {
   final String shopName;
   final double averageRating;
   final Color mainTextColor;
-  final Color secondaryTextColor;
+
   final bool isTablet;
 
   const _ShopInfoSection({
@@ -673,7 +481,6 @@ class _ShopInfoSection extends StatelessWidget {
     required this.shopName,
     required this.averageRating,
     required this.mainTextColor,
-    required this.secondaryTextColor,
     required this.isTablet,
   }) : super(key: key);
 
@@ -707,7 +514,7 @@ class _ShopInfoSection extends StatelessWidget {
                   averageRating.toStringAsFixed(1),
                   style: TextStyle(
                     fontSize: 12,
-                    color: secondaryTextColor,
+                    color: mainTextColor,
                     fontWeight: FontWeight.w500,
                   ),
                 ),

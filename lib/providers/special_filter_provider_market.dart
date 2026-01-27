@@ -3,12 +3,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:rxdart/rxdart.dart';
 import '../models/product.dart';
 import '../models/dynamic_filter.dart';
-import '../user_provider.dart';
+
 import 'package:flutter/foundation.dart';
 
 class SpecialFilterProviderMarket with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final UserProvider userProvider;
+
   StreamSubscription<List<Product>>? _productsStreamSubscription;
 
   // ValueNotifiers for frequently accessed state
@@ -50,25 +50,30 @@ class SpecialFilterProviderMarket with ChangeNotifier {
   final Map<String, ValueNotifier<bool>> _subcategoryLoadingMoreNotifiers = {};
   final Map<String, ValueNotifier<bool>> _subcategoryHasMoreNotifiers = {};
 
-  SpecialFilterProviderMarket(this.userProvider) {
-    _productsStream = _productIdsSubject.switchMap((productIds) {
-      if (productIds.isEmpty) {
-        return Stream.value(<Product>[]);
+  Future<List<Product>> fetchProductsByIds(List<String> ids) async {
+    if (ids.isEmpty) return [];
+
+    final products = <Product>[];
+
+    // Flutter Firestore: Use whereIn queries (max 30 per query)
+    for (var i = 0; i < ids.length; i += 30) {
+      final chunk = ids.skip(i).take(30).toList();
+
+      final snapshot = await _firestore
+          .collection('shop_products')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+
+      for (final doc in snapshot.docs) {
+        if (doc.exists) {
+          products.add(Product.fromDocument(doc));
+        }
       }
-      final productSnapshots = productIds.map((id) {
-        return _firestore
-            .collection('shop_products')
-            .doc(id)
-            .snapshots()
-            .map((snap) {
-          if (!snap.exists) return null;
-          return Product.fromDocument(snap);
-        });
-      }).toList();
-      return Rx.combineLatestList(productSnapshots).map((list) {
-        return list.whereType<Product>().toList();
-      });
-    }).debounceTime(const Duration(milliseconds: 100));
+    }
+
+    // Preserve original order (whereIn doesn't guarantee order)
+    final productMap = {for (var p in products) p.id: p};
+    return ids.map((id) => productMap[id]).whereType<Product>().toList();
   }
 
   String? _currentCategory;
@@ -311,8 +316,6 @@ class SpecialFilterProviderMarket with ChangeNotifier {
 
   final BehaviorSubject<List<String>> _productIdsSubject =
       BehaviorSubject<List<String>>.seeded([]);
-  late final Stream<List<Product>> _productsStream;
-  Stream<List<Product>> get productsStream => _productsStream;
 
   // Pagination and loading states per filter (dynamic support)
   final Map<String, int> _currentPages = {};
@@ -1310,9 +1313,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
         dynamicColors.isNotEmpty ||
         (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty);
 
-    if (isCacheValid &&
-        _productCache.containsKey(cacheKey) &&
-        !hasFilters) {
+    if (isCacheValid && _productCache.containsKey(cacheKey) && !hasFilters) {
       final cachedProducts = _productCache[cacheKey]!;
       _specificSubcategoryProducts[key] = List.from(cachedProducts);
       _specificSubcategoryProductIds[key] =

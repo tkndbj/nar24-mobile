@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../providers/special_filter_provider_teras.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import '../../screens/market_screen.dart';
@@ -19,20 +17,18 @@ class TerasFilterSortRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
-    return Consumer<SpecialFilterProviderTeras>(
-      builder: (ctx, specialProv, _) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8.0),
-          child: SizedBox(
-            height: 30,
-            child: ListView.separated(
-              controller: scrollController,
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.only(left: 16.0),
-              separatorBuilder: (_, __) => const SizedBox(width: 4),
-              itemCount: 2, // Categories and List Product
-              itemBuilder: (ctx, i) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: SizedBox(
+        height: 30,
+        child: ListView.separated(
+          controller: scrollController,
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.only(left: 16.0),
+          separatorBuilder: (_, __) => const SizedBox(width: 4),
+          itemCount: 2, // Categories and List Product
+          itemBuilder: (context, i) {
                 if (i == 0) {
                   // Categories button
                   return Padding(
@@ -190,7 +186,5 @@ class TerasFilterSortRow extends StatelessWidget {
             ),
           ),
         );
-      },
-    );
   }
 }

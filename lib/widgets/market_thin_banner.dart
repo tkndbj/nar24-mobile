@@ -119,13 +119,8 @@ class _MarketThinBannerState extends State<MarketThinBanner>
       // Prefetch image if not cached
       if (!_cachedUrls.contains(url)) {
         _cachedUrls.add(url);
-        final provider = CachedNetworkImageProvider(
-          url,
-          maxWidth: (MediaQuery.of(context).size.width *
-                  MediaQuery.of(context).devicePixelRatio)
-              .toInt(),
-          maxHeight: (48 * MediaQuery.of(context).devicePixelRatio).toInt(),
-        );
+        // Fixed height for thin banners - width scales proportionally
+        final provider = CachedNetworkImageProvider(url, maxHeight: 150);
         precacheImage(provider, context);
       }
 
@@ -223,15 +218,12 @@ class _MarketThinBannerState extends State<MarketThinBanner>
                     color: Colors.grey.shade200),
                 errorWidget: (_, __, ___) =>
                     const Center(child: Icon(Icons.error)),
-                // Disable fade to avoid flicker
                 fadeInDuration: Duration.zero,
                 fadeOutDuration: Duration.zero,
-                // Cache at screen resolution
-                memCacheWidth: (MediaQuery.of(context).size.width *
-                        MediaQuery.of(context).devicePixelRatio)
-                    .toInt(),
-                memCacheHeight:
-                    (48 * MediaQuery.of(context).devicePixelRatio).toInt(),
+                // Only constrain height - width scales proportionally
+                memCacheHeight: 150,
+                useOldImageOnUrlChange: true,
+                filterQuality: FilterQuality.medium,
               ),
             )
           // ✅ VSYNC-controlled PageView with infinite scroll
@@ -265,11 +257,10 @@ class _MarketThinBannerState extends State<MarketThinBanner>
                         const Center(child: Icon(Icons.error)),
                     fadeInDuration: Duration.zero,
                     fadeOutDuration: Duration.zero,
-                    memCacheWidth: (MediaQuery.of(context).size.width *
-                            MediaQuery.of(context).devicePixelRatio)
-                        .toInt(),
-                    memCacheHeight:
-                        (48 * MediaQuery.of(context).devicePixelRatio).toInt(),
+                    // Only constrain height - width scales proportionally
+                    memCacheHeight: 150,
+                    useOldImageOnUrlChange: true,
+                    filterQuality: FilterQuality.medium,
                   ),
                 );
               },

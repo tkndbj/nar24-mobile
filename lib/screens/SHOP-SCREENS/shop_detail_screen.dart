@@ -444,7 +444,6 @@ class _ShopAppBar extends StatelessWidget {
           coverImageUrls: coverImageUrls,
           rating: rating,
           followers: followers,
-          shopId: shopId,
         ),
       ),
     );
@@ -482,13 +481,11 @@ class _CoverImage extends StatelessWidget {
   final List<String> coverImageUrls;
   final double rating;
   final int followers;
-  final String shopId;
 
   const _CoverImage({
     required this.coverImageUrls,
     required this.rating,
     required this.followers,
-    required this.shopId,
   });
 
   @override
@@ -506,7 +503,6 @@ class _CoverImage extends StatelessWidget {
             _ShopInfoOverlay(
               rating: rating,
               followers: followers,
-              shopId: shopId,
             ),
           ],
         ),
@@ -552,18 +548,14 @@ class _CoverImage extends StatelessWidget {
 class _ShopInfoOverlay extends StatelessWidget {
   final double rating;
   final int followers;
-  final String shopId;
 
   const _ShopInfoOverlay({
     required this.rating,
     required this.followers,
-    required this.shopId,
   });
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-
     return Positioned(
       bottom: 16,
       left: 16,
@@ -582,48 +574,8 @@ class _ShopInfoOverlay extends StatelessWidget {
             '$followers Followers',
             style: const TextStyle(color: Colors.white, fontSize: 12),
           ),
-          const SizedBox(width: 16),
-          _FollowButton(shopId: shopId),
         ],
       ),
-    );
-  }
-}
-
-class _FollowButton extends StatelessWidget {
-  final String shopId;
-
-  const _FollowButton({required this.shopId});
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-
-    return Selector<ShopProvider, bool>(
-      selector: (_, p) => p.favoriteShopIds.contains(shopId),
-      builder: (context, isFavorite, _) {
-        return OutlinedButton(
-          onPressed: () {
-            FocusScope.of(context).unfocus();
-            context.read<ShopProvider>().toggleFavorite(shopId);
-          },
-          style: OutlinedButton.styleFrom(
-            side: const BorderSide(color: Colors.orange, width: 0.5),
-            backgroundColor: isFavorite
-                ? Colors.orange
-                : const Color.fromARGB(255, 222, 98, 234),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          ),
-          child: Text(
-            isFavorite ? l10n.unfollow : l10n.follow,
-            style: const TextStyle(fontSize: 10),
-          ),
-        );
-      },
     );
   }
 }

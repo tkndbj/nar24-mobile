@@ -15,7 +15,6 @@ import '../../route_observer.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../widgets/market_search_delegate.dart';
 import '../../providers/search_history_provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class DynamicCategoryBoxesScreen extends StatefulWidget {
   final String category;
@@ -45,6 +44,7 @@ class _DynamicCategoryBoxesScreenState extends State<DynamicCategoryBoxesScreen>
   late final FocusNode _searchFocusNode;
   bool _isSearching = false;
   String _selectedSortOption = 'None';
+  VoidCallback? _searchTextListener;
 
   final List<String> _sortOptions = [
     'None',
@@ -99,10 +99,32 @@ class _DynamicCategoryBoxesScreenState extends State<DynamicCategoryBoxesScreen>
   @override
   void dispose() {
     routeObserver.unsubscribe(this);
+    _removeSearchListener();
     _scrollController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  void _setupSearchListener(SearchProvider searchProv) {
+    _removeSearchListener();
+
+    _searchTextListener = () {
+      if (searchProv.mounted) {
+        searchProv.updateTerm(
+          _searchController.text,
+          l10n: AppLocalizations.of(context),
+        );
+      }
+    };
+    _searchController.addListener(_searchTextListener!);
+  }
+
+  void _removeSearchListener() {
+    if (_searchTextListener != null) {
+      _searchController.removeListener(_searchTextListener!);
+      _searchTextListener = null;
+    }
   }
 
   void _onScroll() {
@@ -339,7 +361,7 @@ class _DynamicCategoryBoxesScreenState extends State<DynamicCategoryBoxesScreen>
     List<Product> displayProducts,
     List<Product> boostedProducts,
     CategoryBoxesProvider provider,
-  ) {    
+  ) {
     return RefreshIndicator(
       onRefresh: () async {
         // Preserve filters during refresh
@@ -467,8 +489,9 @@ class _DynamicCategoryBoxesScreenState extends State<DynamicCategoryBoxesScreen>
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color:
-                                  hasFilters ? Colors.orange : Colors.transparent,
+                              color: hasFilters
+                                  ? Colors.orange
+                                  : Colors.transparent,
                               border: Border.all(
                                 color: hasFilters
                                     ? Colors.orange
@@ -719,16 +742,11 @@ class _DynamicCategoryBoxesScreenState extends State<DynamicCategoryBoxesScreen>
       return MultiProvider(
         providers: [
           ChangeNotifierProvider<SearchProvider>(
-              create: (_) => SearchProvider()),
+            create: (_) => SearchProvider(),
+          ),
+          // ✅ FIXED: Provider handles auth internally
           ChangeNotifierProvider<SearchHistoryProvider>(
-            create: (_) {
-              final provider = SearchHistoryProvider();
-              final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                provider.fetchSearchHistory(uid);
-              });
-              return provider;
-            },
+            create: (_) => SearchHistoryProvider(),
           ),
         ],
         child: Consumer2<SearchProvider, SearchHistoryProvider>(
@@ -742,7 +760,9 @@ class _DynamicCategoryBoxesScreenState extends State<DynamicCategoryBoxesScreen>
                 onSubmitSearch: _submitSearch,
                 onBackPressed: _handleBackPressed,
                 isSearching: _isSearching,
-                onSearchStateChanged: _handleSearchStateChanged,
+                onSearchStateChanged: (searching) {
+                  _handleSearchStateChanged(searching, searchProv);
+                },
               ),
               body: SafeArea(
                 top: false,
@@ -784,19 +804,18 @@ class _DynamicCategoryBoxesScreenState extends State<DynamicCategoryBoxesScreen>
     context.pop();
   }
 
-  void _handleSearchStateChanged(bool searching) {
+  void _handleSearchStateChanged(bool searching, [SearchProvider? searchProv]) {
     setState(() => _isSearching = searching);
     if (!searching) {
-      // Clear the search controller text when exiting search mode
+      // ✅ FIXED: Clean up listener when exiting search
+      _removeSearchListener();
       _searchController.clear();
       _searchFocusNode.unfocus();
-    } else {
-      // Setup search listener when entering search mode
+      searchProv?.clear();
+    } else if (searchProv != null) {
+      // ✅ FIXED: Setup listener with proper cleanup tracking
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        void onTextChanged() {
-          // Handle search text changes if needed
-        }
-        _searchController.addListener(onTextChanged);
+        _setupSearchListener(searchProv);
       });
     }
   }

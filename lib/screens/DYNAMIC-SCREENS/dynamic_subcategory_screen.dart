@@ -12,7 +12,6 @@ import 'dart:async';
 import '../../widgets/market_search_delegate.dart';
 import '../../providers/search_history_provider.dart';
 import '../../providers/search_provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class DynamicSubcategoryScreen extends StatefulWidget {
   final String category;
@@ -47,6 +46,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
   bool _isSearching = false;
   late final MarketProvider _marketProvider;
   String _selectedSortOption = 'None';
+  VoidCallback? _searchTextListener;
 
   final List<String> _sortOptions = [
     'None',
@@ -84,9 +84,47 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    _removeSearchListener(); // ✅ ADD: Clean up search listener
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  void _setupSearchListener(SearchProvider searchProv) {
+    _removeSearchListener();
+
+    _searchTextListener = () {
+      if (searchProv.mounted) {
+        searchProv.updateTerm(
+          _searchController.text,
+          l10n: AppLocalizations.of(context),
+        );
+      }
+    };
+    _searchController.addListener(_searchTextListener!);
+  }
+
+  void _removeSearchListener() {
+    if (_searchTextListener != null) {
+      _searchController.removeListener(_searchTextListener!);
+      _searchTextListener = null;
+    }
+  }
+
+  void _handleSearchStateChanged(bool searching, [SearchProvider? searchProv]) {
+    setState(() => _isSearching = searching);
+    if (!searching) {
+      _removeSearchListener();
+      _searchController.clear();
+      _searchFocusNode.unfocus();
+      searchProv?.clear();
+    } else if (searchProv != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _setupSearchListener(searchProv);
+        }
+      });
+    }
   }
 
   Future<void> _refreshProducts() async {
@@ -323,9 +361,10 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                           AppLocalizations.of(context).noProductsFound,
                           style: TextStyle(
                             fontSize: 16,
-                            color: Theme.of(context).brightness == Brightness.dark
-                                ? Colors.white70
-                                : Colors.black54,
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.white70
+                                    : Colors.black54,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -366,16 +405,11 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
       return MultiProvider(
         providers: [
           ChangeNotifierProvider<SearchProvider>(
-              create: (_) => SearchProvider()),
+            create: (_) => SearchProvider(),
+          ),
+          // ✅ FIXED: Provider handles auth internally
           ChangeNotifierProvider<SearchHistoryProvider>(
-            create: (_) {
-              final provider = SearchHistoryProvider();
-              final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                provider.fetchSearchHistory(uid);
-              });
-              return provider;
-            },
+            create: (_) => SearchHistoryProvider(),
           ),
         ],
         child: Consumer2<SearchProvider, SearchHistoryProvider>(
@@ -406,29 +440,8 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                   Navigator.of(context).pop();
                 },
                 isSearching: _isSearching,
-                onSearchStateChanged: (bool searching) {
-                  setState(() => _isSearching = searching);
-                  if (!searching) {
-                    _searchController.clear();
-                    _searchFocusNode.unfocus();
-                    if (searchProv.mounted) {
-                      searchProv.clear();
-                    }
-                  } else {
-                    // Setup listener when entering search mode
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      void onTextChanged() {
-                        if (searchProv.mounted) {
-                          searchProv.updateTerm(
-                            _searchController.text,
-                            l10n: AppLocalizations.of(context),
-                          );
-                        }
-                      }
-
-                      _searchController.addListener(onTextChanged);
-                    });
-                  }
+                onSearchStateChanged: (searching) {
+                  _handleSearchStateChanged(searching, searchProv);
                 },
               ),
               body: _buildSearchDelegateArea(ctx),
@@ -467,9 +480,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
           Navigator.of(context).pop();
         },
         isSearching: _isSearching,
-        onSearchStateChanged: (bool searching) {
-          setState(() => _isSearching = searching);
-        },
+        onSearchStateChanged: _handleSearchStateChanged,
       ),
       body: Consumer<SpecialFilterProviderMarket>(
         builder: (context, prov, _) {
@@ -512,7 +523,10 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                           // ✅ FIX: Include category filter in count
                           final appliedCount = (_dynamicBrand != null ? 1 : 0) +
                               _dynamicColors.length +
-                              (_dynamicSubsubcategory != null && _dynamicSubsubcategory!.isNotEmpty ? 1 : 0);
+                              (_dynamicSubsubcategory != null &&
+                                      _dynamicSubsubcategory!.isNotEmpty
+                                  ? 1
+                                  : 0);
                           final hasApplied = appliedCount > 0;
                           final filterLabel = hasApplied
                               ? '${l10n.filter} ($appliedCount)'

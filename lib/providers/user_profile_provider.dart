@@ -36,11 +36,6 @@ class UserProfileProvider with ChangeNotifier {
   int _reviewCount = 0;
   int _sellerTotalProductsSold = 0;
 
-  // Subscriptions
-  StreamSubscription<QuerySnapshot>? _productsSubscription;
-  StreamSubscription<DocumentSnapshot>? _userDataSubscription;
-  StreamSubscription<DocumentSnapshot>? _followingSubscription;
-
   // Error handling
   String? _error;
 
@@ -90,11 +85,10 @@ class UserProfileProvider with ChangeNotifier {
       // Check following status if not current user
       if (!isCurrentUser) {
         await _checkIfFollowing(userId);
-        _listenToFollowingStatus(userId);
+        // ❌ DELETE: _listenToFollowingStatus(userId);
       }
 
-      // Listen to user data changes
-      _listenToUserData(userId);
+      // ❌ DELETE: _listenToUserData(userId);
 
       // Fetch initial products with pagination
       await _fetchProducts(userId);
@@ -126,25 +120,6 @@ class UserProfileProvider with ChangeNotifier {
       debugPrint('Error fetching user data: $e');
       throw Exception('Failed to fetch user data');
     }
-  }
-
-  /// Listen to user data changes in real-time
-  void _listenToUserData(String userId) {
-    _userDataSubscription =
-        _firestore.collection('users').doc(userId).snapshots().listen(
-      (snapshot) {
-        if (snapshot.exists) {
-          _userData = snapshot.data();
-          if (_userData != null) {
-            _userData!['uid'] = userId;
-          }
-          notifyListeners();
-        }
-      },
-      onError: (e) {
-        debugPrint('Error listening to user data: $e');
-      },
-    );
   }
 
   /// Fetch reviews with error handling
@@ -203,28 +178,6 @@ class UserProfileProvider with ChangeNotifier {
       debugPrint('Error checking if following: $e');
       _isFollowing = false;
     }
-  }
-
-  /// Listen to following status changes in real-time
-  void _listenToFollowingStatus(String userId) {
-    User? currentUser = _firebaseAuth.currentUser;
-    if (currentUser == null || userId == currentUser.uid) return;
-
-    _followingSubscription = _firestore
-        .collection('users')
-        .doc(currentUser.uid)
-        .collection('following')
-        .doc(userId)
-        .snapshots()
-        .listen(
-      (snapshot) {
-        _isFollowing = snapshot.exists;
-        notifyListeners();
-      },
-      onError: (e) {
-        debugPrint('Error listening to following status: $e');
-      },
-    );
   }
 
   /// Fetch products with pagination (initial load)
@@ -411,9 +364,6 @@ class UserProfileProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    _productsSubscription?.cancel();
-    _userDataSubscription?.cancel();
-    _followingSubscription?.cancel();
     super.dispose();
   }
 }

@@ -269,11 +269,8 @@ class _AdsBannerWidgetState extends State<AdsBannerWidget>
   void _prefetchImageAsync(String url) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        final provider = CachedNetworkImageProvider(
-          url,
-          maxWidth: _maxWidth,
-          maxHeight: _maxHeight,
-        );
+        // Fixed width constraint - height scales proportionally
+        final provider = CachedNetworkImageProvider(url, maxWidth: 1200);
         precacheImage(provider, context).catchError((error) {
           debugPrint('Failed to prefetch image: $url, error: $error');
         });
@@ -382,10 +379,12 @@ class _AdsBannerWidgetState extends State<AdsBannerWidget>
                             size: isLargerScreen ? 32 : 24,
                           ),
                         ),
-                        fadeInDuration: const Duration(milliseconds: 200),
+                        fadeInDuration: Duration.zero,
                         fadeOutDuration: Duration.zero,
-                        memCacheWidth: _maxWidth,
-                        memCacheHeight: _maxHeight,
+                        // Fixed width constraint - height scales proportionally
+                        memCacheWidth: 1200,
+                        useOldImageOnUrlChange: true,
+                        filterQuality: FilterQuality.medium,
                       ),
                     ),
                   ),

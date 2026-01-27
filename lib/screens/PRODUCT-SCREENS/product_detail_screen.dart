@@ -70,7 +70,6 @@ import '../../widgets/productdetail/product_detail_description.dart';
 import '../../widgets/productdetail/product_detail_tracker.dart';
 import '../../widgets/productdetail/product_questions_widget.dart';
 import '../../widgets/productdetail/other_sellers_widget.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../../widgets/productdetail/video_widget.dart';
 import '../../widgets/productdetail/product_detail_color_options.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -105,7 +104,7 @@ class ProductDetailScreen extends StatefulWidget {
 class _ProductDetailScreenState extends State<ProductDetailScreen>
     with RouteAware {
   bool _showVideoBox = true;
-  bool _detailViewRecorded = false;
+  VoidCallback? _searchTextListener;
   Future<bool>? _hasReviewsFuture;
   late final TextEditingController _searchController;
   late final FocusNode _searchFocusNode;
@@ -321,6 +320,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
       debugPrint('Error unsubscribing from route observer: $e');
     }
 
+    // ✅ ADD: Clean up search listener
+    _removeSearchListener();
+
     _searchController.dispose();
     _searchFocusNode.dispose();
     _listScrollController.removeListener(_onScroll);
@@ -328,6 +330,27 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     _listScrollController.dispose();
 
     super.dispose();
+  }
+
+  void _setupSearchListener(SearchProvider searchProv) {
+    _removeSearchListener();
+
+    _searchTextListener = () {
+      if (searchProv.mounted) {
+        searchProv.updateTerm(
+          _searchController.text,
+          l10n: AppLocalizations.of(context),
+        );
+      }
+    };
+    _searchController.addListener(_searchTextListener!);
+  }
+
+  void _removeSearchListener() {
+    if (_searchTextListener != null) {
+      _searchController.removeListener(_searchTextListener!);
+      _searchTextListener = null;
+    }
   }
 
   Color colorFromInt(int colorValue) {
@@ -521,16 +544,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
       return MultiProvider(
         providers: [
           ChangeNotifierProvider<SearchProvider>(
-              create: (_) => SearchProvider()),
+            create: (_) => SearchProvider(),
+          ),
+          // ✅ FIXED: Provider handles auth internally
           ChangeNotifierProvider<SearchHistoryProvider>(
-            create: (_) {
-              final provider = SearchHistoryProvider();
-              final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                provider.fetchSearchHistory(uid);
-              });
-              return provider;
-            },
+            create: (_) => SearchHistoryProvider(),
           ),
         ],
         child: Consumer2<SearchProvider, SearchHistoryProvider>(
@@ -556,31 +574,23 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                     onSearchStateChanged: (searching) {
                       setState(() => _isSearching = searching);
                       if (!searching) {
+                        // ✅ FIXED: Clean up listener when exiting search
+                        _removeSearchListener();
                         _searchController.clear();
                         _searchFocusNode.unfocus();
                         if (searchProv.mounted) {
                           searchProv.clear();
                         }
                       } else {
-                        // Setup listener when entering search mode
+                        // ✅ FIXED: Setup listener with proper cleanup tracking
                         WidgetsBinding.instance.addPostFrameCallback((_) {
-                          void onTextChanged() {
-                            if (searchProv.mounted) {
-                              searchProv.updateTerm(
-                                _searchController.text,
-                                l10n: AppLocalizations.of(context),
-                              );
-                            }
-                          }
-
-                          _searchController.addListener(onTextChanged);
+                          _setupSearchListener(searchProv);
                         });
                       }
                     },
                     onBackPressed: () {
                       try {
                         final router = GoRouter.of(context);
-
                         if (router.canPop()) {
                           router.pop();
                         } else {

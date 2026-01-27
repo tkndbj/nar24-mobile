@@ -140,10 +140,10 @@ class ShopProvider with ChangeNotifier {
   final ValueNotifier<int> unreadMessagesCount = ValueNotifier<int>(0);
   final ValueNotifier<int> unreadNotificationsCount = ValueNotifier<int>(0);
   final ValueNotifier<int> cartCount = ValueNotifier<int>(0);
-  Set<String> _favoriteShopIds = {};
+
   User? _currentUser;
   int _currentIndex = 0;
-  StreamSubscription<QuerySnapshot>? _favoriteSubscription;
+
   StreamSubscription<User?>? _authSub;
 
   // Reliability improvements
@@ -196,7 +196,7 @@ class ShopProvider with ChangeNotifier {
   bool get hasError => _hasError;
   bool get isSearchActive => _isSearchActive;
   bool get isSearchExpanded => _isSearchExpanded;
-  Set<String> get favoriteShopIds => _favoriteShopIds;
+
   int get currentIndex => _currentIndex;
   Map<String, double> get averageRatings => _averageRatings;
   User? get currentUser => _currentUser;
@@ -224,7 +224,7 @@ class ShopProvider with ChangeNotifier {
     _currentUser = _auth.currentUser;
 
     scrollController.addListener(_scrollListener);
-    _listenToFavoriteShops();
+
     await _fetchInitialShopsWithTimeout();
   }
 
@@ -353,7 +353,9 @@ class ShopProvider with ChangeNotifier {
       final viewportNotFilled = position.maxScrollExtent <= 50;
       final atOrNearBottom = position.pixels >= position.maxScrollExtent - 300;
 
-      if ((viewportNotFilled || atOrNearBottom) && _hasMore && !_isLoadingMore) {
+      if ((viewportNotFilled || atOrNearBottom) &&
+          _hasMore &&
+          !_isLoadingMore) {
         _fetchMoreShops();
       }
     });
@@ -701,7 +703,7 @@ class ShopProvider with ChangeNotifier {
     _timeoutTimer?.cancel();
     scrollController.dispose();
     searchController.dispose();
-    _favoriteSubscription?.cancel();
+
     _authSub?.cancel();
 
     // Dispose ValueNotifiers
@@ -1155,50 +1157,6 @@ class ShopProvider with ChangeNotifier {
   void removeShop(String shopId) {
     _shops.removeWhere((shopDoc) => shopDoc.id == shopId);
     _safeNotifyListeners();
-  }
-
-  void _listenToFavoriteShops() {
-    User? user = _auth.currentUser;
-    if (user != null) {
-      _favoriteSubscription = _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('favoriteShops')
-          .snapshots()
-          .listen((snapshot) {
-        _favoriteShopIds = snapshot.docs.map((doc) => doc.id).toSet();
-        _safeNotifyListeners();
-      }, onError: (error) {
-        print('Error listening to favorite shops: $error');
-      });
-    }
-  }
-
-  Future<void> toggleFavorite(String shopId) async {
-    User? user = _auth.currentUser;
-    if (user == null) return;
-
-    final favoriteDoc = _firestore
-        .collection('users')
-        .doc(user.uid)
-        .collection('favoriteShops')
-        .doc(shopId);
-    final shopRef = _firestore.collection('shops').doc(shopId);
-
-    try {
-      if (_favoriteShopIds.contains(shopId)) {
-        await favoriteDoc.delete();
-        _favoriteShopIds.remove(shopId);
-        await shopRef.update({'followerCount': FieldValue.increment(-1)});
-      } else {
-        await favoriteDoc.set({'shopId': shopId});
-        _favoriteShopIds.add(shopId);
-        await shopRef.update({'followerCount': FieldValue.increment(1)});
-      }
-      _safeNotifyListeners();
-    } catch (e) {
-      print('Error toggling favorite shop: $e');
-    }
   }
 
   Future<void> incrementClickCount(String shopId) async {
