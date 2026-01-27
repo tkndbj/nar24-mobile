@@ -12680,6 +12680,54 @@ class AppLocalizationsTr extends AppLocalizations {
       'Ücretsiz kargo avantajı ile ekspres teslimat seçilemez';
 
   @override
+  String get myCouponsAndBenefits => 'Kuponlarım ve Avantajlarım';
+
+  @override
+  String get coupons => 'Kuponlar';
+
+  @override
+  String get activeCoupons => 'Aktif';
+
+  @override
+  String get usedCoupons => 'Kullanılmış';
+
+  @override
+  String get noCouponsOrBenefits => 'Kupon veya Avantaj Yok';
+
+  @override
+  String get noCouponsOrBenefitsDescription =>
+      'Henüz aktif kuponunuz veya avantajınız yok. Daha sonra tekrar kontrol edin!';
+
+  @override
+  String get noUsedCouponsOrBenefits => 'Kullanılmış Kupon veya Avantaj Yok';
+
+  @override
+  String get noUsedCouponsOrBenefitsDescription =>
+      'Henüz hiç kupon veya avantaj kullanmadınız.';
+
+  @override
+  String get validUntil => 'Son kullanma tarihi';
+
+  @override
+  String get noExpiry => 'Son kullanma tarihi yok';
+
+  @override
+  String get usedOn => 'Kullanım tarihi';
+
+  @override
+  String get enjoyYourGift => 'Hediyenizin Keyfini Çıkarın';
+
+  @override
+  String get freeShippingBenefitDescription =>
+      'Sonraki siparişiniz için ücretsiz kargo';
+
+  @override
+  String get couponsErrorLoadingData => 'Veri Yüklenirken Hata';
+
+  @override
+  String get couponsTryAgainLater => 'Lütfen daha sonra tekrar deneyin.';
+
+  @override
   String get pleaseSelectColor => 'Lütfen bir renk seçin';
 
   @override

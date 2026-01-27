@@ -12655,6 +12655,54 @@ class AppLocalizationsEn extends AppLocalizations {
       'Express delivery not available with free shipping benefit';
 
   @override
+  String get myCouponsAndBenefits => 'My Coupons & Benefits';
+
+  @override
+  String get coupons => 'Coupons';
+
+  @override
+  String get activeCoupons => 'Active';
+
+  @override
+  String get usedCoupons => 'Used';
+
+  @override
+  String get noCouponsOrBenefits => 'No Coupons or Benefits';
+
+  @override
+  String get noCouponsOrBenefitsDescription =>
+      'You don\'t have any active coupons or benefits yet. Check back later!';
+
+  @override
+  String get noUsedCouponsOrBenefits => 'No Used Coupons or Benefits';
+
+  @override
+  String get noUsedCouponsOrBenefitsDescription =>
+      'You haven\'t used any coupons or benefits yet.';
+
+  @override
+  String get validUntil => 'Valid until';
+
+  @override
+  String get noExpiry => 'No expiration date';
+
+  @override
+  String get usedOn => 'Used on';
+
+  @override
+  String get enjoyYourGift => 'Enjoy Your Gift';
+
+  @override
+  String get freeShippingBenefitDescription =>
+      'Free shipping for your next order';
+
+  @override
+  String get couponsErrorLoadingData => 'Error Loading Data';
+
+  @override
+  String get couponsTryAgainLater => 'Please try again later.';
+
+  @override
   String get pleaseSelectColor => 'Please select a color';
 
   @override

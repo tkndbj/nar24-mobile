@@ -5232,7 +5232,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get paid => 'Оплачено';
 
   @override
-  String get active => 'Активно';
+  String get active => 'Активный';
 
   @override
   String get proceedToPayment => 'Оформить платеж';
@@ -12749,6 +12749,55 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get expressDisabledWithBenefit =>
       'Экспресс-доставка недоступна при использовании бесплатной доставки';
+
+  @override
+  String get myCouponsAndBenefits => 'Мои купоны и бонусы';
+
+  @override
+  String get coupons => 'Купоны';
+
+  @override
+  String get activeCoupons => 'Активные';
+
+  @override
+  String get usedCoupons => 'Использованные';
+
+  @override
+  String get noCouponsOrBenefits => 'Нет купонов или бонусов';
+
+  @override
+  String get noCouponsOrBenefitsDescription =>
+      'У вас пока нет активных купонов или бонусов. Проверьте позже!';
+
+  @override
+  String get noUsedCouponsOrBenefits =>
+      'Нет использованных купонов или бонусов';
+
+  @override
+  String get noUsedCouponsOrBenefitsDescription =>
+      'Вы ещё не использовали ни одного купона или бонуса.';
+
+  @override
+  String get validUntil => 'Действителен до';
+
+  @override
+  String get noExpiry => 'Без срока действия';
+
+  @override
+  String get usedOn => 'Использован';
+
+  @override
+  String get enjoyYourGift => 'Наслаждайтесь подарком';
+
+  @override
+  String get freeShippingBenefitDescription =>
+      'Бесплатная доставка для вашего следующего заказа';
+
+  @override
+  String get couponsErrorLoadingData => 'Ошибка загрузки данных';
+
+  @override
+  String get couponsTryAgainLater => 'Пожалуйста, попробуйте позже.';
 
   @override
   String get pleaseSelectColor => 'Пожалуйста, выберите цвет';

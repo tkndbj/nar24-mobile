@@ -22,6 +22,7 @@ import '../../screens/USER-PROFILE/two_factor_verification_screen.dart';
 import '../../screens/NOTIFICATION-CHAT/notification_screen.dart';
 import '../../screens/USER-PROFILE/support_and_faq_screen.dart';
 import '../../screens/USER-PROFILE/seller_info_screen.dart';
+import '../../screens/USER-PROFILE/my_coupons_and_benefits_screen.dart';
 
 // Import order-related screens
 import '../../screens/USER-PROFILE/my_orders_screen.dart';
@@ -282,6 +283,20 @@ class ProfileRoutes {
           return CustomTransitionPage(
             key: state.pageKey,
             child: const SellerInfoScreen(),
+            transitionsBuilder: _slideTransition,
+            transitionDuration: const Duration(milliseconds: 200),
+          );
+        },
+      ),
+
+      // My Coupons and Benefits
+      GoRoute(
+        path: '/my_coupons_and_benefits',
+        name: 'my-coupons-and-benefits',
+        pageBuilder: (context, state) {
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: const MyCouponsAndBenefitsScreen(),
             transitionsBuilder: _slideTransition,
             transitionDuration: const Duration(milliseconds: 200),
           );

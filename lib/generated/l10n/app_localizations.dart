@@ -24210,6 +24210,96 @@ abstract class AppLocalizations {
   /// **'Ücretsiz kargo avantajı ile ekspres teslimat seçilemez'**
   String get expressDisabledWithBenefit;
 
+  /// No description provided for @myCouponsAndBenefits.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kuponlarım ve Avantajlarım'**
+  String get myCouponsAndBenefits;
+
+  /// No description provided for @coupons.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kuponlar'**
+  String get coupons;
+
+  /// No description provided for @activeCoupons.
+  ///
+  /// In tr, this message translates to:
+  /// **'Aktif'**
+  String get activeCoupons;
+
+  /// No description provided for @usedCoupons.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kullanılmış'**
+  String get usedCoupons;
+
+  /// No description provided for @noCouponsOrBenefits.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kupon veya Avantaj Yok'**
+  String get noCouponsOrBenefits;
+
+  /// No description provided for @noCouponsOrBenefitsDescription.
+  ///
+  /// In tr, this message translates to:
+  /// **'Henüz aktif kuponunuz veya avantajınız yok. Daha sonra tekrar kontrol edin!'**
+  String get noCouponsOrBenefitsDescription;
+
+  /// No description provided for @noUsedCouponsOrBenefits.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kullanılmış Kupon veya Avantaj Yok'**
+  String get noUsedCouponsOrBenefits;
+
+  /// No description provided for @noUsedCouponsOrBenefitsDescription.
+  ///
+  /// In tr, this message translates to:
+  /// **'Henüz hiç kupon veya avantaj kullanmadınız.'**
+  String get noUsedCouponsOrBenefitsDescription;
+
+  /// No description provided for @validUntil.
+  ///
+  /// In tr, this message translates to:
+  /// **'Son kullanma tarihi'**
+  String get validUntil;
+
+  /// No description provided for @noExpiry.
+  ///
+  /// In tr, this message translates to:
+  /// **'Son kullanma tarihi yok'**
+  String get noExpiry;
+
+  /// No description provided for @usedOn.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kullanım tarihi'**
+  String get usedOn;
+
+  /// No description provided for @enjoyYourGift.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hediyenizin Keyfini Çıkarın'**
+  String get enjoyYourGift;
+
+  /// No description provided for @freeShippingBenefitDescription.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sonraki siparişiniz için ücretsiz kargo'**
+  String get freeShippingBenefitDescription;
+
+  /// No description provided for @couponsErrorLoadingData.
+  ///
+  /// In tr, this message translates to:
+  /// **'Veri Yüklenirken Hata'**
+  String get couponsErrorLoadingData;
+
+  /// No description provided for @couponsTryAgainLater.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lütfen daha sonra tekrar deneyin.'**
+  String get couponsTryAgainLater;
+
   /// No description provided for @pleaseSelectColor.
   ///
   /// In tr, this message translates to:

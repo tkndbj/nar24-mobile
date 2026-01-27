@@ -784,6 +784,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           theme: theme,
                         ),
                       ),
+                      _verticalDivider(),
+                      Expanded(
+                        child: _buildTopButton(
+                          icon: FeatherIcons.gift,
+                          label: localization.coupons,
+                          onTap: isAuthenticated
+                              ? () => context.push('/my_coupons_and_benefits')
+                              : () => _handleUnauthenticatedTap(context),
+                          theme: theme,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 20),
