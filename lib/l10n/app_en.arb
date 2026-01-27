@@ -5581,5 +5581,7 @@
       "type": "String"
     }
   }
-}
+},
+ "cannotDeleteSellerInfo": "Cannot Delete",
+ "cannotDeleteSellerInfoWithProducts": "You can only update your seller information while you have listed products."
 }

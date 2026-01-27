@@ -12767,4 +12767,11 @@ class AppLocalizationsRu extends AppLocalizations {
   String minimumCartTotal(String amount) {
     return 'Мин. сумма корзины: $amount TL';
   }
+
+  @override
+  String get cannotDeleteSellerInfo => 'Удаление невозможно';
+
+  @override
+  String get cannotDeleteSellerInfoWithProducts =>
+      'Пока у вас есть размещённые товары, вы можете только обновить данные продавца.';
 }

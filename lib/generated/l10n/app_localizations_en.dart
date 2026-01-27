@@ -12670,4 +12670,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String minimumCartTotal(String amount) {
     return 'Min. cart total: $amount TL';
   }
+
+  @override
+  String get cannotDeleteSellerInfo => 'Cannot Delete';
+
+  @override
+  String get cannotDeleteSellerInfoWithProducts =>
+      'You can only update your seller information while you have listed products.';
 }

@@ -696,8 +696,90 @@ class _SellerInfoScreenState extends State<SellerInfoScreen> {
     );
   }
 
+  /// Checks if the current user has any listed products.
+  /// Returns true if products exist, false otherwise.
+  /// On error, returns true to prevent accidental deletion.
+  Future<bool> _userHasListedProducts() async {
+    try {
+      final snapshot = await _firestore
+          .collection('products')
+          .where('userId', isEqualTo: currentUserId)
+          .limit(1)
+          .get();
+      return snapshot.docs.isNotEmpty;
+    } catch (e) {
+      debugPrint('Error checking user products: $e');
+      // Return true on error to be safe - prevents accidental deletion
+      return true;
+    }
+  }
+
   Future<void> _deleteSellerInfo(
       DocumentReference docRef, AppLocalizations localization) async {
+    // Show loading indicator while checking for products
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00A36C)),
+        ),
+      ),
+    );
+
+    // Check if user has any listed products
+    final hasProducts = await _userHasListedProducts();
+
+    // Dismiss loading indicator
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+
+    // If user has products, show error dialog and prevent deletion
+    if (hasProducts) {
+      if (mounted) {
+        showCupertinoDialog(
+          context: context,
+          builder: (BuildContext context) => CupertinoAlertDialog(
+            title: Text(
+              localization.cannotDeleteSellerInfo ?? 'Cannot Delete',
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontFamily: 'Figtree',
+              ),
+            ),
+            content: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                localization.cannotDeleteSellerInfoWithProducts ??
+                    'You cannot delete your seller information while you have listed products. Please delete all your products first.',
+                style: const TextStyle(
+                  fontFamily: 'Figtree',
+                  height: 1.4,
+                ),
+              ),
+            ),
+            actions: [
+              CupertinoDialogAction(
+                child: Text(
+                  localization.done ?? 'OK',
+                  style: TextStyle(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.black,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+
+    // No products found - proceed with deletion confirmation
     final shouldDelete = await showCupertinoDialog<bool>(
       context: context,
       builder: (BuildContext context) => CupertinoAlertDialog(

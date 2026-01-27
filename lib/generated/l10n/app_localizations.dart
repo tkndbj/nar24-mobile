@@ -24239,6 +24239,18 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Min. sepet tutarı: {amount} TL'**
   String minimumCartTotal(String amount);
+
+  /// No description provided for @cannotDeleteSellerInfo.
+  ///
+  /// In tr, this message translates to:
+  /// **'Silinemez'**
+  String get cannotDeleteSellerInfo;
+
+  /// No description provided for @cannotDeleteSellerInfoWithProducts.
+  ///
+  /// In tr, this message translates to:
+  /// **'Listelenen ürünleriniz varken satıcı bilgilerinizi güncelleyebilirsiniz.'**
+  String get cannotDeleteSellerInfoWithProducts;
 }
 
 class _AppLocalizationsDelegate

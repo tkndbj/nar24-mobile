@@ -12695,4 +12695,11 @@ class AppLocalizationsTr extends AppLocalizations {
   String minimumCartTotal(String amount) {
     return 'Min. sepet tutarı: $amount TL';
   }
+
+  @override
+  String get cannotDeleteSellerInfo => 'Silinemez';
+
+  @override
+  String get cannotDeleteSellerInfoWithProducts =>
+      'Listelenen ürünleriniz varken satıcı bilgilerinizi güncelleyebilirsiniz.';
 }

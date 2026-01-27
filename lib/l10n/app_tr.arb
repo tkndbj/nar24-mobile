@@ -5558,5 +5558,7 @@
       "type": "String"
     }
   }
-}
+},
+"cannotDeleteSellerInfo": "Silinemez",
+"cannotDeleteSellerInfoWithProducts": "Listelenen ürünleriniz varken satıcı bilgilerinizi güncelleyebilirsiniz."
 }
