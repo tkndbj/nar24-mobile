@@ -180,13 +180,27 @@ class DiscountSelectionService {
   }
 
   /// Calculate discount amount for given cart total
-  double calculateCouponDiscount(double cartTotal) {
-    final coupon = selectedCoupon;
-    if (coupon == null || !coupon.isValid) return 0;
+ double calculateCouponDiscount(double cartTotal) {
+  final coupon = selectedCoupon;
+  if (coupon == null || !coupon.isValid) return 0;
 
-    // Cap discount at cart total
-    return coupon.amount > cartTotal ? cartTotal : coupon.amount;
-  }
+  // Check minimum requirement (2x coupon amount)
+  if (!_couponService.isCouponApplicable(coupon, cartTotal)) return 0;
+
+  // Cap discount at cart total
+  return coupon.amount > cartTotal ? cartTotal : coupon.amount;
+}
+
+bool isCouponApplicableForCart(double cartTotal) {
+  final coupon = selectedCoupon;
+  if (coupon == null) return true; // No coupon selected
+  return _couponService.isCouponApplicable(coupon, cartTotal);
+}
+
+/// Check if free shipping is applicable for given cart total
+bool isFreeShippingApplicableForCart(double cartTotal) {
+  return _couponService.isFreeShippingApplicable(cartTotal);
+}
 
   /// Get final total after discounts (excluding delivery)
   double calculateFinalTotal(double cartSubtotal) {

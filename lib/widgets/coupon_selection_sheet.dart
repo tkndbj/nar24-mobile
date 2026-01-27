@@ -164,6 +164,8 @@ class _CouponSelectionSheetState extends State<CouponSelectionSheet> {
           return const SizedBox.shrink();
         }
 
+        final isApplicable = _couponService.isFreeShippingApplicable(widget.cartTotal);
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -201,11 +203,13 @@ class _CouponSelectionSheetState extends State<CouponSelectionSheet> {
 
             // Free shipping toggle card
             GestureDetector(
-              onTap: () {
-                setState(() {
-                  _tempUseFreeShipping = !_tempUseFreeShipping;
-                });
-              },
+               onTap: isApplicable ? () {
+            setState(() {
+              _tempUseFreeShipping = !_tempUseFreeShipping;
+            });
+          } : null,
+           child: Opacity(
+    opacity: isApplicable ? 1.0 : 0.5,
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -256,26 +260,37 @@ class _CouponSelectionSheetState extends State<CouponSelectionSheet> {
                               color: Colors.grey[600],
                             ),
                           ),
+                           if (!isApplicable) ...[
+                const SizedBox(height: 4),
+                Text(
+                  l10n.minimumCartTotal(CouponService.freeShippingMinimum.toStringAsFixed(0)),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Colors.red,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
                         ],
                       ),
                     ),
-                    Checkbox(
-                      value: _tempUseFreeShipping,
-                      onChanged: (value) {
-                        setState(() {
-                          _tempUseFreeShipping = value ?? false;
-                        });
-                      },
-                      activeColor: Colors.green,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
+                   Checkbox(
+  value: _tempUseFreeShipping,
+  onChanged: isApplicable ? (value) {
+    setState(() {
+      _tempUseFreeShipping = value ?? false;
+    });
+  } : null,
+  activeColor: Colors.green,
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(4),
+  ),
+),
                   ],
                 ),
               ),
             ),
-          ],
+         ) ],
         );
       },
     );
@@ -341,6 +356,8 @@ class _CouponSelectionSheetState extends State<CouponSelectionSheet> {
                       coupon,
                       widget.cartTotal,
                     );
+                     final isApplicable = _couponService.isCouponApplicable(coupon, widget.cartTotal);
+  final minimumRequired = _couponService.getMinimumForCoupon(coupon);
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: _buildCouponCard(
@@ -352,6 +369,8 @@ class _CouponSelectionSheetState extends State<CouponSelectionSheet> {
                                 : l10n.discountCouponDesc ?? 'Discount coupon'),
                         isDark,
                         expiresIn: coupon.daysUntilExpiry,
+                         isApplicable: isApplicable,        // ADD THIS
+      minimumRequired: minimumRequired,
                       ),
                     );
                   }),
@@ -363,23 +382,31 @@ class _CouponSelectionSheetState extends State<CouponSelectionSheet> {
     );
   }
 
-  Widget _buildCouponCard(
-    Coupon? coupon,
-    String title,
-    String subtitle,
-    bool isDark, {
-    int? expiresIn,
-  }) {
-    final isSelected = coupon == null
-        ? _tempSelectedCoupon == null
-        : _tempSelectedCoupon?.id == coupon.id;
+Widget _buildCouponCard(
+  Coupon? coupon,
+  String title,
+  String subtitle,
+  bool isDark, {
+  int? expiresIn,
+  bool isApplicable = true,  // ADD THIS PARAMETER
+  double? minimumRequired,    // ADD THIS PARAMETER
+}) {
+  final l10n = AppLocalizations.of(context);
+  final isSelected = coupon == null
+      ? _tempSelectedCoupon == null
+      : _tempSelectedCoupon?.id == coupon.id;
 
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _tempSelectedCoupon = coupon;
-        });
-      },
+  // Disable selection if not applicable
+  final canSelect = coupon == null || isApplicable;
+
+  return GestureDetector(
+    onTap: canSelect ? () {
+      setState(() {
+        _tempSelectedCoupon = coupon;
+      });
+    } : null,  // DISABLE TAP IF NOT APPLICABLE
+    child: Opacity(
+      opacity: canSelect ? 1.0 : 0.5,  // ADD OPACITY FOR DISABLED STATE
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -454,30 +481,47 @@ class _CouponSelectionSheetState extends State<CouponSelectionSheet> {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey[600],
-                    ),
-                  ),
+                 Column(
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
+    Text(
+      subtitle,
+      style: TextStyle(
+        fontSize: 13,
+        color: Colors.grey[600],
+      ),
+    ),
+    // Show minimum requirement if not applicable
+    if (!isApplicable && minimumRequired != null) ...[
+      const SizedBox(height: 4),
+      Text(
+  l10n.minimumCartTotal(minimumRequired.toStringAsFixed(0)),
+  style: const TextStyle(
+    fontSize: 11,
+    color: Colors.red,
+    fontWeight: FontWeight.w500,
+  ),
+),
+    ],
+  ],
+),
                 ],
               ),
             ),
-            Radio<String?>(
-              value: coupon?.id,
-              groupValue: _tempSelectedCoupon?.id,
-              onChanged: (value) {
-                setState(() {
-                  _tempSelectedCoupon = coupon;
-                });
-              },
-              activeColor: Colors.orange,
-            ),
+           Radio<String?>(
+  value: coupon?.id,
+  groupValue: _tempSelectedCoupon?.id,
+  onChanged: canSelect ? (value) {
+    setState(() {
+      _tempSelectedCoupon = coupon;
+    });
+  } : null,
+  activeColor: Colors.orange,
+),
           ],
         ),
       ),
-    );
+   ) );
   }
 
   Widget _buildEmptyCouponsCard(AppLocalizations l10n, bool isDark) {

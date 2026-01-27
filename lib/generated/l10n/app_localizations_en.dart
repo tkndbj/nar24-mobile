@@ -12665,4 +12665,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get invalidIban => 'Invalid IBAN.';
+
+  @override
+  String minimumCartTotal(String amount) {
+    return 'Min. cart total: $amount TL';
+  }
 }

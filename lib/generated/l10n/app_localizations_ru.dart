@@ -12762,4 +12762,9 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get invalidIban => 'Неверный IBAN.';
+
+  @override
+  String minimumCartTotal(String amount) {
+    return 'Мин. сумма корзины: $amount TL';
+  }
 }

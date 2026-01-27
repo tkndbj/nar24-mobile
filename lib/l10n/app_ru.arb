@@ -5268,5 +5268,13 @@
 "pleaseSelectAnOption": "Пожалуйста, выберите вариант",
 "pleaseEnterValidDimensions": "Пожалуйста, введите корректные размеры"
 ,
-"invalidIban": "Неверный IBAN."
+"invalidIban": "Неверный IBAN.",
+"minimumCartTotal": "Мин. сумма корзины: {amount} TL",
+"@minimumCartTotal": {
+  "placeholders": {
+    "amount": {
+      "type": "String"
+    }
+  }
+}
 }

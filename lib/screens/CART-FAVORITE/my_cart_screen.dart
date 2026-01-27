@@ -1176,6 +1176,22 @@ class _MyCartScreenState extends State<MyCartScreen>
                         _discountService.calculateFinalTotal(subtotal);
                     final hasDiscount = couponDiscount > 0 || useFreeShipping;
 
+                    // Auto-clear coupon if no longer applicable (cart total changed)
+if (_discountService.selectedCoupon != null && couponDiscount == 0) {
+  // Coupon selected but not applicable - could show a message
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _discountService.selectCoupon(null);
+  });
+}
+
+// Same for free shipping
+if (_discountService.useFreeShipping && 
+    !_couponService.isFreeShippingApplicable(subtotal)) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _discountService.setFreeShipping(false);
+  });
+}
+
                     // Check if user has any available coupons/benefits
                     return ValueListenableBuilder<List<Coupon>>(
                       valueListenable: _couponService.couponsNotifier,

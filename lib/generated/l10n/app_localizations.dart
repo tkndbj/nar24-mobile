@@ -24233,6 +24233,12 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Geçersiz IBAN.'**
   String get invalidIban;
+
+  /// No description provided for @minimumCartTotal.
+  ///
+  /// In tr, this message translates to:
+  /// **'Min. sepet tutarı: {amount} TL'**
+  String minimumCartTotal(String amount);
 }
 
 class _AppLocalizationsDelegate

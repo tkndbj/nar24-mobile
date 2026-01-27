@@ -5573,5 +5573,13 @@
 "pleaseSelectAnOption": "Please select an option",
 "pleaseEnterValidDimensions": "Please enter valid dimensions"
 ,
-"invalidIban": "Invalid IBAN."
+"invalidIban": "Invalid IBAN.",
+"minimumCartTotal": "Min. cart total: {amount} TL",
+"@minimumCartTotal": {
+  "placeholders": {
+    "amount": {
+      "type": "String"
+    }
+  }
+}
 }

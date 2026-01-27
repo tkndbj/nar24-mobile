@@ -31,6 +31,9 @@ class CouponService {
   StreamSubscription<QuerySnapshot>? _benefitsSubscription;
   StreamSubscription<User?>? _authSubscription;
 
+  static const double freeShippingMinimum = 1000.0;
+static const double couponMinimumMultiplier = 2.0;
+
   bool _initialized = false;
 
   // Public getters
@@ -136,6 +139,22 @@ class CouponService {
     isLoadingNotifier.value = false;
   }
 
+  bool isCouponApplicable(Coupon coupon, double cartTotal) {
+  if (!coupon.isValid) return false;
+  final minimumRequired = coupon.amount * couponMinimumMultiplier;
+  return cartTotal >= minimumRequired;
+}
+
+/// Get minimum cart total required for a coupon
+double getMinimumForCoupon(Coupon coupon) {
+  return coupon.amount * couponMinimumMultiplier;
+}
+
+/// Check if free shipping is applicable for given cart total
+bool isFreeShippingApplicable(double cartTotal) {
+  return cartTotal >= freeShippingMinimum;
+}
+
   void _handleCouponsUpdate(QuerySnapshot snapshot) {
     final coupons = snapshot.docs
         .map((doc) =>
@@ -188,13 +207,15 @@ class CouponService {
     }
   }
 
-  /// Apply a coupon to calculate discount
-  /// Returns the discount amount (capped at cart total)
-  double calculateCouponDiscount(Coupon coupon, double cartTotal) {
-    if (!coupon.isValid) return 0.0;
-    // Coupon cannot exceed cart total
-    return coupon.amount > cartTotal ? cartTotal : coupon.amount;
-  }
+ double calculateCouponDiscount(Coupon coupon, double cartTotal) {
+  if (!coupon.isValid) return 0.0;
+  
+  // Check minimum cart total requirement (2x coupon amount)
+  if (!isCouponApplicable(coupon, cartTotal)) return 0.0;
+  
+  // Coupon cannot exceed cart total
+  return coupon.amount > cartTotal ? cartTotal : coupon.amount;
+}
 
   /// Find the best coupon for a given cart total
   /// Returns the coupon that provides maximum discount without exceeding cart total

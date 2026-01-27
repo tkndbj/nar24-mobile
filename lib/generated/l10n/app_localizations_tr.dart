@@ -12690,4 +12690,9 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get invalidIban => 'Geçersiz IBAN.';
+
+  @override
+  String minimumCartTotal(String amount) {
+    return 'Min. sepet tutarı: $amount TL';
+  }
 }

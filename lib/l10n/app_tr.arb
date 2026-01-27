@@ -5550,5 +5550,13 @@
 "pleaseSelectAnOption": "Lütfen bir seçenek seçin",
 "pleaseEnterValidDimensions": "Lütfen geçerli ölçüler girin"
 ,
-"invalidIban": "Geçersiz IBAN."
+"invalidIban": "Geçersiz IBAN.",
+"minimumCartTotal": "Min. sepet tutarı: {amount} TL",
+"@minimumCartTotal": {
+  "placeholders": {
+    "amount": {
+      "type": "String"
+    }
+  }
+}
 }
