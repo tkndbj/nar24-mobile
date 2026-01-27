@@ -779,6 +779,20 @@ class _SellerPanelState extends State<SellerPanel>
               );
             }
 
+            // Handle tab switch requests from other tabs
+            if (provider.requestedTabIndex != null) {
+              final targetIndex = provider.requestedTabIndex!;
+              provider.clearRequestedTabIndex();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (_tabController.index != targetIndex &&
+                    !_tabController.indexIsChanging &&
+                    targetIndex >= 0 &&
+                    targetIndex < _tabController.length) {
+                  _tabController.animateTo(targetIndex);
+                }
+              });
+            }
+
             return Scaffold(
               backgroundColor: Theme.of(context).brightness == Brightness.light
                   ? const Color(0xFFFAFAFA)

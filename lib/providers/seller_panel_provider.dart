@@ -95,6 +95,29 @@ class SellerPanelProvider with ChangeNotifier {
   Map<String, dynamic>? _activeCampaign;
   bool _campaignDismissed = false;
 
+  // Flag to request showing seller info modal on dashboard tab
+  bool _pendingShowSellerInfoModal = false;
+  bool get pendingShowSellerInfoModal => _pendingShowSellerInfoModal;
+
+  // Tab switch request for cross-tab navigation
+  int? _requestedTabIndex;
+  int? get requestedTabIndex => _requestedTabIndex;
+
+  /// Request to switch to dashboard tab and show seller info modal
+  void requestShowSellerInfoOnDashboard() {
+    _pendingShowSellerInfoModal = true;
+    _requestedTabIndex = 0;
+    notifyListeners();
+  }
+
+  void clearPendingSellerInfoModal() {
+    _pendingShowSellerInfoModal = false;
+  }
+
+  void clearRequestedTabIndex() {
+    _requestedTabIndex = null;
+  }
+
   Map<String, dynamic>? get activeCampaign => _activeCampaign;
   bool get campaignDismissed => _campaignDismissed;
   bool get shouldShowCampaignBanner =>

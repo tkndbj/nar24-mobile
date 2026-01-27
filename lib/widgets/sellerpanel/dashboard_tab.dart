@@ -1360,6 +1360,16 @@ class _DashboardTabState extends State<DashboardTab>
             final screenHeight = MediaQuery.of(context).size.height;
             final isTablet = screenWidth >= 600;
 
+            // Handle pending seller info modal request (from ProductsTab)
+            if (provider.pendingShowSellerInfoModal) {
+              provider.clearPendingSellerInfoModal();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  _showSellerInfoModal(context);
+                }
+              });
+            }
+
             return RefreshIndicator(
               onRefresh: () async {
                 final provider =

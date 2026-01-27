@@ -399,10 +399,9 @@ class FilterBar extends StatelessWidget {
                   extra: {'shopId': shopId},
                 );
               } else {
-                context.push(
-                  '/seller_info',
-                  extra: {'shopId': shopId, 'redirectToListProduct': true},
-                );
+                // For shops in seller panel, navigate to dashboard and show seller info modal
+                final provider = context.read<SellerPanelProvider>();
+                provider.requestShowSellerInfoOnDashboard();
               }
             }
           : () {},
