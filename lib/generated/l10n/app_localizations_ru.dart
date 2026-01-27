@@ -12759,4 +12759,7 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get pleaseEnterValidDimensions =>
       'Пожалуйста, введите корректные размеры';
+
+  @override
+  String get invalidIban => 'Неверный IBAN.';
 }

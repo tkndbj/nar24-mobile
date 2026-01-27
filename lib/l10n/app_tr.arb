@@ -5549,4 +5549,6 @@
 "pleaseSelectColor": "Lütfen bir renk seçin",
 "pleaseSelectAnOption": "Lütfen bir seçenek seçin",
 "pleaseEnterValidDimensions": "Lütfen geçerli ölçüler girin"
+,
+"invalidIban": "Geçersiz IBAN."
 }

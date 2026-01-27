@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -9,6 +10,65 @@ import '../../generated/l10n/app_localizations.dart';
 import '../../providers/seller_panel_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
+
+/// Phone number formatter for Turkish format: (5XX) XXX XX XX
+class _PhoneNumberFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digitsOnly = newValue.text.replaceAll(RegExp(r'\D'), '');
+    final limited = digitsOnly.length > 10 ? digitsOnly.substring(0, 10) : digitsOnly;
+
+    final buffer = StringBuffer();
+    for (int i = 0; i < limited.length; i++) {
+      if (i == 0) buffer.write('(');
+      buffer.write(limited[i]);
+      if (i == 2) buffer.write(') ');
+      if (i == 5) buffer.write(' ');
+      if (i == 7) buffer.write(' ');
+    }
+
+    final formatted = buffer.toString();
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+}
+
+/// Turkish IBAN formatter: TR + 24 digits, formatted as TR## #### #### #### #### #### ##
+class _TurkishIbanFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    String cleaned = newValue.text.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+
+    if (cleaned.startsWith('TR')) {
+      cleaned = cleaned.substring(2);
+    }
+
+    final digitsOnly = cleaned.replaceAll(RegExp(r'[^0-9]'), '');
+    final limited = digitsOnly.length > 24 ? digitsOnly.substring(0, 24) : digitsOnly;
+
+    final buffer = StringBuffer('TR');
+    for (int i = 0; i < limited.length; i++) {
+      if (i == 2 || i == 6 || i == 10 || i == 14 || i == 18 || i == 22) {
+        buffer.write(' ');
+      }
+      buffer.write(limited[i]);
+    }
+
+    final formatted = buffer.toString();
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+}
 
 class DashboardTab extends StatefulWidget {
   const DashboardTab({Key? key}) : super(key: key);
@@ -33,6 +93,28 @@ class _DashboardTabState extends State<DashboardTab>
   bool _isDataLoaded = false;
   late Future<void> _initialLoadFuture;
   String? _currentShopId;
+
+  /// Format stored phone "05XXXXXXXXX" to display format "(5XX) XXX XX XX"
+  String _formatPhoneForDisplay(String phone) {
+    final digitsOnly = phone.replaceAll(RegExp(r'\D'), '');
+    final digits = digitsOnly.startsWith('0') ? digitsOnly.substring(1) : digitsOnly;
+    if (digits.length != 10) return phone;
+    return '(${digits.substring(0, 3)}) ${digits.substring(3, 6)} ${digits.substring(6, 8)} ${digits.substring(8, 10)}';
+  }
+
+  /// Format stored IBAN to display format "TR## #### #### #### #### #### ##"
+  String _formatIbanForDisplay(String iban) {
+    final cleaned = iban.toUpperCase().replaceAll(' ', '');
+    if (cleaned.length != 26 || !cleaned.startsWith('TR')) return iban;
+    final buffer = StringBuffer();
+    for (int i = 0; i < cleaned.length; i++) {
+      if (i == 4 || i == 8 || i == 12 || i == 16 || i == 20 || i == 24) {
+        buffer.write(' ');
+      }
+      buffer.write(cleaned[i]);
+    }
+    return buffer.toString();
+  }
 
   /// Checks if the current user has only viewer role for the selected shop.
   /// Returns true if user is a viewer, false otherwise.
@@ -147,12 +229,12 @@ class _DashboardTabState extends State<DashboardTab>
       if (data != null && mounted) {
         setState(() {
           _sellerInfo = data;
-          _phoneController.text = data['phone'] ?? '';
+          _phoneController.text = _formatPhoneForDisplay(data['phone'] ?? '');
           _selectedRegion = data['region'];
           _addressController.text = data['address'] ?? '';
           _ibanOwnerNameController.text = data['ibanOwnerName'] ?? '';
           _ibanOwnerSurnameController.text = data['ibanOwnerSurname'] ?? '';
-          _ibanController.text = data['iban'] ?? '';
+          _ibanController.text = _formatIbanForDisplay(data['iban'] ?? '');
           _regionController.text = _selectedRegion ?? '';
         });
       }
@@ -415,12 +497,12 @@ class _DashboardTabState extends State<DashboardTab>
   void _showSellerInfoModal(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     if (_sellerInfo != null) {
-      _phoneController.text = _sellerInfo!['phone'] ?? '';
+      _phoneController.text = _formatPhoneForDisplay(_sellerInfo!['phone'] ?? '');
       _selectedRegion = _sellerInfo!['region'];
       _addressController.text = _sellerInfo!['address'] ?? '';
       _ibanOwnerNameController.text = _sellerInfo!['ibanOwnerName'] ?? '';
       _ibanOwnerSurnameController.text = _sellerInfo!['ibanOwnerSurname'] ?? '';
-      _ibanController.text = _sellerInfo!['iban'] ?? '';
+      _ibanController.text = _formatIbanForDisplay(_sellerInfo!['iban'] ?? '');
       _regionController.text = _selectedRegion ?? '';
     } else {
       _phoneController.clear();
@@ -1398,11 +1480,12 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
                           // Phone Number
                           _buildTextField(
                             controller: widget.phoneController,
-                            placeholder: l10n.phoneNumber,
+                            placeholder: '(5__) ___ __ __',
                             keyboardType: TextInputType.phone,
                             isDark: isDarkMode,
                             borderColor: borderColor,
                             placeholderStyle: placeholderStyle,
+                            inputFormatters: [_PhoneNumberFormatter()],
                           ),
                           const SizedBox(height: 12),
 
@@ -1483,10 +1566,11 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
                           // IBAN
                           _buildTextField(
                             controller: widget.ibanController,
-                            placeholder: l10n.bankAccountNumberIban,
+                            placeholder: 'TR__ ____ ____ ____ ____ ____ __',
                             isDark: isDarkMode,
                             borderColor: borderColor,
                             placeholderStyle: placeholderStyle,
+                            inputFormatters: [_TurkishIbanFormatter()],
                           ),
                         ],
                       ),
@@ -1535,9 +1619,57 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
                                       _selectedRegion == null)
                                   ? null
                                   : () {
+                                      final l10n = AppLocalizations.of(context);
+
+                                      // Validate phone: must be 10 digits
+                                      final phoneDigits = widget.phoneController.text.replaceAll(RegExp(r'\D'), '');
+                                      if (phoneDigits.length != 10) {
+                                        showCupertinoDialog(
+                                          context: context,
+                                          builder: (context) => CupertinoAlertDialog(
+                                            title: Text(l10n.error),
+                                            content: Text(l10n.invalidPhoneNumber),
+                                            actions: [
+                                              CupertinoDialogAction(
+                                                child: Text(l10n.done),
+                                                onPressed: () => Navigator.pop(context),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                        return;
+                                      }
+
+                                      // Validate IBAN if provided
+                                      final ibanText = widget.ibanController.text.trim();
+                                      if (ibanText.isNotEmpty) {
+                                        final normalizedIban = ibanText.replaceAll(' ', '').toUpperCase();
+                                        if (normalizedIban.length != 26 || !normalizedIban.startsWith('TR')) {
+                                          showCupertinoDialog(
+                                            context: context,
+                                            builder: (context) => CupertinoAlertDialog(
+                                              title: Text(l10n.error),
+                                              content: Text(l10n.invalidIban ?? 'Invalid IBAN. Turkish IBAN must be TR followed by 24 digits.'),
+                                              actions: [
+                                                CupertinoDialogAction(
+                                                  child: Text(l10n.done),
+                                                  onPressed: () => Navigator.pop(context),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                          return;
+                                        }
+                                      }
+
+                                      // Normalize phone and IBAN for storage
+                                      final normalizedPhone = '0$phoneDigits';
+                                      final normalizedIban = ibanText.isNotEmpty
+                                          ? ibanText.replaceAll(' ', '').toUpperCase()
+                                          : '';
+
                                       final newProfile = {
-                                        'phone':
-                                            widget.phoneController.text.trim(),
+                                        'phone': normalizedPhone,
                                         'region': _selectedRegion ?? '',
                                         'address':
                                             widget.addressController.text.trim(),
@@ -1547,7 +1679,7 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
                                         'ibanOwnerSurname': widget
                                             .ibanOwnerSurnameController.text
                                             .trim(),
-                                        'iban': widget.ibanController.text.trim(),
+                                        'iban': normalizedIban,
                                       };
                                       Navigator.pop(context);
                                       widget.onSave(newProfile);
@@ -1587,6 +1719,7 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
     required TextStyle placeholderStyle,
     TextInputType? keyboardType,
     int maxLines = 1,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return CupertinoTextField(
       controller: controller,
@@ -1594,6 +1727,7 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
       keyboardType: keyboardType,
       maxLines: maxLines,
       padding: const EdgeInsets.all(12),
+      inputFormatters: inputFormatters,
       style: TextStyle(
         color: isDark ? Colors.white : Colors.black,
         fontSize: 16,

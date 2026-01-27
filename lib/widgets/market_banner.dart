@@ -50,8 +50,9 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
   bool _hasBeenVisible = false;
   bool _isProcessingBanners = false;
 
-  // For viewport-based image lazy loading
-  final Set<int> _visibleIndices = {};
+  static const int _imageCacheWidth = 1200; // Covers most phones at 3x
+  static const int _imageCacheHeight = 600;
+
   final Set<String> _prefetchedUrls = {};
 
   // Debounce for prefetch triggers
@@ -102,17 +103,13 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
   void _prefetchInitialImages() {
     if (!mounted || _banners.isEmpty) return;
 
-    final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final cacheWidth = (screenWidth * devicePixelRatio).toInt();
-
-    // Only prefetch first 2 images
+    // FIX 2: Use fixed cache width for prefetch
     for (int i = 0; i < _banners.length && i < 2; i++) {
-      _prefetchImage(_banners[i].url, cacheWidth);
+      _prefetchImage(_banners[i].url);
     }
   }
 
-  void _prefetchImage(String url, int cacheWidth) {
+  void _prefetchImage(String url) {
     if (_prefetchedUrls.contains(url)) return;
     _prefetchedUrls.add(url);
 
@@ -120,12 +117,14 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
       if (!mounted) return;
 
       try {
+        // FIX 3: Use fixed cache width for prefetch
         final provider = CachedNetworkImageProvider(
           url,
-          maxWidth: cacheWidth,
+          maxWidth: _imageCacheWidth,
+          maxHeight: _imageCacheHeight,
+          cacheKey: 'banner_${url.hashCode}',
         );
         precacheImage(provider, context).catchError((_) {
-          // Silently handle prefetch errors
           _prefetchedUrls.remove(url);
         });
       } catch (e) {
@@ -152,7 +151,9 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
     // If provider already has docs (e.g., returning to screen), process them
     if (provider.docs.isNotEmpty && _banners.isEmpty) {
       _processBanners(provider.docs);
-    } else if (provider.docs.isEmpty && !provider.isLoading && provider.hasMore) {
+    } else if (provider.docs.isEmpty &&
+        !provider.isLoading &&
+        provider.hasMore) {
       // Only fetch if we haven't loaded anything yet
       provider.fetchNextPage(context: context);
     }
@@ -193,15 +194,11 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
   void _prefetchNearbyImages(int centerIndex) {
     if (!mounted || _banners.isEmpty) return;
 
-    final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final cacheWidth = (screenWidth * devicePixelRatio).toInt();
-
-    // Prefetch 2 items ahead
+    // FIX 4: No need to recalculate cache dimensions
     for (int i = centerIndex;
         i < _banners.length && i <= centerIndex + 2;
         i++) {
-      _prefetchImage(_banners[i].url, cacheWidth);
+      _prefetchImage(_banners[i].url);
     }
   }
 
@@ -254,7 +251,8 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
         // SYNC BANNER PROCESSING: Process docs when available
         // This handles the case when returning to the screen with existing data
         // ═══════════════════════════════════════════════════════════
-        if (provider.docs.isNotEmpty && _banners.length != provider.docs.length) {
+        if (provider.docs.isNotEmpty &&
+            _banners.length != provider.docs.length) {
           // Schedule processing for next frame to avoid setState during build
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted && _banners.length != provider.docs.length) {
@@ -390,10 +388,6 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
   }
 
   Widget _buildBannerList(MarketBannerProvider provider) {
-    final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final cacheWidth = (screenWidth * devicePixelRatio).toInt();
-
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final placeholderColor = isDarkMode
         ? const Color.fromARGB(255, 40, 37, 58)
@@ -405,7 +399,6 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
           // Handle loading indicator at the end
           if (index >= _banners.length) {
             if (provider.hasMore) {
-              // Trigger next page fetch
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted && !provider.isLoading) {
                   provider.fetchNextPage(context: context);
@@ -433,53 +426,68 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
           // Check for pagination trigger
           _handleScrollForPagination(index, provider);
 
-          // ═══════════════════════════════════════════════════════════
-          // LAZY IMAGE LOADING: CachedNetworkImage handles this, but
-          // we optimize with memCacheWidth and avoid unnecessary work
-          // ═══════════════════════════════════════════════════════════
-          return GestureDetector(
-            onTap: () => _handleBannerTap(item),
-            child: CachedNetworkImage(
-              imageUrl: item.url,
-              width: double.infinity,
-              fit: BoxFit.fitWidth,
-
-              // Placeholder while loading
-              placeholder: (_, __) => Container(
-                height: 150,
+          // FIX 5: Wrap each banner in RepaintBoundary for render isolation
+          return RepaintBoundary(
+            child: GestureDetector(
+              onTap: () => _handleBannerTap(item),
+              child: CachedNetworkImage(
+                // FIX 6: Stable cache key
+                key: ValueKey('banner_${item.id}'),
+                imageUrl: item.url,
                 width: double.infinity,
-                color: placeholderColor,
-                child: const Center(
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                fit: BoxFit.fitWidth,
+
+                // FIX 7: Fixed cache dimensions
+                memCacheWidth: _imageCacheWidth,
+                memCacheHeight: _imageCacheHeight,
+                maxWidthDiskCache: _imageCacheWidth,
+                maxHeightDiskCache: _imageCacheHeight,
+
+                // FIX 8: Stable cache key for CachedNetworkImage
+                cacheKey: 'banner_${item.url.hashCode}',
+
+                // FIX 9: Disable ALL fade animations
+                fadeInDuration: Duration.zero,
+                fadeOutDuration: Duration.zero,
+
+                // FIX 10: Keep old image during reload
+                useOldImageOnUrlChange: true,
+
+                // FIX 11: Medium quality for smoother scaling
+                filterQuality: FilterQuality.medium,
+
+                // Placeholder while loading
+                placeholder: (_, __) => Container(
+                  height: 150,
+                  width: double.infinity,
+                  color: placeholderColor,
+                  child: const Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                ),
+
+                // Error state
+                errorWidget: (_, __, ___) => Container(
+                  height: 150,
+                  width: double.infinity,
+                  color: placeholderColor,
+                  child: const Center(
+                    child: Icon(Icons.broken_image_outlined, size: 32),
                   ),
                 ),
               ),
-
-              // Error state
-              errorWidget: (_, __, ___) => Container(
-                height: 150,
-                width: double.infinity,
-                color: placeholderColor,
-                child: const Center(child: Icon(Icons.broken_image, size: 32)),
-              ),
-
-              // Performance optimizations
-              fadeInDuration: const Duration(milliseconds: 150),
-              fadeOutDuration: Duration.zero,
-              memCacheWidth: cacheWidth, // Downscale for memory efficiency
-              useOldImageOnUrlChange: true,
             ),
           );
         },
-
         childCount: _banners.length + (provider.hasMore ? 1 : 0),
 
-        // Performance: Let SliverList handle lifecycle
+        // FIX 12: Disable automatic keep alives for memory efficiency with many images
         addAutomaticKeepAlives: false,
-        addRepaintBoundaries: true,
+        addRepaintBoundaries: false, // We add our own RepaintBoundary
         addSemanticIndexes: false,
       ),
     );

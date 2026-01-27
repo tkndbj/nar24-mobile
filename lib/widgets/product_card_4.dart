@@ -346,7 +346,7 @@ class _ImagePlaceholder extends StatelessWidget {
       color: Colors.grey.shade200,
       child: Center(
         child: Image.asset(
-          'assets/images/narsiyah.png',
+          'assets/images/nargri.png',
           width: _placeholderSize,
           height: _placeholderSize,
           fit: BoxFit.contain,

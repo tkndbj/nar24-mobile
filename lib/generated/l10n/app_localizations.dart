@@ -24227,6 +24227,12 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Lütfen geçerli ölçüler girin'**
   String get pleaseEnterValidDimensions;
+
+  /// No description provided for @invalidIban.
+  ///
+  /// In tr, this message translates to:
+  /// **'Geçersiz IBAN.'**
+  String get invalidIban;
 }
 
 class _AppLocalizationsDelegate

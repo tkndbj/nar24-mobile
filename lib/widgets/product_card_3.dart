@@ -141,17 +141,21 @@ class _ProductCard3State extends State<ProductCard3>
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    super.build(context);
 
-    // ✅ OPTIMIZATION 3: Cache MediaQuery and Theme
     final mediaQuery = MediaQuery.of(context);
     final theme = Theme.of(context);
 
-    return _ProductCard3Content(
-      state: this,
-      widget: widget,
-      mediaQuery: mediaQuery,
-      theme: theme,
+    return RepaintBoundary(
+      child: _ProductCard3Content(
+        key: widget.productId != null
+            ? ValueKey('product_card3_${widget.productId}')
+            : null,
+        state: this,
+        widget: widget,
+        mediaQuery: mediaQuery,
+        theme: theme,
+      ),
     );
   }
 }
@@ -294,6 +298,10 @@ class _ProductImage extends StatelessWidget {
   final MediaQueryData mediaQuery;
   final ThemeData theme;
 
+  // FIX: Fixed cache dimensions for stability
+  static const int _cacheHeight = 240; // 80 * 3
+  static const int _cacheWidth = 270; // 90 * 3
+
   const _ProductImage({
     super.key,
     required this.state,
@@ -312,24 +320,30 @@ class _ProductImage extends StatelessWidget {
         topLeft: Radius.circular(8.0 * effectiveScaleFactor),
         bottomLeft: Radius.circular(8.0 * effectiveScaleFactor),
       ),
-      child: SizedBox(
-        width: imageWidth,
-        height: imageHeight,
-        child: CachedNetworkImage(
-          imageUrl: state._displayImageUrl,
-          fit: BoxFit.cover,
-          // ✅ OPTIMIZATION 9: Cache network images with size constraints
-          memCacheHeight: (imageHeight * mediaQuery.devicePixelRatio).round(),
-          maxHeightDiskCache:
-              (imageHeight * mediaQuery.devicePixelRatio).round(),
-          memCacheWidth: (imageWidth * mediaQuery.devicePixelRatio).round(),
-          maxWidthDiskCache: (imageWidth * mediaQuery.devicePixelRatio).round(),
-          // ✅ Use shimmer for loading placeholder
-          placeholder: (_, __) => _buildShimmerPlaceholder(),
-          errorWidget: (_, __, ___) => _buildError(),
-          // Disable fade animation for snappier feel
-          fadeInDuration: Duration.zero,
-          fadeOutDuration: Duration.zero,
+      // FIX: RepaintBoundary for image isolation
+      child: RepaintBoundary(
+        child: SizedBox(
+          width: imageWidth,
+          height: imageHeight,
+          child: CachedNetworkImage(
+            imageUrl: state._displayImageUrl,
+            fit: BoxFit.cover,
+            // FIX: Fixed cache dimensions
+            memCacheHeight: _cacheHeight,
+            memCacheWidth: _cacheWidth,
+            maxHeightDiskCache: _cacheHeight,
+            maxWidthDiskCache: _cacheWidth,
+            // FIX: Stable cache key
+            cacheKey: 'product3_${state._displayImageUrl.hashCode}',
+            // FIX: Keep old image during URL change
+            useOldImageOnUrlChange: true,
+            // FIX: Medium quality for smoother scaling
+            filterQuality: FilterQuality.medium,
+            placeholder: (_, __) => _buildShimmerPlaceholder(),
+            errorWidget: (_, __, ___) => _buildError(),
+            fadeInDuration: Duration.zero,
+            fadeOutDuration: Duration.zero,
+          ),
         ),
       ),
     );
@@ -876,32 +890,42 @@ class _OverlayIconsState extends State<_OverlayIcons> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer2<FavoriteProvider, CartProvider>(
-      builder: (context, favProv, cartProv, _) {
-        final isFav = favProv.favoriteProductIds.contains(widget.productId);
-        final inCart = cartProv.cartProductIds.contains(widget.productId);
-
-        return Row(
-          children: [
-            _ActionIcon(
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // FIX: Selector for minimal rebuilds - only rebuilds when this product's favorite status changes
+        Selector<FavoriteProvider, bool>(
+          selector: (_, provider) =>
+              provider.favoriteProductIds.contains(widget.productId),
+          builder: (context, isFav, _) {
+            return _ActionIcon(
               icon: FeatherIcons.heart,
               color: isFav ? Colors.red : Colors.white,
               isProcessing: _isFavoriteProcessing,
               onTap: _isFavoriteProcessing
                   ? null
-                  : () => _handleFavoriteToggle(favProv),
-            ),
-            const SizedBox(width: 8),
-            _ActionIcon(
+                  : () =>
+                      _handleFavoriteToggle(context.read<FavoriteProvider>()),
+            );
+          },
+        ),
+        SizedBox(width: 8 * widget.scaleFactor),
+        // FIX: Selector for cart status
+        Selector<CartProvider, bool>(
+          selector: (_, provider) =>
+              provider.cartProductIds.contains(widget.productId),
+          builder: (context, inCart, _) {
+            return _ActionIcon(
               icon: FeatherIcons.shoppingCart,
               color: inCart ? Colors.orange : Colors.white,
               isProcessing: _isCartProcessing,
-              onTap:
-                  _isCartProcessing ? null : () => _handleAddToCart(cartProv),
-            ),
-          ],
-        );
-      },
+              onTap: _isCartProcessing
+                  ? null
+                  : () => _handleAddToCart(context.read<CartProvider>()),
+            );
+          },
+        ),
+      ],
     );
   }
 

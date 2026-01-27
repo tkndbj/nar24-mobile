@@ -110,6 +110,7 @@ flutter:
     - lib/constants/categories.json
     - assets/images/narsplash.mp4
     - assets/images/naricon.png
+    - assets/images/nargri.png
     - assets/images/logo.png
     - assets/images/coupon.png
     - assets/images/tick.png

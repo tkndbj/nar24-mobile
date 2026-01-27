@@ -94,9 +94,9 @@ class _ProductCardState extends State<ProductCard>
   static const _navigationThrottle = Duration(milliseconds: 500);
 
   // ✅ OPTIMIZATION 1: Cache computed values
-  late final bool _isFantasyProduct;
-  late final List<String> _imageUrls;
-  late final int _imageCount;
+  late bool _isFantasyProduct;
+  late List<String> _imageUrls;
+  late int _imageCount;
 
   // ✅ OPTIMIZATION 2: Keep widget alive to avoid rebuilds when scrolling
   @override
@@ -128,9 +128,7 @@ class _ProductCardState extends State<ProductCard>
   void didUpdateWidget(ProductCard oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // Check product change first (most important)
     if (widget.product.id != oldWidget.product.id) {
-      // Re-initialize for new product
       _isFantasyProduct =
           widget.product.subsubcategory.toLowerCase() == 'fantasy';
       _imageUrls = widget.product.imageUrls;
@@ -139,37 +137,40 @@ class _ProductCardState extends State<ProductCard>
       _selectedColor = widget.selectedColor;
       _initializeColorOptions();
 
-      // Dispose and recreate PageController
+      // FIX: Synchronous disposal, deferred creation
+      final oldController = _pageController;
+      _pageController = null; // Clear reference immediately
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _pageController?.dispose();
+        oldController?.dispose(); // Dispose after frame
+
+        if (!mounted) return;
 
         if (_imageCount > 1 && !_isFantasyProduct) {
           _pageController = PageController(initialPage: 0);
-        } else {
-          _pageController = null;
+          setState(() {}); // Only setState if we created a new controller
         }
-
-        if (mounted) setState(() {});
       });
-      return; // ✅ EXIT EARLY - no need to check color change for new product
+      return;
     }
 
-    // Only check color change if product is the same
     if (widget.selectedColor != oldWidget.selectedColor) {
       _selectedColor = widget.selectedColor;
       _currentImageIndex = 0;
 
+      final oldController = _pageController;
+      _pageController = null;
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _pageController?.dispose();
+        oldController?.dispose();
+
+        if (!mounted) return;
 
         final newUrls = _getCurrentImageUrls();
         if (newUrls.length > 1 && !_isFantasyProduct) {
           _pageController = PageController(initialPage: 0);
-        } else {
-          _pageController = null;
+          setState(() {});
         }
-
-        if (mounted) setState(() {});
       });
     }
   }
@@ -194,19 +195,21 @@ class _ProductCardState extends State<ProductCard>
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // Required for AutomaticKeepAliveClientMixin
-
-    // ✅ OPTIMIZATION 5: Reduce MediaQuery lookups - cache them
+    super.build(context);
     final mediaQuery = MediaQuery.of(context);
     final theme = Theme.of(context);
 
-    return MediaQuery(
-      data: mediaQuery.copyWith(textScaler: TextScaler.noScaling),
-      child: _ProductCardContent(
-        widget: widget,
-        state: this,
-        mediaQuery: mediaQuery,
-        theme: theme,
+    // FIX: Add RepaintBoundary for render isolation
+    return RepaintBoundary(
+      child: MediaQuery(
+        data: mediaQuery.copyWith(textScaler: TextScaler.noScaling),
+        child: _ProductCardContent(
+          key: ValueKey('product_card_${widget.product.id}'),
+          widget: widget,
+          state: this,
+          mediaQuery: mediaQuery,
+          theme: theme,
+        ),
       ),
     );
   }
@@ -306,15 +309,19 @@ class _ProductCardState extends State<ProductCard>
     _selectedColor = color;
     _currentImageIndex = 0;
 
+    final oldController = _pageController;
+    _pageController = null; // Clear reference immediately
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _pageController?.dispose();
+      oldController?.dispose();
+
+      if (!mounted) return;
+
       final newUrls = _getCurrentImageUrls();
       if (newUrls.length > 1 && !_isFantasyProduct) {
         _pageController = PageController(initialPage: 0);
-      } else {
-        _pageController = null;
       }
-      if (mounted) setState(() {});
+      setState(() {});
     });
   }
 
@@ -803,9 +810,13 @@ class _ImageSection extends StatelessWidget {
                     children: [
                       if (!isFantasyProduct || imageCount == 1)
                         PageView.builder(
+                          // FIX: Add key for widget identity when images change
+                          key: ValueKey('pageview_${imageUrls.hashCode}'),
                           controller: pageController,
                           itemCount: imageUrls.length,
                           onPageChanged: onPageChanged,
+                          // FIX: Disable implicit scrolling for memory efficiency
+                          allowImplicitScrolling: false,
                           itemBuilder: (context, index) {
                             return _buildImageWidget(
                                 imageUrls[index], actualHeight);
@@ -1039,22 +1050,35 @@ class _ImageSection extends StatelessWidget {
   }
 
   Widget _buildImageWidget(String imageUrl, double height) {
-    // ✅ MEMORY OPTIMIZATION: Limit decoded image size to prevent GPU buffer overflow
-    // Only specify WIDTH to maintain aspect ratio - Flutter calculates height automatically
-    final double displayWidth = mediaQuery.size.width / 2; // Grid is 2 columns
-    final double dpr = mediaQuery.devicePixelRatio;
-    // Cap at reasonable max to prevent memory issues on high-DPI devices
-    final int cacheWidth = (displayWidth * dpr).round().clamp(100, 500);
+    // FIX: Use fixed cache dimensions for stability
+    // 500px width covers most grid layouts at 2-3x DPR
+    const int fixedCacheWidth = 500;
+    // Calculate proportional height based on typical card aspect ratio
+    final int fixedCacheHeight = (height * 3).round().clamp(300, 800);
 
-    return CachedNetworkImage(
-      imageUrl: imageUrl,
-      fit: BoxFit.cover,
-      memCacheWidth: cacheWidth,
-      // NOTE: Only specify memCacheWidth - specifying both width AND height distorts aspect ratio
-      placeholder: (context, url) =>
-          _buildImagePlaceholder(effectiveScaleFactor),
-      errorWidget: (context, url, error) =>
-          _buildImageErrorWidget(effectiveScaleFactor),
+    return RepaintBoundary(
+      child: CachedNetworkImage(
+        imageUrl: imageUrl,
+        fit: BoxFit.cover,
+        // FIX: Fixed cache dimensions - not reactive to screen changes
+        memCacheWidth: fixedCacheWidth,
+        memCacheHeight: fixedCacheHeight,
+        maxWidthDiskCache: fixedCacheWidth,
+        maxHeightDiskCache: fixedCacheHeight,
+        // FIX: Disable fade animations to prevent flicker
+        fadeInDuration: Duration.zero,
+        fadeOutDuration: Duration.zero,
+        // FIX: Keep old image while new one loads (color change)
+        useOldImageOnUrlChange: true,
+        // FIX: Stable cache key based on URL
+        cacheKey: 'product_${imageUrl.hashCode}',
+        // FIX: Medium quality for smoother scaling
+        filterQuality: FilterQuality.medium,
+        placeholder: (context, url) =>
+            _buildImagePlaceholder(effectiveScaleFactor),
+        errorWidget: (context, url, error) =>
+            _buildImageErrorWidget(effectiveScaleFactor),
+      ),
     );
   }
 
@@ -1075,21 +1099,19 @@ class _ImageSection extends StatelessWidget {
       color: Colors.grey[200],
       alignment: Alignment.center,
       child: Image.asset(
-        'assets/images/narsiyah.png',
-        width: 120 * effectiveScaleFactor * widget.internalScaleFactor,
-        height: 120 * effectiveScaleFactor * widget.internalScaleFactor,
+        'assets/images/nargri.png',
+        width: 100 * effectiveScaleFactor * widget.internalScaleFactor,
+        height: 100 * effectiveScaleFactor * widget.internalScaleFactor,
         fit: BoxFit.contain,
-        // ✅ OPTIMIZATION 12: Cache asset images
-        cacheWidth: (120 *
-                effectiveScaleFactor *
-                widget.internalScaleFactor *
-                mediaQuery.devicePixelRatio)
-            .round(),
+        // REMOVE these - let Flutter handle asset scaling naturally
+        // cacheWidth: assetCacheSize,
+        // cacheHeight: assetCacheSize,
+        filterQuality: FilterQuality.low,
         errorBuilder: (context, error, stackTrace) {
           return Icon(
-            Icons.image,
+            Icons.image_outlined,
             size: 35 * effectiveScaleFactor * widget.internalScaleFactor,
-            color: Colors.grey,
+            color: Colors.grey.shade400,
           );
         },
       ),

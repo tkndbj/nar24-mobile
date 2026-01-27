@@ -5267,4 +5267,6 @@
 "pleaseSelectColor": "Пожалуйста, выберите цвет",
 "pleaseSelectAnOption": "Пожалуйста, выберите вариант",
 "pleaseEnterValidDimensions": "Пожалуйста, введите корректные размеры"
+,
+"invalidIban": "Неверный IBAN."
 }

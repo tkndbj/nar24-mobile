@@ -160,7 +160,10 @@ class _ProductPaymentScreenState extends State<ProductPaymentScreen> {
                   ),
               ],
             ),
-            body: _items.isEmpty
+            body: GestureDetector(
+              onTap: () => FocusScope.of(context).unfocus(),
+              behavior: HitTestBehavior.opaque,
+              child: _items.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -463,6 +466,7 @@ class _ProductPaymentScreenState extends State<ProductPaymentScreen> {
                       ),
                     ],
                   ),
+            ),
           );
         },
       ),

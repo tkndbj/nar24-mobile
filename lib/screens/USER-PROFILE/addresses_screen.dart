@@ -36,6 +36,33 @@ class _TitleCaseFormatter extends TextInputFormatter {
   }
 }
 
+/// Phone number formatter for Turkish format: (5XX) XXX XX XX
+class _PhoneNumberFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digitsOnly = newValue.text.replaceAll(RegExp(r'\D'), '');
+    final limited = digitsOnly.length > 10 ? digitsOnly.substring(0, 10) : digitsOnly;
+
+    final buffer = StringBuffer();
+    for (int i = 0; i < limited.length; i++) {
+      if (i == 0) buffer.write('(');
+      buffer.write(limited[i]);
+      if (i == 2) buffer.write(') ');
+      if (i == 5) buffer.write(' ');
+      if (i == 7) buffer.write(' ');
+    }
+
+    final formatted = buffer.toString();
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+}
+
 class AddressesScreen extends StatefulWidget {
   @override
   _AddressesScreenState createState() => _AddressesScreenState();
@@ -916,6 +943,16 @@ class _AddressFormModalState extends State<AddressFormModal> {
   String? _city;
   LatLng? _pinnedLocation;
 
+  /// Format stored phone "05XXXXXXXXX" to display format "(5XX) XXX XX XX"
+  String _formatPhoneForDisplay(String phone) {
+    final digitsOnly = phone.replaceAll(RegExp(r'\D'), '');
+    // Remove leading 0 if present
+    final digits = digitsOnly.startsWith('0') ? digitsOnly.substring(1) : digitsOnly;
+    if (digits.length != 10) return phone; // Return as-is if not valid
+
+    return '(${digits.substring(0, 3)}) ${digits.substring(3, 6)} ${digits.substring(6, 8)} ${digits.substring(8, 10)}';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -931,7 +968,7 @@ class _AddressFormModalState extends State<AddressFormModal> {
     );
     _phoneNumberController = TextEditingController(
       text: widget.addressDoc != null
-          ? widget.addressDoc!.get('phoneNumber') ?? ''
+          ? _formatPhoneForDisplay(widget.addressDoc!.get('phoneNumber') ?? '')
           : '',
     );
     _city = widget.addressDoc != null
@@ -1064,11 +1101,12 @@ class _AddressFormModalState extends State<AddressFormModal> {
                           // Phone Number
                           _buildTextField(
                             controller: _phoneNumberController,
-                            placeholder: localization.phoneNumber,
+                            placeholder: '(5__) ___ __ __',
                             keyboardType: TextInputType.phone,
                             isDark: isDarkMode,
                             borderColor: borderColor,
                             placeholderStyle: placeholderStyle,
+                            inputFormatters: [_PhoneNumberFormatter()],
                           ),
                           const SizedBox(height: 12),
 
@@ -1215,13 +1253,14 @@ class _AddressFormModalState extends State<AddressFormModal> {
                                       _city == null)
                                   ? null
                                   : () {
+                                      // Normalize phone: "(5XX) XXX XX XX" -> "05XXXXXXXXX"
+                                      final normalizedPhone = '0${_phoneNumberController.text.replaceAll(RegExp(r'\D'), '')}';
                                       final Map<String, dynamic> addressData = {
                                         'addressLine1':
                                             _addressLine1Controller.text,
                                         'addressLine2':
                                             _addressLine2Controller.text,
-                                        'phoneNumber':
-                                            _phoneNumberController.text,
+                                        'phoneNumber': normalizedPhone,
                                         'city': _city,
                                       };
                                       if (_pinnedLocation != null) {
@@ -1267,14 +1306,19 @@ class _AddressFormModalState extends State<AddressFormModal> {
     TextInputType? keyboardType,
     int maxLines = 1,
     bool applyTitleCase = false,
+    List<TextInputFormatter>? inputFormatters,
   }) {
+    final formatters = <TextInputFormatter>[
+      if (applyTitleCase) _TitleCaseFormatter(),
+      if (inputFormatters != null) ...inputFormatters,
+    ];
     return CupertinoTextField(
       controller: controller,
       placeholder: placeholder,
       keyboardType: keyboardType,
       maxLines: maxLines,
       padding: const EdgeInsets.all(12),
-      inputFormatters: applyTitleCase ? [_TitleCaseFormatter()] : null,
+      inputFormatters: formatters.isNotEmpty ? formatters : null,
       style: TextStyle(
         color: isDark ? Colors.white : Colors.black,
         fontSize: 16,

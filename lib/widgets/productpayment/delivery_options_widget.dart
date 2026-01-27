@@ -165,15 +165,17 @@ class _DeliveryCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                price,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: isDisabled ? Colors.grey : Colors.orange, // MODIFY
+              if (!isDisabled) ...[
+                const SizedBox(height: 4),
+                Text(
+                  price,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.orange,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),

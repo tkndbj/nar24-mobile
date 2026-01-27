@@ -12687,4 +12687,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get pleaseEnterValidDimensions => 'Lütfen geçerli ölçüler girin';
+
+  @override
+  String get invalidIban => 'Geçersiz IBAN.';
 }

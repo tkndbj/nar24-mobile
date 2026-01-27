@@ -393,7 +393,7 @@ class _ImageLoadingPlaceholder extends StatelessWidget {
       color: Colors.grey.shade200,
       child: Center(
         child: Image.asset(
-          'assets/images/narsiyah.png',
+          'assets/images/nargri.png',
           width: 80,
           height: 80,
           fit: BoxFit.contain,

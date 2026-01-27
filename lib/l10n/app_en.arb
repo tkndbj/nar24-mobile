@@ -5572,4 +5572,6 @@
 "pleaseSelectColor": "Please select a color",
 "pleaseSelectAnOption": "Please select an option",
 "pleaseEnterValidDimensions": "Please enter valid dimensions"
+,
+"invalidIban": "Invalid IBAN."
 }

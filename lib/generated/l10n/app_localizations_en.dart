@@ -12662,4 +12662,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pleaseEnterValidDimensions => 'Please enter valid dimensions';
+
+  @override
+  String get invalidIban => 'Invalid IBAN.';
 }

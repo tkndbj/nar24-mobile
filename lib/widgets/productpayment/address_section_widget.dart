@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/product_payment_provider.dart';
 import '../../screens/LOCATION-SCREENS/pin_location_screen.dart';
@@ -481,14 +482,17 @@ class _AddressSectionWidgetState extends State<AddressSectionWidget> {
                     _buildCompactTextField(
                       controller: provider.phoneNumberController,
                       label: l10n.phoneNumber,
+                      hintText: '(5__) ___ __ __',
                       icon: Icons.phone_outlined,
                       keyboardType: TextInputType.phone,
+                      inputFormatters: [_PhoneNumberFormatter()],
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
                           return l10n.fieldRequired;
                         }
-                        if (!RegExp(r'^\+?[0-9]{7,15}$')
-                            .hasMatch(value.trim())) {
+                        // Check for 10 digits (formatted as "(XXX) XXX XX XX")
+                        final digitsOnly = value.replaceAll(RegExp(r'\D'), '');
+                        if (digitsOnly.length != 10) {
                           return l10n.invalidPhoneNumber;
                         }
                         return null;
@@ -626,12 +630,14 @@ class _AddressSectionWidgetState extends State<AddressSectionWidget> {
     TextInputType? keyboardType,
     String? Function(String?)? validator,
     Widget? suffixIcon,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       validator: validator,
+      inputFormatters: inputFormatters,
       style: TextStyle(
         fontSize: 14,
         color: isDark ? Colors.white : Colors.black,
@@ -673,6 +679,37 @@ class _AddressSectionWidgetState extends State<AddressSectionWidget> {
         hintStyle: TextStyle(
             fontSize: 14, color: isDark ? Colors.white : Colors.grey.shade400),
       ),
+    );
+  }
+}
+
+/// Phone number formatter for Turkish format: (5XX) XXX XX XX
+class _PhoneNumberFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    // Remove all non-digits
+    final digitsOnly = newValue.text.replaceAll(RegExp(r'\D'), '');
+
+    // Limit to 10 digits
+    final limited = digitsOnly.length > 10 ? digitsOnly.substring(0, 10) : digitsOnly;
+
+    // Format as (XXX) XXX XX XX
+    final buffer = StringBuffer();
+    for (int i = 0; i < limited.length; i++) {
+      if (i == 0) buffer.write('(');
+      buffer.write(limited[i]);
+      if (i == 2) buffer.write(') ');
+      if (i == 5) buffer.write(' ');
+      if (i == 7) buffer.write(' ');
+    }
+
+    final formatted = buffer.toString();
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
 }

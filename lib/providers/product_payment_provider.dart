@@ -322,11 +322,13 @@ class ProductPaymentProvider with ChangeNotifier {
       }).toList();
 
       // Prepare address payload
+      // Normalize phone: "(5XX) XXX XX XX" -> "05XXXXXXXXX"
+      final normalizedPhone = '0${phoneNumberController.text.replaceAll(RegExp(r'\D'), '')}';
       final addressPayload = {
         'addressLine1': addressLine1Controller.text,
         'addressLine2': addressLine2Controller.text,
         'city': selectedRegion,
-        'phoneNumber': phoneNumberController.text,
+        'phoneNumber': normalizedPhone,
         'location': {
           'latitude': selectedLocation!.latitude,
           'longitude': selectedLocation!.longitude,
