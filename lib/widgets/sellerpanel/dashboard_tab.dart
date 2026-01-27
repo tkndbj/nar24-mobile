@@ -191,6 +191,28 @@ class _DashboardTabState extends State<DashboardTab>
     super.dispose();
   }
 
+  /// Checks if the current shop has any listed products in shop_products collection.
+  /// Returns true if products exist, false otherwise.
+  /// On error, returns true to prevent accidental deletion.
+  Future<bool> _shopHasListedProducts() async {
+    final provider = Provider.of<SellerPanelProvider>(context, listen: false);
+    final shop = provider.selectedShop;
+    if (shop == null) return false;
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('shop_products')
+          .where('shopId', isEqualTo: shop.id)
+          .limit(1)
+          .get();
+      return snapshot.docs.isNotEmpty;
+    } catch (e) {
+      debugPrint('Error checking shop products: $e');
+      // Return true on error to be safe - prevents accidental deletion
+      return true;
+    }
+  }
+
   Future<void> _deleteSellerInfo() async {
     final provider = Provider.of<SellerPanelProvider>(context, listen: false);
     final shop = provider.selectedShop;
@@ -547,12 +569,76 @@ class _DashboardTabState extends State<DashboardTab>
         },
         onDelete: _sellerInfo != null
             ? () async {
+                // Show loading indicator while checking for products
+                showDialog(
+                  context: ctx,
+                  barrierDismissible: false,
+                  builder: (context) => const Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00A36C)),
+                    ),
+                  ),
+                );
+
+                // Check if shop has any listed products
+                final hasProducts = await _shopHasListedProducts();
+
+                // Dismiss loading indicator
+                if (mounted && Navigator.of(ctx).canPop()) {
+                  Navigator.of(ctx).pop();
+                }
+
+                // If shop has products, show error dialog and prevent deletion
+                if (hasProducts) {
+                  if (mounted) {
+                    showCupertinoDialog(
+                      context: ctx,
+                      builder: (context) => CupertinoAlertDialog(
+                        title: Text(
+                          l10n.cannotDeleteSellerInfo ?? 'Cannot Delete',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontFamily: 'Figtree',
+                          ),
+                        ),
+                        content: Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            l10n.cannotDeleteSellerInfoWithProducts ??
+                                'You cannot delete your seller information while you have listed products. Please delete all your products first.',
+                            style: const TextStyle(
+                              fontFamily: 'Figtree',
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                        actions: [
+                          CupertinoDialogAction(
+                            child: Text(
+                              l10n.done ?? 'OK',
+                              style: TextStyle(
+                                color: Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.white
+                                    : Colors.black,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return;
+                }
+
+                // No products found - proceed with deletion confirmation
                 final confirm = await showCupertinoDialog<bool>(
                   context: ctx,
                   builder: (context) => CupertinoAlertDialog(
                     title: Text(l10n.delete),
                     content:
-                        Text('Are you sure you want to delete seller info?'),
+                        Text(l10n.deleteSellerInfoConfirmation ?? 'Are you sure you want to delete your seller information?'),
                     actions: [
                       CupertinoDialogAction(
                         child: Text(l10n.cancel),
