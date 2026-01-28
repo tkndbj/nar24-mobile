@@ -449,20 +449,18 @@ class MarketScreenState extends State<MarketScreen>
     }
   }
 
-  /// Initialize layout service with error handling
-  Future<void> _initializeLayoutService() async {
-    try {
-      final layoutService =
-          Provider.of<MarketLayoutService>(context, listen: false);
-      await layoutService.initialize();
-      layoutService.startListening();
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Layout service initialization error: $e');
-      }
-      // Continue without layout service if it fails
+Future<void> _initializeLayoutService() async {
+  try {
+    final layoutService =
+        Provider.of<MarketLayoutService>(context, listen: false);
+    await layoutService.initialize();
+    // One-time fetch only, no listeners needed
+  } catch (e) {
+    if (kDebugMode) {
+      debugPrint('Layout service initialization error: $e');
     }
   }
+}
 
   bool _shouldKeepAlive(int index) {
     final distance = (index - _currentPage).abs();
@@ -2435,18 +2433,6 @@ class MarketScreenState extends State<MarketScreen>
 
     WidgetsBinding.instance.removeObserver(this);
 
-    // 5. Stop layout service
-    try {
-      if (mounted) {
-        final layoutService =
-            Provider.of<MarketLayoutService>(context, listen: false);
-        layoutService.stopListening();
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('⚠️ Error stopping layout service: $e');
-      }
-    }
 
     // 6. Clean up provider notifiers
     if (_specialFilterProvider != null) {

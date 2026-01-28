@@ -12,21 +12,24 @@ class ShopWidgetProvider with ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  static const String _configCollection = 'app_config';
+  static const String _configDoc = 'featured_shops';
+
   // ————————————————————————————————————————————
   // 1️⃣  Auth & favorite‐shops tracking
 
   bool _userOwnsShop = false;
   bool _isCheckingMembership = false;
-  List<String> _userShopIds = []; // User's actual shop IDs (from memberOfShops)
+  List<String> _userShopIds = [];
   StreamSubscription<User?>? _authSub;
 
   // ————————————————————————————————————————————
   // 2️⃣  Featured‐shops list (for horizontal carousel)
-  final List<QueryDocumentSnapshot> _shops = [];
+  // ✅ FIXED: Changed from QueryDocumentSnapshot to DocumentSnapshot
+  final List<DocumentSnapshot> _shops = [];
   bool _isLoadingShops = false;
 
   ShopWidgetProvider() {
-    // Listen for sign‐in / sign‐out:
     _authSub = _auth.authStateChanges().listen((user) {
       _userOwnsShop = false;
       _userShopIds = [];
@@ -37,41 +40,91 @@ class ShopWidgetProvider with ChangeNotifier {
         _checkUserMembership(user.uid);
       }
     });
-    // kick off featured‐shops fetch:
     fetchFeaturedShops();
   }
 
   // 🚪 Expose for the widgets:
 
-  /// Currently signed in
   User? get currentUser => _auth.currentUser;
-
-  /// Has at least one shop where user is owner/co‐owner/editor/viewer?
   bool get userOwnsShop => _userOwnsShop;
-
-  /// Whether we're currently checking user's shop membership
   bool get isCheckingMembership => _isCheckingMembership;
-
-  /// User's actual shop IDs (from memberOfShops map)
   List<String> get userShopIds => List.unmodifiable(_userShopIds);
-
-  /// First shop ID that the user has access to (safe getter, returns null if none)
   String? get firstUserShopId =>
       _userShopIds.isNotEmpty ? _userShopIds.first : null;
 
-  /// The featured shops to show
-  List<QueryDocumentSnapshot> get shops => List.unmodifiable(_shops);
-
-  /// while we're loading that first batch
+  // ✅ FIXED: Changed return type
+  List<DocumentSnapshot> get shops => List.unmodifiable(_shops);
   bool get isLoadingMore => _isLoadingShops;
 
   // ————————————————————————————————————————————
   // 👇  Public helpers
 
-  /// Preload the first N shops, sorted by newest first
   Future<void> fetchFeaturedShops({int limit = 10}) async {
     _isLoadingShops = true;
     notifyListeners();
+
+    try {
+      // First, try to get configured featured shops
+      final configDoc = await _firestore
+          .collection(_configCollection)
+          .doc(_configDoc)
+          .get();
+
+      if (configDoc.exists && configDoc.data() != null) {
+        final data = configDoc.data()!;
+        final shopIds = (data['shopIds'] as List<dynamic>?)?.cast<String>() ?? [];
+
+        if (shopIds.isNotEmpty) {
+          // Fetch shops in the configured order
+          final shops = await _fetchShopsByIds(shopIds);
+          
+          if (shops.isNotEmpty) {
+            _shops
+              ..clear()
+              ..addAll(shops);
+            _isLoadingShops = false;
+            notifyListeners();
+            debugPrint('✅ Loaded ${shops.length} configured featured shops');
+            return;
+          }
+        }
+      }
+
+      // Fallback: fetch default shops if no config or no valid shops
+      debugPrint('ℹ️ No featured shops config, using fallback query');
+      await _fetchDefaultFeaturedShops(limit);
+    } catch (e) {
+      debugPrint('❌ Error fetching featured shops config: $e');
+      // Fallback on error
+      await _fetchDefaultFeaturedShops(limit);
+    }
+  }
+
+  // ✅ FIXED: Changed return type and removed invalid cast
+  Future<List<DocumentSnapshot>> _fetchShopsByIds(List<String> shopIds) async {
+    final List<DocumentSnapshot> shops = [];
+
+    for (final shopId in shopIds) {
+      try {
+        final shopDoc = await _firestore.collection('shops').doc(shopId).get();
+        
+        if (shopDoc.exists) {
+          final data = shopDoc.data();
+          // Only include active shops
+          if (data?['isActive'] != false) {
+            shops.add(shopDoc);  // ✅ No casting needed - it's already DocumentSnapshot
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ Error fetching shop $shopId: $e');
+      }
+    }
+
+    return shops;
+  }
+
+  /// Fallback: fetch shops sorted by createdAt (original behavior)
+  Future<void> _fetchDefaultFeaturedShops(int limit) async {
     try {
       final snap = await _firestore
           .collection('shops')
@@ -79,14 +132,18 @@ class ShopWidgetProvider with ChangeNotifier {
           .orderBy('createdAt', descending: true)
           .limit(limit)
           .get();
+      
       _shops
         ..clear()
-        ..addAll(snap.docs);
+        ..addAll(snap.docs);  // ✅ QueryDocumentSnapshot extends DocumentSnapshot, so this works
+      
+      debugPrint('✅ Loaded ${snap.docs.length} default featured shops');
     } catch (e) {
-      debugPrint('Error fetching featured shops: $e');
+      debugPrint('❌ Error fetching default shops: $e');
+    } finally {
+      _isLoadingShops = false;
+      notifyListeners();
     }
-    _isLoadingShops = false;
-    notifyListeners();
   }
 
   Future<void> incrementClickCount(String shopId) async {
@@ -94,13 +151,11 @@ class ShopWidgetProvider with ChangeNotifier {
   }
 
   Future<void> _checkUserMembership(String uid) async {
-    // Prevent concurrent calls
     if (_isCheckingMembership) return;
     _isCheckingMembership = true;
     notifyListeners();
 
     try {
-      // 1. Direct lookup on user document
       final userDoc = await _firestore.collection('users').doc(uid).get();
 
       if (!userDoc.exists) {
@@ -121,7 +176,6 @@ class ShopWidgetProvider with ChangeNotifier {
         return;
       }
 
-      // 2. Check ALL shop memberships, not just the first one
       bool hasValidMembership = false;
       List<String> validShopIds = [];
       List<String> shopsToCleanup = [];
@@ -135,7 +189,6 @@ class ShopWidgetProvider with ChangeNotifier {
               await _firestore.collection('shops').doc(shopId).get();
 
           if (!shopDoc.exists) {
-            // Shop was deleted, mark for cleanup
             shopsToCleanup.add(shopId);
             continue;
           }
@@ -148,29 +201,24 @@ class ShopWidgetProvider with ChangeNotifier {
             hasValidMembership = true;
             validShopIds.add(shopId);
           } else {
-            // User is no longer member of this shop, mark for cleanup
             shopsToCleanup.add(shopId);
           }
         } catch (e) {
           debugPrint('Error checking shop $shopId: $e');
-          // On error, assume shop is still valid to avoid false negatives
           hasValidMembership = true;
           validShopIds.add(shopId);
         }
       }
 
-      // 3. Clean up invalid memberships (fire and forget, don't block UI)
       if (shopsToCleanup.isNotEmpty) {
         _cleanupMultipleShopsFromUser(uid, shopsToCleanup);
       }
 
-      // 4. Update state atomically
       _userShopIds = validShopIds;
       _userOwnsShop = hasValidMembership;
       notifyListeners();
     } catch (e) {
       debugPrint('Error checking shop membership: $e');
-      // Fallback to old method if new approach fails
       await _checkUserMembershipFallback(uid);
     } finally {
       _isCheckingMembership = false;
@@ -178,7 +226,6 @@ class ShopWidgetProvider with ChangeNotifier {
     }
   }
 
-// Helper method to clean up multiple shops at once
   Future<void> _cleanupMultipleShopsFromUser(
       String uid, List<String> shopIds) async {
     try {
@@ -194,7 +241,6 @@ class ShopWidgetProvider with ChangeNotifier {
     }
   }
 
-  // Helper method to verify user is still member of shop
   bool _verifyUserStillMemberOfShop(
       String uid, String role, Map<String, dynamic> shopData) {
     switch (role) {
@@ -214,7 +260,6 @@ class ShopWidgetProvider with ChangeNotifier {
     }
   }
 
-  // Fallback to original method if optimized approach fails
   Future<void> _checkUserMembershipFallback(String uid) async {
     try {
       final futures = [
@@ -241,7 +286,6 @@ class ShopWidgetProvider with ChangeNotifier {
       ];
       final results = await Future.wait(futures);
 
-      // Collect all shop IDs from results
       final shopIds = <String>{};
       for (final result in results) {
         for (final doc in result.docs) {

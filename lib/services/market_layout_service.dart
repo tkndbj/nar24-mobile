@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
-import 'dart:async';
 
 // Widget configuration model
 class MarketWidgetConfig {
@@ -77,15 +76,14 @@ class MarketWidgetConfig {
 /// Layout service to manage market screen layout
 /// 
 /// This is a singleton service that manages the dynamic layout configuration
-/// for the market screen. It handles Firestore synchronization, local caching,
-/// and provides emergency reset capabilities.
+/// for the market screen. It handles Firestore synchronization with one-time
+/// fetch (no real-time listeners to minimize reads).
 class MarketLayoutService extends ChangeNotifier {
   static final MarketLayoutService _instance = MarketLayoutService._internal();
   factory MarketLayoutService() => _instance;
   MarketLayoutService._internal();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  StreamSubscription<DocumentSnapshot>? _layoutSubscription;
 
   List<MarketWidgetConfig> _widgets = [];
   bool _isLoading = false;
@@ -93,24 +91,20 @@ class MarketLayoutService extends ChangeNotifier {
   bool _isInitialized = false;
   bool _isDisposed = false;
 
-  // Reference counting for subscription management
-  int _activeListeners = 0;
-
-  // Debounce timer to prevent rapid sequential operations
-  Timer? _debounceTimer;
-  static const _debounceDuration = Duration(milliseconds: 300);
+  // Firestore document paths
+  static const String _collectionPath = 'app_config';
+  static const String _docFlutter = 'market_layout_flutter'; // Flutter-specific (priority)
+  static const String _docShared = 'market_layout'; // Shared/fallback
 
   // Retry configuration
   static const int _maxRetries = 3;
   static const Duration _retryDelay = Duration(seconds: 2);
 
-  // Getters with null safety
+  // Getters
   List<MarketWidgetConfig> get widgets => List.unmodifiable(_widgets);
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isInitialized => _isInitialized;
-  int get activeListeners => _activeListeners;
-  bool get hasActiveSubscription => _layoutSubscription != null;
 
   /// Get visible widgets sorted by order
   List<MarketWidgetConfig> get visibleWidgets {
@@ -215,15 +209,18 @@ class MarketLayoutService extends ChangeNotifier {
     }
   }
 
-  /// Load layout from Firestore with retry logic
+  /// Load layout from Firestore (one-time fetch with retry logic)
+  /// Priority: flutter-specific → shared → defaults
   Future<void> loadLayout({int retryCount = 0}) async {
     if (_isDisposed) return;
 
     try {
-      final docRef = _firestore.collection('app_config').doc('market_layout');
-      
-      // Use source option for better offline support
-      final docSnap = await docRef.get(const GetOptions(
+      // ========================================
+      // 1. Try flutter-specific document first
+      // ========================================
+      final flutterDocRef = _firestore.collection(_collectionPath).doc(_docFlutter);
+
+      var docSnap = await flutterDocRef.get(const GetOptions(
         source: Source.serverAndCache,
       ));
 
@@ -233,25 +230,47 @@ class MarketLayoutService extends ChangeNotifier {
 
         if (parsedWidgets.isNotEmpty) {
           _widgets = parsedWidgets;
-          debugPrint('📦 Market layout loaded: ${_widgets.length} widgets');
-        } else {
-          debugPrint('⚠️ No valid widgets found, using defaults');
-          _widgets = List.from(defaultWidgets);
+          debugPrint('📦 Market layout loaded from flutter-specific: ${_widgets.length} widgets');
+          return;
         }
-      } else {
-        debugPrint('ℹ️ No configuration exists, using defaults');
-        _widgets = List.from(defaultWidgets);
       }
+
+      // ========================================
+      // 2. Fallback to shared document
+      // ========================================
+      debugPrint('⚠️ No flutter-specific layout, trying shared fallback...');
+
+      final sharedDocRef = _firestore.collection(_collectionPath).doc(_docShared);
+      docSnap = await sharedDocRef.get(const GetOptions(
+        source: Source.serverAndCache,
+      ));
+
+      if (docSnap.exists && docSnap.data() != null) {
+        final data = docSnap.data()!;
+        final parsedWidgets = _parseWidgetsFromData(data);
+
+        if (parsedWidgets.isNotEmpty) {
+          _widgets = parsedWidgets;
+          debugPrint('📦 Market layout loaded from shared: ${_widgets.length} widgets');
+          return;
+        }
+      }
+
+      // ========================================
+      // 3. No config found, use defaults
+      // ========================================
+      debugPrint('ℹ️ No configuration exists, using defaults');
+      _widgets = List.from(defaultWidgets);
+
     } on FirebaseException catch (e) {
       debugPrint('🔥 Firebase error loading layout: ${e.code} - ${e.message}');
-      
-      // Retry logic for transient errors
+
       if (retryCount < _maxRetries && _shouldRetry(e.code)) {
         debugPrint('🔄 Retrying... (${retryCount + 1}/$_maxRetries)');
         await Future.delayed(_retryDelay * (retryCount + 1));
         return loadLayout(retryCount: retryCount + 1);
       }
-      
+
       _widgets = List.from(defaultWidgets);
       rethrow;
     } catch (e) {
@@ -311,139 +330,6 @@ class MarketLayoutService extends ChangeNotifier {
     return retryableCodes.contains(errorCode);
   }
 
-  /// Start listening with reference counting
-  void startListening() {
-    if (_isDisposed) {
-      debugPrint('⚠️ Cannot start listening on disposed service');
-      return;
-    }
-
-    _activeListeners++;
-    debugPrint('👂 Active listeners: $_activeListeners');
-
-    // Only start subscription if this is the first listener
-    if (_activeListeners == 1 && _layoutSubscription == null) {
-      _startFirestoreListener();
-    }
-  }
-
-  /// Stop listening with reference counting
-  void stopListening() {
-    if (_activeListeners > 0) {
-      _activeListeners--;
-      debugPrint('👋 Active listeners: $_activeListeners');
-    }
-
-    // Only stop subscription when no one is listening
-    if (_activeListeners == 0) {
-      _debounceTimer?.cancel();
-      if (_layoutSubscription != null) {
-        _stopFirestoreListener();
-      }
-    }
-  }
-
-  /// Start Firestore real-time listener
-  void _startFirestoreListener() {
-    if (_isDisposed || _layoutSubscription != null) return;
-
-    try {
-      _layoutSubscription = _firestore
-          .collection('app_config')
-          .doc('market_layout')
-          .snapshots(includeMetadataChanges: false)
-          .listen(
-        _handleSnapshot,
-        onError: _handleSnapshotError,
-        cancelOnError: false,
-      );
-      
-      debugPrint('🎧 Firestore listener started');
-    } catch (e) {
-      debugPrint('❌ Error setting up listener: $e');
-      _error = 'Failed to setup real-time updates';
-      _safeNotifyListeners();
-    }
-  }
-
-  /// Handle snapshot updates
-  void _handleSnapshot(DocumentSnapshot snapshot) {
-    if (_isDisposed) return;
-
-    try {
-      // Ignore metadata-only changes
-      if (snapshot.metadata.hasPendingWrites) return;
-
-      if (!snapshot.exists || snapshot.data() == null) {
-        debugPrint('⚠️ Snapshot has no data');
-        return;
-      }
-
-      final data = snapshot.data() as Map<String, dynamic>;
-      final parsedWidgets = _parseWidgetsFromData(data);
-
-      if (parsedWidgets.isEmpty) {
-        debugPrint('⚠️ No valid widgets in snapshot');
-        return;
-      }
-
-      // Check if widgets actually changed to avoid unnecessary rebuilds
-      if (_widgetsChanged(parsedWidgets)) {
-        _widgets = parsedWidgets;
-        _error = null;
-        
-        // Debounce notifications to prevent rapid updates
-        _debounceTimer?.cancel();
-        _debounceTimer = Timer(_debounceDuration, () {
-          _safeNotifyListeners();
-          debugPrint('🔄 Layout updated: ${_widgets.length} widgets');
-        });
-      }
-    } catch (e) {
-      debugPrint('❌ Error processing snapshot: $e');
-      _error = 'Failed to process layout update';
-      _safeNotifyListeners();
-    }
-  }
-
-  /// Handle snapshot errors
-  void _handleSnapshotError(Object error, StackTrace stackTrace) {
-    if (_isDisposed) return;
-
-    debugPrint('❌ Snapshot error: $error');
-    _error = 'Connection error: ${error.toString()}';
-    _safeNotifyListeners();
-
-    // Attempt to restart listener on certain errors
-    if (error is FirebaseException && _shouldRetry(error.code)) {
-      debugPrint('🔄 Attempting to restart listener...');
-      _stopFirestoreListener();
-      Future.delayed(_retryDelay, () {
-        if (!_isDisposed && _activeListeners > 0) {
-          _startFirestoreListener();
-        }
-      });
-    }
-  }
-
-  /// Check if widgets have actually changed
-  bool _widgetsChanged(List<MarketWidgetConfig> newWidgets) {
-    if (_widgets.length != newWidgets.length) return true;
-
-    for (int i = 0; i < _widgets.length; i++) {
-      if (_widgets[i] != newWidgets[i]) return true;
-    }
-
-    return false;
-  }
-
-  /// Stop Firestore listener
-  void _stopFirestoreListener() {
-    _layoutSubscription?.cancel();
-    _layoutSubscription = null;
-    debugPrint('🔇 Firestore listener stopped');
-  }
-
   /// Check if a specific widget is visible
   bool isWidgetVisible(String widgetType) {
     if (_isDisposed) return false;
@@ -478,18 +364,22 @@ class MarketLayoutService extends ChangeNotifier {
     }
   }
 
-  /// Refresh layout manually
+  /// Refresh layout manually (re-fetches from Firestore)
   Future<void> refresh() async {
     if (_isDisposed) return;
 
     try {
+      _isLoading = true;
       _error = null;
-      await loadLayout();
       _safeNotifyListeners();
+
+      await loadLayout();
       debugPrint('🔄 Layout refreshed');
     } catch (e) {
       debugPrint('❌ Error refreshing layout: $e');
       _error = 'Failed to refresh layout';
+    } finally {
+      _isLoading = false;
       _safeNotifyListeners();
     }
   }
@@ -501,29 +391,20 @@ class MarketLayoutService extends ChangeNotifier {
 
     try {
       debugPrint('🚨 EMERGENCY RESET initiated');
-      
-      // Stop all listeners
-      _stopFirestoreListener();
-      _debounceTimer?.cancel();
-      
+
       // Reset local state
       _widgets = List.from(defaultWidgets);
       _error = null;
       _isLoading = false;
-      
-      // Reset Firestore
-      final docRef = _firestore.collection('app_config').doc('market_layout');
+
+      // Reset Firestore (flutter-specific document)
+      final docRef = _firestore.collection(_collectionPath).doc(_docFlutter);
       await docRef.set({
         'widgets': defaultWidgets.map((w) => w.toMap()).toList(),
         'updatedAt': FieldValue.serverTimestamp(),
         'resetReason': 'Emergency reset',
         'version': DateTime.now().millisecondsSinceEpoch,
       });
-
-      // Restart listeners if needed
-      if (_activeListeners > 0) {
-        _startFirestoreListener();
-      }
 
       _safeNotifyListeners();
       debugPrint('✅ Emergency reset completed');
@@ -562,8 +443,6 @@ class MarketLayoutService extends ChangeNotifier {
 ✓ Loading: $_isLoading
 ✓ Error: ${_error ?? 'None'}
 ✓ Disposed: $_isDisposed
-✓ Active Listeners: $_activeListeners
-✓ Has Subscription: $hasActiveSubscription
 ✓ Widgets Count: ${_widgets.length}
 ✓ Visible Widgets: ${visibleWidgets.length}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -575,12 +454,7 @@ class MarketLayoutService extends ChangeNotifier {
     if (_isDisposed) return;
 
     debugPrint('🧹 Disposing MarketLayoutService');
-    
     _isDisposed = true;
-    _debounceTimer?.cancel();
-    _stopFirestoreListener();
-    _activeListeners = 0;
-    
     super.dispose();
   }
 }

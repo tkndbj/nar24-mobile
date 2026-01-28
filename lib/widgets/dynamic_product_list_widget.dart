@@ -1,6 +1,6 @@
 // ===============================================
-// ENHANCED dynamic_product_list_widget.dart
-// Replace your entire file with this version
+// OPTIMIZED dynamic_product_list_widget.dart
+// One-time fetch pattern - NO LISTENERS
 // ===============================================
 
 import 'package:flutter/material.dart';
@@ -9,7 +9,6 @@ import 'package:shimmer/shimmer.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import '../../models/product.dart';
 import 'product_card.dart';
-import 'dart:io' show Platform;
 
 class DynamicProductListsWidget extends StatefulWidget {
   const DynamicProductListsWidget({Key? key}) : super(key: key);
@@ -21,19 +20,30 @@ class DynamicProductListsWidget extends StatefulWidget {
 
 class _DynamicProductListsWidgetState extends State<DynamicProductListsWidget>
     with AutomaticKeepAliveClientMixin {
-  // ✅ NEW: Memory limits
+  // ✅ Memory limits
   static const int _maxCachedLists = 10;
   static const int _maxProductsPerList = 20;
+
+  // ✅ NEW: Lists data (one-time fetch)
+  List<Map<String, dynamic>> _lists = [];
+  bool _isLoadingLists = true;
+  String? _listsError;
 
   final Map<String, List<Product>> _productCache = {};
   final Map<String, bool> _loadingStates = {};
   final Set<String> _shouldLoadLists = {};
 
-  // ✅ NEW: LRU tracking
+  // LRU tracking
   final Map<String, DateTime> _listAccessTimes = {};
 
   @override
   bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchDynamicLists();
+  }
 
   @override
   void dispose() {
@@ -41,24 +51,73 @@ class _DynamicProductListsWidgetState extends State<DynamicProductListsWidget>
     _loadingStates.clear();
     _shouldLoadLists.clear();
     _listAccessTimes.clear();
+    _lists.clear();
     super.dispose();
   }
 
-  /// ✅ NEW: Enforce cache limits with LRU eviction
+  /// ✅ NEW: One-time fetch for dynamic lists configuration
+  Future<void> _fetchDynamicLists() async {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoadingLists = true;
+      _listsError = null;
+    });
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('dynamic_product_lists')
+          .where('isActive', isEqualTo: true)
+          .orderBy('order')
+          .get();
+
+      if (!mounted) return;
+
+      final lists = snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+
+      setState(() {
+        _lists = lists;
+        _isLoadingLists = false;
+      });
+
+      debugPrint('✅ Fetched ${lists.length} dynamic product lists (one-time)');
+    } catch (e) {
+      debugPrint('❌ Error fetching dynamic lists: $e');
+      if (mounted) {
+        setState(() {
+          _listsError = e.toString();
+          _isLoadingLists = false;
+        });
+      }
+    }
+  }
+
+  /// ✅ NEW: Manual refresh method
+  Future<void> refresh() async {
+    _productCache.clear();
+    _loadingStates.clear();
+    _shouldLoadLists.clear();
+    _listAccessTimes.clear();
+    await _fetchDynamicLists();
+  }
+
+  /// Enforce cache limits with LRU eviction
   void _enforceCacheLimit() {
     if (_productCache.length <= _maxCachedLists) return;
 
-    // Sort by access time
     final sortedLists = _listAccessTimes.entries.toList()
       ..sort((a, b) => a.value.compareTo(b.value));
 
-    // Remove oldest
     while (_productCache.length > _maxCachedLists && sortedLists.isNotEmpty) {
       final oldestList = sortedLists.removeAt(0);
       _productCache.remove(oldestList.key);
       _loadingStates.remove(oldestList.key);
       _listAccessTimes.remove(oldestList.key);
-      
+
       debugPrint('🗑️ Evicted product list cache: ${oldestList.key}');
     }
   }
@@ -67,83 +126,74 @@ class _DynamicProductListsWidgetState extends State<DynamicProductListsWidget>
   Widget build(BuildContext context) {
     super.build(context);
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('dynamic_product_lists')
-          .where('isActive', isEqualTo: true)
-          .orderBy('order')
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          debugPrint('Error loading dynamic lists: ${snapshot.error}');
-          return const SizedBox.shrink();
-        }
+    // Loading state
+    if (_isLoadingLists) {
+      return _buildLoadingPlaceholder();
+    }
 
-        if (!snapshot.hasData) {
-          return _buildLoadingPlaceholder();
-        }
+    // Error state
+    if (_listsError != null) {
+      debugPrint('Error loading dynamic lists: $_listsError');
+      return const SizedBox.shrink();
+    }
 
-        final lists = snapshot.data!.docs;
-        if (lists.isEmpty) {
-          return const SizedBox.shrink();
-        }
+    // Empty state
+    if (_lists.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
-        // Detect tablet for spacing adjustments
-        final screenWidth = MediaQuery.of(context).size.width;
-        final bool isTablet = screenWidth >= 600;
-        final bool isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    // Detect tablet for spacing adjustments
+    final screenWidth = MediaQuery.of(context).size.width;
+    final bool isTablet = screenWidth >= 600;
+    final bool isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
 
-        // Tablet-specific bottom padding to prevent overlap
-        final double listBottomPadding = isTablet
-            ? (isLandscape ? 32.0 : 26.0)  // Tablets: more spacing
-            : 18.0;                         // Mobile: unchanged
+    // Tablet-specific bottom padding to prevent overlap
+    final double listBottomPadding =
+        isTablet ? (isLandscape ? 32.0 : 26.0) : 18.0;
 
-        return Column(
-          children: lists.map((doc) {
-            final listData = doc.data() as Map<String, dynamic>;
-            listData['id'] = doc.id;
-            return Padding(
-              padding: EdgeInsets.only(bottom: listBottomPadding),
-              child: _ProductListSection(
-                listId: doc.id,
-                listData: listData,
-                onVisibilityChanged: _handleVisibilityChanged,
-                shouldLoad: _shouldLoadLists.contains(doc.id),
-                cachedProducts: _productCache[doc.id],
-                isLoading: _loadingStates[doc.id] ?? false,
-                onProductsLoaded: (products) {
+    return Column(
+      children: _lists.map((listData) {
+        final listId = listData['id'] as String;
+        return Padding(
+          padding: EdgeInsets.only(bottom: listBottomPadding),
+          child: _ProductListSection(
+            listId: listId,
+            listData: listData,
+            onVisibilityChanged: _handleVisibilityChanged,
+            shouldLoad: _shouldLoadLists.contains(listId),
+            cachedProducts: _productCache[listId],
+            isLoading: _loadingStates[listId] ?? false,
+            onProductsLoaded: (products) {
+              if (mounted) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (mounted) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (mounted) {
-                        setState(() {
-                          // ✅ NEW: Limit products per list
-                          _productCache[doc.id] = products.take(_maxProductsPerList).toList();
-                          _loadingStates[doc.id] = false;
-                          _listAccessTimes[doc.id] = DateTime.now();
-                        });
-                        
-                        // ✅ NEW: Enforce cache limits
-                        _enforceCacheLimit();
-                      }
+                    setState(() {
+                      _productCache[listId] =
+                          products.take(_maxProductsPerList).toList();
+                      _loadingStates[listId] = false;
+                      _listAccessTimes[listId] = DateTime.now();
+                    });
+
+                    _enforceCacheLimit();
+                  }
+                });
+              }
+            },
+            onLoadingStateChanged: (isLoading) {
+              if (mounted) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    setState(() {
+                      _loadingStates[listId] = isLoading;
                     });
                   }
-                },
-                onLoadingStateChanged: (isLoading) {
-                  if (mounted) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (mounted) {
-                        setState(() {
-                          _loadingStates[doc.id] = isLoading;
-                        });
-                      }
-                    });
-                  }
-                },
-              ),
-            );
-          }).toList(),
+                });
+              }
+            },
+          ),
         );
-      },
+      }).toList(),
     );
   }
 
@@ -152,7 +202,7 @@ class _DynamicProductListsWidgetState extends State<DynamicProductListsWidget>
 
     if (isVisible && !wasMarkedForLoading) {
       debugPrint('👁️ List $listId became visible');
-      
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           setState(() {
@@ -204,15 +254,14 @@ class _ProductListSection extends StatefulWidget {
 class _ProductListSectionState extends State<_ProductListSection> {
   bool _hasStartedLoading = false;
   bool _isLocalLoading = false;
-  
-  // ✅ NEW: Prevent duplicate loads
+
+  // Prevent duplicate loads
   bool _isFetching = false;
 
   @override
   void didUpdateWidget(_ProductListSection oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // ✅ ENHANCED: Better race condition protection
     if (widget.shouldLoad &&
         !_hasStartedLoading &&
         widget.cachedProducts == null &&
@@ -220,7 +269,7 @@ class _ProductListSectionState extends State<_ProductListSection> {
         !_isFetching) {
       _hasStartedLoading = true;
       _isLocalLoading = true;
-      
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           _loadProducts();
@@ -234,13 +283,12 @@ class _ProductListSectionState extends State<_ProductListSection> {
       return;
     }
 
-    // ✅ NEW: Set fetching flag
     _isFetching = true;
     widget.onLoadingStateChanged(true);
 
     try {
       final products = await _fetchProducts();
-      
+
       if (mounted) {
         _isLocalLoading = false;
         widget.onProductsLoaded(products);
@@ -266,37 +314,38 @@ class _ProductListSectionState extends State<_ProductListSection> {
         final List<String> productIds =
             List<String>.from(listData['selectedProductIds']);
 
-        debugPrint('Fetching ${productIds.length} products for ${widget.listId}');
+        debugPrint(
+            'Fetching ${productIds.length} products for ${widget.listId}');
 
-        // ✅ NEW: Limit batch size for memory efficiency
         const batchSize = 10;
-        const maxProducts = 20; // Don't fetch more than 20 products
-        
+        const maxProducts = 20;
+
         int fetchedCount = 0;
-        
-        for (int i = 0; i < productIds.length && fetchedCount < maxProducts; i += batchSize) {
+
+        for (int i = 0;
+            i < productIds.length && fetchedCount < maxProducts;
+            i += batchSize) {
           if (!mounted) break;
-          
+
           final end = (i + batchSize < productIds.length)
               ? i + batchSize
               : productIds.length;
           final batch = productIds.sublist(i, end);
 
-          // ✅ NEW: Add timeout to prevent hanging
           final batchDocs = await FirebaseFirestore.instance
               .collection('shop_products')
               .where(FieldPath.documentId, whereIn: batch)
               .get()
               .timeout(
-                const Duration(seconds: 10),
-                onTimeout: () {
-                  debugPrint('⚠️ Timeout fetching batch for ${widget.listId}');
-                  return FirebaseFirestore.instance
-                      .collection('shop_products')
-                      .limit(0)
-                      .get();
-                },
-              );
+            const Duration(seconds: 10),
+            onTimeout: () {
+              debugPrint('⚠️ Timeout fetching batch for ${widget.listId}');
+              return FirebaseFirestore.instance
+                  .collection('shop_products')
+                  .limit(0)
+                  .get();
+            },
+          );
 
           for (var doc in batchDocs.docs) {
             if (!mounted || fetchedCount >= maxProducts) break;
@@ -304,30 +353,29 @@ class _ProductListSectionState extends State<_ProductListSection> {
             fetchedCount++;
           }
         }
-      }
-      else if (listData['selectedShopId'] != null &&
+      } else if (listData['selectedShopId'] != null &&
           listData['selectedShopId'].toString().isNotEmpty) {
         final String shopId = listData['selectedShopId'].toString();
-        final int limit = (listData['limit'] ?? 10).clamp(1, 20); // ✅ NEW: Limit max
+        final int limit = (listData['limit'] ?? 10).clamp(1, 20);
 
         debugPrint('Fetching products from shop $shopId with limit $limit');
 
-        // ✅ NEW: Add timeout
         final snapshot = await FirebaseFirestore.instance
             .collection('shop_products')
             .where('shopId', isEqualTo: shopId)
             .limit(limit)
             .get()
             .timeout(
-              const Duration(seconds: 10),
-              onTimeout: () {
-                debugPrint('⚠️ Timeout fetching shop products for ${widget.listId}');
-                return FirebaseFirestore.instance
-                    .collection('shop_products')
-                    .limit(0)
-                    .get();
-              },
-            );
+          const Duration(seconds: 10),
+          onTimeout: () {
+            debugPrint(
+                '⚠️ Timeout fetching shop products for ${widget.listId}');
+            return FirebaseFirestore.instance
+                .collection('shop_products')
+                .limit(0)
+                .get();
+          },
+        );
 
         if (mounted) {
           products =
@@ -348,41 +396,28 @@ class _ProductListSectionState extends State<_ProductListSection> {
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
 
-    // Detect tablet and orientation
     final bool isTablet = screenWidth >= 600;
-    final bool isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    final bool isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
 
-    // ✅ FIX: Calculate effective scale factor matching ProductCard's logic
-    // This ensures the info area height scales consistently with card content
     double effectiveScaleFactor = (screenWidth / 375).clamp(0.8, 1.2);
     if (isLandscape && effectiveScaleFactor > 1.0) {
       effectiveScaleFactor = 1.0;
     }
 
-    // Tablets: shorter image height, larger info area for visibility
-    // Landscape tablets need even more info area due to shorter viewport
-    // Image heights increased for better tall/narrow image display
     final double portraitImageHeight = isTablet
         ? (isLandscape ? screenHeight * 0.31 : screenHeight * 0.24)
         : screenHeight * 0.33;
 
-    // ✅ FIX: Calculate info area height dynamically based on ProductCard's content
-    // ProductCard info section includes: padding(5) + productName(18) + rotatingText(18) +
-    // spacing(2) + ratingRow(16) + priceRow(20) ≈ 79px base, scaled by effectiveScaleFactor
-    // Added 8px buffer for iOS font rendering differences
-    final double baseInfoHeight = 87.0; // Base height at scale 1.0 with buffer
+    final double baseInfoHeight = 87.0;
     final double infoAreaHeight = isTablet
-        ? (isLandscape ? 105.0 : 100.0)  // Tablets: keep existing values
+        ? (isLandscape ? 105.0 : 100.0)
         : (baseInfoHeight * effectiveScaleFactor).clamp(80.0, 105.0);
 
     final double rowHeight = portraitImageHeight + infoAreaHeight;
 
-    // Card width - wider on tablets
     final double cardWidth = isTablet ? 195.0 : 170.0;
 
-    // ✅ FIX: Calculate header area height properly
-    // Header consists of: Padding(vertical: 6) * 2 = 12 + title(~24) + SizedBox(8) = ~44px
-    // Add buffer for safe rendering across different iOS devices
     final double headerAreaHeight = 48.0;
 
     return VisibilityDetector(
@@ -394,9 +429,8 @@ class _ProductListSectionState extends State<_ProductListSection> {
       child: Container(
         margin: const EdgeInsets.only(bottom: 8.0),
         width: double.infinity,
-        // ✅ FIX: Use calculated header height instead of magic numbers
-        // Total = rowHeight (image + info) + header area + platform buffer
-        height: rowHeight + headerAreaHeight + (isTablet ? (isLandscape ? 8 : 4) : 0),
+        height:
+            rowHeight + headerAreaHeight + (isTablet ? (isLandscape ? 8 : 4) : 0),
         clipBehavior: Clip.none,
         child: Stack(
           children: [
@@ -411,7 +445,8 @@ class _ProductListSectionState extends State<_ProductListSection> {
                   Expanded(
                     child: ClipRect(
                       clipBehavior: Clip.none,
-                      child: _buildProductsContent(context, cardWidth, portraitImageHeight),
+                      child: _buildProductsContent(
+                          context, cardWidth, portraitImageHeight),
                     ),
                   ),
                 ],
@@ -465,12 +500,14 @@ class _ProductListSectionState extends State<_ProductListSection> {
     );
   }
 
-  Widget _buildProductsContent(BuildContext context, double cardWidth, double portraitImageHeight) {
+  Widget _buildProductsContent(
+      BuildContext context, double cardWidth, double portraitImageHeight) {
     if (widget.cachedProducts != null) {
       if (widget.cachedProducts!.isEmpty) {
         return _buildEmptyState();
       }
-      return _buildProductsList(widget.cachedProducts!, cardWidth, portraitImageHeight);
+      return _buildProductsList(
+          widget.cachedProducts!, cardWidth, portraitImageHeight);
     }
 
     if (!widget.shouldLoad || _isLocalLoading || widget.isLoading) {
@@ -480,7 +517,8 @@ class _ProductListSectionState extends State<_ProductListSection> {
     return _buildEmptyState();
   }
 
-  Widget _buildProductsList(List<Product> products, double cardWidth, double portraitImageHeight) {
+  Widget _buildProductsList(
+      List<Product> products, double cardWidth, double portraitImageHeight) {
     final bool isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
     final double scaleFactor = isLandscape ? 0.92 : 0.88;
