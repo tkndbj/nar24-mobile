@@ -1,257 +1,501 @@
 import {onCall, HttpsError} from 'firebase-functions/v2/https';
-import {FieldPath} from 'firebase-admin/firestore';
 import admin from 'firebase-admin';
 
+/**
+ * Calculate cart totals for the authenticated user.
+ *
+ * This function fetches ALL cart items directly from the user's cart subcollection,
+ * applies bundle discounts, bulk discounts, and returns the final total.
+ *
+ * @param {Object} request - The request object from Firebase callable function
+ * @param {Object} request.data - Request data
+ * @param {string[]} [request.data.excludedProductIds] - Product IDs to exclude from calculation
+ * @returns {Promise<Object>} Cart totals with itemized breakdown
+ */
 export const calculateCartTotals = onCall(
   {
     region: 'europe-west3',
-    memory: '256MiB',
-    timeoutSeconds: 30,
-    maxInstances: 100,      
+    memory: '512MiB',
+    timeoutSeconds: 60,
+    maxInstances: 100,
     concurrency: 80,
   },
   async (request) => {
+    const startTime = Date.now();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 1. AUTHENTICATION CHECK
+    // ═══════════════════════════════════════════════════════════════════════
     if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'User must be logged in');
+      throw new HttpsError(
+        'unauthenticated',
+        'User must be logged in to calculate cart totals'
+      );
     }
 
     const userId = request.auth.uid;
-    const {selectedProductIds} = request.data;
+    const requestId = `${userId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    if (!Array.isArray(selectedProductIds) || selectedProductIds.length === 0) {
-      return {
-        total: 0,
-        currency: 'TL',
-        items: [],
-        calculatedAt: new Date().toISOString(),
-      };
+    console.log(`📊 [${requestId}] Cart totals calculation started for user: ${userId}`);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 2. INPUT VALIDATION & SANITIZATION
+    // ═══════════════════════════════════════════════════════════════════════
+    let excludedProductIds = [];
+
+    if (request.data?.excludedProductIds) {
+      if (!Array.isArray(request.data.excludedProductIds)) {
+        throw new HttpsError(
+          'invalid-argument',
+          'excludedProductIds must be an array'
+        );
+      }
+
+      excludedProductIds = request.data.excludedProductIds
+        .filter((id) => typeof id === 'string' && id.trim().length > 0)
+        .map((id) => id.trim())
+        .slice(0, 500);
     }
 
-    // Rate limiting
-    const rateLimitRef = admin.firestore().collection('_rate_limits').doc(`cart_totals:${userId}`);
-const rateLimitDoc = await rateLimitRef.get();
+    const db = admin.firestore();
+    const excludedSet = new Set(excludedProductIds);
 
-const now = Date.now();
-const windowMs = 10000; // 10 seconds
-const maxCalls = 5; // 5 calls per window
+    // ═══════════════════════════════════════════════════════════════════════
+    // 3. RATE LIMITING (Sliding Window)
+    // ═══════════════════════════════════════════════════════════════════════
+    try {
+      const rateLimitPassed = await checkRateLimit(db, userId, requestId);
+      if (!rateLimitPassed) {
+        throw new HttpsError(
+          'resource-exhausted',
+          'Too many requests. Please wait a few seconds and try again.'
+        );
+      }
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      console.warn(`⚠️ [${requestId}] Rate limit check failed, continuing: ${error.message}`);
+    }
 
-if (rateLimitDoc.exists) {
-  const data = rateLimitDoc.data();
-  const calls = data.calls || [];
-  
-  // Remove calls outside the current window
-  const recentCalls = calls.filter((timestamp) => now - timestamp < windowMs);
-  
-  if (recentCalls.length >= maxCalls) {
-    throw new HttpsError('resource-exhausted', 'Too many requests. Please wait.');
-  }
-  
-  // Add current call
-  recentCalls.push(now);
-  await rateLimitRef.set({calls: recentCalls}, {merge: true}); // ✅ This is correct - you're already doing this
-} else {
-  await rateLimitRef.set({calls: [now]});
-}
+    // ═══════════════════════════════════════════════════════════════════════
+    // 4. FETCH ALL CART ITEMS
+    // ═══════════════════════════════════════════════════════════════════════
+    const cartItems = [];
 
     try {
-      // Fetch cart items
-      const cartItems = [];
-      const cartRef = admin.firestore().collection('users').doc(userId).collection('cart');
+      const cartRef = db.collection('users').doc(userId).collection('cart');
+      const snapshot = await cartRef.get();
 
-      if (selectedProductIds.length <= 10) {
-        const snapshot = await cartRef
-          .where(FieldPath.documentId(), 'in', selectedProductIds)
-          .get();
-
-        snapshot.forEach((doc) => {
-          cartItems.push({productId: doc.id, ...doc.data()});
-        });
-      } else {
-        const batches = [];
-        for (let i = 0; i < selectedProductIds.length; i += 10) {
-          const batch = selectedProductIds.slice(i, i + 10);
-          batches.push(cartRef.where(FieldPath.documentId(), 'in', batch).get());
-        }
-
-        const snapshots = await Promise.all(batches);
-        snapshots.forEach((snapshot) => {
-          snapshot.forEach((doc) => {
-            cartItems.push({productId: doc.id, ...doc.data()});
-          });
-        });
+      if (snapshot.empty) {
+        console.log(`📭 [${requestId}] Cart is empty`);
+        return createEmptyResponse(requestId, startTime);
       }
 
-      if (cartItems.length === 0) {
-        return {
-          total: 0,
-          currency: 'TL',
-          items: [],
-          calculatedAt: new Date().toISOString(),
-        };
-      }
+      snapshot.forEach((doc) => {
+        const productId = doc.id;
 
-      // ✅ NEW: Fetch bundles using bundleData from products
-      const applicableBundles = [];
-      const uniqueBundleIds = new Set();
-      
-      // Collect all bundle IDs from cart items
-      cartItems.forEach((item) => {
-        if (item.bundleData && Array.isArray(item.bundleData)) {
-          item.bundleData.forEach((bd) => {
-            if (bd.bundleId) {
-              uniqueBundleIds.add(bd.bundleId);
-            }
-          });
+        if (excludedSet.has(productId)) {
+          return;
         }
+
+        const data = doc.data();
+
+        if (!data || typeof data.unitPrice === 'undefined') {
+          console.warn(`⚠️ [${requestId}] Skipping invalid cart item: ${productId}`);
+          return;
+        }
+
+        cartItems.push({
+          productId,
+          ...data,
+        });
       });
 
-      // Fetch bundle documents
-      if (uniqueBundleIds.size > 0) {
-        const bundlePromises = Array.from(uniqueBundleIds).map((bundleId) =>
-          admin.firestore().collection('bundles').doc(bundleId).get(),
-        );
-        const bundleDocs = await Promise.all(bundlePromises);
-        
-        bundleDocs.forEach((doc) => {
-          if (doc.exists) {
-            const bundleData = doc.data();
-            
-            // ✅ Check if cart contains ALL products from this bundle
-            const bundleProductIds = bundleData.products.map((p) => p.productId);
-            const cartProductIds = cartItems.map((item) => item.productId);
-            
-            const hasAllProducts = bundleProductIds.every((id) => 
-              cartProductIds.includes(id),
-            );
-            
-            if (hasAllProducts) {
-              applicableBundles.push({
-                bundleId: doc.id,
-                ...bundleData,
-                productIds: bundleProductIds,
-                savings: bundleData.totalOriginalPrice - bundleData.totalBundlePrice,
-              });
-            }
-          }
+      console.log(`📦 [${requestId}] Fetched ${cartItems.length} cart items (${excludedSet.size} excluded)`);
+
+      if (cartItems.length === 0) {
+        return createEmptyResponse(requestId, startTime);
+      }
+    } catch (error) {
+      console.error(`❌ [${requestId}] Failed to fetch cart items:`, error);
+      throw new HttpsError(
+        'internal',
+        'Failed to fetch cart items. Please try again.'
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 5. FETCH & EVALUATE BUNDLES
+    // ═══════════════════════════════════════════════════════════════════════
+    let selectedBundle = null;
+
+    try {
+      selectedBundle = await findBestApplicableBundle(db, cartItems, requestId);
+    } catch (error) {
+      console.warn(`⚠️ [${requestId}] Bundle evaluation failed, continuing without bundles: ${error.message}`);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 6. CALCULATE TOTALS
+    // ═══════════════════════════════════════════════════════════════════════
+    let result;
+
+    try {
+      result = calculateTotalsWithDiscounts(cartItems, selectedBundle, requestId);
+    } catch (error) {
+      console.error(`❌ [${requestId}] Calculation error:`, error);
+      throw new HttpsError(
+        'internal',
+        'Failed to calculate totals. Please try again.'
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 7. FINAL VALIDATION
+    // ═══════════════════════════════════════════════════════════════════════
+    if (result.total < 0) {
+      console.error(`❌ [${requestId}] CRITICAL: Negative total detected!`, {
+        total: result.total,
+        itemCount: result.items.length,
+      });
+      throw new HttpsError(
+        'internal',
+        'Invalid total calculated. Please contact support.'
+      );
+    }
+
+    const MAX_CART_TOTAL = 10000000;
+    if (result.total > MAX_CART_TOTAL) {
+      console.error(`❌ [${requestId}] CRITICAL: Suspiciously high total!`, {
+        total: result.total,
+      });
+      throw new HttpsError(
+        'internal',
+        'Cart total exceeds maximum allowed. Please contact support.'
+      );
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ [${requestId}] Calculation complete in ${duration}ms: ${result.total} ${result.currency}`);
+
+    return {
+      ...result,
+      requestId,
+      calculatedAt: new Date().toISOString(),
+      processingTimeMs: duration,
+    };
+  }
+);
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HELPER FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Check rate limit using sliding window algorithm
+ * @param {FirebaseFirestore.Firestore} db - Firestore database instance
+ * @param {string} userId - The user ID to check rate limit for
+ * @param {string} requestId - Unique request ID for logging
+ * @return {Promise<boolean>} True if rate limit not exceeded, false otherwise
+ */
+async function checkRateLimit(db, userId, requestId) {
+  const WINDOW_MS = 10000;
+  const MAX_CALLS = 5;
+
+  const rateLimitRef = db.collection('_rate_limits').doc(`cart_totals:${userId}`);
+
+  return db.runTransaction(async (transaction) => {
+    const doc = await transaction.get(rateLimitRef);
+    const now = Date.now();
+
+    let calls = [];
+    if (doc.exists) {
+      calls = doc.data()?.calls || [];
+    }
+
+    const recentCalls = calls.filter((timestamp) => now - timestamp < WINDOW_MS);
+
+    if (recentCalls.length >= MAX_CALLS) {
+      console.warn(`🚫 [${requestId}] Rate limit exceeded: ${recentCalls.length}/${MAX_CALLS}`);
+      return false;
+    }
+
+    recentCalls.push(now);
+    transaction.set(rateLimitRef, {
+      calls: recentCalls,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return true;
+  });
+}
+
+/**
+ * Find the best applicable bundle with highest savings
+ * @param {FirebaseFirestore.Firestore} db - Firestore database instance
+ * @param {Array<Object>} cartItems - Array of cart items
+ * @param {string} requestId - Unique request ID for logging
+ * @return {Promise<Object|null>} Best applicable bundle or null if none found
+ */
+async function findBestApplicableBundle(db, cartItems, requestId) {
+  const uniqueBundleIds = new Set();
+
+  cartItems.forEach((item) => {
+    if (item.bundleData && Array.isArray(item.bundleData)) {
+      item.bundleData.forEach((bd) => {
+        if (bd?.bundleId && typeof bd.bundleId === 'string') {
+          uniqueBundleIds.add(bd.bundleId);
+        }
+      });
+    }
+
+    if (item.bundleIds && Array.isArray(item.bundleIds)) {
+      item.bundleIds.forEach((id) => {
+        if (typeof id === 'string' && id.trim()) {
+          uniqueBundleIds.add(id.trim());
+        }
+      });
+    }
+  });
+
+  if (uniqueBundleIds.size === 0) {
+    return null;
+  }
+
+  console.log(`🔍 [${requestId}] Checking ${uniqueBundleIds.size} potential bundles`);
+
+  const bundlePromises = Array.from(uniqueBundleIds).map((bundleId) =>
+    db.collection('bundles').doc(bundleId).get()
+  );
+
+  const bundleDocs = await Promise.all(bundlePromises);
+  const cartProductIds = new Set(cartItems.map((item) => item.productId));
+  const applicableBundles = [];
+
+  bundleDocs.forEach((doc) => {
+    if (!doc.exists) return;
+
+    const bundleData = doc.data();
+
+    if (!bundleData?.products || !Array.isArray(bundleData.products)) return;
+    if (typeof bundleData.totalBundlePrice !== 'number') return;
+    if (typeof bundleData.totalOriginalPrice !== 'number') return;
+
+    if (bundleData.isActive === false) return;
+
+    if (bundleData.expiresAt) {
+      const expiryDate = bundleData.expiresAt.toDate ?
+        bundleData.expiresAt.toDate() :
+        new Date(bundleData.expiresAt);
+      if (expiryDate < new Date()) return;
+    }
+
+    const bundleProductIds = bundleData.products
+      .map((p) => p?.productId)
+      .filter((id) => typeof id === 'string');
+
+    const hasAllProducts = bundleProductIds.every((id) => cartProductIds.has(id));
+
+    if (hasAllProducts && bundleProductIds.length > 0) {
+      const savings = bundleData.totalOriginalPrice - bundleData.totalBundlePrice;
+
+      if (savings > 0) {
+        applicableBundles.push({
+          bundleId: doc.id,
+          ...bundleData,
+          productIds: bundleProductIds,
+          savings,
         });
       }
+    }
+  });
 
-      // ✅ Step 2: Select best bundle (highest savings)
-      let selectedBundle = null;
-      if (applicableBundles.length > 0) {
-        applicableBundles.sort((a, b) => b.savings - a.savings);
-        selectedBundle = applicableBundles[0];
-        
-        console.log(`✅ Applying bundle ${selectedBundle.bundleId}: Save ${selectedBundle.savings}`);
-      }
+  if (applicableBundles.length === 0) {
+    return null;
+  }
 
-      // ✅ Step 3: Calculate totals
-      const itemTotals = [];
-      let total = 0.0;
-      let currency = 'TL';
-      const bundledProductIds = new Set(selectedBundle ? selectedBundle.productIds : []);
+  applicableBundles.sort((a, b) => b.savings - a.savings);
+  const bestBundle = applicableBundles[0];
 
-      // Apply bundle price if selected
-      if (selectedBundle) {
-        // Find minimum quantity across all bundle products
-        const bundleItems = cartItems.filter((item) => 
-          bundledProductIds.has(item.productId),
-        );
-        
-        const minQuantity = Math.min(...bundleItems.map((item) => item.quantity || 1));
-        
-        // Add bundle price
-        const bundleTotal = selectedBundle.totalBundlePrice * minQuantity;
-        total += bundleTotal;
-        currency = selectedBundle.currency || 'TL';
-        
-        itemTotals.push({
-          bundleId: selectedBundle.bundleId,
-          bundleName: `Bundle (${selectedBundle.productIds.length} products)`,
-          unitPrice: selectedBundle.totalBundlePrice,
-          total: bundleTotal,
-          quantity: minQuantity,
-          isBundle: true,
-          productIds: selectedBundle.productIds,
-        });
-        
-        // Handle extra quantities beyond bundle set
-        for (const item of bundleItems) {
-          const remainingQty = (item.quantity || 1) - minQuantity;
-          
-          if (remainingQty > 0) {
-            let unitPrice = item.unitPrice || item.cachedPrice || 0;
-            
-            // Apply bulk discount to extra units
-            const discountThreshold = item.discountThreshold || item.cachedDiscountThreshold;
-            const bulkDiscountPercentage = item.bulkDiscountPercentage || item.cachedBulkDiscountPercentage;
-            
-            if (discountThreshold && bulkDiscountPercentage && remainingQty >= discountThreshold) {
-              unitPrice = unitPrice * (1 - bulkDiscountPercentage / 100);
-            }
-            
-            const itemTotal = unitPrice * remainingQty;
-            total += itemTotal;
-            
-            itemTotals.push({
-              productId: item.productId,
-              unitPrice,
-              total: itemTotal,
-              quantity: remainingQty,
-              isBundle: false,
-            });
-          }
-        }
-      }
+  console.log(`💰 [${requestId}] Best bundle: ${bestBundle.bundleId} (saves ${bestBundle.savings})`);
 
-      // Process non-bundled products
-      for (const item of cartItems) {
-        if (bundledProductIds.has(item.productId)) continue;
-        
-        const quantity = item.quantity || 1;
-        let unitPrice = item.unitPrice || item.cachedPrice || 0;
-        
-        // Apply bulk discount
-        const discountThreshold = item.discountThreshold || item.cachedDiscountThreshold;
-        const bulkDiscountPercentage = item.bulkDiscountPercentage || item.cachedBulkDiscountPercentage;
-        
-        if (discountThreshold && bulkDiscountPercentage && quantity >= discountThreshold) {
-          unitPrice = unitPrice * (1 - bulkDiscountPercentage / 100);
-        }
-        
-        const itemTotal = unitPrice * quantity;
+  return bestBundle;
+}
+
+/**
+ * Calculate totals with all applicable discounts
+ * @param {Array<Object>} cartItems - Array of cart items
+ * @param {Object|null} selectedBundle - Selected bundle to apply, or null
+ * @param {string} requestId - Unique request ID for logging
+ * @return {Object} Calculated totals with itemized breakdown
+ */
+function calculateTotalsWithDiscounts(cartItems, selectedBundle, requestId) {
+  const itemTotals = [];
+  let total = 0;
+  let currency = 'TL';
+
+  const bundledProductIds = new Set(
+    selectedBundle ? selectedBundle.productIds : []
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Process bundle items first
+  // ─────────────────────────────────────────────────────────────────────────
+  if (selectedBundle) {
+    const bundleItems = cartItems.filter((item) =>
+      bundledProductIds.has(item.productId)
+    );
+
+    const quantities = bundleItems.map((item) =>
+      Math.max(1, parseInt(item.quantity, 10) || 1)
+    );
+    const minQuantity = Math.min(...quantities);
+
+    const bundlePrice = parseFloat(selectedBundle.totalBundlePrice) || 0;
+    const bundleTotal = bundlePrice * minQuantity;
+
+    total += bundleTotal;
+    currency = selectedBundle.currency || 'TL';
+
+    itemTotals.push({
+      bundleId: selectedBundle.bundleId,
+      bundleName: selectedBundle.name || `Bundle (${selectedBundle.productIds.length} products)`,
+      unitPrice: roundCurrency(bundlePrice),
+      total: roundCurrency(bundleTotal),
+      quantity: minQuantity,
+      isBundle: true,
+      isBundleItem: true,
+      productIds: selectedBundle.productIds,
+      savings: roundCurrency(selectedBundle.savings * minQuantity),
+    });
+
+    for (const item of bundleItems) {
+      const itemQty = Math.max(1, parseInt(item.quantity, 10) || 1);
+      const remainingQty = itemQty - minQuantity;
+
+      if (remainingQty > 0) {
+        const {unitPrice, itemTotal} = calculateItemPrice(item, remainingQty);
+
         total += itemTotal;
-        currency = item.currency || 'TL';
-        
+
         itemTotals.push({
           productId: item.productId,
-          unitPrice,
-          total: itemTotal,
-          quantity,
+          productName: item.productName || 'Unknown Product',
+          unitPrice: roundCurrency(unitPrice),
+          total: roundCurrency(itemTotal),
+          quantity: remainingQty,
           isBundle: false,
+          isBundleItem: false,
+          isExtraBundleQuantity: true,
         });
       }
-
-      // Validation
-      if (total < 0) {
-        console.error('❌ Negative total detected!', {total, items: itemTotals});
-        throw new HttpsError('internal', 'Invalid total calculated');
-      }
-
-      return {
-        total: Math.round(total * 100) / 100,
-        currency,
-        items: itemTotals,
-        appliedBundle: selectedBundle ? {
-          bundleId: selectedBundle.bundleId,
-          savings: selectedBundle.savings,
-          productCount: selectedBundle.productIds.length,
-        } : null,
-        calculatedAt: new Date().toISOString(),
-      };
-    } catch (error) {
-      console.error('❌ Calculate totals error:', error);
-      throw new HttpsError('internal', 'Failed to calculate totals');
     }
-  },
-);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Process non-bundled products
+  // ─────────────────────────────────────────────────────────────────────────
+  for (const item of cartItems) {
+    if (bundledProductIds.has(item.productId)) continue;
+
+    const quantity = Math.max(1, parseInt(item.quantity, 10) || 1);
+    const {unitPrice, itemTotal, discountApplied} = calculateItemPrice(item, quantity);
+
+    total += itemTotal;
+    currency = item.currency || currency;
+
+    itemTotals.push({
+      productId: item.productId,
+      productName: item.productName || 'Unknown Product',
+      unitPrice: roundCurrency(unitPrice),
+      total: roundCurrency(itemTotal),
+      quantity,
+      isBundle: false,
+      isBundleItem: false,
+      bulkDiscountApplied: discountApplied,
+    });
+  }
+
+  const totalItemCount = cartItems.reduce((sum, item) => {
+    return sum + Math.max(1, parseInt(item.quantity, 10) || 1);
+  }, 0);
+
+  return {
+    total: roundCurrency(total),
+    currency,
+    items: itemTotals,
+    itemCount: totalItemCount,
+    uniqueProductCount: cartItems.length,
+    appliedBundle: selectedBundle ? {
+      bundleId: selectedBundle.bundleId,
+      bundleName: selectedBundle.name,
+      savings: roundCurrency(selectedBundle.savings),
+      productCount: selectedBundle.productIds.length,
+    } : null,
+  };
+}
+
+/**
+ * Calculate price for a single item with bulk discounts
+ * @param {Object} item - Cart item object
+ * @param {number} quantity - Quantity of the item
+ * @return {Object} Object containing unitPrice, itemTotal, and discountApplied flag
+ */
+function calculateItemPrice(item, quantity) {
+  let unitPrice = parseFloat(item.unitPrice) ||
+                  parseFloat(item.cachedPrice) ||
+                  parseFloat(item.price) ||
+                  0;
+
+  unitPrice = Math.max(0, unitPrice);
+
+  let discountApplied = false;
+
+  const discountThreshold = parseInt(item.discountThreshold || item.cachedDiscountThreshold, 10);
+  const bulkDiscountPercentage = parseInt(item.bulkDiscountPercentage || item.cachedBulkDiscountPercentage, 10);
+
+  if (discountThreshold > 0 &&
+      bulkDiscountPercentage > 0 &&
+      bulkDiscountPercentage <= 100 &&
+      quantity >= discountThreshold) {
+    unitPrice = unitPrice * (1 - bulkDiscountPercentage / 100);
+    discountApplied = true;
+  }
+
+  const itemTotal = unitPrice * quantity;
+
+  return {
+    unitPrice,
+    itemTotal,
+    discountApplied,
+  };
+}
+
+/**
+ * Round to 2 decimal places for currency precision
+ * @param {number} value - The value to round
+ * @return {number} Value rounded to 2 decimal places
+ */
+function roundCurrency(value) {
+  return Math.round(value * 100) / 100;
+}
+
+/**
+ * Create empty response object when cart is empty
+ * @param {string} requestId - Unique request ID for tracking
+ * @param {number} startTime - Timestamp when request started
+ * @return {Object} Empty cart totals response
+ */
+function createEmptyResponse(requestId, startTime) {
+  return {
+    total: 0,
+    currency: 'TL',
+    items: [],
+    itemCount: 0,
+    uniqueProductCount: 0,
+    appliedBundle: null,
+    requestId,
+    calculatedAt: new Date().toISOString(),
+    processingTimeMs: Date.now() - startTime,
+  };
+}

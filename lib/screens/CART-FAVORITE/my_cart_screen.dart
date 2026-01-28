@@ -33,7 +33,7 @@ class MyCartScreen extends StatefulWidget {
 class _MyCartScreenState extends State<MyCartScreen>
     with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
-  final Map<String, bool> _selectedProducts = {};
+  final Set<String> _deselectedProducts = {};
   bool _isValidating = false;
   CartProvider? _cartProvider;
   final SalesConfigService _salesConfigService = SalesConfigService();
@@ -168,47 +168,50 @@ class _MyCartScreenState extends State<MyCartScreen>
     }
   }
 
-  Future<void> _removeItem(String productId) async {
-    if (_cartProvider == null) return;
+ Future<void> _removeItem(String productId) async {
+  if (_cartProvider == null) return;
 
-    final result = await _cartProvider!.removeFromCart(productId);
+  final result = await _cartProvider!.removeFromCart(productId);
 
-    if (result == 'Removed from cart') {
-      _selectedProducts.remove(productId);
-      _updateTotalsForCurrentSelection();
-    } else {
-      _showSnackBar(result, isError: true);
-    }
+  if (result == 'Removed from cart') {
+    _deselectedProducts.remove(productId);  // ✅ CHANGED
+    _updateTotalsForCurrentSelection();
+  } else {
+    _showSnackBar(result, isError: true);
+  }
+}
+
+ Future<void> _deleteSelectedProducts() async {
+  if (_cartProvider == null) return;
+  final l10n = AppLocalizations.of(context);
+
+  // ✅ CHANGED: Get selected IDs (items NOT in deselected set)
+  final allProductIds = _cartProvider!.cartItems
+      .where((item) => item['product'] != null)
+      .map((item) => (item['product'] as Product).id)
+      .toList();
+  
+  final selectedIds = allProductIds
+      .where((id) => !_deselectedProducts.contains(id))
+      .toList();
+
+  if (selectedIds.isEmpty) {
+    _showSnackBar(l10n.noItemsSelected, isError: true);
+    return;
   }
 
-  Future<void> _deleteSelectedProducts() async {
-    if (_cartProvider == null) return;
-    final l10n = AppLocalizations.of(context);
+  final result = await _cartProvider!.removeMultipleFromCart(selectedIds);
 
-    final selectedIds = _selectedProducts.entries
-        .where((entry) => entry.value)
-        .map((entry) => entry.key)
-        .toList();
-
-    if (selectedIds.isEmpty) {
-      _showSnackBar(l10n.noItemsSelected, isError: true);
-      return;
-    }
-
-    final result = await _cartProvider!.removeMultipleFromCart(selectedIds);
-
-    if (result == 'Products removed from cart') {
-      setState(() {
-        for (var id in selectedIds) {
-          _selectedProducts.remove(id);
-        }
-      });
-      _updateTotalsForCurrentSelection();
-      _showSnackBar(l10n.itemsRemoved);
-    } else {
-      _showSnackBar(result, isError: true);
-    }
+  if (result == 'Products removed from cart') {
+    setState(() {
+      // No need to update _deselectedProducts - items are removed from cart
+    });
+    _updateTotalsForCurrentSelection();
+    _showSnackBar(l10n.itemsRemoved);
+  } else {
+    _showSnackBar(result, isError: true);
   }
+}
 
   List<Map<String, dynamic>> _prepareItemsForPayment(
       List<Map<String, dynamic>> cartItems) {
@@ -250,10 +253,14 @@ class _MyCartScreenState extends State<MyCartScreen>
     if (_cartProvider == null) return;
     final l10n = AppLocalizations.of(context);
 
-    final selectedIds = _selectedProducts.entries
-        .where((entry) => entry.value)
-        .map((entry) => entry.key)
-        .toList();
+    final allProductIds = _cartProvider!.cartItems
+    .where((item) => item['product'] != null)
+    .map((item) => (item['product'] as Product).id)
+    .toList();
+
+final selectedIds = allProductIds
+    .where((id) => !_deselectedProducts.contains(id))
+    .toList();
 
     if (selectedIds.isEmpty) {
       _showSnackBar(l10n.pleaseSelectItemsToCheckout, isError: true);
@@ -313,8 +320,12 @@ class _MyCartScreenState extends State<MyCartScreen>
       if (validation['isValid'] == true &&
           (validation['warnings'] as Map).isEmpty) {
         // ✅ No issues - proceed directly to payment
-        final totals = await _cartProvider!
-            .calculateCartTotals(selectedProductIds: selectedIds);
+        final excludedIds = allProductIds
+    .where((id) => !selectedIds.contains(id))
+    .toList();
+final totals = await _cartProvider!.calculateCartTotals(
+  excludedProductIds: excludedIds.isNotEmpty ? excludedIds : null,
+);
         final rawItems =
             await _cartProvider!.fetchAllSelectedItems(selectedIds);
         final items = _prepareItemsForPayment(rawItems);
@@ -372,7 +383,7 @@ class _MyCartScreenState extends State<MyCartScreen>
 
                 // Remove error items from selection
                 for (final productId in errors.keys) {
-                  _selectedProducts.remove(productId);
+                  _deselectedProducts.add(productId);
                 }
 
                 // ✅ FIX: Use validatedItems instead of recalculating
@@ -394,8 +405,13 @@ class _MyCartScreenState extends State<MyCartScreen>
                       _prepareItemsForPayment(rawValidCartItems);
 
                   // ✅ Calculate totals from validated items (which have fresh prices)
-                  final totals = await _cartProvider!
-                      .calculateCartTotals(selectedProductIds: validIds);
+                  final allIdsForTotals = _cartProvider!.cartProductIds.toList();
+final excludedForTotals = allIdsForTotals
+    .where((id) => !validIds.contains(id))
+    .toList();
+final totals = await _cartProvider!.calculateCartTotals(
+  excludedProductIds: excludedForTotals.isNotEmpty ? excludedForTotals : null,
+);
 
                   if (mounted) {
                     // ✅ FIX: Navigate to payment immediately
@@ -442,14 +458,10 @@ class _MyCartScreenState extends State<MyCartScreen>
       );
     }
   }
-
-  void _updateTotalsForCurrentSelection() {
-    final selectedIds = _selectedProducts.entries
-        .where((entry) => entry.value)
-        .map((entry) => entry.key)
-        .toList();
-    _cartProvider?.updateTotalsForSelection(selectedIds);
-  }
+void _updateTotalsForCurrentSelection() {
+  // ✅ SIMPLIFIED: Pass deselected IDs to provider
+  _cartProvider?.updateTotalsForExcluded(_deselectedProducts.toList());
+}
 
   void _showSalesPausedDialog(String? reason) {
     final l10n = AppLocalizations.of(context);
@@ -581,24 +593,31 @@ class _MyCartScreenState extends State<MyCartScreen>
         title: Text(l10n.myCart),
         centerTitle: true,
         actions: [
-          // Delete selected button
-          ValueListenableBuilder<List<Map<String, dynamic>>>(
-            valueListenable:
-                _cartProvider?.cartItemsNotifier ?? ValueNotifier([]),
-            builder: (context, items, _) {
-              final hasSelected =
-                  _selectedProducts.values.any((selected) => selected);
+  // Delete selected button
+  ValueListenableBuilder<List<Map<String, dynamic>>>(
+    valueListenable:
+        _cartProvider?.cartItemsNotifier ?? ValueNotifier([]),
+    builder: (context, items, _) {
+      // ✅ CHANGED: Check if any items are selected (not deselected)
+      final allProductIds = items
+          .where((item) => item['product'] != null)
+          .map((item) => (item['product'] as Product).id)
+          .toSet();
+      
+      final hasSelected = allProductIds.any(
+        (id) => !_deselectedProducts.contains(id)
+      );
 
-              if (!hasSelected) return const SizedBox.shrink();
+      if (!hasSelected) return const SizedBox.shrink();
 
-              return IconButton(
-                icon: const Icon(Icons.delete_outline),
-                onPressed: _deleteSelectedProducts,
-                tooltip: l10n.delete,
-              );
-            },
-          ),
-        ],
+      return IconButton(
+        icon: const Icon(Icons.delete_outline),
+        onPressed: _deleteSelectedProducts,
+        tooltip: l10n.delete,
+      );
+    },
+  ),
+],
       ),
       body: user == null ? _buildAuthPrompt(l10n) : _buildCartContent(l10n),
       bottomNavigationBar: user != null ? _buildCheckoutButton(l10n) : null,
@@ -718,20 +737,16 @@ class _MyCartScreenState extends State<MyCartScreen>
     );
   }
 
-  void _syncSelections(List<Map<String, dynamic>> items) {
-    final currentProductIds = items
-        .where((item) => item['product'] != null)
-        .map((item) => (item['product'] as Product).id)
-        .toSet();
+ void _syncSelections(List<Map<String, dynamic>> items) {
+  // ✅ SIMPLIFIED: Just remove deselections for items no longer in cart
+  final currentProductIds = items
+      .where((item) => item['product'] != null)
+      .map((item) => (item['product'] as Product).id)
+      .toSet();
 
-    // Remove old selections
-    _selectedProducts.removeWhere((id, _) => !currentProductIds.contains(id));
-
-    // Add new items (selected by default)
-    for (final productId in currentProductIds) {
-      _selectedProducts.putIfAbsent(productId, () => true);
-    }
-  }
+  // Remove deselections for items that are no longer in cart
+  _deselectedProducts.removeWhere((id) => !currentProductIds.contains(id));
+}
 
   Widget _buildSellerHeader(Map<String, dynamic> item) {
     final sellerName = item['sellerName'] as String? ?? 'Unknown';
@@ -775,7 +790,7 @@ class _MyCartScreenState extends State<MyCartScreen>
       );
     }
 
-    final isSelected = _selectedProducts[product.id] ?? true;
+    final isSelected = !_deselectedProducts.contains(product.id); 
     final quantity = item['quantity'] as int? ?? 1;
     final cartData = item['cartData'] as Map<String, dynamic>;
     final selectedColor = cartData['selectedColor'] as String?;
@@ -820,19 +835,23 @@ class _MyCartScreenState extends State<MyCartScreen>
               children: [
                 // Checkbox - toggles selection
                 Transform.scale(
-                  scale: 0.9,
-                  child: Checkbox(
-                    value: isSelected,
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedProducts[product.id] = value ?? false;
-                      });
-                      _updateTotalsForCurrentSelection();
-                    },
-                    activeColor: Colors.orange,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
+  scale: 0.9,
+  child: Checkbox(
+    value: !_deselectedProducts.contains(product.id),  // ✅ CHANGED
+    onChanged: (value) {
+      setState(() {
+        if (value == true) {
+          _deselectedProducts.remove(product.id);  // ✅ CHANGED
+        } else {
+          _deselectedProducts.add(product.id);  // ✅ CHANGED
+        }
+      });
+      _updateTotalsForCurrentSelection();
+    },
+    activeColor: Colors.orange,
+    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  ),
+),
                 const SizedBox(width: 8),
 
                 // Product image & details - navigates to product detail
@@ -1055,12 +1074,17 @@ class _MyCartScreenState extends State<MyCartScreen>
     }
 
     return ValueListenableBuilder<List<Map<String, dynamic>>>(
-      valueListenable: _cartProvider!.cartItemsNotifier,
-      builder: (context, items, _) {
-        final selectedIds = _selectedProducts.entries
-            .where((entry) => entry.value)
-            .map((entry) => entry.key)
-            .toList();
+  valueListenable: _cartProvider!.cartItemsNotifier,
+  builder: (context, items, _) {
+    // ✅ CHANGED: Calculate selected IDs
+    final allProductIds = items
+        .where((item) => item['product'] != null)
+        .map((item) => (item['product'] as Product).id)
+        .toSet();
+    
+    final selectedIds = allProductIds
+        .where((id) => !_deselectedProducts.contains(id))
+        .toList();
 
         final isDark = Theme.of(context).brightness == Brightness.dark;
 
