@@ -5551,6 +5551,7 @@
 "usedCoupons": "Kullanılmış",
 "noCouponsOrBenefits": "Kupon veya Avantaj Yok",
 "noCouponsOrBenefitsDescription": "Henüz aktif kuponunuz veya avantajınız yok. Daha sonra tekrar kontrol edin!",
+"limitedSearchMode": "Gelişmiş arama bakımı devam etmektedir. Lütfen birkaç dakika sonra tekrar deneyin.",
 "noUsedCouponsOrBenefits": "Kullanılmış Kupon veya Avantaj Yok",
 "noUsedCouponsOrBenefitsDescription": "Henüz hiç kupon veya avantaj kullanmadınız.",
 "validUntil": "Son kullanma tarihi",

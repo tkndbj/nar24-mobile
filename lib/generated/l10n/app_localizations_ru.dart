@@ -12770,6 +12770,10 @@ class AppLocalizationsRu extends AppLocalizations {
       'У вас пока нет активных купонов или бонусов. Проверьте позже!';
 
   @override
+  String get limitedSearchMode =>
+      'Расширенный поиск находится на техническом обслуживании. Повторите попытку через несколько минут.';
+
+  @override
   String get noUsedCouponsOrBenefits =>
       'Нет использованных купонов или бонусов';
 

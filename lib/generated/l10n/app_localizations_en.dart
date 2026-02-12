@@ -12674,6 +12674,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'You don\'t have any active coupons or benefits yet. Check back later!';
 
   @override
+  String get limitedSearchMode =>
+      'Advanced search is under maintenance. Please try again in a few minutes.';
+
+  @override
   String get noUsedCouponsOrBenefits => 'No Used Coupons or Benefits';
 
   @override

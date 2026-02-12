@@ -57,6 +57,7 @@ import 'widgets/version_check_modal.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'services/sales_config_service.dart';
 import 'services/coupon_service.dart';
+import 'services/search_config_service.dart';
 
 /// Background message handler for FCM.
 ///
@@ -179,6 +180,12 @@ Future<void> main() async {
     SalesConfigService().initialize();
     if (kDebugMode) {
       debugPrint('✅ SalesConfigService initialized');
+    }
+
+    await SearchConfigService.instance.initialize();
+    if (kDebugMode) {
+      debugPrint(
+          '✅ SearchConfigService initialized: ${SearchConfigService.instance.config}');
     }
 
     const AndroidInitializationSettings initializationSettingsAndroid =
@@ -547,6 +554,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           debugPrint('Error clearing caches: $e');
         }
       }
+    }
+
+    if (state == AppLifecycleState.detached) {
+      SearchConfigService.instance.shutdown();
     }
 
     if (state == AppLifecycleState.resumed) {

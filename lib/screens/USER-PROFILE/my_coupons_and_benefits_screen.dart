@@ -552,7 +552,13 @@ class _MyCouponsAndBenefitsScreenState
           children: [
             Icon(icon, size: 16),
             const SizedBox(width: 6),
-            Text(text),
+            Flexible(
+              child: Text(
+                text,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
           ],
         ),
       ),

@@ -5574,6 +5574,7 @@
 "usedCoupons": "Used",
 "noCouponsOrBenefits": "No Coupons or Benefits",
 "noCouponsOrBenefitsDescription": "You don't have any active coupons or benefits yet. Check back later!",
+"limitedSearchMode": "Advanced search is under maintenance. Please try again in a few minutes.",
 "noUsedCouponsOrBenefits": "No Used Coupons or Benefits",
 "noUsedCouponsOrBenefitsDescription": "You haven't used any coupons or benefits yet.",
 "validUntil": "Valid until",

@@ -5269,6 +5269,7 @@
 "usedCoupons": "Использованные",
 "noCouponsOrBenefits": "Нет купонов или бонусов",
 "noCouponsOrBenefitsDescription": "У вас пока нет активных купонов или бонусов. Проверьте позже!",
+"limitedSearchMode":"Расширенный поиск находится на техническом обслуживании. Повторите попытку через несколько минут.",
 "noUsedCouponsOrBenefits": "Нет использованных купонов или бонусов",
 "noUsedCouponsOrBenefitsDescription": "Вы ещё не использовали ни одного купона или бонуса.",
 "validUntil": "Действителен до",

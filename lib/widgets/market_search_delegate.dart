@@ -21,6 +21,7 @@ import '../providers/market_dynamic_filter_provider.dart';
 import 'animated_filter_chip.dart';
 import '../utils/category_image_mapper.dart';
 import '../models/shop_suggestion.dart';
+import '../services/search_config_service.dart';
 
 class MarketSearchDelegate extends SearchDelegate<String?> {
   final MarketProvider marketProv;
@@ -155,6 +156,51 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
         child: Column(
           children: [
             _buildNetworkStatusBanner(context),
+            // Firestore fallback mode banner - always visible
+            if (SearchConfigService.instance.useFirestore)
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.orange.withOpacity(0.1)
+                        : Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.orange.withOpacity(0.2)
+                          : Colors.orange.shade200,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.info_outline_rounded,
+                          size: 14,
+                          color: isDark
+                              ? Colors.orange.shade300
+                              : Colors.orange.shade700),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          l10n.limitedSearchMode ??
+                              'Advanced search is under maintenance. Please try again in a few minutes.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: isDark
+                                ? Colors.orange.shade300
+                                : Colors.orange.shade700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             // Dynamic filters section - ALWAYS at top
             _buildDynamicFiltersSection(context, isDark),
             Expanded(
@@ -708,7 +754,6 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
                 );
               }
 
-              // Show "Load more" hint if there's more to load
               if (provider.hasMoreProducts && productSuggestions.isNotEmpty) {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),

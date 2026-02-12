@@ -8,6 +8,8 @@ import '../services/algolia_service_manager.dart';
 import '../services/enhanced_category_search.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../utils/connectivity_helper.dart';
+import '../services/search_config_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SearchProvider extends ChangeNotifier {
   // ==================== CONFIGURATION ====================
@@ -59,7 +61,8 @@ class SearchProvider extends ChangeNotifier {
       List.unmodifiable(_shopSuggestions);
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
-  bool get hasMoreProducts => _hasMoreProducts && _suggestions.length < _maxSuggestions;
+  bool get hasMoreProducts =>
+      _hasMoreProducts && _suggestions.length < _maxSuggestions;
   String? get errorMessage => _errorMessage;
   bool get hasNetworkError => _hasNetworkError;
   bool get mounted => !_disposed;
@@ -103,6 +106,13 @@ class SearchProvider extends ChangeNotifier {
     if (_suggestions.length >= _maxSuggestions) return; // Max reached
     if (_term.isEmpty) return; // No search term
 
+    // ✅ ADD: No pagination in Firestore fallback mode
+    if (SearchConfigService.instance.useFirestore) {
+      _hasMoreProducts = false;
+      notifyListeners(); // ← ADD THIS so UI updates
+      return;
+    }
+
     _isLoadingMore = true;
     notifyListeners();
 
@@ -118,7 +128,8 @@ class SearchProvider extends ChangeNotifier {
 
       // Calculate how many more to fetch
       final remaining = _maxSuggestions - _suggestions.length;
-      final fetchCount = remaining < _loadMorePageSize ? remaining : _loadMorePageSize;
+      final fetchCount =
+          remaining < _loadMorePageSize ? remaining : _loadMorePageSize;
 
       final newSuggestions = await _fetchMoreProductSuggestions(
         _term,
@@ -137,9 +148,8 @@ class SearchProvider extends ChangeNotifier {
       } else {
         // Deduplicate and add new suggestions
         final existingIds = _suggestions.map((s) => s.id).toSet();
-        final uniqueNew = newSuggestions
-            .where((s) => !existingIds.contains(s.id))
-            .toList();
+        final uniqueNew =
+            newSuggestions.where((s) => !existingIds.contains(s.id)).toList();
 
         _suggestions = [..._suggestions, ...uniqueNew];
         _currentProductCount += newSuggestions.length;
@@ -217,10 +227,10 @@ class SearchProvider extends ChangeNotifier {
     _isLoadingMore = false;
   }
 
-  Future<void> _performInitialSearch(String searchTerm, AppLocalizations? l10n) async {
+  Future<void> _performInitialSearch(
+      String searchTerm, AppLocalizations? l10n) async {
     if (!mounted || searchTerm.isEmpty) return;
 
-    // Reset pagination for new search
     _resetPagination();
     _lastSearchTerm = searchTerm;
 
@@ -233,6 +243,28 @@ class SearchProvider extends ChangeNotifier {
           l10n?.searchNetworkError ?? 'No internet connection',
           isNetworkError: true,
         );
+        return;
+      }
+
+      // ✅ ADD: If Firestore mode, skip Algolia-dependent searches
+      if (SearchConfigService.instance.useFirestore) {
+        // Only fetch product suggestions via Firestore
+        // Category and shop suggestions won't work in fallback mode
+        final productSuggestions = await _fetchProductSuggestionsFirestore(
+            searchTerm,
+            limit: _initialPageSize);
+
+        if (mounted && _term == searchTerm) {
+          _suggestions = productSuggestions;
+          _categorySuggestions = []; // Not available in Firestore mode
+          _shopSuggestions = []; // Not available in Firestore mode
+          _currentProductCount = productSuggestions.length;
+          if (productSuggestions.length < _initialPageSize) {
+            _hasMoreProducts = false;
+          }
+          _isLoading = false;
+          notifyListeners();
+        }
         return;
       }
 
@@ -251,7 +283,7 @@ class SearchProvider extends ChangeNotifier {
         _categorySuggestions = categorySuggestions;
         _shopSuggestions = shopSuggestions;
         _currentProductCount = productSuggestions.length;
-        
+
         // If we got fewer than requested, no more available
         if (productSuggestions.length < _initialPageSize) {
           _hasMoreProducts = false;
@@ -268,6 +300,72 @@ class SearchProvider extends ChangeNotifier {
           l10n?.searchGeneralError ?? 'Search error occurred',
         );
       }
+    }
+  }
+
+  Future<List<Suggestion>> _fetchProductSuggestionsFirestore(
+    String searchTerm, {
+    required int limit,
+  }) async {
+    try {
+      final lower = searchTerm.toLowerCase();
+      final capitalized = searchTerm.substring(0, 1).toUpperCase() +
+          searchTerm.substring(1).toLowerCase();
+
+      final results = await Future.wait([
+        FirebaseFirestore.instance
+            .collection('products')
+            .orderBy('productName')
+            .startAt([lower])
+            .endAt(['$lower\uf8ff'])
+            .limit(limit)
+            .get(),
+        FirebaseFirestore.instance
+            .collection('products')
+            .orderBy('productName')
+            .startAt([capitalized])
+            .endAt(['$capitalized\uf8ff'])
+            .limit(limit)
+            .get(),
+        FirebaseFirestore.instance
+            .collection('shop_products')
+            .orderBy('productName')
+            .startAt([lower])
+            .endAt(['$lower\uf8ff'])
+            .limit(limit)
+            .get(),
+        FirebaseFirestore.instance
+            .collection('shop_products')
+            .orderBy('productName')
+            .startAt([capitalized])
+            .endAt(['$capitalized\uf8ff'])
+            .limit(limit)
+            .get(),
+      ]).timeout(const Duration(seconds: 5));
+
+      final combined = <Suggestion>[];
+      final seenIds = <String>{};
+
+      for (final snapshot in results) {
+        for (final doc in snapshot.docs) {
+          if (combined.length >= limit) break;
+          final data = doc.data();
+          if (seenIds.add(doc.id)) {
+            combined.add(Suggestion(
+              id: doc.id,
+              name: data['productName'] as String? ?? '',
+              price: (data['price'] as num?)?.toDouble() ?? 0.0,
+              imageUrl: (data['imageUrls'] as List?)?.isNotEmpty == true
+                  ? (data['imageUrls'] as List).first as String?
+                  : null,
+            ));
+          }
+        }
+      }
+      return combined;
+    } catch (e) {
+      if (kDebugMode) debugPrint('❌ Firestore product suggestions error: $e');
+      return [];
     }
   }
 
@@ -361,7 +459,8 @@ class SearchProvider extends ChangeNotifier {
             id: p.id,
             name: p.productName,
             price: p.price,
-            imageUrl: p.imageUrls?.isNotEmpty == true ? p.imageUrls!.first : null,
+            imageUrl:
+                p.imageUrls?.isNotEmpty == true ? p.imageUrls!.first : null,
           ));
         }
       }

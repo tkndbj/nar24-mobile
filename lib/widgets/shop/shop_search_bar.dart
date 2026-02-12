@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:rxdart/rxdart.dart';
 import '../../services/algolia_service_manager.dart';
+import '../../services/search_config_service.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -105,65 +106,13 @@ class ShopSearchBarState extends State<ShopSearchBar> {
     widget.onSearchResultsChanged(null, true);
 
     try {
-      final l10n = AppLocalizations.of(context);
-      final languageCode = l10n.localeName ?? 'en';
+      List<DocumentSnapshot> shopDocs;
 
-      // Search Algolia
-      final algoliaResults = await AlgoliaServiceManager.instance.shopsService
-          .searchShops(
-            query: query,
-            hitsPerPage: 50,
-            languageCode: languageCode,
-          )
-          .timeout(const Duration(seconds: 5));
-
-      if (!mounted) return;
-
-      // Bail out early if user has changed/cleared search
-      if (_searchController.text.trim() != query) {
-        return;
+      if (SearchConfigService.instance.useFirestore) {
+        shopDocs = await _searchShopsFirestore(query);
+      } else {
+        shopDocs = await _searchShopsAlgolia(query);
       }
-
-      // Extract shop IDs from Algolia results
-      final shopIds = algoliaResults
-          .map((hit) =>
-              hit['objectID']?.toString().replaceAll('shops_', '') ?? '')
-          .where((id) => id.isNotEmpty)
-          .toList();
-
-      if (shopIds.isEmpty) {
-        setState(() {
-          _isLoading = false;
-        });
-        widget.onSearchResultsChanged([], false);
-        return;
-      }
-
-      // Fetch actual Firestore documents in batches (Firestore 'in' query limit is 10)
-      final List<DocumentSnapshot> shopDocs = [];
-      const batchSize = 10;
-
-      for (int i = 0; i < shopIds.length; i += batchSize) {
-        final batch = shopIds.skip(i).take(batchSize).toList();
-
-        final querySnapshot = await FirebaseFirestore.instance
-            .collection('shops')
-            .where(FieldPath.documentId, whereIn: batch)
-            .where('isActive', isEqualTo: true) // Only fetch active shops
-            .get()
-            .timeout(const Duration(seconds: 5));
-
-        shopDocs.addAll(querySnapshot.docs);
-      }
-
-      if (!mounted) return;
-
-      // Sort results to match Algolia ranking
-      shopDocs.sort((a, b) {
-        final indexA = shopIds.indexOf(a.id);
-        final indexB = shopIds.indexOf(b.id);
-        return indexA.compareTo(indexB);
-      });
 
       if (!mounted) return;
 
@@ -221,6 +170,102 @@ class ShopSearchBarState extends State<ShopSearchBar> {
         );
       }
     }
+  }
+
+  /// Firestore fallback: range query on `name` field.
+  Future<List<DocumentSnapshot>> _searchShopsFirestore(String query) async {
+    final lower = query.toLowerCase();
+    final capitalized =
+        query.substring(0, 1).toUpperCase() + query.substring(1).toLowerCase();
+
+    final results = await Future.wait([
+      FirebaseFirestore.instance
+          .collection('shops')
+          .orderBy('name')
+          .startAt([lower])
+          .endAt(['$lower\uf8ff'])
+          .limit(50)
+          .get(),
+      FirebaseFirestore.instance
+          .collection('shops')
+          .orderBy('name')
+          .startAt([capitalized])
+          .endAt(['$capitalized\uf8ff'])
+          .limit(50)
+          .get(),
+    ]).timeout(const Duration(seconds: 5));
+
+    // Merge, deduplicate, and filter active shops
+    final seen = <String>{};
+    final shopDocs = <DocumentSnapshot>[];
+    for (final snapshot in results) {
+      for (final doc in snapshot.docs) {
+        if (seen.add(doc.id)) {
+          final data = doc.data() as Map<String, dynamic>?;
+          if (data != null && data['isActive'] == true) {
+            shopDocs.add(doc);
+          }
+        }
+      }
+    }
+
+    return shopDocs;
+  }
+
+  /// Algolia search: existing flow.
+  Future<List<DocumentSnapshot>> _searchShopsAlgolia(String query) async {
+    final l10n = AppLocalizations.of(context);
+    final languageCode = l10n.localeName ?? 'en';
+
+    final algoliaResults = await AlgoliaServiceManager.instance.shopsService
+        .searchShops(
+          query: query,
+          hitsPerPage: 50,
+          languageCode: languageCode,
+        )
+        .timeout(const Duration(seconds: 5));
+
+    if (!mounted) return [];
+
+    // Bail out early if user has changed/cleared search
+    if (_searchController.text.trim() != query) {
+      return [];
+    }
+
+    // Extract shop IDs from Algolia results
+    final shopIds = algoliaResults
+        .map((hit) =>
+            hit['objectID']?.toString().replaceAll('shops_', '') ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList();
+
+    if (shopIds.isEmpty) return [];
+
+    // Fetch actual Firestore documents in batches (Firestore 'in' query limit is 10)
+    final List<DocumentSnapshot> shopDocs = [];
+    const batchSize = 10;
+
+    for (int i = 0; i < shopIds.length; i += batchSize) {
+      final batch = shopIds.skip(i).take(batchSize).toList();
+
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('shops')
+          .where(FieldPath.documentId, whereIn: batch)
+          .where('isActive', isEqualTo: true)
+          .get()
+          .timeout(const Duration(seconds: 5));
+
+      shopDocs.addAll(querySnapshot.docs);
+    }
+
+    // Sort results to match Algolia ranking
+    shopDocs.sort((a, b) {
+      final indexA = shopIds.indexOf(a.id);
+      final indexB = shopIds.indexOf(b.id);
+      return indexA.compareTo(indexB);
+    });
+
+    return shopDocs;
   }
 
   @override

@@ -12699,6 +12699,10 @@ class AppLocalizationsTr extends AppLocalizations {
       'Henüz aktif kuponunuz veya avantajınız yok. Daha sonra tekrar kontrol edin!';
 
   @override
+  String get limitedSearchMode =>
+      'Gelişmiş arama bakımı devam etmektedir. Lütfen birkaç dakika sonra tekrar deneyin.';
+
+  @override
   String get noUsedCouponsOrBenefits => 'Kullanılmış Kupon veya Avantaj Yok';
 
   @override

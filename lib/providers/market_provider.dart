@@ -19,6 +19,7 @@ import '../services/click_tracking_service.dart';
 import '../services/user_activity_service.dart';
 import '../services/lifecycle_aware.dart';
 import '../services/app_lifecycle_manager.dart';
+import '../services/search_config_service.dart';
 
 class _RequestDeduplicator {
   final Map<String, Future<List<ProductSummary>>> _pending = {};
@@ -500,6 +501,11 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
   }) async {
     if (query.isEmpty) return [];
 
+    // ✅ ADD: If remote config says use Firestore, go directly to fallback
+    if (SearchConfigService.instance.useFirestore) {
+      return await _fetchSuggestionsFromFirestore(query, l10n: l10n);
+    }
+
     // Check circuit breaker
     if (_isAlgoliaCircuitOpen()) {
       print('Algolia circuit breaker is open, using Firestore fallback');
@@ -590,7 +596,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
             );
           }
         }
-            }
+      }
 
       // If we got results, record success and cache
       if (combined.isNotEmpty) {
@@ -612,26 +618,26 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     }
   }
 
- Future<List<ProductSummary>> _safeAlgoliaSearch(
-  AlgoliaService service,
-  String searchQuery,
-  List<String> filters,
-) async {
-  try {
-    return await service
-        .searchProducts(
-          query: searchQuery,
-          sortOption: 'alphabetical',
-          page: 0,
-          hitsPerPage: 5,
-          filters: filters.isNotEmpty ? filters : null,
-        )
-        .timeout(const Duration(seconds: 5));
-  } catch (e) {
-    print('Safe Algolia search failed: $e');
-    return <ProductSummary>[];
+  Future<List<ProductSummary>> _safeAlgoliaSearch(
+    AlgoliaService service,
+    String searchQuery,
+    List<String> filters,
+  ) async {
+    try {
+      return await service
+          .searchProducts(
+            query: searchQuery,
+            sortOption: 'alphabetical',
+            page: 0,
+            hitsPerPage: 5,
+            filters: filters.isNotEmpty ? filters : null,
+          )
+          .timeout(const Duration(seconds: 5));
+    } catch (e) {
+      print('Safe Algolia search failed: $e');
+      return <ProductSummary>[];
+    }
   }
-}
 
   /// Firestore fallback for suggestions
   Future<List<Suggestion>> _fetchSuggestionsFromFirestore(
@@ -639,47 +645,61 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     AppLocalizations? l10n,
   }) async {
     try {
-      final qLower = query.toLowerCase();
+      final lower = query.toLowerCase();
+      final capitalized = query.substring(0, 1).toUpperCase() +
+          query.substring(1).toLowerCase();
 
-      // Search in both collections
-      final futures = [
+      final snapshots = await Future.wait([
         _firestore
             .collection('products')
-            .where('keywords', arrayContains: qLower)
+            .orderBy('productName')
+            .startAt([lower])
+            .endAt(['$lower\uf8ff'])
+            .limit(5)
+            .get(),
+        _firestore
+            .collection('products')
+            .orderBy('productName')
+            .startAt([capitalized])
+            .endAt(['$capitalized\uf8ff'])
             .limit(5)
             .get(),
         _firestore
             .collection('shop_products')
-            .where('keywords', arrayContains: qLower)
+            .orderBy('productName')
+            .startAt([lower])
+            .endAt(['$lower\uf8ff'])
             .limit(5)
             .get(),
-      ];
+        _firestore
+            .collection('shop_products')
+            .orderBy('productName')
+            .startAt([capitalized])
+            .endAt(['$capitalized\uf8ff'])
+            .limit(5)
+            .get(),
+      ]).timeout(const Duration(seconds: 5));
 
-      final snapshots = await Future.wait(futures);
       final suggestions = <Suggestion>[];
       final seenIds = <String>{};
 
       for (final snapshot in snapshots) {
         for (final doc in snapshot.docs) {
-          final data = doc.data();
-          final productName = data['productName'] as String? ?? '';
-
-          if (productName.toLowerCase().contains(qLower) &&
-              seenIds.add(doc.id)) {
-            suggestions.add(
-              Suggestion(
-                id: doc.id,
-                name: productName,
-                price: (data['price'] as num?)?.toDouble() ?? 0.0,
-              ),
-            );
+          if (suggestions.length >= 10) break;
+          if (seenIds.add(doc.id)) {
+            final data = doc.data();
+            suggestions.add(Suggestion(
+              id: doc.id,
+              name: data['productName'] as String? ?? '',
+              price: (data['price'] as num?)?.toDouble() ?? 0.0,
+            ));
           }
         }
       }
 
       return suggestions;
     } catch (e) {
-      print('Firestore suggestions fallback failed: $e');
+      debugPrint('Firestore suggestions fallback failed: $e');
       return [];
     }
   }
@@ -740,6 +760,12 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     notifyListeners();
 
     try {
+      // ✅ ADD: Check remote config
+      if (SearchConfigService.instance.useFirestore) {
+        await _searchProductsFirestore(
+            query: query, page: page, hitsPerPage: hitsPerPage);
+        return; // skip Algolia entirely
+      }
       // Check circuit breaker first
       if (_isAlgoliaCircuitOpen()) {
         print('Algolia circuit open, using Firestore for search');
@@ -869,60 +895,63 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     int hitsPerPage = 50,
   }) async {
     try {
-      final qLower = query.toLowerCase();
-      final futures = <Future<QuerySnapshot>>[];
+      final lower = query.toLowerCase();
+      final capitalized = query.substring(0, 1).toUpperCase() +
+          query.substring(1).toLowerCase();
 
-      // Search in both collections
-      Query productsQuery = _firestore
-          .collection('products')
-          .where('keywords', arrayContains: qLower)
-          .limit(hitsPerPage);
-
-      Query shopQuery = _firestore
-          .collection('shop_products')
-          .where('keywords', arrayContains: qLower)
-          .limit(hitsPerPage);
-
-      // Apply filters if any
-      if (_selectedCategory?.isNotEmpty ?? false) {
-        productsQuery =
-            productsQuery.where('category', isEqualTo: _selectedCategory);
-        shopQuery = shopQuery.where('category', isEqualTo: _selectedCategory);
-      }
-
-      final results = await AnalyticsService.trackRead(
-        operation: 'market_search_firestore_fallback',
-        execute: () => Future.wait([
-          productsQuery.get(),
-          shopQuery.get(),
-        ]),
-        metadata: {
-          'query': qLower.substring(0, qLower.length > 50 ? 50 : qLower.length),
-          'has_category_filter': _selectedCategory?.isNotEmpty ?? false,
-        },
-      );
+      final snapshots = await Future.wait([
+        _firestore
+            .collection('products')
+            .orderBy('productName')
+            .startAt([lower])
+            .endAt(['$lower\uf8ff'])
+            .limit(hitsPerPage)
+            .get(),
+        _firestore
+            .collection('products')
+            .orderBy('productName')
+            .startAt([capitalized])
+            .endAt(['$capitalized\uf8ff'])
+            .limit(hitsPerPage)
+            .get(),
+        _firestore
+            .collection('shop_products')
+            .orderBy('productName')
+            .startAt([lower])
+            .endAt(['$lower\uf8ff'])
+            .limit(hitsPerPage)
+            .get(),
+        _firestore
+            .collection('shop_products')
+            .orderBy('productName')
+            .startAt([capitalized])
+            .endAt(['$capitalized\uf8ff'])
+            .limit(hitsPerPage)
+            .get(),
+      ]).timeout(const Duration(seconds: 8));
 
       final combined = <ProductSummary>[];
       final seen = <String>{};
 
-      for (final snapshot in results) {
+      for (final snapshot in snapshots) {
         for (final doc in snapshot.docs) {
-          final product = ProductSummary.fromDocument(doc);
-          if (seen.add(product.id)) {
-            combined.add(product);
+          if (combined.length >= hitsPerPage) break;
+          if (seen.add(doc.id)) {
+            combined.add(ProductSummary.fromDocument(doc));
           }
         }
       }
 
       _updateSearchResults(combined, page, hitsPerPage);
     } catch (e) {
-      print('Firestore search fallback failed: $e');
+      debugPrint('Firestore search fallback failed: $e');
       _updateSearchResults([], page, hitsPerPage);
     }
   }
 
   /// Helper to update search results consistently
-  void _updateSearchResults(List<ProductSummary> results, int page, int hitsPerPage) {
+  void _updateSearchResults(
+      List<ProductSummary> results, int page, int hitsPerPage) {
     const MAX_PRODUCTS_IN_MEMORY = 200; // ✅ NEW: Hard limit
 
     _hasMore = results.length >= hitsPerPage;
@@ -1036,8 +1065,9 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
           execute: () => query.get(),
           metadata: {'category': buyerCategory, 'query_type': 'gender_whereIn'},
         );
-        allProducts =
-            snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
+        allProducts = snapshot.docs
+            .map((doc) => ProductSummary.fromDocument(doc))
+            .toList();
 
         debugPrint('Fetched ${allProducts.length} products with single query');
       } else {
@@ -1059,8 +1089,9 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
             'query_type': 'category_equals'
           },
         );
-        allProducts =
-            snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
+        allProducts = snapshot.docs
+            .map((doc) => ProductSummary.fromDocument(doc))
+            .toList();
       }
 
       _setBuyerCategoryCache(buyerCategory, allProducts);
@@ -1087,7 +1118,8 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     return _buyerCategoryCache[buyerCategory];
   }
 
-  void _setBuyerCategoryCache(String buyerCategory, List<ProductSummary> products) {
+  void _setBuyerCategoryCache(
+      String buyerCategory, List<ProductSummary> products) {
     // Enforce cache size limit
     if (_buyerCategoryCache.length >= _maxBuyerCategoryCacheSize) {
       // Remove oldest entry
@@ -1200,8 +1232,9 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
             .limit(20); // ✅ Direct limit - no need to fetch 30 and trim to 20
 
         final snapshot = await query.get();
-        allProducts =
-            snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
+        allProducts = snapshot.docs
+            .map((doc) => ProductSummary.fromDocument(doc))
+            .toList();
 
         debugPrint(
             '✅ Fetched ${allProducts.length} products with single optimized query');
@@ -1217,8 +1250,9 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
             .limit(20);
 
         final snapshot = await query.get();
-        allProducts =
-            snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
+        allProducts = snapshot.docs
+            .map((doc) => ProductSummary.fromDocument(doc))
+            .toList();
       }
 
       // Cache the results in TERAS cache before returning
@@ -1244,8 +1278,9 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
               .limit(20); // ✅ Direct limit
 
           final snapshot = await fallbackQuery.get();
-          fallbackProducts =
-              snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
+          fallbackProducts = snapshot.docs
+              .map((doc) => ProductSummary.fromDocument(doc))
+              .toList();
 
           debugPrint(
               '✅ Fallback: Single query returned ${fallbackProducts.length} products');
@@ -1258,8 +1293,9 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
               .limit(20);
 
           final snapshot = await fallbackQuery.get();
-          fallbackProducts =
-              snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
+          fallbackProducts = snapshot.docs
+              .map((doc) => ProductSummary.fromDocument(doc))
+              .toList();
         }
 
         // Cache even the fallback results in TERAS cache
@@ -1370,7 +1406,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     final cacheKey = '$query|$filterType|$page|$_sortOption';
     final now = DateTime.now();
 
-    // 1) Return cache if fresh
+    // 1) Return cache if fresh (unchanged)
     if (_searchCache.containsKey(cacheKey)) {
       final ts = _cacheTimestamps[cacheKey]!;
       if (now.difference(ts) < _cacheTTL) {
@@ -1381,6 +1417,13 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     }
 
     return _searchDeduplicator.deduplicate(cacheKey, () async {
+      // ✅ ADD: Check remote config — if Firestore mode, skip Algolia entirely
+      if (SearchConfigService.instance.useFirestore) {
+        final fallback = await _firestoreSearchFallback(query);
+        _searchCache[cacheKey] = fallback;
+        _cacheTimestamps[cacheKey] = now;
+        return fallback;
+      }
       // 2) Build your facet filters as before…
       List<String>? facetFilters;
       switch (filterType) {
@@ -1464,13 +1507,56 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
 
   Future<List<ProductSummary>> _firestoreSearchFallback(String query) async {
     if (query.isEmpty) return [];
-    final q = query.toLowerCase();
-    final snapshot = await _firestore
-        .collection('shop_products')
-        .where('keywords', arrayContains: q) // assuming you’ve indexed keywords
-        .limit(50)
-        .get();
-    return snapshot.docs.map((d) => ProductSummary.fromDocument(d)).toList();
+
+    final lower = query.toLowerCase();
+    final capitalized =
+        query.substring(0, 1).toUpperCase() + query.substring(1).toLowerCase();
+    const searchLimit = 50;
+
+    final snapshots = await Future.wait([
+      _firestore
+          .collection('products')
+          .orderBy('productName')
+          .startAt([lower])
+          .endAt(['$lower\uf8ff'])
+          .limit(searchLimit)
+          .get(),
+      _firestore
+          .collection('products')
+          .orderBy('productName')
+          .startAt([capitalized])
+          .endAt(['$capitalized\uf8ff'])
+          .limit(searchLimit)
+          .get(),
+      _firestore
+          .collection('shop_products')
+          .orderBy('productName')
+          .startAt([lower])
+          .endAt(['$lower\uf8ff'])
+          .limit(searchLimit)
+          .get(),
+      _firestore
+          .collection('shop_products')
+          .orderBy('productName')
+          .startAt([capitalized])
+          .endAt(['$capitalized\uf8ff'])
+          .limit(searchLimit)
+          .get(),
+    ]).timeout(const Duration(seconds: 8));
+
+    final combined = <ProductSummary>[];
+    final seen = <String>{};
+
+    for (final snapshot in snapshots) {
+      for (final doc in snapshot.docs) {
+        if (combined.length >= searchLimit) break;
+        if (seen.add(doc.id)) {
+          combined.add(ProductSummary.fromDocument(doc));
+        }
+      }
+    }
+
+    return combined;
   }
 
   void clearSearchCache() {

@@ -24246,6 +24246,12 @@ abstract class AppLocalizations {
   /// **'Henüz aktif kuponunuz veya avantajınız yok. Daha sonra tekrar kontrol edin!'**
   String get noCouponsOrBenefitsDescription;
 
+  /// No description provided for @limitedSearchMode.
+  ///
+  /// In tr, this message translates to:
+  /// **'Gelişmiş arama bakımı devam etmektedir. Lütfen birkaç dakika sonra tekrar deneyin.'**
+  String get limitedSearchMode;
+
   /// No description provided for @noUsedCouponsOrBenefits.
   ///
   /// In tr, this message translates to:
