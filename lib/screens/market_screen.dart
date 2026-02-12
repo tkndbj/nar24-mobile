@@ -16,7 +16,7 @@ import '../widgets/market_app_bar.dart';
 import '../widgets/product_card.dart';
 import '../widgets/product_list_sliver.dart';
 import '../widgets/market_shimmer_card.dart';
-import '../models/product.dart';
+import '../models/product_summary.dart';
 import '../models/dynamic_filter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
@@ -1661,7 +1661,7 @@ Future<void> _initializeLayoutService() async {
   /// Build optimized dynamic filter view
   Widget _buildDynamicFilterView(DynamicFilter dynamicFilter) {
     // ✅ OPTIMIZATION: Use Selector to only rebuild when products for THIS filter change
-    return Selector<SpecialFilterProviderMarket, List<Product>>(
+    return Selector<SpecialFilterProviderMarket, List<ProductSummary>>(
       selector: (_, prov) => prov.getProducts(dynamicFilter.id),
       builder: (context, products, _) {
         final l10n = AppLocalizations.of(context);
@@ -1691,9 +1691,9 @@ Future<void> _initializeLayoutService() async {
     DynamicFilter dynamicFilter,
     SpecialFilterProviderMarket prov,
     AppLocalizations l10n,
-    List<Product> products,
-    List<Product> boosted,
-    List<Product> normal,
+    List<ProductSummary> products,
+    List<ProductSummary> boosted,
+    List<ProductSummary> normal,
   ) {
     return NotificationListener<ScrollNotification>(
       onNotification: (notif) {
@@ -1722,9 +1722,9 @@ Future<void> _initializeLayoutService() async {
     DynamicFilter dynamicFilter,
     SpecialFilterProviderMarket prov,
     AppLocalizations l10n,
-    List<Product> products,
-    List<Product> normal,
-    List<Product> boosted,
+    List<ProductSummary> products,
+    List<ProductSummary> normal,
+    List<ProductSummary> boosted,
   ) {
     // ✅ OPTIMIZATION: Cache MediaQuery
     final mediaQuery = MediaQuery.of(context);
@@ -1896,7 +1896,7 @@ Future<void> _initializeLayoutService() async {
         },
       );
     } else {
-      return Selector<SpecialFilterProviderMarket, List<Product>>(
+      return Selector<SpecialFilterProviderMarket, List<ProductSummary>>(
         selector: (_, prov) => prov.getProducts(filterType),
         builder: (context, products, _) {
           final l10n = AppLocalizations.of(context);
@@ -2066,7 +2066,7 @@ Future<void> _initializeLayoutService() async {
     String filterType,
     AppLocalizations l10n,
   ) {
-    final products = subcategory['products'] as List<Product>;
+    final products = subcategory['products'] as List<ProductSummary>;
     final subcategoryName = subcategory['subcategoryName'] as String;
 
     // For Women/Men filters, the subcategoryName is actually a category name
@@ -2161,7 +2161,7 @@ Future<void> _initializeLayoutService() async {
   }
 
   /// Build subcategory product list
-  Widget _buildSubcategoryProductList(List<Product> products) {
+  Widget _buildSubcategoryProductList(List<ProductSummary> products) {
     // ✅ OPTIMIZATION: Cache MediaQuery
     final mediaQuery = MediaQuery.of(context);
     final screenWidth = mediaQuery.size.width;

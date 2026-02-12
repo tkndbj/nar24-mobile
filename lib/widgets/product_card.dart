@@ -1,44 +1,12 @@
-// lib/widgets/product_card.dart - PRODUCTION OPTIMIZED
-//
-// ═══════════════════════════════════════════════════════════════════════════
-// NAVIGATION & RENDERING OPTIMIZATIONS
-// ═══════════════════════════════════════════════════════════════════════════
-//
-// OPTIMIZATION STRATEGIES:
-// ───────────────────────────────────────────────────────────────────────────
-// 1. HERO IMAGE PRECACHING:
-//    - First image precached before navigation starts
-//    - Ensures instant display when ProductDetailScreen mounts
-//
-// 2. NAVIGATION THROTTLING:
-//    - 500ms cooldown between navigation events
-//    - Prevents accidental double-taps and concurrent navigations
-//
-// 3. SMOOTH ANIMATION:
-//    - 250ms duration with FastOutSlowIn curve
-//    - Coordinated with ProductDetailScreen's staged rendering
-//    - Optimized for perceived smoothness on low-end devices
-//
-// 4. MEMORY EFFICIENT RENDERING:
-//    - AutomaticKeepAliveClientMixin prevents unnecessary rebuilds
-//    - Static color map for instant lookups
-//    - Cached computed values in initState
-//
-// 5. IMAGE OPTIMIZATION:
-//    - CachedNetworkImage with proper cache dimensions
-//    - Asset images cached at device pixel ratio
-//    - PageController lifecycle properly managed
-//
-// ═══════════════════════════════════════════════════════════════════════════
-
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
+import 'package:shimmer/shimmer.dart';
 import '../providers/market_provider.dart';
-import '../models/product.dart';
+import '../models/product_summary.dart';
 import '../screens/PRODUCT-SCREENS/product_detail_screen.dart';
 import '../generated/l10n/app_localizations.dart';
 import '../providers/cart_provider.dart';
@@ -50,7 +18,7 @@ import 'product_option_selector.dart';
 import 'dart:ui';
 
 class ProductCard extends StatefulWidget {
-  final Product product;
+  final ProductSummary product;
   final double scaleFactor;
   final double internalScaleFactor;
   final double? portraitImageHeight;
@@ -268,10 +236,9 @@ class _ProductCardState extends State<ProductCard>
       pageBuilder: (ctx, animation, secondaryAnimation) =>
           ChangeNotifierProvider(
         create: (_) => ProductDetailProvider(
-          productId: widget.product.id,
-          repository: repo,
-          initialProduct: widget.product,
-        ),
+  productId: widget.product.id,
+  repository: repo,
+),
         child: ProductDetailScreen(productId: widget.product.id),
       ),
       transitionDuration: const Duration(milliseconds: 250),
@@ -434,13 +401,10 @@ class _ProductCardContent extends StatelessWidget {
               children: [
                 _ProductName(text: productName, scaleFactor: textScaleFactor),
                 RotatingText(
-                  duration: widget.product.description.isNotEmpty
-                      ? const Duration(milliseconds: 1500)
-                      : const Duration(seconds: 2),
-                  children: _buildRotatingChildren(
-                    context: context,
-                    description: widget.product.description,
-                    brandModel: widget.product.brandModel ?? '',
+  duration: const Duration(milliseconds: 1500),
+  children: _buildRotatingChildren(
+    context: context,
+    brandModel: widget.product.brandModel ?? '',
                     condition: widget.product.condition,
                     quantity: widget.product.quantity,
                     textScaleFactor: textScaleFactor,
@@ -494,8 +458,7 @@ class _ProductCardContent extends StatelessWidget {
   }
 
   List<Widget> _buildRotatingChildren({
-    required BuildContext context,
-    required String description,
+    required BuildContext context,    
     required String brandModel,
     required String condition,
     required int quantity,
@@ -646,7 +609,7 @@ class _PriceRow extends StatelessWidget {
   final String currency;
   final double textScaleFactor;
   final double extraScaleFactor;
-  final Product product;
+  final ProductSummary product;
   final bool showCartIcon;
 
   const _PriceRow({
@@ -713,9 +676,9 @@ class _PriceRow extends StatelessWidget {
         ),
         if (showCartIcon)
           _AddToCartIconButton(
-            product: product,
-            scaleFactor: textScaleFactor,
-          ),
+  productId: product.id,
+  scaleFactor: textScaleFactor,
+),
       ],
     );
   }
@@ -1083,25 +1046,15 @@ class _ImageSection extends StatelessWidget {
   }
 
   Widget _buildImagePlaceholder(double effectiveScaleFactor) {
-    return Container(
-      color: Colors.grey[200],
-      alignment: Alignment.center,
-      child: Image.asset(
-        'assets/images/nargri.png',
-        width: 100 * effectiveScaleFactor * widget.internalScaleFactor,
-        height: 100 * effectiveScaleFactor * widget.internalScaleFactor,
-        fit: BoxFit.contain,
-        // REMOVE these - let Flutter handle asset scaling naturally
-        // cacheWidth: assetCacheSize,
-        // cacheHeight: assetCacheSize,
-        filterQuality: FilterQuality.low,
-        errorBuilder: (context, error, stackTrace) {
-          return Icon(
-            Icons.image_outlined,
-            size: 35 * effectiveScaleFactor * widget.internalScaleFactor,
-            color: Colors.grey.shade400,
-          );
-        },
+    final isDark = theme.brightness == Brightness.dark;
+    return Shimmer.fromColors(
+      baseColor: isDark ? const Color(0xFF1E1C2C) : const Color(0xFFE0E0E0),
+      highlightColor:
+          isDark ? const Color(0xFF211F31) : const Color(0xFFF5F5F5),
+      period: const Duration(milliseconds: 1200),
+      child: const ColoredBox(
+        color: Colors.white,
+        child: SizedBox.expand(),
       ),
     );
   }
@@ -1120,7 +1073,7 @@ class _ImageSection extends StatelessWidget {
 }
 
 class _Banner extends StatelessWidget {
-  final Product product;
+  final ProductSummary product;
   final double effectiveScaleFactor;
   final MediaQueryData mediaQuery;
 
@@ -1198,7 +1151,7 @@ class _Banner extends StatelessWidget {
 }
 
 class _FavoriteIcon extends StatefulWidget {
-  final Product product;
+  final ProductSummary product;
   final double scaleFactor;
 
   const _FavoriteIcon({
@@ -1326,12 +1279,12 @@ class _FavoriteIconState extends State<_FavoriteIcon> {
 }
 
 class _AddToCartIconButton extends StatefulWidget {
-  final Product product;
+  final String productId;
   final double scaleFactor;
 
   const _AddToCartIconButton({
     Key? key,
-    required this.product,
+    required this.productId,
     required this.scaleFactor,
   }) : super(key: key);
 
@@ -1351,30 +1304,34 @@ class _AddToCartIconButtonState extends State<_AddToCartIconButton> {
       valueListenable: Provider.of<CartProvider>(context, listen: false)
           .cartProductIdsNotifier,
       builder: (context, cartIds, child) {
-        final isInCart = cartIds.contains(widget.product.id);
+        final isInCart = cartIds.contains(widget.productId);
         final iconToShow = isInCart ? Icons.check : Icons.add_shopping_cart;
 
         return GestureDetector(
           onTap: _isProcessing
-              ? null
-              : () async {
-                  setState(() => _isProcessing = true);
+    ? null
+    : () async {
+        setState(() => _isProcessing = true);
+        try {
+          final cartProvider =
+              Provider.of<CartProvider>(context, listen: false);
 
-                  try {
-                    final cartProvider =
-                        Provider.of<CartProvider>(context, listen: false);
+          if (isInCart) {
+            await cartProvider.removeFromCart(widget.productId);
+          } else {
+            // Fetch full product for option selector
+            final repo = context.read<ProductRepository>();
+            final fullProduct = await repo.fetchById(widget.productId);
+            if (!context.mounted) return;
 
-                    if (isInCart) {
-                      await cartProvider.removeFromCart(widget.product.id);
-                    } else {
-                      final selections =
-                          await showCupertinoModalPopup<Map<String, dynamic>?>(
-                        context: context,
-                        builder: (_) => ProductOptionSelector(
-                          product: widget.product,
-                          isBuyNow: false,
-                        ),
-                      );
+            final selections =
+                await showCupertinoModalPopup<Map<String, dynamic>?>(
+              context: context,
+              builder: (_) => ProductOptionSelector(
+                product: fullProduct,
+                isBuyNow: false,
+              ),
+            );
 
                       if (selections == null) {
                         setState(() => _isProcessing = false);
@@ -1390,12 +1347,12 @@ class _AddToCartIconButtonState extends State<_AddToCartIconButton> {
                         ..remove('quantity')
                         ..remove('selectedColor');
 
-                      await cartProvider.addProductToCart(
-                        widget.product,
-                        quantity: qty,
-                        selectedColor: selectedColor,
-                        attributes: attrs.isNotEmpty ? attrs : null,
-                      );
+                     await cartProvider.addProductToCart(
+  fullProduct,         // ← use the fetched full Product
+  quantity: qty,
+  selectedColor: selectedColor,
+  attributes: attrs.isNotEmpty ? attrs : null,
+);
                     }
                   } catch (e) {
                     if (kDebugMode) {

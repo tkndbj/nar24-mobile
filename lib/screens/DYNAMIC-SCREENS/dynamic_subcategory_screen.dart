@@ -7,7 +7,8 @@ import '../../providers/special_filter_provider_market.dart';
 import '../../providers/market_provider.dart';
 import '../../widgets/dynamicscreens/market_app_bar.dart';
 import '../../widgets/product_list_sliver.dart';
-import '../../models/product.dart';
+import '../../widgets/product_card_shimmer.dart';
+import '../../models/product_summary.dart';
 import 'dart:async';
 import '../../widgets/market_search_delegate.dart';
 import '../../providers/search_history_provider.dart';
@@ -278,7 +279,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
   Widget _buildFilterView() {
     return Consumer<SpecialFilterProviderMarket>(
       builder: (context, prov, child) {
-        List<Product> allProducts;
+        List<ProductSummary> allProducts;
 
         if (widget.isGenderFilter == true) {
           allProducts = prov.getProducts(widget.category);
@@ -492,7 +493,22 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
           );
 
           if (isLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.65,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                ),
+                itemCount: 6,
+                itemBuilder: (_, __) => const ProductCardShimmer(
+                  portraitImageHeight: 150,
+                ),
+              ),
+            );
           }
 
           return RefreshIndicator(

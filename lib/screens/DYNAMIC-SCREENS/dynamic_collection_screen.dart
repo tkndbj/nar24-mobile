@@ -4,7 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../generated/l10n/app_localizations.dart';
-import '../../models/product.dart';
+import '../../models/product_summary.dart';
 import '../../models/dynamic_filter.dart';
 import '../../widgets/product_list_sliver.dart';
 import '../../screens/FILTER-SCREENS/market_screen_dynamic_filters_filter_screen.dart';
@@ -32,9 +32,9 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
 
   // Collection data
   Map<String, dynamic>? _collectionData;
-  List<Product> _products = [];
-  List<Product> _filteredProducts = [];
-  List<Product> _boostedProducts = [];
+  List<ProductSummary> _products = [];
+  List<ProductSummary> _filteredProducts = [];
+  List<ProductSummary> _boostedProducts = [];
 
   // Loading states
   bool _isLoading = true;
@@ -142,11 +142,10 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
     }
   }
 
-  Future<void> _loadProducts(List<String> productIds) async {
+ Future<void> _loadProducts(List<String> productIds) async {
   try {
-    final products = <Product>[];
+    final products = <ProductSummary>[];  // ← changed
 
-    // Load products in batches to avoid Firestore limits
     for (int i = 0; i < productIds.length; i += 10) {
       final batch = productIds.skip(i).take(10).toList();
 
@@ -157,15 +156,13 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
 
       for (final doc in snapshot.docs) {
         try {
-          // **FIXED**: Use fromDocument which properly handles doc.id
-          final product = Product.fromDocument(doc);
-          
-          // **VALIDATION**: Check if product ID is valid
+          final product = ProductSummary.fromDocument(doc);  // ← changed
+
           if (product.id.trim().isEmpty) {
             debugPrint('Warning: Product with empty ID found in document: ${doc.id}');
             continue;
           }
-          
+
           products.add(product);
         } catch (e) {
           debugPrint('Error parsing product ${doc.id}: $e');
@@ -173,7 +170,6 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
       }
     }
 
-    // Sort products by creation date (newest first)
     products.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     setState(() {
@@ -225,7 +221,7 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
     _updateFilterCount();
   }
 
-  bool _matchesFilters(Product product, Map<String, dynamic> filters) {
+  bool _matchesFilters(ProductSummary product, Map<String, dynamic> filters) {
     // Brand filter
     final selectedBrands = filters['brands'] as List<String>?;
     if (selectedBrands != null && selectedBrands.isNotEmpty) {

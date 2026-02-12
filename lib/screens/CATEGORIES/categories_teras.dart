@@ -8,7 +8,7 @@ import '../../providers/market_provider.dart';
 import '../../providers/dynamic_teras_provider.dart';
 import '../DYNAMIC-SCREENS/dynamic_teras.dart';
 import '../../widgets/product_card.dart';
-import '../../models/product.dart';
+import '../../models/product_summary.dart';
 import '../../route_observer.dart';
 import '../../services/algolia_service_manager.dart';
 import '../../widgets/product_card_shimmer.dart';
@@ -25,7 +25,7 @@ class _CategoriesTerasScreenState extends State<CategoriesTerasScreen>
   String _selectedBuyerCategory = 'Women';
   String? _selectedBuyerSubcategory;
   final ScrollController _scrollController = ScrollController();
-  List<Product> _displayProducts = [];
+  List<ProductSummary> _displayProducts = [];
   Set<String> _expandedSubcategories = {};
   bool _isLoadingProducts = false; 
 
@@ -103,7 +103,7 @@ class _CategoriesTerasScreenState extends State<CategoriesTerasScreen>
     }
   }
 
-  List<Product> _filterValidProducts(List<Product> products) {
+  List<ProductSummary> _filterValidProducts(List<ProductSummary> products) {
     return products.where((p) {
       return p.productName.isNotEmpty &&
           ((p.brandModel?.isNotEmpty ?? false) ||

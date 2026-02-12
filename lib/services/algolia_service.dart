@@ -5,15 +5,18 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:retry/retry.dart';
 import '../models/product.dart';
+import '../models/product_summary.dart'; 
 import '../models/category_suggestion.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AlgoliaPage {
   final List<String> ids;
+  final List<Map<String, dynamic>> hits;
   final int page;
   final int nbPages;
   AlgoliaPage({
     required this.ids,
+    required this.hits,
     required this.page,
     required this.nbPages,
   });
@@ -733,60 +736,58 @@ Future<List<CategorySuggestion>> _performCategorySearch(
   }
 
   /// Searches for Products with enhanced error handling
-  Future<List<Product>> searchProducts({
-    required String query,
-    required String sortOption,
-    int page = 0,
-    int hitsPerPage = 50,
-    List<String>? filters,
-  }) async {
+Future<List<ProductSummary>> searchProducts({
+  required String query,
+  required String sortOption,
+  int page = 0,
+  int hitsPerPage = 50,
+  List<String>? filters,
+}) async {
+  try {
+    return await _searchInIndex<ProductSummary>(
+      indexName: mainIndexName,
+      query: query,
+      sortOption: sortOption,
+      mapper: (hit) => ProductSummary.fromAlgolia(hit),
+      page: page,
+      hitsPerPage: hitsPerPage,
+      filters: filters,
+    );
+  } catch (e) {
+    print('Final Algolia search failure for index $mainIndexName: $e');
+    return <ProductSummary>[];
+  }
+}
+
+  /// Debounced search for Products with enhanced error handling
+Future<List<ProductSummary>> debouncedSearchProducts({
+  required String query,
+  required String sortOption,
+  int page = 0,
+  int hitsPerPage = 50,
+  List<String>? filters,
+}) {
+  _productDebounceTimer?.cancel();
+  final completer = Completer<List<ProductSummary>>();
+
+  _productDebounceTimer = Timer(_debounceDuration, () async {
     try {
-      return await _searchInIndex<Product>(
-        indexName: mainIndexName,
+      final results = await searchProducts(
         query: query,
         sortOption: sortOption,
-        mapper: (hit) => Product.fromAlgolia(hit),
         page: page,
         hitsPerPage: hitsPerPage,
         filters: filters,
       );
+      completer.complete(results);
     } catch (e) {
-      print('Final Algolia search failure for index $mainIndexName: $e');
-      // Return empty list instead of throwing to prevent app crashes
-      return <Product>[];
+      print('Debounced search error: $e');
+      completer.complete(<ProductSummary>[]);
     }
-  }
+  });
 
-  /// Debounced search for Products with enhanced error handling
-  Future<List<Product>> debouncedSearchProducts({
-    required String query,
-    required String sortOption,
-    int page = 0,
-    int hitsPerPage = 50,
-    List<String>? filters,
-  }) {
-    _productDebounceTimer?.cancel();
-    final completer = Completer<List<Product>>();
-
-    _productDebounceTimer = Timer(_debounceDuration, () async {
-      try {
-        final results = await searchProducts(
-          query: query,
-          sortOption: sortOption,
-          page: page,
-          hitsPerPage: hitsPerPage,
-          filters: filters,
-        );
-        completer.complete(results);
-      } catch (e) {
-        print('Debounced search error: $e');
-        // Complete with empty list instead of error to prevent crashes
-        completer.complete(<Product>[]);
-      }
-    });
-
-    return completer.future;
-  }
+  return completer.future;
+}
 
  Future<AlgoliaPage> searchIdsWithFacets({
   required String indexName,
@@ -806,7 +807,18 @@ Future<List<CategorySuggestion>> _performCategorySearch(
     ..write('&page=${_enc(page)}')
     ..write('&hitsPerPage=${_enc(hitsPerPage)}')
     // Request only what we need - ilanNo contains the Firestore doc ID
-    ..write('&attributesToRetrieve=${_enc(['objectID', 'ilanNo'])}')
+    ..write('&attributesToRetrieve=${_enc([
+  'objectID', 'ilanNo', 'productName', 'price', 'originalPrice',
+  'discountPercentage', 'currency', 'condition', 'brandModel',
+  'imageUrls', 'averageRating', 'reviewCount', 'category',
+  'subcategory', 'subsubcategory', 'gender', 'availableColors',
+  'colorImages', 'sellerName', 'shopId', 'userId', 'ownerId',
+  'quantity', 'colorQuantities', 'isBoosted', 'isFeatured',
+  'isTrending', 'purchaseCount', 'bestSellerRank', 'deliveryOption',
+  'paused', 'campaignName', 'bundleIds', 'discountThreshold',
+  'bulkDiscountPercentage', 'videoUrl', 'createdAt',
+  'rankingScore', 'promotionScore'
+])}')
     ..write('&attributesToHighlight=${_enc('')}');
 
   if (facetFilters != null && facetFilters.isNotEmpty) {
@@ -845,7 +857,7 @@ Future<List<CategorySuggestion>> _performCategorySearch(
 
     if (resp.statusCode != 200) {
       debugPrint('Algolia error ${resp.statusCode}: ${resp.body}');
-      return AlgoliaPage(ids: const [], page: page, nbPages: page + 1);
+      return AlgoliaPage(ids: const [], hits: const [], page: page, nbPages: page + 1);
     }
 
     final data = jsonDecode(resp.body) as Map<String, dynamic>;
@@ -883,10 +895,15 @@ Future<List<CategorySuggestion>> _performCategorySearch(
       debugPrint('Sample IDs: ${ids.take(3).join(", ")}');
     }
     
-    return AlgoliaPage(ids: ids, page: curPage, nbPages: nbPages);
+    return AlgoliaPage(
+  ids: ids,
+  hits: hits.cast<Map<String, dynamic>>(),
+  page: curPage,
+  nbPages: nbPages,
+);
   } catch (e) {
     debugPrint('Algolia exception: $e');
-    return AlgoliaPage(ids: const [], page: page, nbPages: page + 1);
+    return AlgoliaPage(ids: const [], hits: const [], page: page, nbPages: page + 1);
   }
 }
 

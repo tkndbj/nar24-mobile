@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'dart:ui';
+import 'package:shimmer/shimmer.dart';
 
 class RefundFormScreen extends StatefulWidget {
   const RefundFormScreen({Key? key}) : super(key: key);
@@ -161,11 +162,7 @@ class _RefundFormScreenState extends State<RefundFormScreen> {
     if (_isLoading) {
       return Scaffold(
         backgroundColor: theme.scaffoldBackgroundColor,
-        body: const Center(
-          child: CircularProgressIndicator(
-            color: Colors.orange,
-          ),
-        ),
+        body: _buildFormShimmer(isDarkMode),
       );
     }
 
@@ -638,30 +635,30 @@ class _RefundFormScreenState extends State<RefundFormScreen> {
                                 onTap: _isSubmitting ? null : _handleSubmit,
                                 child: Center(
                                   child: _isSubmitting
-                                      ? Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            const SizedBox(
-                                              width: 20,
-                                              height: 20,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                valueColor:
-                                                    AlwaysStoppedAnimation<
-                                                        Color>(Colors.white),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Text(
-                                              localization.refundFormSubmitting,
-                                              style: const TextStyle(
+                                      ? Shimmer.fromColors(
+                                          baseColor: Colors.white.withOpacity(0.5),
+                                          highlightColor: Colors.white,
+                                          period: const Duration(milliseconds: 1200),
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              const Icon(
+                                                FeatherIcons.send,
                                                 color: Colors.white,
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
+                                                size: 20,
                                               ),
-                                            ),
-                                          ],
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                localization.refundFormSubmitting,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         )
                                       : Row(
                                           mainAxisAlignment:
@@ -837,6 +834,127 @@ class _RefundFormScreenState extends State<RefundFormScreen> {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFormShimmer(bool isDarkMode) {
+    return SafeArea(
+      child: Shimmer.fromColors(
+        baseColor: isDarkMode
+            ? const Color(0xFF1E1C2C)
+            : const Color(0xFFE0E0E0),
+        highlightColor: isDarkMode
+            ? const Color(0xFF211F31)
+            : const Color(0xFFF5F5F5),
+        period: const Duration(milliseconds: 1200),
+        child: SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              // Header shimmer
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(40),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      width: 200,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: 250,
+                      height: 15,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              // Form fields shimmer
+              ...List.generate(
+                4,
+                (index) => Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 16,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              width: 100,
+                              height: 14,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          height: index == 3 ? 120 : 48,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Submit button shimmer
+              Container(
+                width: double.infinity,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

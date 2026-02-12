@@ -9,7 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import '../providers/market_provider.dart';
 import '../providers/search_results_provider.dart';
-import '../models/product.dart';
+import '../models/product_summary.dart';
 import '../widgets/product_list_sliver.dart';
 import '../generated/l10n/app_localizations.dart';
 
@@ -39,7 +39,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
   int _currentFilterIndex = 0;
 
   // Pagination state
-  final List<Product> _allSearchResults = [];
+  final List<ProductSummary> _allSearchResults = [];
   int _currentPage = 0;
   bool _isLoading = false;
   bool _hasMore = true;

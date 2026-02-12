@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/personalized_feed_service.dart';
-import '../../models/product.dart';
+import '../../models/product_summary.dart';
 import '../product_card.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
@@ -23,11 +23,11 @@ class _TerasPreferenceProductState extends State<TerasPreferenceProduct> {
   final PersonalizedFeedService _feedService = PersonalizedFeedService.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  static List<Product>? _cachedProducts;
+  static List<ProductSummary>? _cachedProducts;
   static DateTime? _productsCacheExpiry;
   static const Duration _productsCacheDuration = Duration(hours: 1);
 
-  List<Product> _products = [];
+  List<ProductSummary> _products = [];
   bool _isLoading = true;
   String? _error;
 
@@ -135,10 +135,10 @@ class _TerasPreferenceProductState extends State<TerasPreferenceProduct> {
   }
 
   /// Fetch product details from Firestore in batches
-  Future<List<Product>> _fetchProductDetails(List<String> productIds) async {
+  Future<List<ProductSummary>> _fetchProductDetails(List<String> productIds) async {
     if (productIds.isEmpty) return [];
 
-    final products = <Product>[];
+    final products = <ProductSummary>[];
 
     // Firestore whereIn limit is 30, so we're safe with take(30)
     final snapshot = await _firestore
@@ -148,7 +148,7 @@ class _TerasPreferenceProductState extends State<TerasPreferenceProduct> {
 
     for (final doc in snapshot.docs) {
       try {
-        products.add(Product.fromDocument(doc));
+        products.add(ProductSummary.fromDocument(doc));
       } catch (e) {
         debugPrint('Error parsing product ${doc.id}: $e');
       }

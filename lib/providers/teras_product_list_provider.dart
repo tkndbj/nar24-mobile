@@ -1,17 +1,17 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../models/product.dart';
+import '../models/product_summary.dart';
 
 class TerasProductListProvider with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Products state
-  List<Product> _products = [];
-  List<Product> _boostedProducts = [];
+  List<ProductSummary> _products = [];
+  List<ProductSummary> _boostedProducts = [];
 
-  List<Product> get products => _products;
-  List<Product> get boostedProducts => _boostedProducts;
+  List<ProductSummary> get products => _products;
+  List<ProductSummary> get boostedProducts => _boostedProducts;
 
   // Pagination state
   DocumentSnapshot? _lastDocument;
@@ -130,7 +130,7 @@ class TerasProductListProvider with ChangeNotifier {
       if (_isDisposed) return;
 
       _boostedProducts =
-          snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
+          snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
 
       debugPrint('Fetched ${_boostedProducts.length} boosted products');
       _safeNotifyListeners();
@@ -168,7 +168,7 @@ class TerasProductListProvider with ChangeNotifier {
         _hasMore = false;
       } else {
         final newProducts =
-            snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
+            snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
 
         // Filter out boosted products to avoid duplicates
         final boostedIds = _boostedProducts.map((p) => p.id).toSet();
@@ -219,7 +219,7 @@ class TerasProductListProvider with ChangeNotifier {
 }
 
   /// Get combined products list (boosted first, then regular)
-  List<Product> getCombinedProducts() {
+  List<ProductSummary> getCombinedProducts() {
     return [..._boostedProducts, ..._products];
   }
 }

@@ -40,7 +40,8 @@ class _SellerPanelState extends State<SellerPanel>
     super.initState();
     _tabController = TabController(
         length: 6, vsync: this, initialIndex: widget.initialTabIndex);
-    _initializationFuture = _initializeProvider();
+    // Defer to next event loop tick to avoid notifyListeners during build phase
+    _initializationFuture = Future(() => _initializeProvider());
     _setupAuthListener();
   }
 

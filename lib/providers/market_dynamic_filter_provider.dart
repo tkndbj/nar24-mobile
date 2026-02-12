@@ -4,7 +4,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../models/dynamic_filter.dart';
-import '../models/product.dart';
+import '../models/product_summary.dart';
 
 class DynamicFilterProvider with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -34,19 +34,19 @@ class DynamicFilterProvider with ChangeNotifier {
   static const int _maxCachedProducts = 500; // Total products across all filters
 
   // Cache for paginated filter products
-  final Map<String, Map<int, List<Product>>> _paginatedCache = {};
+  final Map<String, Map<int, List<ProductSummary>>> _paginatedCache = {};
   final Map<String, int> _currentPages = {};
   final Map<String, bool> _hasMorePages = {};
   final Map<String, bool> _isLoadingMoreMap = {};
   final Map<String, Map<int, DocumentSnapshot>> _pageCursors = {};
-  final Map<String, List<Product>> _filterProductsCache = {};
+  final Map<String, List<ProductSummary>> _filterProductsCache = {};
   final Map<String, DateTime> _filterCacheTimestamps = {};
   
   // ✅ NEW: Reduced cache timeout for mobile
   final Duration _cacheTimeout = const Duration(minutes: 2);
 
   // ✅ NEW: Race condition protection
-  final Map<String, Completer<List<Product>>> _ongoingFetches = {};
+  final Map<String, Completer<List<ProductSummary>>> _ongoingFetches = {};
   
   // ✅ NEW: LRU tracking for cache eviction
   final Map<String, DateTime> _filterAccessTimes = {};
@@ -144,7 +144,7 @@ class DynamicFilterProvider with ChangeNotifier {
   // ========== RACE CONDITION PROTECTION ==========
 
   /// ✅ ENHANCED: Fetch with mutex protection
-  Future<List<Product>> _fetchFilterProducts(
+  Future<List<ProductSummary>> _fetchFilterProducts(
     String filterId, {
     required int page,
     bool useCache = true,
@@ -156,7 +156,7 @@ class DynamicFilterProvider with ChangeNotifier {
     }
 
     // Create completer for this fetch
-    final completer = Completer<List<Product>>();
+    final completer = Completer<List<ProductSummary>>();
     _ongoingFetches[filterId] = completer;
 
     try {
@@ -177,7 +177,7 @@ class DynamicFilterProvider with ChangeNotifier {
   }
 
   /// Internal fetch logic (protected by mutex)
-  Future<List<Product>> _fetchFilterProductsInternal(
+  Future<List<ProductSummary>> _fetchFilterProductsInternal(
     String filterId, {
     required int page,
     bool useCache = true,
@@ -243,7 +243,7 @@ class DynamicFilterProvider with ChangeNotifier {
         _pageCursors[filterId]![page] = docs.last;
       }
 
-      final products = docs.map((doc) => Product.fromDocument(doc)).toList();
+      final products = docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
 
       // Update state
       _hasMorePages[filterId] = products.length >= _pageSize;
@@ -307,11 +307,11 @@ class DynamicFilterProvider with ChangeNotifier {
     }
   }
 
-  Future<List<Product>> getFilterProducts(String filterId) async {
+  Future<List<ProductSummary>> getFilterProducts(String filterId) async {
     return await _fetchFilterProducts(filterId, page: 0);
   }
 
-  List<Product> getAllLoadedProducts(String filterId) {
+  List<ProductSummary> getAllLoadedProducts(String filterId) {
     _updateFilterAccessTime(filterId);
     return _filterProductsCache[filterId] ?? [];
   }
@@ -549,7 +549,7 @@ class DynamicFilterProvider with ChangeNotifier {
             _cacheTimeout;
   }
 
-  List<Product>? getCachedFilterProducts(String filterId) {
+  List<ProductSummary>? getCachedFilterProducts(String filterId) {
     if (hasFilterCache(filterId)) {
       _updateFilterAccessTime(filterId);
       return _filterProductsCache[filterId];

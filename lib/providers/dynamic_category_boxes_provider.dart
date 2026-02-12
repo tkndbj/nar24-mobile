@@ -4,7 +4,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../models/product.dart';
+import '../models/product_summary.dart';
 import '../utils/debouncer.dart';
 
 /// A provider tailored to "category‐box" taps. It can filter by:
@@ -20,16 +20,16 @@ class CategoryBoxesProvider with ChangeNotifier {
   // ──────────────────────────────────────────────────────────────────────────
 
   /// Holds each fetched Firestore page: pageIndex → List<Product>.
-  final Map<int, List<Product>> _pageCache = {};
+  final Map<int, List<ProductSummary>> _pageCache = {};
 
   /// For each pageIndex, stores the last DocumentSnapshot used as a cursor.
   final Map<int, DocumentSnapshot> _pageCursors = {};
 
   /// A flattened, concatenated list of all items currently in memory (unfiltered).
-  final List<Product> _allLoaded = [];
-  List<Product> get rawProducts => List.unmodifiable(_allLoaded);
+  final List<ProductSummary> _allLoaded = [];
+  List<ProductSummary> get rawProducts => List.unmodifiable(_allLoaded);
 
-  Map<int, List<Product>> get pageCache => _pageCache;
+  Map<int, List<ProductSummary>> get pageCache => _pageCache;
   Future<void> fetchPage(int page) => _fetchPage(page: page);
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -37,15 +37,15 @@ class CategoryBoxesProvider with ChangeNotifier {
   // ──────────────────────────────────────────────────────────────────────────
 
   /// The list your UI binds to after applying quick or dynamic filters.
-  final List<Product> _products = [];
-  List<Product> get products => List.unmodifiable(_products);
+  final List<ProductSummary> _products = [];
+  List<ProductSummary> get products => List.unmodifiable(_products);
 
   // ──────────────────────────────────────────────────────────────────────────
   // BOOSTED PRODUCTS (Default tab only)
   // ──────────────────────────────────────────────────────────────────────────
 
-  final List<Product> _boostedProducts = [];
-  List<Product> get boostedProducts => List.unmodifiable(_boostedProducts);
+  final List<ProductSummary> _boostedProducts = [];
+  List<ProductSummary> get boostedProducts => List.unmodifiable(_boostedProducts);
 
   // ──────────────────────────────────────────────────────────────────────────
   // METADATA & FLAGS
@@ -82,7 +82,7 @@ class CategoryBoxesProvider with ChangeNotifier {
   int _currentPage = 0; // Last fetched page
 
   // 5-minute TTL cache for each (category|subcategory|subsubcategory|page|sort)
-  final Map<String, List<Product>> _cache = {};
+  final Map<String, List<ProductSummary>> _cache = {};
   final Map<String, DateTime> _cacheTs = {};
   static const Duration _cacheTtl = Duration(minutes: 5);
 
@@ -251,15 +251,20 @@ class CategoryBoxesProvider with ChangeNotifier {
   }
 
   /// Load the next page if `hasMore == true`
-  Future<void> fetchMoreProducts() async {
-    if (!_hasMore || _isLoadingMore) return;
-    _isLoadingMore = true;
-    _currentPage++;
-
+ Future<void> fetchMoreProducts() async {
+  if (!_hasMore || _isLoadingMore) return;
+  _isLoadingMore = true;
+  _currentPage++;
+  try {
     await _fetchPage(page: _currentPage);
+  } catch (e) {
+    _currentPage--;
+    debugPrint('fetchMoreProducts error: $e');
+  } finally {
     _isLoadingMore = false;
     _notifyDebouncer.run(notifyListeners);
   }
+}
 
   /// Force a full refresh (clear all cached pages + fetch page 0)
   /// IMPORTANT: This preserves dynamic filters during refresh
@@ -458,7 +463,7 @@ class CategoryBoxesProvider with ChangeNotifier {
         _pageCursors.remove(page);
       }
 
-      final fetched = docs.map((d) => Product.fromDocument(d)).toList();
+      final fetched = docs.map((d) => ProductSummary.fromDocument(d)).toList();
       _hasMore = fetched.length >= _limit;
 
       // Cache page 0 in our 5-minute TTL map
@@ -517,7 +522,7 @@ class CategoryBoxesProvider with ChangeNotifier {
       final snap = await q.get(GetOptions(source: Source.server));
       _boostedProducts
         ..clear()
-        ..addAll(snap.docs.map((d) => Product.fromDocument(d)));
+        ..addAll(snap.docs.map((d) => ProductSummary.fromDocument(d)));
       _notifyDebouncer.run(notifyListeners);
     } catch (e) {
       debugPrint('Error fetching boosted products: $e');

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../providers/shop_widget_provider.dart';
 import '../../screens/SHOP-SCREENS/shop_detail_screen.dart';
@@ -194,8 +195,6 @@ class _ShopCardContent extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final mainTextColor = isDark ? Colors.white : Colors.black;
-    final secondaryTextColor =
-        isDark ? Colors.grey.shade300 : Colors.grey.shade700;
 
     final currentUser = widgetProv.currentUser;
     final isOwner = currentUser?.uid == ownerId;
@@ -316,7 +315,9 @@ class _CoverSection extends StatelessWidget {
   }
 }
 
-/// Optimized cover image with stable caching
+/// Optimized cover image with stable caching and constrained memory footprint.
+/// memCacheWidth caps the decoded bitmap size in memory so large originals
+/// don't blow up the image cache and cause re-decode flicker on scroll.
 class _OptimizedCoverImage extends StatelessWidget {
   final String imageUrl;
 
@@ -332,9 +333,15 @@ class _OptimizedCoverImage extends StatelessWidget {
       fit: BoxFit.cover,
       width: double.infinity,
       height: double.infinity,
+      // Eliminate ALL fade transitions to prevent flicker
       fadeInDuration: Duration.zero,
       fadeOutDuration: Duration.zero,
-      placeholder: (context, url) => const _ImageLoadingPlaceholder(),
+      placeholderFadeInDuration: Duration.zero,
+      // Cap decoded bitmap at ~360px wide (covers ~120dp cover at 3x).
+      // This keeps memory usage predictable when many cards are loaded.
+      memCacheWidth: 360,
+      memCacheHeight: 240,
+      placeholder: (context, url) => const _ShimmerCoverPlaceholder(),
       errorWidget: (context, url, error) => const _ImageErrorPlaceholder(),
       filterQuality: FilterQuality.medium,
       useOldImageOnUrlChange: true,
@@ -342,32 +349,22 @@ class _OptimizedCoverImage extends StatelessWidget {
   }
 }
 
-/// Loading placeholder with consistent appearance
-class _ImageLoadingPlaceholder extends StatelessWidget {
-  const _ImageLoadingPlaceholder({Key? key}) : super(key: key);
+/// Shimmer placeholder for cover image loading.
+/// Uses the same dark/light color scheme as the rest of the app.
+class _ShimmerCoverPlaceholder extends StatelessWidget {
+  const _ShimmerCoverPlaceholder({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: Colors.grey.shade200,
-      child: Center(
-        child: Image.asset(
-          'assets/images/nargri.png',
-          width: 80,
-          height: 80,
-          fit: BoxFit.contain,
-          cacheWidth: 160, // 2x for retina
-          cacheHeight: 160,
-          // FIX 11: Ensure asset loading doesn't throw
-          errorBuilder: (context, error, stackTrace) => Icon(
-            Icons.image,
-            size: 40,
-            color: Colors.grey.shade400,
-          ),
-          // Disable animations on asset image
-          filterQuality: FilterQuality.low,
-          isAntiAlias: false,
-        ),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Shimmer.fromColors(
+      baseColor: isDark ? const Color(0xFF1E1C2C) : const Color(0xFFE0E0E0),
+      highlightColor:
+          isDark ? const Color(0xFF211F31) : const Color(0xFFF5F5F5),
+      period: const Duration(milliseconds: 1200),
+      child: const ColoredBox(
+        color: Colors.white,
+        child: SizedBox.expand(),
       ),
     );
   }
@@ -407,9 +404,28 @@ class _NoCoverPlaceholder extends StatelessWidget {
   }
 }
 
-/// Profile avatar with optimized image loading
+/// Profile avatar with flicker-free image loading.
+///
+/// Uses CachedNetworkImage inside ClipOval instead of DecorationImage +
+/// CachedNetworkImageProvider. DecorationImage has no fade-duration control
+/// and triggers a visible flash every time the widget rebuilds. Wrapping
+/// CachedNetworkImage lets us set fadeIn/fadeOut to Duration.zero.
 class _ProfileAvatar extends StatelessWidget {
   final String profileImageUrl;
+
+  // Pre-computed constant decoration for the outer ring + shadow.
+  // Allocated once and reused across all instances.
+  static const _outerDecoration = BoxDecoration(
+    shape: BoxShape.circle,
+    color: Color(0xFFEEEEEE), // Colors.grey.shade200 equivalent
+    boxShadow: [
+      BoxShadow(
+        color: Color(0x1A000000), // black12-ish
+        blurRadius: 4,
+        offset: Offset(0, 2),
+      ),
+    ],
+  );
 
   const _ProfileAvatar({
     Key? key,
@@ -420,35 +436,59 @@ class _ProfileAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasImage = profileImageUrl.isNotEmpty;
 
-    // FIX 13: Use Container with DecorationImage for more stable rendering
-    return Container(
-      width: 48,
-      height: 48,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.grey.shade200,
-        border: Border.all(color: Colors.white, width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-        image: hasImage
-            ? DecorationImage(
-                image: CachedNetworkImageProvider(
-                  profileImageUrl,
-                  maxHeight: 144, // 48 * 3 for retina
-                  maxWidth: 144,
-                ),
-                fit: BoxFit.cover,
-              )
-            : null,
+    return DecoratedBox(
+      decoration: _outerDecoration,
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 2),
+        ),
+        child: ClipOval(
+          child: hasImage
+              ? CachedNetworkImage(
+                  imageUrl: profileImageUrl,
+                  fit: BoxFit.cover,
+                  width: 44, // 48 - 2*2 border
+                  height: 44,
+                  fadeInDuration: Duration.zero,
+                  fadeOutDuration: Duration.zero,
+                  placeholderFadeInDuration: Duration.zero,
+                  memCacheWidth: 132, // 44 * 3 for retina
+                  memCacheHeight: 132,
+                  useOldImageOnUrlChange: true,
+                  placeholder: (context, url) =>
+                      const _ShimmerAvatarPlaceholder(),
+                  errorWidget: (context, url, error) => const Icon(
+                    Icons.person,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                )
+              : const Icon(Icons.person, color: Colors.white, size: 24),
+        ),
       ),
-      child: hasImage
-          ? null
-          : const Icon(Icons.person, color: Colors.white, size: 24),
+    );
+  }
+}
+
+/// Shimmer placeholder for the circular profile avatar.
+class _ShimmerAvatarPlaceholder extends StatelessWidget {
+  const _ShimmerAvatarPlaceholder({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Shimmer.fromColors(
+      baseColor: isDark ? const Color(0xFF1E1C2C) : const Color(0xFFE0E0E0),
+      highlightColor:
+          isDark ? const Color(0xFF211F31) : const Color(0xFFF5F5F5),
+      period: const Duration(milliseconds: 1200),
+      child: const ColoredBox(
+        color: Colors.white,
+        child: SizedBox.expand(),
+      ),
     );
   }
 }

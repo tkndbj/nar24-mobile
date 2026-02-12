@@ -75,17 +75,14 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
   // ========================================================================
   Future<void> _fetchFreshProductData() async {
     try {
-      setState(() {
-        _isLoadingProduct = true;
-        _loadError = null;
-      });
-
       // ✅ OPTIMIZATION: Try shop_products first (most common), single read
       final productDoc = await FirebaseFirestore.instance
           .collection('shop_products')
           .doc(widget.product.id)
           .get(const GetOptions(
               source: Source.server)); // Force server for fresh data
+
+      if (!mounted) return;
 
       DocumentSnapshot? validDoc;
 
@@ -97,6 +94,8 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
             .collection('products')
             .doc(widget.product.id)
             .get(const GetOptions(source: Source.server));
+
+        if (!mounted) return;
 
         if (productsDoc.exists) {
           validDoc = productsDoc;
@@ -124,6 +123,7 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
       _initializeDefaultSelections();
     } catch (e) {
       debugPrint('❌ Error fetching fresh product: $e');
+      if (!mounted) return;
       setState(() {
         _loadError = 'Failed to load product details';
         _isLoadingProduct = false;

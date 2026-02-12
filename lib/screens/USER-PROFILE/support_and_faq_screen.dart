@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -436,14 +437,32 @@ class _SupportAndFaqScreenState extends State<SupportAndFaqScreen> {
                                           },
                                     child: Center(
                                       child: isSubmitting
-                                          ? const SizedBox(
-                                              width: 20,
-                                              height: 20,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                valueColor:
-                                                    AlwaysStoppedAnimation<
-                                                        Color>(Colors.white),
+                                          ? Shimmer.fromColors(
+                                              baseColor: Colors.white
+                                                  .withValues(alpha: 0.5),
+                                              highlightColor: Colors.white,
+                                              period: const Duration(
+                                                  milliseconds: 1000),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  const Icon(
+                                                    FeatherIcons.mail,
+                                                    color: Colors.white,
+                                                    size: 20,
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    localization.submitButton,
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             )
                                           : Row(
@@ -739,14 +758,32 @@ class _SupportAndFaqScreenState extends State<SupportAndFaqScreen> {
                                           },
                                     child: Center(
                                       child: isSubmitting
-                                          ? const SizedBox(
-                                              width: 20,
-                                              height: 20,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                valueColor:
-                                                    AlwaysStoppedAnimation<
-                                                        Color>(Colors.white),
+                                          ? Shimmer.fromColors(
+                                              baseColor: Colors.white
+                                                  .withValues(alpha: 0.5),
+                                              highlightColor: Colors.white,
+                                              period: const Duration(
+                                                  milliseconds: 1000),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  const Icon(
+                                                    FeatherIcons.mail,
+                                                    color: Colors.white,
+                                                    size: 20,
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    localization.submitButton,
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             )
                                           : Row(

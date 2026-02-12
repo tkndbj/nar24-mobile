@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:visibility_detector/visibility_detector.dart';
-import '../../models/product.dart';
+import '../../models/product_summary.dart';
 import 'product_card.dart';
 
 class DynamicProductListsWidget extends StatefulWidget {
@@ -29,7 +29,7 @@ class _DynamicProductListsWidgetState extends State<DynamicProductListsWidget>
   bool _isLoadingLists = true;
   String? _listsError;
 
-  final Map<String, List<Product>> _productCache = {};
+  final Map<String, List<ProductSummary>> _productCache = {};
   final Map<String, bool> _loadingStates = {};
   final Set<String> _shouldLoadLists = {};
 
@@ -230,9 +230,9 @@ class _ProductListSection extends StatefulWidget {
   final Map<String, dynamic> listData;
   final Function(String, bool) onVisibilityChanged;
   final bool shouldLoad;
-  final List<Product>? cachedProducts;
+  final List<ProductSummary>? cachedProducts;
   final bool isLoading;
-  final Function(List<Product>) onProductsLoaded;
+  final Function(List<ProductSummary>) onProductsLoaded;
   final Function(bool) onLoadingStateChanged;
 
   const _ProductListSection({
@@ -304,9 +304,9 @@ class _ProductListSectionState extends State<_ProductListSection> {
     }
   }
 
-  Future<List<Product>> _fetchProducts() async {
+  Future<List<ProductSummary>> _fetchProducts() async {
     final listData = widget.listData;
-    List<Product> products = [];
+    List<ProductSummary> products = [];
 
     try {
       if (listData['selectedProductIds'] != null &&
@@ -349,7 +349,7 @@ class _ProductListSectionState extends State<_ProductListSection> {
 
           for (var doc in batchDocs.docs) {
             if (!mounted || fetchedCount >= maxProducts) break;
-            products.add(Product.fromDocument(doc));
+            products.add(ProductSummary.fromDocument(doc));
             fetchedCount++;
           }
         }
@@ -379,7 +379,7 @@ class _ProductListSectionState extends State<_ProductListSection> {
 
         if (mounted) {
           products =
-              snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
+              snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
         }
       }
 
@@ -518,7 +518,7 @@ class _ProductListSectionState extends State<_ProductListSection> {
   }
 
   Widget _buildProductsList(
-      List<Product> products, double cardWidth, double portraitImageHeight) {
+      List<ProductSummary> products, double cardWidth, double portraitImageHeight) {
     final bool isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
     final double scaleFactor = isLandscape ? 0.92 : 0.88;

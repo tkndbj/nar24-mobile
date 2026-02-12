@@ -259,7 +259,7 @@ class _OngoingBoostCard extends StatelessWidget {
                   flex: 3,
                   child: boostedItem.product != null
                       ? ProductCard(
-                          product: boostedItem.product!,
+                          product: boostedItem.product!.toSummary(),
                           scaleFactor: 0.8,
                           internalScaleFactor: 0.7,
                           portraitImageHeight: 100,

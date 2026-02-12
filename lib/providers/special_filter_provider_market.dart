@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:rxdart/rxdart.dart';
-import '../models/product.dart';
+import '../models/product_summary.dart';  
 import '../models/dynamic_filter.dart';
 
 import 'package:flutter/foundation.dart';
@@ -9,7 +9,7 @@ import 'package:flutter/foundation.dart';
 class SpecialFilterProviderMarket with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  StreamSubscription<List<Product>>? _productsStreamSubscription;
+  StreamSubscription<List<ProductSummary>>? _productsStreamSubscription;
 
   // ValueNotifiers for frequently accessed state
   final ValueNotifier<String?> _specialFilterNotifier = ValueNotifier(null);
@@ -50,10 +50,10 @@ class SpecialFilterProviderMarket with ChangeNotifier {
   final Map<String, ValueNotifier<bool>> _subcategoryLoadingMoreNotifiers = {};
   final Map<String, ValueNotifier<bool>> _subcategoryHasMoreNotifiers = {};
 
-  Future<List<Product>> fetchProductsByIds(List<String> ids) async {
+  Future<List<ProductSummary>> fetchProductsByIds(List<String> ids) async {
     if (ids.isEmpty) return [];
 
-    final products = <Product>[];
+    final products = <ProductSummary>[];
 
     // Flutter Firestore: Use whereIn queries (max 30 per query)
     for (var i = 0; i < ids.length; i += 30) {
@@ -66,14 +66,14 @@ class SpecialFilterProviderMarket with ChangeNotifier {
 
       for (final doc in snapshot.docs) {
         if (doc.exists) {
-          products.add(Product.fromDocument(doc));
+          products.add(ProductSummary.fromDocument(doc));
         }
       }
     }
 
     // Preserve original order (whereIn doesn't guarantee order)
     final productMap = {for (var p in products) p.id: p};
-    return ids.map((id) => productMap[id]).whereType<Product>().toList();
+    return ids.map((id) => productMap[id]).whereType<ProductSummary>().toList();
   }
 
   String? _currentCategory;
@@ -293,8 +293,8 @@ class SpecialFilterProviderMarket with ChangeNotifier {
   }
 
   // Store products for each filter type (including dynamic filters)
-  final Map<String, List<Product>> _filterProducts = {};
-  List<Product> getProducts(String filterType) =>
+  final Map<String, List<ProductSummary>> _filterProducts = {};
+  List<ProductSummary> getProducts(String filterType) =>
       _filterProducts[filterType] ?? [];
 
   // Store product IDs for each filter type
@@ -306,7 +306,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       _subcategoryProducts[filterType] ?? [];
 
   // Store products for specific category|subcategoryId
-  final Map<String, List<Product>> _specificSubcategoryProducts = {};
+  final Map<String, List<ProductSummary>> _specificSubcategoryProducts = {};
   final Map<String, Set<String>> _specificSubcategoryProductIds = {};
   final Map<String, int> _specificSubcategoryPages = {};
   final Map<String, bool> _specificSubcategoryLoading = {};
@@ -326,7 +326,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
   bool hasMore(String filterType) => _hasMore[filterType] ?? true;
   bool isLoadingMore(String filterType) => _isLoadingMore[filterType] ?? false;
 
-  final Map<String, List<Product>> _productCache = {};
+  final Map<String, List<ProductSummary>> _productCache = {};
   final Map<String, DateTime> _cacheTimestamps = {};
   final Map<String, bool> _isFiltering = {};
 
@@ -518,14 +518,14 @@ class SpecialFilterProviderMarket with ChangeNotifier {
         var newProducts = snapshot.docs
             .map((doc) {
               try {
-                return Product.fromDocument(doc);
+                return ProductSummary.fromDocument(doc);
               } catch (e) {
                 debugPrint(
                     'Warning: Failed to parse product document ${doc.id}: $e');
                 return null;
               }
             })
-            .whereType<Product>()
+            .whereType<ProductSummary>()
             .where((product) => _isValidProduct(product))
             .toList();
 
@@ -670,7 +670,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     return query;
   }
 
-  bool _isValidProduct(Product product) {
+  bool _isValidProduct(ProductSummary product) {
     return product.id.isNotEmpty &&
         product.productName.isNotEmpty &&
         product.price >= 0 &&
@@ -686,7 +686,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
   }
 
   void _updateProductCollections(
-      List<Product> newProducts, String filterType, int page) {
+      List<ProductSummary> newProducts, String filterType, int page) {
     if (page == 0) {
       _filterProducts[filterType] = [];
       _filterProductIds[filterType] = <String>{};
@@ -705,7 +705,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     _filterProductIds[filterType] = currentProductIds;
   }
 
-  void _cacheResults(List<Product> newProducts, String filterType, int page) {
+  void _cacheResults(List<ProductSummary> newProducts, String filterType, int page) {
     final cacheKey = '$filterType|$page';
     _productCache[cacheKey] = List.from(newProducts);
     _cacheTimestamps[cacheKey] = DateTime.now();
@@ -790,7 +790,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
 
     final snapshot = await query.get();
     var newProducts =
-        snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
+        snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
 
     if (snapshot.docs.isNotEmpty) {
       _lastDocuments[filterType] = snapshot.docs.last;
@@ -826,7 +826,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
 
   /// Check if product is suitable for a specific gender
   /// Uses explicit gender field if available, otherwise falls back to keyword detection
-  bool _isProductSuitableForGender(Product product, String gender) {
+  bool _isProductSuitableForGender(ProductSummary product, String gender) {
     // First check if product has an explicit gender field
     if (product.gender != null && product.gender!.isNotEmpty) {
       final productGender = product.gender!.toLowerCase();
@@ -838,7 +838,6 @@ class SpecialFilterProviderMarket with ChangeNotifier {
 
     // Fallback to keyword-based logic
     final productName = product.productName.toLowerCase();
-    final description = product.description.toLowerCase();
     final brandModel = product.brandModel?.toLowerCase() ?? '';
 
     if (gender == 'Women') {
@@ -849,11 +848,6 @@ class SpecialFilterProviderMarket with ChangeNotifier {
           productName.contains('woman') ||
           productName.contains('kadın') ||
           productName.contains('bayan') ||
-          description.contains('women') ||
-          description.contains('female') ||
-          description.contains('ladies') ||
-          description.contains('kadın') ||
-          description.contains('bayan') ||
           brandModel.contains('women') ||
           brandModel.contains('ladies');
 
@@ -872,10 +866,6 @@ class SpecialFilterProviderMarket with ChangeNotifier {
           productName.contains('man') ||
           productName.contains('erkek') ||
           productName.contains('bay') ||
-          description.contains('men') ||
-          description.contains('male') ||
-          description.contains('gentlemen') ||
-          description.contains('erkek') ||
           brandModel.contains('men') ||
           brandModel.contains('male');
 
@@ -928,7 +918,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     if (buyerSubcategories.isEmpty) return;
 
     final List<Map<String, dynamic>> subcategoryData = [];
-    final List<Product> allProducts = [];
+    final List<ProductSummary> allProducts = [];
     final Set<String> allProductIds = <String>{};
 
     // Fetch products for each buyer subcategory (mapped to product category)
@@ -950,7 +940,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
         final snapshot = await query.get();
 
         final products =
-            snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
+            snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
 
         if (products.isNotEmpty) {
           subcategoryData.add({
@@ -1026,13 +1016,13 @@ class SpecialFilterProviderMarket with ChangeNotifier {
 
     final productsSnapshot = await productsQuery.get();
     final allProducts =
-        productsSnapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
+        productsSnapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
 
     if (productsSnapshot.docs.isNotEmpty) {
       _lastDocuments[filterType] = productsSnapshot.docs.last;
     }
 
-    final Map<String, List<Product>> subcategoryMap = {};
+    final Map<String, List<ProductSummary>> subcategoryMap = {};
     for (var product in allProducts) {
       final subcategory = product.subcategory;
       if (subcategory.isNotEmpty) {
@@ -1072,7 +1062,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     final currentSubcategoryProducts = _subcategoryProducts[filterType] ?? [];
 
     for (var subcat in subcatData) {
-      final products = subcat['products'] as List<Product>;
+      final products = subcat['products'] as List<ProductSummary>;
       for (var product in products) {
         if (currentProductIds.add(product.id)) {
           currentProducts.add(product);
@@ -1408,27 +1398,13 @@ class SpecialFilterProviderMarket with ChangeNotifier {
             .where('title', isLessThanOrEqualTo: searchTerm + '\uf8ff');
       }
 
-      query = query.limit(20);
-
-      print('🔍 Fetching products for $key');
-      print('   category: $category');
-      print('   subcategoryId: $subcategoryId');
-      print('   gender: $gender');
-      print('   filters:');
-      print('      brand: $dynamicBrand');
-      print('      colors: $dynamicColors');
-      print('      subsubcategory: $dynamicSubsubcategory');
-      print('      search: $searchTerm');
-      print('      selectedFilter: $selectedFilter');
-      print(
-          '   Query logic: subcategoryId == category? ${subcategoryId == category}');
+      query = query.limit(20);     
 
       final snapshot = await query.get();
       var products =
-          snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
+          snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
 
-      print('✅ Fetched ${products.length} products for $key');
-
+  
       if (snapshot.docs.isNotEmpty) {
         _specificSubcategoryLastDocs[key] = snapshot.docs.last;
       }
@@ -1582,13 +1558,9 @@ class SpecialFilterProviderMarket with ChangeNotifier {
         query = query.startAfterDocument(_specificSubcategoryLastDocs[key]!);
       }
 
-      print('🔍 Fetching MORE products for $key (gender: $_currentGender)');
-
       final snapshot = await query.get();
       var newProducts =
-          snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
-
-      print('✅ Fetched ${newProducts.length} MORE products for $key');
+          snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
 
       if (snapshot.docs.isNotEmpty) {
         _specificSubcategoryLastDocs[key] = snapshot.docs.last;
@@ -1627,7 +1599,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
         : '$category|$subcategoryId';
   }
 
-  List<Product> getSubcategoryProductsById(
+  List<ProductSummary> getSubcategoryProductsById(
       String category, String subcategoryId,
       {String? gender}) {
     final key = _getSubcategoryKey(category, subcategoryId, gender: gender);

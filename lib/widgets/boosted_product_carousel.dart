@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/boosted_rotation_provider.dart';
-import '../../models/product.dart';
+import '../../models/product_summary.dart';
 import 'product_card.dart';
 import '../generated/l10n/app_localizations.dart';
 import 'package:shimmer/shimmer.dart';
@@ -64,7 +64,7 @@ class BoostedProductsCarousel extends StatelessWidget {
                     const SizedBox(height: 8.0),
                     _buildProductList(
                       context,
-                      provider.boostedProducts,
+                      provider.boostedProducts.map((p) => p.toSummary()).toList(),
                       rowHeight,
                       portraitImageHeight,
                     ),
@@ -271,7 +271,7 @@ class BoostedProductsCarousel extends StatelessWidget {
 
   Widget _buildProductList(
     BuildContext context,
-    List<Product> products, // Changed from List<dynamic>
+    List<ProductSummary> products, // Changed from List<dynamic>
     double rowHeight,
     double portraitImageHeight,
   ) {

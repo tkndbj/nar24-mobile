@@ -223,6 +223,7 @@ class _DashboardTabState extends State<DashboardTab>
           .collection('seller_info')
           .doc('info');
       await ref.delete();
+      if (!mounted) return;
       setState(() {
         _sellerInfo = null;
         _phoneController.clear();
@@ -237,6 +238,7 @@ class _DashboardTabState extends State<DashboardTab>
   }
 
   Future<void> _fetchSellerInfoIfNeeded() async {
+    if (!mounted) return;
     final provider = Provider.of<SellerPanelProvider>(context, listen: false);
     final shop = provider.selectedShop;
     if (shop == null) return;
@@ -246,9 +248,10 @@ class _DashboardTabState extends State<DashboardTab>
         .collection('seller_info')
         .doc('info');
     final docSnapshot = await sellerInfoRef.get();
+    if (!mounted) return;
     if (docSnapshot.exists) {
       final data = docSnapshot.data();
-      if (data != null && mounted) {
+      if (data != null) {
         setState(() {
           _sellerInfo = data;
           _phoneController.text = _formatPhoneForDisplay(data['phone'] ?? '');
@@ -260,7 +263,7 @@ class _DashboardTabState extends State<DashboardTab>
           _regionController.text = _selectedRegion ?? '';
         });
       }
-    } else if (mounted) {
+    } else {
       setState(() {
         _sellerInfo = null;
       });

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import '../models/product.dart';
+import '../models/product_summary.dart';
 
 class UserProfileProvider with ChangeNotifier {
   static const int _productsPageSize = 20;
@@ -16,7 +16,7 @@ class UserProfileProvider with ChangeNotifier {
   String? _currentUserId;
 
   // Products with pagination
-  List<Product> _products = [];
+  List<ProductSummary> _products = [];
   DocumentSnapshot? _lastProductDocument;
   bool _hasMoreProducts = true;
 
@@ -43,7 +43,7 @@ class UserProfileProvider with ChangeNotifier {
 
   // Getters
   Map<String, dynamic>? get userData => _userData;
-  List<Product> get products => _filteredProducts;
+  List<ProductSummary> get products => _filteredProducts;
   bool get isLoading => _isInitializing || _isLoadingProducts;
   bool get isLoadingMore => _isLoadingMore;
   bool get isFollowing => _isFollowing;
@@ -55,7 +55,7 @@ class UserProfileProvider with ChangeNotifier {
   bool get hasMoreProducts => _hasMoreProducts;
   String? get error => _error;
 
-  List<Product> get _filteredProducts {
+  List<ProductSummary> get _filteredProducts {
     if (_searchQuery.isEmpty) return _products;
     return _products.where((product) {
       final name = product.productName.toLowerCase();
@@ -205,13 +205,13 @@ class UserProfileProvider with ChangeNotifier {
         final newProducts = snapshot.docs
             .map((doc) {
               try {
-                return Product.fromDocument(doc);
+                return ProductSummary.fromDocument(doc);
               } catch (e) {
                 debugPrint('Error parsing product ${doc.id}: $e');
                 return null;
               }
             })
-            .whereType<Product>()
+            .whereType<ProductSummary>()
             .toList();
 
         _products = newProducts;
@@ -264,13 +264,13 @@ class UserProfileProvider with ChangeNotifier {
         final newProducts = snapshot.docs
             .map((doc) {
               try {
-                return Product.fromDocument(doc);
+                return ProductSummary.fromDocument(doc);
               } catch (e) {
                 debugPrint('Error parsing product ${doc.id}: $e');
                 return null;
               }
             })
-            .whereType<Product>()
+            .whereType<ProductSummary>()
             .toList();
 
         _products.addAll(newProducts);

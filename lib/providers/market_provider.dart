@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../models/product.dart';
+import '../models/product_summary.dart';
 import '../services/algolia_service.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../helpers/firestore_helper.dart';
@@ -21,11 +21,11 @@ import '../services/lifecycle_aware.dart';
 import '../services/app_lifecycle_manager.dart';
 
 class _RequestDeduplicator {
-  final Map<String, Future<List<Product>>> _pending = {};
+  final Map<String, Future<List<ProductSummary>>> _pending = {};
 
-  Future<List<Product>> deduplicate(
+  Future<List<ProductSummary>> deduplicate(
     String key,
-    Future<List<Product>> Function() request,
+    Future<List<ProductSummary>> Function() request,
   ) async {
     // Return existing request if in progress
     if (_pending.containsKey(key)) {
@@ -83,9 +83,9 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
 
   bool get mounted => !_isDisposed;
 
-  final Map<String, List<Product>> _buyerCategoryCache = {};
+  final Map<String, List<ProductSummary>> _buyerCategoryCache = {};
   final Map<String, DateTime> _buyerCategoryTimestamps = {};
-  final Map<String, List<Product>> _buyerCategoryTerasCache = {};
+  final Map<String, List<ProductSummary>> _buyerCategoryTerasCache = {};
   final Map<String, DateTime> _buyerCategoryTerasTimestamps = {};
   static const Duration _buyerCategoryCacheTTL = Duration(minutes: 20);
   static const int _maxBuyerCategoryCacheSize = 10;
@@ -106,8 +106,8 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
   static const Duration _circuitCooldown = Duration(minutes: 5);
 
   // Boosted products
-  final List<Product> _boostedProducts = [];
-  List<Product> get boostedProducts => _boostedProducts;
+  final List<ProductSummary> _boostedProducts = [];
+  List<ProductSummary> get boostedProducts => _boostedProducts;
 
   // Current user info
   String? _currentUserId;
@@ -120,7 +120,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
   String? get dynamicBrand => _dynamicBrand;
   List<String> get dynamicColors => List.unmodifiable(_dynamicColors);
 
-  final Map<String, List<Product>> _productCache = {};
+  final Map<String, List<ProductSummary>> _productCache = {};
   final Map<String, DateTime> _cacheTimestamps = {};
   static const Duration _cacheTTL = Duration(minutes: 5);
   static const Duration _maxAge = Duration(minutes: 5);
@@ -128,8 +128,8 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
   final Debouncer _cartDebouncer =
       Debouncer(delay: const Duration(milliseconds: 500));
 
-  List<Product> _recommendedProducts = [];
-  List<Product> get recommendedProducts => _recommendedProducts;
+  List<ProductSummary> _recommendedProducts = [];
+  List<ProductSummary> get recommendedProducts => _recommendedProducts;
 
   bool _hasMore = true;
   bool _isLoadingMore = false;
@@ -137,8 +137,8 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
   bool get hasMore => _hasMore;
 
   // The main product list + set of IDs
-  final List<Product> _products = [];
-  List<Product> get products => _products;
+  final List<ProductSummary> _products = [];
+  List<ProductSummary> get products => _products;
 
   final Set<String> _productIds = {};
   // Filtering states
@@ -564,7 +564,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
 
     try {
       // Execute dual Algolia search with circuit breaker protection
-      final List<Future<List<Product>>> searchFutures = [
+      final List<Future<List<ProductSummary>>> searchFutures = [
         _safeAlgoliaSearch(algoliaService, searchQuery, filters),
         _safeAlgoliaSearch(algoliaShopService, searchQuery, filters),
       ];
@@ -612,26 +612,26 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     }
   }
 
-  Future<List<Product>> _safeAlgoliaSearch(
-    AlgoliaService service,
-    String searchQuery,
-    List<String> filters,
-  ) async {
-    try {
-      return await service
-          .searchProducts(
-            query: searchQuery,
-            sortOption: 'alphabetical',
-            page: 0,
-            hitsPerPage: 5,
-            filters: filters.isNotEmpty ? filters : null,
-          )
-          .timeout(const Duration(seconds: 5));
-    } catch (e) {
-      print('Safe Algolia search failed: $e');
-      return <Product>[];
-    }
+ Future<List<ProductSummary>> _safeAlgoliaSearch(
+  AlgoliaService service,
+  String searchQuery,
+  List<String> filters,
+) async {
+  try {
+    return await service
+        .searchProducts(
+          query: searchQuery,
+          sortOption: 'alphabetical',
+          page: 0,
+          hitsPerPage: 5,
+          filters: filters.isNotEmpty ? filters : null,
+        )
+        .timeout(const Duration(seconds: 5));
+  } catch (e) {
+    print('Safe Algolia search failed: $e');
+    return <ProductSummary>[];
   }
+}
 
   /// Firestore fallback for suggestions
   Future<List<Suggestion>> _fetchSuggestionsFromFirestore(
@@ -810,7 +810,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
         );
 
         // Process successful results
-        final combined = <Product>[];
+        final combined = <ProductSummary>[];
         final seen = <String>{};
         for (final list in results) {
           for (final p in list) {
@@ -902,12 +902,12 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
         },
       );
 
-      final combined = <Product>[];
+      final combined = <ProductSummary>[];
       final seen = <String>{};
 
       for (final snapshot in results) {
         for (final doc in snapshot.docs) {
-          final product = Product.fromDocument(doc);
+          final product = ProductSummary.fromDocument(doc);
           if (seen.add(product.id)) {
             combined.add(product);
           }
@@ -922,7 +922,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
   }
 
   /// Helper to update search results consistently
-  void _updateSearchResults(List<Product> results, int page, int hitsPerPage) {
+  void _updateSearchResults(List<ProductSummary> results, int page, int hitsPerPage) {
     const MAX_PRODUCTS_IN_MEMORY = 200; // ✅ NEW: Hard limit
 
     _hasMore = results.length >= hitsPerPage;
@@ -1010,14 +1010,14 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     return fieldName.replaceAll('.', '_').replaceAll('/', '_');
   }
 
-  Future<List<Product>> fetchProductsForBuyerCategory(
+  Future<List<ProductSummary>> fetchProductsForBuyerCategory(
       String buyerCategory) async {
     // Check cache first
     final cached = _getBuyerCategoryCache(buyerCategory);
     if (cached != null) return cached;
 
     try {
-      List<Product> allProducts = [];
+      List<ProductSummary> allProducts = [];
 
       if (buyerCategory == 'Women' || buyerCategory == 'Men') {
         // OLD: 2 separate queries
@@ -1037,7 +1037,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
           metadata: {'category': buyerCategory, 'query_type': 'gender_whereIn'},
         );
         allProducts =
-            snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
+            snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
 
         debugPrint('Fetched ${allProducts.length} products with single query');
       } else {
@@ -1060,7 +1060,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
           },
         );
         allProducts =
-            snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
+            snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
       }
 
       _setBuyerCategoryCache(buyerCategory, allProducts);
@@ -1072,7 +1072,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
   }
 
   // Cache helper methods for buyer categories
-  List<Product>? _getBuyerCategoryCache(String buyerCategory) {
+  List<ProductSummary>? _getBuyerCategoryCache(String buyerCategory) {
     final timestamp = _buyerCategoryTimestamps[buyerCategory];
     if (timestamp == null) return null;
 
@@ -1087,7 +1087,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     return _buyerCategoryCache[buyerCategory];
   }
 
-  void _setBuyerCategoryCache(String buyerCategory, List<Product> products) {
+  void _setBuyerCategoryCache(String buyerCategory, List<ProductSummary> products) {
     // Enforce cache size limit
     if (_buyerCategoryCache.length >= _maxBuyerCategoryCacheSize) {
       // Remove oldest entry
@@ -1123,7 +1123,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
   }
 
   // Cache helper methods for Teras buyer categories
-  List<Product>? _getBuyerCategoryTerasCache(String buyerCategory) {
+  List<ProductSummary>? _getBuyerCategoryTerasCache(String buyerCategory) {
     final timestamp = _buyerCategoryTerasTimestamps[buyerCategory];
     if (timestamp == null) return null;
 
@@ -1139,7 +1139,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
   }
 
   void _setBuyerCategoryTerasCache(
-      String buyerCategory, List<Product> products) {
+      String buyerCategory, List<ProductSummary> products) {
     // Enforce cache size limit
     if (_buyerCategoryTerasCache.length >= _maxBuyerCategoryCacheSize) {
       // Remove oldest entry
@@ -1174,7 +1174,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     }
   }
 
-  Future<List<Product>> fetchProductsForBuyerCategoryTeras(
+  Future<List<ProductSummary>> fetchProductsForBuyerCategoryTeras(
       String buyerCategory) async {
     // Check TERAS cache first (separate from regular cache)
     final cached = _getBuyerCategoryTerasCache(buyerCategory);
@@ -1185,7 +1185,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     }
 
     try {
-      List<Product> allProducts = [];
+      List<ProductSummary> allProducts = [];
 
       if (buyerCategory == 'Women' || buyerCategory == 'Men') {
         // ✅ OPTIMIZED: Single query instead of 2 separate queries
@@ -1201,7 +1201,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
 
         final snapshot = await query.get();
         allProducts =
-            snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
+            snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
 
         debugPrint(
             '✅ Fetched ${allProducts.length} products with single optimized query');
@@ -1218,7 +1218,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
 
         final snapshot = await query.get();
         allProducts =
-            snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
+            snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
       }
 
       // Cache the results in TERAS cache before returning
@@ -1233,7 +1233,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
 
       // ✅ OPTIMIZED: Simplified fallback with single query
       try {
-        List<Product> fallbackProducts = [];
+        List<ProductSummary> fallbackProducts = [];
 
         if (buyerCategory == 'Women' || buyerCategory == 'Men') {
           // ✅ Single fallback query instead of 2
@@ -1245,7 +1245,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
 
           final snapshot = await fallbackQuery.get();
           fallbackProducts =
-              snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
+              snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
 
           debugPrint(
               '✅ Fallback: Single query returned ${fallbackProducts.length} products');
@@ -1259,7 +1259,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
 
           final snapshot = await fallbackQuery.get();
           fallbackProducts =
-              snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
+              snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
         }
 
         // Cache even the fallback results in TERAS cache
@@ -1356,9 +1356,9 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     }
   }
 
-  final _searchCache = <String, List<Product>>{};
+  final _searchCache = <String, List<ProductSummary>>{};
 
-  Future<List<Product>> searchOnly({
+  Future<List<ProductSummary>> searchOnly({
     required String query,
     int page = 0,
     int hitsPerPage = 50,
@@ -1438,7 +1438,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
         );
 
         // 4) Merge & dedupe
-        final merged = <Product>[];
+        final merged = <ProductSummary>[];
         final seen = <String>{};
         for (final list in [mainResults, shopResults]) {
           for (final p in list) {
@@ -1462,7 +1462,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     });
   }
 
-  Future<List<Product>> _firestoreSearchFallback(String query) async {
+  Future<List<ProductSummary>> _firestoreSearchFallback(String query) async {
     if (query.isEmpty) return [];
     final q = query.toLowerCase();
     final snapshot = await _firestore
@@ -1470,7 +1470,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
         .where('keywords', arrayContains: q) // assuming you’ve indexed keywords
         .limit(50)
         .get();
-    return snapshot.docs.map((d) => Product.fromDocument(d)).toList();
+    return snapshot.docs.map((d) => ProductSummary.fromDocument(d)).toList();
   }
 
   void clearSearchCache() {

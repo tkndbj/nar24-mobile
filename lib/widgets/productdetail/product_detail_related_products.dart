@@ -189,7 +189,7 @@ class _ProductDetailRelatedProductsState
                                 child: Align(
                                   alignment: Alignment.topCenter,
                                   child: ProductCard(
-                                    product: relatedProduct,
+                                    product: relatedProduct.toSummary(),
                                     scaleFactor: cardScaleFactor,
                                     overrideInternalScaleFactor:
                                         internalScaleFactor,

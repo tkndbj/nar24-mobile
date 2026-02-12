@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
+import 'package:shimmer/shimmer.dart';
 import '../providers/cart_provider.dart';
 import '../providers/favorite_product_provider.dart';
 
@@ -325,34 +326,21 @@ class _OptimizedProductImage extends StatelessWidget {
   }
 }
 
-/// Image loading placeholder
+/// Shimmer loading placeholder
 class _ImagePlaceholder extends StatelessWidget {
-  static const double _placeholderSize = 75.0; // 25 * 3
-  static const int _assetCacheSize = 150; // 75 * 2 for retina
-
   const _ImagePlaceholder({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: Colors.grey.shade200,
-      child: Center(
-        child: Image.asset(
-          'assets/images/nargri.png',
-          width: _placeholderSize,
-          height: _placeholderSize,
-          fit: BoxFit.contain,
-          // FIX 10: Fixed asset cache size
-          cacheWidth: _assetCacheSize,
-          cacheHeight: _assetCacheSize,
-          filterQuality: FilterQuality.low,
-          isAntiAlias: false,
-          errorBuilder: (_, __, ___) => Icon(
-            Icons.image_outlined,
-            size: 25,
-            color: Colors.grey.shade400,
-          ),
-        ),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Shimmer.fromColors(
+      baseColor: isDark ? const Color(0xFF1E1C2C) : const Color(0xFFE0E0E0),
+      highlightColor:
+          isDark ? const Color(0xFF211F31) : const Color(0xFFF5F5F5),
+      period: const Duration(milliseconds: 1200),
+      child: const ColoredBox(
+        color: Colors.white,
+        child: SizedBox.expand(),
       ),
     );
   }

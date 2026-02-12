@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../models/product.dart';
+import '../models/product_summary.dart';
 import '../utils/debouncer.dart';
 import '../services/algolia_service.dart';
 
@@ -15,7 +15,7 @@ class DynamicTerasProvider with ChangeNotifier {
   // main.dart: DynamicTerasProvider.algoliaService = AlgoliaServiceManager.instance.shopService;
   // ──────────────────────────────────────────────────────────────────────────
   static const int _docCacheMax = 1000; // tune
-  final Map<String, Product> _docCache = {};
+  final Map<String, ProductSummary> _docCache = {};
   final Map<String, DateTime> _docCacheTs = {};
   static const int _maxMainCacheEntries = 100;
 
@@ -38,13 +38,13 @@ class DynamicTerasProvider with ChangeNotifier {
   String? get buyerCategory => _buyerCategory;
   String? get buyerSubcategory => _buyerSubcategory;
 
-  final Map<int, List<Product>> _pageCache = {};
+  final Map<int, List<ProductSummary>> _pageCache = {};
   final Map<int, DocumentSnapshot> _pageCursors = {};
-  final List<Product> _allLoaded = [];
-  List<Product> get rawProducts => List.unmodifiable(_allLoaded);
-  Map<int, List<Product>> get pageCache => _pageCache;
+  final List<ProductSummary> _allLoaded = [];
+  List<ProductSummary> get rawProducts => List.unmodifiable(_allLoaded);
+  Map<int, List<ProductSummary>> get pageCache => _pageCache;
 
-  final Map<String, Map<int, List<Product>>> _filterPageCache = {};
+  final Map<String, Map<int, List<ProductSummary>>> _filterPageCache = {};
   final Map<String, bool> _filterHasMore = {};
   final Map<String, DateTime> _filterCacheTs = {};
 
@@ -54,12 +54,12 @@ class DynamicTerasProvider with ChangeNotifier {
   List<String> _dynamicSubSubcategories = [];
 
   // UI list
-  final List<Product> _products = [];
-  List<Product> get products => List.unmodifiable(_products);
+  final List<ProductSummary> _products = [];
+  List<ProductSummary> get products => List.unmodifiable(_products);
 
   // Boosted
-  final List<Product> _boostedProducts = [];
-  List<Product> get boostedProducts => List.unmodifiable(_boostedProducts);
+  final List<ProductSummary> _boostedProducts = [];
+  List<ProductSummary> get boostedProducts => List.unmodifiable(_boostedProducts);
 
   // Flags
   bool get hasMore => _hasMore;
@@ -95,7 +95,7 @@ class DynamicTerasProvider with ChangeNotifier {
   int _currentPage = 0;
 
   // TTL cache
-  final Map<String, List<Product>> _cache = {};
+  final Map<String, List<ProductSummary>> _cache = {};
   final Map<String, DateTime> _cacheTs = {};
   static const Duration _cacheTtl = Duration(minutes: 5);
 
@@ -164,7 +164,7 @@ class DynamicTerasProvider with ChangeNotifier {
     await _resetAndFetch();
   }
 
-  void _docCachePut(String id, Product p) {
+  void _docCachePut(String id, ProductSummary p) {
   _docCache[id] = p;
   _docCacheTs[id] = DateTime.now();
   if (_docCache.length > _docCacheMax) {
@@ -487,7 +487,7 @@ Future<void> setQuickFilter(String? filterKey) async {
         _pageCursors.remove(page);
       }
 
-      final fetched = docs.map((d) => Product.fromDocument(d)).toList();
+      final fetched = docs.map((d) => ProductSummary.fromDocument(d)).toList();
       _hasMore = fetched.length >= _limit;
 
       final key = _buildCacheKey(page);
@@ -531,7 +531,7 @@ Future<void> setQuickFilter(String? filterKey) async {
           _pageCursors.remove(page);
         }
 
-        final fetched = docs.map((d) => Product.fromDocument(d)).toList();
+        final fetched = docs.map((d) => ProductSummary.fromDocument(d)).toList();
         _hasMore = fetched.length >= _limit;
 
         final key = _buildCacheKey(page);
@@ -679,46 +679,49 @@ Future<void> setQuickFilter(String? filterKey) async {
   // ──────────────────────────────────────────────────────────────────────────
   // ALGOLIA PATH (AlgoliaService üzerinden id → Firestore hydrate)
   // ──────────────────────────────────────────────────────────────────────────
-  Future<void> _fetchPageFromAlgolia({
-    required int page,
-    required int seq,
-  }) async {
-    final svc = algoliaService;
+ Future<void> _fetchPageFromAlgolia({
+  required int page,
+  required int seq,
+}) async {
+  final svc = algoliaService;
+  final indexName = _algoliaIndexForCurrentIndex();
+  final facetFilters = _buildAlgoliaFacetFilters();
+  final numericFilters = _buildAlgoliaNumericFilters();
 
-    final indexName = _algoliaIndexForCurrentIndex();
-    final facetFilters = _buildAlgoliaFacetFilters();
-    final numericFilters = _buildAlgoliaNumericFilters();
+  try {
+    final res = await svc.searchIdsWithFacets(
+      indexName: indexName,
+      page: page,
+      hitsPerPage: _limit,
+      facetFilters: facetFilters,
+      numericFilters: numericFilters,
+    );
+    if (seq != _filterSeq) return;
 
-    try {
-      final res = await svc.searchIdsWithFacets(
-        indexName: indexName,
-        page: page,
-        hitsPerPage: _limit,
-        facetFilters: facetFilters,
-        numericFilters: numericFilters,
-      );
-      if (seq != _filterSeq) return;
+    // ✅ Parse directly from Algolia hits — no Firestore round-trip
+    final fetched = res.hits.map((hit) {
+      final summary = ProductSummary.fromAlgolia(hit);
+      _docCachePut(summary.id, summary);
+      return summary;
+    }).toList();
 
-      final fetched = await _fetchProductsByIdsPreservingOrder(res.ids);
+    _hasMore = res.page < (res.nbPages - 1);
 
-      // Algolia hasMore: page < nbPages-1
-      _hasMore = res.page < (res.nbPages - 1);
+    final key = _buildCacheKey(page);
+    _cache[key] = fetched;
+    _cacheTs[key] = DateTime.now();
+    _pruneMainCache();
+    _pageCache[page] = fetched;
+    _rebuildAllLoaded();
+    _pruneIfNeeded();
 
-      final key = _buildCacheKey(page);
-      _cache[key] = fetched;
-      _cacheTs[key] = DateTime.now();
-      _pruneMainCache();
-      _pageCache[page] = fetched;
-      _rebuildAllLoaded();
-      _pruneIfNeeded();
-
-      _products..clear()..addAll(_allLoaded);
-      _notifyDebouncer.run(notifyListeners);
-    } catch (e) {
-      debugPrint('Algolia service query error: $e');
-      await _fetchPageFromFirestore(page: page, seq: seq); // güvenli fallback
-    }
+    _products..clear()..addAll(_allLoaded);
+    _notifyDebouncer.run(notifyListeners);
+  } catch (e) {
+    debugPrint('Algolia service query error: $e');
+    await _fetchPageFromFirestore(page: page, seq: seq);
   }
+}
 
 String _algoliaIndexForCurrentIndex() {
   // Since you don't have filter replicas, always use sort replicas
@@ -803,7 +806,7 @@ if (_maxPrice != null) filters.add('price<=${_maxPrice!.ceil()}');
     return filters;
   }
 
-  Future<List<Product>> _fetchProductsByIdsPreservingOrder(List<String> ids) async {
+  Future<List<ProductSummary>> _fetchProductsByIdsPreservingOrder(List<String> ids) async {
     if (ids.isEmpty) {
       debugPrint('No IDs to fetch from Firestore');
       return [];
@@ -825,12 +828,12 @@ if (_maxPrice != null) filters.add('price<=${_maxPrice!.ceil()}');
       }
       final snaps = await Future.wait(futures);
       for (final d in snaps.expand((s) => s.docs)) {
-  final product = Product.fromDocument(d);
+  final product = ProductSummary.fromDocument(d);
   _docCachePut(d.id, product); // ⬅️ use the LRU-aware put
 }
     }
 
-    final ordered = <Product>[];
+    final ordered = <ProductSummary>[];
 for (final id in ids) {
   final p = _docCache[id];
   if (p != null) {
@@ -886,7 +889,7 @@ for (final id in ids) {
       }
 
       final snap = await q.limit(50).get(GetOptions(source: Source.server));
-      _boostedProducts..clear()..addAll(snap.docs.map((d) => Product.fromDocument(d)));
+      _boostedProducts..clear()..addAll(snap.docs.map((d) => ProductSummary.fromDocument(d)));
       _notifyDebouncer.run(notifyListeners);
     } catch (e) {
       debugPrint('Error fetching boosted products: $e');
@@ -909,7 +912,7 @@ for (final id in ids) {
   void _rebuildAllLoaded() {
   final sortedPages = _pageCache.keys.toList()..sort();
   final seen = <String>{};
-  final combined = <Product>[];
+  final combined = <ProductSummary>[];
   for (final i in sortedPages) {
     for (final p in _pageCache[i]!) {
       if (seen.add(p.id)) combined.add(p);

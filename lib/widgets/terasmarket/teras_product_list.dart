@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/teras_product_list_provider.dart';
 import '../../widgets/product_list_sliver.dart';
 import '../../generated/l10n/app_localizations.dart';
-import '../../models/product.dart';
+import '../../models/product_summary.dart';
 import '../../widgets/product_card_shimmer.dart'; // ✅ Import ProductCard shimmer
 
 /// Returns multiple slivers: header + product grid
@@ -170,8 +170,8 @@ class _TerasProductListState extends State<TerasProductList>
 
   /// Build multiple slivers wrapped in SliverMainAxisGroup
   Widget _buildMultiSliver(
-    List<dynamic> regularProducts,
-    List<dynamic> boostedProducts,
+    List<ProductSummary> regularProducts,
+    List<ProductSummary> boostedProducts,
     TerasProductListProvider provider,
   ) {
     return SliverMainAxisGroup(
@@ -200,8 +200,8 @@ class _TerasProductListState extends State<TerasProductList>
         ),
         // Product grid sliver
         ProductListSliver(
-          products: regularProducts as List<Product>,
-          boostedProducts: boostedProducts as List<Product>,
+          products: regularProducts,
+          boostedProducts: boostedProducts,
           hasMore: provider.hasMore,
           screenName: 'teras_product_list',
           isLoadingMore: provider.isLoadingMore,

@@ -1,7 +1,18 @@
-// lib/models/product.dart
-
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'parse_helpers.dart';
+import 'product_summary.dart';
 
+/// Full product model — used on the **detail screen** and for
+/// write operations (create / update / cart / order).
+///
+/// For list / grid views, prefer [ProductSummary] which skips
+/// ~50 fields that cards never display.
+///
+/// ### Migration path
+/// 1. Provider pagination → swap `Product` lists for `ProductSummary`.
+/// 2. Card widgets → accept `ProductSummary` instead of `Product`.
+/// 3. Detail screen → fetch full `Product` on tap via `Product.fromDocument`.
+/// 4. Everything that **writes** (cart, order, edit) stays on `Product`.
 class Product {
   final String id;
   final String? sourceCollection;
@@ -36,14 +47,10 @@ class Product {
   final Timestamp? archivedByAdminAt;
   final String? archivedByAdminId;
 
-  /// The user ID of the seller.
   final String userId;
-
   final double rankingScore;
   final double promotionScore;
-  final String? campaign; // Campaign ID
-
-  /// The owner ID in Firestore.
+  final String? campaign;
   final String ownerId;
   final String? shopId;
   final String ilanNo;
@@ -72,14 +79,8 @@ class Product {
   final Timestamp? lastClickDate;
   final bool paused;
   final String? campaignName;
-
-  /// Maps color names to their image URLs.
   final Map<String, List<String>> colorImages;
-
-  /// Video URL (if any) for the product.
   final String? videoUrl;
-
-  /// *** All of your formerly hard‑coded extras now live here. ***
   final Map<String, dynamic> attributes;
 
   Product({
@@ -150,204 +151,341 @@ class Product {
     this.relatedCount = 0,
   });
 
-  /// ----- SAFE PARSE FACTORY (Firestore) -----
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SUMMARY CONVERSION
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Downcast to a lightweight [ProductSummary] for use in list views.
+  ///
+  /// This is cheap — it just copies references, no deep cloning.
+  ProductSummary toSummary() {
+    return ProductSummary(
+      id: id,
+      sourceCollection: sourceCollection,
+      productName: productName,
+      price: price,
+      currency: currency,
+      condition: condition,
+      brandModel: brandModel,
+      imageUrls: imageUrls,
+      averageRating: averageRating,
+      reviewCount: reviewCount,
+      originalPrice: originalPrice,
+      discountPercentage: discountPercentage,
+      campaignName: campaignName,
+      category: category,
+      subcategory: subcategory,
+      subsubcategory: subsubcategory,
+      gender: gender,
+      availableColors: availableColors,
+      colorImages: colorImages,
+      sellerName: sellerName,
+      shopId: shopId,
+      userId: userId,
+      ownerId: ownerId,
+      quantity: quantity,
+      colorQuantities: colorQuantities,
+      isBoosted: isBoosted,
+      isFeatured: isFeatured,
+      isTrending: isTrending,
+      purchaseCount: purchaseCount,
+      bestSellerRank: bestSellerRank,
+      deliveryOption: deliveryOption,
+      paused: paused,
+      bundleIds: bundleIds,
+      discountThreshold: discountThreshold,
+      bulkDiscountPercentage: bulkDiscountPercentage,
+      videoUrl: videoUrl,
+      createdAt: createdAt,
+      rankingScore: rankingScore,
+      promotionScore: promotionScore,
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FACTORIES — now using shared [Parse] helpers
+  // ═══════════════════════════════════════════════════════════════════════════
+
   factory Product.fromDocument(DocumentSnapshot doc) {
     if (!doc.exists || doc.data() == null) {
       throw Exception('Missing product document! ID: ${doc.id}');
     }
-    final data = doc.data() as Map<String, dynamic>;
-
-    // Helpers
-    double _safeDouble(dynamic v, [double d = 0]) {
-      if (v == null) return d;
-      if (v is double) return v;
-      if (v is int) return v.toDouble();
-      if (v is String) return double.tryParse(v) ?? d;
-      return d;
-    }
-
-    int _safeInt(dynamic v, [int d = 0]) {
-      if (v == null) return d;
-      if (v is int) return v;
-      if (v is double) return v.toInt();
-      if (v is String) return int.tryParse(v) ?? d;
-      return d;
-    }
-
-    String _safeString(dynamic v, [String d = '']) {
-      if (v == null) return d;
-      return v.toString();
-    }
-
-    List<String> _safeStringList(dynamic v) {
-      if (v == null) return [];
-      if (v is List) return v.map((e) => e.toString()).toList();
-      if (v is String) return v.isEmpty ? [] : [v];
-      return [];
-    }
-
-    Map<String, int> _safeColorQty(dynamic v) {
-      if (v is! Map) return {};
-      final m = <String, int>{};
-      v.forEach((k, val) => m[k.toString()] = _safeInt(val));
-      return m;
-    }
-
-    Map<String, List<String>> _safeColorImgs(dynamic v) {
-      if (v is! Map) return {};
-      final m = <String, List<String>>{};
-      v.forEach((k, val) {
-        if (val is List)
-          m[k.toString()] = val.map((e) => e.toString()).toList();
-        else if (val is String && val.isNotEmpty) m[k.toString()] = [val];
-      });
-      return m;
-    }
-
-    Timestamp _safeTs(dynamic v) {
-      if (v is Timestamp) return v;
-      if (v is String) {
-        try {
-          return Timestamp.fromDate(DateTime.parse(v));
-        } catch (_) {
-          return Timestamp.now();
-        }
-      }
-      return Timestamp.now();
-    }
-
-    Timestamp? _safeTsNullable(dynamic v) {
-      if (v == null) return null;
-      if (v is Timestamp) return v;
-      if (v is String) {
-        try {
-          return Timestamp.fromDate(DateTime.parse(v));
-        } catch (_) {
-          return null;
-        }
-      }
-      return null;
-    }
-
-    String? _safeStringNullable(dynamic v) {
-      if (v == null) return null;
-      final str = v.toString().trim();
-      return str.isEmpty ? null : str;
-    }
-
-    List<Map<String, dynamic>>? _safeBundleData(dynamic v) {
-      if (v == null) return null;
-      if (v is! List) return null;
-
-      try {
-        return v.map((item) {
-          if (item is Map<String, dynamic>) {
-            return item;
-          } else if (item is Map) {
-            // Convert Map to Map<String, dynamic>
-            return Map<String, dynamic>.from(item);
-          }
-          return <String, dynamic>{};
-        }).toList();
-      } catch (e) {
-        return null;
-      }
-    }
-
-    String? sourceCollection;
-    if (doc.reference.path.startsWith('products/')) {
-      sourceCollection = 'products';
-    } else if (doc.reference.path.startsWith('shop_products/')) {
-      sourceCollection = 'shop_products';
-    }
-
-    // Extract dynamic attributes
-    final rawAttr = data['attributes'];
-    final Map<String, dynamic> attributes =
-        rawAttr is Map<String, dynamic> ? rawAttr : <String, dynamic>{};
+    final d = doc.data()! as Map<String, dynamic>;
 
     return Product(
       id: doc.id,
-      sourceCollection: sourceCollection,
-      productName: _safeString(data['productName'] ?? data['title']),
-      description: _safeString(data['description']),
-      price: _safeDouble(data['price']),
-      currency: _safeString(data['currency'], 'TL'),
-      condition: _safeString(data['condition'], 'Brand New'),
-      brandModel: _safeString(data['brandModel'] ?? data['brand'] ?? ''),
-      imageUrls: _safeStringList(data['imageUrls']),
-      averageRating: _safeDouble(data['averageRating']),
-      reviewCount: _safeInt(data['reviewCount']),
-      gender: _safeStringNullable(data['gender']),
-      bundleIds: _safeStringList(data['bundleIds']),
+      sourceCollection: Parse.sourceCollectionFromRef(doc.reference),
+      productName: Parse.toStr(d['productName'] ?? d['title']),
+      description: Parse.toStr(d['description']),
+      price: Parse.toDouble(d['price']),
+      currency: Parse.toStr(d['currency'], 'TL'),
+      condition: Parse.toStr(d['condition'], 'Brand New'),
+      brandModel: Parse.toStr(d['brandModel'] ?? d['brand'] ?? ''),
+      imageUrls: Parse.toStringList(d['imageUrls']),
+      averageRating: Parse.toDouble(d['averageRating']),
+      reviewCount: Parse.toInt(d['reviewCount']),
+      gender: Parse.toStrNullable(d['gender']),
+      bundleIds: Parse.toStringList(d['bundleIds']),
       maxQuantity:
-          data['maxQuantity'] != null ? _safeInt(data['maxQuantity']) : null,
-      bundleData: _safeBundleData(data['bundleData']),
-      originalPrice: data['originalPrice'] != null
-          ? _safeDouble(data['originalPrice'])
+          d['maxQuantity'] != null ? Parse.toInt(d['maxQuantity']) : null,
+      bundleData: Parse.toBundleData(d['bundleData']),
+      originalPrice: d['originalPrice'] != null
+          ? Parse.toDouble(d['originalPrice'])
           : null,
-      discountPercentage: data['discountPercentage'] != null
-          ? _safeInt(data['discountPercentage'])
+      discountPercentage: d['discountPercentage'] != null
+          ? Parse.toInt(d['discountPercentage'])
           : null,
-      colorQuantities: _safeColorQty(data['colorQuantities']),
+      colorQuantities: Parse.toColorQty(d['colorQuantities']),
       reference: doc.reference,
-      boostClickCountAtStart: _safeInt(data['boostClickCountAtStart']),
-      availableColors: _safeStringList(data['availableColors']),
-      userId: _safeString(data['userId']),
-      discountThreshold: data['discountThreshold'] != null
-          ? _safeInt(data['discountThreshold'])
+      boostClickCountAtStart: Parse.toInt(d['boostClickCountAtStart']),
+      availableColors: Parse.toStringList(d['availableColors']),
+      userId: Parse.toStr(d['userId']),
+      discountThreshold: d['discountThreshold'] != null
+          ? Parse.toInt(d['discountThreshold'])
           : null,
-      bulkDiscountPercentage: data['bulkDiscountPercentage'] != null
-          ? _safeInt(data['bulkDiscountPercentage'])
+      bulkDiscountPercentage: d['bulkDiscountPercentage'] != null
+          ? Parse.toInt(d['bulkDiscountPercentage'])
           : null,
-      rankingScore: _safeDouble(data['rankingScore']),
-      promotionScore: _safeDouble(data['promotionScore']),
-      campaign: data['campaign']?.toString(),
-      ownerId: _safeString(data['ownerId']),
-      shopId: data['shopId']?.toString(),
-      ilanNo: _safeString(data['ilan_no'] ?? data['id'], 'N/A'),
-      createdAt: _safeTs(data['createdAt']),
-      sellerName: _safeString(data['sellerName'], 'Unknown'),
-      category: _safeString(data['category'], 'Uncategorized'),
-      subcategory: _safeString(data['subcategory']),
-      subsubcategory: _safeString(data['subsubcategory']),
-      needsUpdate: data['needsUpdate'] == true,
-      archiveReason: _safeStringNullable(data['archiveReason']),
-      archivedByAdmin: data['archivedByAdmin'] == true,
-      archivedByAdminAt: _safeTsNullable(data['archivedByAdminAt']),
-      archivedByAdminId: _safeStringNullable(data['archivedByAdminId']),
-      quantity: _safeInt(data['quantity']),
-      relatedProductIds: _safeStringList(data['relatedProductIds']),
-      relatedLastUpdated: _safeTsNullable(data['relatedLastUpdated']),
-      relatedCount: _safeInt(data['relatedCount']),
-      bestSellerRank: data['bestSellerRank'] != null
-          ? _safeInt(data['bestSellerRank'])
-          : null,
-      clickCount: _safeInt(data['clickCount']),
-      clickCountAtStart: _safeInt(data['clickCountAtStart']),
-      favoritesCount: _safeInt(data['favoritesCount']),
-      cartCount: _safeInt(data['cartCount']),
-      purchaseCount: _safeInt(data['purchaseCount']),
-      deliveryOption: _safeString(data['deliveryOption'], 'Self Delivery'),
-      boostedImpressionCount: _safeInt(data['boostedImpressionCount']),
+      rankingScore: Parse.toDouble(d['rankingScore']),
+      promotionScore: Parse.toDouble(d['promotionScore']),
+      campaign: Parse.toStrNullable(d['campaign']),
+      ownerId: Parse.toStr(d['ownerId']),
+      shopId: Parse.toStrNullable(d['shopId']),
+      ilanNo: Parse.toStr(d['ilan_no'] ?? d['id'], 'N/A'),
+      createdAt: Parse.toTimestamp(d['createdAt']),
+      sellerName: Parse.toStr(d['sellerName'], 'Unknown'),
+      category: Parse.toStr(d['category'], 'Uncategorized'),
+      subcategory: Parse.toStr(d['subcategory']),
+      subsubcategory: Parse.toStr(d['subsubcategory']),
+      needsUpdate: Parse.toBool(d['needsUpdate']),
+      archiveReason: Parse.toStrNullable(d['archiveReason']),
+      archivedByAdmin: Parse.toBool(d['archivedByAdmin']),
+      archivedByAdminAt: Parse.toTimestampNullable(d['archivedByAdminAt']),
+      archivedByAdminId: Parse.toStrNullable(d['archivedByAdminId']),
+      quantity: Parse.toInt(d['quantity']),
+      relatedProductIds: Parse.toStringList(d['relatedProductIds']),
+      relatedLastUpdated: Parse.toTimestampNullable(d['relatedLastUpdated']),
+      relatedCount: Parse.toInt(d['relatedCount']),
+      bestSellerRank:
+          d['bestSellerRank'] != null ? Parse.toInt(d['bestSellerRank']) : null,
+      clickCount: Parse.toInt(d['clickCount']),
+      clickCountAtStart: Parse.toInt(d['clickCountAtStart']),
+      favoritesCount: Parse.toInt(d['favoritesCount']),
+      cartCount: Parse.toInt(d['cartCount']),
+      purchaseCount: Parse.toInt(d['purchaseCount']),
+      deliveryOption: Parse.toStr(d['deliveryOption'], 'Self Delivery'),
+      boostedImpressionCount: Parse.toInt(d['boostedImpressionCount']),
       boostImpressionCountAtStart:
-          _safeInt(data['boostImpressionCountAtStart']),
-      isFeatured: data['isFeatured'] == true,
-      isTrending: data['isTrending'] == true,
-      isBoosted: data['isBoosted'] == true,
-      boostStartTime: _safeTsNullable(data['boostStartTime']),
-      boostEndTime: _safeTsNullable(data['boostEndTime']),
-      dailyClickCount: _safeInt(data['dailyClickCount']),
-      lastClickDate: _safeTsNullable(data['lastClickDate']),
-      paused: data['paused'] == true,
-      campaignName: data['campaignName']?.toString(),
-      colorImages: _safeColorImgs(data['colorImages']),
-      videoUrl: data['videoUrl']?.toString(),
-      attributes: attributes,
+          Parse.toInt(d['boostImpressionCountAtStart']),
+      isFeatured: Parse.toBool(d['isFeatured']),
+      isTrending: Parse.toBool(d['isTrending']),
+      isBoosted: Parse.toBool(d['isBoosted']),
+      boostStartTime: Parse.toTimestampNullable(d['boostStartTime']),
+      boostEndTime: Parse.toTimestampNullable(d['boostEndTime']),
+      dailyClickCount: Parse.toInt(d['dailyClickCount']),
+      lastClickDate: Parse.toTimestampNullable(d['lastClickDate']),
+      paused: Parse.toBool(d['paused']),
+      campaignName: Parse.toStrNullable(d['campaignName']),
+      colorImages: Parse.toColorImages(d['colorImages']),
+      videoUrl: Parse.toStrNullable(d['videoUrl']),
+      attributes: Parse.toAttributes(d['attributes']),
     );
   }
 
-  /// ----- SERIALIZATION for Firestore -----
+  factory Product.fromJson(Map<String, dynamic> json) {
+    return Product(
+      id: json['id'] as String? ?? '',
+      sourceCollection: Parse.sourceCollectionFromJson(json),
+      productName: json['productName'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      price: (json['price'] as num?)?.toDouble() ?? 0.0,
+      currency: json['currency'] as String? ?? 'TL',
+      condition: json['condition'] as String? ?? 'Brand New',
+      brandModel: json['brandModel'] as String? ?? '',
+      imageUrls: json['imageUrls'] != null
+          ? List<String>.from(json['imageUrls'] as List)
+          : [],
+      averageRating: (json['averageRating'] as num?)?.toDouble() ?? 0.0,
+      reviewCount: json['reviewCount'] as int? ?? 0,
+      gender: json['gender'] as String?,
+      bundleIds: json['bundleIds'] != null
+          ? List<String>.from(json['bundleIds'] as List)
+          : [],
+      bundleData: Parse.toBundleData(json['bundleData']),
+      maxQuantity: json['maxQuantity'] as int?,
+      originalPrice: (json['originalPrice'] as num?)?.toDouble(),
+      discountPercentage: json['discountPercentage'] as int?,
+      colorQuantities: json['colorQuantities'] is Map
+          ? (json['colorQuantities'] as Map)
+              .map((k, v) => MapEntry(k.toString(), (v as num).toInt()))
+          : {},
+      reference: null,
+      boostClickCountAtStart: json['boostClickCountAtStart'] as int? ?? 0,
+      availableColors: json['availableColors'] != null
+          ? List<String>.from(json['availableColors'] as List)
+          : [],
+      userId: json['userId'] as String? ?? '',
+      discountThreshold: json['discountThreshold'] as int?,
+      relatedProductIds: json['relatedProductIds'] != null
+          ? List<String>.from(json['relatedProductIds'] as List)
+          : [],
+      relatedLastUpdated: Parse.toTimestampNullable(json['relatedLastUpdated']),
+      relatedCount: json['relatedCount'] as int? ?? 0,
+      rankingScore: (json['rankingScore'] as num?)?.toDouble() ?? 0.0,
+      promotionScore: (json['promotionScore'] as num?)?.toDouble() ?? 0.0,
+      campaign: json['campaign'] as String?,
+      ownerId: json['ownerId'] as String? ?? '',
+      shopId: json['shopId'] as String?,
+      ilanNo: json['ilan_no'] as String? ?? '',
+      needsUpdate: json['needsUpdate'] as bool? ?? false,
+      archiveReason: json['archiveReason'] as String?,
+      archivedByAdmin: json['archivedByAdmin'] as bool? ?? false,
+      archivedByAdminAt: Parse.toTimestampNullable(json['archivedByAdminAt']),
+      archivedByAdminId: json['archivedByAdminId'] as String?,
+      createdAt: Parse.toTimestamp(json['createdAt']),
+      sellerName: json['sellerName'] as String? ?? '',
+      category: json['category'] as String? ?? '',
+      subcategory: json['subcategory'] as String? ?? '',
+      subsubcategory: json['subsubcategory'] as String? ?? '',
+      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      bestSellerRank: json['bestSellerRank'] as int?,
+      clickCount: json['clickCount'] as int? ?? 0,
+      clickCountAtStart: json['clickCountAtStart'] as int? ?? 0,
+      favoritesCount: json['favoritesCount'] as int? ?? 0,
+      cartCount: json['cartCount'] as int? ?? 0,
+      purchaseCount: json['purchaseCount'] as int? ?? 0,
+      deliveryOption: json['deliveryOption'] as String? ?? 'Self Delivery',
+      boostedImpressionCount: json['boostedImpressionCount'] as int? ?? 0,
+      boostImpressionCountAtStart:
+          json['boostImpressionCountAtStart'] as int? ?? 0,
+      isFeatured: json['isFeatured'] as bool? ?? false,
+      isTrending: json['isTrending'] as bool? ?? false,
+      isBoosted: json['isBoosted'] as bool? ?? false,
+      boostStartTime: Parse.toTimestampNullable(json['boostStartTime']),
+      boostEndTime: Parse.toTimestampNullable(json['boostEndTime']),
+      dailyClickCount: json['dailyClickCount'] as int? ?? 0,
+      lastClickDate: Parse.toTimestampNullable(json['lastClickDate']),
+      paused: json['paused'] as bool? ?? false,
+      campaignName: json['campaignName'] as String?,
+      colorImages: json['colorImages'] is Map
+          ? (json['colorImages'] as Map).map(
+              (k, v) => MapEntry(
+                k.toString(),
+                (v as List).map((e) => e.toString()).toList(),
+              ),
+            )
+          : {},
+      videoUrl: json['videoUrl'] as String?,
+      attributes: Parse.toAttributes(json['attributes']),
+    );
+  }
+
+  factory Product.fromAlgolia(Map<String, dynamic> json) {
+    String normalizedId = json['objectID']?.toString() ?? '';
+    String? sourceCollection;
+
+    if (normalizedId.startsWith('products_')) {
+      sourceCollection = 'products';
+      normalizedId = normalizedId.substring('products_'.length);
+    } else if (normalizedId.startsWith('shop_products_')) {
+      sourceCollection = 'shop_products';
+      normalizedId = normalizedId.substring('shop_products_'.length);
+    } else {
+      sourceCollection =
+          (json['shopId'] != null && json['shopId'].toString().isNotEmpty)
+              ? 'shop_products'
+              : 'products';
+    }
+
+    return Product(
+      id: normalizedId,
+      sourceCollection: sourceCollection,
+      productName: json['productName']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
+      price: (json['price'] as num?)?.toDouble() ?? 0.0,
+      currency: json['currency']?.toString() ?? 'TL',
+      condition: json['condition']?.toString() ?? 'Brand New',
+      brandModel: json['brandModel']?.toString() ?? '',
+      imageUrls: json['imageUrls'] != null
+          ? List<String>.from(json['imageUrls'])
+          : [],
+      averageRating: (json['averageRating'] as num?)?.toDouble() ?? 0.0,
+      reviewCount: (json['reviewCount'] as num?)?.toInt() ?? 0,
+      gender: json['gender'] as String?,
+      originalPrice: (json['originalPrice'] as num?)?.toDouble(),
+      discountPercentage: (json['discountPercentage'] as num?)?.toInt(),
+      maxQuantity: (json['maxQuantity'] as num?)?.toInt(),
+      colorQuantities: json['colorQuantities'] is Map
+          ? (json['colorQuantities'] as Map)
+              .map((k, v) => MapEntry(k.toString(), (v as num).toInt()))
+          : {},
+      reference: null,
+      boostClickCountAtStart:
+          (json['boostClickCountAtStart'] as num?)?.toInt() ?? 0,
+      availableColors: json['availableColors'] != null
+          ? List<String>.from(json['availableColors'])
+          : [],
+      userId: json['userId']?.toString() ?? '',
+      discountThreshold: (json['discountThreshold'] as num?)?.toInt(),
+      rankingScore: (json['rankingScore'] as num?)?.toDouble() ?? 0.0,
+      promotionScore: (json['promotionScore'] as num?)?.toDouble() ?? 0.0,
+      campaign: json['campaign']?.toString(),
+      relatedProductIds: json['relatedProductIds'] != null
+          ? List<String>.from(json['relatedProductIds'] as List)
+          : [],
+      relatedLastUpdated: Parse.toTimestampNullable(json['relatedLastUpdated']),
+      relatedCount: json['relatedCount'] as int? ?? 0,
+      ownerId: json['ownerId']?.toString() ?? '',
+      shopId: json['shopId']?.toString(),
+      ilanNo: json['ilan_no']?.toString() ?? '',
+      createdAt: Parse.toTimestamp(json['createdAt']),
+      sellerName: json['sellerName']?.toString() ?? '',
+      category: json['category']?.toString() ?? '',
+      needsUpdate: json['needsUpdate'] as bool? ?? false,
+      archiveReason: json['archiveReason'] as String?,
+      archivedByAdmin: json['archivedByAdmin'] as bool? ?? false,
+      archivedByAdminAt: Parse.toTimestampNullable(json['archivedByAdminAt']),
+      archivedByAdminId: json['archivedByAdminId'] as String?,
+      subcategory: json['subcategory']?.toString() ?? '',
+      subsubcategory: json['subsubcategory']?.toString() ?? '',
+      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      bestSellerRank: (json['bestSellerRank'] as num?)?.toInt(),
+      clickCount: (json['clickCount'] as num?)?.toInt() ?? 0,
+      clickCountAtStart: (json['clickCountAtStart'] as num?)?.toInt() ?? 0,
+      favoritesCount: (json['favoritesCount'] as num?)?.toInt() ?? 0,
+      cartCount: (json['cartCount'] as num?)?.toInt() ?? 0,
+      purchaseCount: (json['purchaseCount'] as num?)?.toInt() ?? 0,
+      deliveryOption: json['deliveryOption']?.toString() ?? 'Self Delivery',
+      boostedImpressionCount:
+          (json['boostedImpressionCount'] as num?)?.toInt() ?? 0,
+      boostImpressionCountAtStart:
+          (json['boostImpressionCountAtStart'] as num?)?.toInt() ?? 0,
+      isFeatured: json['isFeatured'] as bool? ?? false,
+      isTrending: json['isTrending'] as bool? ?? false,
+      isBoosted: json['isBoosted'] as bool? ?? false,
+      boostStartTime: Parse.toTimestampNullable(json['boostStartTime']),
+      boostEndTime: Parse.toTimestampNullable(json['boostEndTime']),
+      dailyClickCount: (json['dailyClickCount'] as num?)?.toInt() ?? 0,
+      lastClickDate: Parse.toTimestampNullable(json['lastClickDate']),
+      paused: json['paused'] as bool? ?? false,
+      campaignName: json['campaignName']?.toString(),
+      colorImages: json['colorImages'] is Map
+          ? (json['colorImages'] as Map).map(
+              (k, v) => MapEntry(
+                k.toString(),
+                (v as List).map((e) => e.toString()).toList(),
+              ),
+            )
+          : {},
+      videoUrl: json['videoUrl']?.toString(),
+      attributes: Parse.toAttributes(json['attributes']),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SERIALIZATION
+  // ═══════════════════════════════════════════════════════════════════════════
+
   Map<String, dynamic> toMap() {
     final m = <String, dynamic>{
       'productName': productName,
@@ -413,141 +551,10 @@ class Product {
       'relatedCount': relatedCount,
       if (attributes.isNotEmpty) 'attributes': attributes,
     };
-    // strip out any nulls
     m.removeWhere((_, v) => v == null);
     return m;
   }
 
-  factory Product.fromJson(Map<String, dynamic> json) {
-    String? sourceCollection = json['sourceCollection'] as String?;
-    if (sourceCollection == null || sourceCollection.isEmpty) {
-      sourceCollection =
-          (json['shopId'] != null && json['shopId'].toString().isNotEmpty)
-              ? 'shop_products'
-              : 'products';
-    }
-    return Product(
-      id: json['id'] as String? ?? '',
-      sourceCollection: sourceCollection,
-      productName: json['productName'] as String? ?? '',
-      description: json['description'] as String? ?? '',
-      price: (json['price'] as num?)?.toDouble() ?? 0.0,
-      currency: json['currency'] as String? ?? 'TL',
-      condition: json['condition'] as String? ?? 'Brand New',
-      brandModel: json['brandModel'] as String? ?? '',
-      imageUrls: json['imageUrls'] != null
-          ? List<String>.from(json['imageUrls'] as List)
-          : [],
-      averageRating: (json['averageRating'] as num?)?.toDouble() ?? 0.0,
-      reviewCount: json['reviewCount'] as int? ?? 0,
-      gender: json['gender'] as String?,
-      bundleIds: json['bundleIds'] != null
-          ? List<String>.from(json['bundleIds'] as List)
-          : [],
-      bundleData: json['bundleData'] != null
-          ? (json['bundleData'] as List)
-              .map((item) => item is Map<String, dynamic>
-                  ? item
-                  : Map<String, dynamic>.from(item as Map))
-              .toList()
-          : null,
-      maxQuantity: json['maxQuantity'] as int?,
-      originalPrice: (json['originalPrice'] as num?)?.toDouble(),
-      discountPercentage: json['discountPercentage'] as int?,
-      colorQuantities: json['colorQuantities'] is Map
-          ? (json['colorQuantities'] as Map)
-              .map((k, v) => MapEntry(k.toString(), (v as num).toInt()))
-          : {},
-      reference: null, // JSON won't include a DocumentReference
-      boostClickCountAtStart: json['boostClickCountAtStart'] as int? ?? 0,
-      availableColors: json['availableColors'] != null
-          ? List<String>.from(json['availableColors'] as List)
-          : [],
-      userId: json['userId'] as String? ?? '',
-      discountThreshold: json['discountThreshold'] as int?,
-      relatedProductIds: json['relatedProductIds'] != null
-          ? List<String>.from(json['relatedProductIds'] as List)
-          : [],
-      relatedLastUpdated: _parseTimestamp(json['relatedLastUpdated']),
-      relatedCount: json['relatedCount'] as int? ?? 0,
-      rankingScore: (json['rankingScore'] as num?)?.toDouble() ?? 0.0,
-      promotionScore: (json['promotionScore'] as num?)?.toDouble() ?? 0.0,
-      campaign: json['campaign'] as String?,
-
-      ownerId: json['ownerId'] as String? ?? '',
-      shopId: json['shopId'] as String?,
-      ilanNo: json['ilan_no'] as String? ?? '',
-      needsUpdate: json['needsUpdate'] as bool? ?? false,
-      archiveReason: json['archiveReason'] as String?,
-      archivedByAdmin: json['archivedByAdmin'] as bool? ?? false,
-      archivedByAdminAt: _parseTimestamp(json['archivedByAdminAt']),
-      archivedByAdminId: json['archivedByAdminId'] as String?,
-      createdAt: _parseCreatedAt(json['createdAt']),
-      sellerName: json['sellerName'] as String? ?? '',
-      category: json['category'] as String? ?? '',
-      subcategory: json['subcategory'] as String? ?? '',
-      subsubcategory: json['subsubcategory'] as String? ?? '',
-      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
-      bestSellerRank: json['bestSellerRank'] as int?,
-
-      clickCount: json['clickCount'] as int? ?? 0,
-      clickCountAtStart: json['clickCountAtStart'] as int? ?? 0,
-      favoritesCount: json['favoritesCount'] as int? ?? 0,
-      cartCount: json['cartCount'] as int? ?? 0,
-      purchaseCount: json['purchaseCount'] as int? ?? 0,
-      deliveryOption: json['deliveryOption'] as String? ?? 'Self Delivery',
-      boostedImpressionCount: json['boostedImpressionCount'] as int? ?? 0,
-      boostImpressionCountAtStart:
-          json['boostImpressionCountAtStart'] as int? ?? 0,
-      isFeatured: json['isFeatured'] as bool? ?? false,
-      isTrending: json['isTrending'] as bool? ?? false,
-      isBoosted: json['isBoosted'] as bool? ?? false,
-      boostStartTime: _parseTimestamp(json['boostStartTime']),
-      boostEndTime: _parseTimestamp(json['boostEndTime']),
-      dailyClickCount: json['dailyClickCount'] as int? ?? 0,
-      lastClickDate: _parseTimestamp(json['lastClickDate']),
-      paused: json['paused'] as bool? ?? false,
-      campaignName: json['campaignName'] as String?,
-      colorImages: json['colorImages'] is Map
-          ? (json['colorImages'] as Map).map(
-              (k, v) => MapEntry(
-                k.toString(),
-                (v as List).map((e) => e.toString()).toList(),
-              ),
-            )
-          : {},
-      videoUrl: json['videoUrl'] as String?,
-      attributes: json['attributes'] is Map<String, dynamic>
-          ? json['attributes'] as Map<String, dynamic>
-          : {},
-    );
-  }
-
-  /// Helper to parse required createdAt field
-  static Timestamp _parseCreatedAt(dynamic value) {
-    if (value is int) {
-      return Timestamp.fromMillisecondsSinceEpoch(value);
-    } else if (value is String) {
-      return Timestamp.fromDate(DateTime.parse(value));
-    } else if (value is Timestamp) {
-      return value;
-    }
-    return Timestamp.now();
-  }
-
-  /// Helper to parse optional Timestamp fields
-  static Timestamp? _parseTimestamp(dynamic value) {
-    if (value is int) {
-      return Timestamp.fromMillisecondsSinceEpoch(value);
-    } else if (value is String) {
-      return Timestamp.fromDate(DateTime.parse(value));
-    } else if (value is Timestamp) {
-      return value;
-    }
-    return null;
-  }
-
-  /// ----- JSON serialization (e.g. Algolia or REST) -----
   Map<String, dynamic> toJson() {
     final m = <String, dynamic>{
       'id': id,
@@ -614,112 +621,10 @@ class Product {
     return m;
   }
 
-  factory Product.fromAlgolia(Map<String, dynamic> json) {
-    // Extract and normalize the ID
-    String normalizedId = json['objectID']?.toString() ?? '';
+  // ═══════════════════════════════════════════════════════════════════════════
+  // COPY WITH
+  // ═══════════════════════════════════════════════════════════════════════════
 
-    String? sourceCollection;
-    if (normalizedId.startsWith('products_')) {
-      sourceCollection = 'products';
-      normalizedId = normalizedId.substring('products_'.length);
-    } else if (normalizedId.startsWith('shop_products_')) {
-      sourceCollection = 'shop_products';
-      normalizedId = normalizedId.substring('shop_products_'.length);
-    } else {
-      // ✅ Fallback: Check if shopId exists to determine collection
-      sourceCollection =
-          (json['shopId'] != null && json['shopId'].toString().isNotEmpty)
-              ? 'shop_products'
-              : 'products';
-    }
-
-    return Product(
-      id: normalizedId, // ← Use normalized ID
-      sourceCollection: sourceCollection,
-      productName: json['productName']?.toString() ?? '',
-      description: json['description']?.toString() ?? '',
-      price: (json['price'] as num?)?.toDouble() ?? 0.0,
-      currency: json['currency']?.toString() ?? 'TL',
-      condition: json['condition']?.toString() ?? 'Brand New',
-      brandModel: json['brandModel']?.toString() ?? '',
-      imageUrls:
-          json['imageUrls'] != null ? List<String>.from(json['imageUrls']) : [],
-      averageRating: (json['averageRating'] as num?)?.toDouble() ?? 0.0,
-      reviewCount: (json['reviewCount'] as num?)?.toInt() ?? 0,
-      gender: json['gender'] as String?,
-      originalPrice: (json['originalPrice'] as num?)?.toDouble(),
-      discountPercentage: (json['discountPercentage'] as num?)?.toInt(),
-      maxQuantity: (json['maxQuantity'] as num?)?.toInt(),
-      colorQuantities: json['colorQuantities'] is Map
-          ? (json['colorQuantities'] as Map).map((k, v) => MapEntry(
-                k.toString(),
-                (v as num).toInt(),
-              ))
-          : {},
-      reference: null,
-      boostClickCountAtStart:
-          (json['boostClickCountAtStart'] as num?)?.toInt() ?? 0,
-      availableColors: json['availableColors'] != null
-          ? List<String>.from(json['availableColors'])
-          : [],
-      userId: json['userId']?.toString() ?? '',
-      discountThreshold: (json['discountThreshold'] as num?)?.toInt(),
-      rankingScore: (json['rankingScore'] as num?)?.toDouble() ?? 0.0,
-      promotionScore: (json['promotionScore'] as num?)?.toDouble() ?? 0.0,
-      campaign: json['campaign']?.toString(),
-      relatedProductIds: json['relatedProductIds'] != null
-          ? List<String>.from(json['relatedProductIds'] as List)
-          : [],
-      relatedLastUpdated: _parseTimestamp(json['relatedLastUpdated']),
-      relatedCount: json['relatedCount'] as int? ?? 0,
-      ownerId: json['ownerId']?.toString() ?? '',
-      shopId: json['shopId']?.toString(),
-      ilanNo: json['ilan_no']?.toString() ?? '',
-      createdAt: _parseCreatedAt(json['createdAt']),
-      sellerName: json['sellerName']?.toString() ?? '',
-      category: json['category']?.toString() ?? '',
-      needsUpdate: json['needsUpdate'] as bool? ?? false,
-      archiveReason: json['archiveReason'] as String?,
-      archivedByAdmin: json['archivedByAdmin'] as bool? ?? false,
-      archivedByAdminAt: _parseTimestamp(json['archivedByAdminAt']),
-      archivedByAdminId: json['archivedByAdminId'] as String?,
-      subcategory: json['subcategory']?.toString() ?? '',
-      subsubcategory: json['subsubcategory']?.toString() ?? '',
-      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
-      bestSellerRank: (json['bestSellerRank'] as num?)?.toInt(),
-      clickCount: (json['clickCount'] as num?)?.toInt() ?? 0,
-      clickCountAtStart: (json['clickCountAtStart'] as num?)?.toInt() ?? 0,
-      favoritesCount: (json['favoritesCount'] as num?)?.toInt() ?? 0,
-      cartCount: (json['cartCount'] as num?)?.toInt() ?? 0,
-      purchaseCount: (json['purchaseCount'] as num?)?.toInt() ?? 0,
-      deliveryOption: json['deliveryOption']?.toString() ?? 'Self Delivery',
-      boostedImpressionCount:
-          (json['boostedImpressionCount'] as num?)?.toInt() ?? 0,
-      boostImpressionCountAtStart:
-          (json['boostImpressionCountAtStart'] as num?)?.toInt() ?? 0,
-      isFeatured: json['isFeatured'] as bool? ?? false,
-      isTrending: json['isTrending'] as bool? ?? false,
-      isBoosted: json['isBoosted'] as bool? ?? false,
-      boostStartTime: _parseTimestamp(json['boostStartTime']),
-      boostEndTime: _parseTimestamp(json['boostEndTime']),
-      dailyClickCount: (json['dailyClickCount'] as num?)?.toInt() ?? 0,
-      lastClickDate: _parseTimestamp(json['lastClickDate']),
-      paused: json['paused'] as bool? ?? false,
-      campaignName: json['campaignName']?.toString(),
-      colorImages: json['colorImages'] is Map
-          ? (json['colorImages'] as Map).map((k, v) => MapEntry(
-                k.toString(),
-                (v as List).map((e) => e.toString()).toList(),
-              ))
-          : {},
-      videoUrl: json['videoUrl']?.toString(),
-      attributes: json['attributes'] is Map<String, dynamic>
-          ? json['attributes'] as Map<String, dynamic>
-          : {},
-    );
-  }
-
-  /// ----- COPY WITH (including attributes) -----
   Product copyWith({
     String? sourceCollection,
     String? productName,
@@ -750,8 +655,6 @@ class Product {
     double? promotionScore,
     int? maxQuantity,
     String? campaign,
-    double? campaignDiscount,
-    double? campaignPrice,
     String? gender,
     String? ownerId,
     String? shopId,
@@ -766,7 +669,6 @@ class Product {
     String? subsubcategory,
     int? quantity,
     int? bestSellerRank,
-    bool? sold,
     int? clickCount,
     int? clickCountAtStart,
     int? favoritesCount,
@@ -787,7 +689,6 @@ class Product {
     Map<String, List<String>>? colorImages,
     String? videoUrl,
     Map<String, dynamic>? attributes,
-    // Add these parameters to explicitly control null setting
     bool setOriginalPriceNull = false,
     bool setDiscountPercentageNull = false,
   }) {
@@ -803,10 +704,8 @@ class Product {
       imageUrls: imageUrls ?? this.imageUrls,
       averageRating: averageRating ?? this.averageRating,
       reviewCount: reviewCount ?? this.reviewCount,
-      // Handle originalPrice with explicit null control
       originalPrice:
           setOriginalPriceNull ? null : (originalPrice ?? this.originalPrice),
-      // Handle discountPercentage with explicit null control
       discountPercentage: setDiscountPercentageNull
           ? null
           : (discountPercentage ?? this.discountPercentage),
@@ -831,7 +730,6 @@ class Product {
       archivedByAdminId: archivedByAdminId ?? this.archivedByAdminId,
       promotionScore: promotionScore ?? this.promotionScore,
       campaign: campaign ?? this.campaign,
-
       ownerId: ownerId ?? this.ownerId,
       shopId: shopId ?? this.shopId,
       ilanNo: ilanNo ?? this.ilanNo,

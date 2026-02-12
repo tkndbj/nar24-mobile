@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import '../generated/l10n/app_localizations.dart';
-import '../models/product.dart';
+import '../models/product_summary.dart';
 import 'product_card.dart';
 import 'boostedVisibilityWrapper.dart';
 
 class ProductListSliver extends StatelessWidget {
-  final List<Product> products;
-  final List<Product> boostedProducts;
+  final List<ProductSummary> products;
+  final List<ProductSummary> boostedProducts;
   final bool hasMore;
   final bool isLoadingMore;
   final String? selectedColor;
@@ -125,7 +125,7 @@ class ProductListSliver extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final boostedIds = boostedProducts.map((p) => p.id).toSet();
-    final combinedProducts = <Product>[
+    final combinedProducts = <ProductSummary>[
       ...boostedProducts,
       ...products.where((p) => !boostedIds.contains(p.id)),
     ];

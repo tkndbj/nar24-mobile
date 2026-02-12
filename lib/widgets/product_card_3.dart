@@ -745,13 +745,7 @@ class _QuantityControllerState extends State<_QuantityController> {
             color: widget.theme.brightness == Brightness.dark
                 ? const Color.fromARGB(255, 33, 31, 49)
                 : Colors.grey[200],
-            child: _isProcessing
-                ? SizedBox(
-                    width: 14 * widget.scaleFactor,
-                    height: 14 * widget.scaleFactor,
-                    child: const CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(
+            child: Text(
                     '${widget.quantity}',
                     style: TextStyle(
                       fontSize: 14 * widget.scaleFactor,
@@ -987,17 +981,11 @@ class _ActionIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: isProcessing
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Icon(
-              icon,
-              color: color,
-              size: 16,
-            ),
+      child: Icon(
+        icon,
+        color: color,
+        size: 16,
+      ),
     );
   }
 }

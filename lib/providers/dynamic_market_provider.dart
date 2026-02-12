@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../models/product.dart';
+import '../models/product_summary.dart';
 import '../utils/debouncer.dart';
 import '../services/algolia_service.dart';
 
@@ -10,16 +10,16 @@ enum SearchBackend { firestore, algolia }
 class ShopMarketProvider with ChangeNotifier {
   final AlgoliaService algoliaService;
   ShopMarketProvider({required this.algoliaService});
+
   // ──────────────────────────────────────────────────────────────────────────
-  // Algolia entegrasyonu: DI ile tek yerden verilecek
-  // main.dart: ShopMarketProvider.algoliaService = AlgoliaServiceManager.instance.shopService;
+  // DOC CACHE (Algolia hydration)
   // ──────────────────────────────────────────────────────────────────────────
-  static const int _docCacheMax = 1000; // tune
-  final Map<String, Product> _docCache = {};
+  static const int _docCacheMax = 1000;
+  final Map<String, ProductSummary> _docCache = {};
   final Map<String, DateTime> _docCacheTs = {};
   static const int _maxMainCacheEntries = 100;
 
-  // Base index ve replica eşlemesi (dashboard’da varsa)
+  // Algolia index config
   static String algoliaBaseIndex = 'shop_products';
   static Map<String, String> algoliaSortReplicas = {
     'date': 'shop_products_createdAt_desc',
@@ -37,13 +37,14 @@ class ShopMarketProvider with ChangeNotifier {
   String? get buyerCategory => _buyerCategory;
   String? get buyerSubcategory => _buyerSubcategory;
 
-  final Map<int, List<Product>> _pageCache = {};
+  final Map<int, List<ProductSummary>> _pageCache = {};
   final Map<int, DocumentSnapshot> _pageCursors = {};
-  final List<Product> _allLoaded = [];
-  List<Product> get rawProducts => List.unmodifiable(_allLoaded);
-  Map<int, List<Product>> get pageCache => _pageCache;
+  final List<ProductSummary> _allLoaded = [];
+  List<ProductSummary> get rawProducts => List.unmodifiable(_allLoaded);
+  Map<int, List<ProductSummary>> get pageCache => _pageCache;
 
-  final Map<String, Map<int, List<Product>>> _filterPageCache = {};
+  // Filter page cache — for quick filter switching
+  final Map<String, Map<int, List<ProductSummary>>> _filterPageCache = {};
   final Map<String, bool> _filterHasMore = {};
   final Map<String, DateTime> _filterCacheTs = {};
 
@@ -54,12 +55,13 @@ class ShopMarketProvider with ChangeNotifier {
   List<String> _dynamicSubSubcategories = [];
 
   // UI list
-  final List<Product> _products = [];
-  List<Product> get products => List.unmodifiable(_products);
+  final List<ProductSummary> _products = [];
+  List<ProductSummary> get products => List.unmodifiable(_products);
 
   // Boosted
-  final List<Product> _boostedProducts = [];
-  List<Product> get boostedProducts => List.unmodifiable(_boostedProducts);
+  final List<ProductSummary> _boostedProducts = [];
+  List<ProductSummary> get boostedProducts =>
+      List.unmodifiable(_boostedProducts);
 
   // Flags
   bool get hasMore => _hasMore;
@@ -68,8 +70,6 @@ class ShopMarketProvider with ChangeNotifier {
   bool get isLoadingMore => _isLoadingMore;
   bool _isLoadingMore = false;
 
-  // Tracks whether data fetch is in progress
-  // Uses a counter to handle concurrent fetch operations correctly
   bool get isLoading => _activeLoadingCount > 0;
   int _activeLoadingCount = 0;
 
@@ -94,8 +94,8 @@ class ShopMarketProvider with ChangeNotifier {
   static const int _limit = 20;
   int _currentPage = 0;
 
-  // TTL cache
-  final Map<String, List<Product>> _cache = {};
+  // TTL cache (keyed by full filter+page state)
+  final Map<String, List<ProductSummary>> _cache = {};
   final Map<String, DateTime> _cacheTs = {};
   static const Duration _cacheTtl = Duration(minutes: 5);
 
@@ -168,11 +168,10 @@ class ShopMarketProvider with ChangeNotifier {
     await _resetAndFetch();
   }
 
-  void _docCachePut(String id, Product p) {
+  void _docCachePut(String id, ProductSummary p) {
     _docCache[id] = p;
     _docCacheTs[id] = DateTime.now();
     if (_docCache.length > _docCacheMax) {
-      // evict oldest ~10%
       final nEvict = (_docCacheMax * 0.1).round();
       final oldest = _docCacheTs.entries.toList()
         ..sort((a, b) => a.value.compareTo(b.value));
@@ -248,7 +247,6 @@ class ShopMarketProvider with ChangeNotifier {
     }
 
     if (changed) {
-      // Clear filter cache since filters have changed
       _filterPageCache.clear();
       _filterHasMore.clear();
       _filterCacheTs.clear();
@@ -283,7 +281,6 @@ class ShopMarketProvider with ChangeNotifier {
     }
 
     if (changed) {
-      // Clear filter cache since filters have changed
       _filterPageCache.clear();
       _filterHasMore.clear();
       _filterCacheTs.clear();
@@ -299,7 +296,6 @@ class ShopMarketProvider with ChangeNotifier {
       _dynamicSubSubcategories.clear();
       _minPrice = null;
       _maxPrice = null;
-      // Clear filter cache
       _filterPageCache.clear();
       _filterHasMore.clear();
       _filterCacheTs.clear();
@@ -310,7 +306,6 @@ class ShopMarketProvider with ChangeNotifier {
   void _pruneFilterCache() {
     final now = DateTime.now();
 
-    // First remove expired entries
     final keysToRemove = <String>[];
     _filterCacheTs.forEach((key, timestamp) {
       if (now.difference(timestamp) >= _cacheTtl) {
@@ -324,10 +319,8 @@ class ShopMarketProvider with ChangeNotifier {
       _filterCacheTs.remove(key);
     }
 
-    // Then apply size limit
     const maxCacheEntries = 20;
     if (_filterPageCache.length > maxCacheEntries) {
-      // Sort by timestamp to remove oldest first
       final sortedEntries = _filterCacheTs.entries.toList()
         ..sort((a, b) => a.value.compareTo(b.value));
 
@@ -346,23 +339,23 @@ class ShopMarketProvider with ChangeNotifier {
   Future<void> setQuickFilter(String? filterKey) async {
     if (_quickFilter == filterKey) return;
 
-    // Save current state with full filter context
+    // Save current state
     final currentCacheKey = _buildFilterCacheKey();
-    _filterPageCache[currentCacheKey] = Map.from(_pageCache);
+    _filterPageCache[currentCacheKey] = Map<int, List<ProductSummary>>.from(
+      _pageCache.map((k, v) => MapEntry(k, List<ProductSummary>.from(v))),
+    );
     _filterHasMore[currentCacheKey] = _hasMore;
-    _filterCacheTs[currentCacheKey] = DateTime.now(); // Add timestamp
+    _filterCacheTs[currentCacheKey] = DateTime.now();
     _pruneFilterCache();
 
-    // Update quick filter
     _quickFilter = filterKey;
 
-    // Check if we have cached pages for this exact filter combination
+    // Check cache for new filter
     final newCacheKey = _buildFilterCacheKey();
     final cached = _filterPageCache[newCacheKey];
     final ts = _filterCacheTs[newCacheKey];
     final now = DateTime.now();
 
-    // Check both existence and expiration
     if (cached != null && ts != null && now.difference(ts) < _cacheTtl) {
       _pageCache.clear();
       _pageCache.addAll(cached);
@@ -373,7 +366,6 @@ class ShopMarketProvider with ChangeNotifier {
       _filterCacheTs[newCacheKey] = now;
       notifyListeners();
     } else {
-      // Cache expired or doesn't exist
       if (cached != null) {
         _filterPageCache.remove(newCacheKey);
         _filterHasMore.remove(newCacheKey);
@@ -384,13 +376,19 @@ class ShopMarketProvider with ChangeNotifier {
   }
 
   Future<void> fetchMoreProducts() async {
-    if (!_hasMore || _isLoadingMore) return;
-    _isLoadingMore = true;
-    _currentPage++;
+  if (!_hasMore || _isLoadingMore) return;
+  _isLoadingMore = true;
+  _currentPage++;
+  try {
     await _fetchPage(page: _currentPage);
+  } catch (e) {
+    _currentPage--;  // rollback
+    debugPrint('fetchMoreProducts error: $e');
+  } finally {
     _isLoadingMore = false;
     _notifyDebouncer.run(notifyListeners);
   }
+}
 
   Future<void> refresh() async => _resetAndFetch();
 
@@ -456,13 +454,11 @@ class ShopMarketProvider with ChangeNotifier {
   }
 
   SearchBackend _decideBackend() {
-    // Quick filter'larda (deals, boosted, trending, fiveStar, bestSellers) ALGOLIA'ya zorla
     if (_quickFilter != null) return SearchBackend.algolia;
 
     final disj = _disjunctionFieldCount();
     final count = _activeFilterCount();
 
-    // alfabetik + fiyat aralığı -> Firestore orderBy conflict
     final alphabeticalWithPrice =
         (_sortOption == 'alphabetical') && _hasPriceIneq();
     if (alphabeticalWithPrice) return SearchBackend.algolia;
@@ -542,25 +538,14 @@ class ShopMarketProvider with ChangeNotifier {
         _pageCursors.remove(page);
       }
 
-      final fetched = docs.map((d) => Product.fromDocument(d)).toList();
+      final fetched =
+          docs.map((d) => ProductSummary.fromDocument(d)).toList();
       _hasMore = fetched.length >= _limit;
 
-      final key = _buildCacheKey(page);
-      _cache[key] = fetched;
-      _cacheTs[key] = DateTime.now();
-      _pruneMainCache();
-      _pageCache[page] = fetched;
-      _rebuildAllLoaded();
-      _pruneIfNeeded();
-
-      _products
-        ..clear()
-        ..addAll(_allLoaded);
-      _notifyDebouncer.run(notifyListeners);
+      _storePage(page, fetched);
     } catch (e) {
       debugPrint('Firestore query error (will fallback): $e');
 
-      // ---- FALLBACK: sadece WHERE + minimal ORDER BY ----
       try {
         Query fb = _applyWhereClauses(_firestore.collection('shop_products'));
 
@@ -592,27 +577,33 @@ class ShopMarketProvider with ChangeNotifier {
           _pageCursors.remove(page);
         }
 
-        final fetched = docs.map((d) => Product.fromDocument(d)).toList();
+        final fetched =
+            docs.map((d) => ProductSummary.fromDocument(d)).toList();
         _hasMore = fetched.length >= _limit;
 
-        final key = _buildCacheKey(page);
-        _cache[key] = fetched;
-        _cacheTs[key] = DateTime.now();
-        _pruneMainCache();
-        _pageCache[page] = fetched;
-        _rebuildAllLoaded();
-        _pruneIfNeeded();
-
-        _products
-          ..clear()
-          ..addAll(_allLoaded);
-        _notifyDebouncer.run(notifyListeners);
+        _storePage(page, fetched);
       } catch (e2) {
         debugPrint('Fallback Firestore query error: $e2');
         _hasMore = false;
         _notifyDebouncer.run(notifyListeners);
       }
     }
+  }
+
+  /// Shared helper to store a fetched page into all caches and rebuild UI list.
+  void _storePage(int page, List<ProductSummary> fetched) {
+    final key = _buildCacheKey(page);
+    _cache[key] = fetched;
+    _cacheTs[key] = DateTime.now();
+    _pruneMainCache();
+    _pageCache[page] = fetched;
+    _rebuildAllLoaded();
+    _pruneIfNeeded();
+
+    _products
+      ..clear()
+      ..addAll(_allLoaded);
+    _notifyDebouncer.run(notifyListeners);
   }
 
   Query _applyWhereClauses(Query q) {
@@ -741,10 +732,8 @@ class ShopMarketProvider with ChangeNotifier {
   String _buildFilterCacheKey() {
     final parts = <String>[];
 
-    // Include quick filter
     parts.add(_quickFilter ?? 'default');
 
-    // Include all dynamic filters (sorted for consistent keys)
     if (_dynamicBrands.isNotEmpty) {
       final sortedBrands = List<String>.from(_dynamicBrands)..sort();
       parts.add('b:${sortedBrands.join(",")}');
@@ -770,54 +759,45 @@ class ShopMarketProvider with ChangeNotifier {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // ALGOLIA PATH (AlgoliaService üzerinden id → Firestore hydrate)
+  // ALGOLIA PATH
   // ──────────────────────────────────────────────────────────────────────────
-  Future<void> _fetchPageFromAlgolia({
-    required int page,
-    required int seq,
-  }) async {
-    final svc = algoliaService;
+ Future<void> _fetchPageFromAlgolia({
+  required int page,
+  required int seq,
+}) async {
+  final svc = algoliaService;
 
-    final indexName = _algoliaIndexForCurrentIndex();
-    final facetFilters = _buildAlgoliaFacetFilters();
-    final numericFilters = _buildAlgoliaNumericFilters();
+  final indexName = _algoliaIndexForCurrentIndex();
+  final facetFilters = _buildAlgoliaFacetFilters();
+  final numericFilters = _buildAlgoliaNumericFilters();
 
-    try {
-      final res = await svc.searchIdsWithFacets(
-        indexName: indexName,
-        page: page,
-        hitsPerPage: _limit,
-        facetFilters: facetFilters,
-        numericFilters: numericFilters,
-      );
-      if (seq != _filterSeq) return;
+  try {
+    final res = await svc.searchIdsWithFacets(
+      indexName: indexName,
+      page: page,
+      hitsPerPage: _limit,
+      facetFilters: facetFilters,
+      numericFilters: numericFilters,
+    );
+    if (seq != _filterSeq) return;
 
-      final fetched = await _fetchProductsByIdsPreservingOrder(res.ids);
+    // ✅ Parse directly from Algolia hits — no Firestore round-trip
+    final fetched = res.hits.map((hit) {
+      final summary = ProductSummary.fromAlgolia(hit);
+      _docCachePut(summary.id, summary); // still cache for other uses
+      return summary;
+    }).toList();
 
-      // Algolia hasMore: page < nbPages-1
-      _hasMore = res.page < (res.nbPages - 1);
+    _hasMore = res.page < (res.nbPages - 1);
 
-      final key = _buildCacheKey(page);
-      _cache[key] = fetched;
-      _cacheTs[key] = DateTime.now();
-      _pruneMainCache();
-      _pageCache[page] = fetched;
-      _rebuildAllLoaded();
-      _pruneIfNeeded();
-
-      _products
-        ..clear()
-        ..addAll(_allLoaded);
-      _notifyDebouncer.run(notifyListeners);
-    } catch (e) {
-      debugPrint('Algolia service query error: $e');
-      await _fetchPageFromFirestore(page: page, seq: seq); // güvenli fallback
-    }
+    _storePage(page, fetched);
+  } catch (e) {
+    debugPrint('Algolia service query error: $e');
+    await _fetchPageFromFirestore(page: page, seq: seq);
   }
+}
 
   String _algoliaIndexForCurrentIndex() {
-    // Since you don't have filter replicas, always use sort replicas
-    // Filters (facet/numeric) work on any index/replica
     final replica = algoliaSortReplicas[_sortOption];
     return replica ?? algoliaBaseIndex;
   }
@@ -828,11 +808,8 @@ class ShopMarketProvider with ChangeNotifier {
     debugPrint(
         'Building filters: category=$_category, subcategory=$_subcategory, subSubcategory=$_subSubcategory, buyerCategory=$_buyerCategory');
 
-    // For Women/Men categories with null subsubcategory, don't add subsubcategory filter
     final bool isGenderedCategory =
         (_buyerCategory == 'Women' || _buyerCategory == 'Men');
-    final bool shouldSkipSubSubcategory =
-        isGenderedCategory && _subSubcategory == null;
 
     if (_category != null) {
       groups.add(['category_en:${_category!}']);
@@ -841,32 +818,22 @@ class ShopMarketProvider with ChangeNotifier {
       groups.add(['subcategory_en:${_subcategory!}']);
     }
 
-    // Only add subsubcategory filter if:
-    // 1. It's not null
-    // 2. OR it's not a gendered category (Women/Men)
     if (_subSubcategory != null) {
       groups.add(['subsubcategory_en:${_subSubcategory!}']);
-    } else if (!isGenderedCategory) {
-      // For non-gendered categories, we might still want the filter even if null
-      // This depends on your data structure
     }
 
-    // Gender field appears to be without suffix in your data
     if (_buyerCategory == 'Women' || _buyerCategory == 'Men') {
       groups.add(['gender:${_buyerCategory!}', 'gender:Unisex']);
     }
 
-    // brandModel appears to be without suffix
     if (_dynamicBrands.isNotEmpty) {
       groups.add(_dynamicBrands.map((b) => 'brandModel:$b').toList());
     }
 
-    // availableColors might need to be checked - it's not in your example
     if (_dynamicColors.isNotEmpty) {
       groups.add(_dynamicColors.map((c) => 'availableColors:$c').toList());
     }
 
-    // For dynamic subsubcategories, use language suffix
     if (_dynamicSubSubcategories.isNotEmpty) {
       groups.add(
           _dynamicSubSubcategories.map((s) => 'subsubcategory_en:$s').toList());
@@ -902,14 +869,14 @@ class ShopMarketProvider with ChangeNotifier {
     return filters;
   }
 
-  Future<List<Product>> _fetchProductsByIdsPreservingOrder(
+  Future<List<ProductSummary>> _fetchProductsByIdsPreservingOrder(
       List<String> ids) async {
     if (ids.isEmpty) {
       debugPrint('No IDs to fetch from Firestore');
       return [];
     }
 
-    // Yalnızca ihtiyaç olanları çek
+    // Only fetch what's not cached
     final need = <String>[];
     for (final id in ids) {
       if (!_docCache.containsKey(id)) need.add(id);
@@ -921,22 +888,21 @@ class ShopMarketProvider with ChangeNotifier {
         futures.add(_firestore
             .collection('shop_products')
             .where(FieldPath.documentId, whereIn: chunk)
-            .get(const GetOptions(
-                source: Source.serverAndCache))); // server doğruluğu
+            .get(const GetOptions(source: Source.serverAndCache)));
       }
       final snaps = await Future.wait(futures);
       for (final d in snaps.expand((s) => s.docs)) {
-        final product = Product.fromDocument(d);
-        _docCachePut(d.id, product); // ⬅️ use the LRU-aware put
+        final summary = ProductSummary.fromDocument(d);
+        _docCachePut(d.id, summary);
       }
     }
 
-    final ordered = <Product>[];
+    final ordered = <ProductSummary>[];
     for (final id in ids) {
       final p = _docCache[id];
       if (p != null) {
         ordered.add(p);
-        _docCacheTs[id] = DateTime.now(); // ⬅️ touch
+        _docCacheTs[id] = DateTime.now();
       }
     }
     return ordered;
@@ -1001,7 +967,7 @@ class ShopMarketProvider with ChangeNotifier {
       final snap = await q.limit(50).get(GetOptions(source: Source.server));
       _boostedProducts
         ..clear()
-        ..addAll(snap.docs.map((d) => Product.fromDocument(d)));
+        ..addAll(snap.docs.map((d) => ProductSummary.fromDocument(d)));
       _notifyDebouncer.run(notifyListeners);
     } catch (e) {
       debugPrint('Error fetching boosted products: $e');
@@ -1024,7 +990,7 @@ class ShopMarketProvider with ChangeNotifier {
   void _rebuildAllLoaded() {
     final sortedPages = _pageCache.keys.toList()..sort();
     final seen = <String>{};
-    final combined = <Product>[];
+    final combined = <ProductSummary>[];
     for (final i in sortedPages) {
       for (final p in _pageCache[i]!) {
         if (seen.add(p.id)) combined.add(p);

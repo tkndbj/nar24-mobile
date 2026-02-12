@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:Nar24/generated/l10n/app_localizations.dart';
 import 'package:Nar24/models/dynamic_filter.dart';
-import 'package:Nar24/models/product.dart';
+import 'package:Nar24/models/product_summary.dart';
 import 'package:Nar24/widgets/product_list_sliver.dart';
 import 'package:Nar24/providers/market_dynamic_filter_provider.dart';
 import 'package:Nar24/utils/color_localization.dart';
@@ -244,7 +244,7 @@ class ServerSideResultCache {
     return '${collection}_${baseFilter.id}_${selectedBrands.join(',')}_${selectedColors.join(',')}_${selectedCategory ?? ''}_${selectedSubcategory ?? ''}_${selectedSubSubcategory ?? ''}_${minPrice ?? ''}_${maxPrice ?? ''}_${sortBy ?? ''}_$sortDescending';
   }
 
-  List<Product>? getCachedResults({
+  List<ProductSummary>? getCachedResults({
     required String collection,
     required DynamicFilter baseFilter,
     required List<String> selectedBrands,
@@ -291,7 +291,7 @@ class ServerSideResultCache {
     required double? maxPrice,
     required String? sortBy,
     required bool sortDescending,
-    required List<Product> products,
+    required List<ProductSummary> products,
   }) {
     final key = _generateCacheKey(
       collection: collection,
@@ -322,7 +322,7 @@ class ServerSideResultCache {
 }
 
 class _CacheEntry {
-  final List<Product> products;
+  final List<ProductSummary> products;
   final DateTime expiresAt;
 
   _CacheEntry(this.products, this.expiresAt);
@@ -353,8 +353,8 @@ class _MarketScreenDynamicFiltersScreenState
   final ScrollController _scrollController = ScrollController();
 
   // Server-side data
-  List<Product> _allProducts = [];
-  List<Product> _boostedProducts = [];
+  List<ProductSummary> _allProducts = [];
+  List<ProductSummary> _boostedProducts = [];
 
   bool _isLoading = true;
   bool _isLoadingMore = false;
@@ -464,9 +464,9 @@ class _MarketScreenDynamicFiltersScreenState
 
       if (mounted) {
         final products = snapshot.docs
-            .map((doc) => Product.fromDocument(doc))
+            .map((doc) => ProductSummary.fromDocument(doc))
             .where((product) => product != null)
-            .cast<Product>()
+            .cast<ProductSummary>()
             .toList();
 
         final boosted = products.where((p) => p.isBoosted).toList();
@@ -539,9 +539,9 @@ class _MarketScreenDynamicFiltersScreenState
 
       if (mounted) {
         final products = snapshot.docs
-            .map((doc) => Product.fromDocument(doc))
+            .map((doc) => ProductSummary.fromDocument(doc))
             .where((product) => product != null)
-            .cast<Product>()
+            .cast<ProductSummary>()
             .toList();
 
         final boosted = products.where((p) => p.isBoosted).toList();

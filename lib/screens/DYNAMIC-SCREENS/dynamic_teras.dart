@@ -6,7 +6,7 @@ import '../../providers/dynamic_teras_provider.dart';
 import '../../providers/search_provider.dart';
 import '../../widgets/product_list_sliver.dart';
 import '../../generated/l10n/app_localizations.dart';
-import '../../models/product.dart';
+import '../../models/product_summary.dart';
 import '../../widgets/dynamicscreens/market_app_bar.dart';
 import 'package:go_router/go_router.dart';
 import '../../route_observer.dart';
@@ -476,8 +476,8 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
   }
 
   Widget _buildProductsList(
-    List<Product> displayProducts,
-    List<Product> boostedProducts,
+    List<ProductSummary> displayProducts,
+    List<ProductSummary> boostedProducts,
     DynamicTerasProvider terasProvider,
   ) {
     return RefreshIndicator(

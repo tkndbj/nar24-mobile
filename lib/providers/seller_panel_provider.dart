@@ -563,6 +563,9 @@ class SellerPanelProvider with ChangeNotifier {
         getMetrics(), // This needs products, so fetch minimal
       ]);
 
+      // Re-check after async gap - shop may have changed or been cleared
+      if (_selectedShop == null) return;
+
       // Setup listeners (lightweight)
       _setupQuestionListener(_selectedShop!.id);
       _setupShopNotificationsListener(_selectedShop!.id);
@@ -2143,15 +2146,14 @@ class SellerPanelProvider with ChangeNotifier {
     final myId = ++_activeQueryId;
 
     try {
-      final filters = ['shopId:"$currentShopId"'];
-      final results =
-          await AlgoliaServiceManager.instance.shopService.searchProducts(
-        query: query,
-        sortOption: 'date',
-        page: 0,
-        hitsPerPage: 20,
-        filters: filters,
-      );
+     final results =
+    await AlgoliaServiceManager.instance.shopService.searchShopProducts(
+  shopId: currentShopId,
+  query: query,
+  sortOption: 'date',
+  page: 0,
+  hitsPerPage: 20,
+);
 
       // drop stale responses
       if (myId != _activeQueryId) return;
@@ -2183,14 +2185,14 @@ class SellerPanelProvider with ChangeNotifier {
     final myId = _activeQueryId;
 
     try {
-      final results =
-          await AlgoliaServiceManager.instance.shopService.searchProducts(
-        query: _lastSearchQuery,
-        sortOption: 'date',
-        page: _currentSearchPage,
-        hitsPerPage: 20,
-        filters: ['shopId:"${_selectedShop!.id}"'],
-      );
+     final results =
+    await AlgoliaServiceManager.instance.shopService.searchShopProducts(
+  shopId: _selectedShop!.id,
+  query: _lastSearchQuery,
+  sortOption: 'date',
+  page: _currentSearchPage,
+  hitsPerPage: 20,
+);
 
       if (myId != _activeQueryId)
         return; // user changed query -> drop this page

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../auth_service.dart';
 import '../../services/two_factor_service.dart';
@@ -765,7 +766,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         body: SafeArea(
           top: false,
           child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
+              ? _buildSettingsShimmer(isDarkMode)
               : SingleChildScrollView(
                   child: Column(
                   children: [
@@ -1196,6 +1197,134 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   ],
                 ),
               ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsShimmer(bool isDark) {
+    final baseColor =
+        isDark ? const Color(0xFF1E1C2C) : const Color(0xFFE0E0E0);
+    final highlightColor =
+        isDark ? const Color(0xFF211F31) : const Color(0xFFF5F5F5);
+
+    Widget buildShimmerTile() {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              // Icon placeholder
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              const SizedBox(width: 16),
+              // Text placeholders
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 140,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Switch placeholder
+              Container(
+                width: 40,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    Widget buildSectionHeader() {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              width: 160,
+              height: 16,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      child: Shimmer.fromColors(
+        baseColor: baseColor,
+        highlightColor: highlightColor,
+        period: const Duration(milliseconds: 1200),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 24),
+            // Security section header
+            buildSectionHeader(),
+            const SizedBox(height: 8),
+            buildShimmerTile(),
+            const SizedBox(height: 24),
+            // Notifications section header
+            buildSectionHeader(),
+            const SizedBox(height: 8),
+            buildShimmerTile(),
+            buildShimmerTile(),
+            buildShimmerTile(),
+            buildShimmerTile(),
+            const SizedBox(height: 24),
+            // Danger zone header
+            buildSectionHeader(),
+            const SizedBox(height: 8),
+            buildShimmerTile(),
+          ],
         ),
       ),
     );

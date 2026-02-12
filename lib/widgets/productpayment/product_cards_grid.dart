@@ -2,11 +2,11 @@
 
 import 'package:flutter/material.dart';
 import '../../generated/l10n/app_localizations.dart';
-import '../../models/product.dart';
+import '../../models/product_summary.dart';
 import '../product_card.dart';
 
 class ProductCardsGrid extends StatelessWidget {
-  final List<Product> products;
+  final List<ProductSummary> products;
   final String? selectedColor; // Kept for compatibility, but optional
 
   const ProductCardsGrid({
@@ -51,7 +51,7 @@ class ProductCardsGrid extends StatelessWidget {
 }
 
 class _TotalPriceWidget extends StatelessWidget {
-  final List<Product> products;
+  final List<ProductSummary> products;
   final AppLocalizations l10n;
 
   const _TotalPriceWidget({

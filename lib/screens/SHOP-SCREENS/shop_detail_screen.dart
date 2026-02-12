@@ -1100,7 +1100,7 @@ class _ProductsTab extends StatelessWidget {
                     if (provider.searchQuery.isNotEmpty)
                       const SliverToBoxAdapter(child: _SearchResultsHeader()),
                     ProductListSliver(
-                      products: products,
+                      products: products.map((p) => p.toSummary()).toList(),
                       boostedProducts: const [],
                       hasMore: provider.hasMoreProducts &&
                           provider.searchQuery.isEmpty,

@@ -6,7 +6,7 @@ import '../../providers/dynamic_market_provider.dart';
 import '../../providers/search_provider.dart';
 import '../../widgets/product_list_sliver.dart';
 import '../../generated/l10n/app_localizations.dart';
-import '../../models/product.dart';
+import '../../models/product_summary.dart';
 import '../../widgets/dynamicscreens/market_app_bar.dart';
 import 'package:go_router/go_router.dart';
 import '../../route_observer.dart';
@@ -474,10 +474,10 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
   }
 
   Widget _buildProductsList(
-    List<Product> displayProducts,
-    List<Product> boostedProducts,
-    ShopMarketProvider marketProvider,
-  ) {
+  List<ProductSummary> displayProducts,
+  List<ProductSummary> boostedProducts,
+  ShopMarketProvider marketProvider,
+) {
     return RefreshIndicator(
       onRefresh: () async {
         await marketProvider.refresh();

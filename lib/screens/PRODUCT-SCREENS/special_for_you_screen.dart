@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/personalized_feed_service.dart';
-import '../../../models/product.dart';
+import '../../../models/product_summary.dart';
 import '../../widgets/product_list_sliver.dart';
 import '../../widgets/product_card_shimmer.dart';
 import '../../generated/l10n/app_localizations.dart';
@@ -24,7 +24,7 @@ class _SpecialForYouScreenState extends State<SpecialForYouScreen>
   final ScrollController _scrollController = ScrollController();
 
   List<String> _allProductIds = []; // All 200 IDs from backend
-  List<Product> _loadedProducts = []; // Products loaded so far
+  List<ProductSummary> _loadedProducts = []; // Products loaded so far
   int _currentIndex = 0; // Current position in _allProductIds
 
   bool _isInitialLoading = true;
@@ -137,7 +137,7 @@ class _SpecialForYouScreenState extends State<SpecialForYouScreen>
   }
 
   /// Fetch product details from Firestore in a single query
-  Future<List<Product>> _fetchProductDetails(List<String> productIds) async {
+  Future<List<ProductSummary>> _fetchProductDetails(List<String> productIds) async {
     if (productIds.isEmpty) return [];
 
     final snapshot = await _firestore
@@ -145,10 +145,10 @@ class _SpecialForYouScreenState extends State<SpecialForYouScreen>
         .where(FieldPath.documentId, whereIn: productIds)
         .get();
 
-    final products = <Product>[];
+    final products = <ProductSummary>[];
     for (final doc in snapshot.docs) {
       try {
-        products.add(Product.fromDocument(doc));
+        products.add(ProductSummary.fromDocument(doc));
       } catch (e) {
         debugPrint('Error parsing product ${doc.id}: $e');
       }

@@ -8,7 +8,7 @@ import '../../providers/dynamic_category_boxes_provider.dart'; // New provider
 import '../../providers/search_provider.dart';
 import '../../widgets/product_list_sliver.dart';
 import '../../generated/l10n/app_localizations.dart';
-import '../../models/product.dart';
+import '../../models/product_summary.dart';
 import '../../widgets/dynamicscreens/market_app_bar.dart';
 import 'package:go_router/go_router.dart';
 import '../../route_observer.dart';
@@ -164,8 +164,8 @@ class _DynamicCategoryBoxesScreenState extends State<DynamicCategoryBoxesScreen>
     return Future.value();
   }
 
-  List<Product> _getSortedProducts(List<Product> products) {
-    final sorted = List<Product>.from(products);
+List<ProductSummary> _getSortedProducts(List<ProductSummary> products) {
+  final sorted = List<ProductSummary>.from(products);
     switch (_selectedSortOption) {
       case 'Alphabetical':
         sorted.sort((a, b) =>
@@ -358,8 +358,8 @@ class _DynamicCategoryBoxesScreenState extends State<DynamicCategoryBoxesScreen>
   }
 
   Widget _buildProductsList(
-    List<Product> displayProducts,
-    List<Product> boostedProducts,
+    List<ProductSummary> displayProducts,
+    List<ProductSummary> boostedProducts,
     CategoryBoxesProvider provider,
   ) {
     return RefreshIndicator(
