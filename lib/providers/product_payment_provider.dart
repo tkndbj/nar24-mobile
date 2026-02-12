@@ -297,6 +297,8 @@ class ProductPaymentProvider with ChangeNotifier {
     isProcessingPayment = true;
     notifyListeners();
 
+    String? orderNumber;
+
     try {
       // ✅ Prepare items payload - extract ONLY from selectedAttributes
       final itemsPayload = items.map((item) {
@@ -323,7 +325,8 @@ class ProductPaymentProvider with ChangeNotifier {
 
       // Prepare address payload
       // Normalize phone: "(5XX) XXX XX XX" -> "05XXXXXXXXX"
-      final normalizedPhone = '0${phoneNumberController.text.replaceAll(RegExp(r'\D'), '')}';
+      final normalizedPhone =
+          '0${phoneNumberController.text.replaceAll(RegExp(r'\D'), '')}';
       final addressPayload = {
         'addressLine1': addressLine1Controller.text,
         'addressLine2': addressLine2Controller.text,
@@ -335,7 +338,7 @@ class ProductPaymentProvider with ChangeNotifier {
         },
       };
 
-      final orderNumber = 'ORDER-${DateTime.now().millisecondsSinceEpoch}';
+      orderNumber = 'ORDER-${DateTime.now().millisecondsSinceEpoch}';
 
       // Get user info
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
@@ -365,7 +368,7 @@ class ProductPaymentProvider with ChangeNotifier {
           _functions.httpsCallable('initializeIsbankPayment');
       final initResponse = await initPayment.call({
         'amount':
-            finalTotal, // Changed from cartCalculatedTotal + getDeliveryPrice()
+            finalTotal, // Server will recalculate — this is for logging/comparison only
         'orderNumber': orderNumber,
         'customerName': customerName,
         'customerEmail': customerEmail,
@@ -390,7 +393,7 @@ class ProductPaymentProvider with ChangeNotifier {
           builder: (context) => IsbankPaymentScreen(
             gatewayUrl: initData['gatewayUrl'],
             paymentParams: Map<String, dynamic>.from(initData['paymentParams']),
-            orderNumber: orderNumber,
+            orderNumber: orderNumber ?? '',
           ),
         ),
       );
@@ -472,7 +475,34 @@ class ProductPaymentProvider with ChangeNotifier {
           );
         }
       }
+      // Log error to Firestore (fire-and-forget, non-blocking)
+      _logClientError(
+        userId: user?.uid,
+        context: 'confirmPayment',
+        error: e.toString(),
+        orderNumber:
+            orderNumber, // ← Now captures the real one (or null if it failed before that line)
+      );
       return false;
+    }
+  }
+
+  void _logClientError({
+    String? userId,
+    required String context,
+    required String error,
+    String? orderNumber,
+  }) {
+    try {
+      _firestore.collection('_client_errors').add({
+        'userId': userId,
+        'context': context,
+        'error': error,
+        'orderNumber': orderNumber,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {
+      // Silent — logging should never break the app
     }
   }
 

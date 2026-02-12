@@ -463,6 +463,29 @@ function getShopMemberIdsFromData(shopData) {
   return [...new Set(memberIds)];
 }
 
+// Fire-and-forget alert for post-order task failures
+function logTaskFailureAlert(taskName, orderId, buyerId, buyerName, error) {
+  try {
+    admin.firestore().collection('_payment_alerts').doc(`${orderId}_${taskName}`).set({
+      type: `task_${taskName}_failed`,
+      severity: 'low',
+      orderNumber: orderId,
+      pendingPaymentId: null,
+      orderId,
+      userId: buyerId,
+      buyerName: buyerName || '',
+      amount: 0,
+      errorMessage: `${taskName} failed: ${error?.message || String(error)}`,
+      isRead: false,
+      isResolved: false,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      detectedBy: 'task_catch',
+    });
+  } catch (_) {
+    // Silent — alerting should never break anything
+  }
+}
+
 async function createOrderTransaction(buyerId, requestData) {
   const {
     items,
@@ -568,10 +591,23 @@ async function createOrderTransaction(buyerId, requestData) {
       );
     }
 
-    // ✅ ADD: SERVER-SIDE PRICE CALCULATION
-    const serverDeliveryPrice = discountResult.freeShippingApplied ? 0 : (clientDeliveryPrice || 0);
-    const serverCouponDiscount = discountResult.couponDiscount;
-    const serverFinalTotal = Math.max(0, (cartCalculatedTotal || 0) - serverCouponDiscount) + serverDeliveryPrice;
+    const preCalc = requestData.serverCalculation || null;
+
+let serverFinalTotal;
+let serverDeliveryPrice;
+let serverCouponDiscount;
+
+if (preCalc) {
+  serverFinalTotal = preCalc.finalTotal;
+  serverDeliveryPrice = preCalc.deliveryPrice;
+  serverCouponDiscount = preCalc.couponDiscount;
+  console.log(`💰 Using pre-calculated totals: final=${serverFinalTotal}, delivery=${serverDeliveryPrice}, coupon=-${serverCouponDiscount}`);
+} else {
+  serverDeliveryPrice = discountResult.freeShippingApplied ? 0 : (clientDeliveryPrice || 0);
+  serverCouponDiscount = discountResult.couponDiscount;
+  serverFinalTotal = Math.max(0, (cartCalculatedTotal || 0) - serverCouponDiscount) + serverDeliveryPrice;
+  console.log(`💰 Fallback calculation: final=${serverFinalTotal}, delivery=${serverDeliveryPrice}, coupon=-${serverCouponDiscount}`);
+}
 
     console.log(`Price calculation - Subtotal: ${cartCalculatedTotal}, Coupon: -${serverCouponDiscount}, Delivery: ${serverDeliveryPrice}, Final: ${serverFinalTotal}`);
 
@@ -942,7 +978,7 @@ async function createOrderTransaction(buyerId, requestData) {
         couponDiscount: serverCouponDiscount,
         couponCode: discountResult.couponCode,
         freeShippingApplied: discountResult.freeShippingApplied,
-        originalDeliveryPrice: clientDeliveryPrice || 0,
+        originalDeliveryPrice: preCalc ? preCalc.deliveryPriceBeforeFreeShipping : (clientDeliveryPrice || 0),
         language: userLanguage,
         status: 'pending',
         pickupPoint: deliveryOption === 'pickup' ? {
@@ -987,7 +1023,7 @@ async function createOrderTransaction(buyerId, requestData) {
       });
     } catch (convError) {
       console.error('Error tracking ad conversion:', convError);
-      // Don't fail the order
+      logTaskFailureAlert('ad_conversion', finalOrderId, buyerId, orderResult?.buyerName, convError);
     }
   });
 
@@ -1013,9 +1049,11 @@ async function createOrderTransaction(buyerId, requestData) {
           console.error(`Notification ${idx} failed:`, result.reason?.message || result.reason);
         }
       });
+      logTaskFailureAlert('notification_partial', finalOrderId, buyerId, orderResult?.buyerName, {message: `${failed}/${results.length} notifications failed`});
     }
   }).catch((err) => {
     console.error('Unexpected error in notification batch:', err);
+    logTaskFailureAlert('notifications', finalOrderId, buyerId, orderResult?.buyerName, err);
   });
 
   Promise.resolve().then(async () => {
@@ -1024,7 +1062,7 @@ async function createOrderTransaction(buyerId, requestData) {
       await createCartClearTask(buyerId, purchasedProductIds, finalOrderId);
     } catch (cartClearError) {
       console.error('Error creating cart clear task:', cartClearError);
-      // Don't fail the order
+      logTaskFailureAlert('cart_clear', finalOrderId, buyerId, orderResult?.buyerName, cartClearError);
     }
   });
 
@@ -1044,7 +1082,7 @@ async function createOrderTransaction(buyerId, requestData) {
       await trackPurchaseActivity(buyerId, trackingItems, finalOrderId);
     } catch (trackingError) {
       console.error('User activity tracking failed:', trackingError);
-      // Don't fail the order
+      logTaskFailureAlert('activity_tracking', finalOrderId, buyerId, orderResult?.buyerName, trackingError);
     }
   });
 
@@ -1059,6 +1097,7 @@ async function createOrderTransaction(buyerId, requestData) {
       });
     } catch (qrError) {
       console.error('Error creating QR code task:', qrError);
+      logTaskFailureAlert('qr_code', finalOrderId, buyerId, orderResult?.buyerName, qrError);
     }
   });
 
@@ -1207,7 +1246,7 @@ export const initializeIsbankPayment = onCall(
       }
 
       const {
-        amount,
+        amount,            // Client-calculated (kept for logging/comparison only)
         orderNumber,
         customerName,
         customerEmail,
@@ -1217,23 +1256,111 @@ export const initializeIsbankPayment = onCall(
 
       const sanitizedCustomerName = (() => {
         if (!customerName) return 'Customer';
-
         const sanitized = transliterate(customerName)
           .replace(/[^a-zA-Z0-9\s]/g, '')
           .trim()
           .substring(0, 50);
-
-        return sanitized || 'Customer'; // Fallback if sanitization results in empty string
+        return sanitized || 'Customer';
       })();
 
-      if (!amount || !orderNumber || !cartData) {
-        throw new HttpsError('invalid-argument', 'Amount, orderNumber, and cartData are required');
+      if (!orderNumber || !cartData) {
+        throw new HttpsError('invalid-argument', 'orderNumber and cartData are required');
       }
 
-      console.log('🔍 Received amount from Flutter:', amount);
-      console.log('🔍 Amount type:', typeof amount);
+      // ═══════════════════════════════════════════════════════════════
+      // SERVER-SIDE TOTAL CALCULATION — Single Source of Truth
+      // ═══════════════════════════════════════════════════════════════
+      const db = admin.firestore();
+      const userId = request.auth.uid;
 
-      const formattedAmount = Math.round(parseFloat(amount)).toString();
+      const cartCalculatedTotal = parseFloat(cartData.cartCalculatedTotal) || 0;
+      const deliveryOption = cartData.deliveryOption || 'normal';
+      const couponId = cartData.couponId || null;
+      const freeShippingBenefitId = cartData.freeShippingBenefitId || null;
+
+      // --- 1. Fetch delivery settings from Firestore ---
+      let deliverySettings = null;
+      try {
+        const deliveryDoc = await db.collection('settings').doc('delivery').get();
+        if (deliveryDoc.exists) {
+          deliverySettings = deliveryDoc.data();
+        }
+      } catch (e) {
+        console.error('Failed to fetch delivery settings:', e);
+      }
+
+      // --- 2. Calculate server-side delivery price ---
+      const serverDeliveryPriceRaw = calculateDeliveryPrice(
+        deliveryOption,
+        cartCalculatedTotal,
+        deliverySettings,
+      );
+
+      // --- 3. Validate coupon & free shipping (read-only, no marking as used) ---
+      let serverCouponDiscount = 0;
+      let serverFreeShippingApplied = false;
+      let couponCode = null;
+
+      if (couponId) {
+        try {
+          const couponRef = db.collection('users').doc(userId).collection('coupons').doc(couponId);
+          const couponDoc = await couponRef.get();
+
+          if (couponDoc.exists) {
+            const coupon = couponDoc.data();
+            if (!coupon.isUsed && (!coupon.expiresAt || coupon.expiresAt.toDate() >= new Date())) {
+              serverCouponDiscount = Math.min(coupon.amount || 0, cartCalculatedTotal);
+              couponCode = coupon.code || null;
+            } else {
+              console.warn(`Coupon ${couponId} is invalid (used or expired)`);
+              // Don't throw — let createOrderTransaction handle the final validation
+              // This is just pre-calculation
+            }
+          }
+        } catch (e) {
+          console.error('Coupon validation failed:', e);
+          // Continue without coupon — createOrderTransaction will validate again
+        }
+      }
+
+      if (freeShippingBenefitId) {
+        try {
+          const benefitRef = db.collection('users').doc(userId).collection('benefits').doc(freeShippingBenefitId);
+          const benefitDoc = await benefitRef.get();
+
+          if (benefitDoc.exists) {
+            const benefit = benefitDoc.data();
+            if (!benefit.isUsed && (!benefit.expiresAt || benefit.expiresAt.toDate() >= new Date())) {
+              serverFreeShippingApplied = true;
+            } else {
+              console.warn(`Benefit ${freeShippingBenefitId} is invalid (used or expired)`);
+            }
+          }
+        } catch (e) {
+          console.error('Benefit validation failed:', e);
+        }
+      }
+
+      // --- 4. Compute final delivery price (apply free shipping) ---
+      const serverDeliveryPrice = serverFreeShippingApplied ? 0 : serverDeliveryPriceRaw;
+
+      // --- 5. Calculate the REAL final total ---
+      const serverFinalTotal = Math.max(0, cartCalculatedTotal - serverCouponDiscount) + serverDeliveryPrice;
+
+      // --- 6. Log comparison for monitoring ---
+      const clientAmount = parseFloat(amount) || 0;
+      const discrepancy = Math.abs(serverFinalTotal - clientAmount);
+      if (discrepancy > 0.01) {
+        console.warn(`⚠️ PRICE DISCREPANCY: client=${clientAmount}, server=${serverFinalTotal}, diff=${discrepancy.toFixed(2)}`);
+        console.warn(`  Breakdown: subtotal=${cartCalculatedTotal}, coupon=-${serverCouponDiscount}, delivery=+${serverDeliveryPrice}`);
+      }
+
+      console.log(`💰 Server total: ${serverFinalTotal} (subtotal: ${cartCalculatedTotal}, coupon: -${serverCouponDiscount}, delivery: +${serverDeliveryPrice})`);
+
+      // ═══════════════════════════════════════════════════════════════
+      // USE SERVER-CALCULATED TOTAL FOR BANK
+      // ═══════════════════════════════════════════════════════════════
+      const formattedAmount = Math.round(serverFinalTotal).toString();
       const rnd = Date.now().toString();
 
       const baseUrl = `https://europe-west3-emlak-mobile-app.cloudfunctions.net`;
@@ -1241,7 +1368,7 @@ export const initializeIsbankPayment = onCall(
       const failUrl = `${baseUrl}/isbankPaymentCallback`;
       const callbackUrl = `${baseUrl}/isbankPaymentCallback`;
       const isbankConfig = await getIsbankConfig();
-      // For hash calculation - match exactly what will be sent
+
       const hashParams = {
         BillToName: sanitizedCustomerName || '',
         amount: formattedAmount,
@@ -1257,13 +1384,12 @@ export const initializeIsbankPayment = onCall(
         okurl: okUrl,
         rnd: rnd,
         storetype: isbankConfig.storeType,
-        taksit: '', // Keep empty string for installment
+        taksit: '',
         tel: customerPhone || '',
       };
 
       const hash = await generateHashVer3(hashParams);
 
-      // For form submission
       const paymentParams = {
         clientid: isbankConfig.clientId,
         storetype: isbankConfig.storeType,
@@ -1278,7 +1404,7 @@ export const initializeIsbankPayment = onCall(
         callbackurl: callbackUrl,
         lang: 'tr',
         rnd: rnd,
-        taksit: '', // Empty for single payment
+        taksit: '',
         BillToName: sanitizedCustomerName || '',
         email: customerEmail || '',
         tel: customerPhone || '',
@@ -1287,13 +1413,13 @@ export const initializeIsbankPayment = onCall(
       console.log('Hash params:', JSON.stringify(hashParams, null, 2));
       console.log('Payment params being sent:', JSON.stringify(paymentParams, null, 2));
 
-      const db = admin.firestore();
       const timestamp = admin.firestore.FieldValue.serverTimestamp();
 
       await db.collection('pendingPayments').doc(orderNumber).set({
         userId: request.auth.uid,
-        amount: amount,
+        amount: serverFinalTotal,              // ✅ Server-calculated
         formattedAmount: formattedAmount,
+        clientAmount: clientAmount,            // ✅ Keep client value for comparison/debugging
         orderNumber: orderNumber,
         status: 'awaiting_3d',
         paymentParams: paymentParams,
@@ -1302,6 +1428,18 @@ export const initializeIsbankPayment = onCall(
           name: sanitizedCustomerName,
           email: customerEmail,
           phone: customerPhone,
+        },
+        // ✅ NEW: Pre-calculated values for createOrderTransaction
+        serverCalculation: {
+          itemsSubtotal: cartCalculatedTotal,
+          couponDiscount: serverCouponDiscount,
+          couponCode: couponCode,
+          deliveryPrice: serverDeliveryPrice,
+          deliveryPriceBeforeFreeShipping: serverDeliveryPriceRaw,
+          freeShippingApplied: serverFreeShippingApplied,
+          finalTotal: serverFinalTotal,
+          deliveryOption: deliveryOption,
+          calculatedAt: new Date().toISOString(),
         },
         createdAt: timestamp,
         expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
@@ -1319,6 +1457,31 @@ export const initializeIsbankPayment = onCall(
     }
   },
 );
+
+// ═══════════════════════════════════════════════════════════════════════
+// NEW HELPER: Calculate delivery price (mirrors Flutter logic exactly)
+// ═══════════════════════════════════════════════════════════════════════
+function calculateDeliveryPrice(deliveryOption, cartTotal, deliverySettings) {
+  if (!deliverySettings) {
+    // Fallback defaults (same as Flutter defaults)
+    const defaults = {
+      normal: { price: 150, freeThreshold: 2000 },
+      express: { price: 350, freeThreshold: 10000 },
+    };
+    const opt = defaults[deliveryOption] || defaults.normal;
+    return cartTotal >= opt.freeThreshold ? 0 : opt.price;
+  }
+
+  const optionSettings = deliverySettings[deliveryOption] || deliverySettings['normal'];
+  if (!optionSettings) {
+    return 0;
+  }
+
+  const price = parseFloat(optionSettings.price) || 0;
+  const freeThreshold = parseFloat(optionSettings.freeThreshold) || Infinity;
+
+  return cartTotal >= freeThreshold ? 0 : price;
+}
 
 async function generateHashVer3(params) {
   // Get all parameter keys except 'hash' and 'encoding'!!!
@@ -1669,8 +1832,9 @@ export const isbankPaymentCallback = onRequest(
           transactionResult.pendingPayment.userId,
           {
             ...transactionResult.pendingPayment.cartData,
-            paymentOrderId: oid, // CRITICAL: Pass payment reference
+            paymentOrderId: oid,
             paymentMethod: 'isbank_3d',
+            serverCalculation: transactionResult.pendingPayment.serverCalculation || null,
           },
         );
 
@@ -5968,6 +6132,11 @@ export const generateReceiptBackground = onDocumentCreated(
         lastError: error.message,
         failedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+
+      // If permanently failed, log to payment alerts
+      if (retryCount >= 3) {
+        logTaskFailureAlert('receipt_generation', taskData.orderId, taskData.buyerId, taskData.buyerName, error);
+      }
 
       // If under retry limit, throw error to trigger function retry
       if (retryCount < 3) {
@@ -13779,3 +13948,4 @@ export {
   revokeCoupon,
   revokeBenefit,
 } from './17-coupons/index.js';
+export {alertOnPaymentIssue, detectPaymentAnomalies} from './18-payment-alerts/index.js';

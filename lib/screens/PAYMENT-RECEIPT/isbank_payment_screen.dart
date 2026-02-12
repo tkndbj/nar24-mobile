@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../providers/cart_provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class IsbankPaymentScreen extends StatefulWidget {
   final String gatewayUrl;
@@ -92,10 +93,23 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
         }
       },
       onError: (error) {
-        print('❌ Payment listener error: $error');
-        // Don't fail - WebView URL scheme is backup
+        _logPaymentError('Listener error: $error');
       },
     );
+  }
+
+  void _logPaymentError(String error) {
+    try {
+      FirebaseFirestore.instance.collection('_client_errors').add({
+        'userId': FirebaseAuth.instance.currentUser?.uid,
+        'context': 'isbank_payment_screen',
+        'error': error,
+        'orderNumber': widget.orderNumber,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {
+      // Silent
+    }
   }
 
   void _startTimeoutTimer() {
@@ -160,7 +174,8 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
     setState(() => _isNavigating = true);
     _cleanup();
 
-    print('❌ Payment failed: $errorMessage');
+    // Log to Firestore (fire-and-forget)
+    _logPaymentError(errorMessage);
 
     _showErrorDialog(errorMessage);
   }
