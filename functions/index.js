@@ -1012,15 +1012,7 @@ if (preCalc) {
         .filter((meta) => meta.data.shopId)
         .map((meta) => meta.data.shopId))];
 
-      // Call conversion tracking
-      const functions = admin.functions();
-      await functions.httpsCallable('trackAdConversion')({
-        orderId: finalOrderId,
-        productIds,
-        shopIds,
-      }, {
-        auth: {uid: buyerId},
-      });
+      await trackAdConversionInternal(buyerId, finalOrderId, productIds, shopIds);
     } catch (convError) {
       console.error('Error tracking ad conversion:', convError);
       logTaskFailureAlert('ad_conversion', finalOrderId, buyerId, orderResult?.buyerName, convError);
@@ -3502,6 +3494,82 @@ export const trackAdConversion = onCall(
     }
   },
 );
+
+async function trackAdConversionInternal(userId, orderId, productIds, shopIds) {
+  const db = admin.firestore();
+
+  const thirtyDaysAgo = admin.firestore.Timestamp.fromMillis(
+    Date.now() - 30 * 24 * 60 * 60 * 1000,
+  );
+
+  const userClicksSnap = await db
+    .collection('users')
+    .doc(userId)
+    .collection('ad_clicks')
+    .where('clickedAt', '>=', thirtyDaysAgo)
+    .where('converted', '==', false)
+    .get();
+
+  if (userClicksSnap.empty) {
+    return;
+  }
+
+  const batch = db.batch();
+  let conversionsCount = 0;
+
+  for (const clickDoc of userClicksSnap.docs) {
+    const clickData = clickDoc.data();
+
+    let isConversion = false;
+
+    if (clickData.linkedType === 'product' && productIds.includes(clickData.linkedId)) {
+      isConversion = true;
+    } else if (clickData.linkedType === 'shop' && shopIds && shopIds.includes(clickData.linkedId)) {
+      isConversion = true;
+    }
+
+    if (isConversion) {
+      conversionsCount++;
+
+      batch.update(clickDoc.ref, {
+        converted: true,
+        convertedAt: admin.firestore.FieldValue.serverTimestamp(),
+        orderId: orderId,
+      });
+
+      const adCollectionName = getAdCollectionName(clickData.adType);
+      const adRef = db.collection(adCollectionName).doc(clickData.adId);
+
+      batch.update(adRef, {
+        totalConversions: admin.firestore.FieldValue.increment(1),
+        lastConvertedAt: admin.firestore.FieldValue.serverTimestamp(),
+        metricsUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      const clickRecordsSnap = await db
+        .collection(adCollectionName)
+        .doc(clickData.adId)
+        .collection('clicks')
+        .where('userId', '==', userId)
+        .where('clickedAt', '==', clickData.clickedAt)
+        .limit(1)
+        .get();
+
+      if (!clickRecordsSnap.empty) {
+        batch.update(clickRecordsSnap.docs[0].ref, {
+          converted: true,
+          convertedAt: admin.firestore.FieldValue.serverTimestamp(),
+          orderId: orderId,
+        });
+      }
+    }
+  }
+
+  if (conversionsCount > 0) {
+    await batch.commit();
+    console.log(`✅ Tracked ${conversionsCount} ad conversions for order ${orderId}`);
+  }
+}
 
 // Batch Analytics Snapshot (Daily scheduled function)
 export const createDailyAdAnalyticsSnapshot = onSchedule(
