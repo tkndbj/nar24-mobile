@@ -220,6 +220,7 @@ async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
   // Aggregation maps
   const categoryScores = new Map();
   const brandScores = new Map();
+  const genderScores = new Map(); // ✅ NEW: Gender tracking
   const recentProducts = [];
   const searchQueries = [];
   let purchaseCount = 0;
@@ -265,6 +266,12 @@ async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
     if (event.brand && weight > 0) {
       const current = brandScores.get(event.brand) || 0;
       brandScores.set(event.brand, current + weight);
+    }
+
+    // ✅ NEW: Aggregate gender scores (only positive weights)
+    if (event.gender && weight > 0) {
+      const current = genderScores.get(event.gender) || 0;
+      genderScores.set(event.gender, current + weight);
     }
 
     // Track recently viewed products
@@ -321,6 +328,16 @@ async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
     for (const [brand, score] of brandScores.entries()) {
       const safeKey = brand.replace(/[./]/g, '_');
       profileUpdate.brandScores[safeKey] =
+        admin.firestore.FieldValue.increment(score);
+    }
+  }
+
+  // ✅ NEW: Build nested genderScores object
+  if (genderScores.size > 0) {
+    profileUpdate.genderScores = {};
+    for (const [gender, score] of genderScores.entries()) {
+      const safeKey = gender.replace(/[./]/g, '_');
+      profileUpdate.genderScores[safeKey] =
         admin.firestore.FieldValue.increment(score);
     }
   }
@@ -555,27 +572,42 @@ export const computeUserPreferences = onSchedule({
 }, async () => {
   const db = admin.firestore();
   const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
-
+  const startTime = Date.now();
   console.log('🧮 Computing user preferences...');
 
   try {
-    const profilesSnapshot = await db
-        .collection('user_profiles')
-        .where('lastActivityAt', '>=', sixHoursAgo)
-        .limit(500)
-        .get();
-
-    if (profilesSnapshot.empty) {
-      console.log('✅ No active users');
-      return;
-    }
-
     let processed = 0;
+let totalFetched = 0;
+let lastDoc = null;
+const PAGE_SIZE = 500;
+const MAX_USERS = 10000; // Safety cap
 
-    // Process in batches of 50 for efficiency
-    const profileDocs = profilesSnapshot.docs;
+while (totalFetched < MAX_USERS) {
+  let query = db
+      .collection('user_profiles')
+      .where('lastActivityAt', '>=', sixHoursAgo)
+      .orderBy('lastActivityAt')
+      .limit(PAGE_SIZE);
 
-    for (let i = 0; i < profileDocs.length; i += 50) {
+  if (lastDoc) {
+    query = query.startAfter(lastDoc);
+  }
+
+  const profilesSnapshot = await query.get();
+
+  if (profilesSnapshot.empty) {
+    if (totalFetched === 0) {
+      console.log('✅ No active users');
+    }
+    break;
+  }
+
+  totalFetched += profilesSnapshot.size;
+  lastDoc = profilesSnapshot.docs[profilesSnapshot.docs.length - 1];
+
+  const profileDocs = profilesSnapshot.docs;
+
+  for (let i = 0; i < profileDocs.length; i += 50) {
       const batch = db.batch();
       const chunk = profileDocs.slice(i, i + 50);
 
@@ -618,6 +650,15 @@ export const computeUserPreferences = onSchedule({
                   prunedBrandScores[brand] = score;
                 }
               });
+
+          // ✅ NEW: Compute gender preference
+          const genderScores = profile.genderScores || {};
+          const sortedGenders = Object.entries(genderScores)
+              .map(([gender, score]) => ({gender, score}))
+              .sort((a, b) => b.score - a.score);
+          const preferredGender = sortedGenders.length > 0 ?
+            sortedGenders[0].gender :
+            null;
       
           // Compute average purchase price
           const stats = profile.stats || {};
@@ -629,8 +670,11 @@ export const computeUserPreferences = onSchedule({
           batch.update(profileDoc.ref, {
             'categoryScores': prunedCategoryScores,
             'brandScores': prunedBrandScores,
+            'genderScores': genderScores, // ✅ NEW: Keep as-is (very few entries)
             'preferences.topCategories': topCategories,
             'preferences.topBrands': topBrands,
+            'preferences.preferredGender': preferredGender, // ✅ NEW
+            'preferences.genderScores': sortedGenders, // ✅ NEW
             'preferences.avgPurchasePrice': avgPurchasePrice,
             'preferences.computedAt': admin.firestore.FieldValue.serverTimestamp(),
             'trendingInput.needsRecompute': true,
@@ -645,13 +689,26 @@ export const computeUserPreferences = onSchedule({
       await batch.commit();
     }
 
+    // Check timeout (leave 60s buffer)
+    const elapsed = Date.now() - startTime;
+    if (elapsed > 480000) {
+      console.warn(`⏰ Approaching timeout after ${totalFetched} users, stopping`);
+      break;
+    }
+
+    // If we got fewer than PAGE_SIZE, we've reached the end
+    if (profilesSnapshot.size < PAGE_SIZE) {
+      break;
+    }
+  }
+
     console.log(JSON.stringify({
       level: 'INFO',
       event: 'preferences_computed',
       processed,
-      total: profilesSnapshot.size,
+      totalFetched,
     }));
-  } catch (error) {
+    } catch (error) {
     console.error(JSON.stringify({
       level: 'ERROR',
       event: 'preferences_failed',
@@ -680,6 +737,7 @@ export async function trackPurchaseActivity(userId, items, orderId) {
       let totalValue = 0;
       const categoryScores = new Map();
       const brandScores = new Map();
+      const genderScores = new Map(); // ✅ NEW
 
       for (const item of items) {
         const eventRef = db
@@ -703,6 +761,7 @@ export async function trackPurchaseActivity(userId, items, orderId) {
           subcategory: item.subcategory || null,
           subsubcategory: item.subsubcategory || null,
           brand: item.brandModel || null,
+          gender: item.gender || null, // ✅ NEW: Store gender in raw event
           price: item.price || 0,
           quantity: item.quantity || 1,
           totalValue: itemTotal,
@@ -718,6 +777,12 @@ export async function trackPurchaseActivity(userId, items, orderId) {
         if (item.brandModel) {
           const current = brandScores.get(item.brandModel) || 0;
           brandScores.set(item.brandModel, current + ACTIVITY_WEIGHTS.purchase);
+        }
+
+        // ✅ NEW: Track gender from purchased items
+        if (item.gender) {
+          const current = genderScores.get(item.gender) || 0;
+          genderScores.set(item.gender, current + ACTIVITY_WEIGHTS.purchase);
         }
       }
 
@@ -746,6 +811,16 @@ export async function trackPurchaseActivity(userId, items, orderId) {
         for (const [brand, score] of brandScores.entries()) {
           const safeKey = brand.replace(/[./]/g, '_');
           profileUpdate.brandScores[safeKey] =
+            admin.firestore.FieldValue.increment(score);
+        }
+      }
+
+      // ✅ NEW: Build nested genderScores object
+      if (genderScores.size > 0) {
+        profileUpdate.genderScores = {};
+        for (const [gender, score] of genderScores.entries()) {
+          const safeKey = gender.replace(/[./]/g, '_');
+          profileUpdate.genderScores[safeKey] =
             admin.firestore.FieldValue.increment(score);
         }
       }

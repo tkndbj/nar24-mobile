@@ -24,8 +24,9 @@ const BASE_WEIGHTS = {
   CATEGORY_MATCH: 0.25, // Base: 25% (will scale up to 40% with engagement)
   BRAND_MATCH: 0.20, // Base: 20% (will scale up to 30% with engagement)
   TRENDING_SCORE: 0.25, // Base: 25% (will scale down to 10% with engagement)
-  PRICE_RANGE_MATCH: 0.15, // Fixed: 15%
+  PRICE_RANGE_MATCH: 0.05, // Fixed: 15%
   RECENCY_PENALTY: 0.15, // Fixed: 15%
+  GENDER_MATCH: 0.10,
 };
 
 // ✅ NEW: Progressive personalization config
@@ -212,6 +213,7 @@ class CandidateSelector {
               clicks: data.clickCount || 0,
               cartCount: data.cartCount || 0,
               favoritesCount: data.favoritesCount || 0,
+              gender: data.gender || null,
             });
           }
         });
@@ -281,9 +283,10 @@ class FeedScorer {
     // Fixed weights
     const priceWeight = BASE_WEIGHTS.PRICE_RANGE_MATCH;
     const recencyWeight = BASE_WEIGHTS.RECENCY_PENALTY;
+    const genderWeight = BASE_WEIGHTS.GENDER_MATCH;
 
     // Normalize to ensure sum = 1.0
-    const total = categoryWeight + brandWeight + trendingWeight + priceWeight + recencyWeight;
+    const total = categoryWeight + brandWeight + trendingWeight + priceWeight + recencyWeight + genderWeight;
 
     return {
       CATEGORY_MATCH: categoryWeight / total,
@@ -291,10 +294,28 @@ class FeedScorer {
       TRENDING_SCORE: trendingWeight / total,
       PRICE_RANGE_MATCH: priceWeight / total,
       RECENCY_PENALTY: recencyWeight / total,
+      GENDER_MATCH: genderWeight / total,
       // Store metadata for debugging
       _personalizationStrength: personalizationStrength,
       _activityCount: activityCount,
     };
+  }
+
+  calculateGenderMatch(product, userProfile) {
+    const genderScores = userProfile.genderScores || {};
+    const productGender = product.gender;
+  
+    if (!productGender || Object.keys(genderScores).length === 0) {
+      return 0.5; // Neutral — don't penalize unknown
+    }
+  
+    // Unisex products always get a good score
+    if (productGender === 'Unisex') {
+      return 0.8;
+    }
+  
+    const maxScore = Math.max(...Object.values(genderScores), 1);
+    return (genderScores[productGender] || 0) / maxScore;
   }
 
   normalize(value, min, max) {
@@ -368,6 +389,7 @@ class FeedScorer {
 
   scoreProduct(product, userProfile) {
     const categoryMatch = this.calculateCategoryMatch(product, userProfile);
+    const genderMatch = this.calculateGenderMatch(product, userProfile);
     const brandMatch = this.calculateBrandMatch(product, userProfile);
     const priceMatch = this.calculatePriceMatch(product, userProfile);
     const recencyPenalty = this.calculateRecencyPenalty(product, userProfile);
@@ -377,6 +399,7 @@ class FeedScorer {
     // ✅ Use dynamic weights instead of static WEIGHTS
     const score =
       categoryMatch * this.weights.CATEGORY_MATCH +
+      genderMatch * this.weights.GENDER_MATCH +
       brandMatch * this.weights.BRAND_MATCH +
       trendingScore * this.weights.TRENDING_SCORE +
       priceMatch * this.weights.PRICE_RANGE_MATCH +
@@ -386,6 +409,7 @@ class FeedScorer {
       score,
       breakdown: {
         category: categoryMatch.toFixed(3),
+        gender: genderMatch.toFixed(3),
         brand: brandMatch.toFixed(3),
         trending: trendingScore.toFixed(3),
         price: priceMatch.toFixed(3),
@@ -397,6 +421,7 @@ class FeedScorer {
   getWeightsInfo() {
     return {
       category: this.weights.CATEGORY_MATCH.toFixed(3),
+      gender: this.weights.GENDER_MATCH.toFixed(3),
       brand: this.weights.BRAND_MATCH.toFixed(3),
       trending: this.weights.TRENDING_SCORE.toFixed(3),
       price: this.weights.PRICE_RANGE_MATCH.toFixed(3),

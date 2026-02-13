@@ -346,6 +346,7 @@ class TrendingCalculator {
             cart: product.cartCount,
             favorites: product.favoritesCount,
             purchases: product.purchaseCount,
+            category: product.category,
           },
         };
       });

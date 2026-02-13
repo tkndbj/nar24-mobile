@@ -1,0 +1,17 @@
+[debug] [2026-02-13T12:16:41.180Z] ----------------------------------------------------------------------
+[debug] [2026-02-13T12:16:41.181Z] Command:       C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\firebase-tools\lib\bin\firebase.js deploy --only functions:computeTrendingProducts
+[debug] [2026-02-13T12:16:41.181Z] CLI Version:   14.15.0
+[debug] [2026-02-13T12:16:41.181Z] Platform:      win32
+[debug] [2026-02-13T12:16:41.181Z] Node Version:  v20.18.3
+[debug] [2026-02-13T12:16:41.181Z] Time:          Fri Feb 13 2026 15:16:41 GMT+0300 (GMT+03:00)
+[debug] [2026-02-13T12:16:41.181Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-02-13T12:16:41.274Z] Object "" in "firebase.json" has unknown property: {"additionalProperty":"flutter"}
+[debug] [2026-02-13T12:16:41.277Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-13T12:16:41.277Z] > authorizing via signed-in user (tekin@ctscyprushomes.com)
+[debug] [2026-02-13T12:16:41.277Z] [iam] checking project emlak-mobile-app for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[debug] [2026-02-13T12:16:41.278Z] Checked if tokens are valid: false, expires at: 1770985884001
+[debug] [2026-02-13T12:16:41.278Z] Checked if tokens are valid: false, expires at: 1770985884001
+[debug] [2026-02-13T12:16:41.278Z] > refreshing access token with scopes: []
+[debug] [2026-02-13T12:16:41.279Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-02-13T12:16:41.279Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]

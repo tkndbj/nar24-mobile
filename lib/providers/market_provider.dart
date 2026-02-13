@@ -876,6 +876,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     String? subcategory, // ✅ ADD
     String? subsubcategory, // ✅ ADD
     String? brand, // ✅ ADD
+    String? gender, // ✅ ADD
   }) async {
     await ClickTrackingService.instance.trackProductClick(
       itemId,
@@ -886,6 +887,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
       subcategory: subcategory,
       subsubcategory: subsubcategory,
       brand: brand,
+      gender: gender,
     );
   }
 

@@ -229,6 +229,7 @@ class _ProductCardState extends State<ProductCard>
       subcategory: widget.product.subcategory,
       subsubcategory: widget.product.subsubcategory,
       brand: widget.product.brandModel,
+      gender: widget.product.gender,
     );
 
     // ✅ OPTIMIZATION: Use lighter curve for smoother animation on low-end devices

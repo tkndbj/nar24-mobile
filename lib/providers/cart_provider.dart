@@ -703,6 +703,7 @@ Future<void> updateTotalsForSelection(List<String> selectedProductIds) async {
           product.imageUrls.isNotEmpty ? product.imageUrls.first : '',
       'colorImages': product.colorImages,
       'videoUrl': product.videoUrl,
+      'gender': product.gender,
       'availableStock': product.quantity,
       'colorQuantities': product.colorQuantities,
       'availableColors': product.availableColors,
@@ -828,6 +829,7 @@ Future<void> _backgroundRefreshTotals() async {
         subcategory: productData['subcategory'] as String?,
         subsubcategory: productData['subsubcategory'] as String?,
         brand: productData['brandModel'] as String?,
+        gender: productData['gender'] as String?,
         price: (productData['unitPrice'] as num?)?.toDouble(),
         quantity: quantity,
         productName: productData['productName'] as String?,
@@ -951,6 +953,7 @@ Future<void> _backgroundRefreshTotals() async {
         productName: cartData?['productName'] as String?,
         category: cartData?['category'] as String?,
         brand: cartData?['brandModel'] as String?,
+        gender: cartData?['gender'] as String?,
       );
 
       _metricsService.logCartRemoved(

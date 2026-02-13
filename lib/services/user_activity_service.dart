@@ -53,6 +53,7 @@ class ActivityEvent {
   final String? category;
   final String? subcategory;
   final String? subsubcategory;
+  final String? gender;
   final String? brand;
   final double? price;
   final String? searchQuery;
@@ -71,6 +72,7 @@ class ActivityEvent {
     this.category,
     this.subcategory,
     this.subsubcategory,
+    this.gender,
     this.brand,
     this.price,
     this.searchQuery,
@@ -95,6 +97,7 @@ class ActivityEvent {
     if (subcategory != null) map['subcategory'] = subcategory;
     if (subsubcategory != null) map['subsubcategory'] = subsubcategory;
     if (brand != null) map['brand'] = brand;
+    if (gender != null) map['gender'] = gender;
     if (price != null) map['price'] = price;
     if (searchQuery != null) map['searchQuery'] = searchQuery;
     if (source != null) map['source'] = source;
@@ -120,6 +123,7 @@ class ActivityEvent {
       subcategory: json['subcategory'] as String?,
       subsubcategory: json['subsubcategory'] as String?,
       brand: json['brand'] as String?,
+      gender: json['gender'] as String?,
       price: (json['price'] as num?)?.toDouble(),
       searchQuery: json['searchQuery'] as String?,
       source: json['source'] as String?,
@@ -308,6 +312,7 @@ class UserActivityService {
     String? category,
     String? subcategory,
     String? subsubcategory,
+    String? gender,
     String? brand,
     double? price,
     String? source,
@@ -322,6 +327,7 @@ class UserActivityService {
       category: category,
       subcategory: subcategory,
       subsubcategory: subsubcategory,
+      gender: gender,
       brand: brand,
       price: price,
       source: source,
@@ -336,6 +342,7 @@ class UserActivityService {
     String? subcategory,
     String? subsubcategory,
     String? brand,
+    String? gender,
     double? price,
     String? source,
     int? viewDurationSeconds,
@@ -350,6 +357,7 @@ class UserActivityService {
       subcategory: subcategory,
       subsubcategory: subsubcategory,
       brand: brand,
+      gender: gender,
       price: price,
       source: source,
       extra: viewDurationSeconds != null ? {'viewDuration': viewDurationSeconds} : null,
@@ -364,6 +372,7 @@ class UserActivityService {
     String? category,
     String? subcategory,
     String? subsubcategory,
+    String? gender,
     String? brand,
     double? price,
     int quantity = 1,
@@ -378,6 +387,7 @@ class UserActivityService {
       category: category,
       subcategory: subcategory,
       subsubcategory: subsubcategory,
+      gender: gender,
       brand: brand,
       price: price,
       quantity: quantity,
@@ -390,6 +400,7 @@ class UserActivityService {
     String? shopId,
     String? productName,
     String? category,
+    String? gender,
     String? brand,
     double? price,
     int quantity = 1,
@@ -402,6 +413,7 @@ class UserActivityService {
       productName: productName,
       shopId: shopId,
       category: category,
+      gender: gender,
       brand: brand,
       price: price,
       quantity: quantity,
@@ -416,6 +428,7 @@ class UserActivityService {
     String? category,
     String? subcategory,
     String? subsubcategory,
+    String? gender,
     String? brand,
     double? price,
   }) {
@@ -429,6 +442,7 @@ class UserActivityService {
       category: category,
       subcategory: subcategory,
       subsubcategory: subsubcategory,
+      gender: gender,
       brand: brand,
       price: price,
     ));
@@ -440,6 +454,7 @@ class UserActivityService {
     String? shopId,
     String? productName,
     String? category,
+    String? gender,
     String? brand,
     double? price,
   }) {
@@ -451,6 +466,7 @@ class UserActivityService {
       productName: productName,
       shopId: shopId,
       category: category,
+      gender: gender,
       brand: brand,
       price: price,
     ));
@@ -648,6 +664,7 @@ class UserActivityService {
         category: product.category as String?,
         subcategory: product.subcategory as String?,
         subsubcategory: product.subsubcategory as String?,
+        gender: product.gender as String?,
         brand: product.brandModel as String?,
         price: (product.price as num?)?.toDouble(),
         source: source,
@@ -666,6 +683,7 @@ class UserActivityService {
         category: product.category as String?,
         subcategory: product.subcategory as String?,
         subsubcategory: product.subsubcategory as String?,
+        gender: product.gender as String?,
         brand: product.brandModel as String?,
         price: (product.price as num?)?.toDouble(),
         source: source,
@@ -686,6 +704,7 @@ class UserActivityService {
         category: cartData['category'] as String?,
         subcategory: cartData['subcategory'] as String?,
         subsubcategory: cartData['subsubcategory'] as String?,
+        gender: cartData['gender'] as String?,
         brand: cartData['brandModel'] as String?,
         price: (cartData['unitPrice'] as num?)?.toDouble(),
         quantity: quantity,

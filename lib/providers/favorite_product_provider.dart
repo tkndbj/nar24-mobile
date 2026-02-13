@@ -454,6 +454,7 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
         'subcategory': data['subcategory'] as String?, // ✅ ADD
         'subsubcategory': data['subsubcategory'] as String?,
         'brand': data['brandModel'] as String?,
+        'gender': data['gender'] as String?,
       };
     } catch (e) {
       debugPrint('⚠️ Failed to get product metadata: $e');
@@ -544,6 +545,7 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
           productName: productName,
           category: metadata['category'],
           brand: metadata['brand'],
+          gender: metadata['gender'],
         );
         _metricsService.logFavoriteRemoved(
           productId: productId,
@@ -599,6 +601,7 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
           subcategory: metadata['subcategory'],
           subsubcategory: metadata['subsubcategory'],
           brand: metadata['brand'],
+          gender: metadata['gender'],
         );
         _metricsService.logFavoriteAdded(
           productId: productId,

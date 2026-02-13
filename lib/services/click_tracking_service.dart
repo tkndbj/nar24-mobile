@@ -127,6 +127,7 @@ class ClickTrackingService {
     String? subcategory, // ✅ ADD
     String? subsubcategory, // ✅ ADD
     String? brand, // ✅ ADD
+    String? gender, // ✅ ADD
   }) async {
     final now = DateTime.now();
     final lastClick = _lastClickTime[productId];
@@ -144,6 +145,7 @@ class ClickTrackingService {
       subcategory: subcategory, // ✅ ADD
       subsubcategory: subsubcategory, // ✅ ADD
       brand: brand, // ✅ ADD
+      gender: gender, // ✅ ADD
     );
 
     // Check buffer limits
