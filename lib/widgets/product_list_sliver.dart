@@ -180,6 +180,7 @@ class ProductListSliver extends StatelessWidget {
                   productId: product.id,
                   screenName: screenName,
                   child: card,
+                  sourceCollection: product.sourceCollection,
                 );
               }
 

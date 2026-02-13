@@ -357,18 +357,10 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _isLoading = true);
 
     try {
-      // Check connectivity before attempting Google Sign-In
-      final hasConnection = await NetworkUtils.hasConnectivity();
-      if (!hasConnection) {
-        if (mounted) {
-          _showFloatingSnackBar(
-            AppLocalizations.of(context).errorNoConnection ??
-                'No internet connection. Please check your network and try again.',
-            backgroundColor: Colors.red,
-          );
-        }
-        return;
-      }
+      // No pre-connectivity check — Google Sign-In SDK and Firebase
+      // surface clear network errors natively, which are already handled
+      // in the catch blocks below. Removing the check avoids an extra
+      // async round-trip before the account picker appears.
 
       final result =
           await _authService.signInWithGoogle(forceAccountPicker: true);

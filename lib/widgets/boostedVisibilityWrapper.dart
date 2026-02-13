@@ -54,6 +54,7 @@ class ImpressionBatcher {
 
   Timer? _batchTimer;
   Timer? _cleanupTimer;
+  Timer? _persistTimer;
   MarketProvider? _marketProvider;
 
   // ✅ NEW: Current user tracking
@@ -253,8 +254,8 @@ class ImpressionBatcher {
       timestamp: now,
     ));
     
-    // Persist
-    _persistPageImpressions();
+    _persistTimer?.cancel();
+_persistTimer = Timer(const Duration(seconds: 5), _persistPageImpressions);
     
     debugPrint('✅ Recorded impression #${validPages.length} for product $productId on screen $currentScreen by user $_currentUserId (${_maxImpressionsPerHour - validPages.length} remaining in this hour)');
 
@@ -288,79 +289,94 @@ class ImpressionBatcher {
     }
   }
 
-  Future<void> _sendBatch() async {
-    if (_impressionBuffer.isEmpty || _marketProvider == null) return;
+ Future<void> _sendBatch() async {
+  if (_impressionBuffer.isEmpty || _marketProvider == null) return;
 
-    // ✅ CHANGED: Extract product IDs from records
-    final recordsToSend = List<ImpressionRecord>.from(_impressionBuffer);
-    final idsToSend = recordsToSend.map((r) => r.productId).toList();
-    
-    _impressionBuffer.clear();
+  final recordsToSend = List<ImpressionRecord>.from(_impressionBuffer);
+  _impressionBuffer.clear();
 
-    try {
-      final profileData = _marketProvider!.userProvider.profileData;
-      final userGender = profileData?['gender'] as String?;
-      final birthDate = profileData?['birthDate'] as Timestamp?;
-      final userAge = _calculateAge(birthDate);
+  try {
+    // ← Deduplicate: aggregate counts per product ID
+    final countMap = <String, int>{};
+    for (final record in recordsToSend) {
+      countMap[record.productId] = (countMap[record.productId] ?? 0) + 1;
+    }
 
-      await _marketProvider!.incrementImpressionCount(
-        productIds: idsToSend, // ✅ Sends all IDs (including duplicates)
-        userGender: userGender,
-        userAge: userAge,
-      );
-
-      debugPrint(
-          '📊 Sent batch of ${recordsToSend.length} impressions from user $_currentUserId - Gender: ${userGender ?? 'unknown'}, Age: ${userAge ?? 'unknown'}');
-      _retryCount = 0;
-    } catch (e) {
-      debugPrint('❌ Error sending impression batch: $e');
-
-      if (_retryCount < _maxRetries) {
-        _retryCount++;
-        final delay = Duration(seconds: 2 * _retryCount);
-
-        debugPrint(
-            '🔄 Retrying impression batch in ${delay.inSeconds}s (attempt $_retryCount/$_maxRetries)');
-
-        // ✅ CHANGED: Re-add failed records
-        _impressionBuffer.addAll(recordsToSend);
-
-        Future.delayed(delay, () {
-          if (!_isDisposed) _sendBatch();
-        });
-      } else {
-        debugPrint('❌ Max retries reached, dropping ${recordsToSend.length} impressions');
-        _retryCount = 0;
+    // ← Expand back to list (Cloud Function already deduplicates,
+    //    but this reduces payload for repeated IDs)
+    final idsToSend = <String>[];
+    countMap.forEach((id, count) {
+      for (var i = 0; i < count; i++) {
+        idsToSend.add(id);
       }
+    });
+
+    final profileData = _marketProvider!.userProvider.profileData;
+    final userGender = profileData?['gender'] as String?;
+    final birthDate = profileData?['birthDate'] as Timestamp?;
+    final userAge = _calculateAge(birthDate);
+
+    await _marketProvider!.incrementImpressionCount(
+      productIds: idsToSend,
+      userGender: userGender,
+      userAge: userAge,
+    );
+
+    debugPrint(
+        '📊 Sent batch of ${recordsToSend.length} impressions (${countMap.length} unique) from user $_currentUserId');
+    _retryCount = 0;
+  } catch (e) {
+    debugPrint('❌ Error sending impression batch: $e');
+
+    if (_retryCount < _maxRetries) {
+      _retryCount++;
+      final delay = Duration(seconds: 2 * _retryCount);
+      debugPrint(
+          '🔄 Retrying in ${delay.inSeconds}s (attempt $_retryCount/$_maxRetries)');
+      _impressionBuffer.addAll(recordsToSend);
+      Future.delayed(delay, () {
+        if (!_isDisposed) _sendBatch();
+      });
+    } else {
+      debugPrint(
+          '❌ Max retries reached, dropping ${recordsToSend.length} impressions');
+      _retryCount = 0;
     }
   }
+}
 
   Future<void> flush() async {
-    _batchTimer?.cancel();
-    await _sendBatch();
-  }
+  _batchTimer?.cancel();
+  _persistTimer?.cancel();        // ← ADD
+  _persistPageImpressions();      // ← ADD
+  await _sendBatch();
+}
 
-  void dispose() {
-    _isDisposed = true;
-    _batchTimer?.cancel();
-    _cleanupTimer?.cancel();
-    _impressionBuffer.clear();
-    _pageImpressions.clear();
-    _marketProvider = null;
-  }
+ void dispose() {
+  _isDisposed = true;
+  _batchTimer?.cancel();
+  _cleanupTimer?.cancel();
+  _persistTimer?.cancel();        // ← ADD
+  _persistPageImpressions();      // ← ADD
+  _impressionBuffer.clear();
+  _pageImpressions.clear();
+  _marketProvider = null;
+}
 }
 
 // ✅ UPDATED: BoostedVisibilityWrapper with screen name support
 class BoostedVisibilityWrapper extends StatefulWidget {
   final String productId;
   final Widget child;
-  final String? screenName; // ✅ NEW: Screen identifier
+  final String? screenName;
+  final String? sourceCollection;
 
   const BoostedVisibilityWrapper({
     Key? key,
     required this.productId,
     required this.child,
     this.screenName, // ✅ NEW
+    this.sourceCollection,
   }) : super(key: key);
 
   @override
@@ -389,24 +405,30 @@ class _BoostedVisibilityWrapperState extends State<BoostedVisibilityWrapper> {
       onVisibilityChanged: (visibilityInfo) {
         if (visibilityInfo.visibleFraction > 0.5) {
           if (!_hasRecordedImpression) {
-            _batcher.addImpression(
-              widget.productId,
-              screenName: widget.screenName, // ✅ PASS screen name
-            );
+            final prefixedId = widget.sourceCollection != null
+    ? '${widget.sourceCollection}_${widget.productId}'
+    : widget.productId;
+
+_batcher.addImpression(
+  prefixedId,
+  screenName: widget.screenName,
+);
             _hasRecordedImpression = true;
 
-            // ✅ CHANGED: Reset after 1 second (page-level cooldown only)
-            Future.delayed(const Duration(seconds: 1), () {
-              if (mounted) {
-                _hasRecordedImpression = false;
-              }
-            });
           }
         }
       },
       child: widget.child,
     );
   }
+
+  @override
+void didUpdateWidget(BoostedVisibilityWrapper oldWidget) {
+  super.didUpdateWidget(oldWidget);
+  if (widget.productId != oldWidget.productId) {
+    _hasRecordedImpression = false;
+  }
+}
 
   @override
   void dispose() {

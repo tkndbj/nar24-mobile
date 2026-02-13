@@ -571,14 +571,17 @@ class AuthService {
 
       GoogleSignInAccount? googleUser;
 
-      // Always disconnect first when forcing account picker
+      // Clear cached session so authenticate() shows a fresh account picker.
+      // Uses signOut() instead of disconnect() — signOut() only clears local
+      // session state (fast, no network call), while disconnect() revokes
+      // tokens server-side (slow network round-trip) which is unnecessary
+      // just for re-showing the picker.
       if (forceAccountPicker) {
         try {
-          await _googleSignIn.disconnect();
+          await _googleSignIn.signOut();
           _currentGoogleUser = null;
-          await Future.delayed(const Duration(milliseconds: 500));
         } catch (e) {
-          if (kDebugMode) debugPrint('Pre-auth disconnect: $e');
+          if (kDebugMode) debugPrint('Pre-auth sign out: $e');
         }
       } else {
         final Future<GoogleSignInAccount?>? lightweightFuture =
@@ -1116,24 +1119,15 @@ class AuthService {
     try {
       final userId = _auth.currentUser?.uid;
 
-      // Step 1: Run FCM removal and Google disconnect in parallel (independent operations)
-      await Future.wait([
-        // FCM token removal with timeout
-        if (userId != null)
-          _removeFcmToken().timeout(
-            const Duration(seconds: 2),
-            onTimeout: () {
-              if (kDebugMode) debugPrint('FCM removal timed out');
-            },
-          ),
-        // Google disconnect with timeout
-        _disconnectGoogleWithTimeout(),
-      ], eagerError: false);
-
-      // Step 2: Sign out from Firebase (must happen after Google disconnect)
+      // Step 1: Sign out from Firebase FIRST.
+      // This triggers the auth state change immediately so the UI
+      // transitions to unauthenticated state without waiting for
+      // network cleanup. Firebase sign-out has no dependency on
+      // Google disconnect — they use independent token stores.
       await _auth.signOut();
+      _currentGoogleUser = null;
 
-      // Step 3: Clear local data and caches in parallel
+      // Step 2: Clear local data and caches (fast, local-only).
       final prefs = await SharedPreferences.getInstance();
 
       // Preserve agreement acceptance keys (they're user-specific and should persist)
@@ -1159,6 +1153,21 @@ class AuthService {
       // Sync cache clears (fast, no await needed)
       PreferenceProduct.clearCache();
       TerasPreferenceProduct.clearCache();
+
+      // Step 3: Remote cleanup — fire-and-forget (best-effort).
+      // User is already signed out; these clean up remote/platform state.
+      // Failures are safe to ignore — FCM tokens expire naturally and
+      // Google state is cleared on next sign-in.
+      unawaited(Future.wait([
+        if (userId != null)
+          _removeFcmToken().timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              if (kDebugMode) debugPrint('FCM removal timed out');
+            },
+          ),
+        _disconnectGoogleWithTimeout(),
+      ], eagerError: false).catchError((_) {}));
 
       if (kDebugMode) debugPrint('User logged out successfully');
     } catch (e) {
