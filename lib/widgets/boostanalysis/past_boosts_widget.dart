@@ -210,8 +210,8 @@ class _PastBoostCardState extends State<_PastBoostCard> {
     final String itemName = widget.boostDoc['itemName'] ?? 'Unnamed Product';
     final String? productImage = widget.boostDoc['productImage'];
     final double averageRating = (widget.boostDoc['averageRating'] ?? 0).toDouble();
-    final num price = widget.boostDoc['price'] ?? 0;
-    final String currency = widget.boostDoc['currency'] ?? 'TL';
+    final num boostPrice = widget.boostDoc['boostPrice'] ?? 0;
+final String currency = 'TL';
 
     // Boost metrics
     final int impressionsDuringBoost =
@@ -317,7 +317,7 @@ class _PastBoostCardState extends State<_PastBoostCard> {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
-                                '$price $currency',
+                                '$boostPrice $currency',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
