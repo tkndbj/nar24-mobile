@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../widgets/language_selector.dart';
 import 'dart:async';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({Key? key}) : super(key: key);
@@ -123,7 +124,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     try {
       final email = _emailController.text.trim().toLowerCase();
 
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      final functions = FirebaseFunctions.instanceFor(region: 'europe-west3');
+      final callable = functions.httpsCallable('sendPasswordResetEmail');
+      await callable.call({'email': email});
 
       setState(() {
         _emailSent = true;
@@ -137,24 +140,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
 
         _showSnackBar(message, backgroundColor: Colors.green);
       }
-    } on FirebaseAuthException catch (e) {
+    } on FirebaseFunctionsException catch (e) {
       String message;
       switch (e.code) {
-        case 'user-not-found':
-          message = AppLocalizations.of(context).errorUserNotFound ??
-              'No account found with this email address.';
-          break;
-        case 'invalid-email':
+        case 'invalid-argument':
           message = AppLocalizations.of(context).errorInvalidEmail ??
               'Please enter a valid email address.';
-          break;
-        case 'network-error':
-          message =
-              'Network error. Please check your connection and try again.';
-          break;
-        case 'too-many-requests':
-          message =
-              'Too many requests. Please wait a moment before trying again.';
           break;
         default:
           message = AppLocalizations.of(context).errorGeneral ??
@@ -189,9 +180,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     });
 
     try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(
-        email: _emailController.text.trim().toLowerCase(),
-      );
+      final functions = FirebaseFunctions.instanceFor(region: 'europe-west3');
+      final callable = functions.httpsCallable('sendPasswordResetEmail');
+      await callable
+          .call({'email': _emailController.text.trim().toLowerCase()});
 
       _startResendTimer();
 
@@ -202,21 +194,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           backgroundColor: Colors.green,
         );
       }
-    } on FirebaseAuthException catch (e) {
-      String message;
-      switch (e.code) {
-        case 'too-many-requests':
-          message = 'Too many requests. Please wait before trying again.';
-          break;
-        case 'network-error':
-          message = 'Network error. Please check your connection.';
-          break;
-        default:
-          message = 'Failed to resend email. Please try again.';
-      }
-
+    } catch (e) {
       if (mounted) {
-        _showSnackBar(message, backgroundColor: Colors.red);
+        _showSnackBar(
+          'Failed to resend email. Please try again.',
+          backgroundColor: Colors.red,
+        );
       }
     } finally {
       if (mounted) {
@@ -235,7 +218,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     return GestureDetector(
       onTap: _dismissKeyboard,
       child: Scaffold(
-        backgroundColor: isDark ? const Color.fromARGB(255, 33, 31, 49) : Colors.white,
+        backgroundColor:
+            isDark ? const Color.fromARGB(255, 33, 31, 49) : Colors.white,
         body: SafeArea(
           child: FadeTransition(
             opacity: _fadeInAnimation,

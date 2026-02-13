@@ -12729,4 +12729,7 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get cannotDeleteSellerInfoWithProducts =>
       'You can only update your seller information while you have listed products.';
+
+  @override
+  String get sending => 'Sending...';
 }

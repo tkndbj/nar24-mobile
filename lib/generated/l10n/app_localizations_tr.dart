@@ -12754,4 +12754,7 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get cannotDeleteSellerInfoWithProducts =>
       'Listelenen ürünleriniz varken satıcı bilgilerinizi güncelleyebilirsiniz.';
+
+  @override
+  String get sending => 'Gönderiliyor...';
 }

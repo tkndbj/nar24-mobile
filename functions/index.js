@@ -6602,7 +6602,7 @@ doc.fillColor('#666')
         
         doc.fontSize(9)
           .text(item.productName || 'Boost Item', 55, yPosition, {width: 200})
-          .text(`${data.boostData.boostDuration} min`, 260, yPosition, {width: 100})
+          .text(`${data.boostData.boostDuration} ${lang === 'tr' ? 'dakika' : lang === 'ru' ? 'минут' : 'minutes'}`, 260, yPosition, {width: 100})
           .text(`${item.unitPrice.toFixed(0)} ${data.currency}`, 365, yPosition, {width: 70, align: 'right'})
           .text(`${item.totalPrice.toFixed(0)} ${data.currency}`, 480, yPosition, {width: 65, align: 'right'});
         
@@ -8033,59 +8033,66 @@ export const registerWithEmailPassword = onCall(
 
 // Helper function to send verification email via SendGrid mail collection
 async function sendVerificationEmail(email, code, languageCode, displayName) {
-  // Email subjects by language
   const subjects = {
     en: 'Nar24 - Email Verification Code',
     tr: 'Nar24 - Email Doğrulama Kodu',
     ru: 'Nar24 - Код подтверждения электронной почты',
   };
 
-  // Split code into individual digits for better rendering
   const codeDigits = code.split('');
 
-  // Email HTML templates by language
+  // Get logo URL from Storage
+  let logoUrl = '';
+  try {
+    const bucket = admin.storage().bucket();
+    const logoFile = bucket.file('assets/naricon.png');
+    const [exists] = await logoFile.exists();
+    if (exists) {
+      const [url] = await logoFile.getSignedUrl({
+        action: 'read',
+        expires: Date.now() + 30 * 24 * 60 * 60 * 1000,
+      });
+      logoUrl = url;
+    }
+  } catch (err) {
+    console.warn('Could not get logo URL:', err.message);
+  }
+
   const getEmailHtml = (lang, codeDigits, name) => {
     const templates = {
       en: {
-        title: 'Verify Your Email',
         greeting: `Hello ${name},`,
-        message: 'Thank you for signing up with Nar24. To complete your registration, please enter the verification code below:',
-        codeLabel: 'Your Verification Code',
-        expiry: 'This code expires in 5 minutes',
-        warning: 'If you did not create an account with Nar24, please ignore this email or contact our support team.',
-        footer: 'This is an automated message from Nar24. Please do not reply to this email.',
-        copyright: '© 2024 Nar24. All rights reserved.',
+        message: 'Thank you for signing up with Nar24. Please enter the verification code below to complete your registration.',
+        codeLabel: 'VERIFICATION CODE',
+        expiry: 'This code expires in 5 minutes.',
+        warning: 'If you did not create an account with Nar24, please ignore this email.',
+        rights: 'All rights reserved.',
       },
       tr: {
-        title: 'E-postanızı Doğrulayın',
         greeting: `Merhaba ${name},`,
-        message: 'Nar24\'e kaydolduğunuz için teşekkür ederiz. Kaydınızı tamamlamak için lütfen aşağıdaki doğrulama kodunu girin:',
-        codeLabel: 'Doğrulama Kodunuz',
-        expiry: 'Bu kod 5 dakika içinde sona erer',
-        warning: 'Nar24\'te bir hesap oluşturmadıysanız, lütfen bu e-postayı görmezden gelin veya destek ekibimizle iletişime geçin.',
-        footer: 'Bu, Nar24 tarafından gönderilen otomatik bir mesajdır. Lütfen bu e-postayı yanıtlamayın.',
-        copyright: '© 2024 Nar24. Tüm hakları saklıdır.',
+        message: 'Nar24\'e kaydolduğunuz için teşekkür ederiz. Kaydınızı tamamlamak için aşağıdaki doğrulama kodunu girin.',
+        codeLabel: 'DOĞRULAMA KODU',
+        expiry: 'Bu kod 5 dakika içinde sona erer.',
+        warning: 'Nar24\'te bir hesap oluşturmadıysanız, lütfen bu e-postayı görmezden gelin.',
+        rights: 'Tüm hakları saklıdır.',
       },
       ru: {
-        title: 'Подтвердите вашу почту',
         greeting: `Здравствуйте, ${name}!`,
-        message: 'Благодарим вас за регистрацию в Nar24. Чтобы завершить регистрацию, введите код подтверждения ниже:',
-        codeLabel: 'Ваш код подтверждения',
-        expiry: 'Срок действия кода истекает через 5 минут',
-        warning: 'Если вы не создавали учетную запись в Nar24, проигнорируйте это письмо или свяжитесь с нашей службой поддержки.',
-        footer: 'Это автоматическое сообщение от Nar24. Пожалуйста, не отвечайте на это письмо.',
-        copyright: '© 2024 Nar24. Все права защищены.',
+        message: 'Благодарим за регистрацию в Nar24. Введите код подтверждения ниже, чтобы завершить регистрацию.',
+        codeLabel: 'КОД ПОДТВЕРЖДЕНИЯ',
+        expiry: 'Срок действия кода — 5 минут.',
+        warning: 'Если вы не создавали учётную запись в Nar24, проигнорируйте это письмо.',
+        rights: 'Все права защищены.',
       },
     };
 
     const t = templates[lang] || templates.en;
 
-    // Generate individual digit boxes for maximum compatibility
     const digitBoxes = codeDigits.map((digit) => `
               <td style="padding:0 4px;">
                 <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
                   <tr>
-                    <td style="width:44px;height:56px;background-color:#ffffff;border:2px solid #ff6b35;border-radius:8px;text-align:center;vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:28px;font-weight:bold;color:#333333;">
+                    <td style="width:44px;height:56px;background-color:#f9fafb;border:2px solid #e5e7eb;border-radius:8px;text-align:center;vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:28px;font-weight:bold;color:#1a1a1a;">
                       ${digit}
                     </td>
                   </tr>
@@ -8100,7 +8107,6 @@ async function sendVerificationEmail(email, code, languageCode, displayName) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>${t.title}</title>
   <!--[if mso]>
   <noscript>
     <xml>
@@ -8111,98 +8117,105 @@ async function sendVerificationEmail(email, code, languageCode, displayName) {
   </noscript>
   <![endif]-->
 </head>
-<body style="margin:0;padding:0;background-color:#f4f4f4;font-family:Arial,Helvetica,sans-serif;-webkit-font-smoothing:antialiased;-ms-text-size-adjust:100%;-webkit-text-size-adjust:100%;">
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background-color:#f9fafb;-webkit-font-smoothing:antialiased;">
   
-  <!-- Wrapper Table -->
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f4f4f4;">
+  <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f9fafb;padding:40px 0;">
     <tr>
-      <td align="center" style="padding:40px 20px;">
-        
-        <!-- Main Content Table -->
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+      <td align="center">
+        <table cellpadding="0" cellspacing="0" border="0" width="520" style="max-width:520px;background-color:#ffffff;">
           
-          <!-- Header -->
+          <!-- Logo -->
           <tr>
-            <td style="background-color:#ff6b35;padding:30px 40px;text-align:center;">
-              <h1 style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:32px;font-weight:bold;color:#ffffff;">Nar24</h1>
+            <td style="padding:32px 40px 24px 40px;text-align:center;">
+              ${logoUrl ? `<img src="${logoUrl}" alt="Nar24" width="64" height="64" style="display:inline-block;width:64px;height:64px;border-radius:12px;" />` : `<span style="font-size:22px;font-weight:700;color:#1a1a1a;letter-spacing:-0.3px;">Nar24</span>`}
             </td>
           </tr>
           
-          <!-- Body -->
+          <!-- Top Gradient Line -->
           <tr>
-            <td style="padding:40px;">
-              
-              <!-- Title -->
-              <h2 style="margin:0 0 24px 0;font-family:Arial,Helvetica,sans-serif;font-size:24px;font-weight:bold;color:#333333;text-align:center;">
-                ${t.title}
-              </h2>
-              
-              <!-- Greeting -->
-              <p style="margin:0 0 16px 0;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;color:#555555;">
-                ${t.greeting}
-              </p>
-              
-              <!-- Message -->
-              <p style="margin:0 0 32px 0;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;color:#555555;">
-                ${t.message}
-              </p>
-              
-              <!-- Code Label -->
-              <p style="margin:0 0 16px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;color:#888888;text-align:center;text-transform:uppercase;letter-spacing:1px;">
-                ${t.codeLabel}
-              </p>
-              
-              <!-- Verification Code Box -->
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:16px;">
+            <td style="padding:0 40px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
                 <tr>
-                  <td align="center">
-                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8f9fa;border-radius:12px;padding:24px;">
-                      <tr>
-                        ${digitBoxes}
-                      </tr>
-                    </table>
+                  <td width="50%" style="height:2px;background-color:#ff6b35;">&nbsp;</td>
+                  <td width="50%" style="height:2px;background-color:#ec4899;">&nbsp;</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Greeting -->
+          <tr>
+            <td style="padding:32px 40px 0 40px;">
+              <p style="margin:0;color:#1a1a1a;font-size:16px;font-weight:600;line-height:24px;">${t.greeting}</p>
+              <p style="margin:8px 0 0 0;color:#6b7280;font-size:14px;line-height:22px;">${t.message}</p>
+            </td>
+          </tr>
+          
+          <!-- Code Label -->
+          <tr>
+            <td style="padding:28px 40px 12px 40px;text-align:center;">
+              <p style="margin:0;font-size:11px;font-weight:600;color:#9ca3af;letter-spacing:1.5px;">${t.codeLabel}</p>
+            </td>
+          </tr>
+          
+          <!-- Verification Code Digits -->
+          <tr>
+            <td style="padding:0 40px;text-align:center;">
+              <table cellpadding="0" cellspacing="0" border="0" align="center">
+                <tr>
+                  ${digitBoxes}
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Fallback Plain Text Code -->
+          <tr>
+            <td style="padding:12px 40px 0 40px;text-align:center;">
+              <p style="margin:0;font-size:13px;color:#c0c0c0;">Code: <strong style="color:#9ca3af;letter-spacing:2px;">${codeDigits.join('')}</strong></p>
+            </td>
+          </tr>
+          
+          <!-- Expiry Notice -->
+          <tr>
+            <td style="padding:24px 40px 0 40px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td style="background-color:#f9fafb;border-radius:8px;padding:14px 16px;text-align:center;">
+                    <p style="margin:0;font-size:13px;color:#6b7280;">${t.expiry}</p>
                   </td>
                 </tr>
               </table>
-              
-              <!-- Fallback Plain Text Code (ensures code is always accessible) -->
-              <p style="margin:0 0 32px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#888888;text-align:center;">
-                Code: <strong style="color:#333333;font-size:18px;letter-spacing:2px;">${codeDigits.join('')}</strong>
-              </p>
-              
-              <!-- Expiry Notice -->
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:24px;">
+            </td>
+          </tr>
+          
+          <!-- Warning -->
+          <tr>
+            <td style="padding:20px 40px 0 40px;">
+              <p style="margin:0;font-size:13px;color:#c0c0c0;line-height:20px;">${t.warning}</p>
+            </td>
+          </tr>
+          
+          <!-- Bottom Gradient Line -->
+          <tr>
+            <td style="padding:36px 40px 0 40px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
                 <tr>
-                  <td style="background-color:#fff8e1;border-left:4px solid #ffc107;padding:16px;border-radius:0 8px 8px 0;">
-                    <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#856404;">
-                      <strong>&#9200;</strong> ${t.expiry}
-                    </p>
-                  </td>
+                  <td width="50%" style="height:2px;background-color:#ff6b35;">&nbsp;</td>
+                  <td width="50%" style="height:2px;background-color:#ec4899;">&nbsp;</td>
                 </tr>
               </table>
-              
-              <!-- Warning -->
-              <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#888888;">
-                ${t.warning}
-              </p>
-              
             </td>
           </tr>
           
           <!-- Footer -->
           <tr>
-            <td style="background-color:#f8f9fa;padding:24px 40px;border-top:1px solid #eeeeee;">
-              <p style="margin:0 0 8px 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#999999;text-align:center;">
-                ${t.footer}
-              </p>
-              <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#999999;text-align:center;">
-                ${t.copyright}
-              </p>
+            <td style="padding:20px 40px 32px 40px;text-align:center;">
+              <p style="margin:0;color:#c0c0c0;font-size:12px;font-weight:400;">© 2026 Nar24. ${t.rights}</p>
             </td>
           </tr>
           
         </table>
-        
       </td>
     </tr>
   </table>
@@ -8212,72 +8225,55 @@ async function sendVerificationEmail(email, code, languageCode, displayName) {
     `;
   };
 
-  // Create mail document for SendGrid extension
   const mailDoc = {
     to: [email],
     message: {
       subject: subjects[languageCode] || subjects.en,
       html: getEmailHtml(languageCode, codeDigits, displayName),
-      // Add plain text version for clients that don't support HTML
       text: getPlainTextEmail(languageCode, code, displayName),
     },
   };
 
-  // Add to mail collection - SendGrid extension will process it
   await admin.firestore().collection('mail').add(mailDoc);
 }
 
-// Helper function to generate plain text email (fallback for non-HTML clients)
 function getPlainTextEmail(lang, code, name) {
   const templates = {
     en: {
-      title: 'Email Verification - Nar24',
       greeting: `Hello ${name},`,
-      message: 'Thank you for signing up with Nar24. To complete your registration, please enter the verification code below:',
-      codeLabel: 'Your Verification Code',
+      message: 'Thank you for signing up with Nar24. Your verification code:',
       expiry: 'This code expires in 5 minutes.',
       warning: 'If you did not create an account with Nar24, please ignore this email.',
-      footer: 'This is an automated message from Nar24.',
     },
     tr: {
-      title: 'E-posta Doğrulama - Nar24',
       greeting: `Merhaba ${name},`,
-      message: 'Nar24\'e kaydolduğunuz için teşekkür ederiz. Kaydınızı tamamlamak için lütfen aşağıdaki doğrulama kodunu girin:',
-      codeLabel: 'Doğrulama Kodunuz',
+      message: 'Nar24\'e kaydolduğunuz için teşekkür ederiz. Doğrulama kodunuz:',
       expiry: 'Bu kod 5 dakika içinde sona erer.',
       warning: 'Nar24\'te bir hesap oluşturmadıysanız, lütfen bu e-postayı görmezden gelin.',
-      footer: 'Bu, Nar24 tarafından gönderilen otomatik bir mesajdır.',
     },
     ru: {
-      title: 'Подтверждение почты - Nar24',
       greeting: `Здравствуйте, ${name}!`,
-      message: 'Благодарим вас за регистрацию в Nar24. Чтобы завершить регистрацию, введите код подтверждения ниже:',
-      codeLabel: 'Ваш код подтверждения',
-      expiry: 'Срок действия кода истекает через 5 минут.',
-      warning: 'Если вы не создавали учетную запись в Nar24, проигнорируйте это письмо.',
-      footer: 'Это автоматическое сообщение от Nar24.',
+      message: 'Благодарим за регистрацию в Nar24. Ваш код подтверждения:',
+      expiry: 'Срок действия кода — 5 минут.',
+      warning: 'Если вы не создавали учётную запись в Nar24, проигнорируйте это письмо.',
     },
   };
 
   const t = templates[lang] || templates.en;
 
   return `
-${t.title}
-========================================
-
 ${t.greeting}
 
 ${t.message}
 
-${t.codeLabel}: ${code}
+${code}
 
 ${t.expiry}
 
 ${t.warning}
 
 ---
-${t.footer}
-© 2024 Nar24
+© 2026 Nar24
   `.trim();
 }
 
@@ -8455,6 +8451,236 @@ export const resendEmailVerificationCode = onCall(
   },
 );
 
+export const sendPasswordResetEmail = onCall(
+  {region: 'europe-west3'},
+  async (request) => {
+    const {email} = request.data;
+
+    if (!email) {
+      throw new HttpsError('invalid-argument', 'Email is required');
+    }
+
+    try {
+      // Get user's language preference (don't reveal if user exists)
+      let languageCode = 'en';
+      let displayName = '';
+
+      try {
+        const userRecord = await admin.auth().getUserByEmail(email.trim().toLowerCase());
+        const userDoc = await admin.firestore()
+          .collection('users')
+          .doc(userRecord.uid)
+          .get();
+
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          languageCode = userData.languageCode || 'en';
+          displayName = userData.displayName || '';
+        }
+      } catch (err) {
+        // User not found — return success anyway to not reveal if email exists
+        return {success: true};
+      }
+
+      // Generate password reset link via Admin SDK
+      const resetLink = await admin.auth().generatePasswordResetLink(
+        email.trim().toLowerCase(),
+      );
+
+      // Get logo URL from Storage
+      let logoUrl = '';
+      try {
+        const bucket = storage.bucket(`${process.env.GCLOUD_PROJECT}.appspot.com`);
+        const logoFile = bucket.file('assets/naricon.png');
+        const [exists] = await logoFile.exists();
+        if (exists) {
+          const [url] = await logoFile.getSignedUrl({
+            action: 'read',
+            expires: Date.now() + 30 * 24 * 60 * 60 * 1000,
+          });
+          logoUrl = url;
+        }
+      } catch (err) {
+        console.warn('Could not get logo URL:', err.message);
+      }
+
+      const content = getPasswordResetContent(languageCode);
+      const greeting = displayName ? `${content.greeting} ${displayName},` : `${content.greeting},`;
+
+      const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+</head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background-color:#f9fafb;-webkit-font-smoothing:antialiased;">
+  
+  <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f9fafb;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table cellpadding="0" cellspacing="0" border="0" width="520" style="max-width:520px;background-color:#ffffff;">
+          
+          <!-- Logo -->
+          <tr>
+            <td style="padding:32px 40px 24px 40px;text-align:center;">
+              ${logoUrl ? `<img src="${logoUrl}" alt="Nar24" width="64" height="64" style="display:inline-block;width:64px;height:64px;border-radius:12px;" />` : `<span style="font-size:22px;font-weight:700;color:#1a1a1a;letter-spacing:-0.3px;">Nar24</span>`}
+            </td>
+          </tr>
+          
+          <!-- Top Gradient Line -->
+          <tr>
+            <td style="padding:0 40px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td width="50%" style="height:2px;background-color:#ff6b35;">&nbsp;</td>
+                  <td width="50%" style="height:2px;background-color:#ec4899;">&nbsp;</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Greeting -->
+          <tr>
+            <td style="padding:32px 40px 0 40px;">
+              <p style="margin:0;color:#1a1a1a;font-size:16px;font-weight:600;line-height:24px;">${greeting}</p>
+              <p style="margin:8px 0 0 0;color:#6b7280;font-size:14px;line-height:22px;">${content.message}</p>
+            </td>
+          </tr>
+          
+          <!-- Reset Button -->
+          <tr>
+            <td style="padding:28px 40px 0 40px;text-align:center;">
+              <a href="${resetLink}" style="display:inline-block;padding:14px 36px;background-color:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">${content.resetButton}</a>
+            </td>
+          </tr>
+          
+          <!-- Or copy link -->
+          <tr>
+            <td style="padding:20px 40px 0 40px;text-align:center;">
+              <p style="margin:0 0 8px 0;color:#c0c0c0;font-size:12px;">${content.orCopyLink}</p>
+              <p style="margin:0;color:#9ca3af;font-size:11px;line-height:18px;word-break:break-all;">${resetLink}</p>
+            </td>
+          </tr>
+          
+          <!-- Expiry Notice -->
+          <tr>
+            <td style="padding:24px 40px 0 40px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td style="background-color:#f9fafb;border-radius:8px;padding:14px 16px;text-align:center;">
+                    <p style="margin:0;font-size:13px;color:#6b7280;">${content.expiry}</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Warning -->
+          <tr>
+            <td style="padding:20px 40px 0 40px;">
+              <p style="margin:0;font-size:13px;color:#c0c0c0;line-height:20px;">${content.warning}</p>
+            </td>
+          </tr>
+          
+          <!-- Bottom Gradient Line -->
+          <tr>
+            <td style="padding:36px 40px 0 40px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td width="50%" style="height:2px;background-color:#ff6b35;">&nbsp;</td>
+                  <td width="50%" style="height:2px;background-color:#ec4899;">&nbsp;</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="padding:20px 40px 32px 40px;text-align:center;">
+              <p style="margin:0;color:#c0c0c0;font-size:12px;font-weight:400;">© 2026 Nar24. ${content.rights}</p>
+            </td>
+          </tr>
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+  
+</body>
+</html>
+      `;
+
+      const mailDoc = {
+        to: [email.trim().toLowerCase()],
+        message: {
+          subject: `${content.subject} — Nar24`,
+          html: emailHtml,
+        },
+      };
+
+      await admin.firestore().collection('mail').add(mailDoc);
+
+      return {success: true};
+    } catch (error) {
+      console.error('Password reset email error:', error);
+
+      // Don't reveal specific errors for security
+      if (error.code === 'auth/user-not-found') {
+        return {success: true};
+      }
+
+      throw new HttpsError('internal', 'Failed to send password reset email');
+    }
+  },
+);
+
+function getPasswordResetContent(languageCode) {
+  const content = {
+    en: {
+      greeting: 'Hello',
+      message: 'We received a request to reset your password. Click the button below to create a new password.',
+      resetButton: 'Reset Password',
+      orCopyLink: 'Or copy and paste this link in your browser:',
+      expiry: 'This link expires in 1 hour.',
+      warning: 'If you did not request a password reset, you can safely ignore this email. Your password will not be changed.',
+      subject: 'Password Reset',
+      rights: 'All rights reserved.',
+    },
+    tr: {
+      greeting: 'Merhaba',
+      message: 'Şifrenizi sıfırlamak için bir istek aldık. Yeni bir şifre oluşturmak için aşağıdaki butona tıklayın.',
+      resetButton: 'Şifreyi Sıfırla',
+      orCopyLink: 'Veya bu bağlantıyı tarayıcınıza yapıştırın:',
+      expiry: 'Bu bağlantı 1 saat içinde sona erer.',
+      warning: 'Şifre sıfırlama talebinde bulunmadıysanız bu e-postayı görmezden gelebilirsiniz. Şifreniz değiştirilmeyecektir.',
+      subject: 'Şifre Sıfırlama',
+      rights: 'Tüm hakları saklıdır.',
+    },
+    ru: {
+      greeting: 'Здравствуйте',
+      message: 'Мы получили запрос на сброс вашего пароля. Нажмите кнопку ниже, чтобы создать новый пароль.',
+      resetButton: 'Сбросить пароль',
+      orCopyLink: 'Или скопируйте и вставьте эту ссылку в браузер:',
+      expiry: 'Срок действия ссылки — 1 час.',
+      warning: 'Если вы не запрашивали сброс пароля, проигнорируйте это письмо. Ваш пароль не будет изменён.',
+      subject: 'Сброс пароля',
+      rights: 'Все права защищены.',
+    },
+  };
+
+  return content[languageCode] || content.en;
+}
+
 export const sendReceiptEmail = onCall(
   {region: 'europe-west3'},
   async (request) => {
@@ -8481,7 +8707,6 @@ export const sendReceiptEmail = onCall(
 
       // ✅ Support for shop receipts
       if (isShopReceipt && shopId) {
-        // Get receipt from shop's collection
         receiptDoc = await admin.firestore()
           .collection('shops')
           .doc(shopId)
@@ -8493,7 +8718,6 @@ export const sendReceiptEmail = onCall(
           throw new HttpsError('not-found', 'Receipt not found');
         }
 
-        // Get shop details for language
         ownerDoc = await admin.firestore()
           .collection('shops')
           .doc(shopId)
@@ -8505,7 +8729,6 @@ export const sendReceiptEmail = onCall(
           languageCode = shopData.languageCode || 'tr';
         }
       } else {
-        // Get user's receipt (existing logic)
         ownerDoc = await admin.firestore()
           .collection('users')
           .doc(uid)
@@ -8527,8 +8750,7 @@ export const sendReceiptEmail = onCall(
         }
 
         const receiptData = receiptDoc.data();
-        
-        // Verify ownership for user receipts only
+
         if (receiptData.buyerId !== uid) {
           throw new HttpsError('permission-denied', 'Access denied');
         }
@@ -8536,7 +8758,24 @@ export const sendReceiptEmail = onCall(
 
       const receiptData = receiptDoc.data();
 
-      // Rest of the function stays the same...
+      // Get logo URL from Storage
+      let logoUrl = '';
+      try {
+        const bucket = storage.bucket(`${process.env.GCLOUD_PROJECT}.appspot.com`);
+        const logoFile = bucket.file('assets/naricon.png');
+        const [exists] = await logoFile.exists();
+        if (exists) {
+          const [url] = await logoFile.getSignedUrl({
+            action: 'read',
+            expires: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
+          });
+          logoUrl = url;
+        }
+      } catch (err) {
+        console.warn('Could not get logo URL:', err.message);
+      }
+
+      // Get PDF download URL
       let pdfUrl = null;
       try {
         const bucket = storage.bucket(`${process.env.GCLOUD_PROJECT}.appspot.com`);
@@ -8564,182 +8803,206 @@ export const sendReceiptEmail = onCall(
         console.error('Error generating download URL:', error);
       }
 
-      // Get localized content
       const content = getLocalizedContent(languageCode);
       const orderIdShort = orderId.substring(0, 8).toUpperCase();
       const receiptIdShort = receiptId.substring(0, 8).toUpperCase();
 
-      // Format date
       const orderDate = receiptData.createdAt ?
-        new Date(receiptData.createdAt.toDate()).toLocaleDateString(languageCode === 'tr' ? 'tr-TR' : languageCode === 'ru' ? 'ru-RU' : 'en-US', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        }) : new Date().toLocaleDateString();
+        new Date(receiptData.createdAt.toDate()).toLocaleDateString(
+          languageCode === 'tr' ? 'tr-TR' : languageCode === 'ru' ? 'ru-RU' : 'en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          }) : new Date().toLocaleDateString();
 
-      // Enhanced HTML email template
+      const isBoost = receiptData.receiptType === 'boost';
+
       const emailHtml = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <!--[if mso]>
-          <noscript>
-            <xml>
-              <o:OfficeDocumentSettings>
-                <o:PixelsPerInch>96</o:PixelsPerInch>
-              </o:OfficeDocumentSettings>
-            </xml>
-          </noscript>
-          <![endif]-->
-        </head>
-        <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background-color:#f7f8fa;">
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+</head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background-color:#f9fafb;-webkit-font-smoothing:antialiased;">
+  
+  <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f9fafb;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table cellpadding="0" cellspacing="0" border="0" width="520" style="max-width:520px;background-color:#ffffff;">
           
-          <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f7f8fa;padding:20px 0;">
-            <tr>
-              <td align="center">
+          <!-- Logo -->
+          <tr>
+            <td style="padding:32px 40px 24px 40px;text-align:center;">
+              ${logoUrl ? `<img src="${logoUrl}" alt="Nar24" width="64" height="64" style="display:inline-block;width:44px;height:44px;border-radius:10px;" />` : `<span style="font-size:22px;font-weight:700;color:#1a1a1a;letter-spacing:-0.3px;">Nar24</span>`}
+            </td>
+          </tr>
+          
+          <!-- Top Gradient Line -->
+          <tr>
+            <td style="padding:0 40px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td width="50%" style="height:2px;background-color:#ff6b35;">&nbsp;</td>
+                  <td width="50%" style="height:2px;background-color:#ec4899;">&nbsp;</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Greeting -->
+          <tr>
+            <td style="padding:32px 40px 0 40px;">
+              <p style="margin:0;color:#1a1a1a;font-size:16px;font-weight:600;line-height:24px;">${content.greeting} ${displayName},</p>
+              <p style="margin:8px 0 0 0;color:#6b7280;font-size:14px;line-height:22px;">${isBoost ? content.boostMessage : content.message}</p>
+            </td>
+          </tr>
+          
+          <!-- Details -->
+          <tr>
+            <td style="padding:28px 40px 0 40px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
                 
-                <!-- Main Container -->
-                <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.07);">
-                  
-                  <!-- Header Section -->
-                  <tr>
-                    <td style="background:linear-gradient(135deg,#ff6b35 0%,#ff8555 100%);padding:40px 30px;text-align:center;">
-                      <h1 style="margin:0;color:#ffffff;font-size:36px;font-weight:700;letter-spacing:-0.5px;">Nar24</h1>
-                      <p style="margin:10px 0 0 0;color:#ffe5dd;font-size:14px;font-weight:500;">${content.tagline}</p>
-                    </td>
-                  </tr>
-                  
-                  <!-- Success Icon & Message -->
-                  <tr>
-                    <td style="padding:40px 30px 20px 30px;text-align:center;">
-                      <div style="display:inline-block;width:80px;height:80px;background:linear-gradient(135deg,#4ade80 0%,#22c55e 100%);border-radius:50%;margin-bottom:20px;">
-                        <div style="color:#ffffff;font-size:40px;line-height:80px;">✓</div>
-                      </div>
-                      <h2 style="margin:0 0 10px 0;color:#1a1a1a;font-size:24px;font-weight:600;">${content.successTitle}</h2>
-                      <p style="margin:0;color:#6b7280;font-size:16px;line-height:24px;">${content.greeting} ${displayName}, ${content.message}</p>
-                    </td>
-                  </tr>
-                  
-                  <!-- Order Details Card -->
-                  <tr>
-                    <td style="padding:0 30px 30px 30px;">
-                      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:linear-gradient(135deg,#fef3f2 0%,#fff7f5 100%);border-radius:12px;border:1px solid #fed7d2;">
-                        <tr>
-                          <td style="padding:24px;">
-                            
-                            <!-- Order Header -->
-                            <table cellpadding="0" cellspacing="0" border="0" width="100%">
-                              <tr>
-                                <td style="padding-bottom:20px;border-bottom:1px solid #fed7d2;">
-                                  <h3 style="margin:0 0 8px 0;color:#ff6b35;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">${content.orderDetailsTitle}</h3>
-                                </td>
-                              </tr>
-                            </table>
-                            
-                            <!-- Order Info Grid -->
-                            <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:20px;">
-                              <tr>
-                                <td width="50%" style="padding-right:10px;">
-                                  <p style="margin:0 0 4px 0;color:#9ca3af;font-size:12px;font-weight:500;text-transform:uppercase;">${content.orderLabel}</p>
-                                  <p style="margin:0;color:#1a1a1a;font-size:16px;font-weight:600;">#${orderIdShort}</p>
-                                </td>
-                                <td width="50%" style="padding-left:10px;">
-                                  <p style="margin:0 0 4px 0;color:#9ca3af;font-size:12px;font-weight:500;text-transform:uppercase;">${content.receiptLabel}</p>
-                                  <p style="margin:0;color:#1a1a1a;font-size:16px;font-weight:600;">#${receiptIdShort}</p>
-                                </td>
-                              </tr>
-                              <tr>
-                                <td colspan="2" style="padding-top:16px;">
-                                  <p style="margin:0 0 4px 0;color:#9ca3af;font-size:12px;font-weight:500;text-transform:uppercase;">${content.dateLabel}</p>
-                                  <p style="margin:0;color:#1a1a1a;font-size:16px;font-weight:600;">${orderDate}</p>
-                                </td>
-                              </tr>
-                            </table>
-                            
-                            <!-- Total Amount -->
-                            <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:20px;padding-top:20px;border-top:1px solid #fed7d2;">
-                              <tr>
-                                <td>
-                                  <p style="margin:0;color:#6b7280;font-size:14px;font-weight:500;">${content.totalLabel}</p>
-                                </td>
-                                <td align="right">
-                                  <p style="margin:0;color:#ff6b35;font-size:28px;font-weight:700;">${receiptData.totalPrice.toFixed(0)} ${receiptData.currency || 'TL'}</p>
-                                </td>
-                              </tr>
-                            </table>
-                            
-                          </td>
-                        </tr>
-                      </table>
-                    </td>
-                  </tr>
-                  
-                  <!-- Download Button -->
-${pdfUrl ? `
-<tr>
-  <td style="padding:0 30px 40px 30px;text-align:center;">
-    <a href="${pdfUrl}" style="display:inline-block;padding:16px 40px;background:linear-gradient(135deg,#ff6b35 0%,#ff8555 100%);color:#ffffff;text-decoration:none;border-radius:10px;font-size:16px;font-weight:600;box-shadow:0 4px 14px 0 rgba(255,107,53,0.35);">
-      📄 ${content.downloadButton}
-    </a>
-    <p style="margin:12px 0 0 0;color:#9ca3af;font-size:12px;">${content.downloadHint}</p>
-  </td>
-</tr>
+                <!-- Order/Boost ID -->
+                <tr>
+                  <td style="padding:12px 0;border-bottom:1px solid #f3f4f6;">
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td style="color:#9ca3af;font-size:13px;font-weight:500;">${isBoost ? content.boostLabel : content.orderLabel}</td>
+                        <td align="right" style="color:#1a1a1a;font-size:13px;font-weight:600;">#${orderIdShort}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                
+                <!-- Receipt ID -->
+                <tr>
+                  <td style="padding:12px 0;border-bottom:1px solid #f3f4f6;">
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td style="color:#9ca3af;font-size:13px;font-weight:500;">${content.receiptLabel}</td>
+                        <td align="right" style="color:#1a1a1a;font-size:13px;font-weight:600;">#${receiptIdShort}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                
+                <!-- Date -->
+                <tr>
+                  <td style="padding:12px 0;border-bottom:1px solid #f3f4f6;">
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td style="color:#9ca3af;font-size:13px;font-weight:500;">${content.dateLabel}</td>
+                        <td align="right" style="color:#1a1a1a;font-size:13px;font-weight:600;">${orderDate}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                
+                <!-- Payment Method -->
+                <tr>
+                  <td style="padding:12px 0;border-bottom:1px solid #f3f4f6;">
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td style="color:#9ca3af;font-size:13px;font-weight:500;">${content.paymentLabel}</td>
+                        <td align="right" style="color:#1a1a1a;font-size:13px;font-weight:600;">${receiptData.paymentMethod || 'Card'}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+${isBoost && receiptData.boostDuration ? `
+                <!-- Boost Duration -->
+                <tr>
+                  <td style="padding:12px 0;border-bottom:1px solid #f3f4f6;">
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td style="color:#9ca3af;font-size:13px;font-weight:500;">${content.durationLabel}</td>
+                        <td align="right" style="color:#1a1a1a;font-size:13px;font-weight:600;">${receiptData.boostDuration} ${content.minutesUnit}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                
+                <!-- Boosted Items -->
+                <tr>
+                  <td style="padding:12px 0;border-bottom:1px solid #f3f4f6;">
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td style="color:#9ca3af;font-size:13px;font-weight:500;">${content.itemsLabel}</td>
+                        <td align="right" style="color:#1a1a1a;font-size:13px;font-weight:600;">${receiptData.itemCount || 1}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
 ` : ''}
-                  
-                  <!-- Help Section -->
-                  <tr>
-                    <td style="background-color:#fafbfc;padding:30px;text-align:center;border-top:1px solid #e5e7eb;">
-                      <p style="margin:0 0 8px 0;color:#6b7280;font-size:14px;">${content.needHelp}</p>
-                      <a href="mailto:support@nar24.com" style="color:#ff6b35;text-decoration:none;font-weight:600;font-size:14px;">${content.contactSupport}</a>
-                    </td>
-                  </tr>
-                  
-                  <!-- Footer -->
-                  <tr>
-                    <td style="background-color:#1a1a1a;padding:30px;text-align:center;">
-                      <p style="margin:0 0 8px 0;color:#ffffff;font-size:14px;font-weight:500;">${content.footer}</p>
-                      <p style="margin:0 0 16px 0;color:#9ca3af;font-size:12px;">© 2024 Nar24. ${content.rights}</p>
-                      
-                      <!-- Social Media Icons -->
-                      <table cellpadding="0" cellspacing="0" border="0" align="center">
-                        <tr>
-                          <td style="padding:0 8px;">
-                            <a href="https://facebook.com/nar24" style="display:inline-block;width:32px;height:32px;background-color:#2d2d2d;border-radius:50%;text-align:center;line-height:32px;text-decoration:none;">
-                              <span style="color:#ffffff;font-size:16px;">f</span>
-                            </a>
-                          </td>
-                          <td style="padding:0 8px;">
-                            <a href="https://instagram.com/nar24" style="display:inline-block;width:32px;height:32px;background-color:#2d2d2d;border-radius:50%;text-align:center;line-height:32px;text-decoration:none;">
-                              <span style="color:#ffffff;font-size:16px;">📷</span>
-                            </a>
-                          </td>
-                          <td style="padding:0 8px;">
-                            <a href="https://twitter.com/nar24" style="display:inline-block;width:32px;height:32px;background-color:#2d2d2d;border-radius:50%;text-align:center;line-height:32px;text-decoration:none;">
-                              <span style="color:#ffffff;font-size:16px;">X</span>
-                            </a>
-                          </td>
-                        </tr>
-                      </table>
-                    </td>
-                  </tr>
-                  
-                </table>
                 
-              </td>
-            </tr>
-          </table>
+                <!-- Total -->
+                <tr>
+                  <td style="padding:16px 0 0 0;">
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td style="color:#1a1a1a;font-size:14px;font-weight:600;">${content.totalLabel}</td>
+                        <td align="right" style="color:#ff6b35;font-size:22px;font-weight:700;letter-spacing:-0.3px;">${receiptData.totalPrice.toFixed(0)} ${receiptData.currency || 'TL'}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                
+              </table>
+            </td>
+          </tr>
+
+${pdfUrl ? `
+          <!-- Download Button -->
+          <tr>
+            <td style="padding:32px 40px 0 40px;text-align:center;">
+              <a href="${pdfUrl}" style="display:inline-block;padding:12px 32px;background-color:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">${content.downloadButton}</a>
+            </td>
+          </tr>
+` : ''}
           
-        </body>
-        </html>
+          <!-- Bottom Gradient Line -->
+          <tr>
+            <td style="padding:36px 40px 0 40px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td width="50%" style="height:2px;background-color:#ff6b35;">&nbsp;</td>
+                  <td width="50%" style="height:2px;background-color:#ec4899;">&nbsp;</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="padding:20px 40px 32px 40px;text-align:center;">
+              <p style="margin:0;color:#c0c0c0;font-size:12px;font-weight:400;">© 2026 Nar24. ${content.rights}</p>
+            </td>
+          </tr>
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+  
+</body>
+</html>
       `;
 
-      // Create mail document for SendGrid
       const mailDoc = {
         to: [email],
         message: {
-          subject: `✅ ${content.subject} #${orderIdShort} - Nar24`,
+          subject: `${content.subject} #${orderIdShort} — Nar24`,
           html: emailHtml,
         },
         template: {
@@ -8747,12 +9010,11 @@ ${pdfUrl ? `
           data: {
             receiptId,
             orderId,
-            type: 'order_receipt',
+            type: isBoost ? 'boost_receipt' : 'order_receipt',
           },
         },
       };
 
-      // Send email via SendGrid extension
       await admin.firestore().collection('mail').add(mailDoc);
 
       return {
@@ -8773,57 +9035,54 @@ function getLocalizedContent(languageCode) {
   const content = {
     en: {
       greeting: 'Hello',
-      message: 'thank you for your order!',
-      orderLabel: 'Order ID',
-      receiptLabel: 'Receipt ID',
+      message: 'Thank you for your purchase. Here are your receipt details.',
+      boostMessage: 'Your boost payment was successful. Here are the details.',
+      orderLabel: 'Order',
+      boostLabel: 'Boost',
+      receiptLabel: 'Receipt',
       dateLabel: 'Date',
-      totalLabel: 'Total Amount',
-      subject: 'Your Receipt',
-      downloadButton: 'Download Receipt PDF',
-      downloadHint: 'Save this receipt for your records',
-      footer: 'Thank you for shopping with Nar24!',
+      paymentLabel: 'Payment',
+      durationLabel: 'Duration',
+      itemsLabel: 'Items Boosted',
+      minutesUnit: 'min',
+      totalLabel: 'Total',
+      subject: 'Receipt',
+      downloadButton: 'Download PDF',
       rights: 'All rights reserved.',
-      tagline: 'Your Premium Shopping Destination',
-      successTitle: 'Payment Successful!',
-      orderDetailsTitle: 'Order Information',
-      needHelp: 'Need help with your order?',
-      contactSupport: 'Contact Support',
     },
     tr: {
       greeting: 'Merhaba',
-      message: 'siparişiniz için teşekkür ederiz!',
-      orderLabel: 'Sipariş No',
-      receiptLabel: 'Fatura No',
+      message: 'Satın alımınız için teşekkür ederiz. Fatura detaylarınız aşağıdadır.',
+      boostMessage: 'Boost ödemeniz başarılı. Detaylar aşağıdadır.',
+      orderLabel: 'Sipariş',
+      boostLabel: 'Boost',
+      receiptLabel: 'Fatura',
       dateLabel: 'Tarih',
-      totalLabel: 'Toplam Tutar',
-      subject: 'Faturanız',
-      downloadButton: 'Faturayı PDF Olarak İndir',
-      downloadHint: 'Bu faturayı kayıtlarınız için saklayın',
-      footer: 'Nar24\'ten alışveriş yaptığınız için teşekkür ederiz!',
+      paymentLabel: 'Ödeme',
+      durationLabel: 'Süre',
+      itemsLabel: 'Boost Edilen',
+      minutesUnit: 'dk',
+      totalLabel: 'Toplam',
+      subject: 'Fatura',
+      downloadButton: 'PDF İndir',
       rights: 'Tüm hakları saklıdır.',
-      tagline: 'Premium Alışveriş Deneyiminiz',
-      successTitle: 'Ödeme Başarılı!',
-      orderDetailsTitle: 'Sipariş Bilgileri',
-      needHelp: 'Siparişinizle ilgili yardıma mı ihtiyacınız var?',
-      contactSupport: 'Destek ile İletişime Geç',
     },
     ru: {
       greeting: 'Здравствуйте',
-      message: 'спасибо за ваш заказ!',
-      orderLabel: 'Номер заказа',
-      receiptLabel: 'Номер чека',
+      message: 'Спасибо за покупку. Детали вашего чека ниже.',
+      boostMessage: 'Оплата буста прошла успешно. Детали ниже.',
+      orderLabel: 'Заказ',
+      boostLabel: 'Буст',
+      receiptLabel: 'Чек',
       dateLabel: 'Дата',
+      paymentLabel: 'Оплата',
+      durationLabel: 'Длительность',
+      itemsLabel: 'Товаров',
+      minutesUnit: 'мин',
       totalLabel: 'Итого',
-      subject: 'Ваш чек',
-      downloadButton: 'Скачать чек в PDF',
-      downloadHint: 'Сохраните этот чек для ваших записей',
-      footer: 'Спасибо за покупки в Nar24!',
+      subject: 'Чек',
+      downloadButton: 'Скачать PDF',
       rights: 'Все права защищены.',
-      tagline: 'Ваш премиум шоппинг',
-      successTitle: 'Оплата прошла успешно!',
-      orderDetailsTitle: 'Информация о заказе',
-      needHelp: 'Нужна помощь с заказом?',
-      contactSupport: 'Связаться с поддержкой',
     },
   };
 
@@ -8873,7 +9132,6 @@ export const sendReportEmail = onCall(
 
       const reportData = reportDoc.data();
 
-
       // Get shop data
       const shopDoc = await admin.firestore()
         .collection('shops')
@@ -8886,6 +9144,23 @@ export const sendReportEmail = onCall(
       // Verify ownership or access
       if (shopData.ownerId !== uid && !shopData.managers?.includes(uid)) {
         throw new HttpsError('permission-denied', 'Access denied');
+      }
+
+      // Get logo URL from Storage
+      let logoUrl = '';
+      try {
+        const bucket = storage.bucket(`${process.env.GCLOUD_PROJECT}.appspot.com`);
+        const logoFile = bucket.file('assets/naricon.png');
+        const [exists] = await logoFile.exists();
+        if (exists) {
+          const [url] = await logoFile.getSignedUrl({
+            action: 'read',
+            expires: Date.now() + 30 * 24 * 60 * 60 * 1000,
+          });
+          logoUrl = url;
+        }
+      } catch (err) {
+        console.warn('Could not get logo URL:', err.message);
       }
 
       // Get localized content
@@ -8907,45 +9182,47 @@ export const sendReportEmail = onCall(
         dateRangeText = `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
       }
 
-      // Generate report URL (you'll need to implement this endpoint)
+      // Build included data tags
+      const includedTags = [];
+      if (reportData.includeProducts) includedTags.push(content.products);
+      if (reportData.includeOrders) includedTags.push(content.orders);
+      if (reportData.includeBoostHistory) includedTags.push(content.boostHistory);
+      const includedText = includedTags.join(', ');
+
+      // Generate report URL
       let pdfUrl = null;
       try {
         const bucket = storage.bucket(`${process.env.GCLOUD_PROJECT}.appspot.com`);
 
-        // Try to get file path from report data first (for newer reports)
         if (reportData.filePath) {
           const file = bucket.file(reportData.filePath);
           const [url] = await file.getSignedUrl({
             action: 'read',
-            expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+            expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
           });
           pdfUrl = url;
         } else {
-          // Fallback for older reports - try different naming patterns
           const possiblePaths = [
             `reports/${shopId}/${reportId}.pdf`,
-            // Could add more patterns here if needed
           ];
 
-          for (const path of possiblePaths) {
+          for (const filePath of possiblePaths) {
             try {
-              const file = bucket.file(path);
+              const file = bucket.file(filePath);
               const [exists] = await file.exists();
               if (exists) {
                 const [url] = await file.getSignedUrl({
                   action: 'read',
-                  expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+                  expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
                 });
                 pdfUrl = url;
                 break;
               }
             } catch (error) {
-              // Continue to next path
               continue;
             }
           }
 
-          // Final fallback - search for files with timestamp
           if (!pdfUrl) {
             try {
               const [files] = await bucket.getFiles({
@@ -8953,11 +9230,10 @@ export const sendReportEmail = onCall(
               });
 
               if (files.length > 0) {
-                // Use the most recent file (sort by name which includes timestamp)
                 const sortedFiles = files.sort((a, b) => b.name.localeCompare(a.name));
                 const [url] = await sortedFiles[0].getSignedUrl({
                   action: 'read',
-                  expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+                  expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
                 });
                 pdfUrl = url;
               }
@@ -8968,168 +9244,183 @@ export const sendReportEmail = onCall(
         }
       } catch (error) {
         console.error('Error generating download URL:', error);
-      // You might want to handle this more gracefully in production
       }
 
-      // Enhanced HTML email template
       const emailHtml = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        </head>
-        <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background-color:#f7f8fa;">
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+</head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background-color:#f9fafb;-webkit-font-smoothing:antialiased;">
+  
+  <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f9fafb;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table cellpadding="0" cellspacing="0" border="0" width="520" style="max-width:520px;background-color:#ffffff;">
           
-          <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f7f8fa;padding:20px 0;">
-            <tr>
-              <td align="center">
-                
-                <!-- Main Container -->
-                <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.07);">
-                  
-                  <!-- Header Section -->
-                  <tr>
-                    <td style="background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%);padding:40px 30px;text-align:center;">
-                      <h1 style="margin:0;color:#ffffff;font-size:36px;font-weight:700;letter-spacing:-0.5px;">Nar24</h1>
-                      <p style="margin:10px 0 0 0;color:#E9D5FF;font-size:14px;font-weight:500;">${content.businessReports}</p>
-                    </td>
-                  </tr>
-                  
-                  <!-- Icon & Message -->
-                  <tr>
-                    <td style="padding:40px 30px 20px 30px;text-align:center;">
-                      <div style="display:inline-block;width:80px;height:80px;background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%);border-radius:50%;margin-bottom:20px;">
-                        <div style="color:#ffffff;font-size:40px;line-height:80px;">📊</div>
-                      </div>
-                      <h2 style="margin:0 0 10px 0;color:#1a1a1a;font-size:24px;font-weight:600;">${content.reportReady}</h2>
-                      <p style="margin:0;color:#6b7280;font-size:16px;line-height:24px;">${content.greeting} ${displayName}, ${content.message}</p>
-                    </td>
-                  </tr>
-                  
-                  <!-- Report Details Card -->
-                  <tr>
-                    <td style="padding:0 30px 30px 30px;">
-                      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:linear-gradient(135deg,#F3F4F6 0%,#F9FAFB 100%);border-radius:12px;border:1px solid #E5E7EB;">
-                        <tr>
-                          <td style="padding:24px;">
-                            
-                            <!-- Report Header -->
-                            <table cellpadding="0" cellspacing="0" border="0" width="100%">
-                              <tr>
-                                <td style="padding-bottom:20px;border-bottom:1px solid #E5E7EB;">
-                                  <h3 style="margin:0 0 8px 0;color:#6366F1;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">${content.reportDetails}</h3>
-                                </td>
-                              </tr>
-                            </table>
-                            
-                            <!-- Report Info Grid -->
-                            <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:20px;">
-                              <tr>
-                                <td width="50%" style="padding-right:10px;">
-                                  <p style="margin:0 0 4px 0;color:#9ca3af;font-size:12px;font-weight:500;text-transform:uppercase;">${content.reportName}</p>
-                                  <p style="margin:0;color:#1a1a1a;font-size:16px;font-weight:600;">${reportData.reportName || 'Report'}</p>
-                                </td>
-                                <td width="50%" style="padding-left:10px;">
-                                  <p style="margin:0 0 4px 0;color:#9ca3af;font-size:12px;font-weight:500;text-transform:uppercase;">${content.reportId}</p>
-                                  <p style="margin:0;color:#1a1a1a;font-size:16px;font-weight:600;">#${reportIdShort}</p>
-                                </td>
-                              </tr>
-                              <tr>
-                                <td colspan="2" style="padding-top:16px;">
-                                  <p style="margin:0 0 4px 0;color:#9ca3af;font-size:12px;font-weight:500;text-transform:uppercase;">${content.shopName}</p>
-                                  <p style="margin:0;color:#1a1a1a;font-size:16px;font-weight:600;">${shopName}</p>
-                                </td>
-                              </tr>
-                              ${dateRangeText ? `
-                              <tr>
-                                <td colspan="2" style="padding-top:16px;">
-                                  <p style="margin:0 0 4px 0;color:#9ca3af;font-size:12px;font-weight:500;text-transform:uppercase;">${content.dateRange}</p>
-                                  <p style="margin:0;color:#1a1a1a;font-size:16px;font-weight:600;">${dateRangeText}</p>
-                                </td>
-                              </tr>
-                              ` : ''}
-                              <tr>
-                                <td colspan="2" style="padding-top:16px;">
-                                  <p style="margin:0 0 4px 0;color:#9ca3af;font-size:12px;font-weight:500;text-transform:uppercase;">${content.generatedOn}</p>
-                                  <p style="margin:0;color:#1a1a1a;font-size:16px;font-weight:600;">${formattedDate}</p>
-                                </td>
-                              </tr>
-                            </table>
-                            
-                            <!-- Data Types Included -->
-                            <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:20px;padding-top:20px;border-top:1px solid #E5E7EB;">
-                              <tr>
-                                <td>
-                                  <p style="margin:0 0 12px 0;color:#6b7280;font-size:14px;font-weight:500;">${content.includedData}:</p>
-                                  <div>
-                                    ${reportData.includeProducts ? `
-                                      <span style="display:inline-block;margin:4px;padding:6px 12px;background-color:#10B981;color:#ffffff;border-radius:6px;font-size:12px;font-weight:600;">
-                                        ${content.products}
-                                      </span>
-                                    ` : ''}
-                                    ${reportData.includeOrders ? `
-                                      <span style="display:inline-block;margin:4px;padding:6px 12px;background-color:#F59E0B;color:#ffffff;border-radius:6px;font-size:12px;font-weight:600;">
-                                        ${content.orders}
-                                      </span>
-                                    ` : ''}
-                                    ${reportData.includeBoostHistory ? `
-                                      <span style="display:inline-block;margin:4px;padding:6px 12px;background-color:#6366F1;color:#ffffff;border-radius:6px;font-size:12px;font-weight:600;">
-                                        ${content.boostHistory}
-                                      </span>
-                                    ` : ''}
-                                  </div>
-                                </td>
-                              </tr>
-                            </table>
-                            
-                          </td>
-                        </tr>
-                      </table>
-                    </td>
-                  </tr>
-                  
-                  <!-- Download Button -->
-                  <tr>
-                    <td style="padding:0 30px 40px 30px;text-align:center;">
-                      <a href="${pdfUrl}" style="display:inline-block;padding:16px 40px;background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%);color:#ffffff;text-decoration:none;border-radius:10px;font-size:16px;font-weight:600;box-shadow:0 4px 14px 0 rgba(99,102,241,0.35);">
-                        📥 ${content.downloadButton}
-                      </a>
-                      <p style="margin:12px 0 0 0;color:#9ca3af;font-size:12px;">${content.downloadHint}</p>
-                    </td>
-                  </tr>
-                  
-                  <!-- Help Section -->
-                  <tr>
-                    <td style="background-color:#fafbfc;padding:30px;text-align:center;border-top:1px solid #e5e7eb;">
-                      <p style="margin:0 0 8px 0;color:#6b7280;font-size:14px;">${content.needHelp}</p>
-                      <a href="mailto:support@nar24.com" style="color:#6366F1;text-decoration:none;font-weight:600;font-size:14px;">${content.contactSupport}</a>
-                    </td>
-                  </tr>
-                  
-                  <!-- Footer -->
-                  <tr>
-                    <td style="background-color:#1a1a1a;padding:30px;text-align:center;">
-                      <p style="margin:0 0 8px 0;color:#ffffff;font-size:14px;font-weight:500;">${content.footer}</p>
-                      <p style="margin:0 0 16px 0;color:#9ca3af;font-size:12px;">© 2024 Nar24. ${content.rights}</p>
-                    </td>
-                  </tr>
-                  
-                </table>
-                
-              </td>
-            </tr>
-          </table>
+          <!-- Logo -->
+          <tr>
+            <td style="padding:32px 40px 24px 40px;text-align:center;">
+              ${logoUrl ? `<img src="${logoUrl}" alt="Nar24" width="64" height="64" style="display:inline-block;width:64px;height:64px;border-radius:12px;" />` : `<span style="font-size:22px;font-weight:700;color:#1a1a1a;letter-spacing:-0.3px;">Nar24</span>`}
+            </td>
+          </tr>
           
-        </body>
-        </html>
+          <!-- Top Gradient Line -->
+          <tr>
+            <td style="padding:0 40px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td width="50%" style="height:2px;background-color:#ff6b35;">&nbsp;</td>
+                  <td width="50%" style="height:2px;background-color:#ec4899;">&nbsp;</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Greeting -->
+          <tr>
+            <td style="padding:32px 40px 0 40px;">
+              <p style="margin:0;color:#1a1a1a;font-size:16px;font-weight:600;line-height:24px;">${content.greeting} ${displayName},</p>
+              <p style="margin:8px 0 0 0;color:#6b7280;font-size:14px;line-height:22px;">${content.message}</p>
+            </td>
+          </tr>
+          
+          <!-- Details -->
+          <tr>
+            <td style="padding:28px 40px 0 40px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                
+                <!-- Report Name -->
+                <tr>
+                  <td style="padding:12px 0;border-bottom:1px solid #f3f4f6;">
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td style="color:#9ca3af;font-size:13px;font-weight:500;">${content.reportName}</td>
+                        <td align="right" style="color:#1a1a1a;font-size:13px;font-weight:600;">${reportData.reportName || 'Report'}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                
+                <!-- Report ID -->
+                <tr>
+                  <td style="padding:12px 0;border-bottom:1px solid #f3f4f6;">
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td style="color:#9ca3af;font-size:13px;font-weight:500;">${content.reportId}</td>
+                        <td align="right" style="color:#1a1a1a;font-size:13px;font-weight:600;">#${reportIdShort}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                
+                <!-- Shop Name -->
+                <tr>
+                  <td style="padding:12px 0;border-bottom:1px solid #f3f4f6;">
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td style="color:#9ca3af;font-size:13px;font-weight:500;">${content.shopName}</td>
+                        <td align="right" style="color:#1a1a1a;font-size:13px;font-weight:600;">${shopName}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                
+                <!-- Date -->
+                <tr>
+                  <td style="padding:12px 0;border-bottom:1px solid #f3f4f6;">
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td style="color:#9ca3af;font-size:13px;font-weight:500;">${content.generatedOn}</td>
+                        <td align="right" style="color:#1a1a1a;font-size:13px;font-weight:600;">${formattedDate}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+${dateRangeText ? `
+                <!-- Date Range -->
+                <tr>
+                  <td style="padding:12px 0;border-bottom:1px solid #f3f4f6;">
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td style="color:#9ca3af;font-size:13px;font-weight:500;">${content.dateRange}</td>
+                        <td align="right" style="color:#1a1a1a;font-size:13px;font-weight:600;">${dateRangeText}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+` : ''}
+                
+                <!-- Included Data -->
+                <tr>
+                  <td style="padding:12px 0;border-bottom:1px solid #f3f4f6;">
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td style="color:#9ca3af;font-size:13px;font-weight:500;">${content.includedData}</td>
+                        <td align="right" style="color:#1a1a1a;font-size:13px;font-weight:600;">${includedText || '—'}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                
+              </table>
+            </td>
+          </tr>
+
+${pdfUrl ? `
+          <!-- Download Button -->
+          <tr>
+            <td style="padding:32px 40px 0 40px;text-align:center;">
+              <a href="${pdfUrl}" style="display:inline-block;padding:12px 32px;background-color:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">${content.downloadButton}</a>
+            </td>
+          </tr>
+` : ''}
+          
+          <!-- Bottom Gradient Line -->
+          <tr>
+            <td style="padding:36px 40px 0 40px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td width="50%" style="height:2px;background-color:#ff6b35;">&nbsp;</td>
+                  <td width="50%" style="height:2px;background-color:#ec4899;">&nbsp;</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="padding:20px 40px 32px 40px;text-align:center;">
+              <p style="margin:0;color:#c0c0c0;font-size:12px;font-weight:400;">© 2026 Nar24. ${content.rights}</p>
+            </td>
+          </tr>
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+  
+</body>
+</html>
       `;
 
       // Create mail document for SendGrid
       const mailDoc = {
         to: [email],
         message: {
-          subject: `📊 ${content.subject}: ${reportData.reportName || 'Report'} - Nar24`,
+          subject: `${content.subject}: ${reportData.reportName || 'Report'} — Nar24`,
           html: emailHtml,
         },
         template: {
@@ -9159,18 +9450,71 @@ export const sendReportEmail = onCall(
   },
 );
 
+function getReportLocalizedContent(languageCode) {
+  const content = {
+    en: {
+      greeting: 'Hello',
+      message: 'Your shop report is ready. Here are the details.',
+      reportName: 'Report',
+      reportId: 'Report ID',
+      shopName: 'Shop',
+      generatedOn: 'Date',
+      dateRange: 'Period',
+      includedData: 'Includes',
+      products: 'Products',
+      orders: 'Orders',
+      boostHistory: 'Boost History',
+      subject: 'Report',
+      downloadButton: 'Download PDF',
+      rights: 'All rights reserved.',
+    },
+    tr: {
+      greeting: 'Merhaba',
+      message: 'Mağaza raporunuz hazır. Detaylar aşağıdadır.',
+      reportName: 'Rapor',
+      reportId: 'Rapor No',
+      shopName: 'Mağaza',
+      generatedOn: 'Tarih',
+      dateRange: 'Dönem',
+      includedData: 'İçerik',
+      products: 'Ürünler',
+      orders: 'Siparişler',
+      boostHistory: 'Boost Geçmişi',
+      subject: 'Rapor',
+      downloadButton: 'PDF İndir',
+      rights: 'Tüm hakları saklıdır.',
+    },
+    ru: {
+      greeting: 'Здравствуйте',
+      message: 'Отчёт вашего магазина готов. Детали ниже.',
+      reportName: 'Отчёт',
+      reportId: 'Номер отчёта',
+      shopName: 'Магазин',
+      generatedOn: 'Дата',
+      dateRange: 'Период',
+      includedData: 'Содержание',
+      products: 'Товары',
+      orders: 'Заказы',
+      boostHistory: 'История бустов',
+      subject: 'Отчёт',
+      downloadButton: 'Скачать PDF',
+      rights: 'Все права защищены.',
+    },
+  };
+
+  return content[languageCode] || content.en;
+}
+
 export const shopWelcomeEmail = onCall(
   {region: 'europe-west3'},
   async (request) => {
     const {shopId, email} = request.data;
     const context = request.auth;
 
-    // Check if user is authenticated (admin calling this)
     if (!context || !context.uid) {
       throw new HttpsError('unauthenticated', 'User must be authenticated');
     }
 
-    // Validate input
     if (!shopId || !email) {
       throw new HttpsError('invalid-argument', 'Missing required fields: shopId and email');
     }
@@ -9184,220 +9528,250 @@ export const shopWelcomeEmail = onCall(
       }
 
       const shopData = shopDoc.data();
-      const shopName = shopData.name || 'Mağazanız';
-      const ownerName = shopData.ownerName || 'Değerli Satıcı';
+      const shopName = shopData.name || 'Shop';
+      const ownerName = shopData.ownerName || 'Seller';
+
+      // Get user's language preference
+      const userDoc = await admin.firestore()
+        .collection('users')
+        .doc(context.uid)
+        .get();
+      const userData = userDoc.data() || {};
+      const languageCode = userData.languageCode || 'tr';
+
+      const content = getWelcomeLocalizedContent(languageCode);
 
       // Get signed URLs for email images
       const bucket = admin.storage().bucket();
       const imageUrls = {};
-      
+
       const images = [
-        'shopwelcome.png',
-        'shopproducts.png',
-        'shopboost.png',
+        {key: 'logo', path: 'assets/naricon.png'},
+        {key: 'welcome', path: 'assets/shopwelcome.png'},
+        {key: 'products', path: 'assets/shopproducts.png'},
+        {key: 'boost', path: 'assets/shopboost.png'},
       ];
 
       try {
-        for (const image of images) {
-          const file = bucket.file(`functions/shop-email-icons/${image}`);
+        for (const img of images) {
+          const file = bucket.file(img.path);
           const [exists] = await file.exists();
-          
           if (exists) {
             const [url] = await file.getSignedUrl({
               action: 'read',
-              expires: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
+              expires: Date.now() + 30 * 24 * 60 * 60 * 1000,
             });
-            imageUrls[image.replace('.png', '')] = url;
+            imageUrls[img.key] = url;
           }
         }
       } catch (error) {
         console.error('Error loading email images:', error);
-        // Continue without images if they fail to load
       }
 
-      // Enhanced HTML email template for shop welcome
       const emailHtml = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        </head>
-        <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background-color:#f7f8fa;">
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+</head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background-color:#f9fafb;-webkit-font-smoothing:antialiased;">
+  
+  <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f9fafb;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table cellpadding="0" cellspacing="0" border="0" width="520" style="max-width:520px;background-color:#ffffff;">
           
-          <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f7f8fa;padding:20px 0;">
-            <tr>
-              <td align="center">
-                
-                <!-- Main Container -->
-                <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.07);">
-                  
-                  <!-- Header Section with Gradient -->
-                  <tr>
-                    <td style="background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%);padding:40px 30px;text-align:center;">
-                      <h1 style="margin:0;color:#ffffff;font-size:36px;font-weight:700;letter-spacing:-0.5px;">Nar24</h1>
-                      <p style="margin:10px 0 0 0;color:#E9D5FF;font-size:14px;font-weight:500;">Premium Alışveriş Platformu</p>
-                    </td>
-                  </tr>
-                  
-                  <!-- Celebration Icon & Main Title -->
-                  <tr>
-                    <td style="padding:40px 30px 30px 30px;text-align:center;">
-                      ${imageUrls.shopwelcome ? `
-                        <img src="${imageUrls.shopwelcome}" alt="Hoş Geldiniz" style="width:120px;height:120px;margin-bottom:24px;display:block;margin-left:auto;margin-right:auto;" />
-                      ` : `
-                        <div style="display:inline-block;width:100px;height:100px;background:linear-gradient(135deg,#10B981 0%,#059669 100%);border-radius:50%;margin-bottom:24px;">
-                          <div style="color:#ffffff;font-size:50px;line-height:100px;">🎉</div>
-                        </div>
-                      `}
-                      <h2 style="margin:0 0 16px 0;color:#1a1a1a;font-size:28px;font-weight:700;line-height:1.3;">
-                        Tebrikler, Nar24'te Yetkili Satıcı Oldunuz! 🎉
-                      </h2>
-                      <p style="margin:0;color:#6b7280;font-size:16px;line-height:24px;">
-                        Merhaba <strong style="color:#6366F1;">${ownerName}</strong>,<br/>
-                        <strong style="color:#1a1a1a;">${shopName}</strong> mağazanız başarıyla onaylandı ve artık satışa hazırsınız!
-                      </p>
-                    </td>
-                  </tr>
-                  
-                  <!-- Features Section -->
-                  <tr>
-                    <td style="padding:0 30px 40px 30px;">
-                      
-                      <!-- Feature 1: Upload Products -->
-                      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:linear-gradient(135deg,#F0F9FF 0%,#E0F2FE 100%);border-radius:12px;margin-bottom:16px;border:1px solid #BAE6FD;">
-                        <tr>
-                          <td style="padding:24px;">
-                            <table cellpadding="0" cellspacing="0" border="0" width="100%">
-                              <tr>
-                                <td width="80" valign="top">
-                                  ${imageUrls.shopproducts ? `
-                                    <img src="${imageUrls.shopproducts}" alt="Ürün Yükleme" style="width:64px;height:64px;border-radius:12px;" />
-                                  ` : `
-                                    <div style="width:64px;height:64px;background:linear-gradient(135deg,#0EA5E9 0%,#0284C7 100%);border-radius:12px;text-align:center;line-height:64px;font-size:32px;">
-                                      📦
-                                    </div>
-                                  `}
-                                </td>
-                                <td style="padding-left:16px;">
-                                  <h3 style="margin:0 0 8px 0;color:#0369A1;font-size:18px;font-weight:600;">
-                                    Ürünlerinizi Kolaylıkla Yükleyin
-                                  </h3>
-                                  <p style="margin:0;color:#475569;font-size:14px;line-height:20px;">
-                                    Ürünlerinizi kolaylıkla yükleyip hemen satışa sunabilirsiniz! Gelişmiş panelimiz ile dakikalar içinde ürünlerinizi yükleyin.
-                                  </p>
-                                </td>
-                              </tr>
-                            </table>
-                          </td>
-                        </tr>
-                      </table>
-                      
-                      <!-- Feature 2: Boost Products -->
-                      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:linear-gradient(135deg,#FEF3C7 0%,#FDE68A 100%);border-radius:12px;border:1px solid #FCD34D;">
-                        <tr>
-                          <td style="padding:24px;">
-                            <table cellpadding="0" cellspacing="0" border="0" width="100%">
-                              <tr>
-                                <td width="80" valign="top">
-                                  ${imageUrls.shopboost ? `
-                                    <img src="${imageUrls.shopboost}" alt="Ürün Boost" style="width:64px;height:64px;border-radius:12px;" />
-                                  ` : `
-                                    <div style="width:64px;height:64px;background:linear-gradient(135deg,#F59E0B 0%,#D97706 100%);border-radius:12px;text-align:center;line-height:64px;font-size:32px;">
-                                      🚀
-                                    </div>
-                                  `}
-                                </td>
-                                <td style="padding-left:16px;">
-                                  <h3 style="margin:0 0 8px 0;color:#B45309;font-size:18px;font-weight:600;">
-                                    Ürünlerinizi Öne Çıkarın
-                                  </h3>
-                                  <p style="margin:0;color:#78350F;font-size:14px;line-height:20px;">
-                                    Dilediğiniz ürünlerinizi öne çıkarıp daha geniş kitlelere ulaşabilirsiniz. Boost özelliği ile satışlarınızı artırın!
-                                  </p>
-                                </td>
-                              </tr>
-                            </table>
-                          </td>
-                        </tr>
-                      </table>
-                      
-                    </td>
-                  </tr>
-                  
-                  <!-- Call to Action Button -->
-                  <tr>
-                    <td style="padding:0 30px 40px 30px;text-align:center;">
-                      <a href="https://www.nar24panel.com/" style="display:inline-block;padding:18px 48px;background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%);color:#ffffff;text-decoration:none;border-radius:12px;font-size:18px;font-weight:600;box-shadow:0 4px 14px 0 rgba(99,102,241,0.4);transition:all 0.3s ease;">
-                        🏪 Mağaza Paneline Git
-                      </a>
-                      <p style="margin:16px 0 0 0;color:#9ca3af;font-size:13px;line-height:20px;">
-                        Hemen başlayın ve binlerce müşteriye ulaşın!
-                      </p>
-                    </td>
-                  </tr>
-                  
-                  <!-- Quick Start Tips -->
-                  <tr>
-                    <td style="background-color:#fafbfc;padding:30px;border-top:1px solid #e5e7eb;">
-                      <h3 style="margin:0 0 16px 0;color:#1a1a1a;font-size:16px;font-weight:600;text-align:center;">
-                        💡 Hızlı Başlangıç İpuçları
-                      </h3>
-                      <table cellpadding="0" cellspacing="0" border="0" width="100%">
-                        <tr>
-                          <td style="padding:8px 0;">
-                            <span style="display:inline-block;width:24px;height:24px;background-color:#10B981;color:#ffffff;border-radius:50%;text-align:center;line-height:24px;font-size:12px;font-weight:600;margin-right:8px;">1</span>
-                            <span style="color:#4b5563;font-size:14px;">İlk ürünlerinizi ekleyin ve detaylı açıklamalar yazın</span>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td style="padding:8px 0;">
-                            <span style="display:inline-block;width:24px;height:24px;background-color:#F59E0B;color:#ffffff;border-radius:50%;text-align:center;line-height:24px;font-size:12px;font-weight:600;margin-right:8px;">2</span>
-                            <span style="color:#4b5563;font-size:14px;">Kaliteli fotoğraflar kullanarak ürünlerinizi sergileyin</span>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td style="padding:8px 0;">
-                            <span style="display:inline-block;width:24px;height:24px;background-color:#6366F1;color:#ffffff;border-radius:50%;text-align:center;line-height:24px;font-size:12px;font-weight:600;margin-right:8px;">3</span>
-                            <span style="color:#4b5563;font-size:14px;">Popüler ürünlerinizi boost ederek öne çıkarın</span>
-                          </td>
-                        </tr>
-                      </table>
-                    </td>
-                  </tr>
-                  
-                  <!-- Help Section -->
-                  <tr>
-                    <td style="background-color:#fafbfc;padding:20px 30px;text-align:center;border-top:1px solid #e5e7eb;">
-                      <p style="margin:0 0 8px 0;color:#6b7280;font-size:14px;">Yardıma mı ihtiyacınız var?</p>
-                      <a href="mailto:support@nar24.com" style="color:#6366F1;text-decoration:none;font-weight:600;font-size:14px;">Destek Ekibimizle İletişime Geçin</a>
-                    </td>
-                  </tr>
-                  
-                  <!-- Footer -->
-                  <tr>
-                    <td style="background-color:#1a1a1a;padding:30px;text-align:center;">
-                      <p style="margin:0 0 8px 0;color:#ffffff;font-size:14px;font-weight:500;">Nar24'te satıcı olduğunuz için teşekkür ederiz! 🙏</p>
-                      <p style="margin:0 0 16px 0;color:#9ca3af;font-size:12px;">Başarılı satışlar dileriz!</p>
-                      <p style="margin:0;color:#6b7280;font-size:11px;">© 2024 Nar24. Tüm hakları saklıdır.</p>
-                    </td>
-                  </tr>
-                  
-                </table>
-                
-              </td>
-            </tr>
-          </table>
+          <!-- Logo -->
+          <tr>
+            <td style="padding:32px 40px 24px 40px;text-align:center;">
+              ${imageUrls.logo ? `<img src="${imageUrls.logo}" alt="Nar24" width="64" height="64" style="display:inline-block;width:64px;height:64px;border-radius:12px;" />` : `<span style="font-size:22px;font-weight:700;color:#1a1a1a;letter-spacing:-0.3px;">Nar24</span>`}
+            </td>
+          </tr>
           
-        </body>
-        </html>
+          <!-- Top Gradient Line -->
+          <tr>
+            <td style="padding:0 40px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td width="50%" style="height:2px;background-color:#ff6b35;">&nbsp;</td>
+                  <td width="50%" style="height:2px;background-color:#ec4899;">&nbsp;</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Welcome Image -->
+          ${imageUrls.welcome ? `
+          <tr>
+            <td style="padding:32px 40px 0 40px;text-align:center;">
+              <img src="${imageUrls.welcome}" alt="Welcome" width="100" height="100" style="display:inline-block;width:100px;height:100px;" />
+            </td>
+          </tr>
+          ` : ''}
+          
+          <!-- Greeting -->
+          <tr>
+            <td style="padding:24px 40px 0 40px;text-align:center;">
+              <h2 style="margin:0 0 12px 0;color:#1a1a1a;font-size:22px;font-weight:700;line-height:1.3;">${content.title}</h2>
+              <p style="margin:0;color:#6b7280;font-size:14px;line-height:22px;">
+                ${content.greeting} <span style="color:#1a1a1a;font-weight:600;">${ownerName}</span>, 
+                <span style="color:#ff6b35;font-weight:600;">${shopName}</span> ${content.approved}
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Feature Cards -->
+          <tr>
+            <td style="padding:32px 40px 0 40px;">
+              
+              <!-- Feature 1: Products -->
+              <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:16px;">
+                <tr>
+                  <td style="padding:20px;background-color:#f9fafb;border-radius:12px;">
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        ${imageUrls.products ? `
+                        <td width="56" valign="top">
+                          <img src="${imageUrls.products}" alt="" width="48" height="48" style="display:block;width:48px;height:48px;border-radius:10px;" />
+                        </td>
+                        ` : `
+                        <td width="56" valign="top">
+                          <div style="width:48px;height:48px;background-color:#e0f2fe;border-radius:10px;text-align:center;line-height:48px;font-size:22px;">📦</div>
+                        </td>
+                        `}
+                        <td style="padding-left:14px;">
+                          <p style="margin:0 0 4px 0;color:#1a1a1a;font-size:14px;font-weight:600;">${content.productsTitle}</p>
+                          <p style="margin:0;color:#9ca3af;font-size:13px;line-height:19px;">${content.productsDesc}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Feature 2: Boost -->
+              <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:16px;">
+                <tr>
+                  <td style="padding:20px;background-color:#f9fafb;border-radius:12px;">
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        ${imageUrls.boost ? `
+                        <td width="56" valign="top">
+                          <img src="${imageUrls.boost}" alt="" width="48" height="48" style="display:block;width:48px;height:48px;border-radius:10px;" />
+                        </td>
+                        ` : `
+                        <td width="56" valign="top">
+                          <div style="width:48px;height:48px;background-color:#fef3c7;border-radius:10px;text-align:center;line-height:48px;font-size:22px;">🚀</div>
+                        </td>
+                        `}
+                        <td style="padding-left:14px;">
+                          <p style="margin:0 0 4px 0;color:#1a1a1a;font-size:14px;font-weight:600;">${content.boostTitle}</p>
+                          <p style="margin:0;color:#9ca3af;font-size:13px;line-height:19px;">${content.boostDesc}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              
+            </td>
+          </tr>
+          
+          <!-- Quick Start Steps -->
+          <tr>
+            <td style="padding:8px 40px 0 40px;">
+              <p style="margin:0 0 14px 0;color:#1a1a1a;font-size:14px;font-weight:600;">${content.quickStart}</p>
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td style="padding:8px 0;">
+                    <table cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td width="28" valign="top">
+                          <div style="width:22px;height:22px;background-color:#ff6b35;color:#ffffff;border-radius:50%;text-align:center;line-height:22px;font-size:11px;font-weight:700;">1</div>
+                        </td>
+                        <td style="color:#6b7280;font-size:13px;line-height:20px;">${content.step1}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:8px 0;">
+                    <table cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td width="28" valign="top">
+                          <div style="width:22px;height:22px;background-color:#ff6b35;color:#ffffff;border-radius:50%;text-align:center;line-height:22px;font-size:11px;font-weight:700;">2</div>
+                        </td>
+                        <td style="color:#6b7280;font-size:13px;line-height:20px;">${content.step2}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:8px 0;">
+                    <table cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td width="28" valign="top">
+                          <div style="width:22px;height:22px;background-color:#ff6b35;color:#ffffff;border-radius:50%;text-align:center;line-height:22px;font-size:11px;font-weight:700;">3</div>
+                        </td>
+                        <td style="color:#6b7280;font-size:13px;line-height:20px;">${content.step3}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- CTA Button -->
+          <tr>
+            <td style="padding:28px 40px 0 40px;text-align:center;">
+              <a href="https://www.nar24panel.com/" style="display:inline-block;padding:14px 36px;background-color:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">${content.ctaButton}</a>
+            </td>
+          </tr>
+          
+          <!-- Bottom Gradient Line -->
+          <tr>
+            <td style="padding:36px 40px 0 40px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td width="50%" style="height:2px;background-color:#ff6b35;">&nbsp;</td>
+                  <td width="50%" style="height:2px;background-color:#ec4899;">&nbsp;</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="padding:20px 40px 32px 40px;text-align:center;">
+              <p style="margin:0 0 6px 0;color:#9ca3af;font-size:12px;">${content.supportText} <a href="mailto:support@nar24.com" style="color:#ff6b35;text-decoration:none;font-weight:500;">support@nar24.com</a></p>
+              <p style="margin:0;color:#c0c0c0;font-size:12px;font-weight:400;">© 2026 Nar24. ${content.rights}</p>
+            </td>
+          </tr>
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+  
+</body>
+</html>
       `;
 
-      // Create mail document for SendGrid
       const mailDoc = {
         to: [email],
         message: {
-          subject: '🎉 Tebrikler! Nar24\'te Yetkili Satıcı Oldunuz - Mağazanız Onaylandı',
+          subject: `${content.subject} — Nar24`,
           html: emailHtml,
         },
         template: {
@@ -9410,10 +9784,8 @@ export const shopWelcomeEmail = onCall(
         },
       };
 
-      // Send email via SendGrid extension
       await admin.firestore().collection('mail').add(mailDoc);
 
-      // Update shop document to mark welcome email as sent
       await admin.firestore().collection('shops').doc(shopId).update({
         welcomeEmailSent: true,
         welcomeEmailSentAt: new Date(),
@@ -9434,81 +9806,64 @@ export const shopWelcomeEmail = onCall(
   },
 );
 
-function getReportLocalizedContent(languageCode) {
+function getWelcomeLocalizedContent(languageCode) {
   const content = {
     en: {
+      title: 'You Are Now an Authorized Seller!',
       greeting: 'Hello',
-      message: 'your shop report is ready for download!',
-      reportName: 'Report Name',
-      reportId: 'Report ID',
-      shopName: 'Shop',
-      dateRange: 'Date Range',
-      generatedOn: 'Generated On',
-      includedData: 'Included Data',
-      products: 'Products',
-      orders: 'Orders',
-      boostHistory: 'Boost History',
-      subject: 'Your Shop Report',
-      downloadButton: 'Download Report PDF',
-      downloadHint: 'Click to download your detailed shop report',
-      footer: 'Thank you for using Nar24 Business Tools!',
+      approved: 'has been approved and is ready for sales!',
+      productsTitle: 'List Your Products Easily',
+      productsDesc: 'Upload your products in minutes and start selling right away with our advanced panel.',
+      boostTitle: 'Boost Your Products',
+      boostDesc: 'Highlight your products to reach wider audiences and increase your sales.',
+      quickStart: 'Quick Start',
+      step1: 'Add your first products with detailed descriptions',
+      step2: 'Use quality photos to showcase your products',
+      step3: 'Boost popular products to get more visibility',
+      ctaButton: 'Go to Shop Panel',
+      supportText: 'Need help?',
       rights: 'All rights reserved.',
-      businessReports: 'Business Intelligence Reports',
-      reportReady: 'Your Report is Ready!',
-      reportDetails: 'Report Information',
-      needHelp: 'Need help understanding your report?',
-      contactSupport: 'Contact Support',
+      subject: 'Your Shop Has Been Approved',
     },
     tr: {
+      title: 'Yetkili Satıcı Oldunuz!',
       greeting: 'Merhaba',
-      message: 'mağaza raporunuz indirilmeye hazır!',
-      reportName: 'Rapor Adı',
-      reportId: 'Rapor No',
-      shopName: 'Mağaza',
-      dateRange: 'Tarih Aralığı',
-      generatedOn: 'Oluşturulma Tarihi',
-      includedData: 'İçerilen Veriler',
-      products: 'Ürünler',
-      orders: 'Siparişler',
-      boostHistory: 'Boost Geçmişi',
-      subject: 'Mağaza Raporunuz',
-      downloadButton: 'Raporu PDF Olarak İndir',
-      downloadHint: 'Detaylı mağaza raporunuzu indirmek için tıklayın',
-      footer: 'Nar24 İşletme Araçlarını kullandığınız için teşekkür ederiz!',
+      approved: 'mağazanız onaylandı ve satışa hazır!',
+      productsTitle: 'Ürünlerinizi Kolayca Listeleyin',
+      productsDesc: 'Gelişmiş panelimiz ile ürünlerinizi dakikalar içinde yükleyip hemen satışa sunun.',
+      boostTitle: 'Ürünlerinizi Öne Çıkarın',
+      boostDesc: 'Ürünlerinizi boost ederek daha geniş kitlelere ulaşın ve satışlarınızı artırın.',
+      quickStart: 'Hızlı Başlangıç',
+      step1: 'İlk ürünlerinizi detaylı açıklamalarla ekleyin',
+      step2: 'Kaliteli fotoğraflar ile ürünlerinizi sergileyin',
+      step3: 'Popüler ürünlerinizi boost ederek öne çıkarın',
+      ctaButton: 'Mağaza Paneline Git',
+      supportText: 'Yardıma mı ihtiyacınız var?',
       rights: 'Tüm hakları saklıdır.',
-      businessReports: 'İş Zekası Raporları',
-      reportReady: 'Raporunuz Hazır!',
-      reportDetails: 'Rapor Bilgileri',
-      needHelp: 'Raporunuzu anlamak için yardıma mı ihtiyacınız var?',
-      contactSupport: 'Destek ile İletişime Geç',
+      subject: 'Mağazanız Onaylandı',
     },
     ru: {
+      title: 'Вы стали авторизованным продавцом!',
       greeting: 'Здравствуйте',
-      message: 'ваш отчет магазина готов к загрузке!',
-      reportName: 'Название отчета',
-      reportId: 'Номер отчета',
-      shopName: 'Магазин',
-      dateRange: 'Период',
-      generatedOn: 'Дата создания',
-      includedData: 'Включенные данные',
-      products: 'Товары',
-      orders: 'Заказы',
-      boostHistory: 'История продвижения',
-      subject: 'Ваш отчет магазина',
-      downloadButton: 'Скачать отчет в PDF',
-      downloadHint: 'Нажмите, чтобы скачать подробный отчет магазина',
-      footer: 'Спасибо за использование бизнес-инструментов Nar24!',
+      approved: 'ваш магазин одобрен и готов к продажам!',
+      productsTitle: 'Легко размещайте товары',
+      productsDesc: 'Загружайте товары за считанные минуты и сразу начинайте продавать через нашу панель.',
+      boostTitle: 'Продвигайте свои товары',
+      boostDesc: 'Выделяйте товары с помощью буста, чтобы охватить больше покупателей и увеличить продажи.',
+      quickStart: 'Быстрый старт',
+      step1: 'Добавьте первые товары с подробными описаниями',
+      step2: 'Используйте качественные фотографии для демонстрации',
+      step3: 'Продвигайте популярные товары для большей видимости',
+      ctaButton: 'Перейти в панель магазина',
+      supportText: 'Нужна помощь?',
       rights: 'Все права защищены.',
-      businessReports: 'Бизнес-аналитика',
-      reportReady: 'Ваш отчет готов!',
-      reportDetails: 'Информация об отчете',
-      needHelp: 'Нужна помощь в понимании отчета?',
-      contactSupport: 'Связаться с поддержкой',
+      subject: 'Ваш магазин одобрен',
     },
   };
 
-  return content[languageCode] || content.en;
+  return content[languageCode] || content.tr;
 }
+
 
 const ReportTranslations = {
   en: {

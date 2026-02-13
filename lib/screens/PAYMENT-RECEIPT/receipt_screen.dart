@@ -206,96 +206,97 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
               }
             },
             child: Column(
-            children: [
-              // Header Section
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.orange.withOpacity(0.1),
-                      Colors.pink.withOpacity(0.1),
+              children: [
+                // Header Section
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.orange.withOpacity(0.1),
+                        Colors.pink.withOpacity(0.1),
+                      ],
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Colors.orange, Colors.pink],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(50),
+                        ),
+                        child: const Icon(
+                          FeatherIcons.fileText,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        l10n.receipts,
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: theme.textTheme.bodyMedium?.color,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        l10n.yourPurchaseReceiptsWillAppearHere ??
+                            'Your purchase receipts will appear here',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: theme.textTheme.bodyMedium?.color
+                              ?.withOpacity(0.7),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                     ],
                   ),
                 ),
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Colors.orange, Colors.pink],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(50),
-                      ),
-                      child: const Icon(
-                        FeatherIcons.fileText,
-                        color: Colors.white,
-                        size: 32,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      l10n.receipts,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: theme.textTheme.bodyMedium?.color,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      l10n.yourPurchaseReceiptsWillAppearHere ??
-                          'Your purchase receipts will appear here',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color:
-                            theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              // Content
-              Expanded(
-                child: _isInitialLoad
-                    ? _buildReceiptShimmerList()
-                    : _receipts.isEmpty
-                        ? _buildEmptyState(context, l10n, isDark)
-                        : RefreshIndicator(
-                            onRefresh: _refreshReceipts,
-                            child: ListView.builder(
-                              controller: _scrollController,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
+                const SizedBox(height: 16),
+                // Content
+                Expanded(
+                  child: _isInitialLoad
+                      ? _buildReceiptShimmerList()
+                      : _receipts.isEmpty
+                          ? _buildEmptyState(context, l10n, isDark)
+                          : RefreshIndicator(
+                              onRefresh: _refreshReceipts,
+                              child: ListView.builder(
+                                controller: _scrollController,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                itemCount:
+                                    _receipts.length + (_hasMore ? 1 : 0),
+                                itemBuilder: (context, index) {
+                                  if (index == _receipts.length) {
+                                    return _buildLoadingIndicator();
+                                  }
+                                  return _buildReceiptCard(
+                                    context,
+                                    _receipts[index],
+                                    isDark,
+                                    l10n,
+                                  );
+                                },
                               ),
-                              itemCount: _receipts.length + (_hasMore ? 1 : 0),
-                              itemBuilder: (context, index) {
-                                if (index == _receipts.length) {
-                                  return _buildLoadingIndicator();
-                                }
-                                return _buildReceiptCard(
-                                  context,
-                                  _receipts[index],
-                                  isDark,
-                                  l10n,
-                                );
-                              },
                             ),
-                          ),
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );
@@ -429,7 +430,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                         children: [
                           Expanded(
                             child: Text(
-                              '${l10n.orders} #${receipt.orderId.substring(0, 8).toUpperCase()}',
+                              '${receipt.getReceiptTypeDisplay(l10n)} #${receipt.orderId.substring(0, 8).toUpperCase()}',
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,
@@ -444,39 +445,72 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _getDeliveryColor(receipt.deliveryOption ?? '')
-                                  .withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  _getDeliveryIcon(receipt.deliveryOption ?? ''),
-                                  size: 12,
-                                  color:
-                                      _getDeliveryColor(receipt.deliveryOption ?? ''),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  _localizeDeliveryOption(
-                                      receipt.deliveryOption ?? '', l10n),
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
+                          receipt.isBoostReceipt
+                              ? Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF00A86B)
+                                        .withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.rocket_launch_rounded,
+                                        size: 12,
+                                        color: Color(0xFF00A86B),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        receipt.getFormattedBoostDuration(l10n),
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF00A86B),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
                                     color: _getDeliveryColor(
-                                        receipt.deliveryOption ?? ''),
+                                            receipt.deliveryOption ?? '')
+                                        .withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _getDeliveryIcon(
+                                            receipt.deliveryOption ?? ''),
+                                        size: 12,
+                                        color: _getDeliveryColor(
+                                            receipt.deliveryOption ?? ''),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _localizeDeliveryOption(
+                                            receipt.deliveryOption ?? '', l10n),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: _getDeliveryColor(
+                                              receipt.deliveryOption ?? ''),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
                           const SizedBox(width: 8),
                           Icon(
                             FeatherIcons.calendar,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'dart:async';
@@ -23,11 +24,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   Timer? _countdownTimer;
   int _countdownSeconds = 0;
 
-  // Code input controllers
-  final List<TextEditingController> _codeControllers =
-      List.generate(6, (index) => TextEditingController());
-  final List<FocusNode> _codeFocusNodes =
-      List.generate(6, (index) => FocusNode());
+  // Code input controller
+  final TextEditingController _codeController = TextEditingController();
+  final FocusNode _codeFocusNode = FocusNode();
 
   late AnimationController _fadeInController;
   late Animation<double> _fadeInAnimation;
@@ -50,6 +49,10 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     ));
 
     _fadeInController.forward();
+
+    _codeFocusNode.addListener(() {
+      setState(() {});
+    });
 
     _currentUser = FirebaseAuth.instance.currentUser;
     if (_currentUser == null) {
@@ -192,20 +195,13 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   }
 
   void _clearCodeInputs() {
-    for (var controller in _codeControllers) {
-      controller.clear();
-    }
-    _codeFocusNodes[0].requestFocus();
+    _codeController.clear();
+    _codeFocusNode.requestFocus();
   }
 
-  String get _enteredCode {
-    return _codeControllers.map((c) => c.text).join();
-  }
+  String get _enteredCode => _codeController.text;
 
-  bool get _isCodeComplete {
-    return _enteredCode.length == 6 &&
-        _enteredCode.split('').every((c) => c.isNotEmpty);
-  }
+  bool get _isCodeComplete => _enteredCode.length == 6;
 
   Future<void> _verifyCode() async {
     if (!_isCodeComplete) return;
@@ -323,12 +319,8 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     _countdownTimer?.cancel();
     _fadeInController.dispose();
 
-    for (var controller in _codeControllers) {
-      controller.dispose();
-    }
-    for (var node in _codeFocusNodes) {
-      node.dispose();
-    }
+    _codeController.dispose();
+    _codeFocusNode.dispose();
 
     super.dispose();
   }
@@ -501,60 +493,78 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   }
 
   Widget _buildCodeInput(bool isDark) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: List.generate(6, (index) {
-        final hasValue = _codeControllers[index].text.isNotEmpty;
-        return Container(
-          width: 46,
-          height: 54,
-          decoration: BoxDecoration(
-            color: isDark
-                ? Colors.white.withOpacity(0.08)
-                : Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: hasValue
-                  ? const Color(0xFF00A86B)
-                  : (isDark ? Colors.white12 : Colors.grey.shade300),
-              width: hasValue ? 1.5 : 1,
-            ),
+    return GestureDetector(
+      onTap: () => _codeFocusNode.requestFocus(),
+      child: Stack(
+        children: [
+          // Visual digit boxes
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(6, (index) {
+              final code = _codeController.text;
+              final hasValue = index < code.length;
+              final isFocused = _codeFocusNode.hasFocus && index == code.length;
+              return Container(
+                width: 46,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.08)
+                      : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: hasValue
+                        ? const Color(0xFF00A86B)
+                        : isFocused
+                            ? const Color(0xFF00A86B).withOpacity(0.5)
+                            : (isDark ? Colors.white12 : Colors.grey.shade300),
+                    width: hasValue ? 1.5 : 1,
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  hasValue ? code[index] : '',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    fontFamily: 'Figtree',
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+              );
+            }),
           ),
-          child: TextField(
-            controller: _codeControllers[index],
-            focusNode: _codeFocusNodes[index],
-            textAlign: TextAlign.center,
-            keyboardType: TextInputType.number,
-            maxLength: 1,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'Figtree',
-              color: isDark ? Colors.white : Colors.black87,
-            ),
-            decoration: const InputDecoration(
-              counterText: '',
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
-            ),
-            onChanged: (value) {
-              if (value.isNotEmpty) {
-                if (index < 5) {
-                  _codeFocusNodes[index + 1].requestFocus();
-                } else {
-                  _codeFocusNodes[index].unfocus();
-                  if (_isCodeComplete) {
+          // Hidden TextField that handles all input
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0,
+              child: TextField(
+                controller: _codeController,
+                focusNode: _codeFocusNode,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                enableInteractiveSelection: false,
+                showCursor: false,
+                decoration: const InputDecoration(
+                  counterText: '',
+                  border: InputBorder.none,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(6),
+                ],
+                onChanged: (value) {
+                  setState(() {});
+                  if (value.length == 6) {
+                    _codeFocusNode.unfocus();
                     _verifyCode();
                   }
-                }
-              } else if (value.isEmpty && index > 0) {
-                _codeFocusNodes[index - 1].requestFocus();
-              }
-              setState(() {});
-            },
+                },
+              ),
+            ),
           ),
-        );
-      }),
+        ],
+      ),
     );
   }
 

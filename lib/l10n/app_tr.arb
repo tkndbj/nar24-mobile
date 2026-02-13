@@ -5576,5 +5576,6 @@
   }
 },
 "cannotDeleteSellerInfo": "Silinemez",
-"cannotDeleteSellerInfoWithProducts": "Listelenen ürünleriniz varken satıcı bilgilerinizi güncelleyebilirsiniz."
+"cannotDeleteSellerInfoWithProducts": "Listelenen ürünleriniz varken satıcı bilgilerinizi güncelleyebilirsiniz.",
+"sending": "Gönderiliyor..."
 }

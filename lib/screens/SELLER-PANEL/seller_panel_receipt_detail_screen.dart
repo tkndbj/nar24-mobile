@@ -168,7 +168,8 @@ class _SellerPanelReceiptDetailScreenState
                 ),
               ),
               padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
+                bottom: MediaQuery.of(context).viewInsets.bottom +
+                    MediaQuery.of(context).padding.bottom,
               ),
               child: SingleChildScrollView(
                 child: Padding(

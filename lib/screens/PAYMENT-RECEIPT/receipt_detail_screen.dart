@@ -332,9 +332,11 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
                                   child: Center(
                                     child: _isSharingQR
                                         ? Shimmer.fromColors(
-                                            baseColor: Colors.white.withOpacity(0.5),
+                                            baseColor:
+                                                Colors.white.withOpacity(0.5),
                                             highlightColor: Colors.white,
-                                            period: const Duration(milliseconds: 1200),
+                                            period: const Duration(
+                                                milliseconds: 1200),
                                             child: Row(
                                               mainAxisAlignment:
                                                   MainAxisAlignment.center,
@@ -460,11 +462,15 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
                                           },
                                     icon: _isQRLoading
                                         ? Shimmer.fromColors(
-                                            baseColor: Colors.orange.withOpacity(0.5),
+                                            baseColor:
+                                                Colors.orange.withOpacity(0.5),
                                             highlightColor: Colors.orange,
-                                            period: const Duration(milliseconds: 1200),
-                                            child: const Icon(FeatherIcons.refreshCw,
-                                                size: 16, color: Colors.orange),
+                                            period: const Duration(
+                                                milliseconds: 1200),
+                                            child: const Icon(
+                                                FeatherIcons.refreshCw,
+                                                size: 16,
+                                                color: Colors.orange),
                                           )
                                         : const Icon(FeatherIcons.refreshCw,
                                             size: 16),
@@ -618,6 +624,14 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
+
+      // Boost receipts don't have an orders document
+      if (widget.receipt.isBoostReceipt) {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
 
       final orderDoc = await FirebaseFirestore.instance
           .collection('orders')
@@ -987,24 +1001,27 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
                                     child: Center(
                                       child: _isSendingEmail
                                           ? Shimmer.fromColors(
-                                              baseColor: Colors.white.withOpacity(0.5),
+                                              baseColor:
+                                                  Colors.white.withOpacity(0.5),
                                               highlightColor: Colors.white,
-                                              period: const Duration(milliseconds: 1200),
+                                              period: const Duration(
+                                                  milliseconds: 1200),
                                               child: Row(
                                                 mainAxisAlignment:
                                                     MainAxisAlignment.center,
-                                                children: const [
-                                                  Icon(
+                                                children: [
+                                                  const Icon(
                                                     FeatherIcons.send,
                                                     color: Colors.white,
                                                     size: 18,
                                                   ),
-                                                  SizedBox(width: 8),
+                                                  const SizedBox(width: 8),
                                                   Text(
-                                                    'Sending...',
-                                                    style: TextStyle(
+                                                    l10n.sending,
+                                                    style: const TextStyle(
                                                       color: Colors.white,
-                                                      fontWeight: FontWeight.w600,
+                                                      fontWeight:
+                                                          FontWeight.w600,
                                                     ),
                                                   ),
                                                 ],
@@ -1123,13 +1140,14 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
           ),
           centerTitle: true,
           actions: [
-            IconButton(
-              icon: Icon(
-                FeatherIcons.grid,
-                color: theme.textTheme.bodyMedium?.color,
+            if (!widget.receipt.isBoostReceipt)
+              IconButton(
+                icon: Icon(
+                  FeatherIcons.grid,
+                  color: theme.textTheme.bodyMedium?.color,
+                ),
+                onPressed: _showQRCodeModal,
               ),
-              onPressed: _showQRCodeModal,
-            ),
             IconButton(
               icon: Icon(
                 FeatherIcons.mail,
@@ -1155,16 +1173,19 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
                           children: [
                             _buildOrderInfo(context, isDark, l10n, theme),
                             const SizedBox(height: 16),
-                            if (_orderData != null &&
-                                _orderData!['address'] != null)
-                              _buildDeliveryInfo(context, isDark, l10n, theme),
-                            if (_orderData != null &&
-                                _orderData!['address'] != null)
-                              const SizedBox(height: 16),
-                            if (_orderItems.isNotEmpty)
-                              _buildItemsList(context, isDark, l10n, theme),
-                            if (_orderItems.isNotEmpty)
-                              const SizedBox(height: 16),
+                            if (!widget.receipt.isBoostReceipt) ...[
+                              if (_orderData != null &&
+                                  _orderData!['address'] != null)
+                                _buildDeliveryInfo(
+                                    context, isDark, l10n, theme),
+                              if (_orderData != null &&
+                                  _orderData!['address'] != null)
+                                const SizedBox(height: 16),
+                              if (_orderItems.isNotEmpty)
+                                _buildItemsList(context, isDark, l10n, theme),
+                              if (_orderItems.isNotEmpty)
+                                const SizedBox(height: 16),
+                            ],
                             _buildPriceSummary(context, isDark, l10n, theme),
                             const SizedBox(height: 32),
                           ],
@@ -1324,14 +1345,43 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
           const SizedBox(height: 8),
           Divider(color: Colors.grey.withOpacity(0.2), height: 1),
           const SizedBox(height: 8),
-          _buildInfoRow(
-            l10n.delivery ?? 'Delivery',
-            _getLocalizedDeliveryOption(
-                widget.receipt.deliveryOption ?? '', l10n, theme),
-            isDark,
-            valueColor: _getDeliveryColor(widget.receipt.deliveryOption ?? ''),
-            theme,
-          ),
+          if (widget.receipt.isBoostReceipt) ...[
+            _buildInfoRow(
+              l10n.localeName == 'tr'
+                  ? 'Boost Süresi'
+                  : l10n.localeName == 'ru'
+                      ? 'Длительность'
+                      : 'Boost Duration',
+              widget.receipt.getFormattedBoostDuration(l10n),
+              isDark,
+              theme,
+              valueColor: const Color(0xFF00A86B),
+            ),
+            if (widget.receipt.itemCount != null) ...[
+              const SizedBox(height: 8),
+              Divider(color: Colors.grey.withOpacity(0.2), height: 1),
+              const SizedBox(height: 8),
+              _buildInfoRow(
+                l10n.localeName == 'tr'
+                    ? 'Boost Edilen'
+                    : l10n.localeName == 'ru'
+                        ? 'Товаров'
+                        : 'Boosted Items',
+                '${widget.receipt.itemCount}',
+                isDark,
+                theme,
+              ),
+            ],
+          ] else
+            _buildInfoRow(
+              l10n.delivery ?? 'Delivery',
+              _getLocalizedDeliveryOption(
+                  widget.receipt.deliveryOption ?? '', l10n, theme),
+              isDark,
+              valueColor:
+                  _getDeliveryColor(widget.receipt.deliveryOption ?? ''),
+              theme,
+            ),
         ],
       ),
     );
@@ -1820,148 +1870,151 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
               ],
             ),
           ],
-
-          const SizedBox(height: 12),
-
-          // Delivery row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  if (freeShippingApplied) ...[
-                    Icon(
-                      FeatherIcons.gift,
-                      size: 14,
-                      color: Colors.green[600],
-                    ),
-                    const SizedBox(width: 6),
-                  ],
-                  Text(
-                    l10n.delivery ?? 'Delivery',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color:
-                          theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                children: [
-                  // Show original price struck through if free shipping applied
-                  if (freeShippingApplied && originalDeliveryPrice > 0) ...[
-                    Text(
-                      '${originalDeliveryPrice.toStringAsFixed(0)} ${widget.receipt.currency}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color:
-                            theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
-                        decoration: TextDecoration.lineThrough,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  Text(
-                    deliveryPrice == 0
-                        ? l10n.free ?? 'Free'
-                        : '${deliveryPrice.toStringAsFixed(0)} ${widget.receipt.currency}',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: deliveryPrice == 0
-                          ? Colors.green[600]
-                          : theme.textTheme.bodyMedium?.color,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-
-          // Free shipping benefit label
-          if (freeShippingApplied) ...[
-            const SizedBox(height: 4),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      FeatherIcons.check,
-                      size: 12,
-                      color: Colors.green[600],
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      l10n.freeShippingBenefit ?? 'Free Shipping Benefit',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.green[600],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-
-          // Total savings row (if any discounts applied)
-          if (totalSavings > 0) ...[
+          if (!widget.receipt.isBoostReceipt) ...[
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.green.withOpacity(0.15),
-                    Colors.green.withOpacity(0.05),
+
+            // Delivery row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    if (freeShippingApplied) ...[
+                      Icon(
+                        FeatherIcons.gift,
+                        size: 14,
+                        color: Colors.green[600],
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    Text(
+                      l10n.delivery ?? 'Delivery',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color:
+                            theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                      ),
+                    ),
                   ],
                 ),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: Colors.green.withOpacity(0.3),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        FeatherIcons.percent,
-                        size: 16,
-                        color: Colors.green[600],
+                Row(
+                  children: [
+                    // Show original price struck through if free shipping applied
+                    if (freeShippingApplied && originalDeliveryPrice > 0) ...[
+                      Text(
+                        '${originalDeliveryPrice.toStringAsFixed(0)} ${widget.receipt.currency}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: theme.textTheme.bodyMedium?.color
+                              ?.withOpacity(0.5),
+                          decoration: TextDecoration.lineThrough,
+                        ),
                       ),
                       const SizedBox(width: 8),
+                    ],
+                    Text(
+                      deliveryPrice == 0
+                          ? l10n.free ?? 'Free'
+                          : '${deliveryPrice.toStringAsFixed(0)} ${widget.receipt.currency}',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: deliveryPrice == 0
+                            ? Colors.green[600]
+                            : theme.textTheme.bodyMedium?.color,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            // Free shipping benefit label
+            if (freeShippingApplied) ...[
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        FeatherIcons.check,
+                        size: 12,
+                        color: Colors.green[600],
+                      ),
+                      const SizedBox(width: 4),
                       Text(
-                        l10n.youSaved ?? 'You Saved',
+                        l10n.freeShippingBenefit ?? 'Free Shipping Benefit',
                         style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.green[700],
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.green[600],
                         ),
                       ),
                     ],
                   ),
-                  Text(
-                    '${totalSavings.toStringAsFixed(0)} ${widget.receipt.currency}',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green[600],
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
+            ],
+
+            // Total savings row (if any discounts applied)
+            if (totalSavings > 0) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.green.withOpacity(0.15),
+                      Colors.green.withOpacity(0.05),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.green.withOpacity(0.3),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          FeatherIcons.percent,
+                          size: 16,
+                          color: Colors.green[600],
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          l10n.youSaved ?? 'You Saved',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.green[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '${totalSavings.toStringAsFixed(0)} ${widget.receipt.currency}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
 
           Padding(

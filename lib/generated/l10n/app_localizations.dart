@@ -24347,6 +24347,12 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Listelenen ürünleriniz varken satıcı bilgilerinizi güncelleyebilirsiniz.'**
   String get cannotDeleteSellerInfoWithProducts;
+
+  /// No description provided for @sending.
+  ///
+  /// In tr, this message translates to:
+  /// **'Gönderiliyor...'**
+  String get sending;
 }
 
 class _AppLocalizationsDelegate

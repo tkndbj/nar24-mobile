@@ -12827,4 +12827,7 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get cannotDeleteSellerInfoWithProducts =>
       'Пока у вас есть размещённые товары, вы можете только обновить данные продавца.';
+
+  @override
+  String get sending => 'Отправка...';
 }

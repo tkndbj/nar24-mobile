@@ -5294,5 +5294,6 @@
   }
 },
 "cannotDeleteSellerInfo": "Удаление невозможно",
-"cannotDeleteSellerInfoWithProducts": "Пока у вас есть размещённые товары, вы можете только обновить данные продавца."
+"cannotDeleteSellerInfoWithProducts": "Пока у вас есть размещённые товары, вы можете только обновить данные продавца.",
+"sending": "Отправка..."
 }
