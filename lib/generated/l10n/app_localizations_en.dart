@@ -4349,7 +4349,44 @@ class AppLocalizationsEn extends AppLocalizations {
   String get unarchive => 'Unarchive';
 
   @override
+  String boostExpiredAdminArchived(Object productName) {
+    return '\"$productName\" boost was ended early because the product was paused by admin.';
+  }
+
+  @override
+  String boostExpiredSellerArchived(Object productName) {
+    return '\"$productName\" boost was ended early because the product was archived.';
+  }
+
+  @override
+  String boostExpiredGeneric(Object productName) {
+    return '\"$productName\" boost has expired.';
+  }
+
+  @override
   String get boostInfoTitle => 'Boost Your Products';
+
+  @override
+  String get boostTerminatedEarlyAdmin =>
+      'Boost finished early because the product was paused by admin.';
+
+  @override
+  String get boostTerminatedEarlySeller =>
+      'Boost finished early because the product was archived.';
+
+  @override
+  String productArchivedSimple(Object productName) {
+    return '\"$productName\" was paused by admin.';
+  }
+
+  @override
+  String productArchivedNeedsUpdate(Object archiveReason, Object productName) {
+    return '\"$productName\" was paused by admin and needs updates: $archiveReason';
+  }
+
+  @override
+  String get productArchivedBoostNote =>
+      'The active boost was also ended early.';
 
   @override
   String get boostInfoDescription =>
@@ -12676,6 +12713,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get limitedSearchMode =>
       'Advanced search is under maintenance. Please try again in a few minutes.';
+
+  @override
+  String get productArchivedByAdmin =>
+      'Your product has been suspended by the administrator. Tap for details.';
 
   @override
   String get noUsedCouponsOrBenefits => 'No Used Coupons or Benefits';

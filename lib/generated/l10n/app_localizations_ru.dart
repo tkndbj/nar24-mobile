@@ -4370,7 +4370,44 @@ class AppLocalizationsRu extends AppLocalizations {
   String get unarchive => 'Вынуть из архива';
 
   @override
+  String boostExpiredAdminArchived(Object productName) {
+    return 'Буст \"$productName\" был завершён досрочно, так как продукт был приостановлен администратором.';
+  }
+
+  @override
+  String boostExpiredSellerArchived(Object productName) {
+    return 'Буст \"$productName\" был завершён досрочно, так как продукт был архивирован.';
+  }
+
+  @override
+  String boostExpiredGeneric(Object productName) {
+    return 'Буст \"$productName\" закончился.';
+  }
+
+  @override
   String get boostInfoTitle => 'Продвигайте свои товары';
+
+  @override
+  String get boostTerminatedEarlyAdmin =>
+      'Буст завершён досрочно, так как продукт был приостановлен администратором.';
+
+  @override
+  String get boostTerminatedEarlySeller =>
+      'Буст завершён досрочно, так как продукт был архивирован.';
+
+  @override
+  String productArchivedSimple(Object productName) {
+    return '\"$productName\" приостановлен администратором.';
+  }
+
+  @override
+  String productArchivedNeedsUpdate(Object archiveReason, Object productName) {
+    return '\"$productName\" приостановлен администратором и требует обновления: $archiveReason';
+  }
+
+  @override
+  String get productArchivedBoostNote =>
+      'Активный буст также был завершён досрочно.';
 
   @override
   String get boostInfoDescription =>
@@ -12772,6 +12809,10 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get limitedSearchMode =>
       'Расширенный поиск находится на техническом обслуживании. Повторите попытку через несколько минут.';
+
+  @override
+  String get productArchivedByAdmin =>
+      'Ваш продукт был остановлен администратором. Нажмите для получения подробной информации.';
 
   @override
   String get noUsedCouponsOrBenefits =>

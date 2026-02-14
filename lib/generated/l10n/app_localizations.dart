@@ -8614,11 +8614,59 @@ abstract class AppLocalizations {
   /// **'Arşivden Çıkar'**
   String get unarchive;
 
+  /// No description provided for @boostExpiredAdminArchived.
+  ///
+  /// In tr, this message translates to:
+  /// **'\"{productName}\" boost süresi, ürün admin tarafından durdurulduğu için erken sonlandırıldı.'**
+  String boostExpiredAdminArchived(Object productName);
+
+  /// No description provided for @boostExpiredSellerArchived.
+  ///
+  /// In tr, this message translates to:
+  /// **'\"{productName}\" boost süresi, ürün arşivlendiği için erken sonlandırıldı.'**
+  String boostExpiredSellerArchived(Object productName);
+
+  /// No description provided for @boostExpiredGeneric.
+  ///
+  /// In tr, this message translates to:
+  /// **'\"{productName}\" boost süresi doldu.'**
+  String boostExpiredGeneric(Object productName);
+
   /// No description provided for @boostInfoTitle.
   ///
   /// In tr, this message translates to:
   /// **'Ürünlerinizi Öne Çıkarın'**
   String get boostInfoTitle;
+
+  /// No description provided for @boostTerminatedEarlyAdmin.
+  ///
+  /// In tr, this message translates to:
+  /// **'Boost, ürün admin tarafından durdurulduğu için erken sonlandırıldı.'**
+  String get boostTerminatedEarlyAdmin;
+
+  /// No description provided for @boostTerminatedEarlySeller.
+  ///
+  /// In tr, this message translates to:
+  /// **'Boost, ürün arşivlendiği için erken sonlandırıldı.'**
+  String get boostTerminatedEarlySeller;
+
+  /// No description provided for @productArchivedSimple.
+  ///
+  /// In tr, this message translates to:
+  /// **'\"{productName}\" admin tarafından durduruldu.'**
+  String productArchivedSimple(Object productName);
+
+  /// No description provided for @productArchivedNeedsUpdate.
+  ///
+  /// In tr, this message translates to:
+  /// **'\"{productName}\" admin tarafından durduruldu ve güncelleme gerekiyor: {archiveReason}'**
+  String productArchivedNeedsUpdate(Object archiveReason, Object productName);
+
+  /// No description provided for @productArchivedBoostNote.
+  ///
+  /// In tr, this message translates to:
+  /// **'Aktif boost da erken sonlandırıldı.'**
+  String get productArchivedBoostNote;
 
   /// No description provided for @boostInfoDescription.
   ///
@@ -24251,6 +24299,12 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Gelişmiş arama bakımı devam etmektedir. Lütfen birkaç dakika sonra tekrar deneyin.'**
   String get limitedSearchMode;
+
+  /// No description provided for @productArchivedByAdmin.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ürününüz Admin Tarafından Durduruldu. Ayrıntılar için dokunun.'**
+  String get productArchivedByAdmin;
 
   /// No description provided for @noUsedCouponsOrBenefits.
   ///

@@ -1,14 +1,27 @@
 import {onCall, HttpsError} from 'firebase-functions/v2/https';
 import {getFirestore, FieldValue} from 'firebase-admin/firestore';
+import {CloudTasksClient} from '@google-cloud/tasks';
 
-// Constants for validation
+// Constants
 const MAX_ARCHIVE_REASON_LENGTH = 1000;
 const BATCH_SIZE = 400; // Keep under 500 for safety margin
+const PROJECT_ID = process.env.GCP_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'emlak-mobile-app';
+const CLOUD_TASKS_LOCATION = 'europe-west3';
+const BOOST_EXPIRATION_QUEUE = 'boost-expiration-queue';
+
+// Lazy-init Cloud Tasks client (only created when needed)
+let _tasksClient = null;
+function getTasksClient() {
+  if (!_tasksClient) {
+    _tasksClient = new CloudTasksClient();
+  }
+  return _tasksClient;
+}
 
 // Helper function for moving subcollections safely
 async function moveSubcollection(db, sourceCollection, destCollection) {
   const snapshot = await sourceCollection.get();
-  
+
   if (snapshot.empty) {
     return 0;
   }
@@ -19,12 +32,12 @@ async function moveSubcollection(db, sourceCollection, destCollection) {
   for (let i = 0; i < snapshot.docs.length; i += BATCH_SIZE) {
     const copyBatch = db.batch();
     const chunk = snapshot.docs.slice(i, i + BATCH_SIZE);
-    
+
     for (const doc of chunk) {
       copyBatch.set(destCollection.doc(doc.id), doc.data());
       deleteRefs.push(doc.ref);
     }
-    
+
     await copyBatch.commit();
   }
 
@@ -34,17 +47,124 @@ async function moveSubcollection(db, sourceCollection, destCollection) {
   for (let i = 0; i < deleteRefs.length; i += BATCH_SIZE) {
     const deleteBatch = db.batch();
     const chunk = deleteRefs.slice(i, i + BATCH_SIZE);
-    
+
     for (const ref of chunk) {
       deleteBatch.delete(ref);
     }
-    
+
     await deleteBatch.commit();
   }
 
   console.log(`Deleted ${deleteRefs.length} source docs`);
 
   return snapshot.docs.length;
+}
+
+/**
+ * Gracefully expires a product's boost and cleans up related resources.
+ * Called AFTER the main archive transaction completes.
+ * All operations are best-effort — failures are logged but do not block the archive.
+ *
+ * @param {FirebaseFirestore.Firestore} db - Firestore instance
+ * @param {string} productId - The product document ID
+ * @param {string} sourceCollection - Original collection ('products' or 'shop_products')
+ * @param {Object} boostCleanupData - Captured boost state from the transaction
+ */
+async function handleBoostCleanup(db, productId, sourceCollection, boostCleanupData) {
+  const bcd = boostCleanupData;
+  console.log(`Performing boost cleanup for ${productId} (source: ${sourceCollection})`);
+
+  // 1. Update boost history with final stats
+  if (bcd.boostStartTime) {
+    try {
+      const isShopProduct = sourceCollection === 'shop_products';
+      const historyOwnerId = isShopProduct ? bcd.productShopId : bcd.productUserId;
+
+      if (!historyOwnerId) {
+        console.warn(`No owner ID for boost history lookup on ${productId}`);
+      } else {
+        const historyCol = isShopProduct ? db.collection('shops').doc(historyOwnerId).collection('boostHistory') : db.collection('users').doc(historyOwnerId).collection('boostHistory');
+
+        const historySnap = await historyCol
+          .where('itemId', '==', productId)
+          .where('boostStartTime', '==', bcd.boostStartTime)
+          .limit(1)
+          .get();
+
+        const impressionsDuringBoost = Math.max(
+          (bcd.boostedImpressionCount) - (bcd.boostImpressionCountAtStart), 0,
+        );
+        const clicksDuringBoost = Math.max(
+          (bcd.clickCount) - (bcd.boostClickCountAtStart), 0,
+        );
+
+        const historyData = {
+          impressionsDuringBoost,
+          clicksDuringBoost,
+          totalImpressionCount: bcd.boostedImpressionCount,
+          totalClickCount: bcd.clickCount,
+          finalImpressions: bcd.boostImpressionCountAtStart,
+          finalClicks: bcd.boostClickCountAtStart,
+          itemName: bcd.productName,
+          productImage: bcd.productImage,
+          averageRating: bcd.averageRating,
+          price: bcd.price,
+          currency: bcd.currency,
+          actualExpirationTime: FieldValue.serverTimestamp(),
+          expiredReason: 'admin_archived',
+          terminatedEarly: true,
+        };
+
+        if (!historySnap.empty) {
+          await historySnap.docs[0].ref.update(historyData);
+          console.log(`✅ Boost history updated for ${productId}`);
+        } else {
+          await historyCol.add({
+            ...historyData,
+            itemId: productId,
+            itemType: isShopProduct ? 'shop_product' : 'product',
+            boostStartTime: bcd.boostStartTime,
+            createdAt: FieldValue.serverTimestamp(),
+          });
+          console.log(`✅ Boost history created for ${productId} (none existed)`);
+        }
+      }
+    } catch (historyError) {
+      console.error(`Failed to update boost history for ${productId}:`, historyError);
+    }
+  }
+
+  // 2. Cancel scheduled Cloud Task (best-effort)
+  if (bcd.boostExpirationTaskName) {
+    try {
+      const client = getTasksClient();
+      const taskPath = client.taskPath(
+        PROJECT_ID,
+        CLOUD_TASKS_LOCATION,
+        BOOST_EXPIRATION_QUEUE,
+        bcd.boostExpirationTaskName,
+      );
+      await client.deleteTask({name: taskPath});
+      console.log(`✅ Cancelled boost expiration task: ${bcd.boostExpirationTaskName}`);
+    } catch (taskError) {
+      // Task may have already executed, been deleted, or not exist — safe to ignore
+      if (taskError.code === 5) {
+        // NOT_FOUND — task already gone
+        console.log(`Boost task already completed/deleted: ${bcd.boostExpirationTaskName}`);
+      } else {
+        console.warn(`Could not cancel boost task: ${taskError.message}`);
+      }
+    }
+  }
+
+  // 3. Individual product boost notification — SKIPPED
+  // For individual products, the main archive notification handles this
+  // with boostExpired: true flag. Only shop products need a separate
+  // boost notification since they don't get the archive notification.
+
+ // 4. Shop product boost notification — SKIPPED
+  // For admin-archived shop products, the main archive notification
+  // handles this with boostExpired: true flag (same pattern as individual products).
 }
 
 export const adminToggleProductArchiveStatus = onCall({
@@ -59,9 +179,9 @@ export const adminToggleProductArchiveStatus = onCall({
 
   const userId = request.auth.uid;
   const {
-    productId, 
-    shopId, 
-    archiveStatus, 
+    productId,
+    shopId,
+    archiveStatus,
     collection: sourceCollectionType,
     needsUpdate,
     archiveReason,
@@ -71,20 +191,19 @@ export const adminToggleProductArchiveStatus = onCall({
   if (!productId || typeof productId !== 'string') {
     throw new HttpsError('invalid-argument', 'Valid Product ID is required');
   }
-  
+
   if (archiveStatus === undefined || typeof archiveStatus !== 'boolean') {
     throw new HttpsError('invalid-argument', 'Archive status must be a boolean');
   }
 
   // Sanitize archiveReason
   const sanitizedArchiveReason = archiveReason ? String(archiveReason).trim().slice(0, MAX_ARCHIVE_REASON_LENGTH) : null;
-
   const db = getFirestore();
 
   try {
     // Verify user is a full admin
     const userDoc = await db.collection('users').doc(userId).get();
-    
+
     if (!userDoc.exists) {
       throw new HttpsError('not-found', 'User not found');
     }
@@ -99,7 +218,7 @@ export const adminToggleProductArchiveStatus = onCall({
     // Determine collections
     let sourceCollection;
     let destCollection;
-    
+
     if (archiveStatus) {
       if (sourceCollectionType === 'shop_products' || shopId) {
         sourceCollection = 'shop_products';
@@ -121,7 +240,9 @@ export const adminToggleProductArchiveStatus = onCall({
     const sourceRef = db.collection(sourceCollection).doc(productId);
     const destRef = db.collection(destCollection).doc(productId);
 
-    // Use transaction for atomicity on main document
+    // ================================================================
+    // TRANSACTION: Atomic read → prepare → write
+    // ================================================================
     const result = await db.runTransaction(async (transaction) => {
       const productDoc = await transaction.get(sourceRef);
 
@@ -129,11 +250,11 @@ export const adminToggleProductArchiveStatus = onCall({
         throw new HttpsError('not-found', `Product not found in ${sourceCollection}`);
       }
 
-      // Idempotency check - already in destination?
+      // Idempotency check — already in destination?
       const destDoc = await transaction.get(destRef);
       if (destDoc.exists) {
         console.log(`Product ${productId} already exists in ${destCollection}, skipping`);
-        return { alreadyProcessed: true, productData: destDoc.data() };
+        return {alreadyProcessed: true, productData: destDoc.data(), boostCleanupData: null};
       }
 
       const productData = productDoc.data();
@@ -146,14 +267,61 @@ export const adminToggleProductArchiveStatus = onCall({
         modifiedBy: userId,
       };
 
+      // Track boost cleanup data (populated only when archiving a boosted product)
+      let boostCleanupData = null;
+
       if (archiveStatus) {
+        // ── Archive: set admin flags ──
         updateData.archivedByAdmin = true;
         updateData.archivedByAdminAt = FieldValue.serverTimestamp();
         updateData.archivedByAdminId = userId;
         updateData.needsUpdate = needsUpdate === true;
         updateData.archiveReason = (needsUpdate && sanitizedArchiveReason) ? sanitizedArchiveReason : null;
         updateData.adminArchiveReason = updateData.archiveReason || 'Archived by admin';
+
+        // ── If product is currently boosted, clean boost state ──
+        if (productData.isBoosted === true) {
+          console.log(`Product ${productId} is boosted — cleaning boost fields before archive`);
+
+          // Capture everything needed for post-transaction cleanup.
+          // We snapshot these values NOW because after the transaction
+          // the source document will be deleted.
+          boostCleanupData = {
+            boostStartTime: productData.boostStartTime || null,
+            boostExpirationTaskName: productData.boostExpirationTaskName || null,
+            boostedImpressionCount: productData.boostedImpressionCount || 0,
+            boostImpressionCountAtStart: productData.boostImpressionCountAtStart || 0,
+            clickCount: productData.clickCount || 0,
+            boostClickCountAtStart: productData.boostClickCountAtStart || 0,
+            productName: productData.productName || 'Product',
+            productImage: (productData.imageUrls && productData.imageUrls.length > 0) ? productData.imageUrls[0] : null,
+            averageRating: productData.averageRating || 0,
+            price: productData.price || 0,
+            currency: productData.currency || 'TL',
+            productUserId: productData.userId || null,
+            productShopId: productData.shopId || shopId || null,
+          };
+
+          // Overwrite boost fields in the document that will be written
+          // to the paused collection so it arrives in a clean state.
+          updateData.isBoosted = false;
+          updateData.lastBoostExpiredAt = FieldValue.serverTimestamp();
+          updateData.promotionScore = Math.max((productData.promotionScore || 0) - 1000, 0);
+
+          // Remove transient boost fields entirely — they are meaningless
+          // once the boost is expired and would be stale if the product
+          // is ever unarchived.
+          delete updateData.boostStartTime;
+          delete updateData.boostEndTime;
+          delete updateData.boostExpirationTaskName;
+          delete updateData.boostDuration;
+          delete updateData.boostScreen;
+          delete updateData.screenType;
+          delete updateData.boostImpressionCountAtStart;
+          delete updateData.boostClickCountAtStart;
+        }
       } else {
+        // ── Unarchive: clear admin flags ──
         updateData.archivedByAdmin = false;
         updateData.archivedByAdminAt = null;
         updateData.archivedByAdminId = null;
@@ -168,10 +336,12 @@ export const adminToggleProductArchiveStatus = onCall({
       transaction.set(destRef, updateData);
       transaction.delete(sourceRef);
 
-      return { alreadyProcessed: false, productData };
+      return {alreadyProcessed: false, productData, boostCleanupData};
     });
 
-    // If already processed, return early
+    // ================================================================
+    // EARLY RETURN: idempotent case
+    // ================================================================
     if (result.alreadyProcessed) {
       return {
         success: true,
@@ -186,7 +356,9 @@ export const adminToggleProductArchiveStatus = onCall({
       };
     }
 
-    // Handle subcollections outside transaction
+    // ================================================================
+    // POST-TRANSACTION: Subcollection migration
+    // ================================================================
     const subcollectionsToMove = ['reviews', 'product_questions', 'sale_preferences'];
     let totalSubcollectionDocsMoved = 0;
 
@@ -195,7 +367,7 @@ export const adminToggleProductArchiveStatus = onCall({
         const movedCount = await moveSubcollection(
           db,
           sourceRef.collection(subcollectionName),
-          destRef.collection(subcollectionName)
+          destRef.collection(subcollectionName),
         );
         totalSubcollectionDocsMoved += movedCount;
       } catch (subcollectionError) {
@@ -203,7 +375,34 @@ export const adminToggleProductArchiveStatus = onCall({
       }
     }
 
-    // Audit logging
+    // ================================================================
+    // POST-TRANSACTION: Boost cleanup (best-effort, non-blocking)
+    // ================================================================
+    if (result.boostCleanupData) {
+      await handleBoostCleanup(db, productId, sourceCollection, result.boostCleanupData);
+    }
+
+    // ================================================================
+    // POST-TRANSACTION: Audit logging
+    // ================================================================
+    const auditMetadata = {
+      previousState: {
+        archivedByAdmin: result.productData?.archivedByAdmin || false,
+        paused: result.productData?.paused || false,
+        needsUpdate: result.productData?.needsUpdate || false,
+        isBoosted: result.productData?.isBoosted || false,
+      },
+      newState: {
+        archivedByAdmin: archiveStatus,
+        paused: archiveStatus,
+        needsUpdate: archiveStatus ? (needsUpdate === true) : false,
+        isBoosted: false,
+      },
+      archiveReason: archiveStatus ? sanitizedArchiveReason : null,
+      subcollectionDocsMoved: totalSubcollectionDocsMoved,
+      boostWasActive: result.boostCleanupData !== null,
+    };
+
     await db.collection('admin_audit_logs').add({
       action: archiveStatus ? 'PRODUCT_ARCHIVED_BY_ADMIN' : 'PRODUCT_UNARCHIVED_BY_ADMIN',
       adminId: userId,
@@ -214,66 +413,56 @@ export const adminToggleProductArchiveStatus = onCall({
       destCollection: destCollection,
       timestamp: FieldValue.serverTimestamp(),
       productName: result.productData?.productName || 'Unknown',
-      metadata: {
-        previousState: {
-          archivedByAdmin: result.productData?.archivedByAdmin || false,
-          paused: result.productData?.paused || false,
-          needsUpdate: result.productData?.needsUpdate || false,
-        },
-        newState: {
-          archivedByAdmin: archiveStatus,
-          paused: archiveStatus,
-          needsUpdate: archiveStatus ? (needsUpdate === true) : false,
-        },
-        archiveReason: archiveStatus ? sanitizedArchiveReason : null,
-        subcollectionDocsMoved: totalSubcollectionDocsMoved,
-      },
+      metadata: auditMetadata,
     });
 
+    // ================================================================
+    // POST-TRANSACTION: Archive notification for individual (non-shop) products
+    // ================================================================
+    if (archiveStatus && !shopId && result.productData?.userId) {
+      try {
+        const productOwnerId = result.productData.userId;
+        const productName = result.productData?.productName || 'Your product';
+
+        await db.collection('users').doc(productOwnerId).collection('notifications').add({
+          type: 'product_archived_by_admin',
+          productId: productId,
+          productName: productName,
+          needsUpdate: needsUpdate === true,
+          archiveReason: sanitizedArchiveReason || null,
+          boostExpired: result.boostCleanupData !== null,
+          isRead: false,
+          timestamp: FieldValue.serverTimestamp(),
+        });
+
+        console.log(`✅ Admin archive notification created for user ${productOwnerId}`);
+      } catch (notificationError) {
+        console.error('Failed to create user archive notification:', notificationError);
+      }
+    }
+
+    // ================================================================
+    // POST-TRANSACTION: Archive notification for shop products
+    // ================================================================
     if (archiveStatus && shopId) {
       try {
-        const shopSnap = await db.collection('shops').doc(shopId).get();
-        
-        if (shopSnap.exists) {
-          const shopData = shopSnap.data();
-    
-          // Build isRead map for all members
-          const isReadMap = {};
-          const addMember = (id) => {
-            if (id && typeof id === 'string') {
-              isReadMap[id] = false;
-            }
-          };
-    
-          addMember(shopData.ownerId);
-          if (Array.isArray(shopData.coOwners)) shopData.coOwners.forEach(addMember);
-          if (Array.isArray(shopData.editors)) shopData.editors.forEach(addMember);
-          if (Array.isArray(shopData.viewers)) shopData.viewers.forEach(addMember);
-    
-          if (Object.keys(isReadMap).length > 0) {
-            const productName = result.productData?.productName || 'Your product';
-    
-            await db.collection('shop_notifications').add({
-              type: 'product_archived_by_admin',
-              shopId,
-              shopName: shopData.name || '',
-              productId,
-              productName,
-              needsUpdate: needsUpdate === true,
-              archiveReason: sanitizedArchiveReason || null,
-              isRead: isReadMap,
-              timestamp: FieldValue.serverTimestamp(),
-              message_en: needsUpdate ? `"${productName}" was paused by admin and needs updates: ${sanitizedArchiveReason || 'Please review'}` : `"${productName}" was paused by admin`,
-              message_tr: needsUpdate ? `"${productName}" admin tarafından durduruldu ve güncelleme gerekiyor: ${sanitizedArchiveReason || 'Lütfen inceleyin'}` : `"${productName}" admin tarafından durduruldu`,
-              message_ru: needsUpdate ? `"${productName}" приостановлен администратором и требует обновления: ${sanitizedArchiveReason || 'Пожалуйста, проверьте'}` : `"${productName}" приостановлен администратором`,
-            });
-    
-            console.log(`✅ Admin archive notification created for shop ${shopId}`);
-          }
-        }
+        const productName = result.productData?.productName || 'Product';
+
+        await db.collection('shop_notifications').add({
+          shopId: shopId,
+          type: 'product_archived_by_admin',
+          productId: productId,
+          productName: productName,
+          needsUpdate: needsUpdate === true,
+          archiveReason: sanitizedArchiveReason || null,
+          boostExpired: result.boostCleanupData !== null,
+          isRead: {},    // ← map, not boolean
+          timestamp: FieldValue.serverTimestamp(),
+        });
+
+        console.log(`✅ Admin archive shop notification created for shop ${shopId}`);
       } catch (notificationError) {
-        console.error('Failed to create admin archive notification:', notificationError);
-        // Don't fail the main operation
+        console.error('Failed to create shop archive notification:', notificationError);
       }
     }
 
@@ -286,6 +475,7 @@ export const adminToggleProductArchiveStatus = onCall({
       sourceCollection: sourceCollection,
       destCollection: destCollection,
       subcollectionDocsMoved: totalSubcollectionDocsMoved,
+      boostExpired: result.boostCleanupData !== null,
     };
   } catch (error) {
     console.error('Error toggling product archive status:', error);
@@ -310,7 +500,7 @@ export const approveArchivedProductEdit = onCall({
 
   const userId = request.auth.uid;
   const db = getFirestore();
-  
+
   // Verify admin status
   const userDoc = await db.collection('users').doc(userId).get();
   if (!userDoc.exists || !userDoc.data()?.isAdmin) {
@@ -318,7 +508,7 @@ export const approveArchivedProductEdit = onCall({
   }
 
   const userData = userDoc.data();
-  const { applicationId } = request.data;
+  const {applicationId} = request.data;
 
   // Enhanced validation
   if (!applicationId || typeof applicationId !== 'string') {
@@ -327,7 +517,7 @@ export const approveArchivedProductEdit = onCall({
 
   try {
     const applicationRef = db.collection('product_edit_applications').doc(applicationId);
-    
+
     // Use transaction for atomicity
     const result = await db.runTransaction(async (transaction) => {
       const applicationDoc = await transaction.get(applicationRef);
@@ -337,12 +527,12 @@ export const approveArchivedProductEdit = onCall({
       }
 
       const applicationData = applicationDoc.data() || {};
-      
+
       // Idempotency check - already approved?
       if (applicationData.status === 'approved') {
         console.log(`Application ${applicationId} already approved, skipping`);
-        return { 
-          alreadyProcessed: true, 
+        return {
+          alreadyProcessed: true,
           productId: applicationData.originalProductId,
           sourceCollection: applicationData.sourceCollection || 'paused_shop_products',
         };
@@ -372,37 +562,37 @@ export const approveArchivedProductEdit = onCall({
       const originalProductData = sourceDoc.data() || {};
 
       // Prepare updated product data
-      const updatedProductData = { ...applicationData };
-      
+      const updatedProductData = {...applicationData};
+
       // Remove application-specific fields
       const fieldsToRemove = [
         'originalProductId', 'editType', 'originalProductData', 'submittedAt',
         'status', 'editedFields', 'changes', 'sourceCollection', 'deletedColors',
         'phone', 'region', 'address', 'ibanOwnerName', 'ibanOwnerSurname', 'iban',
         'approvedAt', 'approvedBy', 'rejectedAt', 'rejectedBy', 'rejectionReason',
-        'applicationId'
+        'applicationId',
       ];
       fieldsToRemove.forEach((field) => delete updatedProductData[field]);
 
       // =====================================================================
       // DEFENSIVE FIELD PRESERVATION
       // =====================================================================
-      
+
       // Identity - CRITICAL
       updatedProductData.id = productId;
       updatedProductData.ilan_no = applicationData.ilan_no ?? originalProductData.ilan_no ?? productId;
       updatedProductData.currency = applicationData.currency ?? originalProductData.currency ?? 'TL';
-      
+
       // Ownership - CRITICAL
       updatedProductData.userId = applicationData.userId ?? originalProductData.userId;
       updatedProductData.ownerId = applicationData.ownerId ?? originalProductData.ownerId ?? applicationData.userId ?? originalProductData.userId;
       updatedProductData.shopId = applicationData.shopId ?? originalProductData.shopId;
       updatedProductData.sellerName = applicationData.sellerName ?? originalProductData.sellerName ?? 'Unknown Seller';
-      
+
       // Timestamps - CRITICAL
       updatedProductData.createdAt = originalProductData.createdAt ?? FieldValue.serverTimestamp();
       updatedProductData.updatedAt = FieldValue.serverTimestamp();
-      
+
       // Stats - PRESERVE FROM ORIGINAL
       updatedProductData.averageRating = applicationData.averageRating ?? originalProductData.averageRating ?? 0;
       updatedProductData.reviewCount = applicationData.reviewCount ?? originalProductData.reviewCount ?? 0;
@@ -410,28 +600,32 @@ export const approveArchivedProductEdit = onCall({
       updatedProductData.favoritesCount = applicationData.favoritesCount ?? originalProductData.favoritesCount ?? 0;
       updatedProductData.cartCount = applicationData.cartCount ?? originalProductData.cartCount ?? 0;
       updatedProductData.purchaseCount = applicationData.purchaseCount ?? originalProductData.purchaseCount ?? 0;
-      
+
       // Flags - PRESERVE FROM ORIGINAL
       updatedProductData.isFeatured = applicationData.isFeatured ?? originalProductData.isFeatured ?? false;
       updatedProductData.isTrending = applicationData.isTrending ?? originalProductData.isTrending ?? false;
-      updatedProductData.isBoosted = applicationData.isBoosted ?? originalProductData.isBoosted ?? false;
-      
+
+      // Boost should always be false for a product coming out of archive.
+      // The admin archive function already cleaned boost state when archiving.
+      // If somehow stale boost data persists, force it clean here.
+      updatedProductData.isBoosted = false;
+      updatedProductData.promotionScore = applicationData.promotionScore ?? originalProductData.promotionScore ?? 0;
+
       // Ranking - PRESERVE FROM ORIGINAL
       updatedProductData.rankingScore = applicationData.rankingScore ?? originalProductData.rankingScore ?? 0;
-      updatedProductData.promotionScore = applicationData.promotionScore ?? originalProductData.promotionScore ?? 0;
-      
-      // Boost tracking - PRESERVE FROM ORIGINAL
-      updatedProductData.boostedImpressionCount = applicationData.boostedImpressionCount ?? originalProductData.boostedImpressionCount ?? 0;
-      updatedProductData.boostImpressionCountAtStart = applicationData.boostImpressionCountAtStart ?? originalProductData.boostImpressionCountAtStart ?? 0;
-      updatedProductData.boostClickCountAtStart = applicationData.boostClickCountAtStart ?? originalProductData.boostClickCountAtStart ?? 0;
-      updatedProductData.boostStartTime = applicationData.boostStartTime ?? originalProductData.boostStartTime ?? null;
-      updatedProductData.boostEndTime = applicationData.boostEndTime ?? originalProductData.boostEndTime ?? null;
-      
+
+      // Boost tracking - explicitly clear (boost was expired on archive)
+      updatedProductData.boostedImpressionCount = originalProductData.boostedImpressionCount ?? 0;
+      updatedProductData.boostImpressionCountAtStart = 0;
+      updatedProductData.boostClickCountAtStart = 0;
+      updatedProductData.boostStartTime = null;
+      updatedProductData.boostEndTime = null;
+
       // Click tracking - PRESERVE FROM ORIGINAL
       updatedProductData.dailyClickCount = applicationData.dailyClickCount ?? originalProductData.dailyClickCount ?? 0;
       updatedProductData.lastClickDate = applicationData.lastClickDate ?? originalProductData.lastClickDate ?? null;
       updatedProductData.clickCountAtStart = applicationData.clickCountAtStart ?? originalProductData.clickCountAtStart ?? 0;
-      
+
       // Related products - PRESERVE FROM ORIGINAL
       updatedProductData.relatedProductIds = applicationData.relatedProductIds ?? originalProductData.relatedProductIds ?? [];
       updatedProductData.relatedLastUpdated = applicationData.relatedLastUpdated ?? originalProductData.relatedLastUpdated ?? null;
@@ -445,7 +639,7 @@ export const approveArchivedProductEdit = onCall({
       updatedProductData.archivedByAdminAt = null;
       updatedProductData.archivedByAdminId = null;
       updatedProductData.adminArchiveReason = null;
-      
+
       // Set approval metadata
       updatedProductData.lastModified = FieldValue.serverTimestamp();
       updatedProductData.approvedAt = FieldValue.serverTimestamp();
@@ -461,8 +655,8 @@ export const approveArchivedProductEdit = onCall({
         approvedBy: userId,
       });
 
-      return { 
-        alreadyProcessed: false, 
+      return {
+        alreadyProcessed: false,
         productId,
         sourceCollection,
         destCollection,
@@ -496,7 +690,7 @@ export const approveArchivedProductEdit = onCall({
         const movedCount = await moveSubcollection(
           db,
           sourceRef.collection(subcollectionName),
-          destRef.collection(subcollectionName)
+          destRef.collection(subcollectionName),
         );
         totalSubcollectionDocsMoved += movedCount;
       } catch (subcollectionError) {

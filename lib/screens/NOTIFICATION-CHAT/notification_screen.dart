@@ -446,6 +446,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
         }
         break;
 
+      case 'product_archived_by_admin':
+        context.push('/archived-products');
+        break;
+
       case 'refund_request_approved':
         showDialog(
           context: context,
@@ -527,8 +531,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
         break;
 
       case 'product_question_answered':
-  context.push('/user-product-questions');
-  break;
+        context.push('/user-product-questions');
+        break;
 
       case 'refund_request_rejected':
         final rejectionReason = notification.rejectionReason;
@@ -1306,6 +1310,17 @@ class _NotificationScreenState extends State<NotificationScreen> {
                       if (type == 'campaign') {
                         message = notification.campaignDescription ??
                             (notification.message ?? '');
+                      } else if (type == 'boost_expired') {
+                        final productName = notification.productName ?? '';
+                        final reason = notification.reason ?? '';
+                        if (reason == 'admin_archived') {
+                          message = l10n.boostExpiredAdminArchived(productName);
+                        } else if (reason == 'seller_archived') {
+                          message =
+                              l10n.boostExpiredSellerArchived(productName);
+                        } else {
+                          message = l10n.boostExpiredGeneric(productName);
+                        }
                       } else if (type == 'shop_approved') {
                         message = l10n.tapToVisitYourShop;
                       } else if (type == 'shop_disapproved') {
@@ -1314,6 +1329,20 @@ class _NotificationScreenState extends State<NotificationScreen> {
                         message = l10n.refundRequestApprovedMessage;
                       } else if (type == 'refund_request_rejected') {
                         message = l10n.refundRequestRejectedMessage;
+                      } else if (type == 'product_archived_by_admin') {
+                        final productName = notification.productName ?? '';
+                        final needsUpdate = notification.needsUpdate ?? false;
+                        final archiveReason = notification.archiveReason ?? '';
+                        final boostExpired = notification.boostExpired ?? false;
+                        if (needsUpdate && archiveReason.isNotEmpty) {
+                          message = l10n.productArchivedNeedsUpdate(
+                              productName, archiveReason);
+                        } else {
+                          message = l10n.productArchivedSimple(productName);
+                        }
+                        if (boostExpired) {
+                          message += ' ${l10n.productArchivedBoostNote}';
+                        }
                       } else {
                         switch (languageCode) {
                           case 'tr':
@@ -1352,6 +1381,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
                           notificationIcon = Icons.local_shipping;
                           iconColor = const Color(0xFF00A86B);
                           break;
+                        case 'product_archived_by_admin':
+                          notificationIcon = Icons.archive_rounded;
+                          iconColor = Colors.red;
+                          break;
                         case 'product_review_shop':
                         case 'product_review_user':
                         case 'seller_review_shop':
@@ -1364,9 +1397,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
                           iconColor = Color(0xFF00A86B);
                           break;
                         case 'product_question_answered':
-  notificationIcon = Icons.question_answer_rounded;
-  iconColor = const Color(0xFF00A86B);
-  break;
+                          notificationIcon = Icons.question_answer_rounded;
+                          iconColor = const Color(0xFF00A86B);
+                          break;
                         case 'shop_approved':
                           notificationIcon = Icons.store;
                           iconColor = Colors.green;
@@ -1536,12 +1569,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   /// Builds shimmer placeholder for notifications loading state
   Widget _buildNotificationShimmer(bool isDarkMode) {
-    final baseColor = isDarkMode
-        ? const Color.fromARGB(255, 30, 28, 44)
-        : Colors.grey[300]!;
-    final highlightColor = isDarkMode
-        ? const Color.fromARGB(255, 45, 42, 65)
-        : Colors.grey[100]!;
+    final baseColor =
+        isDarkMode ? const Color.fromARGB(255, 30, 28, 44) : Colors.grey[300]!;
+    final highlightColor =
+        isDarkMode ? const Color.fromARGB(255, 45, 42, 65) : Colors.grey[100]!;
 
     return Shimmer.fromColors(
       baseColor: baseColor,
@@ -1644,6 +1675,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
         return l10n.boosted;
       case 'boost_expired':
         return l10n.boostExpired;
+      case 'product_archived_by_admin':
+        return l10n.productArchivedByAdmin;
       case 'order_delivered':
         return l10n.orderDelivered ?? 'Order Delivered';
       case 'shipment':
@@ -1663,7 +1696,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
       case 'seller_review_user':
         return l10n.sellerReview;
       case 'product_question_answered':
-  return l10n.questionAnswered ?? 'Question Answered 💬';
+        return l10n.questionAnswered ?? 'Question Answered 💬';
       case 'product_out_of_stock':
         return l10n.productOutOfStock2;
       case 'product_out_of_stock_seller_panel':

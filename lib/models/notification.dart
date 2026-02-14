@@ -16,6 +16,7 @@ class NotificationModel {
 
   /// Generic message field (fallback)
   final String? message;
+  final String? reason;
 
   /// Localized messages
   final String? messageEn;
@@ -42,6 +43,9 @@ class NotificationModel {
   final String? imageUrl;
   final String? paymentLink;
   final String? submissionId;
+  final bool? needsUpdate;
+  final String? archiveReason;
+  final bool? boostExpired;
 
   /// Rejection reason for rejected applications
   final String? rejectionReason;
@@ -74,9 +78,13 @@ class NotificationModel {
     this.itemType,
     this.productId,
     this.shopId,
+    this.needsUpdate,
+    this.archiveReason,
+    this.boostExpired,
     this.transactionId,
     this.campaignName,
     this.campaignDescription,
+    this.reason,
     this.senderId,
     this.sellerId,
     this.inviterName,
@@ -117,9 +125,13 @@ class NotificationModel {
       productId: data['productId'] as String?,
       shopId: data['shopId'] as String?,
       transactionId: data['transactionId'] as String?,
+      reason: data['reason'] as String?,
       orderId: data['orderId'] as String?,
       senderId: data['senderId'] as String?,
       sellerId: data['sellerId'] as String?,
+      needsUpdate: data['needsUpdate'] as bool?,
+      archiveReason: data['archiveReason'] as String?,
+      boostExpired: data['boostExpired'] as bool?,
       campaignName: data['campaignName'] as String?,
       campaignDescription: data['campaignDescription'] as String?,
       inviterName: data['inviterName'] as String?,
@@ -158,6 +170,7 @@ class NotificationModel {
     if (shopId != null) map['shopId'] = shopId;
     if (orderId != null) map['orderId'] = orderId;
     if (transactionId != null) map['transactionId'] = transactionId;
+    if (reason != null) map['reason'] = reason;
     if (senderId != null) map['senderId'] = senderId;
     if (sellerId != null) map['sellerId'] = sellerId;
     if (campaignName != null) map['campaignName'] = campaignName;
@@ -165,6 +178,9 @@ class NotificationModel {
       map['campaignDescription'] = campaignDescription;
     if (inviterName != null) map['inviterName'] = inviterName;
     if (shopName != null) map['shopName'] = shopName;
+    if (needsUpdate != null) map['needsUpdate'] = needsUpdate;
+    if (archiveReason != null) map['archiveReason'] = archiveReason;
+    if (boostExpired != null) map['boostExpired'] = boostExpired;
     if (role != null) map['role'] = role;
     if (status != null) map['status'] = status;
     if (rejectionReason != null) map['rejectionReason'] = rejectionReason;

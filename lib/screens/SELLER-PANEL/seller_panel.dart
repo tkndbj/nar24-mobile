@@ -847,19 +847,20 @@ class _SellerPanelState extends State<SellerPanel>
               ),
               body: SafeArea(
                 top: false,
-                child: (provider.selectedShop == null || provider.isLoadingShops)
-                    ? _ShimmerBodySkeleton()
-                    : TabBarView(
-                        controller: _tabController,
-                        children: [
-                          DashboardTab(),
-                          ProductsTab(),
-                          StockTab(),
-                          TransactionsTab(),
-                          ShipmentsTab(),
-                          AdsTab(),
-                        ],
-                      ),
+                child:
+                    (provider.selectedShop == null || provider.isLoadingShops)
+                        ? _ShimmerBodySkeleton()
+                        : TabBarView(
+                            controller: _tabController,
+                            children: [
+                              DashboardTab(),
+                              ProductsTab(),
+                              StockTab(),
+                              TransactionsTab(),
+                              ShipmentsTab(),
+                              AdsTab(),
+                            ],
+                          ),
               ),
             );
           },
@@ -1173,8 +1174,41 @@ class _ShopNotificationsBottomSheetState
   }
 
   String _getLocalizedMessage(Map<String, dynamic> data, BuildContext context) {
-    final locale = Localizations.localeOf(context).languageCode;
+    final l10n = AppLocalizations.of(context);
+    final type = data['type'] as String?;
 
+    // Handle notifications that use reason-based localization
+    if (type == 'boost_expired') {
+      final productName = data['productName'] as String? ?? '';
+      final reason = data['reason'] as String? ?? '';
+      if (reason == 'admin_archived') {
+        return l10n.boostExpiredAdminArchived(productName);
+      } else if (reason == 'seller_archived') {
+        return l10n.boostExpiredSellerArchived(productName);
+      } else {
+        return l10n.boostExpiredGeneric(productName);
+      }
+    }
+
+    if (type == 'product_archived_by_admin') {
+      final productName = data['productName'] as String? ?? '';
+      final needsUpdate = data['needsUpdate'] as bool? ?? false;
+      final archiveReason = data['archiveReason'] as String? ?? '';
+      final boostExpired = data['boostExpired'] as bool? ?? false;
+      String msg;
+      if (needsUpdate && archiveReason.isNotEmpty) {
+        msg = l10n.productArchivedNeedsUpdate(productName, archiveReason);
+      } else {
+        msg = l10n.productArchivedSimple(productName);
+      }
+      if (boostExpired) {
+        msg += ' ${l10n.productArchivedBoostNote}';
+      }
+      return msg;
+    }
+
+    // Default: use message_* fields
+    final locale = Localizations.localeOf(context).languageCode;
     switch (locale) {
       case 'tr':
         return data['message_tr'] as String? ??
@@ -1223,6 +1257,8 @@ class _ShopNotificationsBottomSheetState
         return Icons.help_outline_rounded;
       case 'stock':
         return Icons.inventory_2_rounded;
+      case 'product_archived_by_admin':
+        return Icons.archive_rounded;
       case 'payment':
         return Icons.payments_rounded;
       case 'shipment':
@@ -1235,6 +1271,8 @@ class _ShopNotificationsBottomSheetState
         return Icons.warning_amber_rounded;
       case 'info':
         return Icons.info_outline_rounded;
+      case 'boost_expired':
+        return Icons.rocket_launch_rounded;
       default:
         return Icons.notifications_rounded;
     }
@@ -1253,10 +1291,14 @@ class _ShopNotificationsBottomSheetState
         return const Color(0xFFFF5722);
       case 'payment':
         return const Color(0xFF9C27B0);
+      case 'boost_expired':
+        return const Color(0xFFFF9800);
       case 'shipment':
         return const Color(0xFF00BCD4);
       case 'campaign':
         return const Color(0xFFE91E63);
+      case 'product_archived_by_admin':
+        return const Color(0xFFE53935);
       case 'boost':
         return const Color(0xFFFF6200);
       case 'warning':
@@ -1566,6 +1608,12 @@ class _ShopNotificationsBottomSheetState
             if (shopId != null && router != null) {
               router.push('/seller_panel_reviews/$shopId');
             }
+            break;
+          case 'boost_expired':
+            _safeAnimateToTab(tabController, 5); // Ads tab
+            break;
+          case 'product_archived_by_admin':
+            _safeAnimateToTab(tabController, 1); // Products tab
             break;
           case 'product_question':
             if (shopId != null && router != null) {

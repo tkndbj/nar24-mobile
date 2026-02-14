@@ -4355,7 +4355,43 @@ class AppLocalizationsTr extends AppLocalizations {
   String get unarchive => 'Arşivden Çıkar';
 
   @override
+  String boostExpiredAdminArchived(Object productName) {
+    return '\"$productName\" boost süresi, ürün admin tarafından durdurulduğu için erken sonlandırıldı.';
+  }
+
+  @override
+  String boostExpiredSellerArchived(Object productName) {
+    return '\"$productName\" boost süresi, ürün arşivlendiği için erken sonlandırıldı.';
+  }
+
+  @override
+  String boostExpiredGeneric(Object productName) {
+    return '\"$productName\" boost süresi doldu.';
+  }
+
+  @override
   String get boostInfoTitle => 'Ürünlerinizi Öne Çıkarın';
+
+  @override
+  String get boostTerminatedEarlyAdmin =>
+      'Boost, ürün admin tarafından durdurulduğu için erken sonlandırıldı.';
+
+  @override
+  String get boostTerminatedEarlySeller =>
+      'Boost, ürün arşivlendiği için erken sonlandırıldı.';
+
+  @override
+  String productArchivedSimple(Object productName) {
+    return '\"$productName\" admin tarafından durduruldu.';
+  }
+
+  @override
+  String productArchivedNeedsUpdate(Object archiveReason, Object productName) {
+    return '\"$productName\" admin tarafından durduruldu ve güncelleme gerekiyor: $archiveReason';
+  }
+
+  @override
+  String get productArchivedBoostNote => 'Aktif boost da erken sonlandırıldı.';
 
   @override
   String get boostInfoDescription =>
@@ -12701,6 +12737,10 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get limitedSearchMode =>
       'Gelişmiş arama bakımı devam etmektedir. Lütfen birkaç dakika sonra tekrar deneyin.';
+
+  @override
+  String get productArchivedByAdmin =>
+      'Ürününüz Admin Tarafından Durduruldu. Ayrıntılar için dokunun.';
 
   @override
   String get noUsedCouponsOrBenefits => 'Kullanılmış Kupon veya Avantaj Yok';

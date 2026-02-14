@@ -13384,6 +13384,8 @@ async function deleteQueryBatch(query, resolve, reject) {
 export const toggleProductPauseStatus = onCall({
   region: 'europe-west3',
   maxInstances: 10,
+  timeoutSeconds: 120,
+  memory: '256MiB',
 }, async (request) => {
   // Verify authentication
   if (!request.auth) {
@@ -13436,7 +13438,6 @@ export const toggleProductPauseStatus = onCall({
 
     const productData = productDoc.data();
 
-        // ========== ADD THIS CHECK HERE ==========
     // Prevent users from unarchiving products archived by admin
     if (!pauseStatus && productData.archivedByAdmin === true) {
       throw new HttpsError(
@@ -13444,8 +13445,6 @@ export const toggleProductPauseStatus = onCall({
         'Bu ürün bir yönetici tarafından arşivlenmiştir. Daha fazla bilgi için destek ile iletişime geçin.',
       );
     }
-    // =========================================
-
 
     // Verify product belongs to the specified shop
     if (productData.shopId !== shopId) {
@@ -13455,26 +13454,67 @@ export const toggleProductPauseStatus = onCall({
       );
     }
 
-    // Use a batch to ensure atomicity for the main document
-    const batch = admin.firestore().batch();
+    // ================================================================
+    // Capture boost state BEFORE modifying anything
+    // ================================================================
+    let boostCleanupData = null;
 
-    // Add product to destination collection with updated metadata
-    batch.set(destRef, {
+    if (pauseStatus && productData.isBoosted === true) {
+      console.log(`Product ${productId} is boosted — will clean boost before archiving`);
+
+      boostCleanupData = {
+        boostStartTime: productData.boostStartTime || null,
+        boostExpirationTaskName: productData.boostExpirationTaskName || null,
+        boostedImpressionCount: productData.boostedImpressionCount || 0,
+        boostImpressionCountAtStart: productData.boostImpressionCountAtStart || 0,
+        clickCount: productData.clickCount || 0,
+        boostClickCountAtStart: productData.boostClickCountAtStart || 0,
+        productName: productData.productName || 'Product',
+        productImage: (productData.imageUrls && productData.imageUrls.length > 0) ? productData.imageUrls[0] : null,
+        averageRating: productData.averageRating || 0,
+        price: productData.price || 0,
+        currency: productData.currency || 'TL',
+      };
+    }
+
+    // ================================================================
+    // Prepare the data to write to the destination collection
+    // ================================================================
+    const destData = {
       ...productData,
       paused: pauseStatus,
       lastModified: FieldValue.serverTimestamp(),
       modifiedBy: userId,
-    });
+    };
 
-    // Delete product from source collection
+    // If archiving a boosted product, clean boost fields from dest data
+    if (boostCleanupData) {
+      destData.isBoosted = false;
+      destData.lastBoostExpiredAt = FieldValue.serverTimestamp();
+      destData.promotionScore = Math.max((productData.promotionScore || 0) - 1000, 0);
+
+      delete destData.boostStartTime;
+      delete destData.boostEndTime;
+      delete destData.boostExpirationTaskName;
+      delete destData.boostDuration;
+      delete destData.boostScreen;
+      delete destData.screenType;
+      delete destData.boostImpressionCountAtStart;
+      delete destData.boostClickCountAtStart;
+    }
+
+    // ================================================================
+    // Atomic move: write to dest + delete from source
+    // ================================================================
+    const batch = admin.firestore().batch();
+    batch.set(destRef, destData);
     batch.delete(sourceRef);
-
-    // Commit the batch for the main document
     await batch.commit();
 
-    // Handle subcollections if they exist
-    // Define which subcollections your products might have
-    const subcollectionsToMove = ['reviews', 'product_questions', 'sale_preferences']; // Add your actual subcollection names
+    // ================================================================
+    // Move subcollections (outside batch — best effort)
+    // ================================================================
+    const subcollectionsToMove = ['reviews', 'product_questions', 'sale_preferences'];
 
     for (const subcollectionName of subcollectionsToMove) {
       try {
@@ -13484,15 +13524,12 @@ export const toggleProductPauseStatus = onCall({
         const snapshot = await sourceSubcollection.get();
 
         if (!snapshot.empty) {
-          // Process in batches of 500 (Firestore limit)
           const batchSize = 500;
           let currentBatch = admin.firestore().batch();
           let operationCount = 0;
 
           for (const doc of snapshot.docs) {
-            // Copy to destination
             currentBatch.set(destSubcollection.doc(doc.id), doc.data());
-            // Delete from source
             currentBatch.delete(doc.ref);
             operationCount += 2;
 
@@ -13503,14 +13540,115 @@ export const toggleProductPauseStatus = onCall({
             }
           }
 
-          // Commit any remaining operations
           if (operationCount > 0) {
             await currentBatch.commit();
           }
         }
       } catch (subcollectionError) {
         console.log(`No ${subcollectionName} subcollection or error moving it:`, subcollectionError);
-        // Continue with other subcollections even if one fails
+      }
+    }
+
+    // ================================================================
+    // Boost cleanup (best-effort, non-blocking)
+    // ================================================================
+    if (boostCleanupData) {
+      const bcd = boostCleanupData;
+      console.log(`Performing boost cleanup for ${productId}`);
+
+      // 1. Update boost history with final stats
+      if (bcd.boostStartTime) {
+        try {
+          const historyCol = admin.firestore()
+            .collection('shops')
+            .doc(shopId)
+            .collection('boostHistory');
+
+          const historySnap = await historyCol
+            .where('itemId', '==', productId)
+            .where('boostStartTime', '==', bcd.boostStartTime)
+            .limit(1)
+            .get();
+
+            const impressionsDuringBoost = Math.max(
+              bcd.boostedImpressionCount - bcd.boostImpressionCountAtStart, 0,
+            );
+            const clicksDuringBoost = Math.max(
+              bcd.clickCount - bcd.boostClickCountAtStart, 0,
+            );
+  
+            const historyData = {
+              impressionsDuringBoost,
+              clicksDuringBoost,
+              totalImpressionCount: bcd.boostedImpressionCount,
+              totalClickCount: bcd.clickCount,
+              finalImpressions: bcd.boostImpressionCountAtStart,
+              finalClicks: bcd.boostClickCountAtStart,
+              itemName: bcd.productName,
+              productImage: bcd.productImage,
+              averageRating: bcd.averageRating,
+              price: bcd.price,
+              currency: bcd.currency,
+              actualExpirationTime: FieldValue.serverTimestamp(),
+              expiredReason: 'seller_archived',
+              terminatedEarly: true,
+            };
+  
+            if (!historySnap.empty) {
+              await historySnap.docs[0].ref.update(historyData);
+              console.log(`✅ Boost history updated for ${productId}`);
+            } else {
+              await historyCol.add({
+                ...historyData,
+                itemId: productId,
+                itemType: 'shop_product',
+                boostStartTime: bcd.boostStartTime,
+                createdAt: FieldValue.serverTimestamp(),
+              });
+              console.log(`✅ Boost history created for ${productId} (none existed)`);
+            }
+        } catch (historyError) {
+          console.error(`Failed to update boost history for ${productId}:`, historyError);
+        }
+      }
+
+      // 2. Cancel scheduled Cloud Task
+      if (bcd.boostExpirationTaskName) {
+        try {
+          const projectId = process.env.GCP_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'emlak-mobile-app';
+          const tasksClient = new CloudTasksClient();
+          const taskPath = tasksClient.taskPath(
+            projectId,
+            'europe-west3',
+            'boost-expiration-queue',
+            bcd.boostExpirationTaskName,
+          );
+          await tasksClient.deleteTask({name: taskPath});
+          console.log(`✅ Cancelled boost expiration task: ${bcd.boostExpirationTaskName}`);
+        } catch (taskError) {
+          if (taskError.code === 5) {
+            console.log(`Boost task already completed/deleted: ${bcd.boostExpirationTaskName}`);
+          } else {
+            console.warn(`Could not cancel boost task: ${taskError.message}`);
+          }
+        }
+      }
+
+      // 3. Single shop notification
+      try {
+        await admin.firestore().collection('shop_notifications').add({
+          shopId: shopId,
+          type: 'boost_expired',
+          productId: productId,
+          productName: bcd.productName,
+          productImage: bcd.productImage,
+          reason: 'seller_archived',
+          isRead: {},
+          timestamp: FieldValue.serverTimestamp(),
+        });
+        console.log(`✅ Boost-expired shop notification created for shop ${shopId}`);
+      } catch (notifError) {
+        console.error(`Failed to create boost-expired shop notification:`, notifError);
       }
     }
 
@@ -13518,16 +13656,15 @@ export const toggleProductPauseStatus = onCall({
       success: true,
       productId: productId,
       paused: pauseStatus,
+      boostExpired: boostCleanupData !== null,
     };
   } catch (error) {
     console.error('Error toggling product pause status:', error);
 
-    // Re-throw HttpsErrors as-is
     if (error instanceof HttpsError) {
       throw error;
     }
 
-    // Convert other errors to HttpsError
     throw new HttpsError(
       'internal',
       'Failed to update product status. Please try again.',

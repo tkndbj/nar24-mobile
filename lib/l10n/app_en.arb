@@ -5580,8 +5580,43 @@
 "validUntil": "Valid until",
 "noExpiry": "No expiration date",
 "usedOn": "Used on",
+"productArchivedByAdmin": "Your product has been suspended by the administrator. Tap for details.",
+"boostExpiredAdminArchived": "\"{productName}\" boost was ended early because the product was paused by admin.",
+"@boostExpiredAdminArchived": {
+  "placeholders": {
+    "productName": { "type": "Object" }
+  }
+},
+"boostExpiredSellerArchived": "\"{productName}\" boost was ended early because the product was archived.",
+"@boostExpiredSellerArchived": {
+  "placeholders": {
+    "productName": { "type": "Object" }
+  }
+},
+"boostExpiredGeneric": "\"{productName}\" boost has expired.",
+"@boostExpiredGeneric": {
+  "placeholders": {
+    "productName": { "type": "Object" }
+  }
+},
 "active": "Active",
 "enjoyYourGift": "Enjoy Your Gift",
+"productArchivedSimple": "\"{productName}\" was paused by admin.",
+"@productArchivedSimple": {
+  "placeholders": {
+    "productName": { "type": "Object" }
+  }
+},
+"productArchivedNeedsUpdate": "\"{productName}\" was paused by admin and needs updates: {archiveReason}",
+"@productArchivedNeedsUpdate": {
+  "placeholders": {
+    "productName": { "type": "Object" },
+    "archiveReason": { "type": "Object" }
+  }
+},
+"productArchivedBoostNote": "The active boost was also ended early.",
+"boostTerminatedEarlyAdmin": "Boost finished early because the product was paused by admin.",
+"boostTerminatedEarlySeller": "Boost finished early because the product was archived.",
 "freeShippingBenefitDescription": "Free shipping for your next order",
 "couponsErrorLoadingData": "Error Loading Data",
 "couponsTryAgainLater": "Please try again later.",

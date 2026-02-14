@@ -29,6 +29,7 @@ import '../../screens/USER-PROFILE/my_orders_screen.dart';
 import '../../screens/USER-PROFILE/refund_order_selection_screen.dart';
 import '../../screens/USER-PROFILE/refund_form_screen.dart';
 import '../../screens/LOCATION-SCREENS/view_pickup_point_screen.dart';
+import '../../screens/USER-PROFILE/archived_products_screen.dart';
 
 // Import product-related screens
 import '../../screens/USER-PROFILE/my_products_screen.dart';
@@ -67,6 +68,20 @@ class ProfileRoutes {
           return CustomTransitionPage(
             key: state.pageKey,
             child: const ProfileScreen(),
+            transitionsBuilder: _slideTransition,
+            transitionDuration: const Duration(milliseconds: 200),
+          );
+        },
+      ),
+
+      // Archived Products
+      GoRoute(
+        path: '/archived-products',
+        name: 'archived-products',
+        pageBuilder: (context, state) {
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: const ArchivedProductsScreen(),
             transitionsBuilder: _slideTransition,
             transitionDuration: const Duration(milliseconds: 200),
           );
