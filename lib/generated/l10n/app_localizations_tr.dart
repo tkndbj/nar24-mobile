@@ -4394,6 +4394,13 @@ class AppLocalizationsTr extends AppLocalizations {
   String get productArchivedBoostNote => 'Aktif boost da erken sonlandırıldı.';
 
   @override
+  String get activeBoostWarningTitle => 'Aktif Boost';
+
+  @override
+  String get activeBoostWarningMessage =>
+      'Bu ürünün aktif bir boost süresi var. Devam ederseniz boost erken sonlandırılacaktır. Devam etmek istiyor musunuz?';
+
+  @override
   String get boostInfoDescription =>
       'Ürünlerinizi öne çıkararak daha geniş kitlelere ulaşın ve arama sonuçlarında görünürlüğünüzü artırın. Daha fazla görüntülenme ve potansiyel alıcı elde edin!';
 

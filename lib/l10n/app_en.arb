@@ -5600,6 +5600,8 @@
   }
 },
 "active": "Active",
+"activeBoostWarningTitle": "Active Boost",
+"activeBoostWarningMessage": "This product has an active boost. If you proceed, the boost will be ended early. Do you want to proceed?",
 "enjoyYourGift": "Enjoy Your Gift",
 "productArchivedSimple": "\"{productName}\" was paused by admin.",
 "@productArchivedSimple": {

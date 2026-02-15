@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:go_router/go_router.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../widgets/myproducts/listed_products_tab.dart';
 import '../../providers/my_products_provider.dart';
@@ -117,7 +120,7 @@ class _MyProductsAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
         title: const _AppBarTitle(),
         actions: const [
-          _ProductCountBadge(),
+          _AddProductAppBarButton(),
           SizedBox(width: 8),
         ],
       ),
@@ -163,40 +166,75 @@ class _AppBarTitle extends StatelessWidget {
   }
 }
 
-// ✅ FIX 4: Isolate Consumer to only rebuild the badge
-class _ProductCountBadge extends StatelessWidget {
-  const _ProductCountBadge();
+class _AddProductAppBarButton extends StatelessWidget {
+  const _AddProductAppBarButton();
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: Selector<MyProductsProvider, int>(
-        selector: (_, provider) => provider.products.length,
-        builder: (context, productCount, child) {
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: const BoxDecoration(
-              color: _MyProductsScreenState._jadeGreenLight,
-              borderRadius: BorderRadius.all(Radius.circular(20)),
-              border: Border.fromBorderSide(
-                BorderSide(
-                  color: _MyProductsScreenState._jadeGreenBorder,
-                  width: 1,
+      child: GestureDetector(
+        onTap: () async {
+          try {
+            final userId = FirebaseAuth.instance.currentUser?.uid;
+            if (userId == null) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(l10n.youNeedToLogin),
+                    action: SnackBarAction(
+                      label: l10n.pleaseLogin,
+                      onPressed: () {
+                        if (context.mounted) context.push('/login');
+                      },
+                    ),
+                  ),
+                );
+              }
+              return;
+            }
+
+            final userDoc = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(userId)
+                .get();
+
+            if (!context.mounted) return;
+
+            final sellerInfo =
+                userDoc.data()?['sellerInfo'] as Map<String, dynamic>?;
+            if (sellerInfo != null) {
+              context.push('/list_product_screen');
+            } else {
+              context.push('/seller_info',
+                  extra: {'redirectToListProduct': true});
+            }
+          } catch (e) {
+            debugPrint('Error checking seller info: $e');
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('An error occurred. Please try again.'),
                 ),
-              ),
-            ),
-            child: Text(
-              '$productCount',
-              style: const TextStyle(
-                color: _MyProductsScreenState.jadeGreen,
-                fontFamily: 'Figtree',
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          );
+              );
+            }
+          }
         },
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: _MyProductsScreenState.jadeGreen,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Icon(
+            Icons.add_rounded,
+            color: Colors.white,
+            size: 22,
+          ),
+        ),
       ),
     );
   }

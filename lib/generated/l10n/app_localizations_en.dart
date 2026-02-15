@@ -4389,6 +4389,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'The active boost was also ended early.';
 
   @override
+  String get activeBoostWarningTitle => 'Active Boost';
+
+  @override
+  String get activeBoostWarningMessage =>
+      'This product has an active boost. If you proceed, the boost will be ended early. Do you want to proceed?';
+
+  @override
   String get boostInfoDescription =>
       'Boost your products to reach a wider audience and increase visibility in search results. Get more views and potential buyers!';
 

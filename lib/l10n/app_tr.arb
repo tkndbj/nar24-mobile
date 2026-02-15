@@ -1828,6 +1828,8 @@
 "productArchivedSimple": "\"{productName}\" admin tarafından durduruldu.",
 "productArchivedNeedsUpdate": "\"{productName}\" admin tarafından durduruldu ve güncelleme gerekiyor: {archiveReason}",
 "productArchivedBoostNote": "Aktif boost da erken sonlandırıldı.",
+"activeBoostWarningTitle": "Aktif Boost",
+"activeBoostWarningMessage": "Bu ürünün aktif bir boost süresi var. Devam ederseniz boost erken sonlandırılacaktır. Devam etmek istiyor musunuz?",
   "boostInfoDescription": "Ürünlerinizi öne çıkararak daha geniş kitlelere ulaşın ve arama sonuçlarında görünürlüğünüzü artırın. Daha fazla görüntülenme ve potansiyel alıcı elde edin!",
   "noProductsToBoostTitle": "Öne Çıkarılacak Ürün Yok",
   "noProductsToBoostDescription": "Henüz öne çıkarılacak ürününüz bulunmuyor. Reklamcılığa başlamak için önce birkaç ürün ekleyin.",

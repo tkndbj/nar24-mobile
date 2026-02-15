@@ -5752,6 +5752,8 @@ function getWebRoute(type, shopId, orderId) {
       return `/productquestions/${shopId}`;
     case 'product_archived_by_admin':
       return `/archived/${shopId}`;
+    case 'boost_expired':
+      return '/boostanalysis';
     default:
       return '/dashboard';
   }
@@ -11459,32 +11461,19 @@ export const expireSingleBoost = onRequest(
 
       // Create notifications
       if (collection === 'shop_products' && actualShopId) {
-        const shopSnap = await db.collection('shops').doc(actualShopId).get();
-        if (shopSnap.exists) {
-          const shop = shopSnap.data();
-          const members = new Set([shop.ownerId, ...(shop.coOwners||[]), ...(shop.editors||[]), ...(shop.viewers||[])]);
-          for (const memberId of members) {
-            ops.push({
-              type: 'set',
-              ref: db.collection('users')
-                .doc(memberId)
-                .collection('notifications')
-                .doc(),
-              data: {
-                userId: memberId,
-                type: 'boost_expired',
-                message_en: `${productName} boost has expired.`,
-                message_tr: `${productName} boost süresi doldu.`,
-                message_ru: `У объявления ${productName} закончился буст.`,
-                timestamp: admin.firestore.FieldValue.serverTimestamp(),
-                isRead: false,
-                productId: itemId,
-                itemType: 'shop_product',
-                shopId: actualShopId,
-              },
-            });
-          }
-        }
+        ops.push({
+          type: 'set',
+          ref: db.collection('shop_notifications').doc(),
+          data: {
+            shopId: actualShopId,
+            type: 'boost_expired',
+            productId: itemId,
+            productName: productName,
+            productImage: (data.imageUrls && data.imageUrls.length > 0) ? data.imageUrls[0] : null,
+            isRead: {},
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          },
+        });
       } else if (collection === 'products' && actualUserId) {
         ops.push({
           type: 'set',
@@ -11495,6 +11484,7 @@ export const expireSingleBoost = onRequest(
           data: {
             userId: actualUserId,
             type: 'boost_expired',
+            productName: productName,
             message_en: `${productName} boost has expired.`,
             message_tr: `${productName} boost süresi doldu.`,
             message_ru: `У объявления ${productName} закончился буст.`,

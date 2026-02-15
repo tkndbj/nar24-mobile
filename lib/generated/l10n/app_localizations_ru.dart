@@ -4410,6 +4410,13 @@ class AppLocalizationsRu extends AppLocalizations {
       'Активный буст также был завершён досрочно.';
 
   @override
+  String get activeBoostWarningTitle => 'Активный буст';
+
+  @override
+  String get activeBoostWarningMessage =>
+      'У этого товара активный буст. Если вы продолжите, буст будет завершён досрочно. Хотите продолжить?';
+
+  @override
   String get boostInfoDescription =>
       'Продвигайте свои товары, чтобы достичь более широкую аудиторию и улучшить видимость в результатах поиска. Получите больше просмотров и потенциальных покупателей!';
 

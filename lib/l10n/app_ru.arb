@@ -5280,6 +5280,8 @@
 "productArchivedNeedsUpdate": "\"{productName}\" приостановлен администратором и требует обновления: {archiveReason}",
 "productArchivedBoostNote": "Активный буст также был завершён досрочно.",
 "noUsedCouponsOrBenefits": "Нет использованных купонов или бонусов",
+"activeBoostWarningTitle": "Активный буст",
+"activeBoostWarningMessage": "У этого товара активный буст. Если вы продолжите, буст будет завершён досрочно. Хотите продолжить?",
 "noUsedCouponsOrBenefitsDescription": "Вы ещё не использовали ни одного купона или бонуса.",
 "validUntil": "Действителен до",
 "noExpiry": "Без срока действия",

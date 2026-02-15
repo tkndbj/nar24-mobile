@@ -8668,6 +8668,18 @@ abstract class AppLocalizations {
   /// **'Aktif boost da erken sonlandırıldı.'**
   String get productArchivedBoostNote;
 
+  /// No description provided for @activeBoostWarningTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Aktif Boost'**
+  String get activeBoostWarningTitle;
+
+  /// No description provided for @activeBoostWarningMessage.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bu ürünün aktif bir boost süresi var. Devam ederseniz boost erken sonlandırılacaktır. Devam etmek istiyor musunuz?'**
+  String get activeBoostWarningMessage;
+
   /// No description provided for @boostInfoDescription.
   ///
   /// In tr, this message translates to:

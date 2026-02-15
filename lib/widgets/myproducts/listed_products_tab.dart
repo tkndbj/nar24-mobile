@@ -181,7 +181,6 @@ class _ListedProductsTabState extends State<ListedProductsTab>
                   },
                   child: _AddProductButton(
                     l10n: l10n,
-                    isDisposed: () => _isDisposed,
                   ),
                 ),
               ],
@@ -1268,11 +1267,9 @@ class _NoProductsPlaceholder extends StatelessWidget {
 
 class _AddProductButton extends StatelessWidget {
   final AppLocalizations l10n;
-  final bool Function() isDisposed;
 
   const _AddProductButton({
     required this.l10n,
-    required this.isDisposed,
   });
 
   @override
@@ -1285,179 +1282,79 @@ class _AddProductButton extends StatelessWidget {
         top: false,
         child: Padding(
           padding: const EdgeInsets.only(bottom: 20),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                Flexible(
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0x20000000),
-                          blurRadius: 4,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                decoration: const BoxDecoration(
+                  boxShadow: [
+                    BoxShadow(
+                      color: Color(0x20000000),
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
                     ),
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        context.push('/archived-products');
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey.shade700,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(0),
-                        ),
-                      ),
-                      icon: const Icon(Icons.archive_rounded, size: 18),
-                      label: Flexible(
-                        child: Text(
-                          l10n.archivedProducts,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            fontFamily: 'Figtree',
-                          ),
-                        ),
-                      ),
+                  ],
+                ),
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    context.push('/archived-products');
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey.shade700,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(0),
+                    ),
+                  ),
+                  icon: const Icon(Icons.archive_rounded, size: 18),
+                  label: Text(
+                    l10n.archivedProducts,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'Figtree',
                     ),
                   ),
                 ),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0x20000000),
-                          blurRadius: 4,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
+              ),
+              const SizedBox(width: 10),
+              Container(
+                decoration: const BoxDecoration(
+                  boxShadow: [
+                    BoxShadow(
+                      color: Color(0x20000000),
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
                     ),
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        context.push('/vitrin_pending_applications');
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(0),
-                        ),
-                      ),
-                      icon: const Icon(Icons.description_rounded, size: 18),
-                      label: Flexible(
-                        child: Text(
-                          l10n.productApplications,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            fontFamily: 'Figtree',
-                          ),
-                        ),
-                      ),
+                  ],
+                ),
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    context.push('/vitrin_pending_applications');
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(0),
+                    ),
+                  ),
+                  icon: const Icon(Icons.description_rounded, size: 18),
+                  label: Text(
+                    l10n.productApplications,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'Figtree',
                     ),
                   ),
                 ),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0x20000000),
-                          blurRadius: 4,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        if (isDisposed()) return;
-
-                        try {
-                          final userId = FirebaseAuth.instance.currentUser?.uid;
-                          if (userId == null) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(l10n.youNeedToLogin),
-                                  action: SnackBarAction(
-                                    label: l10n.pleaseLogin,
-                                    onPressed: () {
-                                      if (context.mounted) context.push('/login');
-                                    },
-                                  ),
-                                ),
-                              );
-                            }
-                            return;
-                          }
-
-                          final userDoc = await FirebaseFirestore.instance
-                              .collection('users')
-                              .doc(userId)
-                              .get();
-
-                          if (isDisposed() || !context.mounted) return;
-
-                          final sellerInfo =
-                              userDoc.data()?['sellerInfo'] as Map<String, dynamic>?;
-                          if (sellerInfo != null) {
-                            context.push('/list_product_screen');
-                          } else {
-                            context.push('/seller_info',
-                                extra: {'redirectToListProduct': true});
-                          }
-                        } catch (e) {
-                          debugPrint('Error checking seller info: $e');
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('An error occurred. Please try again.'),
-                              ),
-                            );
-                          }
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00A86B),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(0),
-                        ),
-                      ),
-                      icon: const Icon(Icons.add_rounded, size: 18),
-                      label: Flexible(
-                        child: Text(
-                          l10n.listProductButton,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            fontFamily: 'Figtree',
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

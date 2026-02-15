@@ -1054,6 +1054,42 @@ class ProductsList extends StatelessWidget {
 
     if (!context.mounted) return;
 
+    // ── Quick boost check before proceeding ──
+    try {
+      final productDoc = await FirebaseFirestore.instance
+          .collection('shop_products')
+          .doc(productId)
+          .get();
+
+      if (productDoc.exists && productDoc.data()?['isBoosted'] == true) {
+        if (!context.mounted) return;
+        final boostConfirmed = await showCupertinoDialog<bool>(
+          context: context,
+          builder: (ctx) => CupertinoAlertDialog(
+            title: Text(l10n.activeBoostWarningTitle),
+            content: Text(l10n.activeBoostWarningMessage),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text(l10n.cancel),
+              ),
+              CupertinoDialogAction(
+                isDestructiveAction: true,
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: Text(l10n.proceed),
+              ),
+            ],
+          ),
+        );
+        if (boostConfirmed != true) return;
+        if (!context.mounted) return;
+      }
+    } catch (e) {
+      // If check fails, proceed anyway — the cloud function handles boost cleanup
+      debugPrint('Boost check failed: $e');
+    }
+
     // ✅ CAPTURE the dialog context
     BuildContext? dialogContext;
     showDialog(
