@@ -4447,6 +4447,14 @@ class AppLocalizationsTr extends AppLocalizations {
   String get unarchiveProduct => 'Ürünü Arşivden Çıkar';
 
   @override
+  String get pendingPayment => 'Ödeme Bekliyor';
+
+  @override
+  String adExpired(Object adType) {
+    return '$adType reklamınızın süresi doldu.';
+  }
+
+  @override
   String get bulkDiscountFieldsRequired =>
       'Miktar eşiği ve indirim yüzdesi birlikte ayarlanmalıdır';
 

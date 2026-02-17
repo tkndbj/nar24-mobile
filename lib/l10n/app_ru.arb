@@ -5289,6 +5289,8 @@
 "@adRejected2": { "placeholders": { "adType": { "type": "String" } } },
 "validUntil": "Действителен до",
 "noExpiry": "Без срока действия",
+"pendingPayment": "Ожидает оплаты",
+"adExpired": "Срок действия вашего объявления {adType} истёк.",
 "usedOn": "Использован",
 "active": "Активный",
 "enjoyYourGift": "Наслаждайтесь подарком",

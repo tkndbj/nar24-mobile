@@ -140,57 +140,59 @@ class AdPricesService {
   factory AdPricesService() => _instance;
   AdPricesService._internal();
   bool _serviceEnabled = true;
-bool get serviceEnabled => _serviceEnabled;
+  bool get serviceEnabled => _serviceEnabled;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  
+
   Map<AdType, Map<AdDuration, double>>? _cachedPrices;
   StreamSubscription<DocumentSnapshot>? _subscription;
-  final _pricesController = StreamController<Map<AdType, Map<AdDuration, double>>>.broadcast();
+  final _pricesController =
+      StreamController<Map<AdType, Map<AdDuration, double>>>.broadcast();
 
-  Stream<Map<AdType, Map<AdDuration, double>>> get pricesStream => _pricesController.stream;
+  Stream<Map<AdType, Map<AdDuration, double>>> get pricesStream =>
+      _pricesController.stream;
 
   Map<AdType, Map<AdDuration, double>> get defaultPrices => {
-    AdType.topBanner: {
-      AdDuration.oneWeek: 4000.0,
-      AdDuration.twoWeeks: 7500.0,
-      AdDuration.oneMonth: 14000.0,
-    },
-    AdType.thinBanner: {
-      AdDuration.oneWeek: 2000.0,
-      AdDuration.twoWeeks: 3500.0,
-      AdDuration.oneMonth: 6500.0,
-    },
-    AdType.marketBanner: {
-      AdDuration.oneWeek: 2500.0,
-      AdDuration.twoWeeks: 4500.0,
-      AdDuration.oneMonth: 8500.0,
-    },
-  };
+        AdType.topBanner: {
+          AdDuration.oneWeek: 4000.0,
+          AdDuration.twoWeeks: 7500.0,
+          AdDuration.oneMonth: 14000.0,
+        },
+        AdType.thinBanner: {
+          AdDuration.oneWeek: 2000.0,
+          AdDuration.twoWeeks: 3500.0,
+          AdDuration.oneMonth: 6500.0,
+        },
+        AdType.marketBanner: {
+          AdDuration.oneWeek: 2500.0,
+          AdDuration.twoWeeks: 4500.0,
+          AdDuration.oneMonth: 8500.0,
+        },
+      };
 
   void startListening() {
     if (_subscription != null) return;
 
-  _subscription = _firestore
-    .collection('app_config')
-    .doc('ad_prices')
-    .snapshots()
-    .listen((snapshot) {
-  if (snapshot.exists) {
-    final data = snapshot.data() as Map<String, dynamic>;
-    _serviceEnabled = data['serviceEnabled'] ?? true;  // Add this line
-    _cachedPrices = _parsePrices(data);
-    _pricesController.add(_cachedPrices!);
-  } else {
-    _serviceEnabled = true;  // Add this line
-    _cachedPrices = defaultPrices;
-    _pricesController.add(_cachedPrices!);
-  }
-}, onError: (e) {
-  debugPrint('Error listening to ad prices: $e');
-  _serviceEnabled = true;  // Add this line
-  _cachedPrices ??= defaultPrices;
-  _pricesController.add(_cachedPrices!);
-});
+    _subscription = _firestore
+        .collection('app_config')
+        .doc('ad_prices')
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.exists) {
+        final data = snapshot.data() as Map<String, dynamic>;
+        _serviceEnabled = data['serviceEnabled'] ?? true; // Add this line
+        _cachedPrices = _parsePrices(data);
+        _pricesController.add(_cachedPrices!);
+      } else {
+        _serviceEnabled = true; // Add this line
+        _cachedPrices = defaultPrices;
+        _pricesController.add(_cachedPrices!);
+      }
+    }, onError: (e) {
+      debugPrint('Error listening to ad prices: $e');
+      _serviceEnabled = true; // Add this line
+      _cachedPrices ??= defaultPrices;
+      _pricesController.add(_cachedPrices!);
+    });
   }
 
   Map<AdType, Map<AdDuration, double>> _parsePrices(Map<String, dynamic> data) {
@@ -198,24 +200,32 @@ bool get serviceEnabled => _serviceEnabled;
     return {
       AdType.topBanner: {
         AdDuration.oneWeek: (data['topBanner']?['oneWeek'] ?? 4000).toDouble(),
-        AdDuration.twoWeeks: (data['topBanner']?['twoWeeks'] ?? 7500).toDouble(),
-        AdDuration.oneMonth: (data['topBanner']?['oneMonth'] ?? 14000).toDouble(),
+        AdDuration.twoWeeks:
+            (data['topBanner']?['twoWeeks'] ?? 7500).toDouble(),
+        AdDuration.oneMonth:
+            (data['topBanner']?['oneMonth'] ?? 14000).toDouble(),
       },
       AdType.thinBanner: {
         AdDuration.oneWeek: (data['thinBanner']?['oneWeek'] ?? 2000).toDouble(),
-        AdDuration.twoWeeks: (data['thinBanner']?['twoWeeks'] ?? 3500).toDouble(),
-        AdDuration.oneMonth: (data['thinBanner']?['oneMonth'] ?? 6500).toDouble(),
+        AdDuration.twoWeeks:
+            (data['thinBanner']?['twoWeeks'] ?? 3500).toDouble(),
+        AdDuration.oneMonth:
+            (data['thinBanner']?['oneMonth'] ?? 6500).toDouble(),
       },
       AdType.marketBanner: {
-        AdDuration.oneWeek: (data['marketBanner']?['oneWeek'] ?? 2500).toDouble(),
-        AdDuration.twoWeeks: (data['marketBanner']?['twoWeeks'] ?? 4500).toDouble(),
-        AdDuration.oneMonth: (data['marketBanner']?['oneMonth'] ?? 8500).toDouble(),
+        AdDuration.oneWeek:
+            (data['marketBanner']?['oneWeek'] ?? 2500).toDouble(),
+        AdDuration.twoWeeks:
+            (data['marketBanner']?['twoWeeks'] ?? 4500).toDouble(),
+        AdDuration.oneMonth:
+            (data['marketBanner']?['oneMonth'] ?? 8500).toDouble(),
       },
     };
   }
 
   double getPrice(AdType adType, AdDuration duration) {
-    return _cachedPrices?[adType]?[duration] ?? defaultPrices[adType]![duration]!;
+    return _cachedPrices?[adType]?[duration] ??
+        defaultPrices[adType]![duration]!;
   }
 
   void stopListening() {
@@ -227,12 +237,13 @@ bool get serviceEnabled => _serviceEnabled;
 class AdsScreen extends StatefulWidget {
   final String shopId;
   final String shopName;
+  final int initialTabIndex;
 
-  const AdsScreen({
-    super.key,
-    required this.shopId,
-    required this.shopName,
-  });
+  const AdsScreen(
+      {super.key,
+      required this.shopId,
+      required this.shopName,
+      this.initialTabIndex = 0});
 
   @override
   State<AdsScreen> createState() => _AdsScreenState();
@@ -254,14 +265,13 @@ class _AdsScreenState extends State<AdsScreen>
   bool _isUploading = false;
   bool _isViewer = false;
 
-
   bool _isCheckingRole = true;
 
   // State for ad type selection
   AdType? _selectedAdType;
   AdDuration _selectedDuration = AdDuration.oneWeek;
 
- @override
+  @override
   void initState() {
     super.initState();
     _pricesService.startListening();
@@ -281,7 +291,8 @@ class _AdsScreenState extends State<AdsScreen>
         return;
       }
 
-      final shopDoc = await _firestore.collection('shops').doc(widget.shopId).get();
+      final shopDoc =
+          await _firestore.collection('shops').doc(widget.shopId).get();
       if (shopDoc.exists) {
         final shopData = shopDoc.data() as Map<String, dynamic>?;
         if (shopData != null) {
@@ -298,14 +309,15 @@ class _AdsScreenState extends State<AdsScreen>
   }
 
   void _initTabController() {
-    // Viewers only see "My Ads" tab (1 tab), others see both tabs
     _tabController = TabController(
       length: _isViewer ? 1 : 2,
       vsync: this,
+      initialIndex:
+          _isViewer ? 0 : widget.initialTabIndex.clamp(0, 1), // ← CHANGE
     );
   }
 
- @override
+  @override
   void dispose() {
     _tabController?.dispose();
     _pricesSubscription?.cancel();
@@ -337,8 +349,6 @@ class _AdsScreenState extends State<AdsScreen>
   double _getPrice(AdType adType, AdDuration duration) {
     return _pricesService.getPrice(adType, duration);
   }
-
- 
 
   void _showDurationSelectionSheet(AdType adType) {
     final l10n = AppLocalizations.of(context);
@@ -453,7 +463,9 @@ class _AdsScreenState extends State<AdsScreen>
                     ),
                   ),
                 ),
-                SizedBox(height: MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom),
+                SizedBox(
+                    height: MediaQuery.of(context).viewInsets.bottom +
+                        MediaQuery.of(context).padding.bottom),
               ],
             ),
           );
@@ -1033,9 +1045,9 @@ class _AdsScreenState extends State<AdsScreen>
   }
 
   Widget _buildCreateAdTab(AppLocalizations l10n, bool isDark) {
-      if (!_pricesService.serviceEnabled) {
-    return _buildServiceDisabledState(l10n, isDark);
-  }
+    if (!_pricesService.serviceEnabled) {
+      return _buildServiceDisabledState(l10n, isDark);
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1140,49 +1152,50 @@ class _AdsScreenState extends State<AdsScreen>
   }
 
   Widget _buildServiceDisabledState(AppLocalizations l10n, bool isDark) {
-  return Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: const Color(0xFFED8936).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: const Color(0xFFED8936).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(
+                Icons.pause_circle_outline_rounded,
+                size: 64,
+                color: Color(0xFFED8936),
+              ),
             ),
-            child: const Icon(
-              Icons.pause_circle_outline_rounded,
-              size: 64,
-              color: Color(0xFFED8936),
+            const SizedBox(height: 24),
+            Text(
+              l10n.adServiceTemporarilyOff,
+              style: GoogleFonts.figtree(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : const Color(0xFF1A202C),
+              ),
+              textAlign: TextAlign.center,
             ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            l10n.adServiceTemporarilyOff,
-            style: GoogleFonts.figtree(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: isDark ? Colors.white : const Color(0xFF1A202C),
+            const SizedBox(height: 12),
+            Text(
+              l10n.adServiceDisabledMessage,
+              style: GoogleFonts.figtree(
+                fontSize: 14,
+                color:
+                    isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
             ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            l10n.adServiceDisabledMessage,
-            style: GoogleFonts.figtree(
-              fontSize: 14,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-              height: 1.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildAdTypeCard(
     AppLocalizations l10n,
@@ -1466,7 +1479,9 @@ class _AdsScreenState extends State<AdsScreen>
             child: AspectRatio(
               // Tablet landscape: wider aspect ratio for more compact image
               // Tablet portrait: moderate aspect ratio
-              aspectRatio: isTabletLandscape ? 2.8 : (isTablet ? 2.2 : _getAspectRatio(submission.adType)),
+              aspectRatio: isTabletLandscape
+                  ? 2.8
+                  : (isTablet ? 2.2 : _getAspectRatio(submission.adType)),
               child: CachedNetworkImage(
                 imageUrl: submission.imageUrl,
                 fit: BoxFit.cover,
@@ -1499,284 +1514,293 @@ class _AdsScreenState extends State<AdsScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: [
-                    _buildStatusBadge(_getEffectiveStatus(submission), l10n,
-                        isTablet: isTablet),
-                    _buildAdTypeBadge(submission.adType, l10n, isDark,
-                        isTablet: isTablet),
-                    // Countdown badge
-                    if ((submission.status == AdStatus.active ||
-                            submission.status == AdStatus.paid) &&
-                        submission.expiresAt != null)
-                      _buildCountdownBadge(submission, l10n, isDark,
-                          isTablet: isTablet),
-                  ],
-                ),
-                SizedBox(height: isTablet ? 6 : 12),
-                // Hide detailed info on tablet to save space
-                if (!isTablet) ...[
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.access_time_rounded,
-                        size: iconSize,
-                        color: isDark
-                            ? const Color(0xFF94A3B8)
-                            : const Color(0xFF64748B),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          _buildStatusBadge(
+                              _getEffectiveStatus(submission), l10n,
+                              isTablet: isTablet),
+                          _buildAdTypeBadge(submission.adType, l10n, isDark,
+                              isTablet: isTablet),
+                          // Countdown badge
+                          if ((submission.status == AdStatus.active ||
+                                  submission.status == AdStatus.paid) &&
+                              submission.expiresAt != null)
+                            _buildCountdownBadge(submission, l10n, isDark,
+                                isTablet: isTablet),
+                        ],
                       ),
-                      const SizedBox(width: 4),
+                      SizedBox(height: isTablet ? 6 : 12),
+                      // Hide detailed info on tablet to save space
+                      if (!isTablet) ...[
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.access_time_rounded,
+                              size: iconSize,
+                              color: isDark
+                                  ? const Color(0xFF94A3B8)
+                                  : const Color(0xFF64748B),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _getDurationLabel(submission.duration, l10n),
+                              style: GoogleFonts.figtree(
+                                fontSize: titleFontSize,
+                                fontWeight: FontWeight.w600,
+                                color: isDark
+                                    ? const Color(0xFF94A3B8)
+                                    : const Color(0xFF64748B),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Icon(
+                              Icons.payments_rounded,
+                              size: iconSize,
+                              color: isDark
+                                  ? const Color(0xFF94A3B8)
+                                  : const Color(0xFF64748B),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${submission.price?.toStringAsFixed(0) ?? '0'} TL',
+                              style: GoogleFonts.figtree(
+                                fontSize: titleFontSize,
+                                fontWeight: FontWeight.w700,
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF1A202C),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                      ],
                       Text(
-                        _getDurationLabel(submission.duration, l10n),
+                        isTablet
+                            ? '${submission.price?.toStringAsFixed(0) ?? '0'} TL'
+                            : _formatDate(submission.createdAt, l10n),
                         style: GoogleFonts.figtree(
-                          fontSize: titleFontSize,
-                          fontWeight: FontWeight.w600,
+                          fontSize: isTablet ? 11.0 : 11.0,
+                          fontWeight:
+                              isTablet ? FontWeight.w600 : FontWeight.normal,
                           color: isDark
                               ? const Color(0xFF94A3B8)
                               : const Color(0xFF64748B),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Icon(
-                        Icons.payments_rounded,
-                        size: iconSize,
-                        color: isDark
-                            ? const Color(0xFF94A3B8)
-                            : const Color(0xFF64748B),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${submission.price?.toStringAsFixed(0) ?? '0'} TL',
-                        style: GoogleFonts.figtree(
-                          fontSize: titleFontSize,
-                          fontWeight: FontWeight.w700,
-                          color:
-                              isDark ? Colors.white : const Color(0xFF1A202C),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                Text(
-                  isTablet
-                      ? '${submission.price?.toStringAsFixed(0) ?? '0'} TL'
-                      : _formatDate(submission.createdAt, l10n),
-                  style: GoogleFonts.figtree(
-                    fontSize: isTablet ? 11.0 : 11.0,
-                    fontWeight: isTablet ? FontWeight.w600 : FontWeight.normal,
-                    color: isDark
-                        ? const Color(0xFF94A3B8)
-                        : const Color(0xFF64748B),
-                  ),
-                ),
 
-                // Analytics Button - show on both mobile and tablet (compact on tablet)
-                if (submission.activeAdId != null) ...[
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: isTablet
-                        // Tablet: Compact icon-only button
-                        ? OutlinedButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => AdAnalyticsScreen(
-                                    adId: submission.activeAdId!,
-                                    adType: _adTypeToString(submission.adType),
-                                    adName:
-                                        '${_getAdTypeLabel(submission.adType, l10n)} - ${widget.shopName}',
+                      // Analytics Button - show on both mobile and tablet (compact on tablet)
+                      if (submission.activeAdId != null) ...[
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: isTablet
+                              // Tablet: Compact icon-only button
+                              ? OutlinedButton(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => AdAnalyticsScreen(
+                                          adId: submission.activeAdId!,
+                                          adType: _adTypeToString(
+                                              submission.adType),
+                                          adName:
+                                              '${_getAdTypeLabel(submission.adType, l10n)} - ${widget.shopName}',
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF667EEA),
+                                    side: const BorderSide(
+                                      color: Color(0xFF667EEA),
+                                      width: 1.5,
+                                    ),
+                                    padding:
+                                        const EdgeInsets.symmetric(vertical: 8),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.analytics_rounded,
+                                          size: 16),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        l10n.viewAnalytics ?? 'Analytics',
+                                        style: GoogleFonts.figtree(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              // Mobile: Full button with icon and label
+                              : OutlinedButton.icon(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => AdAnalyticsScreen(
+                                          adId: submission.activeAdId!,
+                                          adType: _adTypeToString(
+                                              submission.adType),
+                                          adName:
+                                              '${_getAdTypeLabel(submission.adType, l10n)} - ${widget.shopName}',
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF667EEA),
+                                    side: const BorderSide(
+                                      color: Color(0xFF667EEA),
+                                      width: 1.5,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.analytics_rounded,
+                                      size: 20),
+                                  label: Text(
+                                    l10n.viewAnalytics ?? 'View Analytics',
+                                    style: GoogleFonts.figtree(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
-                              );
-                            },
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF667EEA),
-                              side: const BorderSide(
-                                color: Color(0xFF667EEA),
-                                width: 1.5,
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
+                        ),
+                      ],
+
+                      // Show approval/rejection messages - compact on tablet, full on mobile
+                      // ✅ SHOW APPROVAL MESSAGE FOR APPROVED STATUS
+                      if (submission.status == AdStatus.approved) ...[
+                        SizedBox(height: isTablet ? 6 : 12),
+                        Container(
+                          padding: EdgeInsets.all(isTablet ? 8 : 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF38A169).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: const Color(0xFF38A169).withOpacity(0.3),
                             ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.analytics_rounded, size: 16),
-                                const SizedBox(width: 4),
-                                Text(
-                                  l10n.viewAnalytics ?? 'Analytics',
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.check_circle_outline_rounded,
+                                color: const Color(0xFF38A169),
+                                size: isTablet ? 14 : 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  l10n.adApprovedMessage,
                                   style: GoogleFonts.figtree(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
+                                    fontSize: isTablet ? 10 : 12,
+                                    color: const Color(0xFF38A169),
                                   ),
+                                  maxLines: isTablet ? 2 : 3,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      // Rejection Reason - show on both mobile and tablet
+                      if (submission.status == AdStatus.rejected &&
+                          submission.rejectionReason != null) ...[
+                        SizedBox(height: isTablet ? 6 : 12),
+                        Container(
+                          padding: EdgeInsets.all(isTablet ? 8 : 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE53E3E).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: const Color(0xFFE53E3E).withOpacity(0.3),
                             ),
-                          )
-                        // Mobile: Full button with icon and label
-                        : OutlinedButton.icon(
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.error_outline_rounded,
+                                color: const Color(0xFFE53E3E),
+                                size: isTablet ? 14 : 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  submission.rejectionReason!,
+                                  style: GoogleFonts.figtree(
+                                    fontSize: isTablet ? 10 : 12,
+                                    color: const Color(0xFFE53E3E),
+                                  ),
+                                  maxLines: isTablet ? 2 : 3,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      // Payment Button (for approved ads) - hide on tablet to save space and for viewers
+                      if (!isTablet &&
+                          !_isViewer &&
+                          submission.status == AdStatus.approved &&
+                          submission.paymentLink != null) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
                             onPressed: () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => AdAnalyticsScreen(
-                                    adId: submission.activeAdId!,
-                                    adType: _adTypeToString(submission.adType),
-                                    adName:
-                                        '${_getAdTypeLabel(submission.adType, l10n)} - ${widget.shopName}',
+                                  builder: (context) => DynamicPaymentScreen(
+                                    submissionId: submission.id,
+                                    adType: submission.adType.name,
+                                    duration: submission.duration.name,
+                                    price: submission.price!,
+                                    imageUrl: submission.imageUrl,
+                                    shopName: submission.shopName,
+                                    paymentLink: submission.paymentLink!,
                                   ),
                                 ),
                               );
                             },
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF667EEA),
-                              side: const BorderSide(
-                                color: Color(0xFF667EEA),
-                                width: 1.5,
-                              ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF38A169),
+                              foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
                               ),
                             ),
-                            icon: const Icon(Icons.analytics_rounded, size: 20),
+                            icon: const Icon(Icons.payment_rounded, size: 20),
                             label: Text(
-                              l10n.viewAnalytics ?? 'View Analytics',
+                              '${l10n.proceedToPayment} (${submission.price!.toStringAsFixed(0)} TL)',
                               style: GoogleFonts.figtree(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
-                  ),
-                ],
-
-                // Show approval/rejection messages - compact on tablet, full on mobile
-                // ✅ SHOW APPROVAL MESSAGE FOR APPROVED STATUS
-                if (submission.status == AdStatus.approved) ...[
-                  SizedBox(height: isTablet ? 6 : 12),
-                  Container(
-                    padding: EdgeInsets.all(isTablet ? 8 : 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF38A169).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: const Color(0xFF38A169).withOpacity(0.3),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.check_circle_outline_rounded,
-                          color: const Color(0xFF38A169),
-                          size: isTablet ? 14 : 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            l10n.adApprovedMessage,
-                            style: GoogleFonts.figtree(
-                              fontSize: isTablet ? 10 : 12,
-                              color: const Color(0xFF38A169),
-                            ),
-                            maxLines: isTablet ? 2 : 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
                         ),
                       ],
-                    ),
-                  ),
-                ],
-
-                // Rejection Reason - show on both mobile and tablet
-                if (submission.status == AdStatus.rejected &&
-                    submission.rejectionReason != null) ...[
-                  SizedBox(height: isTablet ? 6 : 12),
-                  Container(
-                    padding: EdgeInsets.all(isTablet ? 8 : 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE53E3E).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: const Color(0xFFE53E3E).withOpacity(0.3),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.error_outline_rounded,
-                          color: const Color(0xFFE53E3E),
-                          size: isTablet ? 14 : 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            submission.rejectionReason!,
-                            style: GoogleFonts.figtree(
-                              fontSize: isTablet ? 10 : 12,
-                              color: const Color(0xFFE53E3E),
-                            ),
-                            maxLines: isTablet ? 2 : 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-
-                // Payment Button (for approved ads) - hide on tablet to save space and for viewers
-                if (!isTablet &&
-                    !_isViewer &&
-                    submission.status == AdStatus.approved &&
-                    submission.paymentLink != null) ...[
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => DynamicPaymentScreen(
-                              submissionId: submission.id,
-                              adType: submission.adType.name,
-                              duration: submission.duration.name,
-                              price: submission.price!,
-                              imageUrl: submission.imageUrl,
-                              shopName: submission.shopName,
-                              paymentLink: submission.paymentLink!,
-                            ),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF38A169),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      icon: const Icon(Icons.payment_rounded, size: 20),
-                      label: Text(
-                        '${l10n.proceedToPayment} (${submission.price!.toStringAsFixed(0)} TL)',
-                        style: GoogleFonts.figtree(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
+                    ],
                   ),
                 ),
               ),
@@ -1839,7 +1863,8 @@ class _AdsScreenState extends State<AdsScreen>
                         style: GoogleFonts.figtree(
                           fontSize: titleFontSize,
                           fontWeight: FontWeight.w700,
-                          color: isDark ? Colors.white : const Color(0xFF1A202C),
+                          color:
+                              isDark ? Colors.white : const Color(0xFF1A202C),
                         ),
                       ),
                     ],

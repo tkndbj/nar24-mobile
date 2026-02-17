@@ -4442,6 +4442,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get unarchiveProduct => 'Unarchive Product';
 
   @override
+  String get pendingPayment => 'Payment Pending';
+
+  @override
+  String adExpired(Object adType) {
+    return 'Your $adType ad has expired.';
+  }
+
+  @override
   String get bulkDiscountFieldsRequired =>
       'Both quantity threshold and discount percentage must be set together';
 

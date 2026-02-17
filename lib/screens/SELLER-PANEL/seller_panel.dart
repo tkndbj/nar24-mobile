@@ -1190,6 +1190,11 @@ class _ShopNotificationsBottomSheetState
       }
     }
 
+    if (type == 'ad_expired') {
+      final adType = data['adType'] as String? ?? '';
+      return l10n.adExpired(adType);
+    }
+
     if (type == 'ad_approved') {
       final adType = data['adType'] as String? ?? '';
       return l10n.adApproved2(adType);
@@ -1267,6 +1272,8 @@ class _ShopNotificationsBottomSheetState
         return Icons.help_outline_rounded;
       case 'stock':
         return Icons.inventory_2_rounded;
+      case 'ad_expired':
+        return Icons.timer_off_rounded;
       case 'product_archived_by_admin':
         return Icons.archive_rounded;
       case 'payment':
@@ -1309,6 +1316,8 @@ class _ShopNotificationsBottomSheetState
         return const Color(0xFF4CAF50);
       case 'ad_rejected':
         return const Color(0xFFE53935);
+      case 'ad_expired':
+        return const Color(0xFFFF9800);
       case 'boost_expired':
         return const Color(0xFFFF9800);
       case 'shipment':
@@ -1629,11 +1638,13 @@ class _ShopNotificationsBottomSheetState
             break;
           case 'ad_approved':
           case 'ad_rejected':
+          case 'ad_expired':
             if (router != null) {
               final shopName = data['shopName'] as String? ?? '';
               router.push('/seller-panel/ads_screen', extra: {
                 'shopId': shopId,
                 'shopName': shopName,
+                'initialTabIndex': 1,
               });
             }
             break;

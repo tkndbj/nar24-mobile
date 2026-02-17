@@ -8758,6 +8758,18 @@ abstract class AppLocalizations {
   /// **'Ürünü Arşivden Çıkar'**
   String get unarchiveProduct;
 
+  /// No description provided for @pendingPayment.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme Bekliyor'**
+  String get pendingPayment;
+
+  /// No description provided for @adExpired.
+  ///
+  /// In tr, this message translates to:
+  /// **'{adType} reklamınızın süresi doldu.'**
+  String adExpired(Object adType);
+
   /// No description provided for @bulkDiscountFieldsRequired.
   ///
   /// In tr, this message translates to:

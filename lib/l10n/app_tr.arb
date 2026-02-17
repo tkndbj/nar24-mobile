@@ -1845,6 +1845,8 @@
 "understood": "Anladım",
 "questionAnswered": "Soru Yanıtlandı 💬",
   "unarchiveProduct": "Ürünü Arşivden Çıkar",
+  "pendingPayment": "Ödeme Bekliyor",
+  "adExpired": "{adType} reklamınızın süresi doldu.",
   "bulkDiscountFieldsRequired": "Miktar eşiği ve indirim yüzdesi birlikte ayarlanmalıdır",
   "unarchiveProductConfirmation": "Bu ürün aktif ürünlere geri taşınacak ve satışa sunulacak.",
   "unarchivingProduct": "Ürün arşivden çıkarılıyor...",

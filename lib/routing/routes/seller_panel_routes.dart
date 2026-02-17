@@ -241,6 +241,8 @@ class SellerPanelRoutes {
                 child: AdsScreen(
                   shopId: extra?['shopId'] as String,
                   shopName: extra?['shopName'] as String,
+                  initialTabIndex:
+                      extra?['initialTabIndex'] as int? ?? 0, // ← ADD
                 ),
                 transitionsBuilder: _slideTransition,
                 transitionDuration: const Duration(milliseconds: 200),

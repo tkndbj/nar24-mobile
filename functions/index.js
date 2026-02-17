@@ -3014,62 +3014,28 @@ async function sendAdExpirationNotifications(db, submission) {
   try {
     const shopId = submission.shopId;
 
-    // Get shop data to find all members
-    const shopSnap = await db.collection('shops').doc(shopId).get();
-
-    if (!shopSnap.exists) {
-      console.log(`Shop ${shopId} not found`);
+    if (!shopId) {
+      console.log('No shopId in submission, skipping notification');
       return;
     }
 
-    const shopData = shopSnap.data();
-    const shopMembers = getShopMemberIdsFromData(shopData);
-
-    if (shopMembers.length === 0) {
-      console.log(`No shop members found for ${shopId}`);
-      return;
-    }
-
-    // Get ad type label for notification
     const adTypeLabel = getAdTypeLabel(submission.adType);
 
-    // Create notifications for all shop members
-    const batch = db.batch();
-    let notificationCount = 0;
+    await db.collection('shop_notifications').add({
+      type: 'ad_expired',
+      adType: submission.adType,
+      adTypeLabel: adTypeLabel,
+      shopId: shopId,
+      shopName: submission.shopName,
+      submissionId: submission.id,
+      imageUrl: submission.imageUrl || null,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      isRead: {},
+    });
 
-    for (const memberId of shopMembers) {
-      const notificationRef = db
-        .collection('users')
-        .doc(memberId)
-        .collection('notifications')
-        .doc();
-
-      batch.set(notificationRef, {
-        type: 'ad_expired',
-        adType: submission.adType,
-        adTypeLabel: adTypeLabel,
-        shopId: shopId,
-        shopName: submission.shopName,
-        submissionId: submission.id,
-        imageUrl: submission.imageUrl || null,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        isRead: false,
-        // English
-        message_en: `Your ${adTypeLabel} ad for ${submission.shopName} has expired.`,
-        // Turkish
-        message_tr: `${submission.shopName} için ${adTypeLabel} reklamınızın süresi doldu.`,
-        // Russian
-        message_ru: `Срок действия вашего объявления ${adTypeLabel} для ${submission.shopName} истек.`,
-      });
-
-      notificationCount++;
-    }
-
-    await batch.commit();
-    console.log(`✅ Sent ${notificationCount} expiration notifications for ad ${submission.id}`);
+    console.log(`✅ Sent shop expiration notification for ad ${submission.id}`);
   } catch (error) {
     console.error('Error sending ad expiration notifications:', error);
-    // Don't throw - notifications are non-critical
   }
 }
 
@@ -5756,6 +5722,7 @@ function getWebRoute(type, shopId, orderId) {
       return '/boostanalysis';
     case 'ad_approved':
     case 'ad_rejected':
+    case 'ad_expired':
       return `/homescreen-ads`;
     default:
       return '/dashboard';
@@ -5903,6 +5870,7 @@ export const sendShopNotificationOnCreation = onDocumentCreated({
       break;
     case 'ad_approved':
     case 'ad_rejected':
+    case 'ad_expired':
       route = `/seller-panel?shopId=${shopId}&tab=5`; 
       break;
   }

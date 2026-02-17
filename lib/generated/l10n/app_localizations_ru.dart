@@ -4463,6 +4463,14 @@ class AppLocalizationsRu extends AppLocalizations {
   String get unarchiveProduct => 'Вынуть товар из архива';
 
   @override
+  String get pendingPayment => 'Ожидает оплаты';
+
+  @override
+  String adExpired(Object adType) {
+    return 'Срок действия вашего объявления $adType истёк.';
+  }
+
+  @override
   String get bulkDiscountFieldsRequired =>
       'Порог количества и процент скидки должны быть установлены вместе';
 

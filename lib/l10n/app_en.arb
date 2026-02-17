@@ -5624,6 +5624,8 @@
 "@adApproved2": { "placeholders": { "adType": { "type": "String" } } },
 "adRejected2": "Your {adType} ad application has been rejected.",
 "@adRejected2": { "placeholders": { "adType": { "type": "String" } } },
+"pendingPayment": "Payment Pending",
+"adExpired": "Your {adType} ad has expired.",
 "couponsErrorLoadingData": "Error Loading Data",
 "couponsTryAgainLater": "Please try again later.",
 "pleaseSelectColor": "Please select a color",

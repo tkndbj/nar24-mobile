@@ -10,6 +10,9 @@ import '../../generated/l10n/app_localizations.dart';
 import '../../providers/seller_panel_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
+import '../../screens/SELLER-PANEL/ads_screen.dart';
+import '../../screens/PAYMENT-RECEIPT/dynamic_payment_screen.dart';
+import 'dart:async';
 
 /// Phone number formatter for Turkish format: (5XX) XXX XX XX
 class _PhoneNumberFormatter extends TextInputFormatter {
@@ -19,7 +22,8 @@ class _PhoneNumberFormatter extends TextInputFormatter {
     TextEditingValue newValue,
   ) {
     final digitsOnly = newValue.text.replaceAll(RegExp(r'\D'), '');
-    final limited = digitsOnly.length > 10 ? digitsOnly.substring(0, 10) : digitsOnly;
+    final limited =
+        digitsOnly.length > 10 ? digitsOnly.substring(0, 10) : digitsOnly;
 
     final buffer = StringBuffer();
     for (int i = 0; i < limited.length; i++) {
@@ -45,14 +49,16 @@ class _TurkishIbanFormatter extends TextInputFormatter {
     TextEditingValue oldValue,
     TextEditingValue newValue,
   ) {
-    String cleaned = newValue.text.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    String cleaned =
+        newValue.text.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
 
     if (cleaned.startsWith('TR')) {
       cleaned = cleaned.substring(2);
     }
 
     final digitsOnly = cleaned.replaceAll(RegExp(r'[^0-9]'), '');
-    final limited = digitsOnly.length > 24 ? digitsOnly.substring(0, 24) : digitsOnly;
+    final limited =
+        digitsOnly.length > 24 ? digitsOnly.substring(0, 24) : digitsOnly;
 
     final buffer = StringBuffer('TR');
     for (int i = 0; i < limited.length; i++) {
@@ -90,6 +96,9 @@ class _DashboardTabState extends State<DashboardTab>
   final TextEditingController _regionController = TextEditingController();
   String? _selectedRegion;
 
+  List<AdSubmission> _pendingPaymentAds = [];
+  StreamSubscription<QuerySnapshot>? _pendingAdsSubscription;
+
   bool _isDataLoaded = false;
   late Future<void> _initialLoadFuture;
   String? _currentShopId;
@@ -97,7 +106,8 @@ class _DashboardTabState extends State<DashboardTab>
   /// Format stored phone "05XXXXXXXXX" to display format "(5XX) XXX XX XX"
   String _formatPhoneForDisplay(String phone) {
     final digitsOnly = phone.replaceAll(RegExp(r'\D'), '');
-    final digits = digitsOnly.startsWith('0') ? digitsOnly.substring(1) : digitsOnly;
+    final digits =
+        digitsOnly.startsWith('0') ? digitsOnly.substring(1) : digitsOnly;
     if (digits.length != 10) return phone;
     return '(${digits.substring(0, 3)}) ${digits.substring(3, 6)} ${digits.substring(6, 8)} ${digits.substring(8, 10)}';
   }
@@ -175,6 +185,29 @@ class _DashboardTabState extends State<DashboardTab>
         }
       });
 
+      // Listen for pending ad payments
+      _pendingAdsSubscription?.cancel();
+      final shopDoc = provider.selectedShop;
+      if (shopDoc != null) {
+        _pendingAdsSubscription = FirebaseFirestore.instance
+            .collection('ad_submissions')
+            .where('shopId', isEqualTo: shopDoc.id)
+            .where('status', isEqualTo: 'approved')
+            .orderBy('reviewedAt', descending: true)
+            .limit(5)
+            .snapshots()
+            .listen((snapshot) {
+          if (mounted) {
+            setState(() {
+              _pendingPaymentAds = snapshot.docs
+                  .map((doc) => AdSubmission.fromDocument(doc))
+                  .where((ad) => ad.paymentLink != null)
+                  .toList();
+            });
+          }
+        });
+      }
+
       // Return immediately for first paint
       return;
     }
@@ -182,6 +215,7 @@ class _DashboardTabState extends State<DashboardTab>
 
   @override
   void dispose() {
+    _pendingAdsSubscription?.cancel();
     _phoneController.dispose();
     _addressController.dispose();
     _ibanOwnerNameController.dispose();
@@ -189,6 +223,121 @@ class _DashboardTabState extends State<DashboardTab>
     _ibanController.dispose();
     _regionController.dispose();
     super.dispose();
+  }
+
+  Widget _buildPendingAdPaymentBanners() {
+    if (_pendingPaymentAds.isEmpty) return const SizedBox.shrink();
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
+    final provider = Provider.of<SellerPanelProvider>(context, listen: false);
+    final isViewer = _isCurrentUserViewer(provider.selectedShop);
+    if (isViewer) return const SizedBox.shrink();
+
+    final adTypeLabels = {
+      AdType.topBanner: l10n.topBanner,
+      AdType.thinBanner: l10n.thinBanner,
+      AdType.marketBanner: l10n.marketBanner,
+    };
+
+    return Column(
+      children: _pendingPaymentAds.map((ad) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isDark
+                  ? [const Color(0xFF1E1E2E), const Color(0xFF2A2040)]
+                  : [const Color(0xFFEEF2FF), const Color(0xFFF5F3FF)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: const Color(0xFF667EEA).withOpacity(0.3),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF667EEA).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.credit_card_rounded,
+                  color: Color(0xFF667EEA),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.pendingPayment,
+                      style: GoogleFonts.figtree(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white : const Color(0xFF1A202C),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${adTypeLabels[ad.adType] ?? ''} · ${ad.price?.toStringAsFixed(0) ?? '0'} TL',
+                      style: GoogleFonts.figtree(
+                        fontSize: 12,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => DynamicPaymentScreen(
+                        submissionId: ad.id,
+                        adType: ad.adType.name,
+                        duration: ad.duration.name,
+                        price: ad.price!,
+                        imageUrl: ad.imageUrl,
+                        shopName: ad.shopName,
+                        paymentLink: ad.paymentLink!,
+                      ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF667EEA),
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 0,
+                ),
+                child: Text(
+                  l10n.proceedToPayment,
+                  style: GoogleFonts.figtree(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
   }
 
   /// Checks if the current shop has any listed products in shop_products collection.
@@ -522,7 +671,8 @@ class _DashboardTabState extends State<DashboardTab>
   void _showSellerInfoModal(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     if (_sellerInfo != null) {
-      _phoneController.text = _formatPhoneForDisplay(_sellerInfo!['phone'] ?? '');
+      _phoneController.text =
+          _formatPhoneForDisplay(_sellerInfo!['phone'] ?? '');
       _selectedRegion = _sellerInfo!['region'];
       _addressController.text = _sellerInfo!['address'] ?? '';
       _ibanOwnerNameController.text = _sellerInfo!['ibanOwnerName'] ?? '';
@@ -578,7 +728,8 @@ class _DashboardTabState extends State<DashboardTab>
                   barrierDismissible: false,
                   builder: (context) => const Center(
                     child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00A36C)),
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(Color(0xFF00A36C)),
                     ),
                   ),
                 );
@@ -620,7 +771,8 @@ class _DashboardTabState extends State<DashboardTab>
                             child: Text(
                               l10n.done ?? 'OK',
                               style: TextStyle(
-                                color: Theme.of(context).brightness == Brightness.dark
+                                color: Theme.of(context).brightness ==
+                                        Brightness.dark
                                     ? Colors.white
                                     : Colors.black,
                                 fontWeight: FontWeight.w600,
@@ -640,8 +792,8 @@ class _DashboardTabState extends State<DashboardTab>
                   context: ctx,
                   builder: (context) => CupertinoAlertDialog(
                     title: Text(l10n.delete),
-                    content:
-                        Text(l10n.deleteSellerInfoConfirmation ?? 'Are you sure you want to delete your seller information?'),
+                    content: Text(l10n.deleteSellerInfoConfirmation ??
+                        'Are you sure you want to delete your seller information?'),
                     actions: [
                       CupertinoDialogAction(
                         child: Text(l10n.cancel),
@@ -979,7 +1131,8 @@ class _DashboardTabState extends State<DashboardTab>
             final campaigns = isViewer
                 ? allCampaigns.where((campaign) {
                     final campaignId = campaign['id'] as String? ?? '';
-                    return provider.campaignParticipationStatus[campaignId] ?? false;
+                    return provider.campaignParticipationStatus[campaignId] ??
+                        false;
                   }).toList()
                 : allCampaigns;
 
@@ -1415,6 +1568,8 @@ class _DashboardTabState extends State<DashboardTab>
                         // Campaign Banner - Optimized with ValueNotifier
                         _buildCampaignBanner(),
 
+                        _buildPendingAdPaymentBanners(),
+
                         // Metrics Grid - Optimized with Selector
                         _buildMetricsGrid(),
                         SizedBox(height: isTablet ? 20.0 : 24.0),
@@ -1700,7 +1855,8 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
                                 l10n.cancel,
                                 style: TextStyle(
                                   fontFamily: 'Figtree',
-                                  color: isDarkMode ? Colors.white : Colors.black,
+                                  color:
+                                      isDarkMode ? Colors.white : Colors.black,
                                   fontWeight: FontWeight.w600,
                                   fontSize: 16,
                                 ),
@@ -1721,17 +1877,22 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
                                       final l10n = AppLocalizations.of(context);
 
                                       // Validate phone: must be 10 digits
-                                      final phoneDigits = widget.phoneController.text.replaceAll(RegExp(r'\D'), '');
+                                      final phoneDigits = widget
+                                          .phoneController.text
+                                          .replaceAll(RegExp(r'\D'), '');
                                       if (phoneDigits.length != 10) {
                                         showCupertinoDialog(
                                           context: context,
-                                          builder: (context) => CupertinoAlertDialog(
+                                          builder: (context) =>
+                                              CupertinoAlertDialog(
                                             title: Text(l10n.error),
-                                            content: Text(l10n.invalidPhoneNumber),
+                                            content:
+                                                Text(l10n.invalidPhoneNumber),
                                             actions: [
                                               CupertinoDialogAction(
                                                 child: Text(l10n.done),
-                                                onPressed: () => Navigator.pop(context),
+                                                onPressed: () =>
+                                                    Navigator.pop(context),
                                               ),
                                             ],
                                           ),
@@ -1740,19 +1901,26 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
                                       }
 
                                       // Validate IBAN if provided
-                                      final ibanText = widget.ibanController.text.trim();
+                                      final ibanText =
+                                          widget.ibanController.text.trim();
                                       if (ibanText.isNotEmpty) {
-                                        final normalizedIban = ibanText.replaceAll(' ', '').toUpperCase();
-                                        if (normalizedIban.length != 26 || !normalizedIban.startsWith('TR')) {
+                                        final normalizedIban = ibanText
+                                            .replaceAll(' ', '')
+                                            .toUpperCase();
+                                        if (normalizedIban.length != 26 ||
+                                            !normalizedIban.startsWith('TR')) {
                                           showCupertinoDialog(
                                             context: context,
-                                            builder: (context) => CupertinoAlertDialog(
+                                            builder: (context) =>
+                                                CupertinoAlertDialog(
                                               title: Text(l10n.error),
-                                              content: Text(l10n.invalidIban ?? 'Invalid IBAN. Turkish IBAN must be TR followed by 24 digits.'),
+                                              content: Text(l10n.invalidIban ??
+                                                  'Invalid IBAN. Turkish IBAN must be TR followed by 24 digits.'),
                                               actions: [
                                                 CupertinoDialogAction(
                                                   child: Text(l10n.done),
-                                                  onPressed: () => Navigator.pop(context),
+                                                  onPressed: () =>
+                                                      Navigator.pop(context),
                                                 ),
                                               ],
                                             ),
@@ -1764,14 +1932,16 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
                                       // Normalize phone and IBAN for storage
                                       final normalizedPhone = '0$phoneDigits';
                                       final normalizedIban = ibanText.isNotEmpty
-                                          ? ibanText.replaceAll(' ', '').toUpperCase()
+                                          ? ibanText
+                                              .replaceAll(' ', '')
+                                              .toUpperCase()
                                           : '';
 
                                       final newProfile = {
                                         'phone': normalizedPhone,
                                         'region': _selectedRegion ?? '',
-                                        'address':
-                                            widget.addressController.text.trim(),
+                                        'address': widget.addressController.text
+                                            .trim(),
                                         'ibanOwnerName': widget
                                             .ibanOwnerNameController.text
                                             .trim(),
