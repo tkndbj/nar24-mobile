@@ -155,9 +155,8 @@ class Receipt {
   }
 
   String getReceiptTypeDisplay(AppLocalizations l10n) {
-    if (isBoostReceipt) {
-      return l10n.boost ?? 'Boost';
-    }
+    if (isBoostReceipt) return l10n.boost ?? 'Boost';
+    if (isAdReceipt) return l10n.ad;
     return l10n.orders ?? 'Order';
   }
 }

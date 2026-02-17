@@ -2687,6 +2687,7 @@ await db.collection('receiptTasks').add({
   receiptType: 'ad',
   ownerType: 'shop',
   ownerId: adData.shopId,
+  buyerId: adData.shopId,
   orderId: oid,
   buyerName: adData.shopName,
   buyerEmail: pendingPayment.customerInfo?.email || '',
