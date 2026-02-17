@@ -2682,6 +2682,32 @@ export const isbankAdPaymentCallback = onRequest(
         // Schedule expiration task
         await scheduleAdExpiration(submissionId, expirationDate);
 
+        // Generate ad receipt
+await db.collection('receiptTasks').add({
+  receiptType: 'ad',
+  ownerType: 'shop',
+  ownerId: adData.shopId,
+  orderId: oid,
+  buyerName: adData.shopName,
+  buyerEmail: pendingPayment.customerInfo?.email || '',
+  buyerPhone: pendingPayment.customerInfo?.phone || '',
+  totalPrice: pendingPayment.totalAmount,
+  itemsSubtotal: pendingPayment.amount,
+  taxAmount: pendingPayment.totalAmount - pendingPayment.amount,
+  currency: 'TL',
+  paymentMethod: 'Credit Card (3D Secure)',
+  language: 'tr',
+  adData: {
+    adType: adData.adType,
+    duration: adData.duration,
+    shopName: adData.shopName,
+    submissionId: pendingPayment.submissionId,
+  },
+  status: 'pending',
+  createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  orderDate: admin.firestore.FieldValue.serverTimestamp(),
+});
+
         // Update payment status
         await pendingPaymentRef.update({
           status: 'completed',
@@ -6146,6 +6172,12 @@ export const generateReceiptBackground = onDocumentCreated(
         receiptDocument.itemCount = taskData.boostData.itemCount;
       }
 
+      // Add ad-specific fields if it's an ad receipt
+if (taskData.receiptType === 'ad' && taskData.adData) {
+  receiptDocument.adType = taskData.adData.adType;
+  receiptDocument.adDuration = taskData.adData.duration;
+}
+
       // Add delivery info for regular orders
       if (taskData.deliveryOption === 'pickup' && taskData.pickupPoint) {
         receiptDocument.pickupPointName = taskData.pickupPoint.name;
@@ -6261,6 +6293,8 @@ async function generateReceipt(data) {
     boostedItems: 'Boosted Items',
     duration: 'Duration',
     shopName: 'Shop Name',
+    adType: 'Ad Type',
+tax: 'Tax (20%)',
       },
       tr: {
         title: 'Nar24 Fatura',
@@ -6298,6 +6332,8 @@ async function generateReceipt(data) {
         boostedItems: 'Boost Edilen',
         duration: 'Süre',
         shopName: 'Dükkan İsmi',
+        adType: 'Reklam Türü',
+tax: 'KDV (%20)',
       },
       ru: {
         title: 'Nar24 Счет',
@@ -6335,6 +6371,8 @@ async function generateReceipt(data) {
         boostedItems: 'Усиленные товары',
         duration: 'Длительность',
         shopName: 'Название магазина',
+        adType: 'Тип рекламы',
+tax: 'Налог (20%)',
       },
     };
 
@@ -6408,7 +6446,6 @@ doc.fillColor('#666')
   .text(data.paymentMethod, valueX, currentY);
 currentY += 20;
 
-// Boost-specific information
 if (data.receiptType === 'boost' && data.boostData) {
   doc.fillColor('#666')
     .text(`${t.boostDuration}:`, leftColumnX, currentY, {width: labelWidth, align: 'left'})
@@ -6424,7 +6461,7 @@ if (data.receiptType === 'boost' && data.boostData) {
 }
 
 // Delivery option (skip for boost receipts)
-if (data.receiptType !== 'boost') {
+if (data.receiptType !== 'boost' && data.receiptType !== 'ad') {
   doc.fillColor('#666')
     .text(`${t.deliveryOption}:`, leftColumnX, currentY, {width: labelWidth, align: 'left'})
     .fillColor('#000')
@@ -6485,7 +6522,7 @@ if (data.pickupPoint) {
   rightCurrentY += 25;
 
  // Buyer name - Use shopName label for boost receipts where owner is a shop
-const nameLabel = (data.receiptType === 'boost' && data.ownerType === 'shop') ? t.shopName : t.name;
+ const nameLabel = ((data.receiptType === 'boost' && data.ownerType === 'shop') || data.receiptType === 'ad') ? t.shopName : t.name;
 doc.fillColor('#666')
   .text(`${nameLabel}:`, rightColumnX, rightCurrentY, {width: buyerLabelWidth, align: 'left'})
   .fillColor('#000')
@@ -6510,7 +6547,7 @@ doc.fillColor('#666')
   rightCurrentY += 20;
 
   // Only show full address for regular orders (not boost)
-  if (data.receiptType !== 'boost' && data.buyerAddress) {
+  if (data.receiptType !== 'boost' && data.receiptType !== 'ad' && data.buyerAddress) {
     doc.fillColor('#666')
       .text(`${t.address}:`, rightColumnX, rightCurrentY, {width: buyerLabelWidth, align: 'left'})
       .fillColor('#000')
@@ -6549,7 +6586,38 @@ doc.fillColor('#666')
 
     yPosition += 25;
 
-    if (data.receiptType === 'boost' && data.boostData) {
+    if (data.receiptType === 'ad' && data.adData) {
+      // AD RECEIPT: Simple single-row table
+      doc.fontSize(9)
+        .font(titleFont)
+        .fillColor('#666')
+        .text(t.product, 55, yPosition, {width: 200})
+        .text(t.duration, 260, yPosition, {width: 100})
+        .text(t.unitPrice, 365, yPosition, {width: 70, align: 'right'})
+        .text(t.total, 480, yPosition, {width: 65, align: 'right'});
+    
+      yPosition += 18;
+    
+      doc.moveTo(55, yPosition - 3)
+        .lineTo(545, yPosition - 3)
+        .strokeColor('#e0e0e0')
+        .lineWidth(0.5)
+        .stroke();
+    
+      doc.font(normalFont)
+        .fillColor('#000');
+    
+      const adTypeLabel = getAdTypeLabel(data.adData.adType);
+      const durationLabel = formatAdDuration(data.adData.duration, lang);
+    
+      doc.fontSize(9)
+        .text(adTypeLabel, 55, yPosition, {width: 200})
+        .text(durationLabel, 260, yPosition, {width: 100})
+        .text(`${data.itemsSubtotal.toFixed(0)} ${data.currency}`, 365, yPosition, {width: 70, align: 'right'})
+        .text(`${data.itemsSubtotal.toFixed(0)} ${data.currency}`, 480, yPosition, {width: 65, align: 'right'});
+    
+      yPosition += 30;
+    } else if (data.receiptType === 'boost' && data.boostData) {
       // BOOST RECEIPT: Simple table header
       doc.fontSize(9)
         .font(titleFont)
@@ -6726,7 +6794,7 @@ const grandTotal = data.totalPrice;
       yPosition += 20;
     }
 
-    if (data.receiptType !== 'boost') {
+    if (data.receiptType !== 'boost' && data.receiptType !== 'ad') {
       // ✅ UPDATED: Show free shipping benefit
       if (freeShippingApplied && originalDeliveryPrice > 0) {
         // Show original price struck through and "Free" 
@@ -6774,6 +6842,18 @@ const grandTotal = data.totalPrice;
         yPosition += 25;
       }
     }
+
+    // Tax row (for ad receipts)
+if (data.receiptType === 'ad' && data.taxAmount) {
+  doc.font(titleFont)
+    .fontSize(11)
+    .fillColor('#666')
+    .text(`${t.tax}:`, 390, yPosition)
+    .fillColor('#333')
+    .text(`${data.taxAmount.toFixed(0)} ${data.currency}`, 460, yPosition, {width: 80, align: 'right'});
+
+  yPosition += 20;
+}
     
     yPosition += 5;
     
@@ -6810,6 +6890,27 @@ const grandTotal = data.totalPrice;
 
     doc.end();
   });
+}
+
+function formatAdDuration(duration, lang = 'en') {
+  const durations = {
+    en: {
+      oneWeek: '1 Week',
+      twoWeeks: '2 Weeks',
+      oneMonth: '1 Month',
+    },
+    tr: {
+      oneWeek: '1 Hafta',
+      twoWeeks: '2 Hafta',
+      oneMonth: '1 Ay',
+    },
+    ru: {
+      oneWeek: '1 Неделя',
+      twoWeeks: '2 Недели',
+      oneMonth: '1 Месяц',
+    },
+  };
+  return durations[lang]?.[duration] || durations['en'][duration] || duration;
 }
 
 

@@ -31,10 +31,16 @@ class _SellerPanelReceiptDetailScreenState
   final TextEditingController _emailController = TextEditingController();
   bool _isSendingEmail = false;
 
+  bool get _isAd => widget.receipt.receiptType == 'ad';
+
   @override
   void initState() {
     super.initState();
-    _fetchBoostDetails();
+    if (!_isAd) {
+      _fetchBoostDetails();
+    } else {
+      setState(() => _isLoading = false);
+    }
     _loadShopEmail();
   }
 
@@ -53,9 +59,8 @@ class _SellerPanelReceiptDetailScreenState
 
       if (shopDoc.exists) {
         final shopData = shopDoc.data();
-        _emailController.text = shopData?['email'] ??
-            shopData?['contactEmail'] ??
-            '';
+        _emailController.text =
+            shopData?['email'] ?? shopData?['contactEmail'] ?? '';
       }
     } catch (e) {
       print('Error loading shop email: $e');
@@ -64,7 +69,6 @@ class _SellerPanelReceiptDetailScreenState
 
   Future<void> _fetchBoostDetails() async {
     try {
-      // Fetch boost payment details from pendingBoostPayments or completed payments
       final paymentDoc = await FirebaseFirestore.instance
           .collection('pendingBoostPayments')
           .doc(widget.receipt.orderId)
@@ -77,16 +81,15 @@ class _SellerPanelReceiptDetailScreenState
           if (_boostData != null && _boostData!['items'] != null) {
             _boostedItems = List<Map<String, dynamic>>.from(
               _boostData!['items'].map((item) => {
-                'itemId': item['itemId'],
-                'collection': item['collection'],
-                'shopId': item['shopId'],
-              }),
+                    'itemId': item['itemId'],
+                    'collection': item['collection'],
+                    'shopId': item['shopId'],
+                  }),
             );
           }
           _isLoading = false;
         });
 
-        // Fetch product details for each item
         await _fetchProductDetails();
       } else {
         setState(() {
@@ -124,8 +127,11 @@ class _SellerPanelReceiptDetailScreenState
           final productData = productDoc.data() as Map<String, dynamic>;
           updatedItems.add({
             ...item,
-            'productName': productData['name'] ?? productData['productName'] ?? 'Unknown Product',
-            'productImage': productData['imageUrls'] != null && (productData['imageUrls'] as List).isNotEmpty
+            'productName': productData['name'] ??
+                productData['productName'] ??
+                'Unknown Product',
+            'productImage': productData['imageUrls'] != null &&
+                    (productData['imageUrls'] as List).isNotEmpty
                 ? productData['imageUrls'][0]
                 : null,
           });
@@ -145,6 +151,36 @@ class _SellerPanelReceiptDetailScreenState
       print('Error fetching product details: $e');
     }
   }
+
+  // --- Ad helper methods ---
+
+  String _getAdTypeLabel(String? adType) {
+    switch (adType) {
+      case 'topBanner':
+        return 'Top Banner';
+      case 'thinBanner':
+        return 'Thin Banner';
+      case 'marketBanner':
+        return 'Market Banner';
+      default:
+        return adType ?? 'Banner';
+    }
+  }
+
+  String _getAdDurationLabel(String? duration, AppLocalizations l10n) {
+    switch (duration) {
+      case 'oneWeek':
+        return l10n.oneWeek;
+      case 'twoWeeks':
+        return l10n.twoWeeks;
+      case 'oneMonth':
+        return l10n.oneMonth;
+      default:
+        return duration ?? '';
+    }
+  }
+
+  // --- Email modal ---
 
   void _showEmailModal() {
     final l10n = AppLocalizations.of(context);
@@ -313,9 +349,11 @@ class _SellerPanelReceiptDetailScreenState
                                   });
 
                                   try {
-                                    final functions = FirebaseFunctions.instanceFor(region: 'europe-west3');
-                                    final callable =
-                                        functions.httpsCallable('sendReceiptEmail');
+                                    final functions =
+                                        FirebaseFunctions.instanceFor(
+                                            region: 'europe-west3');
+                                    final callable = functions
+                                        .httpsCallable('sendReceiptEmail');
 
                                     await callable.call({
                                       'receiptId': widget.receipt.receiptId,
@@ -492,7 +530,7 @@ class _SellerPanelReceiptDetailScreenState
             ),
           ),
           centerTitle: true,
-          actions: [           
+          actions: [
             IconButton(
               icon: const Icon(FeatherIcons.mail),
               onPressed: _showEmailModal,
@@ -511,7 +549,7 @@ class _SellerPanelReceiptDetailScreenState
                     children: [
                       _buildReceiptHeader(context, isDark, l10n, theme),
                       const SizedBox(height: 16),
-                      _buildBoostInfo(context, isDark, l10n, theme),
+                      _buildInfoCard(context, isDark, l10n, theme),
                       const SizedBox(height: 16),
                       _buildBoostedItemsList(context, isDark, l10n, theme),
                       const SizedBox(height: 16),
@@ -532,12 +570,14 @@ class _SellerPanelReceiptDetailScreenState
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Colors.purple, Colors.deepPurple],
+        gradient: LinearGradient(
+          colors: _isAd
+              ? [Colors.orange, Colors.deepOrange]
+              : [Colors.purple, Colors.deepPurple],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(16),       
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         children: [
@@ -547,15 +587,15 @@ class _SellerPanelReceiptDetailScreenState
               color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(50),
             ),
-            child: const Icon(
-              FeatherIcons.zap,
+            child: Icon(
+              _isAd ? Icons.campaign_rounded : FeatherIcons.zap,
               color: Colors.white,
               size: 40,
             ),
           ),
           const SizedBox(height: 16),
           Text(
-            l10n.boostReceipt ?? 'Boost Receipt',
+            _isAd ? (l10n.adReceipt) : (l10n.boostReceipt ?? 'Boost Receipt'),
             style: const TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
@@ -603,7 +643,7 @@ class _SellerPanelReceiptDetailScreenState
     );
   }
 
-  Widget _buildBoostInfo(BuildContext context, bool isDark,
+  Widget _buildInfoCard(BuildContext context, bool isDark,
       AppLocalizations l10n, ThemeData theme) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -626,8 +666,10 @@ class _SellerPanelReceiptDetailScreenState
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Colors.purple, Colors.deepPurple],
+                  gradient: LinearGradient(
+                    colors: _isAd
+                        ? [Colors.orange, Colors.deepOrange]
+                        : [Colors.purple, Colors.deepPurple],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -641,7 +683,9 @@ class _SellerPanelReceiptDetailScreenState
               ),
               const SizedBox(width: 12),
               Text(
-                l10n.boostInformation ?? 'Boost Information',
+                _isAd
+                    ? (l10n.adInformation)
+                    : (l10n.boostInformation ?? 'Boost Information'),
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -659,19 +703,55 @@ class _SellerPanelReceiptDetailScreenState
             showCopy: true,
           ),
           const SizedBox(height: 12),
-          _buildInfoRow(
-            l10n.boostDuration ?? 'Boost Duration',
-            '${widget.receipt.boostDuration ?? 0} ${l10n.minutes ?? 'minutes'}',
-            isDark,
-            theme,
-          ),
-          const SizedBox(height: 12),
-          _buildInfoRow(
-            l10n.boostedItems ?? 'Boosted Items',
-            '${widget.receipt.itemCount ?? _boostedItems.length} ${l10n.items ?? 'items'}',
-            isDark,
-            theme,
-          ),
+          if (_isAd) ...[
+            _buildInfoRow(
+              l10n.adType,
+              _getAdTypeLabel(widget.receipt.adType),
+              isDark,
+              theme,
+            ),
+            const SizedBox(height: 12),
+            _buildInfoRow(
+              l10n.duration ?? 'Duration',
+              _getAdDurationLabel(widget.receipt.adDuration, l10n),
+              isDark,
+              theme,
+            ),
+            if (widget.receipt.itemsSubtotal != null &&
+                widget.receipt.itemsSubtotal! > 0) ...[
+              const SizedBox(height: 12),
+              _buildInfoRow(
+                l10n.subtotal,
+                '${widget.receipt.itemsSubtotal!.toStringAsFixed(0)} ${widget.receipt.currency}',
+                isDark,
+                theme,
+              ),
+            ],
+            if (widget.receipt.taxAmount != null &&
+                widget.receipt.taxAmount! > 0) ...[
+              const SizedBox(height: 12),
+              _buildInfoRow(
+                l10n.tax,
+                '${widget.receipt.taxAmount!.toStringAsFixed(0)} ${widget.receipt.currency}',
+                isDark,
+                theme,
+              ),
+            ],
+          ] else ...[
+            _buildInfoRow(
+              l10n.boostDuration ?? 'Boost Duration',
+              '${widget.receipt.boostDuration ?? 0} ${l10n.minutes ?? 'minutes'}',
+              isDark,
+              theme,
+            ),
+            const SizedBox(height: 12),
+            _buildInfoRow(
+              l10n.boostedItems ?? 'Boosted Items',
+              '${widget.receipt.itemCount ?? _boostedItems.length} ${l10n.items ?? 'items'}',
+              isDark,
+              theme,
+            ),
+          ],
         ],
       ),
     );
@@ -679,7 +759,7 @@ class _SellerPanelReceiptDetailScreenState
 
   Widget _buildBoostedItemsList(BuildContext context, bool isDark,
       AppLocalizations l10n, ThemeData theme) {
-    if (_boostedItems.isEmpty) {
+    if (_isAd || _boostedItems.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -821,6 +901,7 @@ class _SellerPanelReceiptDetailScreenState
   Widget _buildPriceSummary(BuildContext context, bool isDark,
       AppLocalizations l10n, ThemeData theme) {
     final total = widget.receipt.totalPrice;
+    final accentColor = _isAd ? Colors.orange : Colors.purple;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -879,13 +960,13 @@ class _SellerPanelReceiptDetailScreenState
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Colors.purple.withOpacity(0.1),
-                  Colors.purple.withOpacity(0.05),
+                  accentColor.withOpacity(0.1),
+                  accentColor.withOpacity(0.05),
                 ],
               ),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: Colors.purple.withOpacity(0.3),
+                color: accentColor.withOpacity(0.3),
               ),
             ),
             child: Row(
@@ -901,10 +982,10 @@ class _SellerPanelReceiptDetailScreenState
                 ),
                 Text(
                   '${total.toStringAsFixed(0)} ${widget.receipt.currency}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: Colors.purple,
+                    color: accentColor,
                   ),
                 ),
               ],

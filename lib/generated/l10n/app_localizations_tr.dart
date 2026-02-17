@@ -4455,6 +4455,33 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
+  String get ad => 'Reklam';
+
+  @override
+  String get adReceipt => 'Reklam Faturası';
+
+  @override
+  String get adInformation => 'Reklam Bilgileri';
+
+  @override
+  String get adType => 'Reklam Tipi';
+
+  @override
+  String get tax => 'KDV (%20)';
+
+  @override
+  String get subtotal => 'Ara Toplam';
+
+  @override
+  String get oneWeek => '1 Hafta';
+
+  @override
+  String get twoWeeks => '2 Hafta';
+
+  @override
+  String get oneMonth => '1 Ay';
+
+  @override
   String get bulkDiscountFieldsRequired =>
       'Miktar eşiği ve indirim yüzdesi birlikte ayarlanmalıdır';
 
@@ -5293,9 +5320,6 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adPreview => 'Reklam Önizleme';
 
   @override
-  String get adType => 'Reklam Tipi';
-
-  @override
   String get duration => 'Süre';
 
   @override
@@ -5306,9 +5330,6 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get adCost => 'Reklam Ücreti';
-
-  @override
-  String get tax => 'KDV (%20)';
 
   @override
   String get totalAmount => 'Toplam Tutar';
@@ -5373,15 +5394,6 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get selectDuration => 'Süre Seçin';
-
-  @override
-  String get oneWeek => '1 Hafta';
-
-  @override
-  String get twoWeeks => '2 Hafta';
-
-  @override
-  String get oneMonth => '1 Ay';
 
   @override
   String get oneWeekShort => '1 Hafta';
@@ -7635,9 +7647,6 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get deliveryOption3 => 'Normal Kargo';
-
-  @override
-  String get subtotal => 'Ara Toplam';
 
   @override
   String get priceSummary => 'Fiyat Özeti';

@@ -188,117 +188,118 @@ class _SellerPanelReceiptsScreenState extends State<SellerPanelReceiptsScreen> {
             children: [
               // Header Section
               Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Colors.orange.withOpacity(0.1),
-                    Colors.pink.withOpacity(0.1),
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.orange.withOpacity(0.1),
+                      Colors.pink.withOpacity(0.1),
+                    ],
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Colors.orange, Colors.pink],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(50),
+                      ),
+                      child: const Icon(
+                        FeatherIcons.fileText,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      l10n.receipts,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.bodyMedium?.color,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${l10n.shopReceipts ?? 'Shop receipts and payment history'}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color:
+                            theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
                   ],
                 ),
               ),
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Colors.orange, Colors.pink],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(50),
-                    ),
-                    child: const Icon(
-                      FeatherIcons.fileText,
-                      color: Colors.white,
-                      size: 32,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    l10n.receipts,
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: theme.textTheme.bodyMedium?.color,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${l10n.shopReceipts ?? 'Shop receipts and payment history'}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
 
-            // Content
-            Expanded(
-              child: _isInitialLoad
-                  ? _buildShimmerLoading(isDark)
-                  : _receipts.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(24),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(100),
+              // Content
+              Expanded(
+                child: _isInitialLoad
+                    ? _buildShimmerLoading(isDark)
+                    : _receipts.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(24),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(100),
+                                  ),
+                                  child: const Icon(
+                                    FeatherIcons.fileText,
+                                    size: 64,
+                                    color: Colors.orange,
+                                  ),
                                 ),
-                                child: const Icon(
-                                  FeatherIcons.fileText,
-                                  size: 64,
-                                  color: Colors.orange,
+                                const SizedBox(height: 24),
+                                Text(
+                                  l10n.noReceipts ?? 'No receipts yet',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w600,
+                                    color: theme.textTheme.bodyMedium?.color,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 24),
-                              Text(
-                                l10n.noReceipts ?? 'No receipts yet',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.textTheme.bodyMedium?.color,
+                                const SizedBox(height: 8),
+                                Text(
+                                  l10n.noReceiptsDescription ??
+                                      'Your shop receipts will appear here',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: theme.textTheme.bodyMedium?.color
+                                        ?.withOpacity(0.6),
+                                  ),
+                                  textAlign: TextAlign.center,
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                l10n.noReceiptsDescription ??
-                                    'Your shop receipts will appear here',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: theme.textTheme.bodyMedium?.color
-                                      ?.withOpacity(0.6),
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
+                              ],
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _refreshReceipts,
+                            child: ListView.builder(
+                              controller: _scrollController,
+                              padding: const EdgeInsets.all(16),
+                              itemCount: _receipts.length + (_hasMore ? 1 : 0),
+                              itemBuilder: (context, index) {
+                                if (index == _receipts.length) {
+                                  return _buildLoadingIndicator();
+                                }
+                                return _buildReceiptCard(_receipts[index]);
+                              },
+                            ),
                           ),
-                        )
-                      : RefreshIndicator(
-                          onRefresh: _refreshReceipts,
-                          child: ListView.builder(
-                            controller: _scrollController,
-                            padding: const EdgeInsets.all(16),
-                            itemCount: _receipts.length + (_hasMore ? 1 : 0),
-                            itemBuilder: (context, index) {
-                              if (index == _receipts.length) {
-                                return _buildLoadingIndicator();
-                              }
-                              return _buildReceiptCard(_receipts[index]);
-                            },
-                          ),
-                        ),
-            ),
+              ),
             ],
           ),
         ),
@@ -317,21 +318,23 @@ class _SellerPanelReceiptsScreenState extends State<SellerPanelReceiptsScreen> {
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => SellerPanelReceiptDetailScreen(
-        receipt: receipt,
-        shopId: widget.shopId,
-      ),
-    ),
-  );
-},
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => SellerPanelReceiptDetailScreen(
+                  receipt: receipt,
+                  shopId: widget.shopId,
+                ),
+              ),
+            );
+          },
           borderRadius: BorderRadius.circular(16),
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: isDark ? const Color.fromARGB(255, 37, 35, 54) : theme.cardColor,
+              color: isDark
+                  ? const Color.fromARGB(255, 37, 35, 54)
+                  : theme.cardColor,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: theme.dividerColor.withOpacity(0.1),
@@ -405,16 +408,18 @@ class _SellerPanelReceiptsScreenState extends State<SellerPanelReceiptsScreen> {
                                 Icon(
                                   _getReceiptIcon(receipt.receiptType),
                                   size: 12,
-                                  color: _getReceiptTypeColor(receipt.receiptType),
+                                  color:
+                                      _getReceiptTypeColor(receipt.receiptType),
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  _localizeReceiptType(receipt.receiptType, l10n),
+                                  _localizeReceiptType(
+                                      receipt.receiptType, l10n),
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
-                                    color:
-                                        _getReceiptTypeColor(receipt.receiptType),
+                                    color: _getReceiptTypeColor(
+                                        receipt.receiptType),
                                   ),
                                 ),
                               ],
@@ -627,31 +632,29 @@ class _SellerPanelReceiptsScreenState extends State<SellerPanelReceiptsScreen> {
   }
 
   IconData _getReceiptIcon(String? receiptType) {
-    if (receiptType == 'boost') {
-      return FeatherIcons.zap;
-    }
+    if (receiptType == 'boost') return FeatherIcons.zap;
+    if (receiptType == 'ad') return Icons.campaign_rounded;
     return FeatherIcons.fileText;
   }
 
   Color _getReceiptTypeColor(String? receiptType) {
-    if (receiptType == 'boost') {
-      return Colors.purple;
-    }
-    return Colors.orange;
+    if (receiptType == 'boost') return Colors.purple;
+    if (receiptType == 'ad') return Colors.orange;
+    return Colors.green;
   }
 
   String _localizeReceiptType(String? receiptType, AppLocalizations l10n) {
-    if (receiptType == 'boost') {
-      return l10n.boost ?? 'Boost';
-    }
+    if (receiptType == 'boost') return l10n.boost ?? 'Boost';
+    if (receiptType == 'ad') return l10n.ad;
     return l10n.orders ?? 'Order';
   }
 
   String _getReceiptTitle(Receipt receipt, AppLocalizations l10n) {
-    if (receipt.receiptType == 'boost') {
-      return '${l10n.boost ?? 'Boost'} #${receipt.orderId.substring(0, 8).toUpperCase()}';
-    }
-    return '${l10n.orders ?? 'Order'} #${receipt.orderId.substring(0, 8).toUpperCase()}';
+    final shortId = receipt.orderId.substring(0, 8).toUpperCase();
+    if (receipt.receiptType == 'boost')
+      return '${l10n.boost ?? 'Boost'} #$shortId';
+    if (receipt.receiptType == 'ad') return '${l10n.ad} #$shortId';
+    return '${l10n.orders ?? 'Order'} #$shortId';
   }
 
   String _localizePaymentMethod(String paymentMethod, AppLocalizations l10n) {

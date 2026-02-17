@@ -8770,6 +8770,60 @@ abstract class AppLocalizations {
   /// **'{adType} reklamınızın süresi doldu.'**
   String adExpired(Object adType);
 
+  /// No description provided for @ad.
+  ///
+  /// In tr, this message translates to:
+  /// **'Reklam'**
+  String get ad;
+
+  /// No description provided for @adReceipt.
+  ///
+  /// In tr, this message translates to:
+  /// **'Reklam Faturası'**
+  String get adReceipt;
+
+  /// No description provided for @adInformation.
+  ///
+  /// In tr, this message translates to:
+  /// **'Reklam Bilgileri'**
+  String get adInformation;
+
+  /// No description provided for @adType.
+  ///
+  /// In tr, this message translates to:
+  /// **'Reklam Tipi'**
+  String get adType;
+
+  /// No description provided for @tax.
+  ///
+  /// In tr, this message translates to:
+  /// **'KDV (%20)'**
+  String get tax;
+
+  /// No description provided for @subtotal.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ara Toplam'**
+  String get subtotal;
+
+  /// No description provided for @oneWeek.
+  ///
+  /// In tr, this message translates to:
+  /// **'1 Hafta'**
+  String get oneWeek;
+
+  /// No description provided for @twoWeeks.
+  ///
+  /// In tr, this message translates to:
+  /// **'2 Hafta'**
+  String get twoWeeks;
+
+  /// No description provided for @oneMonth.
+  ///
+  /// In tr, this message translates to:
+  /// **'1 Ay'**
+  String get oneMonth;
+
   /// No description provided for @bulkDiscountFieldsRequired.
   ///
   /// In tr, this message translates to:
@@ -10330,12 +10384,6 @@ abstract class AppLocalizations {
   /// **'Reklam Önizleme'**
   String get adPreview;
 
-  /// No description provided for @adType.
-  ///
-  /// In tr, this message translates to:
-  /// **'Reklam Tipi'**
-  String get adType;
-
   /// No description provided for @duration.
   ///
   /// In tr, this message translates to:
@@ -10359,12 +10407,6 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Reklam Ücreti'**
   String get adCost;
-
-  /// No description provided for @tax.
-  ///
-  /// In tr, this message translates to:
-  /// **'KDV (%20)'**
-  String get tax;
 
   /// No description provided for @totalAmount.
   ///
@@ -10485,24 +10527,6 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Süre Seçin'**
   String get selectDuration;
-
-  /// No description provided for @oneWeek.
-  ///
-  /// In tr, this message translates to:
-  /// **'1 Hafta'**
-  String get oneWeek;
-
-  /// No description provided for @twoWeeks.
-  ///
-  /// In tr, this message translates to:
-  /// **'2 Hafta'**
-  String get twoWeeks;
-
-  /// No description provided for @oneMonth.
-  ///
-  /// In tr, this message translates to:
-  /// **'1 Ay'**
-  String get oneMonth;
 
   /// No description provided for @oneWeekShort.
   ///
@@ -14584,12 +14608,6 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Normal Kargo'**
   String get deliveryOption3;
-
-  /// No description provided for @subtotal.
-  ///
-  /// In tr, this message translates to:
-  /// **'Ara Toplam'**
-  String get subtotal;
 
   /// No description provided for @priceSummary.
   ///

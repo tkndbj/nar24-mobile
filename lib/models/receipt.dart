@@ -24,6 +24,9 @@ class Receipt {
   final double couponDiscount;
   final bool freeShippingApplied;
   final double originalDeliveryPrice;
+  final String? adType;
+  final String? adDuration;
+  final double? taxAmount;
 
   Receipt({
     required this.receiptId,
@@ -34,6 +37,9 @@ class Receipt {
     required this.currency,
     required this.timestamp,
     required this.paymentMethod,
+    this.adType,
+    this.adDuration,
+    this.taxAmount,
     this.deliveryOption,
     this.receiptUrl,
     this.receiptType,
@@ -77,6 +83,9 @@ class Receipt {
       receiptType: data['receiptType'] ?? 'order',
       boostDuration: data['boostDuration'] as int?,
       itemCount: data['itemCount'] as int?,
+      adType: data['adType'] as String?,
+      adDuration: data['adDuration'] as String?,
+      taxAmount: (data['taxAmount'] as num?)?.toDouble() ?? 0.0,
       filePath: data['filePath'] as String?,
       // Coupon/Benefit fields
       couponCode: data['couponCode'] as String?,
@@ -88,6 +97,7 @@ class Receipt {
   }
 
   bool get isBoostReceipt => receiptType == 'boost';
+  bool get isAdReceipt => receiptType == 'ad';
 
   // Calculate total savings
   double get totalSavings {

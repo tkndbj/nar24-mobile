@@ -4450,6 +4450,33 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get ad => 'Ad';
+
+  @override
+  String get adReceipt => 'Ad Receipt';
+
+  @override
+  String get adInformation => 'Ad Information';
+
+  @override
+  String get adType => 'Ad Type';
+
+  @override
+  String get tax => 'Tax (20%)';
+
+  @override
+  String get subtotal => 'Subtotal';
+
+  @override
+  String get oneWeek => '1 Week';
+
+  @override
+  String get twoWeeks => '2 Weeks';
+
+  @override
+  String get oneMonth => '1 Month';
+
+  @override
   String get bulkDiscountFieldsRequired =>
       'Both quantity threshold and discount percentage must be set together';
 
@@ -5284,9 +5311,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adPreview => 'Ad Preview';
 
   @override
-  String get adType => 'Ad Type';
-
-  @override
   String get duration => 'Duration';
 
   @override
@@ -5297,9 +5321,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adCost => 'Ad Cost';
-
-  @override
-  String get tax => 'Tax (20%)';
 
   @override
   String get totalAmount => 'Total Amount';
@@ -5363,15 +5384,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get selectDuration => 'Select Duration';
-
-  @override
-  String get oneWeek => '1 Week';
-
-  @override
-  String get twoWeeks => '2 Weeks';
-
-  @override
-  String get oneMonth => '1 Month';
 
   @override
   String get oneWeekShort => '1 Week';
@@ -7626,9 +7638,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deliveryOption3 => 'Normal Cargo';
-
-  @override
-  String get subtotal => 'Subtotal';
 
   @override
   String get priceSummary => 'Price Summary';

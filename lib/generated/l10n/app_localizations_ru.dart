@@ -4471,6 +4471,33 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String get ad => 'Реклама';
+
+  @override
+  String get adReceipt => 'Квитанция за рекламу';
+
+  @override
+  String get adInformation => 'Информация о рекламе';
+
+  @override
+  String get adType => 'Тип рекламы';
+
+  @override
+  String get tax => 'Налог (20%)';
+
+  @override
+  String get subtotal => 'Промежуточный итог';
+
+  @override
+  String get oneWeek => '1 Неделя';
+
+  @override
+  String get twoWeeks => '2 Недели';
+
+  @override
+  String get oneMonth => '1 Месяц';
+
+  @override
   String get bulkDiscountFieldsRequired =>
       'Порог количества и процент скидки должны быть установлены вместе';
 
@@ -5318,9 +5345,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get adPreview => 'Предпросмотр объявления';
 
   @override
-  String get adType => 'Тип объявления';
-
-  @override
   String get duration => 'Продолжительность';
 
   @override
@@ -5331,9 +5355,6 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get adCost => 'Стоимость объявления';
-
-  @override
-  String get tax => 'НДС (20%)';
 
   @override
   String get totalAmount => 'Общая сумма';
@@ -5398,15 +5419,6 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get selectDuration => 'Выберите продолжительность';
-
-  @override
-  String get oneWeek => '1 неделя';
-
-  @override
-  String get twoWeeks => '2 недели';
-
-  @override
-  String get oneMonth => '1 месяц';
 
   @override
   String get oneWeekShort => '1 нед.';
@@ -7668,9 +7680,6 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get deliveryOption3 => 'Обычная доставка';
-
-  @override
-  String get subtotal => 'Промежуточный итог';
 
   @override
   String get priceSummary => 'Сводка цены';
