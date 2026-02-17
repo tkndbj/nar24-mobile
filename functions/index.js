@@ -14488,7 +14488,7 @@ export {
 } from './11-user-activity/index.js';
 export {computeTrendingProducts, cleanupTrendingHistory} from './12-trending-products/index.js';
 export {updatePersonalizedFeeds, cleanupOldFeeds} from './13-personalized-feed/index.js';
-export {adminToggleProductArchiveStatus, approveArchivedProductEdit} from './14-admin-actions/index.js';
+export {adminToggleProductArchiveStatus, approveArchivedProductEdit, approveProductApplication, rejectProductApplication} from './14-admin-actions/index.js';
 export {translateText, translateBatch} from './15-openai-translation/index.js';
 export {processQRCodeGeneration, verifyQRCode, markQRScanned, retryQRGeneration} from './16-qr-for-orders/index.js';
 export {

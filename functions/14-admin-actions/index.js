@@ -732,3 +732,336 @@ export const approveArchivedProductEdit = onCall({
     throw new HttpsError('internal', 'Failed to approve edit');
   }
 });
+
+async function updateCategoryShopsIndex(db, shopId, category, subcategory, subsubcategory) {
+  if (!shopId || shopId.trim() === '') return;
+
+  try {
+    const shopDoc = await db.collection('shops').doc(shopId).get();
+    if (!shopDoc.exists) {
+      console.warn(`Shop ${shopId} not found, skipping category index`);
+      return;
+    }
+
+    const shopData = shopDoc.data();
+    const shopInfo = {
+      shopId: shopId,
+      shopName: shopData.name || 'Unknown Shop',
+    };
+
+    const normalize = (s) => {
+      if (!s || s.trim() === '') return '';
+      return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+    };
+
+    const categories = [
+      {key: normalize(subsubcategory), level: 'subsubcategory'},
+      {key: normalize(subcategory), level: 'subcategory'},
+      {key: normalize(category), level: 'category'},
+    ].filter((cat) => cat.key !== '');
+
+    const batch = db.batch();
+
+    for (const {key, level} of categories) {
+      const docRef = db.collection('category_shops').doc(key);
+      batch.set(
+        docRef,
+        {
+          shops: FieldValue.arrayUnion(shopInfo),
+          level: level,
+          categoryPath: key,
+          lastUpdated: FieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+    }
+
+    await batch.commit();
+    console.log(`✅ Category index updated for shop ${shopId}`);
+  } catch (error) {
+    console.error('Error updating category shops index:', error);
+    // Non-critical — don't throw
+  }
+}
+
+// ===================================================================
+// APPROVE PRODUCT APPLICATION
+// ===================================================================
+export const approveProductApplication = onCall({
+  region: 'europe-west3',
+  maxInstances: 10,
+  timeoutSeconds: 120,
+  memory: '256MiB',
+}, async (request) => {
+  // ── Auth ──
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const adminId = request.auth.uid;
+  const {applicationId, sourceCollection} = request.data;
+
+  // ── Input validation ──
+  if (!applicationId || typeof applicationId !== 'string') {
+    throw new HttpsError('invalid-argument', 'Valid applicationId is required');
+  }
+
+  const validSources = ['product_applications', 'vitrin_product_applications'];
+  if (!sourceCollection || !validSources.includes(sourceCollection)) {
+    throw new HttpsError('invalid-argument', 'Valid sourceCollection is required');
+  }
+
+  const db = getFirestore();
+
+  // ── Verify admin ──
+  const adminDoc = await db.collection('users').doc(adminId).get();
+  if (!adminDoc.exists || !adminDoc.data()?.isAdmin) {
+    throw new HttpsError('permission-denied', 'Only admins can approve applications');
+  }
+  const adminData = adminDoc.data();
+
+  try {
+    const isVitrin = sourceCollection === 'vitrin_product_applications';
+    const applicationRef = db.collection(sourceCollection).doc(applicationId);
+
+    // ── Transaction: read → validate → write ──
+    const result = await db.runTransaction(async (transaction) => {
+      const applicationSnap = await transaction.get(applicationRef);
+
+      if (!applicationSnap.exists) {
+        throw new HttpsError('not-found', 'Application not found — it may have already been processed');
+      }
+
+      const appData = applicationSnap.data();
+
+      // Idempotency
+      if (appData.status === 'approved') {
+        return {alreadyProcessed: true, productId: appData.id || applicationId};
+      }
+      if (appData.status && appData.status !== 'pending') {
+        throw new HttpsError('failed-precondition', `Application is already ${appData.status}`);
+      }
+
+      // ── Determine IDs and target collection ──
+      const ilanNo = appData.ilan_no || appData.ilanNo || applicationSnap.id;
+      const newDocId = ilanNo && ilanNo.trim() !== '' ? ilanNo : applicationSnap.id;
+      const targetCollection = isVitrin ? 'products' : 'shop_products';
+
+      // ── Check duplicate ──
+      const productRef = db.collection(targetCollection).doc(newDocId);
+      const existingProduct = await transaction.get(productRef);
+
+      if (existingProduct.exists) {
+        // Mark as duplicate instead of failing hard
+        transaction.update(applicationRef, {
+          status: 'duplicate',
+          reviewedAt: FieldValue.serverTimestamp(),
+          reviewedBy: adminId,
+          existingProductId: newDocId,
+        });
+        return {duplicate: true, productId: newDocId};
+      }
+
+      // ── Build product payload ──
+      // Fields that exist only on the application and should NOT go to the product
+      const fieldsToExclude = new Set([
+        'status',
+        'needsSync',
+        'updatedAt',
+        'relatedProductIds',
+      ]);
+
+      // Seller info — stored separately, not on the product document
+      const sellerFields = new Set([
+        'phone', 'region', 'address',
+        'ibanOwnerName', 'ibanOwnerSurname', 'iban',
+      ]);
+
+      const payload = {};
+
+      for (const [key, value] of Object.entries(appData)) {
+        if (fieldsToExclude.has(key)) continue;
+        if (sellerFields.has(key)) continue;
+        if (value === undefined) continue;
+        payload[key] = value;
+      }
+
+      // Override identity & timestamps
+      payload.id = newDocId;
+      payload.ilanNo = newDocId;
+      payload.ilan_no = newDocId;
+      payload.createdAt = FieldValue.serverTimestamp();
+      payload.updatedAt = FieldValue.serverTimestamp();
+      payload.needsSync = true;
+      payload.relatedProductIds = [];
+
+      // ── Atomic writes ──
+      transaction.set(productRef, payload);
+      transaction.update(applicationRef, {
+        status: 'approved',
+        reviewedAt: FieldValue.serverTimestamp(),
+        reviewedBy: adminId,
+        approvedProductId: newDocId,
+        approvedCollection: targetCollection,
+      });
+
+      return {
+        alreadyProcessed: false,
+        duplicate: false,
+        productId: newDocId,
+        targetCollection,
+        shopId: appData.shopId || null,
+        category: appData.category || '',
+        subcategory: appData.subcategory || '',
+        subsubcategory: appData.subsubcategory || '',
+        productName: appData.productName || 'Unknown',
+        sellerName: appData.sellerName || 'Unknown',
+      };
+    });
+
+    // ── Early returns ──
+    if (result.alreadyProcessed) {
+      return {success: true, productId: result.productId, note: 'Already approved (idempotent)'};
+    }
+
+    if (result.duplicate) {
+      return {success: false, productId: result.productId, note: 'Product already exists — marked as duplicate'};
+    }
+
+    // ── Post-transaction: Category index (shop products only, not vitrin) ──
+    if (result.shopId && result.shopId.trim() !== '' && !isVitrin) {
+      await updateCategoryShopsIndex(
+        db,
+        result.shopId,
+        result.category,
+        result.subcategory,
+        result.subsubcategory,
+      );
+    }
+
+    // ── Post-transaction: Audit log ──
+    await db.collection('admin_audit_logs').add({
+      action: 'PRODUCT_APPLICATION_APPROVED',
+      adminId,
+      adminEmail: adminData?.email || 'unknown',
+      applicationId,
+      productId: result.productId,
+      shopId: result.shopId,
+      sourceCollection,
+      targetCollection: result.targetCollection,
+      productName: result.productName,
+      sellerName: result.sellerName,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      success: true,
+      productId: result.productId,
+      targetCollection: result.targetCollection,
+    };
+  } catch (error) {
+    console.error('Error approving product application:', error);
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('internal', 'Failed to approve application. Please try again.');
+  }
+});
+
+// ===================================================================
+// REJECT PRODUCT APPLICATION
+// ===================================================================
+export const rejectProductApplication = onCall({
+  region: 'europe-west3',
+  maxInstances: 10,
+  timeoutSeconds: 60,
+  memory: '256MiB',
+}, async (request) => {
+  // ── Auth ──
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const adminId = request.auth.uid;
+  const {applicationId, sourceCollection, rejectionReason} = request.data;
+
+  // ── Input validation ──
+  if (!applicationId || typeof applicationId !== 'string') {
+    throw new HttpsError('invalid-argument', 'Valid applicationId is required');
+  }
+
+  const validSources = ['product_applications', 'vitrin_product_applications'];
+  if (!sourceCollection || !validSources.includes(sourceCollection)) {
+    throw new HttpsError('invalid-argument', 'Valid sourceCollection is required');
+  }
+
+  const sanitizedReason = rejectionReason ? String(rejectionReason).trim().slice(0, 1000) : 'Başvuru reddedildi';
+
+  const db = getFirestore();
+
+  // ── Verify admin ──
+  const adminDoc = await db.collection('users').doc(adminId).get();
+  if (!adminDoc.exists || !adminDoc.data()?.isAdmin) {
+    throw new HttpsError('permission-denied', 'Only admins can reject applications');
+  }
+  const adminData = adminDoc.data();
+
+  try {
+    const applicationRef = db.collection(sourceCollection).doc(applicationId);
+
+    // ── Transaction: read → validate → write ──
+    const result = await db.runTransaction(async (transaction) => {
+      const applicationSnap = await transaction.get(applicationRef);
+
+      if (!applicationSnap.exists) {
+        throw new HttpsError('not-found', 'Application not found — it may have already been processed');
+      }
+
+      const appData = applicationSnap.data();
+
+      // Idempotency
+      if (appData.status === 'rejected') {
+        return {alreadyProcessed: true};
+      }
+      if (appData.status && appData.status !== 'pending') {
+        throw new HttpsError('failed-precondition', `Application is already ${appData.status}`);
+      }
+
+      transaction.update(applicationRef, {
+        status: 'rejected',
+        reviewedAt: FieldValue.serverTimestamp(),
+        reviewedBy: adminId,
+        rejectionReason: sanitizedReason,
+      });
+
+      return {
+        alreadyProcessed: false,
+        productName: appData.productName || 'Unknown',
+        sellerName: appData.sellerName || 'Unknown',
+        shopId: appData.shopId || null,
+      };
+    });
+
+    if (result.alreadyProcessed) {
+      return {success: true, note: 'Already rejected (idempotent)'};
+    }
+
+    // ── Post-transaction: Audit log ──
+    await db.collection('admin_audit_logs').add({
+      action: 'PRODUCT_APPLICATION_REJECTED',
+      adminId,
+      adminEmail: adminData?.email || 'unknown',
+      applicationId,
+      sourceCollection,
+      productName: result.productName,
+      sellerName: result.sellerName,
+      shopId: result.shopId,
+      rejectionReason: sanitizedReason,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return {success: true};
+  } catch (error) {
+    console.error('Error rejecting product application:', error);
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('internal', 'Failed to reject application. Please try again.');
+  }
+});
