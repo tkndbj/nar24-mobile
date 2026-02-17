@@ -4431,6 +4431,16 @@ class AppLocalizationsRu extends AppLocalizations {
   String get addProductFirst => 'Добавить товар';
 
   @override
+  String adApproved2(String adType) {
+    return 'Ваша заявка на рекламу $adType одобрена.';
+  }
+
+  @override
+  String adRejected2(String adType) {
+    return 'Ваша заявка на рекламу $adType отклонена.';
+  }
+
+  @override
   String get salesPausedTitle => 'Продажи временно приостановлены';
 
   @override

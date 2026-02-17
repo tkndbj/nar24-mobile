@@ -24,6 +24,8 @@ class _RefundFormScreenState extends State<RefundFormScreen> {
   String? _receiptNoError;
   String? _descriptionError;
 
+  Map<String, dynamic>? _selectedOrderData;
+
   User? _user;
   Map<String, dynamic>? _profileData;
   bool _isLoading = true;
@@ -111,6 +113,22 @@ class _RefundFormScreenState extends State<RefundFormScreen> {
         'description': _descriptionController.text.trim(),
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
+        // ← ADD THESE (denormalized from order)
+        if (_selectedOrderData != null) ...{
+          'productName': _selectedOrderData!['productName'] ?? '',
+          'sellerName': _selectedOrderData!['sellerName'] ?? '',
+          'price': _selectedOrderData!['price'] ?? 0,
+          'currency': _selectedOrderData!['currency'] ?? 'TL',
+          'quantity': _selectedOrderData!['quantity'] ?? 1,
+          'productImage': (_selectedOrderData!['selectedColorImage']
+                      ?.toString()
+                      .isNotEmpty ==
+                  true)
+              ? _selectedOrderData!['selectedColorImage']
+              : _selectedOrderData!['productImage'] ?? '',
+          'productId': _selectedOrderData!['productId'] ?? '',
+          'shopId': _selectedOrderData!['shopId'] ?? '',
+        },
       });
 
       setState(() {
@@ -126,6 +144,7 @@ class _RefundFormScreenState extends State<RefundFormScreen> {
           _receiptNoController.clear();
           _descriptionController.clear();
           _showSuccessModal = false;
+          _selectedOrderData = null;
         });
         context.pop();
       }
@@ -266,455 +285,520 @@ class _RefundFormScreenState extends State<RefundFormScreen> {
                     LayoutBuilder(
                       builder: (context, constraints) {
                         final isTablet = constraints.maxWidth >= 600;
-                        final formWidth = isTablet ? constraints.maxWidth * 0.65 : constraints.maxWidth;
+                        final formWidth = isTablet
+                            ? constraints.maxWidth * 0.65
+                            : constraints.maxWidth;
 
                         return Center(
                           child: SizedBox(
                             width: formWidth,
                             child: Form(
-                      key: _formKey,
-                      child: Column(
-                        children: [
-                          // Name Field
-                          _buildFormCard(
-                            icon: FeatherIcons.user,
-                            label: localization.refundFormNameLabel,
-                            child: TextFormField(
-                              enabled: false,
-                              initialValue: _profileData?['displayName'] ??
-                                  localization.refundFormNoName,
-                              style: TextStyle(
-                                color: theme.textTheme.bodyMedium?.color
-                                    ?.withOpacity(0.6),
-                                fontSize: 15,
-                              ),
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: isDarkMode
-                                    ? const Color.fromARGB(255, 54, 50, 75)
-                                    : Colors.grey[100],
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: isDarkMode
-                                        ? Colors.white.withOpacity(0.1)
-                                        : Colors.grey[300]!,
-                                  ),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: isDarkMode
-                                        ? Colors.white.withOpacity(0.1)
-                                        : Colors.grey[300]!,
-                                  ),
-                                ),
-                                disabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: isDarkMode
-                                        ? Colors.white.withOpacity(0.1)
-                                        : Colors.grey[300]!,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            theme: theme,
-                            isDarkMode: isDarkMode,
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          // Email Field
-                          _buildFormCard(
-                            icon: FeatherIcons.mail,
-                            label: localization.refundFormEmailLabel,
-                            child: TextFormField(
-                              enabled: false,
-                              initialValue:
-                                  _profileData?['email'] ?? _user?.email ?? '',
-                              style: TextStyle(
-                                color: theme.textTheme.bodyMedium?.color
-                                    ?.withOpacity(0.6),
-                                fontSize: 15,
-                              ),
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: isDarkMode
-                                    ? const Color.fromARGB(255, 54, 50, 75)
-                                    : Colors.grey[100],
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: isDarkMode
-                                        ? Colors.white.withOpacity(0.1)
-                                        : Colors.grey[300]!,
-                                  ),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: isDarkMode
-                                        ? Colors.white.withOpacity(0.1)
-                                        : Colors.grey[300]!,
-                                  ),
-                                ),
-                                disabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: isDarkMode
-                                        ? Colors.white.withOpacity(0.1)
-                                        : Colors.grey[300]!,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            theme: theme,
-                            isDarkMode: isDarkMode,
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          // Receipt Number Field
-                         _buildFormCard(
-  icon: FeatherIcons.fileText,
-  label: localization.refundFormReceiptNoLabel,
-  trailing: InkWell(
-    onTap: () async {
-      final result = await context.push('/refund-order-selection');
-      
-      if (result != null && result is Map<String, dynamic>) {
-        final orderId = result['orderId'] as String?;
-        final orderData = result['orderData'] as Map<String, dynamic>?;
-        
-        if (orderId != null && orderData != null) {
-          setState(() {
-            _receiptNoController.text = orderId;
-            // Optionally store orderData for submission
-            // You can add this data to the refund form submission
-          });
-        }
-      }
-    },
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          localization.refundFormSelectOrder,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Colors.orange,
-          ),
-        ),
-        const SizedBox(width: 4),
-        const Icon(
-          FeatherIcons.externalLink,
-          color: Colors.orange,
-          size: 14,
-        ),
-      ],
-    ),
-  ),
-  child: TextFormField(
-    controller: _receiptNoController,
-    readOnly: true, // Make it read-only since we're selecting from a list
-    style: TextStyle(
-      color: theme.textTheme.bodyMedium?.color,
-      fontSize: 15,
-    ),
-    decoration: InputDecoration(
-      hintText: localization.refundFormReceiptNoPlaceholder,
-      hintStyle: TextStyle(
-        color: theme.textTheme.bodyMedium?.color
-            ?.withOpacity(0.5),
-      ),
-      filled: true,
-      fillColor: isDarkMode
-          ? const Color.fromARGB(255, 54, 50, 75)
-          : Colors.grey[100], // Changed to grey to indicate read-only
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(
-          color: _receiptNoError != null
-              ? Colors.red
-              : isDarkMode
-                  ? Colors.white.withOpacity(0.1)
-                  : Colors.grey[300]!,
-        ),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(
-          color: _receiptNoError != null
-              ? Colors.red
-              : isDarkMode
-                  ? Colors.white.withOpacity(0.1)
-                  : Colors.grey[300]!,
-        ),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: Colors.orange,
-          width: 2,
-        ),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: Colors.red,
-        ),
-      ),
-      suffixIcon: _receiptNoController.text.isNotEmpty
-          ? IconButton(
-              icon: Icon(
-                FeatherIcons.x,
-                size: 18,
-                color: theme.textTheme.bodyMedium?.color
-                    ?.withOpacity(0.6),
-              ),
-              onPressed: () {
-                setState(() {
-                  _receiptNoController.clear();
-                  _receiptNoError = null;
-                });
-              },
-            )
-          : null,
-    ),
-    onTap: () async {
-      // Also allow tapping the field itself to open selection
-      final result = await context.push('/refund-order-selection');
-      
-      if (result != null && result is Map<String, dynamic>) {
-        final orderId = result['orderId'] as String?;
-        final orderData = result['orderData'] as Map<String, dynamic>?;
-        
-        if (orderId != null && orderData != null) {
-          setState(() {
-            _receiptNoController.text = orderId;
-          });
-        }
-      }
-    },
-  ),
-  error: _receiptNoError,
-  theme: theme,
-  isDarkMode: isDarkMode,
-),
-
-                          const SizedBox(height: 16),
-
-                          // Description Field
-                          _buildFormCard(
-                            icon: FeatherIcons.messageSquare,
-                            label: localization.refundFormDescriptionLabel,
-                            child: Column(
-                              children: [
-                                TextFormField(
-                                  controller: _descriptionController,
-                                  maxLines: 6,
-                                  style: TextStyle(
-                                    color: theme.textTheme.bodyMedium?.color,
-                                    fontSize: 15,
-                                  ),
-                                  decoration: InputDecoration(
-                                    hintText: localization
-                                        .refundFormDescriptionPlaceholder,
-                                    hintStyle: TextStyle(
-                                      color: theme.textTheme.bodyMedium?.color
-                                          ?.withOpacity(0.5),
-                                    ),
-                                    filled: true,
-                                    fillColor: isDarkMode
-                                        ? const Color.fromARGB(255, 54, 50, 75)
-                                        : Colors.white,
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide(
-                                        color: _descriptionError != null
-                                            ? Colors.red
-                                            : isDarkMode
+                              key: _formKey,
+                              child: Column(
+                                children: [
+                                  // Name Field
+                                  _buildFormCard(
+                                    icon: FeatherIcons.user,
+                                    label: localization.refundFormNameLabel,
+                                    child: TextFormField(
+                                      enabled: false,
+                                      initialValue:
+                                          _profileData?['displayName'] ??
+                                              localization.refundFormNoName,
+                                      style: TextStyle(
+                                        color: theme.textTheme.bodyMedium?.color
+                                            ?.withOpacity(0.6),
+                                        fontSize: 15,
+                                      ),
+                                      decoration: InputDecoration(
+                                        filled: true,
+                                        fillColor: isDarkMode
+                                            ? const Color.fromARGB(
+                                                255, 54, 50, 75)
+                                            : Colors.grey[100],
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: BorderSide(
+                                            color: isDarkMode
                                                 ? Colors.white.withOpacity(0.1)
                                                 : Colors.grey[300]!,
-                                      ),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide(
-                                        color: _descriptionError != null
-                                            ? Colors.red
-                                            : isDarkMode
+                                          ),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: BorderSide(
+                                            color: isDarkMode
                                                 ? Colors.white.withOpacity(0.1)
                                                 : Colors.grey[300]!,
-                                      ),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(
-                                        color: Colors.orange,
-                                        width: 2,
-                                      ),
-                                    ),
-                                    errorBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(
-                                        color: Colors.red,
-                                      ),
-                                    ),
-                                  ),
-                                  onChanged: (value) {
-                                    if (_descriptionError != null) {
-                                      setState(() => _descriptionError = null);
-                                    }
-                                    setState(() {});
-                                  },
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        _descriptionError ??
-                                            localization
-                                                .refundFormDescriptionHelper,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: _descriptionError != null
-                                              ? Colors.red
-                                              : theme
-                                                  .textTheme.bodyMedium?.color
-                                                  ?.withOpacity(0.6),
+                                          ),
+                                        ),
+                                        disabledBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: BorderSide(
+                                            color: isDarkMode
+                                                ? Colors.white.withOpacity(0.1)
+                                                : Colors.grey[300]!,
+                                          ),
                                         ),
                                       ),
                                     ),
-                                    Text(
-                                      '${_descriptionController.text.length}/20',
+                                    theme: theme,
+                                    isDarkMode: isDarkMode,
+                                  ),
+
+                                  const SizedBox(height: 16),
+
+                                  // Email Field
+                                  _buildFormCard(
+                                    icon: FeatherIcons.mail,
+                                    label: localization.refundFormEmailLabel,
+                                    child: TextFormField(
+                                      enabled: false,
+                                      initialValue: _profileData?['email'] ??
+                                          _user?.email ??
+                                          '',
                                       style: TextStyle(
-                                        fontSize: 12,
-                                        color: _descriptionController
-                                                    .text.length >
-                                                20
-                                            ? Colors.red
-                                            : theme.textTheme.bodyMedium?.color
-                                                ?.withOpacity(0.6),
+                                        color: theme.textTheme.bodyMedium?.color
+                                            ?.withOpacity(0.6),
+                                        fontSize: 15,
+                                      ),
+                                      decoration: InputDecoration(
+                                        filled: true,
+                                        fillColor: isDarkMode
+                                            ? const Color.fromARGB(
+                                                255, 54, 50, 75)
+                                            : Colors.grey[100],
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: BorderSide(
+                                            color: isDarkMode
+                                                ? Colors.white.withOpacity(0.1)
+                                                : Colors.grey[300]!,
+                                          ),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: BorderSide(
+                                            color: isDarkMode
+                                                ? Colors.white.withOpacity(0.1)
+                                                : Colors.grey[300]!,
+                                          ),
+                                        ),
+                                        disabledBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: BorderSide(
+                                            color: isDarkMode
+                                                ? Colors.white.withOpacity(0.1)
+                                                : Colors.grey[300]!,
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                            theme: theme,
-                            isDarkMode: isDarkMode,
-                          ),
+                                    theme: theme,
+                                    isDarkMode: isDarkMode,
+                                  ),
 
-                          const SizedBox(height: 24),
+                                  const SizedBox(height: 16),
 
-                          // Submit Button
-                          Container(
-                            width: double.infinity,
-                            height: 54,
-                            decoration: BoxDecoration(
-                              gradient: _isSubmitting
-                                  ? null
-                                  : const LinearGradient(
-                                      colors: [Colors.orange, Colors.pink],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
+                                  // Receipt Number Field
+                                  _buildFormCard(
+                                    icon: FeatherIcons.fileText,
+                                    label:
+                                        localization.refundFormReceiptNoLabel,
+                                    trailing: InkWell(
+                                      onTap: () async {
+                                        final result = await context
+                                            .push('/refund-order-selection');
+
+                                        if (result != null &&
+                                            result is Map<String, dynamic>) {
+                                          final orderId =
+                                              result['orderId'] as String?;
+                                          final orderData = result['orderData']
+                                              as Map<String, dynamic>?;
+
+                                          if (orderId != null &&
+                                              orderData != null) {
+                                            setState(() {
+                                              _receiptNoController.text =
+                                                  orderId;
+                                              _selectedOrderData = orderData;
+                                            });
+                                          }
+                                        }
+                                      },
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            localization.refundFormSelectOrder,
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.orange,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          const Icon(
+                                            FeatherIcons.externalLink,
+                                            color: Colors.orange,
+                                            size: 14,
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                              color: _isSubmitting ? Colors.grey : null,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(12),
-                                onTap: _isSubmitting ? null : _handleSubmit,
-                                child: Center(
-                                  child: _isSubmitting
-                                      ? Shimmer.fromColors(
-                                          baseColor: Colors.white.withOpacity(0.5),
-                                          highlightColor: Colors.white,
-                                          period: const Duration(milliseconds: 1200),
-                                          child: Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              const Icon(
-                                                FeatherIcons.send,
-                                                color: Colors.white,
-                                                size: 20,
+                                    child: TextFormField(
+                                      controller: _receiptNoController,
+                                      readOnly:
+                                          true, // Make it read-only since we're selecting from a list
+                                      style: TextStyle(
+                                        color:
+                                            theme.textTheme.bodyMedium?.color,
+                                        fontSize: 15,
+                                      ),
+                                      decoration: InputDecoration(
+                                        hintText: localization
+                                            .refundFormReceiptNoPlaceholder,
+                                        hintStyle: TextStyle(
+                                          color: theme
+                                              .textTheme.bodyMedium?.color
+                                              ?.withOpacity(0.5),
+                                        ),
+                                        filled: true,
+                                        fillColor: isDarkMode
+                                            ? const Color.fromARGB(
+                                                255, 54, 50, 75)
+                                            : Colors.grey[
+                                                100], // Changed to grey to indicate read-only
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: BorderSide(
+                                            color: _receiptNoError != null
+                                                ? Colors.red
+                                                : isDarkMode
+                                                    ? Colors.white
+                                                        .withOpacity(0.1)
+                                                    : Colors.grey[300]!,
+                                          ),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: BorderSide(
+                                            color: _receiptNoError != null
+                                                ? Colors.red
+                                                : isDarkMode
+                                                    ? Colors.white
+                                                        .withOpacity(0.1)
+                                                    : Colors.grey[300]!,
+                                          ),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: const BorderSide(
+                                            color: Colors.orange,
+                                            width: 2,
+                                          ),
+                                        ),
+                                        errorBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: const BorderSide(
+                                            color: Colors.red,
+                                          ),
+                                        ),
+                                        suffixIcon: _receiptNoController
+                                                .text.isNotEmpty
+                                            ? IconButton(
+                                                icon: Icon(
+                                                  FeatherIcons.x,
+                                                  size: 18,
+                                                  color: theme.textTheme
+                                                      .bodyMedium?.color
+                                                      ?.withOpacity(0.6),
+                                                ),
+                                                onPressed: () {
+                                                  setState(() {
+                                                    _receiptNoController
+                                                        .clear();
+                                                    _receiptNoError = null;
+                                                    _selectedOrderData = null;
+                                                  });
+                                                },
+                                              )
+                                            : null,
+                                      ),
+                                      onTap: () async {
+                                        // Also allow tapping the field itself to open selection
+                                        final result = await context
+                                            .push('/refund-order-selection');
+
+                                        if (result != null &&
+                                            result is Map<String, dynamic>) {
+                                          final orderId =
+                                              result['orderId'] as String?;
+                                          final orderData = result['orderData']
+                                              as Map<String, dynamic>?;
+
+                                          if (orderId != null &&
+                                              orderData != null) {
+                                            setState(() {
+                                              _receiptNoController.text =
+                                                  orderId;
+                                              _selectedOrderData = orderData;
+                                            });
+                                          }
+                                        }
+                                      },
+                                    ),
+                                    error: _receiptNoError,
+                                    theme: theme,
+                                    isDarkMode: isDarkMode,
+                                  ),
+
+                                  const SizedBox(height: 16),
+
+                                  // Description Field
+                                  _buildFormCard(
+                                    icon: FeatherIcons.messageSquare,
+                                    label:
+                                        localization.refundFormDescriptionLabel,
+                                    child: Column(
+                                      children: [
+                                        TextFormField(
+                                          controller: _descriptionController,
+                                          maxLines: 6,
+                                          style: TextStyle(
+                                            color: theme
+                                                .textTheme.bodyMedium?.color,
+                                            fontSize: 15,
+                                          ),
+                                          decoration: InputDecoration(
+                                            hintText: localization
+                                                .refundFormDescriptionPlaceholder,
+                                            hintStyle: TextStyle(
+                                              color: theme
+                                                  .textTheme.bodyMedium?.color
+                                                  ?.withOpacity(0.5),
+                                            ),
+                                            filled: true,
+                                            fillColor: isDarkMode
+                                                ? const Color.fromARGB(
+                                                    255, 54, 50, 75)
+                                                : Colors.white,
+                                            border: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              borderSide: BorderSide(
+                                                color: _descriptionError != null
+                                                    ? Colors.red
+                                                    : isDarkMode
+                                                        ? Colors.white
+                                                            .withOpacity(0.1)
+                                                        : Colors.grey[300]!,
                                               ),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                localization.refundFormSubmitting,
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w600,
+                                            ),
+                                            enabledBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              borderSide: BorderSide(
+                                                color: _descriptionError != null
+                                                    ? Colors.red
+                                                    : isDarkMode
+                                                        ? Colors.white
+                                                            .withOpacity(0.1)
+                                                        : Colors.grey[300]!,
+                                              ),
+                                            ),
+                                            focusedBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              borderSide: const BorderSide(
+                                                color: Colors.orange,
+                                                width: 2,
+                                              ),
+                                            ),
+                                            errorBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              borderSide: const BorderSide(
+                                                color: Colors.red,
+                                              ),
+                                            ),
+                                          ),
+                                          onChanged: (value) {
+                                            if (_descriptionError != null) {
+                                              setState(() =>
+                                                  _descriptionError = null);
+                                            }
+                                            setState(() {});
+                                          },
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                _descriptionError ??
+                                                    localization
+                                                        .refundFormDescriptionHelper,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: _descriptionError !=
+                                                          null
+                                                      ? Colors.red
+                                                      : theme.textTheme
+                                                          .bodyMedium?.color
+                                                          ?.withOpacity(0.6),
                                                 ),
                                               ),
-                                            ],
-                                          ),
-                                        )
-                                      : Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            const Icon(
-                                              FeatherIcons.send,
-                                              color: Colors.white,
-                                              size: 20,
                                             ),
-                                            const SizedBox(width: 8),
                                             Text(
-                                              localization
-                                                  .refundFormSubmitButton,
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
+                                              '${_descriptionController.text.length}/20',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: _descriptionController
+                                                            .text.length >
+                                                        20
+                                                    ? Colors.red
+                                                    : theme.textTheme.bodyMedium
+                                                        ?.color
+                                                        ?.withOpacity(0.6),
                                               ),
                                             ),
                                           ],
                                         ),
-                                ),
-                              ),
-                            ),
-                          ),
+                                      ],
+                                    ),
+                                    theme: theme,
+                                    isDarkMode: isDarkMode,
+                                  ),
 
-                          const SizedBox(height: 24),
+                                  const SizedBox(height: 24),
 
-                          // Info Section
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: isDarkMode
-                                  ? Colors.blue.withOpacity(0.1)
-                                  : Colors.blue[50],
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isDarkMode
-                                    ? Colors.blue.withOpacity(0.3)
-                                    : Colors.blue[200]!,
+                                  // Submit Button
+                                  Container(
+                                    width: double.infinity,
+                                    height: 54,
+                                    decoration: BoxDecoration(
+                                      gradient: _isSubmitting
+                                          ? null
+                                          : const LinearGradient(
+                                              colors: [
+                                                Colors.orange,
+                                                Colors.pink
+                                              ],
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                            ),
+                                      color: _isSubmitting ? Colors.grey : null,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(12),
+                                        onTap: _isSubmitting
+                                            ? null
+                                            : _handleSubmit,
+                                        child: Center(
+                                          child: _isSubmitting
+                                              ? Shimmer.fromColors(
+                                                  baseColor: Colors.white
+                                                      .withOpacity(0.5),
+                                                  highlightColor: Colors.white,
+                                                  period: const Duration(
+                                                      milliseconds: 1200),
+                                                  child: Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      const Icon(
+                                                        FeatherIcons.send,
+                                                        color: Colors.white,
+                                                        size: 20,
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      Text(
+                                                        localization
+                                                            .refundFormSubmitting,
+                                                        style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                )
+                                              : Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    const Icon(
+                                                      FeatherIcons.send,
+                                                      color: Colors.white,
+                                                      size: 20,
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      localization
+                                                          .refundFormSubmitButton,
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 24),
+
+                                  // Info Section
+                                  Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: isDarkMode
+                                          ? Colors.blue.withOpacity(0.1)
+                                          : Colors.blue[50],
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isDarkMode
+                                            ? Colors.blue.withOpacity(0.3)
+                                            : Colors.blue[200]!,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      localization.refundFormInfoMessage,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: isDarkMode
+                                            ? Colors.blue[300]
+                                            : Colors.blue[800],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            child: Text(
-                              localization.refundFormInfoMessage,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: isDarkMode
-                                    ? Colors.blue[300]
-                                    : Colors.blue[800],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                           ),
                         );
                       },
@@ -841,12 +925,10 @@ class _RefundFormScreenState extends State<RefundFormScreen> {
   Widget _buildFormShimmer(bool isDarkMode) {
     return SafeArea(
       child: Shimmer.fromColors(
-        baseColor: isDarkMode
-            ? const Color(0xFF1E1C2C)
-            : const Color(0xFFE0E0E0),
-        highlightColor: isDarkMode
-            ? const Color(0xFF211F31)
-            : const Color(0xFFF5F5F5),
+        baseColor:
+            isDarkMode ? const Color(0xFF1E1C2C) : const Color(0xFFE0E0E0),
+        highlightColor:
+            isDarkMode ? const Color(0xFF211F31) : const Color(0xFFF5F5F5),
         period: const Duration(milliseconds: 1200),
         child: SingleChildScrollView(
           physics: const NeverScrollableScrollPhysics(),

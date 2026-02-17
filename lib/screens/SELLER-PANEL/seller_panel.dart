@@ -1190,6 +1190,16 @@ class _ShopNotificationsBottomSheetState
       }
     }
 
+    if (type == 'ad_approved') {
+      final adType = data['adType'] as String? ?? '';
+      return l10n.adApproved2(adType);
+    }
+
+    if (type == 'ad_rejected') {
+      final adType = data['adType'] as String? ?? '';
+      return l10n.adRejected2(adType);
+    }
+
     if (type == 'product_archived_by_admin') {
       final productName = data['productName'] as String? ?? '';
       final needsUpdate = data['needsUpdate'] as bool? ?? false;
@@ -1261,6 +1271,10 @@ class _ShopNotificationsBottomSheetState
         return Icons.archive_rounded;
       case 'payment':
         return Icons.payments_rounded;
+      case 'ad_approved':
+        return Icons.check_circle_rounded;
+      case 'ad_rejected':
+        return Icons.cancel_rounded;
       case 'shipment':
         return Icons.local_shipping_rounded;
       case 'campaign':
@@ -1291,6 +1305,10 @@ class _ShopNotificationsBottomSheetState
         return const Color(0xFFFF5722);
       case 'payment':
         return const Color(0xFF9C27B0);
+      case 'ad_approved':
+        return const Color(0xFF4CAF50);
+      case 'ad_rejected':
+        return const Color(0xFFE53935);
       case 'boost_expired':
         return const Color(0xFFFF9800);
       case 'shipment':
@@ -1609,11 +1627,23 @@ class _ShopNotificationsBottomSheetState
               router.push('/seller_panel_reviews/$shopId');
             }
             break;
+          case 'ad_approved':
+          case 'ad_rejected':
+            if (router != null) {
+              final shopName = data['shopName'] as String? ?? '';
+              router.push('/seller-panel/ads_screen', extra: {
+                'shopId': shopId,
+                'shopName': shopName,
+              });
+            }
+            break;
           case 'boost_expired':
             _safeAnimateToTab(tabController, 5); // Ads tab
             break;
           case 'product_archived_by_admin':
-            _safeAnimateToTab(tabController, 1); // Products tab
+            if (router != null) {
+              router.push('/seller_panel_archived_screen');
+            }
             break;
           case 'product_question':
             if (shopId != null && router != null) {

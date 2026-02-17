@@ -4415,6 +4415,16 @@ class AppLocalizationsTr extends AppLocalizations {
   String get addProductFirst => 'Ürün Ekle';
 
   @override
+  String adApproved2(String adType) {
+    return '$adType reklam başvurunuz onaylandı.';
+  }
+
+  @override
+  String adRejected2(String adType) {
+    return '$adType reklam başvurunuz reddedildi.';
+  }
+
+  @override
   String get salesPausedTitle => 'Satışlar Geçici Olarak Durduruldu';
 
   @override

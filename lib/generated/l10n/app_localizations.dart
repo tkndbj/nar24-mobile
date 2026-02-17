@@ -8704,6 +8704,18 @@ abstract class AppLocalizations {
   /// **'Ürün Ekle'**
   String get addProductFirst;
 
+  /// No description provided for @adApproved2.
+  ///
+  /// In tr, this message translates to:
+  /// **'{adType} reklam başvurunuz onaylandı.'**
+  String adApproved2(String adType);
+
+  /// No description provided for @adRejected2.
+  ///
+  /// In tr, this message translates to:
+  /// **'{adType} reklam başvurunuz reddedildi.'**
+  String adRejected2(String adType);
+
   /// No description provided for @salesPausedTitle.
   ///
   /// In tr, this message translates to:

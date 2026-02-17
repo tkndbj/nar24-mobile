@@ -5754,6 +5754,9 @@ function getWebRoute(type, shopId, orderId) {
       return `/archived/${shopId}`;
     case 'boost_expired':
       return '/boostanalysis';
+    case 'ad_approved':
+    case 'ad_rejected':
+      return `/homescreen-ads`;
     default:
       return '/dashboard';
   }
@@ -5893,10 +5896,14 @@ export const sendShopNotificationOnCreation = onDocumentCreated({
       route = `/seller-panel?shopId=${shopId}&tab=5`;
       break;
       case 'product_archived_by_admin':
-        route = `/seller-panel?shopId=${shopId}&tab=1`;  // Products tab
-        break;
+  route = `/seller_panel_archived_screen`;
+  break;
     case 'campaign_ended':
       route = `/seller-panel?shopId=${shopId}&tab=0`;
+      break;
+    case 'ad_approved':
+    case 'ad_rejected':
+      route = `/seller-panel?shopId=${shopId}&tab=5`; 
       break;
   }
 
@@ -5942,6 +5949,7 @@ export const sendShopNotificationOnCreation = onDocumentCreated({
       '{campaignName}': notificationData.campaignName,
       '{quantity}': notificationData.quantity,
       '{rating}': notificationData.rating,
+      '{rejectionReason}': notificationData.rejectionReason,
     };
 
     Object.entries(replacements).forEach(([placeholder, value]) => {

@@ -4410,6 +4410,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addProductFirst => 'Add Product';
 
   @override
+  String adApproved2(String adType) {
+    return 'Your $adType ad application has been approved.';
+  }
+
+  @override
+  String adRejected2(String adType) {
+    return 'Your $adType ad application has been rejected.';
+  }
+
+  @override
   String get salesPausedTitle => 'Sales Temporarily Paused';
 
   @override

@@ -229,9 +229,8 @@ class _RefundOrderSelectionScreenState
           margin: const EdgeInsets.all(16),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: isDarkMode
-                ? Colors.orange.withOpacity(0.1)
-                : Colors.orange[50],
+            color:
+                isDarkMode ? Colors.orange.withOpacity(0.1) : Colors.orange[50],
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isDarkMode
@@ -296,18 +295,19 @@ class _RefundOrderSelectionScreenState
     bool isDarkMode,
   ) {
     final isSelected = _selectedOrderId == orderId;
-    final productName = orderData['productName'] as String? ?? 'Unknown Product';
+    final productName =
+        orderData['productName'] as String? ?? 'Unknown Product';
     final price = (orderData['price'] as num?)?.toDouble() ?? 0.0;
     final currency = orderData['currency'] as String? ?? 'TRY';
     final quantity = (orderData['quantity'] as num?)?.toInt() ?? 1;
     final timestamp = orderData['timestamp'] as Timestamp?;
     final sellerName = orderData['sellerName'] as String? ?? 'Unknown Seller';
-    
+
     // Get image
     final selectedColorImage = orderData['selectedColorImage'] as String?;
     final productImage = orderData['productImage'] as String? ?? '';
-    final imageUrl = (selectedColorImage?.isNotEmpty == true) 
-        ? selectedColorImage! 
+    final imageUrl = (selectedColorImage?.isNotEmpty == true)
+        ? selectedColorImage!
         : productImage;
 
     String dateText = '';
@@ -319,9 +319,8 @@ class _RefundOrderSelectionScreenState
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: isDarkMode
-            ? const Color.fromARGB(255, 33, 31, 49)
-            : Colors.white,
+        color:
+            isDarkMode ? const Color.fromARGB(255, 33, 31, 49) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isSelected
@@ -331,7 +330,6 @@ class _RefundOrderSelectionScreenState
                   : Colors.grey[200]!,
           width: isSelected ? 2 : 1,
         ),
-       
       ),
       child: Material(
         color: Colors.transparent,
@@ -554,9 +552,8 @@ class _RefundOrderSelectionScreenState
         16 + MediaQuery.of(context).padding.bottom,
       ),
       decoration: BoxDecoration(
-        color: isDarkMode
-            ? const Color.fromARGB(255, 33, 31, 49)
-            : Colors.white,
+        color:
+            isDarkMode ? const Color.fromARGB(255, 33, 31, 49) : Colors.white,
       ),
       child: Container(
         height: 54,
