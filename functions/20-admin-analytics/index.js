@@ -1,11 +1,17 @@
 /**
  * Admin Analytics Module
  *
- * Computes weekly analytics by scanning activity_events (clicks, views, carts, favorites, searches)
- * and reading pre-computed weekly_sales_accounting data (revenue, orders, quantities).
+ * Computes weekly analytics by reading daily_engagement_summary docs
+ * (pre-aggregated by the daily engagement CF). Falls back to scanning
+ * raw activity_events if any daily summary is missing.
+ *
+ * Also reads pre-computed weekly_sales_accounting data (revenue, orders).
  *
  * Writes results to admin_analytics/{weekId}.
- * No redundant order queries — relies entirely on already-denormalized data.
+ *
+ * Cost at scale:
+ *   With daily summaries: 7 reads per week (essentially free)
+ *   Without summaries (fallback): scans raw events (scales with traffic)
  */
 import admin from 'firebase-admin';
 import {onSchedule} from 'firebase-functions/v2/scheduler';
@@ -119,8 +125,8 @@ export async function computeWeeklyAnalytics(
   );
 
   try {
-    // ── 3. Scan activity events for the week ───────────────────
-    const engagement = await scanActivityEvents(db, weekStartDate, weekEndDate, weekId);
+    // ── 3. Get engagement data (daily summaries or raw fallback) ──
+    const engagement = await getEngagementData(db, weekStartDate, weekEndDate, weekId);
 
     // ── 4. Read pre-computed sales data ────────────────────────
     const sales = await readSalesData(db, weekId);
@@ -160,20 +166,299 @@ export async function computeWeeklyAnalytics(
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SCAN ACTIVITY EVENTS (7 day shards)
+// GET ENGAGEMENT DATA
+// Primary: read daily_engagement_summary docs (7 reads)
+// Fallback: scan raw events for any missing days
 // ═══════════════════════════════════════════════════════════════
 
-async function scanActivityEvents(db, weekStart, weekEnd, weekId) {
+async function getEngagementData(db, weekStart, weekEnd, weekId) {
   const dates = getDateStrings(weekStart, weekEnd);
 
-  // Aggregation maps
-  const categoryEngagement = new Map(); // key: "cat|subcat|subsubcat"
-  const sellerClicks = new Map(); // key: shopId
-  const brandEngagement = new Map(); // key: brand name
-  const genderEngagement = new Map(); // key: gender value
+  // ── 1. Try reading daily summaries ────────────────────────
+  const summaryDocs = await Promise.all(
+    dates.map((d) => db.collection('daily_engagement_summary').doc(d).get()),
+  );
+
+  const availableSummaries = [];
+  const missingDates = [];
+
+  for (let i = 0; i < dates.length; i++) {
+    const doc = summaryDocs[i];
+    if (doc.exists && doc.data().status === 'completed') {
+      availableSummaries.push(doc.data());
+    } else {
+      missingDates.push(dates[i]);
+    }
+  }
+
+  if (availableSummaries.length === dates.length) {
+    console.log(`📊 Analytics ${weekId}: all ${dates.length} daily summaries found — merging`);
+    return mergeDailySummaries(availableSummaries);
+  }
+
+  if (missingDates.length > 0 && missingDates.length < dates.length) {
+    // Partial: merge available summaries + scan missing days
+    console.log(
+      `📊 Analytics ${weekId}: ${availableSummaries.length} summaries found, ` +
+        `scanning ${missingDates.length} missing days: ${missingDates.join(', ')}`,
+    );
+    const merged = availableSummaries.length > 0 ? mergeDailySummaries(availableSummaries) : createEmptyEngagement();
+    const scanned = await scanRawDays(db, missingDates, weekId);
+    return mergeEngagementData(merged, scanned);
+  }
+
+  // No summaries at all — full raw scan
+  console.log(`📊 Analytics ${weekId}: no daily summaries — falling back to raw scan`);
+  return scanRawDays(db, dates, weekId);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MERGE DAILY SUMMARIES → engagement data structure
+// Converts serialized Firestore objects back to Maps
+// ═══════════════════════════════════════════════════════════════
+
+function mergeDailySummaries(summaries) {
+  const categoryEngagement = new Map();
+  const sellerClicks = new Map();
+  const brandEngagement = new Map();
+  const genderEngagement = new Map();
+  const searchTerms = new Map();
+
+  let totalClicks = 0;
+  let totalViews = 0;
+  let totalCartAdds = 0;
+  let totalFavorites = 0;
+  let totalSearches = 0;
+  let totalPurchaseEvents = 0;
+  let totalEvents = 0;
+  let uniqueProductCount = 0;
+  let uniqueUserCount = 0;
+
+  for (const s of summaries) {
+    // Totals
+    const t = s.totals || {};
+    totalClicks += t.totalClicks || 0;
+    totalViews += t.totalViews || 0;
+    totalCartAdds += t.totalCartAdds || 0;
+    totalFavorites += t.totalFavorites || 0;
+    totalSearches += t.totalSearches || 0;
+    totalPurchaseEvents += t.totalPurchaseEvents || 0;
+    totalEvents += t.totalEvents || 0;
+    uniqueProductCount += s.uniqueProductCount || 0;
+    uniqueUserCount += s.uniqueUserCount || 0;
+
+    // Category engagement
+    for (const [key, val] of Object.entries(s.categoryEngagement || {})) {
+      if (!categoryEngagement.has(key)) {
+        categoryEngagement.set(key, {
+          category: val.category,
+          subcategory: val.subcategory,
+          subsubcategory: val.subsubcategory,
+          clicks: 0, views: 0, cartAdds: 0, favorites: 0, purchases: 0,
+        });
+      }
+      const cat = categoryEngagement.get(key);
+      cat.clicks += val.clicks || 0;
+      cat.views += val.views || 0;
+      cat.cartAdds += val.cartAdds || 0;
+      cat.favorites += val.favorites || 0;
+      cat.purchases += val.purchases || 0;
+    }
+
+    // Brand engagement
+    for (const [key, val] of Object.entries(s.brandEngagement || {})) {
+      if (!brandEngagement.has(key)) {
+        brandEngagement.set(key, {
+          brand: val.brand,
+          clicks: 0, views: 0, cartAdds: 0, favorites: 0, purchases: 0,
+        });
+      }
+      const b = brandEngagement.get(key);
+      b.clicks += val.clicks || 0;
+      b.views += val.views || 0;
+      b.cartAdds += val.cartAdds || 0;
+      b.favorites += val.favorites || 0;
+      b.purchases += val.purchases || 0;
+    }
+
+    // Gender engagement (counts summed — approximate unique users)
+    for (const [key, val] of Object.entries(s.genderEngagement || {})) {
+      if (!genderEngagement.has(key)) {
+        genderEngagement.set(key, {
+          gender: val.gender,
+          clicks: 0, views: 0, cartAdds: 0, favorites: 0, purchases: 0,
+          // Duck-typed: buildAnalytics accesses .uniqueUsers.size
+          uniqueUsers: {size: 0},
+        });
+      }
+      const g = genderEngagement.get(key);
+      g.clicks += val.clicks || 0;
+      g.views += val.views || 0;
+      g.cartAdds += val.cartAdds || 0;
+      g.favorites += val.favorites || 0;
+      g.purchases += val.purchases || 0;
+      g.uniqueUsers.size += val.uniqueUserCount || 0;
+    }
+
+    // Seller clicks (counts summed — approximate unique products)
+    for (const [key, val] of Object.entries(s.sellerClicks || {})) {
+      if (!sellerClicks.has(key)) {
+        sellerClicks.set(key, {
+          shopId: val.shopId,
+          clicks: 0, views: 0,
+          // Duck-typed: buildAnalytics accesses .products.size
+          products: {size: 0},
+        });
+      }
+      const seller = sellerClicks.get(key);
+      seller.clicks += val.clicks || 0;
+      seller.views += val.views || 0;
+      seller.products.size += val.uniqueProductCount || 0;
+    }
+
+    // Search terms
+    for (const [term, count] of Object.entries(s.searchTerms || {})) {
+      searchTerms.set(term, (searchTerms.get(term) || 0) + count);
+    }
+  }
+
+  return {
+    categoryEngagement,
+    sellerClicks,
+    brandEngagement,
+    genderEngagement,
+    searchTerms,
+    uniqueProducts: uniqueProductCount,
+    uniqueUsers: uniqueUserCount,
+    totals: {
+      totalClicks, totalViews, totalCartAdds,
+      totalFavorites, totalSearches, totalPurchaseEvents, totalEvents,
+    },
+  };
+}
+
+function createEmptyEngagement() {
+  return {
+    categoryEngagement: new Map(),
+    sellerClicks: new Map(),
+    brandEngagement: new Map(),
+    genderEngagement: new Map(),
+    searchTerms: new Map(),
+    uniqueProducts: 0,
+    uniqueUsers: 0,
+    totals: {
+      totalClicks: 0, totalViews: 0, totalCartAdds: 0,
+      totalFavorites: 0, totalSearches: 0, totalPurchaseEvents: 0, totalEvents: 0,
+    },
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MERGE TWO ENGAGEMENT DATA OBJECTS
+// Used when combining summary-based data with raw-scan data
+// ═══════════════════════════════════════════════════════════════
+
+function mergeEngagementData(a, b) {
+  // Merge category maps
+  for (const [key, val] of b.categoryEngagement) {
+    if (!a.categoryEngagement.has(key)) {
+      a.categoryEngagement.set(key, {...val});
+    } else {
+      const existing = a.categoryEngagement.get(key);
+      existing.clicks += val.clicks;
+      existing.views += val.views;
+      existing.cartAdds += val.cartAdds;
+      existing.favorites += val.favorites;
+      existing.purchases += val.purchases;
+    }
+  }
+
+  // Merge brand maps
+  for (const [key, val] of b.brandEngagement) {
+    if (!a.brandEngagement.has(key)) {
+      a.brandEngagement.set(key, {...val});
+    } else {
+      const existing = a.brandEngagement.get(key);
+      existing.clicks += val.clicks;
+      existing.views += val.views;
+      existing.cartAdds += val.cartAdds;
+      existing.favorites += val.favorites;
+      existing.purchases += val.purchases;
+    }
+  }
+
+  // Merge gender maps
+  for (const [key, val] of b.genderEngagement) {
+    if (!a.genderEngagement.has(key)) {
+      a.genderEngagement.set(key, {...val});
+    } else {
+      const existing = a.genderEngagement.get(key);
+      existing.clicks += val.clicks;
+      existing.views += val.views;
+      existing.cartAdds += val.cartAdds;
+      existing.favorites += val.favorites;
+      existing.purchases += val.purchases;
+      // For Sets: add sizes; for duck-typed objects: add .size
+      const bSize = val.uniqueUsers instanceof Set ? val.uniqueUsers.size : (val.uniqueUsers?.size || 0);
+      if (existing.uniqueUsers instanceof Set) {
+        // Can't merge Sets from different sources, convert to count
+        existing.uniqueUsers = {size: existing.uniqueUsers.size + bSize};
+      } else {
+        existing.uniqueUsers.size += bSize;
+      }
+    }
+  }
+
+  // Merge seller maps
+  for (const [key, val] of b.sellerClicks) {
+    if (!a.sellerClicks.has(key)) {
+      a.sellerClicks.set(key, {...val});
+    } else {
+      const existing = a.sellerClicks.get(key);
+      existing.clicks += val.clicks;
+      existing.views += val.views;
+      const bSize = val.products instanceof Set ? val.products.size : (val.products?.size || 0);
+      if (existing.products instanceof Set) {
+        existing.products = {size: existing.products.size + bSize};
+      } else {
+        existing.products.size += bSize;
+      }
+    }
+  }
+
+  // Merge search terms
+  for (const [term, count] of b.searchTerms) {
+    a.searchTerms.set(term, (a.searchTerms.get(term) || 0) + count);
+  }
+
+  // Merge totals
+  a.totals.totalClicks += b.totals.totalClicks;
+  a.totals.totalViews += b.totals.totalViews;
+  a.totals.totalCartAdds += b.totals.totalCartAdds;
+  a.totals.totalFavorites += b.totals.totalFavorites;
+  a.totals.totalSearches += b.totals.totalSearches;
+  a.totals.totalPurchaseEvents += b.totals.totalPurchaseEvents;
+  a.totals.totalEvents += b.totals.totalEvents;
+  a.uniqueProducts += b.uniqueProducts;
+  a.uniqueUsers += b.uniqueUsers;
+
+  return a;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RAW SCAN FALLBACK (for missing daily summaries)
+// Same logic as before but only for specific dates
+// ═══════════════════════════════════════════════════════════════
+
+async function scanRawDays(db, dates, weekId) {
+  const categoryEngagement = new Map();
+  const sellerClicks = new Map();
+  const brandEngagement = new Map();
+  const genderEngagement = new Map();
   const searchTerms = new Map();
   const uniqueProducts = new Set();
   const uniqueUsers = new Set();
+
   let totalClicks = 0;
   let totalViews = 0;
   let totalCartAdds = 0;
@@ -198,9 +483,8 @@ async function scanActivityEvents(db, weekStart, weekEnd, weekId) {
 
       const snap = await q.get();
       if (snap.empty) {
-        hasMore = false;
-        break;
-      }
+        hasMore = false; break;
+    }
 
       for (const doc of snap.docs) {
         const e = doc.data();
@@ -211,46 +495,28 @@ async function scanActivityEvents(db, weekStart, weekEnd, weekId) {
 
         const type = e.type;
 
-        // ── Category engagement (including purchases for funnel) ──
         if (e.category && ['click', 'view', 'addToCart', 'favorite', 'purchase'].includes(type)) {
-          const catKey = [
-            e.category,
-            e.subcategory || '',
-            e.subsubcategory || '',
-          ].join('|');
-
+          const catKey = [e.category, e.subcategory || '', e.subsubcategory || ''].join('|');
           if (!categoryEngagement.has(catKey)) {
             categoryEngagement.set(catKey, {
-              category: e.category,
-              subcategory: e.subcategory || null,
+              category: e.category, subcategory: e.subcategory || null,
               subsubcategory: e.subsubcategory || null,
-              clicks: 0,
-              views: 0,
-              cartAdds: 0,
-              favorites: 0,
-              purchases: 0,
+              clicks: 0, views: 0, cartAdds: 0, favorites: 0, purchases: 0,
             });
           }
           const cat = categoryEngagement.get(catKey);
-
           if (type === 'click') {
-            cat.clicks++;
-            totalClicks++;
-          } else if (type === 'view') {
-            cat.views++;
-            totalViews++;
-          } else if (type === 'addToCart') {
-            cat.cartAdds++;
-            totalCartAdds++;
-          } else if (type === 'favorite') {
-            cat.favorites++;
-            totalFavorites++;
-          } else if (type === 'purchase') {
-            cat.purchases++;
-            totalPurchaseEvents++;
-          }
+             cat.clicks++; totalClicks++;
+             }          else if (type === 'view') {
+                 cat.views++; totalViews++;
+                 }          else if (type === 'addToCart') {
+                     cat.cartAdds++; totalCartAdds++;
+                     }          else if (type === 'favorite') {
+                         cat.favorites++; totalFavorites++;
+                         }          else if (type === 'purchase') {
+                             cat.purchases++; totalPurchaseEvents++;
+                             }
         } else {
-          // Count totals even without category
           if (type === 'click') totalClicks++;
           else if (type === 'view') totalViews++;
           else if (type === 'addToCart') totalCartAdds++;
@@ -258,20 +524,13 @@ async function scanActivityEvents(db, weekStart, weekEnd, weekId) {
           else if (type === 'purchase') totalPurchaseEvents++;
         }
 
-        // ── Brand engagement ─────────────────────────────────────
         if (e.brand && ['click', 'view', 'addToCart', 'favorite', 'purchase'].includes(type)) {
-          const brandKey = e.brand;
-          if (!brandEngagement.has(brandKey)) {
-            brandEngagement.set(brandKey, {
-              brand: brandKey,
-              clicks: 0,
-              views: 0,
-              cartAdds: 0,
-              favorites: 0,
-              purchases: 0,
+          if (!brandEngagement.has(e.brand)) {
+            brandEngagement.set(e.brand, {
+              brand: e.brand, clicks: 0, views: 0, cartAdds: 0, favorites: 0, purchases: 0,
             });
           }
-          const b = brandEngagement.get(brandKey);
+          const b = brandEngagement.get(e.brand);
           if (type === 'click') b.clicks++;
           else if (type === 'view') b.views++;
           else if (type === 'addToCart') b.cartAdds++;
@@ -279,21 +538,14 @@ async function scanActivityEvents(db, weekStart, weekEnd, weekId) {
           else if (type === 'purchase') b.purchases++;
         }
 
-        // ── Gender engagement ────────────────────────────────────
         if (e.gender && ['click', 'view', 'addToCart', 'favorite', 'purchase'].includes(type)) {
-          const gKey = e.gender;
-          if (!genderEngagement.has(gKey)) {
-            genderEngagement.set(gKey, {
-              gender: gKey,
-              clicks: 0,
-              views: 0,
-              cartAdds: 0,
-              favorites: 0,
-              purchases: 0,
+          if (!genderEngagement.has(e.gender)) {
+            genderEngagement.set(e.gender, {
+              gender: e.gender, clicks: 0, views: 0, cartAdds: 0, favorites: 0, purchases: 0,
               uniqueUsers: new Set(),
             });
           }
-          const g = genderEngagement.get(gKey);
+          const g = genderEngagement.get(e.gender);
           if (type === 'click') g.clicks++;
           else if (type === 'view') g.views++;
           else if (type === 'addToCart') g.cartAdds++;
@@ -302,14 +554,10 @@ async function scanActivityEvents(db, weekStart, weekEnd, weekId) {
           if (e.userId) g.uniqueUsers.add(e.userId);
         }
 
-        // ── Seller clicks ──────────────────────────────────────
         if (e.shopId && (type === 'click' || type === 'view')) {
           if (!sellerClicks.has(e.shopId)) {
             sellerClicks.set(e.shopId, {
-              shopId: e.shopId,
-              clicks: 0,
-              views: 0,
-              products: new Set(),
+              shopId: e.shopId, clicks: 0, views: 0, products: new Set(),
             });
           }
           const seller = sellerClicks.get(e.shopId);
@@ -318,30 +566,19 @@ async function scanActivityEvents(db, weekStart, weekEnd, weekId) {
           if (e.productId) seller.products.add(e.productId);
         }
 
-        // ── Search terms ───────────────────────────────────────
         if (type === 'search' && e.searchQuery) {
           totalSearches++;
           const term = e.searchQuery.toLowerCase().trim().substring(0, 80);
-          if (term.length > 0) {
-            searchTerms.set(term, (searchTerms.get(term) || 0) + 1);
-          }
+          if (term.length > 0) searchTerms.set(term, (searchTerms.get(term) || 0) + 1);
         }
       }
 
       cursor = snap.docs[snap.docs.length - 1];
       if (snap.docs.length < PAGE_SIZE) hasMore = false;
     }
-
-    if (totalEvents > 0 && totalEvents % 5000 === 0) {
-      console.log(`📦 Analytics ${weekId}: ${totalEvents} events scanned so far`);
-    }
   }
 
-  console.log(
-    `📊 Analytics ${weekId}: scan complete — ${totalEvents} events, ` +
-      `${categoryEngagement.size} categories, ${brandEngagement.size} brands, ` +
-      `${genderEngagement.size} genders, ${sellerClicks.size} sellers`,
-  );
+  console.log(`📊 Analytics ${weekId}: raw scan of ${dates.length} days — ${totalEvents} events`);
 
   return {
     categoryEngagement,
@@ -352,13 +589,8 @@ async function scanActivityEvents(db, weekStart, weekEnd, weekId) {
     uniqueProducts: uniqueProducts.size,
     uniqueUsers: uniqueUsers.size,
     totals: {
-      totalClicks,
-      totalViews,
-      totalCartAdds,
-      totalFavorites,
-      totalSearches,
-      totalPurchaseEvents,
-      totalEvents,
+      totalClicks, totalViews, totalCartAdds,
+      totalFavorites, totalSearches, totalPurchaseEvents, totalEvents,
     },
   };
 }

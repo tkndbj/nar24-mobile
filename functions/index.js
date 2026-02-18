@@ -14580,3 +14580,4 @@ export {alertOnPaymentIssue, detectPaymentAnomalies} from './18-payment-alerts/i
 export {weeklyAccountingScheduled, triggerWeeklyAccounting} from './19-accounting-sales-reports/index.js';
 export { weeklyAnalyticsScheduled, triggerWeeklyAnalytics } from './20-admin-analytics/index.js';
 export { monthlyAnalyticsSummaryScheduled, triggerMonthlySummary } from './21-admin-analytics-summary/index.js';
+export { dailyEngagementScheduled, triggerDailyEngagement } from './22-daily-aggregated-analytics-summary/index.js';
