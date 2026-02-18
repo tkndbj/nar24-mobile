@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../user_provider.dart';
-import '../../providers/profile_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 
@@ -96,16 +95,12 @@ class _CompleteNameScreenState extends State<CompleteNameScreen> {
       // This ensures immediate consistency without waiting for Firestore fetch
       userProvider.updateLocalProfileField('displayName', displayName);
 
-      // Step 6: Refresh ProfileProvider for profile screen
-      // Do this BEFORE navigation to ensure data is ready
+      // Step 6: Refresh UserProvider — ProfileProvider auto-syncs via its listener
       if (mounted) {
         try {
-          final profileProvider =
-              Provider.of<ProfileProvider>(context, listen: false);
-          // Force server fetch to get the updated name
-          await profileProvider.refreshUser();
+          await Provider.of<UserProvider>(context, listen: false).refreshUser();
         } catch (e) {
-          debugPrint('ProfileProvider refresh: $e');
+          debugPrint('UserProvider refresh: $e');
         }
       }
 

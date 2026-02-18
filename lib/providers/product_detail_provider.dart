@@ -122,10 +122,15 @@ class ProductDetailProvider with ChangeNotifier {
   // ✅ FIXED: Cache TTL for SharedPreferences cleanup
   static const Duration _sellerCacheTTL = Duration(hours: 1);
 
+  /// Optional hint for the source Firestore collection ('products' or 'shop_products').
+  /// When provided (and no [initialProduct]), skips the redundant dual-collection read.
+  final String? sourceCollection;
+
   ProductDetailProvider({
     required this.productId,
     required this.repository,
     this.initialProduct,
+    this.sourceCollection,
   }) {
     if (productId.trim().isEmpty) {
       throw ArgumentError('ProductId cannot be empty');
@@ -142,12 +147,17 @@ class ProductDetailProvider with ChangeNotifier {
 
     if (initialProduct != null) {
       _product = initialProduct;
-      // Determine collection based on shopId RIGHT AWAY
-      _productCollection = (initialProduct!.shopId?.isNotEmpty == true)
-          ? 'shop_products'
-          : 'products';
-      _collectionDetermined = true; // ← Set this immediately too
+      // Prefer explicit sourceCollection from the product model, fall back to shopId heuristic
+      _productCollection = initialProduct!.sourceCollection
+          ?? ((initialProduct!.shopId?.isNotEmpty == true)
+              ? 'shop_products'
+              : 'products');
+      _collectionDetermined = true;
       _safeNotifyListeners();
+    } else if (sourceCollection != null && sourceCollection!.isNotEmpty) {
+      // Collection hint provided without a full product — use it
+      _productCollection = sourceCollection;
+      _collectionDetermined = true;
     }
 
     _initializeProvider();
@@ -440,26 +450,55 @@ class ProductDetailProvider with ChangeNotifier {
   if (_isDisposed || productId.trim().isEmpty) return;
 
   try {
-    // ✅ OPTIMIZED: Fetch both collections in parallel
-    final results = await Future.wait([
-      _firestore.collection('products').doc(productId).get()
-          .timeout(const Duration(seconds: 10)),
-      _firestore.collection('shop_products').doc(productId).get()
-          .timeout(const Duration(seconds: 10)),
-    ]);
+    if (_collectionDetermined && _productCollection != null) {
+      // Collection is already known — single read only
+      final snap = await _firestore
+          .collection(_productCollection!)
+          .doc(productId)
+          .get()
+          .timeout(const Duration(seconds: 10));
 
-    final prodSnap = results[0];
-    final shopSnap = results[1];
+      if (snap.exists) {
+        _product = Product.fromDocument(snap);
+      } else {
+        // Fallback: the hint was wrong or product was moved — try the other collection
+        final otherCollection = _productCollection == 'products'
+            ? 'shop_products'
+            : 'products';
+        final fallbackSnap = await _firestore
+            .collection(otherCollection)
+            .doc(productId)
+            .get()
+            .timeout(const Duration(seconds: 10));
 
-    // Check which collection has the product
-    if (prodSnap.exists) {
-      _productCollection = 'products';
-      _product = Product.fromDocument(prodSnap);
-    } else if (shopSnap.exists) {
-      _productCollection = 'shop_products';
-      _product = Product.fromDocument(shopSnap);
+        if (fallbackSnap.exists) {
+          _productCollection = otherCollection;
+          _product = Product.fromDocument(fallbackSnap);
+        } else {
+          throw Exception('Product not found in any collection');
+        }
+      }
     } else {
-      throw Exception('Product not found in any collection');
+      // Collection unknown — fetch both in parallel (original behavior)
+      final results = await Future.wait([
+        _firestore.collection('products').doc(productId).get()
+            .timeout(const Duration(seconds: 10)),
+        _firestore.collection('shop_products').doc(productId).get()
+            .timeout(const Duration(seconds: 10)),
+      ]);
+
+      final prodSnap = results[0];
+      final shopSnap = results[1];
+
+      if (prodSnap.exists) {
+        _productCollection = 'products';
+        _product = Product.fromDocument(prodSnap);
+      } else if (shopSnap.exists) {
+        _productCollection = 'shop_products';
+        _product = Product.fromDocument(shopSnap);
+      } else {
+        throw Exception('Product not found in any collection');
+      }
     }
 
     _collectionDetermined = true;
@@ -467,10 +506,8 @@ class ProductDetailProvider with ChangeNotifier {
 
     if (_isDisposed) return;
 
-    // ✅ Fetch seller info once
+    // Fetch seller info once
     await _fetchSellerAndShopInfo();
-    // ✅ LAZY LOADING: Related products will load when widget is visible
-    // Removed automatic call to _computeRelatedOnClient()
   } catch (e) {
     debugPrint('Error fetching product data: $e');
     if (!_isDisposed) {

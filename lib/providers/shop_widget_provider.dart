@@ -7,10 +7,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../services/click_tracking_service.dart';
+import '../user_provider.dart';
 
 class ShopWidgetProvider with ChangeNotifier {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final UserProvider _userProvider;
 
   static const String _configCollection = 'app_config';
   static const String _configDoc = 'featured_shops';
@@ -21,38 +22,72 @@ class ShopWidgetProvider with ChangeNotifier {
   bool _userOwnsShop = false;
   bool _isCheckingMembership = false;
   List<String> _userShopIds = [];
-  StreamSubscription<User?>? _authSub;
+
+  // Track last checked uid to avoid re-checking when UserProvider notifies
+  // for non-auth-related changes (e.g. profile field updates).
+  String? _lastCheckedUid;
 
   // ————————————————————————————————————————————
   // 2️⃣  Featured‐shops list (for horizontal carousel)
-  // ✅ FIXED: Changed from QueryDocumentSnapshot to DocumentSnapshot
   final List<DocumentSnapshot> _shops = [];
   bool _isLoadingShops = false;
 
-  ShopWidgetProvider() {
-    _authSub = _auth.authStateChanges().listen((user) {
-      _userOwnsShop = false;
-      _userShopIds = [];
-      _isCheckingMembership = false;
-      notifyListeners();
-
-      if (user != null) {
-        _checkUserMembership(user.uid);
-      }
-    });
+  ShopWidgetProvider(this._userProvider) {
+    // Check membership using data already loaded by UserProvider
+    _onUserProviderChanged();
+    _userProvider.addListener(_onUserProviderChanged);
     fetchFeaturedShops();
+  }
+
+  /// Reacts to UserProvider changes. Only triggers membership check
+  /// when the user identity actually changes or profileData becomes available.
+  void _onUserProviderChanged() {
+    final user = _userProvider.user;
+    final profileData = _userProvider.profileData;
+
+    if (user == null) {
+      // Logged out
+      if (_lastCheckedUid != null || _userOwnsShop) {
+        _lastCheckedUid = null;
+        _userOwnsShop = false;
+        _userShopIds = [];
+        _isCheckingMembership = false;
+        notifyListeners();
+      }
+      return;
+    }
+
+    // Only re-check when:
+    // 1. This is a new user (uid changed), OR
+    // 2. profileData just became available for the first time for this user
+    final uid = user.uid;
+    if (uid == _lastCheckedUid && !_isCheckingMembership) {
+      // Same user, already checked — check if memberOfShops field changed
+      final memberOfShops =
+          profileData?['memberOfShops'] as Map<String, dynamic>? ?? {};
+      final currentIds = memberOfShops.keys.toSet();
+      final previousIds = _userShopIds.toSet();
+      if (currentIds.length == previousIds.length &&
+          currentIds.containsAll(previousIds)) {
+        return; // No change
+      }
+    }
+
+    if (profileData != null) {
+      _lastCheckedUid = uid;
+      _checkUserMembershipFromProfile(uid, profileData);
+    }
   }
 
   // 🚪 Expose for the widgets:
 
-  User? get currentUser => _auth.currentUser;
+  User? get currentUser => _userProvider.user;
   bool get userOwnsShop => _userOwnsShop;
   bool get isCheckingMembership => _isCheckingMembership;
   List<String> get userShopIds => List.unmodifiable(_userShopIds);
   String? get firstUserShopId =>
       _userShopIds.isNotEmpty ? _userShopIds.first : null;
 
-  // ✅ FIXED: Changed return type
   List<DocumentSnapshot> get shops => List.unmodifiable(_shops);
   bool get isLoadingMore => _isLoadingShops;
 
@@ -77,7 +112,7 @@ class ShopWidgetProvider with ChangeNotifier {
         if (shopIds.isNotEmpty) {
           // Fetch shops in the configured order
           final shops = await _fetchShopsByIds(shopIds);
-          
+
           if (shops.isNotEmpty) {
             _shops
               ..clear()
@@ -100,19 +135,18 @@ class ShopWidgetProvider with ChangeNotifier {
     }
   }
 
-  // ✅ FIXED: Changed return type and removed invalid cast
   Future<List<DocumentSnapshot>> _fetchShopsByIds(List<String> shopIds) async {
     final List<DocumentSnapshot> shops = [];
 
     for (final shopId in shopIds) {
       try {
         final shopDoc = await _firestore.collection('shops').doc(shopId).get();
-        
+
         if (shopDoc.exists) {
           final data = shopDoc.data();
           // Only include active shops
           if (data?['isActive'] != false) {
-            shops.add(shopDoc);  // ✅ No casting needed - it's already DocumentSnapshot
+            shops.add(shopDoc);
           }
         }
       } catch (e) {
@@ -132,11 +166,11 @@ class ShopWidgetProvider with ChangeNotifier {
           .orderBy('createdAt', descending: true)
           .limit(limit)
           .get();
-      
+
       _shops
         ..clear()
-        ..addAll(snap.docs);  // ✅ QueryDocumentSnapshot extends DocumentSnapshot, so this works
-      
+        ..addAll(snap.docs);
+
       debugPrint('✅ Loaded ${snap.docs.length} default featured shops');
     } catch (e) {
       debugPrint('❌ Error fetching default shops: $e');
@@ -150,24 +184,17 @@ class ShopWidgetProvider with ChangeNotifier {
     await ClickTrackingService.instance.trackShopClick(shopId);
   }
 
-  Future<void> _checkUserMembership(String uid) async {
+  /// Uses the already-loaded profileData from UserProvider instead of
+  /// making a separate Firestore read for users/{uid}.
+  Future<void> _checkUserMembershipFromProfile(
+      String uid, Map<String, dynamic> profileData) async {
     if (_isCheckingMembership) return;
     _isCheckingMembership = true;
     notifyListeners();
 
     try {
-      final userDoc = await _firestore.collection('users').doc(uid).get();
-
-      if (!userDoc.exists) {
-        _userOwnsShop = false;
-        _userShopIds = [];
-        notifyListeners();
-        return;
-      }
-
-      final userData = userDoc.data();
       final memberOfShops =
-          userData?['memberOfShops'] as Map<String, dynamic>? ?? {};
+          profileData['memberOfShops'] as Map<String, dynamic>? ?? {};
 
       if (memberOfShops.isEmpty) {
         _userOwnsShop = false;
@@ -307,7 +334,7 @@ class ShopWidgetProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    _authSub?.cancel();
+    _userProvider.removeListener(_onUserProviderChanged);
     super.dispose();
   }
 }

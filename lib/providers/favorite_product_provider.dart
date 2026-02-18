@@ -195,9 +195,12 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
         if (kDebugMode) {
           debugPrint('🔄 FavoriteProvider: Long pause, refreshing favorites...');
         }
-        // Background reload - don't block UI
-        _loadFavoriteIds();
+        // Background reload - don't block UI.
+        // _loadGlobalFavoriteIds also sets favoriteIdsNotifier when no basket is selected.
         _loadGlobalFavoriteIds();
+        if (selectedBasketNotifier.value != null) {
+          _loadFavoriteIds();
+        }
       }
     }
 
@@ -309,11 +312,16 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
   _pendingFetches['init'] = completer;
 
   try {
-    // Load both current collection AND global favorites
-    await Future.wait([
-      _loadFavoriteIds(),
-      _loadGlobalFavoriteIds(), // ADD THIS
-    ]);
+    // _loadGlobalFavoriteIds reads default + all baskets, and also populates
+    // favoriteIdsNotifier when no basket is selected (avoids duplicate read).
+    await _loadGlobalFavoriteIds();
+
+    // Only read the specific basket collection if a basket is actively selected,
+    // since _loadGlobalFavoriteIds already covered the default case.
+    if (selectedBasketNotifier.value != null) {
+      await _loadFavoriteIds();
+    }
+
     enableLiveUpdates();
     completer.complete();
   } catch (e) {
@@ -324,12 +332,16 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
   }
 }
 
+  /// Loads all favorite IDs across default + all baskets.
+  /// Also populates [favoriteIdsNotifier] from the default collection
+  /// when no basket is selected, avoiding a redundant Firestore read.
   Future<void> _loadGlobalFavoriteIds() async {
   final user = _auth.currentUser;
   if (user == null) return;
 
   try {
     final allIds = <String>{};
+    final defaultIds = <String>{};
 
     // 1. Load default favorites
     final defaultSnapshot = await _firestore
@@ -340,7 +352,10 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
 
     for (final doc in defaultSnapshot.docs) {
       final productId = doc.data()['productId'] as String?;
-      if (productId != null) allIds.add(productId);
+      if (productId != null) {
+        defaultIds.add(productId);
+        allIds.add(productId);
+      }
     }
 
     // 2. Load ALL basket favorites
@@ -362,6 +377,15 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
     }
 
     globalFavoriteIdsNotifier.value = allIds;
+
+    // If no basket is selected, reuse the default favorites we already fetched
+    // instead of making a separate _loadFavoriteIds() call.
+    if (selectedBasketNotifier.value == null) {
+      favoriteIdsNotifier.value = defaultIds;
+      favoriteCountNotifier.value = defaultIds.length;
+      notifyListeners();
+    }
+
     debugPrint('✅ Loaded ${allIds.length} global favorite IDs');
   } catch (e) {
     debugPrint('❌ Error loading global favorites: $e');

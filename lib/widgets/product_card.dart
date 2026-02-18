@@ -239,6 +239,7 @@ class _ProductCardState extends State<ProductCard>
         create: (_) => ProductDetailProvider(
   productId: widget.product.id,
   repository: repo,
+  sourceCollection: widget.product.sourceCollection,
 ),
         child: ProductDetailScreen(productId: widget.product.id),
       ),

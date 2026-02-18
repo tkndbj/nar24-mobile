@@ -352,11 +352,6 @@ class DynamicFilterProvider with ChangeNotifier {
 
               debugPrint('✅ Dynamic filters loaded: ${_dynamicFilters.length}');
               notifyListeners();
-
-              // ✅ MODIFIED: Delayed prefetch (less aggressive)
-              Future.delayed(const Duration(seconds: 1), () {
-                _prefetchFilterData();
-              });
             } else if (_isLoading) {
               _isLoading = false;
               _isInitialized = true;
@@ -394,15 +389,6 @@ class DynamicFilterProvider with ChangeNotifier {
       }
     }
     return true;
-  }
-
-  /// ✅ MODIFIED: Prefetch only 2 filters (was 3)
-  void _prefetchFilterData() {
-    if (!_isInitialized || _isLoading) return;
-    final filtersToPreload = _dynamicFilters.take(2); // Reduced from 3
-    for (final filter in filtersToPreload) {
-      _fetchFilterProducts(filter.id, page: 0, useCache: false);
-    }
   }
 
   Future<void> waitForInitialization() async {

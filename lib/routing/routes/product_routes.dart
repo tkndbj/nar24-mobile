@@ -104,6 +104,10 @@ class ProductRoutes {
             product = extras['product'] as Product?;
           }
 
+          // Use collection query param or derive from product
+          final collection = state.uri.queryParameters['collection']
+              ?? product?.sourceCollection;
+
           return CustomTransitionPage(
             key: state.pageKey,
             child: ChangeNotifierProvider(
@@ -111,6 +115,7 @@ class ProductRoutes {
                 productId: id,
                 initialProduct: product,
                 repository: context.read<ProductRepository>(),
+                sourceCollection: collection,
               ),
               child: ProductDetailScreen(
                 productId: id,

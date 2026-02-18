@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
 import '../../user_provider.dart';
-import '../../providers/profile_provider.dart';
 
 class CompleteProfileScreen extends StatefulWidget {
   const CompleteProfileScreen({Key? key}) : super(key: key);
@@ -578,11 +577,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
         }
       }
 
-      // Refresh both UserProvider and ProfileProvider to ensure UI updates
-      await Future.wait([
-        Provider.of<UserProvider>(context, listen: false).refreshUser(),
-        Provider.of<ProfileProvider>(context, listen: false).refreshUser(),
-      ]);
+      // Refresh UserProvider — ProfileProvider auto-syncs via its listener
+      await Provider.of<UserProvider>(context, listen: false).refreshUser();
 
       // Show success message
       if (mounted) {

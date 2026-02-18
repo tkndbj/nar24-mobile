@@ -302,9 +302,11 @@ Future<void> main() async {
                 ChangeNotifierProvider(
                   create: (context) => SpecialFilterProviderMarket(),
                 ),
-                ChangeNotifierProvider(create: (_) => ShopWidgetProvider()),
-                ChangeNotifierProvider<StatProvider>(
-                    create: (_) => StatProvider()),
+                ChangeNotifierProvider(
+                  create: (_) => ShopWidgetProvider(
+                    Provider.of<UserProvider>(_, listen: false),
+                  ),
+                ),
                 Provider<FirebaseAuth>(create: (_) => FirebaseAuth.instance),
                 Provider<FirebaseFirestore>(
                     create: (_) => FirebaseFirestore.instance),
@@ -337,7 +339,9 @@ Future<void> main() async {
                   create: (_) => MarketLayoutService(),
                 ),
                 ChangeNotifierProvider<ProfileProvider>(
-                  create: (_) => ProfileProvider(),
+                  create: (_) => ProfileProvider(
+                    Provider.of<UserProvider>(_, listen: false),
+                  ),
                 ),
               ],
               child: const MyApp(),
