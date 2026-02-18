@@ -386,27 +386,32 @@ class TrendingCalculator {
   calculateStats(products) {
     if (products.length === 0) {
       return {
-        minClicks: 0,
-        maxClicks: 0,
-        minCart: 0,
-        maxCart: 0,
-        minFavorites: 0,
-        maxFavorites: 0,
-        minPurchases: 0,
-        maxPurchases: 0,
+        minClicks: 0, maxClicks: 0,
+        minCart: 0, maxCart: 0,
+        minFavorites: 0, maxFavorites: 0,
+        minPurchases: 0, maxPurchases: 0,
       };
     }
-
-    return {
-      minClicks: Math.min(...products.map((p) => p.clicks)),
-      maxClicks: Math.max(...products.map((p) => p.clicks)),
-      minCart: Math.min(...products.map((p) => p.cartCount)),
-      maxCart: Math.max(...products.map((p) => p.cartCount)),
-      minFavorites: Math.min(...products.map((p) => p.favoritesCount)),
-      maxFavorites: Math.max(...products.map((p) => p.favoritesCount)),
-      minPurchases: Math.min(...products.map((p) => p.purchaseCount)),
-      maxPurchases: Math.max(...products.map((p) => p.purchaseCount)),
+  
+    const stats = {
+      minClicks: Infinity, maxClicks: -Infinity,
+      minCart: Infinity, maxCart: -Infinity,
+      minFavorites: Infinity, maxFavorites: -Infinity,
+      minPurchases: Infinity, maxPurchases: -Infinity,
     };
+  
+    for (const p of products) {
+      if (p.clicks < stats.minClicks) stats.minClicks = p.clicks;
+      if (p.clicks > stats.maxClicks) stats.maxClicks = p.clicks;
+      if (p.cartCount < stats.minCart) stats.minCart = p.cartCount;
+      if (p.cartCount > stats.maxCart) stats.maxCart = p.cartCount;
+      if (p.favoritesCount < stats.minFavorites) stats.minFavorites = p.favoritesCount;
+      if (p.favoritesCount > stats.maxFavorites) stats.maxFavorites = p.favoritesCount;
+      if (p.purchaseCount < stats.minPurchases) stats.minPurchases = p.purchaseCount;
+      if (p.purchaseCount > stats.maxPurchases) stats.maxPurchases = p.purchaseCount;
+    }
+  
+    return stats;
   }
 }
 
@@ -539,7 +544,7 @@ async function createCategoryTrending(db, scoredProducts) {
     }
 
     // Write category trending in batches
-    const batch = db.batch();
+    let batch = db.batch();
     let batchCount = 0;
 
     for (const [category, productIds] of categoryCounts.entries()) {
@@ -560,6 +565,7 @@ async function createCategoryTrending(db, scoredProducts) {
 
       if (batchCount >= 500) {
         await batch.commit();
+        batch = db.batch();
         batchCount = 0;
       }
     }

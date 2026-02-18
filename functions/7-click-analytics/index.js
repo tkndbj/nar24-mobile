@@ -220,7 +220,7 @@ const duration = Date.now() - startTime;
  * ✅ OPTIMIZED: Faster sync with monitoring
  */
 export const syncClickAnalytics = onSchedule({
-  schedule: 'every 5 minutes',
+  schedule: 'every 2 minutes',
   timeZone: 'UTC',
   timeoutSeconds: 540,
   memory: '1GiB',
@@ -256,7 +256,7 @@ if (!metadataDoc.exists || (metadataDoc.data()?.pendingCount ?? 0) === 0) {
   return {success: true, message: 'No batches to process'};
 }
 
-const MAX_BATCHES_PER_RUN = 100;
+const MAX_BATCHES_PER_RUN = 500;
 const batchDocs = await ShardHelper.getUnprocessedBatches(
   admin.firestore(), 
   shardId, 

@@ -399,7 +399,7 @@ class BatchProcessor {
     const oldBatches = await this.db
       .collection('_processed_batches')
       .where('processedAt', '<', sevenDaysAgo)
-      .limit(500)
+      .limit(3000)
       .get();
 
     if (oldBatches.empty) return;

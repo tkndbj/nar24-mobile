@@ -675,23 +675,6 @@ export const updatePersonalizedFeeds = onSchedule(
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-      const usersSnapshot = await db
-        .collection('user_profiles')
-        .where('lastActivityAt', '>', thirtyDaysAgo)
-        .limit(5000)
-        .get();
-
-      console.log(`📊 Found ${usersSnapshot.size} active users`);
-
-      if (usersSnapshot.empty) {
-        return {success: true, message: 'No active users'};
-      }
-
-      const users = usersSnapshot.docs;
-      const batches = generator.chunkArray(users, CONFIG.BATCH_SIZE);
-
-      console.log(`📦 Processing ${batches.length} batches`);
-
       const totalResults = {
         updated: 0,
         skipped: 0,
@@ -699,26 +682,66 @@ export const updatePersonalizedFeeds = onSchedule(
         reasons: {},
       };
 
-      for (const [index, batch] of batches.entries()) {
-        if (index % 10 === 0) {
-          console.log(`🔄 Batch ${index + 1}/${batches.length}...`);
+      let lastDoc = null;
+      let totalFetched = 0;
+      const PAGE_SIZE = 2000;
+      const MAX_USERS = 30000;
+
+      while (totalFetched < MAX_USERS) {
+        let query = db
+          .collection('user_profiles')
+          .where('lastActivityAt', '>', thirtyDaysAgo)
+          .orderBy('lastActivityAt')
+          .limit(PAGE_SIZE);
+
+        if (lastDoc) {
+          query = query.startAfter(lastDoc);
         }
 
-        const batchResults = await generator.processBatch(batch);
+        const usersSnapshot = await query.get();
 
-        totalResults.updated += batchResults.updated;
-        totalResults.skipped += batchResults.skipped;
-        totalResults.failed += batchResults.failed;
-
-        for (const [reason, count] of Object.entries(batchResults.reasons)) {
-          totalResults.reasons[reason] = (totalResults.reasons[reason] || 0) + count;
-        }
-
-        const elapsed = Date.now() - startTime;
-        if (elapsed > 480000) {
-          console.warn('⏰ Approaching timeout, stopping early');
+        if (usersSnapshot.empty) {
+          if (totalFetched === 0) {
+            console.log('✅ No active users');
+          }
           break;
         }
+
+        totalFetched += usersSnapshot.size;
+        lastDoc = usersSnapshot.docs[usersSnapshot.docs.length - 1];
+
+        console.log(`📊 Page loaded: ${usersSnapshot.size} users (${totalFetched} total)`);
+
+        const batches = generator.chunkArray(usersSnapshot.docs, CONFIG.BATCH_SIZE);
+
+        for (const [index, batch] of batches.entries()) {
+          if (index % 10 === 0) {
+            console.log(`🔄 Batch ${index + 1}/${batches.length}...`);
+          }
+
+          const batchResults = await generator.processBatch(batch);
+
+          totalResults.updated += batchResults.updated;
+          totalResults.skipped += batchResults.skipped;
+          totalResults.failed += batchResults.failed;
+
+          for (const [reason, count] of Object.entries(batchResults.reasons)) {
+            totalResults.reasons[reason] = (totalResults.reasons[reason] || 0) + count;
+          }
+
+          const elapsed = Date.now() - startTime;
+          if (elapsed > 480000) {
+            console.warn(`⏰ Approaching timeout after ${totalFetched} users, stopping`);
+            break;
+          }
+        }
+
+        // Timeout check at page level too
+        const elapsed = Date.now() - startTime;
+        if (elapsed > 480000) break;
+
+        // End of collection
+        if (usersSnapshot.size < PAGE_SIZE) break;
       }
 
       const duration = Date.now() - startTime;
@@ -727,7 +750,7 @@ export const updatePersonalizedFeeds = onSchedule(
         JSON.stringify({
           level: 'INFO',
           event: 'feeds_updated',
-          totalUsers: users.length,
+          totalUsers: totalFetched,
           updated: totalResults.updated,
           skipped: totalResults.skipped,
           failed: totalResults.failed,
@@ -736,12 +759,12 @@ export const updatePersonalizedFeeds = onSchedule(
         }),
       );
 
-      if (totalResults.failed > users.length * 0.1) {
+      if (totalFetched > 0 && totalResults.failed > totalFetched * 0.1) {
         console.error(
           JSON.stringify({
             level: 'ERROR',
             event: 'high_failure_rate',
-            failureRate: ((totalResults.failed / users.length) * 100).toFixed(2) + '%',
+            failureRate: ((totalResults.failed / totalFetched) * 100).toFixed(2) + '%',
             alert: true,
           }),
         );
@@ -749,7 +772,7 @@ export const updatePersonalizedFeeds = onSchedule(
 
       return {
         success: true,
-        totalUsers: users.length,
+        totalUsers: totalFetched,
         updated: totalResults.updated,
         skipped: totalResults.skipped,
         failed: totalResults.failed,

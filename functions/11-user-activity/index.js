@@ -485,7 +485,7 @@ export const cleanupOldActivityEvents = onSchedule({
     const shardsSnapshot = await db
         .collection('activity_events')
         .where(admin.firestore.FieldPath.documentId(), '<', cutoffDateStr)
-        .limit(30)
+        .limit(90)
         .get();
 
     for (const shardDoc of shardsSnapshot.docs) {
@@ -516,7 +516,7 @@ export const cleanupOldActivityEvents = onSchedule({
     const searchSnapshot = await db
         .collection('search_analytics')
         .where(admin.firestore.FieldPath.documentId(), '<', cutoffDateStr)
-        .limit(30)
+        .limit(90)
         .get();
 
     if (!searchSnapshot.empty) {
@@ -533,7 +533,7 @@ export const cleanupOldActivityEvents = onSchedule({
         .collection('activity_dlq')
         .where('status', 'in', ['processed', 'failed'])
         .where('createdAt', '<', dlqCutoff)
-        .limit(100)
+        .limit(500)
         .get();
 
     if (!dlqSnapshot.empty) {
@@ -580,7 +580,7 @@ export const computeUserPreferences = onSchedule({
 let totalFetched = 0;
 let lastDoc = null;
 const PAGE_SIZE = 500;
-const MAX_USERS = 10000; // Safety cap
+const MAX_USERS = 30000; // Safety cap
 
 while (totalFetched < MAX_USERS) {
   let query = db

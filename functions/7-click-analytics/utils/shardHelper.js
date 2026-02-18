@@ -206,7 +206,7 @@ class ShardHelper {
     const snapshot = await db
       .collection('click_analytics')
       .where(admin.firestore.FieldPath.documentId(), '<', cutoffShardId)
-      .limit(50)
+      .limit(100)
       .get();
 
     if (snapshot.empty) {

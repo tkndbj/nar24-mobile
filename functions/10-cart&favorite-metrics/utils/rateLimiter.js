@@ -81,6 +81,15 @@ class DistributedRateLimiter {
           removedCount++;
         }
       }
+
+      if (this.userRequests.size > 100000) {
+        const oldest = Array.from(this.userRequests.entries())
+          .sort((a, b) => a[1].windowStart - b[1].windowStart)
+          .slice(0, 20000);
+        oldest.forEach(([key]) => this.userRequests.delete(key));
+        removedCount += 20000;
+        console.log('⚠️ Rate limiter hit 100k entries, removed 20k oldest');
+      }
   
       if (removedCount > 0) {
         console.log(JSON.stringify({
