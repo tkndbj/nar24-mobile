@@ -1045,62 +1045,98 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
       String buyerCategory) async {
     // Check cache first
     final cached = _getBuyerCategoryCache(buyerCategory);
-    if (cached != null) return cached;
+    if (cached != null) {
+      debugPrint(
+          'Returning cached products for buyer category (Market): $buyerCategory');
+      return cached;
+    }
 
     try {
       List<ProductSummary> allProducts = [];
 
       if (buyerCategory == 'Women' || buyerCategory == 'Men') {
-        // OLD: 2 separate queries
-        // NEW: Single query with whereIn (50% fewer reads!)
         Query query = _firestore
             .collection('shop_products')
-            .where('gender', whereIn: [buyerCategory, 'Unisex']) // ✅ Combined
+            .where('gender',
+                whereIn: [buyerCategory, 'Unisex'])
             .where('quantity', isGreaterThan: 0)
             .orderBy('quantity')
             .orderBy('isBoosted', descending: true)
-            .orderBy('rankingScore', descending: true)
+            .orderBy('promotionScore', descending: true)
             .limit(20);
 
-        final snapshot = await AnalyticsService.trackRead(
-          operation: 'market_fetch_buyer_category',
-          execute: () => query.get(),
-          metadata: {'category': buyerCategory, 'query_type': 'gender_whereIn'},
-        );
+        final snapshot = await query.get();
         allProducts = snapshot.docs
             .map((doc) => ProductSummary.fromDocument(doc))
             .toList();
 
-        debugPrint('Fetched ${allProducts.length} products with single query');
+        debugPrint(
+            'Fetched ${allProducts.length} products with single optimized query');
       } else {
-        // Other categories remain unchanged
         Query query = _firestore
             .collection('shop_products')
             .where('category', isEqualTo: buyerCategory)
             .where('quantity', isGreaterThan: 0)
             .orderBy('quantity')
             .orderBy('isBoosted', descending: true)
-            .orderBy('rankingScore', descending: true)
+            .orderBy('promotionScore', descending: true)
             .limit(20);
 
-        final snapshot = await AnalyticsService.trackRead(
-          operation: 'market_fetch_buyer_category',
-          execute: () => query.get(),
-          metadata: {
-            'category': buyerCategory,
-            'query_type': 'category_equals'
-          },
-        );
+        final snapshot = await query.get();
         allProducts = snapshot.docs
             .map((doc) => ProductSummary.fromDocument(doc))
             .toList();
       }
 
       _setBuyerCategoryCache(buyerCategory, allProducts);
+
+      debugPrint(
+          'Total fetched ${allProducts.length} products for buyer category: $buyerCategory');
       return allProducts;
     } catch (e) {
-      debugPrint('Error: $e');
-      return [];
+      debugPrint(
+          'Error fetching products for buyer category $buyerCategory: $e');
+
+      try {
+        List<ProductSummary> fallbackProducts = [];
+
+        if (buyerCategory == 'Women' || buyerCategory == 'Men') {
+          Query fallbackQuery = _firestore
+              .collection('shop_products')
+              .where('gender', whereIn: [buyerCategory, 'Unisex'])
+              .orderBy('createdAt', descending: true)
+              .limit(20);
+
+          final snapshot = await fallbackQuery.get();
+          fallbackProducts = snapshot.docs
+              .map((doc) => ProductSummary.fromDocument(doc))
+              .toList();
+
+          debugPrint(
+              'Fallback: Single query returned ${fallbackProducts.length} products');
+        } else {
+          Query fallbackQuery = _firestore
+              .collection('shop_products')
+              .where('category', isEqualTo: buyerCategory)
+              .orderBy('createdAt', descending: true)
+              .limit(20);
+
+          final snapshot = await fallbackQuery.get();
+          fallbackProducts = snapshot.docs
+              .map((doc) => ProductSummary.fromDocument(doc))
+              .toList();
+        }
+
+        _setBuyerCategoryCache(buyerCategory, fallbackProducts);
+
+        debugPrint(
+            'Fallback: Fetched ${fallbackProducts.length} products for buyer category: $buyerCategory');
+        return fallbackProducts;
+      } catch (fallbackError) {
+        debugPrint(
+            'Fallback also failed for buyer category $buyerCategory: $fallbackError');
+        return [];
+      }
     }
   }
 
@@ -1230,7 +1266,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
             .where('quantity', isGreaterThan: 0)
             .orderBy('quantity')
             .orderBy('isBoosted', descending: true)
-            .orderBy('rankingScore', descending: true)
+            .orderBy('promotionScore', descending: true)
             .limit(20); // ✅ Direct limit - no need to fetch 30 and trim to 20
 
         final snapshot = await query.get();
@@ -1248,7 +1284,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
             .where('quantity', isGreaterThan: 0)
             .orderBy('quantity')
             .orderBy('isBoosted', descending: true)
-            .orderBy('rankingScore', descending: true)
+            .orderBy('promotionScore', descending: true)
             .limit(20);
 
         final snapshot = await query.get();
@@ -1436,7 +1472,6 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
           facetFilters = ['isBoosted:true'];
           break;
         case 'trending':
-          facetFilters = ['dailyClickCount>=10'];
           break;
         case 'fiveStar':
           facetFilters = ['averageRating=5'];

@@ -877,9 +877,6 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
         isFeatured: widget.isEditMode
             ? widget.originalProduct!.isFeatured
             : widget.product.isFeatured,
-        isTrending: widget.isEditMode
-            ? widget.originalProduct!.isTrending
-            : widget.product.isTrending,
         isBoosted:
             widget.isEditMode ? widget.originalProduct!.isBoosted : false,
         boostedImpressionCount: widget.isEditMode
@@ -888,8 +885,6 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
         boostImpressionCountAtStart: widget.isEditMode
             ? widget.originalProduct!.boostImpressionCountAtStart
             : 0,
-        rankingScore:
-            widget.isEditMode ? widget.originalProduct!.rankingScore : 0,
         promotionScore:
             widget.isEditMode ? widget.originalProduct!.promotionScore : 0,
         paused: widget.isEditMode ? widget.originalProduct!.paused : false,
@@ -897,8 +892,6 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
             widget.isEditMode ? widget.originalProduct!.boostStartTime : null,
         boostEndTime:
             widget.isEditMode ? widget.originalProduct!.boostEndTime : null,
-        dailyClickCount:
-            widget.isEditMode ? widget.originalProduct!.dailyClickCount : 0,
         lastClickDate:
             widget.isEditMode ? widget.originalProduct!.lastClickDate : null,
         clickCountAtStart:
@@ -1003,7 +996,6 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
             .set(productData);
       } else {
         productData['status'] = 'pending';
-        productData['rankingScore'] = 0;
 
         // Normal users go to vitrin_product_applications, shops go to product_applications
         final collection = widget.product.shopId == null

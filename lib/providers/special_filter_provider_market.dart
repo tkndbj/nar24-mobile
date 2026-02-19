@@ -608,8 +608,8 @@ class SpecialFilterProviderMarket with ChangeNotifier {
 
     if (searchTerm.isNotEmpty && searchTerm.length >= 2) {
       query = query
-          .where('title', isGreaterThanOrEqualTo: searchTerm)
-          .where('title', isLessThanOrEqualTo: searchTerm + '\uf8ff');
+          .where('productName', isGreaterThanOrEqualTo: searchTerm)
+          .where('productName', isLessThanOrEqualTo: searchTerm + '\uf8ff');
     }
 
     return query;
@@ -635,8 +635,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     try {
       switch (_subcategorySortOption) {
         case 'alphabetical':
-          // Sort by title alphabetically
-          return query.orderBy('title', descending: false);
+          return query.orderBy('productName', descending: false);
         case 'price_asc':
           // Sort by price low to high
           return query.orderBy('price', descending: false);
@@ -779,8 +778,8 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     }
     if (searchTerm.isNotEmpty) {
       query = query
-          .where('title', isGreaterThanOrEqualTo: searchTerm)
-          .where('title', isLessThanOrEqualTo: searchTerm + '\uf8ff');
+          .where('productName', isGreaterThanOrEqualTo: searchTerm)
+          .where('productName', isLessThanOrEqualTo: searchTerm + '\uf8ff');
     }
 
     if (page > 0 && _lastDocuments[filterType] != null) {
@@ -1002,8 +1001,8 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     }
     if (searchTerm.isNotEmpty) {
       productsQuery = productsQuery
-          .where('title', isGreaterThanOrEqualTo: searchTerm)
-          .where('title', isLessThanOrEqualTo: searchTerm + '\uf8ff');
+          .where('productName', isGreaterThanOrEqualTo: searchTerm)
+          .where('productName', isLessThanOrEqualTo: searchTerm + '\uf8ff');
     }
 
     if (page > 0 && _lastDocuments[filterType] != null) {
@@ -1393,22 +1392,10 @@ class SpecialFilterProviderMarket with ChangeNotifier {
               .orderBy('createdAt', descending: true);
           break;
         case 'trending':
-          query = query
-              .where('dailyClickCount', isGreaterThanOrEqualTo: 10)
-              .orderBy('promotionScore', descending: true)
-              .orderBy('dailyClickCount', descending: true);
           break;
         case 'fiveStar':
-          query = query
-              .where('averageRating', isEqualTo: 5)
-              .orderBy('promotionScore', descending: true)
-              .orderBy('createdAt', descending: true);
           break;
         case 'bestSellers':
-          query = query
-              .where('purchaseCount', isGreaterThan: 0)
-              .orderBy('promotionScore', descending: true)
-              .orderBy('purchaseCount', descending: true);
           break;
         default:
           query = _applySubcategorySorting(query);
@@ -1436,8 +1423,8 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     // Search term
     if (searchTerm.isNotEmpty) {
       query = query
-          .where('title', isGreaterThanOrEqualTo: searchTerm)
-          .where('title', isLessThanOrEqualTo: searchTerm + '\uf8ff');
+          .where('productName', isGreaterThanOrEqualTo: searchTerm)
+          .where('productName', isLessThanOrEqualTo: searchTerm + '\uf8ff');
     }
 
     return query;

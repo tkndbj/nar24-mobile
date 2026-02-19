@@ -107,7 +107,7 @@ String _getReplicaIndexName(String indexName, String sortOption) {
       'page': page.toString(),
       'hitsPerPage': hitsPerPage.toString(),
       'attributesToRetrieve':
-          'objectID,productName,price,imageUrls,campaignName,discountPercentage,isBoosted,dailyClickCount,averageRating,purchaseCount,createdAt,isFeatured,isTrending,colorImages,brandModel,category,subcategory,subsubcategory,condition,userId,sellerName,reviewCount,originalPrice,currency,clickCount,rankingScore,collection,isBoosted,deliveryOption,shopId,quantity',
+          'objectID,productName,price,imageUrls,campaignName,discountPercentage,isBoosted,averageRating,purchaseCount,createdAt,isFeatured,colorImages,brandModel,category,subcategory,subsubcategory,condition,userId,sellerName,reviewCount,originalPrice,currency,clickCount,collection,isBoosted,deliveryOption,shopId,quantity',
       'attributesToHighlight': '',
     };
     if (filters != null && filters.isNotEmpty) {
@@ -814,10 +814,10 @@ Future<List<ProductSummary>> debouncedSearchProducts({
   'subcategory', 'subsubcategory', 'gender', 'availableColors',
   'colorImages', 'sellerName', 'shopId', 'userId', 'ownerId',
   'quantity', 'colorQuantities', 'isBoosted', 'isFeatured',
-  'isTrending', 'purchaseCount', 'bestSellerRank', 'deliveryOption',
+  'purchaseCount', 'bestSellerRank', 'deliveryOption',
   'paused', 'campaignName', 'bundleIds', 'discountThreshold',
   'bulkDiscountPercentage', 'videoUrl', 'createdAt',
-  'rankingScore', 'promotionScore'
+  'promotionScore'
 ])}')
     ..write('&attributesToHighlight=${_enc('')}');
 

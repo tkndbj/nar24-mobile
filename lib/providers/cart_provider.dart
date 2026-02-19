@@ -1734,9 +1734,7 @@ final cacheKey = 'all_minus_${excludedSorted.join(",")}';
       boostedImpressionCount: _safeGet('boostedImpressionCount', 0),
       boostImpressionCountAtStart: _safeGet('boostImpressionCountAtStart', 0),
       boostClickCountAtStart: _safeGet('boostClickCountAtStart', 0),
-      dailyClickCount: _safeGet('dailyClickCount', 0),
       isFeatured: _safeGet('isFeatured', false),
-      isTrending: _safeGet('isTrending', false),
       isBoosted: _safeGet('isBoosted', false),
       paused: _safeGet('paused', false),
       gender: cartData['gender']?.toString(),
@@ -1744,7 +1742,6 @@ final cacheKey = 'all_minus_${excludedSorted.join(",")}';
       availableColors: _safeStringList('availableColors'),
       campaign: cartData['campaign']?.toString(),
       campaignName: cartData['campaignName']?.toString(),
-      rankingScore: _safeGet('rankingScore', 0.0),
       promotionScore: _safeGet('promotionScore', 0.0),
       boostStartTime: cartData['boostStartTime'] is Timestamp
           ? cartData['boostStartTime'] as Timestamp

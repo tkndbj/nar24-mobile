@@ -1054,11 +1054,9 @@ class _ListProductScreenState extends State<ListProductScreen> {
         colorImages: colorImagesUrls,
         deliveryOption: _selectedDeliveryOption ?? '',
         videoUrl: videoUrl,
-        rankingScore: isEditMode ? widget.existingProduct!.rankingScore : 0,
         promotionScore: isEditMode ? widget.existingProduct!.promotionScore : 0,
         paused: isEditMode ? widget.existingProduct!.paused : false,
         isFeatured: isEditMode ? widget.existingProduct!.isFeatured : false,
-        isTrending: isEditMode ? widget.existingProduct!.isTrending : false,
         isBoosted: isEditMode ? widget.existingProduct!.isBoosted : false,
         boostedImpressionCount:
             isEditMode ? widget.existingProduct!.boostedImpressionCount : 0,

@@ -74,12 +74,12 @@
 //     final terasProvider = Provider.of<TerasProvider>(context, listen: false);
 //     // Assumes fetchProducts returns all products.
 //     List<Product> products = await terasProvider.fetchProducts();
-//     // First, try to get products with dailyClickCount > 20.
+//     // First, try to get products with clickCount > 20.
 //     List<Product> filtered =
-//         products.where((p) => (p.dailyClickCount ?? 0) > 20).toList();
+//         products.where((p) => (p.clickCount ?? 0) > 20).toList();
 //     if (filtered.isNotEmpty) {
 //       filtered.sort(
-//           (a, b) => (b.dailyClickCount ?? 0).compareTo(a.dailyClickCount ?? 0));
+//           (a, b) => (b.clickCount ?? 0).compareTo(a.clickCount ?? 0));
 //     } else {
 //       products.sort((a, b) => (b.clickCount ?? 0).compareTo(a.clickCount ?? 0));
 //       filtered = products;

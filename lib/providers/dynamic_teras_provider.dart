@@ -621,16 +621,7 @@ Future<void> setQuickFilter(String? filterKey) async {
 
     final hasPrice = _hasPriceIneq();
     if (_quickFilter == 'bestSellers') {
-      if (hasPrice) {
-        q = q.orderBy('price');
-        q = q.orderBy('purchaseCount', descending: true);
-        q = q.orderBy(FieldPath.documentId);
-      } else {
-        q = q.orderBy('isBoosted', descending: true)
-             .orderBy('purchaseCount', descending: true)
-             .orderBy(FieldPath.documentId);
-      }
-      return q;
+      // No special query filter for bestSellers
     }
 
     switch (_sortOption) {
@@ -656,7 +647,7 @@ Future<void> setQuickFilter(String? filterKey) async {
             q = q.orderBy('promotionScore', descending: true).orderBy('createdAt', descending: true).orderBy(FieldPath.documentId);
           }
         } catch (_) {
-          q = q.orderBy('isBoosted', descending: true).orderBy('rankingScore', descending: true).orderBy('createdAt', descending: true).orderBy(FieldPath.documentId);
+          q = q.orderBy('isBoosted', descending: true).orderBy('promotionScore', descending: true).orderBy('createdAt', descending: true).orderBy(FieldPath.documentId);
         }
         break;
     }
@@ -813,10 +804,8 @@ if (_maxPrice != null) filters.add('price<=${_maxPrice!.ceil()}');
         filters.add('discountPercentage>0');
         break;
       case 'trending':
-        filters.add('dailyClickCount>=10');
         break;
       case 'fiveStar':
-        filters.add('averageRating=5');
         break;
       case 'bestSellers':
       default:
@@ -903,7 +892,7 @@ for (final id in ids) {
         try {
           q = q.orderBy('promotionScore', descending: true).orderBy('createdAt', descending: true).orderBy(FieldPath.documentId);
         } catch (_) {
-          q = q.orderBy('rankingScore', descending: true).orderBy('createdAt', descending: true).orderBy(FieldPath.documentId);
+          q = q.orderBy('promotionScore', descending: true).orderBy('createdAt', descending: true).orderBy(FieldPath.documentId);
         }
       }
 

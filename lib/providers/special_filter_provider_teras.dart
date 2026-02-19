@@ -165,10 +165,6 @@
 //               .orderBy('createdAt', descending: true);
 //           break;
 //         case 'Trending':
-//           query = query
-//               .where('dailyClickCount', isGreaterThanOrEqualTo: 10)
-//               .orderBy('dailyClickCount', descending: true)
-//               .orderBy('createdAt', descending: true);
 //           break;
 //         case '5-Star':
 //           query = query

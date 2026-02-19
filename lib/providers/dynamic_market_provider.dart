@@ -717,17 +717,7 @@ class ShopMarketProvider with ChangeNotifier {
 
     final hasPrice = _hasPriceIneq();
     if (_quickFilter == 'bestSellers') {
-      if (hasPrice) {
-        q = q.orderBy('price');
-        q = q.orderBy('purchaseCount', descending: true);
-        q = q.orderBy(FieldPath.documentId);
-      } else {
-        q = q
-            .orderBy('isBoosted', descending: true)
-            .orderBy('purchaseCount', descending: true)
-            .orderBy(FieldPath.documentId);
-      }
-      return q;
+      // No special query filter for bestSellers
     }
 
     switch (_sortOption) {
@@ -772,7 +762,7 @@ class ShopMarketProvider with ChangeNotifier {
         } catch (_) {
           q = q
               .orderBy('isBoosted', descending: true)
-              .orderBy('rankingScore', descending: true)
+              .orderBy('promotionScore', descending: true)
               .orderBy('createdAt', descending: true)
               .orderBy(FieldPath.documentId);
         }
@@ -910,10 +900,8 @@ class ShopMarketProvider with ChangeNotifier {
         filters.add('discountPercentage>0');
         break;
       case 'trending':
-        filters.add('dailyClickCount>=10');
         break;
       case 'fiveStar':
-        filters.add('averageRating=5');
         break;
       case 'bestSellers':
       default:
@@ -1011,7 +999,7 @@ class ShopMarketProvider with ChangeNotifier {
               .orderBy(FieldPath.documentId);
         } catch (_) {
           q = q
-              .orderBy('rankingScore', descending: true)
+              .orderBy('promotionScore', descending: true)
               .orderBy('createdAt', descending: true)
               .orderBy(FieldPath.documentId);
         }

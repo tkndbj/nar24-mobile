@@ -533,7 +533,7 @@ class CategoryBoxesProvider with ChangeNotifier {
 
 // SERVER-SIDE Quick filters with proper ordering
     if (_quickFilter == 'bestSellers') {
-      q = q.orderBy('purchaseCount', descending: true);
+      // No special query filter for bestSellers
     } else {
       // Apply quick filter conditions first
       switch (_quickFilter) {
@@ -544,10 +544,8 @@ class CategoryBoxesProvider with ChangeNotifier {
           q = q.where('isBoosted', isEqualTo: true);
           break;
         case 'trending':
-          q = q.where('dailyClickCount', isGreaterThanOrEqualTo: 10);
           break;
         case 'fiveStar':
-          q = q.where('averageRating', isEqualTo: 5);
           break;
       }
 
@@ -566,7 +564,7 @@ class CategoryBoxesProvider with ChangeNotifier {
         default:
           q = q
               .orderBy('isBoosted', descending: true)
-              .orderBy('rankingScore', descending: true);
+              .orderBy('promotionScore', descending: true);
           break;
       }
     }

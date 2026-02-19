@@ -67,7 +67,6 @@ class ProductSummary {
   // ── Flags the card may use for badges / ribbons ───────────────────────
   final bool isBoosted;
   final bool isFeatured;
-  final bool isTrending;
   final int purchaseCount;
   final int? bestSellerRank;
   final String deliveryOption;
@@ -89,7 +88,6 @@ class ProductSummary {
   final Timestamp createdAt;
 
   // ── Scores (used by provider for sorting, not displayed) ──────────────
-  final double rankingScore;
   final double promotionScore;
 
   const ProductSummary({
@@ -120,7 +118,6 @@ class ProductSummary {
     this.colorQuantities = const {},
     this.isBoosted = false,
     this.isFeatured = false,
-    this.isTrending = false,
     this.purchaseCount = 0,
     this.bestSellerRank,
     required this.deliveryOption,
@@ -130,7 +127,6 @@ class ProductSummary {
     this.bulkDiscountPercentage,
     this.videoUrl,
     required this.createdAt,
-    this.rankingScore = 0,
     this.promotionScore = 0,
   });
 
@@ -178,7 +174,6 @@ class ProductSummary {
       colorQuantities: Parse.toColorQty(d['colorQuantities']),
       isBoosted: Parse.toBool(d['isBoosted']),
       isFeatured: Parse.toBool(d['isFeatured']),
-      isTrending: Parse.toBool(d['isTrending']),
       purchaseCount: Parse.toInt(d['purchaseCount']),
       bestSellerRank:
           d['bestSellerRank'] != null ? Parse.toInt(d['bestSellerRank']) : null,
@@ -193,7 +188,6 @@ class ProductSummary {
           : null,
       videoUrl: Parse.toStrNullable(d['videoUrl']),
       createdAt: Parse.toTimestamp(d['createdAt']),
-      rankingScore: Parse.toDouble(d['rankingScore']),
       promotionScore: Parse.toDouble(d['promotionScore']),
     );
   }
@@ -242,7 +236,6 @@ class ProductSummary {
           : const {},
       isBoosted: json['isBoosted'] as bool? ?? false,
       isFeatured: json['isFeatured'] as bool? ?? false,
-      isTrending: json['isTrending'] as bool? ?? false,
       purchaseCount: (json['purchaseCount'] as num?)?.toInt() ?? 0,
       bestSellerRank: (json['bestSellerRank'] as num?)?.toInt(),
       deliveryOption: json['deliveryOption'] as String? ?? 'Self Delivery',
@@ -255,7 +248,6 @@ class ProductSummary {
           (json['bulkDiscountPercentage'] as num?)?.toInt(),
       videoUrl: json['videoUrl'] as String?,
       createdAt: Parse.toTimestamp(json['createdAt']),
-      rankingScore: (json['rankingScore'] as num?)?.toDouble() ?? 0.0,
       promotionScore: (json['promotionScore'] as num?)?.toDouble() ?? 0.0,
     );
   }
@@ -320,7 +312,6 @@ class ProductSummary {
           : const {},
       isBoosted: json['isBoosted'] as bool? ?? false,
       isFeatured: json['isFeatured'] as bool? ?? false,
-      isTrending: json['isTrending'] as bool? ?? false,
       purchaseCount: (json['purchaseCount'] as num?)?.toInt() ?? 0,
       bestSellerRank: (json['bestSellerRank'] as num?)?.toInt(),
       deliveryOption: json['deliveryOption']?.toString() ?? 'Self Delivery',
@@ -333,7 +324,6 @@ class ProductSummary {
           (json['bulkDiscountPercentage'] as num?)?.toInt(),
       videoUrl: json['videoUrl']?.toString(),
       createdAt: Parse.toTimestamp(json['createdAt']),
-      rankingScore: (json['rankingScore'] as num?)?.toDouble() ?? 0.0,
       promotionScore: (json['promotionScore'] as num?)?.toDouble() ?? 0.0,
     );
   }

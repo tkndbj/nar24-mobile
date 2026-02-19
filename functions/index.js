@@ -4745,8 +4745,7 @@ function computeRankingScore(d, thresholds) {
   const rankingScore = Math.min(enhancedScore * boostMultiplier, 2.0);
   const promotionScore = d.isBoosted ? rankingScore + 1000 : rankingScore;
 
-  return {
-    rankingScore,
+  return {    
     promotionScore,
     lastRankingUpdate: admin.firestore.FieldValue.serverTimestamp(),
   };
@@ -7863,82 +7862,6 @@ export const createQrAuthSessionWebToPhone = onCall(
   },
 );
 
-export const updateBestSellerRanks = onSchedule(
-  {
-    schedule: 'every 6 hours',
-    timeZone: 'Europe/Istanbul',
-    region: 'europe-west3',
-  },
-  async () => {
-    const db = admin.firestore();
-    const shopProductsRef = db.collection('shop_products');
-
-    try {
-      // 1) grab all unique subsubcategories
-      const subSnap = await shopProductsRef
-        .orderBy('subsubcategory')
-        .select('subsubcategory')
-        .get();
-
-      const subsubs = [
-        ...new Set(
-          subSnap.docs
-            .map((d) => d.data().subsubcategory)
-            .filter((s) => typeof s === 'string' && s.trim()),
-        ),
-      ];
-
-      // 2) for each subsubcategory, do its ranking in parallel
-      await Promise.all(
-        subsubs.map(async (sub) => {
-          // kick off both queries in parallel
-          const [topSnap, restSnap] = await Promise.all([
-            shopProductsRef
-              .where('subsubcategory', '==', sub)
-              .orderBy('purchaseCount', 'desc')
-              .limit(10)
-              .get(),
-            shopProductsRef
-              .where('subsubcategory', '==', sub)
-              .where(
-                'purchaseCount',
-                '<',
-                // cutoff will be adjusted below if fewer than 10
-                topSnap.docs[9]?.data().purchaseCount ?? 0,
-              )
-              .get(),
-          ]);
-
-          if (topSnap.empty) return;
-
-          const batch = db.batch();
-          // assign 1–10
-          let rank = 1;
-          topSnap.docs.forEach((doc) => {
-            batch.update(doc.ref, {bestSellerRank: rank++});
-          });
-
-          // clear everyone else (below cutoff)
-          restSnap.docs.forEach((doc) => {
-            batch.update(doc.ref, {
-              bestSellerRank: admin.firestore.FieldValue.delete(),
-            });
-          });
-
-          await batch.commit();
-          console.log(`Updated bestSellerRank for "${sub}"`);
-        }),
-      );
-
-      console.log('Finished updating bestSellerRank for all subsubcategories');
-    } catch (error) {
-      console.error('Error updating bestSellerRank by subsubcategory:', error);
-      throw new HttpsError('internal', 'Failed to update bestSellerRank');
-    }
-
-    return null;
-  },
-);
 
 export const registerWithEmailPassword = onCall(
   {region: 'europe-west3'},

@@ -48,7 +48,6 @@ class Product {
   final String? archivedByAdminId;
 
   final String userId;
-  final double rankingScore;
   final double promotionScore;
   final String? campaign;
   final String ownerId;
@@ -71,11 +70,9 @@ class Product {
   final int boostedImpressionCount;
   final int boostImpressionCountAtStart;
   final bool isFeatured;
-  final bool isTrending;
   final bool isBoosted;
   final Timestamp? boostStartTime;
   final Timestamp? boostEndTime;
-  final int dailyClickCount;
   final Timestamp? lastClickDate;
   final bool paused;
   final String? campaignName;
@@ -108,7 +105,6 @@ class Product {
     required this.userId,
     this.discountThreshold,
     this.bulkDiscountPercentage,
-    this.rankingScore = 0,
     this.promotionScore = 0,
     this.campaign,
     required this.ownerId,
@@ -135,11 +131,9 @@ class Product {
     this.boostedImpressionCount = 0,
     required this.boostImpressionCountAtStart,
     this.isFeatured = false,
-    this.isTrending = false,
     this.isBoosted = false,
     this.boostStartTime,
     this.boostEndTime,
-    this.dailyClickCount = 0,
     this.lastClickDate,
     this.paused = false,
     this.campaignName,
@@ -187,7 +181,6 @@ class Product {
       colorQuantities: colorQuantities,
       isBoosted: isBoosted,
       isFeatured: isFeatured,
-      isTrending: isTrending,
       purchaseCount: purchaseCount,
       bestSellerRank: bestSellerRank,
       deliveryOption: deliveryOption,
@@ -197,7 +190,6 @@ class Product {
       bulkDiscountPercentage: bulkDiscountPercentage,
       videoUrl: videoUrl,
       createdAt: createdAt,
-      rankingScore: rankingScore,
       promotionScore: promotionScore,
     );
   }
@@ -246,7 +238,6 @@ class Product {
       bulkDiscountPercentage: d['bulkDiscountPercentage'] != null
           ? Parse.toInt(d['bulkDiscountPercentage'])
           : null,
-      rankingScore: Parse.toDouble(d['rankingScore']),
       promotionScore: Parse.toDouble(d['promotionScore']),
       campaign: Parse.toStrNullable(d['campaign']),
       ownerId: Parse.toStr(d['ownerId']),
@@ -278,11 +269,9 @@ class Product {
       boostImpressionCountAtStart:
           Parse.toInt(d['boostImpressionCountAtStart']),
       isFeatured: Parse.toBool(d['isFeatured']),
-      isTrending: Parse.toBool(d['isTrending']),
       isBoosted: Parse.toBool(d['isBoosted']),
       boostStartTime: Parse.toTimestampNullable(d['boostStartTime']),
       boostEndTime: Parse.toTimestampNullable(d['boostEndTime']),
-      dailyClickCount: Parse.toInt(d['dailyClickCount']),
       lastClickDate: Parse.toTimestampNullable(d['lastClickDate']),
       paused: Parse.toBool(d['paused']),
       campaignName: Parse.toStrNullable(d['campaignName']),
@@ -331,7 +320,6 @@ class Product {
           : [],
       relatedLastUpdated: Parse.toTimestampNullable(json['relatedLastUpdated']),
       relatedCount: json['relatedCount'] as int? ?? 0,
-      rankingScore: (json['rankingScore'] as num?)?.toDouble() ?? 0.0,
       promotionScore: (json['promotionScore'] as num?)?.toDouble() ?? 0.0,
       campaign: json['campaign'] as String?,
       ownerId: json['ownerId'] as String? ?? '',
@@ -359,11 +347,9 @@ class Product {
       boostImpressionCountAtStart:
           json['boostImpressionCountAtStart'] as int? ?? 0,
       isFeatured: json['isFeatured'] as bool? ?? false,
-      isTrending: json['isTrending'] as bool? ?? false,
       isBoosted: json['isBoosted'] as bool? ?? false,
       boostStartTime: Parse.toTimestampNullable(json['boostStartTime']),
       boostEndTime: Parse.toTimestampNullable(json['boostEndTime']),
-      dailyClickCount: json['dailyClickCount'] as int? ?? 0,
       lastClickDate: Parse.toTimestampNullable(json['lastClickDate']),
       paused: json['paused'] as bool? ?? false,
       campaignName: json['campaignName'] as String?,
@@ -427,7 +413,6 @@ class Product {
           : [],
       userId: json['userId']?.toString() ?? '',
       discountThreshold: (json['discountThreshold'] as num?)?.toInt(),
-      rankingScore: (json['rankingScore'] as num?)?.toDouble() ?? 0.0,
       promotionScore: (json['promotionScore'] as num?)?.toDouble() ?? 0.0,
       campaign: json['campaign']?.toString(),
       relatedProductIds: json['relatedProductIds'] != null
@@ -461,11 +446,9 @@ class Product {
       boostImpressionCountAtStart:
           (json['boostImpressionCountAtStart'] as num?)?.toInt() ?? 0,
       isFeatured: json['isFeatured'] as bool? ?? false,
-      isTrending: json['isTrending'] as bool? ?? false,
       isBoosted: json['isBoosted'] as bool? ?? false,
       boostStartTime: Parse.toTimestampNullable(json['boostStartTime']),
       boostEndTime: Parse.toTimestampNullable(json['boostEndTime']),
-      dailyClickCount: (json['dailyClickCount'] as num?)?.toInt() ?? 0,
       lastClickDate: Parse.toTimestampNullable(json['lastClickDate']),
       paused: json['paused'] as bool? ?? false,
       campaignName: json['campaignName']?.toString(),
@@ -508,7 +491,6 @@ class Product {
       'userId': userId,
       'discountThreshold': discountThreshold,
       'bulkDiscountPercentage': bulkDiscountPercentage,
-      'rankingScore': rankingScore,
       'promotionScore': promotionScore,
       'campaign': campaign,
       'ownerId': ownerId,
@@ -536,11 +518,9 @@ class Product {
       'boostedImpressionCount': boostedImpressionCount,
       'boostImpressionCountAtStart': boostImpressionCountAtStart,
       'isFeatured': isFeatured,
-      'isTrending': isTrending,
       'isBoosted': isBoosted,
       'boostStartTime': boostStartTime,
       'boostEndTime': boostEndTime,
-      'dailyClickCount': dailyClickCount,
       'lastClickDate': lastClickDate,
       'paused': paused,
       'campaignName': campaignName,
@@ -603,11 +583,9 @@ class Product {
       'boostedImpressionCount': boostedImpressionCount,
       'boostImpressionCountAtStart': boostImpressionCountAtStart,
       'isFeatured': isFeatured,
-      'isTrending': isTrending,
       'isBoosted': isBoosted,
       'boostStartTime': boostStartTime?.millisecondsSinceEpoch,
       'boostEndTime': boostEndTime?.millisecondsSinceEpoch,
-      'dailyClickCount': dailyClickCount,
       'lastClickDate': lastClickDate?.millisecondsSinceEpoch,
       'paused': paused,
       'promotionScore': promotionScore,
@@ -651,7 +629,6 @@ class Product {
     int? discountThreshold,
     int? bulkDiscountPercentage,
     List<Map<String, dynamic>>? bundleData,
-    double? rankingScore,
     double? promotionScore,
     int? maxQuantity,
     String? campaign,
@@ -678,11 +655,9 @@ class Product {
     int? boostedImpressionCount,
     int? boostImpressionCountAtStart,
     bool? isFeatured,
-    bool? isTrending,
     bool? isBoosted,
     Timestamp? boostStartTime,
     Timestamp? boostEndTime,
-    int? dailyClickCount,
     Timestamp? lastClickDate,
     bool? paused,
     String? campaignName,
@@ -722,7 +697,6 @@ class Product {
       discountThreshold: discountThreshold ?? this.discountThreshold,
       bulkDiscountPercentage:
           bulkDiscountPercentage ?? this.bulkDiscountPercentage,
-      rankingScore: rankingScore ?? this.rankingScore,
       needsUpdate: needsUpdate ?? this.needsUpdate,
       archiveReason: archiveReason ?? this.archiveReason,
       archivedByAdmin: archivedByAdmin ?? this.archivedByAdmin,
@@ -751,11 +725,9 @@ class Product {
       boostImpressionCountAtStart:
           boostImpressionCountAtStart ?? this.boostImpressionCountAtStart,
       isFeatured: isFeatured ?? this.isFeatured,
-      isTrending: isTrending ?? this.isTrending,
       isBoosted: isBoosted ?? this.isBoosted,
       boostStartTime: boostStartTime ?? this.boostStartTime,
       boostEndTime: boostEndTime ?? this.boostEndTime,
-      dailyClickCount: dailyClickCount ?? this.dailyClickCount,
       lastClickDate: lastClickDate ?? this.lastClickDate,
       paused: paused ?? this.paused,
       campaignName: campaignName ?? this.campaignName,
