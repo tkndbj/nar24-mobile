@@ -138,26 +138,14 @@ class SpecialFilterProviderMarket with ChangeNotifier {
   // Setter for subcategory sort option
   void setSubcategorySortOption(String sortOption) {
     if (_subcategorySortOption != sortOption) {
-      _subcategorySortOption = sortOption;
-
-      // Clear cache and reset pagination when sort changes
+      // Save snapshot BEFORE changing sort so we can restore on toggle-back
       if (_currentCategory != null && _currentSubcategoryId != null) {
-        final key = '$_currentCategory|$_currentSubcategoryId';
-        _specificSubcategoryPages[key] = 0;
-        _specificSubcategoryLastDocs[key] = null;
-        _specificSubcategoryProducts[key] = [];
-        _specificSubcategoryProductIds[key] = {};
-
-        // Clear all cached pages for this subcategory
-        final keysToRemove = _productCache.keys
-            .where((cacheKey) => cacheKey.startsWith('$key|'))
-            .toList();
-        for (final cacheKey in keysToRemove) {
-          _productCache.remove(cacheKey);
-          _cacheTimestamps.remove(cacheKey);
-        }
+        final key = _getSubcategoryKey(
+            _currentCategory!, _currentSubcategoryId!,
+            gender: _currentGender);
+        _saveSubcategorySnapshot(key);
       }
-
+      _subcategorySortOption = sortOption;
       notifyListeners();
     }
   }
@@ -225,38 +213,21 @@ class SpecialFilterProviderMarket with ChangeNotifier {
   Future<void> setQuickFilter(String? filterKey) async {
     if (_selectedFilterNotifier.value == filterKey) return;
 
-    _selectedFilterNotifier.value = filterKey;
-    print('🔄 SpecialFilterProviderMarket: setQuickFilter to: $filterKey');
-
     if (_currentCategory != null && _currentSubcategoryId != null) {
-      final key = '$_currentCategory|$_currentSubcategoryId';
-
-      // Reset pagination state
-      _specificSubcategoryPages[key] = 0;
-      _specificSubcategoryHasMore[key] = true;
-      _specificSubcategoryLastDocs[key] = null;
-      _specificSubcategoryLoading[key] = false;
-      _specificSubcategoryLoadingMore[key] = false;
-
-      // Update ValueNotifiers
-      _updateSubcategoryLoadingState(key, false);
-      _updateSubcategoryLoadingMoreState(key, false);
-
-      _specificSubcategoryProducts[key] = [];
-      _specificSubcategoryProductIds[key] = {};
-
-      final page0CacheKey = '$key|0';
-      _productCache.remove(page0CacheKey);
-      _cacheTimestamps.remove(page0CacheKey);
-
-      notifyListeners();
+      // Save snapshot BEFORE changing quick filter so the key reflects OLD state
+      final key = _getSubcategoryKey(
+          _currentCategory!, _currentSubcategoryId!,
+          gender: _currentGender);
+      _saveSubcategorySnapshot(key);
 
       await fetchSubcategoryProducts(
         _currentCategory!,
         _currentSubcategoryId!,
         selectedFilter: filterKey,
+        gender: _currentGender,
       );
     } else {
+      _selectedFilterNotifier.value = filterKey;
       notifyListeners();
     }
   }
@@ -313,6 +284,17 @@ class SpecialFilterProviderMarket with ChangeNotifier {
   final Map<String, bool> _specificSubcategoryLoadingMore = {};
   final Map<String, bool> _specificSubcategoryHasMore = {};
   final Map<String, DocumentSnapshot?> _specificSubcategoryLastDocs = {};
+
+  // Subcategory snapshot cache — for instant restore on filter/sort/quickFilter toggle.
+  // Keyed by _buildSubcategorySnapshotKey(), stores full subcategory state per filter combo.
+  static const Duration _snapshotTtl = Duration(minutes: 5);
+  static const int _maxSnapshotEntries = 20;
+  final Map<String, List<ProductSummary>> _snapshotProducts = {};
+  final Map<String, Set<String>> _snapshotProductIds = {};
+  final Map<String, int> _snapshotPages = {};
+  final Map<String, bool> _snapshotHasMore = {};
+  final Map<String, DocumentSnapshot?> _snapshotLastDocs = {};
+  final Map<String, DateTime> _snapshotTs = {};
 
   final BehaviorSubject<List<String>> _productIdsSubject =
       BehaviorSubject<List<String>>.seeded([]);
@@ -1258,18 +1240,115 @@ class SpecialFilterProviderMarket with ChangeNotifier {
   // Store current gender filter for pagination
   String? _currentGender;
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // SUBCATEGORY SNAPSHOT CACHE
+  // ──────────────────────────────────────────────────────────────────────────
+
+  String _buildSubcategorySnapshotKey(String subcategoryKey) {
+    final parts = <String>[subcategoryKey];
+    parts.add('qf:${_selectedFilterNotifier.value ?? 'none'}');
+    parts.add('sort:$_subcategorySortOption');
+    if (_dynamicBrandNotifier.value != null) {
+      parts.add('brand:${_dynamicBrandNotifier.value}');
+    }
+    if (_dynamicColorsNotifier.value.isNotEmpty) {
+      final sorted = List<String>.from(_dynamicColorsNotifier.value)..sort();
+      parts.add('colors:${sorted.join(",")}');
+    }
+    if (_dynamicSubsubcategoryNotifier.value != null) {
+      parts.add('subsub:${_dynamicSubsubcategoryNotifier.value}');
+    }
+    return parts.join('|');
+  }
+
+  void _saveSubcategorySnapshot(String subcategoryKey) {
+    final products = _specificSubcategoryProducts[subcategoryKey];
+    if (products == null || products.isEmpty) return;
+
+    final snapshotKey = _buildSubcategorySnapshotKey(subcategoryKey);
+    _snapshotProducts[snapshotKey] = List<ProductSummary>.from(products);
+    _snapshotProductIds[snapshotKey] =
+        Set<String>.from(_specificSubcategoryProductIds[subcategoryKey] ?? {});
+    _snapshotPages[snapshotKey] = _specificSubcategoryPages[subcategoryKey] ?? 0;
+    _snapshotHasMore[snapshotKey] =
+        _specificSubcategoryHasMore[subcategoryKey] ?? false;
+    _snapshotLastDocs[snapshotKey] =
+        _specificSubcategoryLastDocs[subcategoryKey];
+    _snapshotTs[snapshotKey] = DateTime.now();
+    _pruneSubcategorySnapshots();
+  }
+
+  bool _tryRestoreSubcategorySnapshot(
+      String subcategoryKey, String snapshotKey) {
+    final cached = _snapshotProducts[snapshotKey];
+    final ts = _snapshotTs[snapshotKey];
+    final now = DateTime.now();
+
+    if (cached != null && ts != null && now.difference(ts) < _snapshotTtl) {
+      _specificSubcategoryProducts[subcategoryKey] =
+          List<ProductSummary>.from(cached);
+      _specificSubcategoryProductIds[subcategoryKey] =
+          Set<String>.from(_snapshotProductIds[snapshotKey] ?? {});
+      _specificSubcategoryPages[subcategoryKey] =
+          _snapshotPages[snapshotKey] ?? 0;
+      _specificSubcategoryHasMore[subcategoryKey] =
+          _snapshotHasMore[snapshotKey] ?? false;
+      _specificSubcategoryLastDocs[subcategoryKey] =
+          _snapshotLastDocs[snapshotKey];
+      _snapshotTs[snapshotKey] = now; // LRU touch
+      return true;
+    }
+
+    if (cached != null) {
+      _removeSubcategorySnapshotEntry(snapshotKey);
+    }
+    return false;
+  }
+
+  void _removeSubcategorySnapshotEntry(String snapshotKey) {
+    _snapshotProducts.remove(snapshotKey);
+    _snapshotProductIds.remove(snapshotKey);
+    _snapshotPages.remove(snapshotKey);
+    _snapshotHasMore.remove(snapshotKey);
+    _snapshotLastDocs.remove(snapshotKey);
+    _snapshotTs.remove(snapshotKey);
+  }
+
+  void _pruneSubcategorySnapshots() {
+    final now = DateTime.now();
+    final keysToRemove = <String>[];
+    _snapshotTs.forEach((key, timestamp) {
+      if (now.difference(timestamp) >= _snapshotTtl) {
+        keysToRemove.add(key);
+      }
+    });
+    for (final key in keysToRemove) {
+      _removeSubcategorySnapshotEntry(key);
+    }
+
+    if (_snapshotProducts.length > _maxSnapshotEntries) {
+      final sortedEntries = _snapshotTs.entries.toList()
+        ..sort((a, b) => a.value.compareTo(b.value));
+      final entriesToRemove = sortedEntries
+          .take(_snapshotProducts.length - _maxSnapshotEntries)
+          .map((e) => e.key);
+      for (final key in entriesToRemove) {
+        _removeSubcategorySnapshotEntry(key);
+      }
+    }
+  }
+
   Future<void> fetchSubcategoryProducts(String category, String subcategoryId,
       {String? selectedFilter, String? gender}) async {
+    // ✅ FIX: Include gender in key to prevent cache conflicts
+    final key = gender != null && gender.isNotEmpty
+        ? '$category|$subcategoryId|$gender'
+        : '$category|$subcategoryId';
+
     _currentCategory = category;
     _currentSubcategoryId = subcategoryId;
     _currentGender = gender;
     _selectedFilterNotifier.value = selectedFilter;
-
-    // ✅ FIX: Include gender in key to prevent cache conflicts
-    // Women's Accessories and Men's Accessories should have different keys
-    final key = gender != null && gender.isNotEmpty
-        ? '$category|$subcategoryId|$gender'
-        : '$category|$subcategoryId';
 
     _specificSubcategoryProducts[key] ??= [];
     _specificSubcategoryProductIds[key] ??= <String>{};
@@ -1280,6 +1359,16 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     _specificSubcategoryLoadingMore[key] ??= false;
 
     if (_specificSubcategoryLoading[key] == true) return;
+
+    // Try to restore from snapshot cache for this filter combination
+    final snapshotKey = _buildSubcategorySnapshotKey(key);
+    if (_tryRestoreSubcategorySnapshot(key, snapshotKey)) {
+      _updateSubcategoryLoadingState(key, false);
+      _updateSubcategoryHasMoreState(
+          key, _specificSubcategoryHasMore[key] ?? false);
+      notifyListeners();
+      return;
+    }
 
     _updateSubcategoryLoadingState(key, true);
 
@@ -1698,6 +1787,14 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     _specificSubcategoryLoadingMore.clear();
     _specificSubcategoryHasMore.clear();
     _specificSubcategoryLastDocs.clear();
+
+    // Clear snapshot cache
+    _snapshotProducts.clear();
+    _snapshotProductIds.clear();
+    _snapshotPages.clear();
+    _snapshotHasMore.clear();
+    _snapshotLastDocs.clear();
+    _snapshotTs.clear();
 
     // 7. ✅ NEW: Reset state variables
     _currentCategory = null;

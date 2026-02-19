@@ -485,6 +485,11 @@ class ClickTrackingService {
     _db = null;
   }
 
+  /// Public flush method for lifecycle management
+  Future<void> flush() async {
+    await _flushClicks();
+  }
+
   Map<String, dynamic> getMetrics() {
     return {
       'bufferedClicks': _getTotalBufferedCount(),

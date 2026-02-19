@@ -86,6 +86,14 @@ class CategoryBoxesProvider with ChangeNotifier {
   final Map<String, DateTime> _cacheTs = {};
   static const Duration _cacheTtl = Duration(minutes: 5);
 
+  // Filter state snapshot cache — for instant restore on filter toggle/clear.
+  final Map<String, Map<int, List<ProductSummary>>> _filterPageCache = {};
+  final Map<String, Map<int, DocumentSnapshot>> _filterPageCursors = {};
+  final Map<String, bool> _filterHasMore = {};
+  final Map<String, int> _filterCurrentPage = {};
+  final Map<String, List<ProductSummary>> _filterBoostedCache = {};
+  final Map<String, DateTime> _filterCacheTs = {};
+
   int _filterSeq = 0; // to guard against stale fetchPage calls
 
   String? _category;
@@ -145,11 +153,12 @@ class CategoryBoxesProvider with ChangeNotifier {
     await _resetAndFetch();
   }
 
-  /// Change sort order → clear state + fetch page 0
+  /// Change sort order → save snapshot → restore or fetch
   Future<void> setSortOption(String option) async {
     if (_sortOption == option) return;
+    _saveFilterSnapshot();
     _sortOption = option;
-    await _resetAndFetch();
+    await _restoreOrFetch();
   }
 
   /// Apply dynamic filters with additive behavior
@@ -161,6 +170,7 @@ class CategoryBoxesProvider with ChangeNotifier {
     bool additive = true,
   }) async {
     bool hasChanged = false;
+    _saveFilterSnapshot();
 
     if (additive) {
       if (brands != null) {
@@ -200,7 +210,7 @@ class CategoryBoxesProvider with ChangeNotifier {
     }
 
     if (hasChanged) {
-      await _resetAndFetch();
+      await _restoreOrFetch();
     }
   }
 
@@ -219,6 +229,7 @@ class CategoryBoxesProvider with ChangeNotifier {
     bool clearPrice = false,
   }) async {
     bool changed = false;
+    _saveFilterSnapshot();
 
     if (brand != null && _dynamicBrands.contains(brand)) {
       _dynamicBrands.remove(brand);
@@ -237,17 +248,19 @@ class CategoryBoxesProvider with ChangeNotifier {
     }
 
     if (changed) {
-      await _resetAndFetch();
+      await _restoreOrFetch();
     }
   }
 
   /// Clear all dynamic filters
   Future<void> clearDynamicFilters() async {
+    if (!hasDynamicFilters) return;
+    _saveFilterSnapshot();
     _dynamicBrands.clear();
     _dynamicColors.clear();
     _minPrice = null;
     _maxPrice = null;
-    await _resetAndFetch();
+    await _restoreOrFetch();
   }
 
   /// Load the next page if `hasMore == true`
@@ -303,6 +316,123 @@ class CategoryBoxesProvider with ChangeNotifier {
     count += _dynamicColors.length;
     if (_minPrice != null || _maxPrice != null) count++;
     return count;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // FILTER SNAPSHOT CACHE
+  // ──────────────────────────────────────────────────────────────────────────
+
+  String _buildFilterCacheKey() {
+    final parts = <String>[];
+    parts.add(_quickFilter ?? 'default');
+    if (_dynamicBrands.isNotEmpty) {
+      final sorted = List<String>.from(_dynamicBrands)..sort();
+      parts.add('b:${sorted.join(",")}');
+    }
+    if (_dynamicColors.isNotEmpty) {
+      final sorted = List<String>.from(_dynamicColors)..sort();
+      parts.add('c:${sorted.join(",")}');
+    }
+    if (_minPrice != null) parts.add('min:$_minPrice');
+    if (_maxPrice != null) parts.add('max:$_maxPrice');
+    if (_category != null) parts.add('cat:$_category');
+    if (_subcategory != null) parts.add('sub:$_subcategory');
+    if (_subSubcategory != null) parts.add('subsub:$_subSubcategory');
+    parts.add('sort:$_sortOption');
+    return parts.join('|');
+  }
+
+  void _saveFilterSnapshot() {
+    if (_pageCache.isEmpty) return;
+    final key = _buildFilterCacheKey();
+    _filterPageCache[key] = Map<int, List<ProductSummary>>.from(
+      _pageCache.map((k, v) => MapEntry(k, List<ProductSummary>.from(v))),
+    );
+    _filterPageCursors[key] = Map<int, DocumentSnapshot>.from(_pageCursors);
+    _filterHasMore[key] = _hasMore;
+    _filterCurrentPage[key] = _currentPage;
+    if (_boostedProducts.isNotEmpty) {
+      _filterBoostedCache[key] = List<ProductSummary>.from(_boostedProducts);
+    }
+    _filterCacheTs[key] = DateTime.now();
+    _pruneFilterCache();
+  }
+
+  Future<void> _restoreOrFetch() async {
+    final key = _buildFilterCacheKey();
+    final cached = _filterPageCache[key];
+    final ts = _filterCacheTs[key];
+    final now = DateTime.now();
+
+    if (cached != null && ts != null && now.difference(ts) < _cacheTtl) {
+      _pageCache.clear();
+      _pageCache.addAll(cached);
+
+      _pageCursors.clear();
+      final cachedCursors = _filterPageCursors[key];
+      if (cachedCursors != null) {
+        _pageCursors.addAll(cachedCursors);
+      }
+
+      _hasMore = _filterHasMore[key] ?? true;
+      _currentPage = _filterCurrentPage[key] ??
+          (cached.keys.isEmpty ? 0 : cached.keys.reduce((a, b) => a > b ? a : b));
+      _rebuildAllLoaded();
+      _products
+        ..clear()
+        ..addAll(_allLoaded);
+
+      final cachedBoosted = _filterBoostedCache[key];
+      if (cachedBoosted != null) {
+        _boostedProducts
+          ..clear()
+          ..addAll(cachedBoosted);
+      } else {
+        _boostedProducts.clear();
+      }
+
+      _filterCacheTs[key] = now;
+      notifyListeners();
+    } else {
+      if (cached != null) {
+        _removeFilterCacheEntry(key);
+      }
+      await _resetAndFetch();
+    }
+  }
+
+  void _removeFilterCacheEntry(String key) {
+    _filterPageCache.remove(key);
+    _filterPageCursors.remove(key);
+    _filterHasMore.remove(key);
+    _filterCurrentPage.remove(key);
+    _filterBoostedCache.remove(key);
+    _filterCacheTs.remove(key);
+  }
+
+  void _pruneFilterCache() {
+    final now = DateTime.now();
+    final keysToRemove = <String>[];
+    _filterCacheTs.forEach((key, timestamp) {
+      if (now.difference(timestamp) >= _cacheTtl) {
+        keysToRemove.add(key);
+      }
+    });
+    for (final key in keysToRemove) {
+      _removeFilterCacheEntry(key);
+    }
+
+    const maxCacheEntries = 20;
+    if (_filterPageCache.length > maxCacheEntries) {
+      final sortedEntries = _filterCacheTs.entries.toList()
+        ..sort((a, b) => a.value.compareTo(b.value));
+      final entriesToRemove = sortedEntries
+          .take(_filterPageCache.length - maxCacheEntries)
+          .map((e) => e.key);
+      for (final key in entriesToRemove) {
+        _removeFilterCacheEntry(key);
+      }
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -497,8 +627,9 @@ class CategoryBoxesProvider with ChangeNotifier {
 
   Future<void> setQuickFilter(String? filterKey) async {
     if (_quickFilter == filterKey) return;
+    _saveFilterSnapshot();
     _quickFilter = filterKey;
-    await _resetAndFetch();
+    await _restoreOrFetch();
   }
 
   /// Fetch "boosted" products. If subSubcategory is set, filter by it;

@@ -43,9 +43,13 @@ class ShopMarketProvider with ChangeNotifier {
   List<ProductSummary> get rawProducts => List.unmodifiable(_allLoaded);
   Map<int, List<ProductSummary>> get pageCache => _pageCache;
 
-  // Filter page cache — for quick filter switching
+  // Filter state snapshot cache — for instant restore on filter toggle/clear.
+  // Keyed by _buildFilterCacheKey(), stores full page state per filter combo.
   final Map<String, Map<int, List<ProductSummary>>> _filterPageCache = {};
+  final Map<String, Map<int, DocumentSnapshot>> _filterPageCursors = {};
   final Map<String, bool> _filterHasMore = {};
+  final Map<String, int> _filterCurrentPage = {};
+  final Map<String, List<ProductSummary>> _filterBoostedCache = {};
   final Map<String, DateTime> _filterCacheTs = {};
 
   Future<void> fetchPage(int page) => _fetchPage(page: page);
@@ -164,8 +168,9 @@ class ShopMarketProvider with ChangeNotifier {
 
   Future<void> setSortOption(String option) async {
     if (_sortOption == option) return;
+    _saveFilterSnapshot();
     _sortOption = option;
-    await _resetAndFetch();
+    await _restoreOrFetch();
   }
 
   void _docCachePut(String id, ProductSummary p) {
@@ -203,6 +208,9 @@ class ShopMarketProvider with ChangeNotifier {
     bool additive = true,
   }) async {
     bool changed = false;
+    // Snapshot current state BEFORE mutating filters
+    _saveFilterSnapshot();
+
     if (additive) {
       if (brands != null)
         for (final b in brands)
@@ -247,10 +255,7 @@ class ShopMarketProvider with ChangeNotifier {
     }
 
     if (changed) {
-      _filterPageCache.clear();
-      _filterHasMore.clear();
-      _filterCacheTs.clear();
-      await _resetAndFetch();
+      await _restoreOrFetch();
     }
   }
 
@@ -261,6 +266,9 @@ class ShopMarketProvider with ChangeNotifier {
     bool clearPrice = false,
   }) async {
     bool changed = false;
+    // Snapshot current state BEFORE mutating filters
+    _saveFilterSnapshot();
+
     if (brand != null && _dynamicBrands.contains(brand)) {
       _dynamicBrands.remove(brand);
       changed = true;
@@ -281,44 +289,40 @@ class ShopMarketProvider with ChangeNotifier {
     }
 
     if (changed) {
-      _filterPageCache.clear();
-      _filterHasMore.clear();
-      _filterCacheTs.clear();
-      await _resetAndFetch();
+      await _restoreOrFetch();
     }
   }
 
   Future<void> clearDynamicFilters() async {
-    final has = hasDynamicFilters;
-    if (has) {
-      _dynamicBrands.clear();
-      _dynamicColors.clear();
-      _dynamicSubSubcategories.clear();
-      _minPrice = null;
-      _maxPrice = null;
-      _filterPageCache.clear();
-      _filterHasMore.clear();
-      _filterCacheTs.clear();
-      await _resetAndFetch();
-    }
+    if (!hasDynamicFilters) return;
+
+    // Snapshot current state BEFORE clearing filters
+    _saveFilterSnapshot();
+
+    _dynamicBrands.clear();
+    _dynamicColors.clear();
+    _dynamicSubSubcategories.clear();
+    _minPrice = null;
+    _maxPrice = null;
+
+    await _restoreOrFetch();
   }
 
   void _pruneFilterCache() {
     final now = DateTime.now();
 
+    // Evict expired entries
     final keysToRemove = <String>[];
     _filterCacheTs.forEach((key, timestamp) {
       if (now.difference(timestamp) >= _cacheTtl) {
         keysToRemove.add(key);
       }
     });
-
     for (final key in keysToRemove) {
-      _filterPageCache.remove(key);
-      _filterHasMore.remove(key);
-      _filterCacheTs.remove(key);
+      _removeFilterCacheEntry(key);
     }
 
+    // Enforce max snapshot count (LRU eviction)
     const maxCacheEntries = 20;
     if (_filterPageCache.length > maxCacheEntries) {
       final sortedEntries = _filterCacheTs.entries.toList()
@@ -329,50 +333,99 @@ class ShopMarketProvider with ChangeNotifier {
           .map((e) => e.key);
 
       for (final key in entriesToRemove) {
-        _filterPageCache.remove(key);
-        _filterHasMore.remove(key);
-        _filterCacheTs.remove(key);
+        _removeFilterCacheEntry(key);
       }
+    }
+  }
+
+  void _removeFilterCacheEntry(String key) {
+    _filterPageCache.remove(key);
+    _filterPageCursors.remove(key);
+    _filterHasMore.remove(key);
+    _filterCurrentPage.remove(key);
+    _filterBoostedCache.remove(key);
+    _filterCacheTs.remove(key);
+  }
+
+  /// Saves the current page state, boosted products, and pagination position
+  /// as a snapshot keyed by the current filter configuration.
+  void _saveFilterSnapshot() {
+    if (_pageCache.isEmpty) return; // Nothing to save
+
+    final key = _buildFilterCacheKey();
+    _filterPageCache[key] = Map<int, List<ProductSummary>>.from(
+      _pageCache.map((k, v) => MapEntry(k, List<ProductSummary>.from(v))),
+    );
+    _filterPageCursors[key] = Map<int, DocumentSnapshot>.from(_pageCursors);
+    _filterHasMore[key] = _hasMore;
+    _filterCurrentPage[key] = _currentPage;
+    if (_boostedProducts.isNotEmpty) {
+      _filterBoostedCache[key] = List<ProductSummary>.from(_boostedProducts);
+    }
+    _filterCacheTs[key] = DateTime.now();
+    _pruneFilterCache();
+  }
+
+  /// Tries to restore from a cached snapshot for the current filter config.
+  /// If a fresh snapshot exists, restores instantly (zero Firestore reads).
+  /// Otherwise falls back to a full server fetch.
+  Future<void> _restoreOrFetch() async {
+    final key = _buildFilterCacheKey();
+    final cached = _filterPageCache[key];
+    final ts = _filterCacheTs[key];
+    final now = DateTime.now();
+
+    if (cached != null && ts != null && now.difference(ts) < _cacheTtl) {
+      // Cache hit — instant restore
+      _pageCache.clear();
+      _pageCache.addAll(cached);
+
+      // Restore Firestore pagination cursors so loadMore() continues correctly
+      _pageCursors.clear();
+      final cachedCursors = _filterPageCursors[key];
+      if (cachedCursors != null) {
+        _pageCursors.addAll(cachedCursors);
+      }
+
+      _hasMore = _filterHasMore[key] ?? true;
+      _currentPage = _filterCurrentPage[key] ?? (cached.keys.isEmpty ? 0 : cached.keys.reduce((a, b) => a > b ? a : b));
+      _rebuildAllLoaded();
+      _products
+        ..clear()
+        ..addAll(_allLoaded);
+
+      // Restore boosted products if available
+      final cachedBoosted = _filterBoostedCache[key];
+      if (cachedBoosted != null) {
+        _boostedProducts
+          ..clear()
+          ..addAll(cachedBoosted);
+      } else {
+        _boostedProducts.clear();
+      }
+
+      // Touch timestamp so LRU eviction considers this recently used
+      _filterCacheTs[key] = now;
+      notifyListeners();
+    } else {
+      // Cache miss or stale — clean up and fetch from server
+      if (cached != null) {
+        _removeFilterCacheEntry(key);
+      }
+      await _resetAndFetch();
     }
   }
 
   Future<void> setQuickFilter(String? filterKey) async {
     if (_quickFilter == filterKey) return;
 
-    // Save current state
-    final currentCacheKey = _buildFilterCacheKey();
-    _filterPageCache[currentCacheKey] = Map<int, List<ProductSummary>>.from(
-      _pageCache.map((k, v) => MapEntry(k, List<ProductSummary>.from(v))),
-    );
-    _filterHasMore[currentCacheKey] = _hasMore;
-    _filterCacheTs[currentCacheKey] = DateTime.now();
-    _pruneFilterCache();
+    // Save current state before switching
+    _saveFilterSnapshot();
 
     _quickFilter = filterKey;
 
-    // Check cache for new filter
-    final newCacheKey = _buildFilterCacheKey();
-    final cached = _filterPageCache[newCacheKey];
-    final ts = _filterCacheTs[newCacheKey];
-    final now = DateTime.now();
-
-    if (cached != null && ts != null && now.difference(ts) < _cacheTtl) {
-      _pageCache.clear();
-      _pageCache.addAll(cached);
-      _hasMore = _filterHasMore[newCacheKey] ?? true;
-      _rebuildAllLoaded();
-      _products.clear();
-      _products.addAll(_allLoaded);
-      _filterCacheTs[newCacheKey] = now;
-      notifyListeners();
-    } else {
-      if (cached != null) {
-        _filterPageCache.remove(newCacheKey);
-        _filterHasMore.remove(newCacheKey);
-        _filterCacheTs.remove(newCacheKey);
-      }
-      await _resetAndFetch();
-    }
+    // Try to restore the new filter's state from cache
+    await _restoreOrFetch();
   }
 
   Future<void> fetchMoreProducts() async {

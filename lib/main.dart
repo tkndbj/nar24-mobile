@@ -543,7 +543,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       // Flush pending data before going to background
       ImpressionBatcher().flush();
       UserActivityService.instance.forceFlush();
-      ClickTrackingService.instance.dispose();
+      ClickTrackingService.instance.flush();
 
       // Clear static caches
       try {
@@ -561,6 +561,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
 
     if (state == AppLifecycleState.detached) {
+      ClickTrackingService.instance.dispose();
       SearchConfigService.instance.shutdown();
     }
 

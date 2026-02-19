@@ -45,7 +45,10 @@ class DynamicTerasProvider with ChangeNotifier {
   Map<int, List<ProductSummary>> get pageCache => _pageCache;
 
   final Map<String, Map<int, List<ProductSummary>>> _filterPageCache = {};
+  final Map<String, Map<int, DocumentSnapshot>> _filterPageCursors = {};
   final Map<String, bool> _filterHasMore = {};
+  final Map<String, int> _filterCurrentPage = {};
+  final Map<String, List<ProductSummary>> _filterBoostedCache = {};
   final Map<String, DateTime> _filterCacheTs = {};
 
   Future<void> fetchPage(int page) => _fetchPage(page: page);
@@ -160,8 +163,9 @@ class DynamicTerasProvider with ChangeNotifier {
 
   Future<void> setSortOption(String option) async {
     if (_sortOption == option) return;
+    _saveFilterSnapshot();
     _sortOption = option;
-    await _resetAndFetch();
+    await _restoreOrFetch();
   }
 
   void _docCachePut(String id, ProductSummary p) {
@@ -200,6 +204,8 @@ Future<void> setDynamicFilter({
   bool additive = true,
 }) async {
   bool changed = false;
+  _saveFilterSnapshot();
+
   if (additive) {
     if (brands != null) for (final b in brands) if (!_dynamicBrands.contains(b)) { _dynamicBrands.add(b); changed = true; }
     if (colors != null) for (final c in colors) if (!_dynamicColors.contains(c)) { _dynamicColors.add(c); changed = true; }
@@ -211,13 +217,9 @@ Future<void> setDynamicFilter({
   }
   if (minPrice != _minPrice) { _minPrice = minPrice; changed = true; }
   if (maxPrice != _maxPrice) { _maxPrice = maxPrice; changed = true; }
-  
+
   if (changed) {
-    // Clear filter cache since filters have changed
-    _filterPageCache.clear();
-    _filterHasMore.clear();
-    _filterCacheTs.clear();
-    await _resetAndFetch();
+    await _restoreOrFetch();
   }
 }
 
@@ -228,110 +230,127 @@ Future<void> setDynamicFilter({
   bool clearPrice = false,
 }) async {
   bool changed = false;
+  _saveFilterSnapshot();
+
   if (brand != null && _dynamicBrands.contains(brand)) { _dynamicBrands.remove(brand); changed = true; }
   if (color != null && _dynamicColors.contains(color)) { _dynamicColors.remove(color); changed = true; }
   if (subSubcategory != null && _dynamicSubSubcategories.contains(subSubcategory)) { _dynamicSubSubcategories.remove(subSubcategory); changed = true; }
   if (clearPrice && (_minPrice != null || _maxPrice != null)) { _minPrice = null; _maxPrice = null; changed = true; }
-  
+
   if (changed) {
-    // Clear filter cache since filters have changed
-    _filterPageCache.clear();
-    _filterHasMore.clear();
-    _filterCacheTs.clear();
-    await _resetAndFetch();
+    await _restoreOrFetch();
   }
 }
 
 Future<void> clearDynamicFilters() async {
-  final has = hasDynamicFilters;
-  if (has) {
-    _dynamicBrands.clear();
-    _dynamicColors.clear();
-    _dynamicSubSubcategories.clear();
-    _minPrice = null;
-    _maxPrice = null;
-    // Clear filter cache
-    _filterPageCache.clear();
-    _filterHasMore.clear();
-    _filterCacheTs.clear();
+  if (!hasDynamicFilters) return;
+  _saveFilterSnapshot();
+  _dynamicBrands.clear();
+  _dynamicColors.clear();
+  _dynamicSubSubcategories.clear();
+  _minPrice = null;
+  _maxPrice = null;
+  await _restoreOrFetch();
+}
+
+void _saveFilterSnapshot() {
+  if (_pageCache.isEmpty) return;
+  final key = _buildFilterCacheKey();
+  _filterPageCache[key] = Map<int, List<ProductSummary>>.from(
+    _pageCache.map((k, v) => MapEntry(k, List<ProductSummary>.from(v))),
+  );
+  _filterPageCursors[key] = Map<int, DocumentSnapshot>.from(_pageCursors);
+  _filterHasMore[key] = _hasMore;
+  _filterCurrentPage[key] = _currentPage;
+  if (_boostedProducts.isNotEmpty) {
+    _filterBoostedCache[key] = List<ProductSummary>.from(_boostedProducts);
+  }
+  _filterCacheTs[key] = DateTime.now();
+  _pruneFilterCache();
+}
+
+Future<void> _restoreOrFetch() async {
+  final key = _buildFilterCacheKey();
+  final cached = _filterPageCache[key];
+  final ts = _filterCacheTs[key];
+  final now = DateTime.now();
+
+  if (cached != null && ts != null && now.difference(ts) < _cacheTtl) {
+    _pageCache.clear();
+    _pageCache.addAll(cached);
+
+    _pageCursors.clear();
+    final cachedCursors = _filterPageCursors[key];
+    if (cachedCursors != null) {
+      _pageCursors.addAll(cachedCursors);
+    }
+
+    _hasMore = _filterHasMore[key] ?? true;
+    _currentPage = _filterCurrentPage[key] ??
+        (cached.keys.isEmpty ? 0 : cached.keys.reduce((a, b) => a > b ? a : b));
+    _rebuildAllLoaded();
+    _products
+      ..clear()
+      ..addAll(_allLoaded);
+
+    final cachedBoosted = _filterBoostedCache[key];
+    if (cachedBoosted != null) {
+      _boostedProducts
+        ..clear()
+        ..addAll(cachedBoosted);
+    } else {
+      _boostedProducts.clear();
+    }
+
+    _filterCacheTs[key] = now;
+    notifyListeners();
+  } else {
+    if (cached != null) {
+      _removeFilterCacheEntry(key);
+    }
     await _resetAndFetch();
   }
 }
 
+void _removeFilterCacheEntry(String key) {
+  _filterPageCache.remove(key);
+  _filterPageCursors.remove(key);
+  _filterHasMore.remove(key);
+  _filterCurrentPage.remove(key);
+  _filterBoostedCache.remove(key);
+  _filterCacheTs.remove(key);
+}
+
 void _pruneFilterCache() {
   final now = DateTime.now();
-  
-  // First remove expired entries
   final keysToRemove = <String>[];
   _filterCacheTs.forEach((key, timestamp) {
     if (now.difference(timestamp) >= _cacheTtl) {
       keysToRemove.add(key);
     }
   });
-  
   for (final key in keysToRemove) {
-    _filterPageCache.remove(key);
-    _filterHasMore.remove(key);
-    _filterCacheTs.remove(key);
+    _removeFilterCacheEntry(key);
   }
-  
-  // Then apply size limit
+
   const maxCacheEntries = 20;
   if (_filterPageCache.length > maxCacheEntries) {
-    // Sort by timestamp to remove oldest first
     final sortedEntries = _filterCacheTs.entries.toList()
       ..sort((a, b) => a.value.compareTo(b.value));
-    
     final entriesToRemove = sortedEntries
         .take(_filterPageCache.length - maxCacheEntries)
         .map((e) => e.key);
-    
     for (final key in entriesToRemove) {
-      _filterPageCache.remove(key);
-      _filterHasMore.remove(key);
-      _filterCacheTs.remove(key);
+      _removeFilterCacheEntry(key);
     }
   }
 }
 
 Future<void> setQuickFilter(String? filterKey) async {
   if (_quickFilter == filterKey) return;
-  
-  // Save current state with full filter context
-  final currentCacheKey = _buildFilterCacheKey();
-  _filterPageCache[currentCacheKey] = Map.from(_pageCache);
-  _filterHasMore[currentCacheKey] = _hasMore;
-  _filterCacheTs[currentCacheKey] = DateTime.now(); // Add timestamp
-  _pruneFilterCache();
-  
-  // Update quick filter
+  _saveFilterSnapshot();
   _quickFilter = filterKey;
-  
-  // Check if we have cached pages for this exact filter combination
-  final newCacheKey = _buildFilterCacheKey();
-  final cached = _filterPageCache[newCacheKey];
-  final ts = _filterCacheTs[newCacheKey];
-  final now = DateTime.now();
-  
-  // Check both existence and expiration
-  if (cached != null && ts != null && now.difference(ts) < _cacheTtl) {
-    _pageCache.clear();
-    _pageCache.addAll(cached);
-    _hasMore = _filterHasMore[newCacheKey] ?? true;
-    _rebuildAllLoaded();
-    _products.clear();
-    _products.addAll(_allLoaded);
-    _filterCacheTs[newCacheKey] = now;
-    notifyListeners();
-  } else {
-    // Cache expired or doesn't exist
-    if (cached != null) {
-      _filterPageCache.remove(newCacheKey);
-      _filterHasMore.remove(newCacheKey);
-      _filterCacheTs.remove(newCacheKey);
-    }
-    await _resetAndFetch();
-  }
+  await _restoreOrFetch();
 }
 
   Future<void> fetchMoreProducts() async {

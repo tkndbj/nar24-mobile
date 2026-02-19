@@ -415,7 +415,9 @@ class _MarketScreenDynamicFiltersScreenState
         _error = null;
         _isLoading = true;
       });
-      _resultCache.clearCache();
+      // Don't clear the entire cache — let different filter combinations
+      // keep their separate cache entries for instant restore on toggle-back.
+      // The cache already has max 20 entries with 10-minute expiry.
     }
 
     try {
