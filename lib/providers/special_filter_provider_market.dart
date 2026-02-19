@@ -285,6 +285,24 @@ class SpecialFilterProviderMarket with ChangeNotifier {
   final Map<String, bool> _specificSubcategoryHasMore = {};
   final Map<String, DocumentSnapshot?> _specificSubcategoryLastDocs = {};
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // DUAL-QUERY STATE (for gender + colors Firestore conflict resolution)
+  // Firestore forbids whereIn + arrayContainsAny in the same query.
+  // When both gender and colors are active we split into two parallel queries:
+  //   Q1: gender == 'Women' + arrayContainsAny(colors)
+  //   Q2: gender == 'Unisex' + arrayContainsAny(colors)
+  // Each needs its own pagination cursor and hasMore flag.
+  // ──────────────────────────────────────────────────────────────────────────
+  final Map<String, DocumentSnapshot?> _dualQueryUnisexLastDocs = {};
+  final Map<String, bool> _dualQueryGenderHasMore = {};
+  final Map<String, bool> _dualQueryUnisexHasMore = {};
+
+  /// Returns true when the combination of active filters would cause a
+  /// Firestore conflict (whereIn for gender + arrayContainsAny for colors).
+  bool _needsDualGenderQuery(String? gender) {
+    return gender != null && gender.isNotEmpty && dynamicColors.isNotEmpty;
+  }
+
   // Subcategory snapshot cache — for instant restore on filter/sort/quickFilter toggle.
   // Keyed by _buildSubcategorySnapshotKey(), stores full subcategory state per filter combo.
   static const Duration _snapshotTtl = Duration(minutes: 5);
@@ -1338,6 +1356,222 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     }
   }
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // SUBCATEGORY FETCH HELPERS
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /// Builds the base Firestore query with all filters EXCEPT gender and colors.
+  /// Gender and colors are handled separately by [_executeSubcategoryFetch]
+  /// because Firestore forbids whereIn + arrayContainsAny in one query.
+  Query _buildSubcategoryBaseQuery({
+    required String category,
+    required String subcategoryId,
+    String? selectedFilter,
+  }) {
+    Query query = _firestore
+        .collection('shop_products')
+        .where('category', isEqualTo: category);
+
+    // Only add subcategory filter if it's different from category
+    if (subcategoryId.isNotEmpty && subcategoryId != category) {
+      query = query.where('subcategory', isEqualTo: subcategoryId);
+    }
+
+    // Apply selectedFilter (quick filters) or default sorting
+    if (selectedFilter != null && selectedFilter.isNotEmpty) {
+      switch (selectedFilter) {
+        case 'deals':
+          query = query
+              .where('discountPercentage', isGreaterThan: 0)
+              .orderBy('promotionScore', descending: true)
+              .orderBy('discountPercentage', descending: true);
+          break;
+        case 'boosted':
+          query = query
+              .where('isBoosted', isEqualTo: true)
+              .orderBy('promotionScore', descending: true)
+              .orderBy('createdAt', descending: true);
+          break;
+        case 'trending':
+          query = query
+              .where('dailyClickCount', isGreaterThanOrEqualTo: 10)
+              .orderBy('promotionScore', descending: true)
+              .orderBy('dailyClickCount', descending: true);
+          break;
+        case 'fiveStar':
+          query = query
+              .where('averageRating', isEqualTo: 5)
+              .orderBy('promotionScore', descending: true)
+              .orderBy('createdAt', descending: true);
+          break;
+        case 'bestSellers':
+          query = query
+              .where('purchaseCount', isGreaterThan: 0)
+              .orderBy('promotionScore', descending: true)
+              .orderBy('purchaseCount', descending: true);
+          break;
+        default:
+          query = _applySubcategorySorting(query);
+      }
+    } else {
+      query = _applySubcategorySorting(query);
+    }
+
+    // Subsubcategory filter
+    if (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty) {
+      if (subcategoryId == category || subcategoryId.isEmpty) {
+        // Top-level: "Dresses" is actually a subcategory in DB
+        query = query.where('subcategory', isEqualTo: dynamicSubsubcategory);
+      } else {
+        // Regular subcategory view: filter by actual subsubcategory
+        query = query.where('subsubcategory', isEqualTo: dynamicSubsubcategory);
+      }
+    }
+
+    // Brand filter (isEqualTo — safe with all query types)
+    if (dynamicBrand != null && dynamicBrand!.isNotEmpty) {
+      query = query.where('brandModel', isEqualTo: dynamicBrand);
+    }
+
+    // Search term
+    if (searchTerm.isNotEmpty) {
+      query = query
+          .where('title', isGreaterThanOrEqualTo: searchTerm)
+          .where('title', isLessThanOrEqualTo: searchTerm + '\uf8ff');
+    }
+
+    return query;
+  }
+
+  /// Executes the subcategory fetch, automatically splitting into two parallel
+  /// queries when gender + colors are both active (Firestore conflict).
+  ///
+  /// Returns the fetched products. Updates pagination cursors internally.
+  ///
+  /// [baseQuery] — built by [_buildSubcategoryBaseQuery] (no gender/colors).
+  /// [key]       — the subcategory state key (category|subcategoryId|gender).
+  /// [limit]     — page size per query.
+  /// [gender]    — optional gender filter (e.g. 'Women', 'Men').
+  /// [isLoadMore]— if true, applies startAfterDocument from stored cursors.
+  Future<List<ProductSummary>> _executeSubcategoryFetch({
+    required Query baseQuery,
+    required String key,
+    required int limit,
+    String? gender,
+    bool isLoadMore = false,
+  }) async {
+    if (_needsDualGenderQuery(gender)) {
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // DUAL-QUERY PATH: gender(isEqualTo) + colors(arrayContainsAny) each
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      Query genderQuery = baseQuery
+          .where('gender', isEqualTo: gender)
+          .where('availableColors', arrayContainsAny: dynamicColors)
+          .limit(limit);
+
+      Query unisexQuery = baseQuery
+          .where('gender', isEqualTo: 'Unisex')
+          .where('availableColors', arrayContainsAny: dynamicColors)
+          .limit(limit);
+
+      // Apply pagination cursors for load-more
+      if (isLoadMore) {
+        if (_specificSubcategoryLastDocs[key] != null) {
+          genderQuery = genderQuery
+              .startAfterDocument(_specificSubcategoryLastDocs[key]!);
+        }
+        if (_dualQueryUnisexLastDocs[key] != null) {
+          unisexQuery = unisexQuery
+              .startAfterDocument(_dualQueryUnisexLastDocs[key]!);
+        }
+      }
+
+      // Execute both in parallel
+      final results = await Future.wait([
+        genderQuery.get(),
+        unisexQuery.get(),
+      ]);
+
+      final genderSnapshot = results[0];
+      final unisexSnapshot = results[1];
+
+      // Update pagination cursors
+      if (genderSnapshot.docs.isNotEmpty) {
+        _specificSubcategoryLastDocs[key] = genderSnapshot.docs.last;
+      }
+      if (unisexSnapshot.docs.isNotEmpty) {
+        _dualQueryUnisexLastDocs[key] = unisexSnapshot.docs.last;
+      }
+
+      // Track per-query hasMore for accurate pagination
+      _dualQueryGenderHasMore[key] = genderSnapshot.docs.length >= limit;
+      _dualQueryUnisexHasMore[key] = unisexSnapshot.docs.length >= limit;
+
+      // Merge and deduplicate (preserve order: gender-specific first)
+      final allDocs = [...genderSnapshot.docs, ...unisexSnapshot.docs];
+      final seen = <String>{};
+      final products = <ProductSummary>[];
+
+      for (final doc in allDocs) {
+        if (seen.add(doc.id)) {
+          try {
+            products.add(ProductSummary.fromDocument(doc));
+          } catch (e) {
+            debugPrint('⚠️ Failed to parse product ${doc.id}: $e');
+          }
+        }
+      }
+
+      return products;
+    } else {
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // SINGLE-QUERY PATH: no conflict, add gender/colors directly
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      Query query = baseQuery;
+
+      if (gender != null && gender.isNotEmpty) {
+        query = query.where('gender', whereIn: [gender, 'Unisex']);
+      }
+      if (dynamicColors.isNotEmpty) {
+        query = query.where('availableColors', arrayContainsAny: dynamicColors);
+      }
+
+      query = query.limit(limit);
+
+      // Apply pagination cursor for load-more
+      if (isLoadMore && _specificSubcategoryLastDocs[key] != null) {
+        query = query
+            .startAfterDocument(_specificSubcategoryLastDocs[key]!);
+      }
+
+      final snapshot = await query.get();
+
+      if (snapshot.docs.isNotEmpty) {
+        _specificSubcategoryLastDocs[key] = snapshot.docs.last;
+      }
+
+      // Clear dual-query state when using single-query path
+      _dualQueryUnisexLastDocs.remove(key);
+      _dualQueryGenderHasMore.remove(key);
+      _dualQueryUnisexHasMore.remove(key);
+
+      return snapshot.docs
+          .map((doc) => ProductSummary.fromDocument(doc))
+          .toList();
+    }
+  }
+
+  /// Computes whether more pages are available.
+  /// For dual-query: more data exists if EITHER sub-query has more.
+  /// For single-query: uses standard count-vs-limit check.
+  bool _computeHasMore(String key, int fetchedCount, int limit) {
+    if (_dualQueryGenderHasMore.containsKey(key)) {
+      return (_dualQueryGenderHasMore[key] ?? false) ||
+          (_dualQueryUnisexHasMore[key] ?? false);
+    }
+    return fetchedCount >= limit;
+  }
+
   Future<void> fetchSubcategoryProducts(String category, String subcategoryId,
       {String? selectedFilter, String? gender}) async {
     // ✅ FIX: Include gender in key to prevent cache conflicts
@@ -1375,6 +1609,9 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     _specificSubcategoryPages[key] = 0;
     _updateSubcategoryHasMoreState(key, true);
     _specificSubcategoryLastDocs[key] = null;
+    _dualQueryUnisexLastDocs[key] = null;
+    _dualQueryGenderHasMore.remove(key);
+    _dualQueryUnisexHasMore.remove(key);
     _specificSubcategoryProducts[key] = [];
     _specificSubcategoryProductIds[key] = {};
 
@@ -1404,110 +1641,31 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     }
 
     try {
-      Query query = _firestore
-          .collection('shop_products')
-          .where('category', isEqualTo: category);
+      final baseQuery = _buildSubcategoryBaseQuery(
+        category: category,
+        subcategoryId: subcategoryId,
+        selectedFilter: selectedFilter,
+      );
 
-      // ✅ FIX: Only add subcategory filter if it's different from category
-      // This handles the case where subcategoryId == category (top-level navigation)
-      if (subcategoryId.isNotEmpty && subcategoryId != category) {
-        query = query.where('subcategory', isEqualTo: subcategoryId);
-      }
-
-      // ✅ FIX: Add gender filter for Women/Men View All navigation
-      if (gender != null && gender.isNotEmpty) {
-        query = query.where('gender', whereIn: [gender, 'Unisex']);
-      }
-
-      if (selectedFilter != null && selectedFilter.isNotEmpty) {
-        switch (selectedFilter) {
-          case 'deals':
-            query = query
-                .where('discountPercentage', isGreaterThan: 0)
-                .orderBy('promotionScore', descending: true)
-                .orderBy('discountPercentage', descending: true);
-            break;
-          case 'boosted':
-            query = query
-                .where('isBoosted', isEqualTo: true)
-                .orderBy('promotionScore', descending: true)
-                .orderBy('createdAt', descending: true);
-            break;
-          case 'trending':
-            query = query
-                .where('dailyClickCount', isGreaterThanOrEqualTo: 10)
-                .orderBy('promotionScore', descending: true)
-                .orderBy('dailyClickCount', descending: true);
-            break;
-          case 'fiveStar':
-            query = query
-                .where('averageRating', isEqualTo: 5)
-                .orderBy('promotionScore', descending: true)
-                .orderBy('createdAt', descending: true);
-            break;
-          case 'bestSellers':
-            query = query
-                .where('purchaseCount', isGreaterThan: 0)
-                .orderBy('promotionScore', descending: true)
-                .orderBy('purchaseCount', descending: true);
-            break;
-          default:
-            query = _applySubcategorySorting(query);
-        }
-      } else {
-        query = _applySubcategorySorting(query);
-      }
-
-      // ✅ IMPORTANT: When filtering by subsubcategory from top-level category
-      // The subsubcategory in the filter is actually a subcategory in the database
-      if (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty) {
-        // Check if we're on a top-level category:
-        // - subcategoryId == category (explicitly set to category)
-        // - subcategoryId is empty (navigated from gender filter like Women/Men)
-        if (subcategoryId == category || subcategoryId.isEmpty) {
-          // Top-level: user selected "Dresses" which is a subcategory in DB
-          query = query.where('subcategory', isEqualTo: dynamicSubsubcategory);
-        } else {
-          // Regular subcategory view: filter by actual subsubcategory
-          query =
-              query.where('subsubcategory', isEqualTo: dynamicSubsubcategory);
-        }
-      }
-
-      if (dynamicColors.isNotEmpty) {
-        query = query.where('availableColors', arrayContainsAny: dynamicColors);
-      }
-
-      if (dynamicBrand != null) {
-        query = query.where('brandModel', isEqualTo: dynamicBrand);
-      }
-      if (searchTerm.isNotEmpty) {
-        query = query
-            .where('title', isGreaterThanOrEqualTo: searchTerm)
-            .where('title', isLessThanOrEqualTo: searchTerm + '\uf8ff');
-      }
-
-      query = query.limit(20);     
-
-      final snapshot = await query.get();
-      var products =
-          snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
-
-  
-      if (snapshot.docs.isNotEmpty) {
-        _specificSubcategoryLastDocs[key] = snapshot.docs.last;
-      }
+      final products = await _executeSubcategoryFetch(
+        baseQuery: baseQuery,
+        key: key,
+        limit: 20,
+        gender: gender,
+        isLoadMore: false,
+      );
 
       _specificSubcategoryProducts[key] = products;
       _specificSubcategoryProductIds[key] = products.map((p) => p.id).toSet();
 
-      // ✅ FIX: Only cache unfiltered results to avoid returning filtered data when filters are cleared
+      // Only cache unfiltered results to avoid stale filtered data on filter clear
       if (!hasFilters) {
         _productCache[cacheKey] = List.from(products);
         _cacheTimestamps[cacheKey] = now;
       }
-      _updateSubcategoryHasMoreState(key, products.length >= 20);
+      _updateSubcategoryHasMoreState(key, _computeHasMore(key, products.length, 20));
     } catch (e) {
+      debugPrint('❌ fetchSubcategoryProducts error [$key]: $e');
       _updateSubcategoryHasMoreState(key, false);
     } finally {
       _updateSubcategoryLoadingState(key, false);
@@ -1563,115 +1721,42 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     }
 
     try {
-      Query query = _firestore
-          .collection('shop_products')
-          .where('category', isEqualTo: category);
+      final baseQuery = _buildSubcategoryBaseQuery(
+        category: category,
+        subcategoryId: subcategoryId,
+        selectedFilter: selectedFilter,
+      );
 
-      // ✅ FIX: Same logic for pagination
-      if (subcategoryId.isNotEmpty && subcategoryId != category) {
-        query = query.where('subcategory', isEqualTo: subcategoryId);
-      }
-
-      // ✅ FIX: Add gender filter for pagination (use stored _currentGender)
-      if (_currentGender != null && _currentGender!.isNotEmpty) {
-        query = query.where('gender', whereIn: [_currentGender, 'Unisex']);
-      }
-
-      if (selectedFilter != null && selectedFilter.isNotEmpty) {
-        switch (selectedFilter) {
-          case 'deals':
-            query = query
-                .where('discountPercentage', isGreaterThan: 0)
-                .orderBy('promotionScore', descending: true)
-                .orderBy('discountPercentage', descending: true);
-            break;
-          case 'boosted':
-            query = query
-                .where('isBoosted', isEqualTo: true)
-                .orderBy('promotionScore', descending: true)
-                .orderBy('createdAt', descending: true);
-            break;
-          case 'trending':
-            query = query
-                .where('dailyClickCount', isGreaterThanOrEqualTo: 10)
-                .orderBy('promotionScore', descending: true)
-                .orderBy('dailyClickCount', descending: true);
-            break;
-          case 'fiveStar':
-            query = query
-                .where('averageRating', isEqualTo: 5)
-                .orderBy('promotionScore', descending: true)
-                .orderBy('createdAt', descending: true);
-            break;
-          case 'bestSellers':
-            query = query
-                .where('purchaseCount', isGreaterThan: 0)
-                .orderBy('promotionScore', descending: true)
-                .orderBy('purchaseCount', descending: true);
-            break;
-          default:
-            query = _applySubcategorySorting(query);
-        }
-      } else {
-        query = _applySubcategorySorting(query);
-      }
-
-      // ✅ IMPORTANT: Same logic for subsubcategory filtering
-      if (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty) {
-        // Top-level if subcategoryId == category OR subcategoryId is empty
-        if (subcategoryId == category || subcategoryId.isEmpty) {
-          query = query.where('subcategory', isEqualTo: dynamicSubsubcategory);
-        } else {
-          query =
-              query.where('subsubcategory', isEqualTo: dynamicSubsubcategory);
-        }
-      }
-
-      if (dynamicColors.isNotEmpty) {
-        query = query.where('availableColors', arrayContainsAny: dynamicColors);
-      }
-
-      if (dynamicBrand != null) {
-        query = query.where('brandModel', isEqualTo: dynamicBrand);
-      }
-
-      if (searchTerm.isNotEmpty) {
-        query = query
-            .where('title', isGreaterThanOrEqualTo: searchTerm)
-            .where('title', isLessThanOrEqualTo: searchTerm + '\uf8ff');
-      }
-
-      query = query.limit(20);
-
-      if (_specificSubcategoryLastDocs[key] != null) {
-        query = query.startAfterDocument(_specificSubcategoryLastDocs[key]!);
-      }
-
-      final snapshot = await query.get();
-      var newProducts =
-          snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
-
-      if (snapshot.docs.isNotEmpty) {
-        _specificSubcategoryLastDocs[key] = snapshot.docs.last;
-      }
+      final newProducts = await _executeSubcategoryFetch(
+        baseQuery: baseQuery,
+        key: key,
+        limit: 20,
+        gender: _currentGender,
+        isLoadMore: true,
+      );
 
       final currentProducts = _specificSubcategoryProducts[key] ?? [];
       final currentProductIds =
           _specificSubcategoryProductIds[key] ?? <String>{};
 
-      currentProducts.addAll(newProducts);
-      currentProductIds.addAll(newProducts.map((p) => p.id));
+      // Deduplicate against existing products
+      for (final product in newProducts) {
+        if (currentProductIds.add(product.id)) {
+          currentProducts.add(product);
+        }
+      }
 
       _specificSubcategoryProducts[key] = currentProducts;
       _specificSubcategoryProductIds[key] = currentProductIds;
 
-      // ✅ FIX: Only cache unfiltered results
+      // Only cache unfiltered results
       if (!hasFilters) {
         _productCache[cacheKey] = List.from(newProducts);
         _cacheTimestamps[cacheKey] = now;
       }
-      _updateSubcategoryHasMoreState(key, newProducts.length >= 20);
+      _updateSubcategoryHasMoreState(key, _computeHasMore(key, newProducts.length, 20));
     } catch (e) {
+      debugPrint('❌ fetchMoreSubcategoryProducts error [$key]: $e');
       _updateSubcategoryHasMoreState(key, false);
     } finally {
       _updateSubcategoryLoadingMoreState(key, false);
@@ -1787,6 +1872,11 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     _specificSubcategoryLoadingMore.clear();
     _specificSubcategoryHasMore.clear();
     _specificSubcategoryLastDocs.clear();
+
+    // ✅ Clear dual-query pagination state
+    _dualQueryUnisexLastDocs.clear();
+    _dualQueryGenderHasMore.clear();
+    _dualQueryUnisexHasMore.clear();
 
     // Clear snapshot cache
     _snapshotProducts.clear();

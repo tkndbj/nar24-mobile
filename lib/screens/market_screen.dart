@@ -885,13 +885,13 @@ Future<void> _initializeLayoutService() async {
 
   void _onNavItemTapped(int idx) {
     if (_isSearching) {
+      _setSearchMode(false);
       setState(() {
-        _isSearching = false;
         _selectedIndex = idx;
-        if (idx != 1)
-          _showTerasCategories = false; // Reset when leaving categories
+        if (idx != 1) {
+          _showTerasCategories = false;
+        }
       });
-      _clearSearch();
       return;
     }
 
@@ -957,13 +957,21 @@ Future<void> _initializeLayoutService() async {
     _searchFocusNode.unfocus();
   }
 
-  void exitSearchMode() {
-    if (!_isSearching) return;
-    _searchController.clear();
-    // ✅ REACTIVE: Just update state, build will compute correct color
+  /// Single entry point for all search mode transitions.
+  /// Handles cleanup (clear text, unfocus) when exiting search.
+  void _setSearchMode(bool searching) {
+    if (_isSearching == searching) return;
+    if (!searching) {
+      _searchController.clear();
+      _searchFocusNode.unfocus();
+    }
     setState(() {
-      _isSearching = false;
+      _isSearching = searching;
     });
+  }
+
+  void exitSearchMode() {
+    _setSearchMode(false);
   }
 
   Future<void> _submitSearch() async {
@@ -973,11 +981,13 @@ Future<void> _initializeLayoutService() async {
       final term = _searchController.text.trim();
       if (term.isEmpty) return;
 
-      _clearSearch();
-
       _marketProvider?.recordSearchTerm(term);
       _marketProvider?.clearSearchCache();
       _marketProvider?.resetSearch(triggerFilter: false);
+
+      // Exit search mode before navigation. The PageView stays mounted
+      // (Stack approach), so the filter page position is preserved.
+      _setSearchMode(false);
 
       if (mounted) {
         context.push('/search_results', extra: {'query': term});
@@ -2340,17 +2350,16 @@ Future<void> _initializeLayoutService() async {
 
     // Handle search mode immediately if needed
     if (_isSearching) {
-      _searchController.clear();
-      _searchFocusNode.unfocus();
+      _setSearchMode(false);
       _specialFilterProvider?.setSpecialFilter('');
 
       final homeIndex = _filterTabIndices['Home'] ?? 0;
       if (_pageController.hasClients) _pageController.jumpToPage(homeIndex);
-      if (_filterScrollController.hasClients)
+      if (_filterScrollController.hasClients) {
         _filterScrollController.jumpTo(0.0);
+      }
 
       setState(() {
-        _isSearching = false;
         _currentPage = homeIndex;
         _isRouteActive = true;
       });
@@ -2358,7 +2367,6 @@ Future<void> _initializeLayoutService() async {
     }
 
     // Defer animation resume to next frame to avoid jank during route transition
-    // This spreads the work across frames instead of doing everything at once
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() => _isRouteActive = true);
@@ -2529,17 +2537,7 @@ Future<void> _initializeLayoutService() async {
     // ✅ REACTIVE PATTERN: Listen to banner color changes only when needed.
     // The ValueListenableBuilder only rebuilds AppBar when banner color changes
     // AND we're in the correct context (Market tab + Home filter).
-    if (_isSearching) {
-      return _buildSearchScaffold(
-        _adsBannerBgColor,
-        onHomeFilter,
-        iconWhite,
-        bottomNav,
-        isDarkMode,
-      );
-    }
-
-    return _buildNormalScaffold(
+    return _buildUnifiedScaffold(
       _adsBannerBgColor,
       onHomeFilter,
       iconWhite,
@@ -2610,8 +2608,9 @@ Future<void> _initializeLayoutService() async {
     );
   }
 
-  /// Build search scaffold
-  Widget _buildSearchScaffold(
+  /// Unified scaffold — PageView stays mounted via Stack overlay approach.
+  /// Search delegate is layered on top when active, rather than replacing the body.
+  Widget _buildUnifiedScaffold(
     ValueNotifier<Color> bannerColorNotifier,
     bool onHomeFilter,
     bool iconWhite,
@@ -2620,92 +2619,57 @@ Future<void> _initializeLayoutService() async {
   ) {
     final fallbackColor = isDarkMode ? const Color(0xFF1C1A29) : Colors.white;
 
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider<SearchProvider>(create: (_) => SearchProvider()),
-        // ✅ SIMPLIFIED: Provider handles auth internally, delegate calls ensureLoaded()
-        ChangeNotifierProvider<SearchHistoryProvider>(
-          create: (_) => SearchHistoryProvider(),
-        ),
-      ],
-      child: Consumer2<SearchProvider, SearchHistoryProvider>(
-        builder: (ctx, searchProv, historyProv, _) {
-          return Scaffold(
-            appBar: _buildAppBar(
-              ValueNotifier<Color>(fallbackColor),
-              false,
-              false,
-              isSearching: true,
-              onSearchStateChanged: (searching) {
-                if (!searching) {
-                  _searchController.clear();
-                  _searchFocusNode.unfocus();
-                  searchProv.clear();
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted && _pageController.hasClients) {
-                      _pageController.jumpToPage(_currentPage);
-                    }
-                  });
-                }
-                setState(() => _isSearching = searching);
-              },
-            ),
-            body: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              switchInCurve: Curves.easeOut,
-              switchOutCurve: Curves.easeIn,
-              child: KeyedSubtree(
-                key: const ValueKey('search_delegate'),
-                child: _buildSearchDelegateArea(ctx),
-              ),
-            ),
-            bottomNavigationBar: bottomNav,
-          );
-        },
-      ),
-    );
-  }
+    // AppBar color: use fallback when searching, otherwise use effective color
+    final effectiveColorNotifier =
+        (_isSearching || !onHomeFilter)
+            ? ValueNotifier<Color>(fallbackColor)
+            : bannerColorNotifier;
 
-  /// Build normal scaffold
-  Widget _buildNormalScaffold(
-    ValueNotifier<Color> bannerColorNotifier,
-    bool onHomeFilter,
-    bool iconWhite,
-    Widget bottomNav,
-    bool isDarkMode,
-  ) {
-    final fallbackColor = isDarkMode ? const Color(0xFF1C1A29) : Colors.white;
-
-    // ✅ REACTIVE PATTERN: Compute effective color notifier based on state.
-    // Only use banner color when on Market tab + Home filter,
-    // otherwise use fallback color wrapped in a notifier.
-    final effectiveColorNotifier = onHomeFilter
-        ? bannerColorNotifier
-        : ValueNotifier<Color>(fallbackColor);
+    // Show AppBar when searching OR on tabs that need it
+    final showAppBar = _isSearching ||
+        _selectedIndex == 0 ||
+        _selectedIndex == 1 ||
+        _selectedIndex == 4 ||
+        _selectedIndex == 6;
 
     return Scaffold(
-      appBar: (_selectedIndex == 0 ||
-              _selectedIndex == 1 ||
-              _selectedIndex == 4 ||
-              _selectedIndex == 6) // Add index 6 for CategoriesTerasScreen
+      appBar: showAppBar
           ? _buildAppBar(
               effectiveColorNotifier,
-              onHomeFilter,
-              iconWhite,
-              isSearching: false,
-              onSearchStateChanged: (searching) {
-                setState(() => _isSearching = searching);
-              },
+              _isSearching ? false : onHomeFilter,
+              _isSearching ? false : iconWhite,
+              isSearching: _isSearching,
+              onSearchStateChanged: _setSearchMode,
             )
           : null,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        switchInCurve: Curves.easeOut,
-        switchOutCurve: Curves.easeIn,
-        child: KeyedSubtree(
-          key: ValueKey(_isSearching ? 'search_delegate' : 'normal_tabs'),
-          child: _buildBodyContent(),
-        ),
+      body: Stack(
+        children: [
+          // Bottom layer: tab content (always mounted — PageView stays alive)
+          _buildBodyContent(),
+
+          // Top layer: search overlay (instant mount/unmount)
+          if (_isSearching)
+            Positioned.fill(
+              child: MultiProvider(
+                providers: [
+                  ChangeNotifierProvider<SearchProvider>(
+                    create: (_) => SearchProvider(),
+                  ),
+                  ChangeNotifierProvider<SearchHistoryProvider>(
+                    create: (_) => SearchHistoryProvider(),
+                  ),
+                ],
+                child: Builder(
+                  builder: (ctx) => Material(
+                    color: isDarkMode
+                        ? const Color(0xFF1C1A29)
+                        : Colors.white,
+                    child: _buildSearchDelegateArea(ctx),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
       bottomNavigationBar: bottomNav,
     );
@@ -2741,17 +2705,13 @@ Future<void> _initializeLayoutService() async {
     }
 
     if (_isSearching) {
-      // ✅ REACTIVE: setState triggers rebuild with correct color
+      _setSearchMode(false);
       setState(() {
-        _isSearching = false;
-        _selectedIndex = 1; // Go to categories tab
-        _showTerasCategories = true; // Show teras version
+        _selectedIndex = 1;
+        _showTerasCategories = true;
       });
-      _clearSearch();
       return;
     }
-
-    _clearSearch();
     setState(() {
       _selectedIndex = 1; // Go to categories tab
       _showTerasCategories = true; // Show teras version
@@ -2768,10 +2728,6 @@ Future<void> _initializeLayoutService() async {
   }
 
   Widget _buildBodyContent() {
-    if (_isSearching) {
-      return _buildSearchDelegateArea(context);
-    }
-
     final validIndex = _selectedIndex.clamp(0, 5);
 
     switch (validIndex) {
