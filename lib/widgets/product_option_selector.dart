@@ -135,33 +135,36 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
   // INITIALIZATION
   // ========================================================================
   void _initializeDefaultSelections() {
+    // Auto-select from top-level spec arrays if single option
+    void autoSelectIfSingle(String key, List<String>? values) {
+      if (values != null && values.length == 1) {
+        _selections[key] = values.first;
+      }
+    }
+
+    autoSelectIfSingle('clothingSizes', _currentProduct.clothingSizes);
+    autoSelectIfSingle('pantSizes', _currentProduct.pantSizes);
+    autoSelectIfSingle('footwearSizes', _currentProduct.footwearSizes);
+    autoSelectIfSingle('jewelryMaterials', _currentProduct.jewelryMaterials);
+
+    // Remaining misc attributes map (backward compat)
     for (final entry in _currentProduct.attributes.entries) {
       final value = entry.value;
       List<String> options = [];
-
       if (value is List) {
-        options = value
-            .map((item) => item.toString())
-            .where((item) => item.isNotEmpty)
-            .toList();
+        options =
+            value.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
       } else if (value is String && value.isNotEmpty) {
         options = value
             .split(',')
-            .map((item) => item.trim())
-            .where((item) => item.isNotEmpty)
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
             .toList();
       }
-
-      // Auto-select single options
-      if (options.length == 1) {
-        _selections[entry.key] = options.first;
-      }
+      if (options.length == 1) _selections[entry.key] = options.first;
     }
 
-    // Auto-select default color if no color options
-    if (!hasColors) {
-      selectedColor = 'default';
-    }
+    if (!hasColors) selectedColor = 'default';
   }
 
   void _loadSalePreferencesFromProduct() {
@@ -197,41 +200,45 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
   Map<String, List<String>> _getSelectableAttributes() {
     final Map<String, List<String>> selectableAttrs = {};
 
-    // ✅ ADD: Keys that should NOT be selectable by buyers
+    // Top-level spec arrays — buyer-selectable
+    void addIfMultiple(String key, List<String>? values) {
+      if (values != null && values.length > 1) selectableAttrs[key] = values;
+    }
+
+    addIfMultiple('clothingSizes', _currentProduct.clothingSizes);
+    addIfMultiple('pantSizes', _currentProduct.pantSizes);
+    addIfMultiple('footwearSizes', _currentProduct.footwearSizes);
+    addIfMultiple('jewelryMaterials', _currentProduct.jewelryMaterials);
+
+    // Remaining misc attributes map (backward compat)
     const nonSelectableKeys = {
       'clothingType',
       'clothingTypes',
       'pantFabricType',
       'pantFabricTypes',
       'gender',
-      'clothingFit', // fit is also a product property, not a choice
+      'clothingFit',
+      'productType',
+      'consoleBrand',
+      'curtainMaxWidth',
+      'curtainMaxHeight',
     };
 
     for (final entry in _currentProduct.attributes.entries) {
-      // ✅ ADD: Skip non-selectable attributes
-      if (nonSelectableKeys.contains(entry.key)) {
-        continue;
-      }
-
+      if (nonSelectableKeys.contains(entry.key)) continue;
       final value = entry.value;
       List<String> options = [];
-
       if (value is List) {
-        options = value
-            .map((item) => item.toString())
-            .where((item) => item.isNotEmpty)
-            .toList();
+        options =
+            value.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
       } else if (value is String && value.isNotEmpty) {
         options = value
             .split(',')
-            .map((item) => item.trim())
-            .where((item) => item.isNotEmpty)
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
             .toList();
       }
-
-      if (options.length > 1) {
-        selectableAttrs[entry.key] = options;
-      }
+      if (options.length > 1) selectableAttrs[entry.key] = options;
     }
 
     return selectableAttrs;
@@ -263,16 +270,16 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
     if (width == null || width <= 0) return false;
     if (height == null || height <= 0) return false;
 
-    final maxWidth = _currentProduct.attributes['curtainMaxWidth'];
-    final maxHeight = _currentProduct.attributes['curtainMaxHeight'];
+    final maxWidth = _currentProduct.curtainMaxWidth;
+    final maxHeight = _currentProduct.curtainMaxHeight;
 
     if (maxWidth != null) {
-      final maxW = double.tryParse(maxWidth.toString()) ?? double.infinity;
+      final maxW = maxWidth;
       if (width > maxW) return false;
     }
 
     if (maxHeight != null) {
-      final maxH = double.tryParse(maxHeight.toString()) ?? double.infinity;
+      final maxH = maxHeight;
       if (height > maxH) return false;
     }
 
@@ -617,8 +624,8 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
   // UI BUILDERS
   // ========================================================================
   Widget _buildCurtainDimensionsInput(AppLocalizations l10n, Color txtColor) {
-    final maxWidth = _currentProduct.attributes['curtainMaxWidth'];
-    final maxHeight = _currentProduct.attributes['curtainMaxHeight'];
+    final maxWidth = _currentProduct.curtainMaxWidth;
+    final maxHeight = _currentProduct.curtainMaxHeight;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -717,8 +724,7 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
               if (_widthController.text.isNotEmpty && maxWidth != null) ...[
                 const SizedBox(height: 8),
                 if (double.tryParse(_widthController.text) != null &&
-                    double.parse(_widthController.text) >
-                        double.parse(maxWidth.toString()))
+                    double.parse(_widthController.text) > maxWidth!)
                   Text(
                     '${l10n.widthExceedsMaximum ?? "Width exceeds maximum"}!',
                     style: const TextStyle(color: Colors.red, fontSize: 12),
@@ -727,8 +733,7 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
               if (_heightController.text.isNotEmpty && maxHeight != null) ...[
                 const SizedBox(height: 8),
                 if (double.tryParse(_heightController.text) != null &&
-                    double.parse(_heightController.text) >
-                        double.parse(maxHeight.toString()))
+                    double.parse(_heightController.text) > maxHeight!)
                   Text(
                     '${l10n.heightExceedsMaximum ?? "Height exceeds maximum"}!',
                     style: const TextStyle(color: Colors.red, fontSize: 12),

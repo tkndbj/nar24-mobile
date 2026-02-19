@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../providers/product_detail_provider.dart';
 import '../../utils/attribute_localization_utils.dart';
+import '../../models/product.dart';
 
 class DynamicAttributesWidget extends StatefulWidget {
   const DynamicAttributesWidget({Key? key}) : super(key: key);
@@ -26,9 +27,9 @@ class _DynamicAttributesWidgetState extends State<DynamicAttributesWidget>
     final product = provider.product;
     final l10n = AppLocalizations.of(context);
 
-    if (product == null || product.attributes.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    if (product == null) return const SizedBox.shrink();
+    final displayAttributes = _buildDisplayAttributes(product);
+    if (displayAttributes.isEmpty) return const SizedBox.shrink();
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final containerBg =
@@ -68,11 +69,47 @@ class _DynamicAttributesWidgetState extends State<DynamicAttributesWidget>
           // Attributes Grid
           Padding(
             padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
-            child: _buildAttributesGrid(product.attributes, attributeBg, l10n),
+            child: _buildAttributesGrid(displayAttributes, attributeBg, l10n),
           ),
         ],
       ),
     );
+  }
+
+  Map<String, dynamic> _buildDisplayAttributes(Product product) {
+    final Map<String, dynamic> combined = {};
+
+    // Top-level spec fields first
+    if (product.gender?.isNotEmpty == true) combined['gender'] = product.gender;
+    if (product.productType?.isNotEmpty == true)
+      combined['productType'] = product.productType;
+    if (product.clothingSizes?.isNotEmpty == true)
+      combined['clothingSizes'] = product.clothingSizes;
+    if (product.clothingFit?.isNotEmpty == true)
+      combined['clothingFit'] = product.clothingFit;
+    if (product.clothingTypes?.isNotEmpty == true)
+      combined['clothingTypes'] = product.clothingTypes;
+    if (product.pantSizes?.isNotEmpty == true)
+      combined['pantSizes'] = product.pantSizes;
+    if (product.pantFabricTypes?.isNotEmpty == true)
+      combined['pantFabricTypes'] = product.pantFabricTypes;
+    if (product.footwearSizes?.isNotEmpty == true)
+      combined['footwearSizes'] = product.footwearSizes;
+    if (product.jewelryMaterials?.isNotEmpty == true)
+      combined['jewelryMaterials'] = product.jewelryMaterials;
+    if (product.consoleBrand?.isNotEmpty == true)
+      combined['consoleBrand'] = product.consoleBrand;
+    if (product.curtainMaxWidth != null)
+      combined['curtainMaxWidth'] = product.curtainMaxWidth;
+    if (product.curtainMaxHeight != null)
+      combined['curtainMaxHeight'] = product.curtainMaxHeight;
+
+    // Remaining misc attributes map (backward compat for old products)
+    product.attributes.forEach((key, value) {
+      if (!combined.containsKey(key)) combined[key] = value;
+    });
+
+    return combined;
   }
 
   Widget _buildAttributesGrid(Map<String, dynamic> attributes,
@@ -84,9 +121,12 @@ class _DynamicAttributesWidgetState extends State<DynamicAttributesWidget>
       if (value != null && value.toString().isNotEmpty) {
         try {
           // Use the utility to get localized title and value
-          final localizedTitle = AttributeLocalizationUtils.getLocalizedAttributeTitle(key, l10n);
-          final localizedValue = AttributeLocalizationUtils.getLocalizedAttributeValue(key, value, l10n);
-          
+          final localizedTitle =
+              AttributeLocalizationUtils.getLocalizedAttributeTitle(key, l10n);
+          final localizedValue =
+              AttributeLocalizationUtils.getLocalizedAttributeValue(
+                  key, value, l10n);
+
           if (localizedValue.isNotEmpty) {
             formattedAttributes[localizedTitle] = localizedValue;
           }
