@@ -417,7 +417,7 @@ class _CategoriesTerasScreenState extends State<CategoriesTerasScreen>
                                           create: (_) => DynamicTerasProvider(
                                             algoliaService:
                                                 AlgoliaServiceManager
-                                                    .instance.shopService,
+                                                    .instance.mainService,
                                           ),
                                           child: screen,
                                         ),

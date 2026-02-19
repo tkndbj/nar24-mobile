@@ -12,7 +12,7 @@ class DynamicTerasProvider with ChangeNotifier {
   DynamicTerasProvider({required this.algoliaService}); 
   // ──────────────────────────────────────────────────────────────────────────
   // Algolia entegrasyonu: DI ile tek yerden verilecek
-  // main.dart: DynamicTerasProvider.algoliaService = AlgoliaServiceManager.instance.shopService;
+  // main.dart: DynamicTerasProvider.algoliaService = AlgoliaServiceManager.instance.mainService;
   // ──────────────────────────────────────────────────────────────────────────
   static const int _docCacheMax = 1000; // tune
   final Map<String, ProductSummary> _docCache = {};
@@ -21,12 +21,12 @@ class DynamicTerasProvider with ChangeNotifier {
 
 
   // Base index ve replica eşlemesi (dashboard'da varsa)
-  static String algoliaBaseIndex = 'shop_products';
+  static String algoliaBaseIndex = 'products';
   static Map<String, String> algoliaSortReplicas = {
-    'date'        : 'shop_products_createdAt_desc',
-    'price_asc'   : 'shop_products_price_asc',
-    'price_desc'  : 'shop_products_price_desc',
-    'alphabetical': 'shop_products_alphabetical',
+    'date'        : 'products_createdAt_desc',
+    'price_asc'   : 'products_price_asc',
+    'price_desc'  : 'products_price_desc',
+    'alphabetical': 'products_alphabetical',
   };
 
   // ──────────────────────────────────────────────────────────────────────────
