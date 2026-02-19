@@ -118,29 +118,14 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
 
       if (!mounted) return;
 
-      // Set buyer category FIRST if available
-      if (widget.buyerCategory != null) {
-        _terasProvider.setBuyerCategory(
-          widget.buyerCategory!,
-          widget.buyerSubcategory,
-        );
-      }
-
-      // Set category
-      _terasProvider.setCategory(widget.category);
-
-      // Set subcategory
-      if (widget.selectedSubcategory != null) {
-        _terasProvider.setSubcategory(widget.selectedSubcategory!);
-      }
-
-      // Set subsubcategory if provided
-      if (widget.selectedSubSubcategory != null) {
-        _terasProvider.setSubSubcategory(widget.selectedSubSubcategory!);
-      }
-
-      // Fetch initial data
-      await _terasProvider.fetchBoosted();
+      // Set all state at once, single query
+      await _terasProvider.initialize(
+        category: widget.category,
+        subcategory: widget.selectedSubcategory,
+        subSubcategory: widget.selectedSubSubcategory,
+        buyerCategory: widget.buyerCategory,
+        buyerSubcategory: widget.buyerSubcategory,
+      );
 
       if (mounted) {
         setState(() {
@@ -403,7 +388,6 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
         }
 
         final displayProducts = terasProvider.products;
-        final effectiveBoostedProducts = terasProvider.boostedProducts;
 
         // Loading completed - show empty state if no products found
         if (displayProducts.isEmpty) {
@@ -416,7 +400,6 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
 
         return _buildProductsList(
           displayProducts,
-          effectiveBoostedProducts,
           terasProvider,
         );
       },
@@ -477,13 +460,11 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
 
   Widget _buildProductsList(
     List<ProductSummary> displayProducts,
-    List<ProductSummary> boostedProducts,
     DynamicTerasProvider terasProvider,
   ) {
     return RefreshIndicator(
       onRefresh: () async {
         await terasProvider.refresh();
-        await terasProvider.fetchBoosted();
       },
       child: NotificationListener<ScrollNotification>(
         onNotification: (scrollInfo) {
@@ -499,7 +480,7 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
           slivers: [
             ProductListSliver(
               products: displayProducts,
-              boostedProducts: boostedProducts,
+              boostedProducts: const [],
               hasMore: terasProvider.hasMore,
               screenName: 'dynamic_teras_screen',
               isLoadingMore: terasProvider.isLoadingMore,

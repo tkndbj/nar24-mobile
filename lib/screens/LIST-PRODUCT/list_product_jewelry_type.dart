@@ -37,7 +37,9 @@ class _ListProductJewelryTypeScreenState
     super.initState();
     // Load from dynamic attributes if provided
     if (widget.initialAttributes != null) {
-      _selectedType = widget.initialAttributes!['jewelryType'] as String?;
+      _selectedType =
+          widget.initialAttributes!['productType'] as String? ??
+          widget.initialAttributes!['jewelryType'] as String?;
     }
   }
 
@@ -75,9 +77,9 @@ class _ListProductJewelryTypeScreenState
       return;
     }
 
-    // Return the jewelry type as dynamic attributes
+    // Return the jewelry type as unified productType
     final result = <String, dynamic>{
-      'jewelryType': _selectedType,
+      'productType': _selectedType,
     };
 
     // Include any existing attributes that were passed in

@@ -43,6 +43,7 @@ class _ListProductComputerComponentsScreenState
     // Load from dynamic attributes if provided
     if (widget.initialAttributes != null) {
       _selectedComponent =
+          widget.initialAttributes!['productType'] as String? ??
           widget.initialAttributes!['computerComponent'] as String?;
     }
   }
@@ -93,9 +94,9 @@ class _ListProductComputerComponentsScreenState
       return;
     }
 
-    // Return the computer component as dynamic attributes
+    // Return the computer component as unified productType
     final result = <String, dynamic>{
-      'computerComponent': _selectedComponent,
+      'productType': _selectedComponent,
     };
 
     // Include any existing attributes that were passed in

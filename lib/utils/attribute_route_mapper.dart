@@ -42,6 +42,9 @@ class AttributeRouteMapper {
 
       // White goods attributes
       'whiteGood': '/list_white_goods',
+
+      // Fantasy wear attributes
+      'fantasyWearType': '/list_fantasy_wear',
     };
 
     return attributeRoutes[attributeKey];
@@ -61,6 +64,7 @@ class AttributeRouteMapper {
       '/list_consoles': ['consoleBrand', 'consoleVariant'],
       '/list_kitchen_appliances': ['kitchenAppliance'],
       '/list_white_goods': ['whiteGood'],
+      '/list_fantasy_wear': ['fantasyWearType'],
     };
 
     return routeAttributes[route] ?? [];

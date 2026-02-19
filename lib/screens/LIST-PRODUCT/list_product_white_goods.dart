@@ -34,7 +34,9 @@ class _ListProductWhiteGoodsScreenState
     super.initState();
     // Load from dynamic attributes if provided
     if (widget.initialAttributes != null) {
-      _selectedWhiteGood = widget.initialAttributes!['whiteGood'] as String?;
+      _selectedWhiteGood =
+          widget.initialAttributes!['productType'] as String? ??
+          widget.initialAttributes!['whiteGood'] as String?;
     }
   }
 
@@ -66,9 +68,9 @@ class _ListProductWhiteGoodsScreenState
       return;
     }
 
-    // Return the white good as dynamic attributes
+    // Return the white good as unified productType
     final result = <String, dynamic>{
-      'whiteGood': _selectedWhiteGood,
+      'productType': _selectedWhiteGood,
     };
 
     // Include any existing attributes that were passed in

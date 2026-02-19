@@ -55,6 +55,25 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  Map<String, dynamic> _buildDisplayAttributes() {
+    final p = widget.product;
+    final map = <String, dynamic>{};
+    if (p.clothingSizes != null) map['clothingSizes'] = p.clothingSizes;
+    if (p.clothingFit != null) map['clothingFit'] = p.clothingFit;
+    if (p.clothingTypes != null) map['clothingTypes'] = p.clothingTypes;
+    if (p.pantSizes != null) map['pantSizes'] = p.pantSizes;
+    if (p.pantFabricTypes != null) map['pantFabricTypes'] = p.pantFabricTypes;
+    if (p.footwearSizes != null) map['footwearSizes'] = p.footwearSizes;
+    if (p.jewelryMaterials != null)
+      map['jewelryMaterials'] = p.jewelryMaterials;
+    if (p.consoleBrand != null) map['consoleBrand'] = p.consoleBrand;
+    if (p.curtainMaxWidth != null) map['curtainMaxWidth'] = p.curtainMaxWidth;
+    if (p.curtainMaxHeight != null)
+      map['curtainMaxHeight'] = p.curtainMaxHeight;
+    map.addAll(p.attributes); // truly misc remainder
+    return map;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -273,7 +292,7 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
                             ),
 
                             // Display Dynamic Attributes
-                            if (widget.product.attributes.isNotEmpty) ...[
+                            if (_buildDisplayAttributes().isNotEmpty) ...[
                               const SizedBox(height: 16),
                               Text(
                                 l10n.details,
@@ -283,7 +302,7 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              ...widget.product.attributes.entries.map((entry) {
+                              ..._buildDisplayAttributes().entries.map((entry) {
                                 try {
                                   // Use the utility to get localized title and value
                                   String localizedTitle =
@@ -745,7 +764,24 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
     compareField('colorImages', original.colorImages, updated.colorImages);
     compareField(
         'colorQuantities', original.colorQuantities, updated.colorQuantities);
-    compareField('attributes', original.attributes, updated.attributes);
+    compareField('productType', original.productType, updated.productType);
+    compareField(
+        'clothingSizes', original.clothingSizes, updated.clothingSizes);
+    compareField('clothingFit', original.clothingFit, updated.clothingFit);
+    compareField(
+        'clothingTypes', original.clothingTypes, updated.clothingTypes);
+    compareField('pantSizes', original.pantSizes, updated.pantSizes);
+    compareField(
+        'pantFabricTypes', original.pantFabricTypes, updated.pantFabricTypes);
+    compareField(
+        'footwearSizes', original.footwearSizes, updated.footwearSizes);
+    compareField('jewelryMaterials', original.jewelryMaterials,
+        updated.jewelryMaterials);
+    compareField('consoleBrand', original.consoleBrand, updated.consoleBrand);
+    compareField(
+        'curtainMaxWidth', original.curtainMaxWidth, updated.curtainMaxWidth);
+    compareField('curtainMaxHeight', original.curtainMaxHeight,
+        updated.curtainMaxHeight);
 
     return {
       'editedFields': editedFields,
@@ -901,6 +937,17 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
         availableColors: availableColors,
         videoUrl: videoUrl,
         attributes: widget.product.attributes,
+        productType: widget.product.productType,
+        clothingSizes: widget.product.clothingSizes,
+        clothingFit: widget.product.clothingFit,
+        clothingTypes: widget.product.clothingTypes,
+        pantSizes: widget.product.pantSizes,
+        pantFabricTypes: widget.product.pantFabricTypes,
+        footwearSizes: widget.product.footwearSizes,
+        jewelryMaterials: widget.product.jewelryMaterials,
+        consoleBrand: widget.product.consoleBrand,
+        curtainMaxWidth: widget.product.curtainMaxWidth,
+        curtainMaxHeight: widget.product.curtainMaxHeight,
         relatedProductIds: widget.isEditMode
             ? (widget.originalProduct!.relatedProductIds ?? [])
             : [],
@@ -922,18 +969,6 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
       productData['ibanOwnerSurname'] = widget.ibanOwnerSurname;
       productData['iban'] = widget.iban;
       productData['updatedAt'] = FieldValue.serverTimestamp();
-
-      final attributes = productData['attributes'];
-      if (attributes is Map<String, dynamic>) {
-        // If clothingTypes array exists, remove legacy clothingType
-        if (attributes.containsKey('clothingTypes')) {
-          attributes.remove('clothingType');
-        }
-        // If pantFabricTypes array exists, remove legacy pantFabricType
-        if (attributes.containsKey('pantFabricTypes')) {
-          attributes.remove('pantFabricType');
-        }
-      }
 
       productData = FirebaseDataCleaner.cleanData(productData);
 

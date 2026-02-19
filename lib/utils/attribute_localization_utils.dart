@@ -68,6 +68,10 @@ class AttributeLocalizationUtils {
       case 'consoleVariant':
         return l10n.consoleVariant;
 
+      // Unified product type
+      case 'productType':
+        return l10n.productType;
+
       // Kitchen appliance attributes
       case 'kitchenAppliance':
         return l10n.kitchenAppliance;
@@ -75,6 +79,10 @@ class AttributeLocalizationUtils {
       // White goods attributes
       case 'whiteGood':
         return l10n.whiteGood;
+
+      // Fantasy wear attributes
+      case 'fantasyWearType':
+        return l10n.fantasyWearType;
 
       case 'selectedColor':
         return l10n.color ?? 'Color';
@@ -183,6 +191,12 @@ class AttributeLocalizationUtils {
 
       case 'whiteGood':
         return localizeWhiteGood(stringValue, l10n);
+
+      case 'fantasyWearType':
+        return AllInOneCategoryData.localizeFantasyWearType(stringValue, l10n);
+
+      case 'productType':
+        return localizeProductType(stringValue, l10n);
 
       case 'selectedColor':
         return localizeColorName(stringValue, l10n);
@@ -558,6 +572,31 @@ class AttributeLocalizationUtils {
       default:
         return whiteGood;
     }
+  }
+
+  /// Localizes a unified productType value by trying all known type localizers.
+  static String localizeProductType(String value, AppLocalizations l10n) {
+    // Try each category-specific localizer; return the first non-raw match
+    final tryKitchen = localizeKitchenAppliance(value, l10n);
+    if (tryKitchen != value) return tryKitchen;
+
+    final tryWhiteGood = localizeWhiteGood(value, l10n);
+    if (tryWhiteGood != value) return tryWhiteGood;
+
+    final tryComputer = localizeComputerComponent(value, l10n);
+    if (tryComputer != value) return tryComputer;
+
+    final tryJewelry = localizeJewelryType(value, l10n);
+    if (tryJewelry != value) return tryJewelry;
+
+    final tryConsole = localizeConsoleBrand(value, l10n);
+    if (tryConsole != value) return tryConsole;
+
+    final tryFantasy =
+        AllInOneCategoryData.localizeFantasyWearType(value, l10n);
+    if (tryFantasy != value) return tryFantasy;
+
+    return value;
   }
 
   /// Formats color display with localized color names and quantities

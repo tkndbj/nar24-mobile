@@ -1057,11 +1057,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
       if (buyerCategory == 'Women' || buyerCategory == 'Men') {
         Query query = _firestore
             .collection('shop_products')
-            .where('gender',
-                whereIn: [buyerCategory, 'Unisex'])
-            .where('quantity', isGreaterThan: 0)
-            .orderBy('quantity')
-            .orderBy('isBoosted', descending: true)
+            .where('gender', whereIn: [buyerCategory, 'Unisex'])
             .orderBy('promotionScore', descending: true)
             .limit(20);
 
@@ -1076,9 +1072,6 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
         Query query = _firestore
             .collection('shop_products')
             .where('category', isEqualTo: buyerCategory)
-            .where('quantity', isGreaterThan: 0)
-            .orderBy('quantity')
-            .orderBy('isBoosted', descending: true)
             .orderBy('promotionScore', descending: true)
             .limit(20);
 
@@ -1263,9 +1256,6 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
             .collection('products')
             .where('gender',
                 whereIn: [buyerCategory, 'Unisex']) // ✅ Combined query
-            .where('quantity', isGreaterThan: 0)
-            .orderBy('quantity')
-            .orderBy('isBoosted', descending: true)
             .orderBy('promotionScore', descending: true)
             .limit(20); // ✅ Direct limit - no need to fetch 30 and trim to 20
 
@@ -1281,9 +1271,6 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
         Query query = _firestore
             .collection('products')
             .where('category', isEqualTo: buyerCategory)
-            .where('quantity', isGreaterThan: 0)
-            .orderBy('quantity')
-            .orderBy('isBoosted', descending: true)
             .orderBy('promotionScore', descending: true)
             .limit(20);
 

@@ -44,7 +44,9 @@ class _ListProductFantasyWearScreenState
     super.initState();
     // Load from dynamic attributes if provided
     if (widget.initialAttributes != null) {
-      _selectedType = widget.initialAttributes!['fantasyWearType'] as String?;
+      _selectedType =
+          widget.initialAttributes!['productType'] as String? ??
+          widget.initialAttributes!['fantasyWearType'] as String?;
     }
   }
 
@@ -59,9 +61,9 @@ class _ListProductFantasyWearScreenState
       return;
     }
 
-    // Return the fantasy wear type as dynamic attributes
+    // Return the fantasy wear type as unified productType
     final result = <String, dynamic>{
-      'fantasyWearType': _selectedType,
+      'productType': _selectedType,
     };
 
     // Include any existing attributes that were passed in

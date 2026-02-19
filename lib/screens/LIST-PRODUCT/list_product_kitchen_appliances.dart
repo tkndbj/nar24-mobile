@@ -60,7 +60,9 @@ class _ListProductKitchenAppliancesScreenState
     super.initState();
     // Load from dynamic attributes if provided
     if (widget.initialAttributes != null) {
-      _selectedAppliance = widget.initialAttributes!['kitchenAppliance'] as String?;
+      _selectedAppliance =
+          widget.initialAttributes!['productType'] as String? ??
+          widget.initialAttributes!['kitchenAppliance'] as String?;
     }
   }
 
@@ -146,9 +148,9 @@ class _ListProductKitchenAppliancesScreenState
       return;
     }
 
-    // Return the kitchen appliance as dynamic attributes
+    // Return the kitchen appliance as unified productType
     final result = <String, dynamic>{
-      'kitchenAppliance': _selectedAppliance,
+      'productType': _selectedAppliance,
     };
 
     // Include any existing attributes that were passed in

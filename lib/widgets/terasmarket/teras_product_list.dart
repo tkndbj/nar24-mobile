@@ -4,7 +4,7 @@ import '../../providers/teras_product_list_provider.dart';
 import '../../widgets/product_list_sliver.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../models/product_summary.dart';
-import '../../widgets/product_card_shimmer.dart'; // ✅ Import ProductCard shimmer
+import '../../widgets/product_card_shimmer.dart';
 
 /// Returns multiple slivers: header + product grid
 class TerasProductList extends StatefulWidget {
@@ -59,19 +59,15 @@ class _TerasProductListState extends State<TerasProductList>
 
     return Consumer<TerasProductListProvider>(
       builder: (context, provider, _) {
-        final combinedProducts = provider.getCombinedProducts();
-        final boostedProducts = provider.boostedProducts;
-        final regularProducts = combinedProducts
-            .where((p) => !p.isBoosted && p.promotionScore <= 1000)
-            .toList();
+        final products = provider.products;
 
         // Show shimmer until provider has completed initial load
-        if (!provider.isInitialized && combinedProducts.isEmpty) {
+        if (!provider.isInitialized && products.isEmpty) {
           return _buildShimmerState(context);
         }
 
         // Mark first load complete after frame to avoid modifying state during build
-        if (_isInitialLoading && combinedProducts.isNotEmpty) {
+        if (_isInitialLoading && products.isNotEmpty) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted && _isInitialLoading) {
               setState(() {
@@ -87,7 +83,7 @@ class _TerasProductListState extends State<TerasProductList>
         }
 
         // Return MultiSliver (header + grid)
-        return _buildMultiSliver(regularProducts, boostedProducts, provider);
+        return _buildMultiSliver(products, provider);
       },
     );
   }
@@ -170,8 +166,7 @@ class _TerasProductListState extends State<TerasProductList>
 
   /// Build multiple slivers wrapped in SliverMainAxisGroup
   Widget _buildMultiSliver(
-    List<ProductSummary> regularProducts,
-    List<ProductSummary> boostedProducts,
+    List<ProductSummary> products,
     TerasProductListProvider provider,
   ) {
     return SliverMainAxisGroup(
@@ -200,8 +195,8 @@ class _TerasProductListState extends State<TerasProductList>
         ),
         // Product grid sliver
         ProductListSliver(
-          products: regularProducts,
-          boostedProducts: boostedProducts,
+          products: products,
+          boostedProducts: const [],
           hasMore: provider.hasMore,
           screenName: 'teras_product_list',
           isLoadingMore: provider.isLoadingMore,

@@ -8,17 +8,14 @@ class TerasProductListProvider with ChangeNotifier {
 
   // Products state
   List<ProductSummary> _products = [];
-  List<ProductSummary> _boostedProducts = [];
 
   List<ProductSummary> get products => _products;
-  List<ProductSummary> get boostedProducts => _boostedProducts;
 
   // Pagination state
   DocumentSnapshot? _lastDocument;
   bool _hasMore = true;
   bool _isLoadingMore = false;
   int _currentPage = 0;
-  bool _isFetchingBoosted = false;
   static const int _pageSize = 20;
   static const int _maxPages = 10;
 
@@ -26,7 +23,7 @@ class TerasProductListProvider with ChangeNotifier {
 
   bool get hasMore => _hasMore && _currentPage < _maxPages;
   bool get isLoadingMore => _isLoadingMore;
-  bool get isEmpty => _products.isEmpty && _boostedProducts.isEmpty;
+  bool get isEmpty => _products.isEmpty;
 
   // ✅ ENHANCED: Cache state with better validation
   DateTime? _cacheTimestamp;
@@ -44,8 +41,8 @@ class TerasProductListProvider with ChangeNotifier {
 
   // ✅ ADD: Check if we have usable cached data
   bool get hasCachedData {
-    return _isInitialized && 
-           (_products.isNotEmpty || _boostedProducts.isNotEmpty) &&
+    return _isInitialized &&
+           _products.isNotEmpty &&
            isCacheValid;
   }
 
@@ -81,67 +78,34 @@ class TerasProductListProvider with ChangeNotifier {
 
   /// Reset state and fetch first page
   Future<void> _resetAndFetch() async {
-    if (_isRefreshing || _isDisposed) return; 
+    if (_isRefreshing || _isDisposed) return;
 
     _isRefreshing = true;
 
     _products.clear();
-    _boostedProducts.clear();
     _lastDocument = null;
     _currentPage = 0;
     _hasMore = true;
     _cacheTimestamp = null;
-    _isInitialized = false; // ✅ RESET initialization flag
+    _isInitialized = false;
 
     _safeNotifyListeners();
 
     try {
-      await Future.wait([
-        _fetchBoostedProducts(),
-        _fetchProducts(),
-      ]);
+      await _fetchProducts();
 
-       if (_isDisposed) return;
+      if (_isDisposed) return;
 
-      _isInitialized = true; // ✅ MARK: Successfully initialized
+      _isInitialized = true;
       _setCacheTimestamp();
-      
-      debugPrint('✅ Teras products loaded: ${_products.length} regular, ${_boostedProducts.length} boosted');
+
+      debugPrint('✅ Teras products loaded: ${_products.length} products');
     } finally {
       _isRefreshing = false;
     }
   }
 
-  /// Fetch boosted products (promotionScore > 1000)
-  Future<void> _fetchBoostedProducts() async {
-    if (_isFetchingBoosted || _isDisposed) return;
-    _isFetchingBoosted = true;
-    try {
-      final query = _firestore
-          .collection('products')
-          .where('promotionScore', isGreaterThan: 1000)
-          .where('quantity', isGreaterThan: 0)
-          .orderBy('promotionScore', descending: true)
-          .orderBy('createdAt', descending: true)
-          .limit(10);
-
-      final snapshot = await query.get();
-
-      if (_isDisposed) return;
-
-      _boostedProducts =
-          snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
-
-      debugPrint('Fetched ${_boostedProducts.length} boosted products');
-      _safeNotifyListeners();
-    } catch (e) {
-      debugPrint('Error fetching boosted products: $e');
-    } finally {
-      _isFetchingBoosted = false;
-    }
-  }
-
-  /// Fetch regular products with pagination
+  /// Fetch products with pagination (promotionScore handles boosted ordering)
   Future<void> _fetchProducts() async {
     if (_isLoadingMore || _isDisposed) return;
 
@@ -151,9 +115,8 @@ class TerasProductListProvider with ChangeNotifier {
     try {
       Query query = _firestore
           .collection('products')
-          .where('quantity', isGreaterThan: 0)
-          .orderBy('quantity')
-          .orderBy('createdAt', descending: true)
+          .orderBy('promotionScore', descending: true)
+          .orderBy(FieldPath.documentId)
           .limit(_pageSize);
 
       if (_lastDocument != null) {
@@ -167,28 +130,23 @@ class TerasProductListProvider with ChangeNotifier {
       if (snapshot.docs.isEmpty) {
         _hasMore = false;
       } else {
-        final newProducts =
-            snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
+        final newProducts = snapshot.docs
+            .map((doc) => ProductSummary.fromDocument(doc))
+            .toList();
 
-        // Filter out boosted products to avoid duplicates
-        final boostedIds = _boostedProducts.map((p) => p.id).toSet();
-        final filteredProducts =
-            newProducts.where((p) => !boostedIds.contains(p.id)).toList();
-
-        _products.addAll(filteredProducts);
+        _products.addAll(newProducts);
         _lastDocument = snapshot.docs.last;
         _currentPage++;
         _hasMore = snapshot.docs.length == _pageSize;
 
-        debugPrint(
-            'Fetched page $_currentPage: ${filteredProducts.length} products');
+        debugPrint('Fetched page $_currentPage: ${newProducts.length} products');
       }
     } catch (e) {
       debugPrint('Error fetching products: $e');
       _hasMore = false;
     } finally {
       _isLoadingMore = false;
-     _safeNotifyListeners();
+      _safeNotifyListeners();
     }
   }
 
@@ -211,15 +169,10 @@ class TerasProductListProvider with ChangeNotifier {
     
     debugPrint('⏰ Teras cache expired, clearing products');
     _products.clear();
-    _boostedProducts.clear();
     _cacheTimestamp = null;
     _isInitialized = false;
     _safeNotifyListeners();  // ✅ CHANGE
   });
 }
 
-  /// Get combined products list (boosted first, then regular)
-  List<ProductSummary> getCombinedProducts() {
-    return [..._boostedProducts, ..._products];
-  }
 }

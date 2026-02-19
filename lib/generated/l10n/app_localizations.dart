@@ -9328,6 +9328,12 @@ abstract class AppLocalizations {
   /// **'Konsol Türü'**
   String get consoleVariant;
 
+  /// No description provided for @productType.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ürün Tipi'**
+  String get productType;
+
   /// No description provided for @computerComponent.
   ///
   /// In tr, this message translates to:

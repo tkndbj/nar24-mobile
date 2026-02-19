@@ -4756,6 +4756,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get consoleVariant => 'Konsol Türü';
 
   @override
+  String get productType => 'Ürün Tipi';
+
+  @override
   String get computerComponent => 'Parça';
 
   @override

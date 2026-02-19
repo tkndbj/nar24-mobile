@@ -49,7 +49,6 @@ class ShopMarketProvider with ChangeNotifier {
   final Map<String, Map<int, DocumentSnapshot>> _filterPageCursors = {};
   final Map<String, bool> _filterHasMore = {};
   final Map<String, int> _filterCurrentPage = {};
-  final Map<String, List<ProductSummary>> _filterBoostedCache = {};
   final Map<String, DateTime> _filterCacheTs = {};
 
   Future<void> fetchPage(int page) => _fetchPage(page: page);
@@ -62,10 +61,8 @@ class ShopMarketProvider with ChangeNotifier {
   final List<ProductSummary> _products = [];
   List<ProductSummary> get products => List.unmodifiable(_products);
 
-  // Boosted
-  final List<ProductSummary> _boostedProducts = [];
-  List<ProductSummary> get boostedProducts =>
-      List.unmodifiable(_boostedProducts);
+  // Boosted (handled by promotionScore sorting, no separate query needed)
+  List<ProductSummary> get boostedProducts => const [];
 
   // Flags
   bool get hasMore => _hasMore;
@@ -119,6 +116,22 @@ class ShopMarketProvider with ChangeNotifier {
   // ──────────────────────────────────────────────────────────────────────────
   // PUBLIC API
   // ──────────────────────────────────────────────────────────────────────────
+  /// Sets all category/gender state at once and fires a single query.
+  Future<void> initialize({
+    required String category,
+    String? subcategory,
+    String? subSubcategory,
+    String? buyerCategory,
+    String? buyerSubcategory,
+  }) async {
+    _category = category;
+    _subcategory = subcategory;
+    _subSubcategory = subSubcategory;
+    _buyerCategory = buyerCategory;
+    _buyerSubcategory = buyerSubcategory;
+    await _resetAndFetch();
+  }
+
   Future<void> setBuyerCategory(
       String buyerCategory, String? buyerSubcategory) async {
     if (_buyerCategory == buyerCategory &&
@@ -343,7 +356,6 @@ class ShopMarketProvider with ChangeNotifier {
     _filterPageCursors.remove(key);
     _filterHasMore.remove(key);
     _filterCurrentPage.remove(key);
-    _filterBoostedCache.remove(key);
     _filterCacheTs.remove(key);
   }
 
@@ -359,9 +371,6 @@ class ShopMarketProvider with ChangeNotifier {
     _filterPageCursors[key] = Map<int, DocumentSnapshot>.from(_pageCursors);
     _filterHasMore[key] = _hasMore;
     _filterCurrentPage[key] = _currentPage;
-    if (_boostedProducts.isNotEmpty) {
-      _filterBoostedCache[key] = List<ProductSummary>.from(_boostedProducts);
-    }
     _filterCacheTs[key] = DateTime.now();
     _pruneFilterCache();
   }
@@ -393,16 +402,6 @@ class ShopMarketProvider with ChangeNotifier {
       _products
         ..clear()
         ..addAll(_allLoaded);
-
-      // Restore boosted products if available
-      final cachedBoosted = _filterBoostedCache[key];
-      if (cachedBoosted != null) {
-        _boostedProducts
-          ..clear()
-          ..addAll(cachedBoosted);
-      } else {
-        _boostedProducts.clear();
-      }
 
       // Touch timestamp so LRU eviction considers this recently used
       _filterCacheTs[key] = now;
@@ -469,7 +468,6 @@ class ShopMarketProvider with ChangeNotifier {
     _pageCursors.clear();
     _allLoaded.clear();
     _products.clear();
-    _boostedProducts.clear();
     _hasMore = true;
     _currentPage = 0;
     _filterSeq++;
@@ -477,47 +475,18 @@ class ShopMarketProvider with ChangeNotifier {
     notifyListeners();
     try {
       await _fetchPage(page: 0, forceRefresh: true);
-      if (_quickFilter == null) {
-        await fetchBoosted();
-      }
     } finally {
       _activeLoadingCount--;
       notifyListeners();
     }
   }
 
-  bool _hasPriceIneq() => _minPrice != null || _maxPrice != null;
-
-  int _disjunctionFieldCount() {
-    int c = 0;
-    if (_dynamicBrands.length > 1) c++;
-    if (_dynamicColors.length > 1) c++;
-    if (_dynamicSubSubcategories.length > 1) c++;
-    return c;
-  }
-
-  int _activeFilterCount() {
-    return [
-      _dynamicBrands.isNotEmpty,
-      _dynamicColors.isNotEmpty,
-      _dynamicSubSubcategories.isNotEmpty,
-      _hasPriceIneq(),
-      _quickFilter != null,
-    ].where((b) => b).length;
-  }
-
   SearchBackend _decideBackend() {
+    // Route to Algolia for complex filters or non-default sort.
+    // Firestore only handles the 2 base queries (with/without gender).
     if (_quickFilter != null) return SearchBackend.algolia;
-
-    final disj = _disjunctionFieldCount();
-    final count = _activeFilterCount();
-
-    final alphabeticalWithPrice =
-        (_sortOption == 'alphabetical') && _hasPriceIneq();
-    if (alphabeticalWithPrice) return SearchBackend.algolia;
-
-    if (disj >= 2) return SearchBackend.algolia;
-    if (count > 2) return SearchBackend.algolia;
+    if (_sortOption != 'date') return SearchBackend.algolia;
+    if (hasDynamicFilters) return SearchBackend.algolia;
     return SearchBackend.firestore;
   }
 
@@ -572,7 +541,7 @@ class ShopMarketProvider with ChangeNotifier {
     required int page,
     required int seq,
   }) async {
-    Query q = _buildFirestoreQuerySafe();
+    Query q = _buildFirestoreQuery();
 
     if (page > 0 && _pageCursors.containsKey(page - 1)) {
       final prev = _pageCursors[page - 1];
@@ -597,49 +566,9 @@ class ShopMarketProvider with ChangeNotifier {
 
       _storePage(page, fetched);
     } catch (e) {
-      debugPrint('Firestore query error (will fallback): $e');
-
-      try {
-        Query fb = _applyWhereClauses(_firestore.collection('shop_products'));
-
-        if (_hasPriceIneq()) {
-          fb = fb
-              .orderBy('price')
-              .orderBy('createdAt', descending: true)
-              .orderBy(FieldPath.documentId);
-        } else {
-          fb = fb
-              .orderBy('createdAt', descending: true)
-              .orderBy(FieldPath.documentId);
-        }
-
-        if (page > 0 && _pageCursors.containsKey(page - 1)) {
-          final prev = _pageCursors[page - 1];
-          if (prev != null) fb = fb.startAfterDocument(prev);
-        }
-
-        final snap2 = await fb
-            .limit(_limit)
-            .get(const GetOptions(source: Source.serverAndCache));
-        if (seq != _filterSeq) return;
-
-        final docs = snap2.docs;
-        if (docs.isNotEmpty) {
-          _pageCursors[page] = docs.last;
-        } else {
-          _pageCursors.remove(page);
-        }
-
-        final fetched =
-            docs.map((d) => ProductSummary.fromDocument(d)).toList();
-        _hasMore = fetched.length >= _limit;
-
-        _storePage(page, fetched);
-      } catch (e2) {
-        debugPrint('Fallback Firestore query error: $e2');
-        _hasMore = false;
-        _notifyDebouncer.run(notifyListeners);
-      }
+      debugPrint('Firestore query error: $e');
+      _hasMore = false;
+      _notifyDebouncer.run(notifyListeners);
     }
   }
 
@@ -659,35 +588,11 @@ class ShopMarketProvider with ChangeNotifier {
     _notifyDebouncer.run(notifyListeners);
   }
 
-  Query _applyWhereClauses(Query q) {
-    if (_category != null) q = q.where('category', isEqualTo: _category);
-    if (_subcategory != null)
-      q = q.where('subcategory', isEqualTo: _subcategory);
-    if (_subSubcategory != null)
-      q = q.where('subsubcategory', isEqualTo: _subSubcategory);
-
-    if (_buyerCategory == 'Women' || _buyerCategory == 'Men') {
-      q = q.where('gender', whereIn: [_buyerCategory, 'Unisex']);
-    }
-
-    if (_dynamicBrands.isNotEmpty && _dynamicBrands.length <= 10) {
-      q = q.where('brandModel', whereIn: _dynamicBrands);
-    }
-    if (_dynamicColors.isNotEmpty && _dynamicColors.length <= 10) {
-      q = q.where('availableColors', arrayContainsAny: _dynamicColors);
-    }
-    if (_dynamicSubSubcategories.isNotEmpty &&
-        _dynamicSubSubcategories.length <= 10) {
-      q = q.where('subsubcategory', whereIn: _dynamicSubSubcategories);
-    }
-    if (_minPrice != null)
-      q = q.where('price', isGreaterThanOrEqualTo: _minPrice);
-    if (_maxPrice != null) q = q.where('price', isLessThanOrEqualTo: _maxPrice);
-
-    return q;
-  }
-
-  Query _buildFirestoreQuerySafe() {
+  /// Only 2 possible Firestore queries:
+  /// 1. category + subcategory + subsubcategory (no gender)
+  /// 2. category + subcategory + subsubcategory + gender whereIn (with gender)
+  /// Always ordered by promotionScore DESC, createdAt DESC, __name__ ASC.
+  Query _buildFirestoreQuery() {
     Query q = _firestore.collection('shop_products');
 
     if (_category != null) q = q.where('category', isEqualTo: _category);
@@ -700,74 +605,9 @@ class ShopMarketProvider with ChangeNotifier {
       q = q.where('gender', whereIn: [_buyerCategory, 'Unisex']);
     }
 
-    if (_dynamicBrands.isNotEmpty && _dynamicBrands.length <= 10) {
-      q = q.where('brandModel', whereIn: _dynamicBrands);
-    }
-    if (_dynamicColors.isNotEmpty && _dynamicColors.length <= 10) {
-      q = q.where('availableColors', arrayContainsAny: _dynamicColors);
-    }
-    if (_dynamicSubSubcategories.isNotEmpty &&
-        _dynamicSubSubcategories.length <= 10) {
-      q = q.where('subsubcategory', whereIn: _dynamicSubSubcategories);
-    }
-
-    if (_minPrice != null)
-      q = q.where('price', isGreaterThanOrEqualTo: _minPrice);
-    if (_maxPrice != null) q = q.where('price', isLessThanOrEqualTo: _maxPrice);
-
-    final hasPrice = _hasPriceIneq();
-    if (_quickFilter == 'bestSellers') {
-      // No special query filter for bestSellers
-    }
-
-    switch (_sortOption) {
-      case 'price_asc':
-        q = q
-            .orderBy('price')
-            .orderBy('isBoosted', descending: true)
-            .orderBy('createdAt', descending: true)
-            .orderBy(FieldPath.documentId);
-        break;
-      case 'price_desc':
-        q = q
-            .orderBy('price', descending: true)
-            .orderBy('isBoosted', descending: true)
-            .orderBy('createdAt', descending: true)
-            .orderBy(FieldPath.documentId);
-        break;
-      case 'alphabetical':
-        if (hasPrice) {
-          q = q
-              .orderBy('price')
-              .orderBy('createdAt', descending: true)
-              .orderBy(FieldPath.documentId);
-        } else {
-          q = q.orderBy('productName').orderBy(FieldPath.documentId);
-        }
-        break;
-      case 'date':
-      default:
-        try {
-          if (hasPrice) {
-            q = q
-                .orderBy('price')
-                .orderBy('createdAt', descending: true)
-                .orderBy(FieldPath.documentId);
-          } else {
-            q = q
-                .orderBy('promotionScore', descending: true)
-                .orderBy('createdAt', descending: true)
-                .orderBy(FieldPath.documentId);
-          }
-        } catch (_) {
-          q = q
-              .orderBy('isBoosted', descending: true)
-              .orderBy('promotionScore', descending: true)
-              .orderBy('createdAt', descending: true)
-              .orderBy(FieldPath.documentId);
-        }
-        break;
-    }
+    q = q
+        .orderBy('promotionScore', descending: true)
+        .orderBy(FieldPath.documentId);
 
     return q;
   }
@@ -952,68 +792,6 @@ class ShopMarketProvider with ChangeNotifier {
   Iterable<List<T>> _chunks<T>(List<T> list, int size) sync* {
     for (var i = 0; i < list.length; i += size) {
       yield list.sublist(i, i + size > list.length ? list.length : i + size);
-    }
-  }
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // BOOSTED
-  // ──────────────────────────────────────────────────────────────────────────
-  Future<void> fetchBoosted() async {
-    if (_category == null || _subSubcategory == null) return;
-
-    try {
-      Query q = _firestore
-          .collection('shop_products')
-          .where('isBoosted', isEqualTo: true)
-          .where('category', isEqualTo: _category)
-          .where('subsubcategory', isEqualTo: _subSubcategory);
-
-      if (_buyerCategory == 'Women' || _buyerCategory == 'Men') {
-        q = q.where('gender', whereIn: [_buyerCategory, 'Unisex']);
-      }
-      if (_dynamicBrands.isNotEmpty && _dynamicBrands.length <= 10) {
-        q = q.where('brandModel', whereIn: _dynamicBrands);
-      }
-      if (_dynamicColors.isNotEmpty && _dynamicColors.length <= 10) {
-        q = q.where('availableColors', arrayContainsAny: _dynamicColors);
-      }
-      if (_dynamicSubSubcategories.isNotEmpty &&
-          _dynamicSubSubcategories.length <= 10) {
-        q = q.where('subsubcategory', whereIn: _dynamicSubSubcategories);
-      }
-      if (_minPrice != null)
-        q = q.where('price', isGreaterThanOrEqualTo: _minPrice);
-      if (_maxPrice != null)
-        q = q.where('price', isLessThanOrEqualTo: _maxPrice);
-
-      if (_hasPriceIneq()) {
-        q = q
-            .orderBy('price')
-            .orderBy('createdAt', descending: true)
-            .orderBy(FieldPath.documentId);
-      } else {
-        try {
-          q = q
-              .orderBy('promotionScore', descending: true)
-              .orderBy('createdAt', descending: true)
-              .orderBy(FieldPath.documentId);
-        } catch (_) {
-          q = q
-              .orderBy('promotionScore', descending: true)
-              .orderBy('createdAt', descending: true)
-              .orderBy(FieldPath.documentId);
-        }
-      }
-
-      final snap = await q.limit(50).get(GetOptions(source: Source.server));
-      _boostedProducts
-        ..clear()
-        ..addAll(snap.docs.map((d) => ProductSummary.fromDocument(d)));
-      _notifyDebouncer.run(notifyListeners);
-    } catch (e) {
-      debugPrint('Error fetching boosted products: $e');
-      _boostedProducts.clear();
-      _notifyDebouncer.run(notifyListeners);
     }
   }
 

@@ -1777,6 +1777,7 @@
   "stockValidationError": "Проблема со складом",
   "itemsAddedToCart": "{count} товаров добавлено в корзину",
   "consoleVariant": "Тип консоли",
+  "productType": "Тип продукта",
   "computerComponent": "Компонент",
   "consoleBrand": "Консоль",
   "kitchenAppliance": "Прибор",

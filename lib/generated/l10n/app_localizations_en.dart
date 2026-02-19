@@ -4749,6 +4749,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get consoleVariant => 'Variant';
 
   @override
+  String get productType => 'Product Type';
+
+  @override
   String get computerComponent => 'Component';
 
   @override

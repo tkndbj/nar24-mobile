@@ -312,6 +312,30 @@ class _ListProductScreenState extends State<ListProductScreen> {
         // Fallback: check if gender is in attributes (listed from Flutter)
         _attributes['gender'] = product.attributes['gender'];
       }
+
+      // Load typed spec fields back into _attributes for form editing
+      if (product.productType != null)
+        _attributes['productType'] = product.productType;
+      if (product.clothingSizes != null)
+        _attributes['clothingSizes'] = product.clothingSizes;
+      if (product.clothingFit != null)
+        _attributes['clothingFit'] = product.clothingFit;
+      if (product.clothingTypes != null)
+        _attributes['clothingTypes'] = product.clothingTypes;
+      if (product.pantSizes != null)
+        _attributes['pantSizes'] = product.pantSizes;
+      if (product.pantFabricTypes != null)
+        _attributes['pantFabricTypes'] = product.pantFabricTypes;
+      if (product.footwearSizes != null)
+        _attributes['footwearSizes'] = product.footwearSizes;
+      if (product.jewelryMaterials != null)
+        _attributes['jewelryMaterials'] = product.jewelryMaterials;
+      if (product.consoleBrand != null)
+        _attributes['consoleBrand'] = product.consoleBrand;
+      if (product.curtainMaxWidth != null)
+        _attributes['curtainMaxWidth'] = product.curtainMaxWidth;
+      if (product.curtainMaxHeight != null)
+        _attributes['curtainMaxHeight'] = product.curtainMaxHeight;
     });
   }
 
@@ -1023,6 +1047,24 @@ class _ListProductScreenState extends State<ListProductScreen> {
         }
       }
 
+      List<String>? _getSpecList(String key) {
+        final v = cleanedAttributes[key];
+        return v is List ? List<String>.from(v) : null;
+      }
+
+      final specCleanedAttributes = Map<String, dynamic>.from(cleanedAttributes)
+        ..remove('productType')
+        ..remove('clothingSizes')
+        ..remove('clothingFit')
+        ..remove('clothingTypes')
+        ..remove('pantSizes')
+        ..remove('pantFabricTypes')
+        ..remove('footwearSizes')
+        ..remove('jewelryMaterials')
+        ..remove('consoleBrand')
+        ..remove('curtainMaxWidth')
+        ..remove('curtainMaxHeight');
+
       // Build the Product model
       final product = Product(
         id: isEditMode ? widget.existingProduct!.id : '',
@@ -1065,8 +1107,21 @@ class _ListProductScreenState extends State<ListProductScreen> {
             : 0,
         clickCountAtStart:
             isEditMode ? widget.existingProduct!.clickCountAtStart : 0,
+        productType: cleanedAttributes['productType'] as String?,
+        clothingSizes: _getSpecList('clothingSizes'),
+        clothingFit: cleanedAttributes['clothingFit'] as String?,
+        clothingTypes: _getSpecList('clothingTypes'),
+        pantSizes: _getSpecList('pantSizes'),
+        pantFabricTypes: _getSpecList('pantFabricTypes'),
+        footwearSizes: _getSpecList('footwearSizes'),
+        jewelryMaterials: _getSpecList('jewelryMaterials'),
+        consoleBrand: cleanedAttributes['consoleBrand'] as String?,
+        curtainMaxWidth:
+            (cleanedAttributes['curtainMaxWidth'] as num?)?.toDouble(),
+        curtainMaxHeight:
+            (cleanedAttributes['curtainMaxHeight'] as num?)?.toDouble(),
         attributes:
-            _cleanAttributes(cleanedAttributes), // ✅ Use cleaned attributes
+            _cleanAttributes(specCleanedAttributes), // ← was cleanedAttributes
       );
 
       if (mounted) {

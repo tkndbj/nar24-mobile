@@ -14,7 +14,11 @@
       "Bash(powershell -Command \"\\(Get-Content lib\\\\l10n\\\\app_en.arb\\).Count\")",
       "Bash(flutter gen-l10n:*)",
       "Bash(powershell -Command \"\\(Get-Content lib\\\\l10n\\\\app_tr.arb\\).Count\")",
-      "Bash(powershell -Command:*)"
+      "Bash(powershell -Command:*)",
+      "Bash(grep:*)",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(flutter build:*)"
     ],
     "deny": [],
     "ask": []

@@ -100,7 +100,9 @@ class _ListProductConsolesScreenState extends State<ListProductConsolesScreen> {
     super.initState();
     // Load from dynamic attributes if provided
     if (widget.initialAttributes != null) {
-      _selectedBrand = widget.initialAttributes!['consoleBrand'] as String?;
+      _selectedBrand =
+          widget.initialAttributes!['productType'] as String? ??
+          widget.initialAttributes!['consoleBrand'] as String?;
       _selectedVariant = widget.initialAttributes!['consoleVariant'] as String?;
     }
   }
@@ -250,9 +252,9 @@ class _ListProductConsolesScreenState extends State<ListProductConsolesScreen> {
       return;
     }
 
-    // Return the console selection as dynamic attributes
+    // Return the console selection as unified productType + variant
     final result = <String, dynamic>{
-      'consoleBrand': _selectedBrand,
+      'productType': _selectedBrand,
       'consoleVariant': _selectedVariant,
     };
 

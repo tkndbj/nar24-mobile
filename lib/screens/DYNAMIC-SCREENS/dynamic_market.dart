@@ -118,29 +118,14 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
 
       if (!mounted) return;
 
-      // Set buyer category FIRST if available
-      if (widget.buyerCategory != null) {
-        _shopMarketProvider.setBuyerCategory(
-          widget.buyerCategory!,
-          widget.buyerSubcategory,
-        );
-      }
-
-      // Set category
-      _shopMarketProvider.setCategory(widget.category);
-
-      // Set subcategory
-      if (widget.selectedSubcategory != null) {
-        _shopMarketProvider.setSubcategory(widget.selectedSubcategory!);
-      }
-
-      // Set subsubcategory if provided
-      if (widget.selectedSubSubcategory != null) {
-        _shopMarketProvider.setSubSubcategory(widget.selectedSubSubcategory!);
-      }
-
-      // Fetch initial data
-      await _shopMarketProvider.fetchBoosted();
+      // Set all state at once, single query
+      await _shopMarketProvider.initialize(
+        category: widget.category,
+        subcategory: widget.selectedSubcategory,
+        subSubcategory: widget.selectedSubSubcategory,
+        buyerCategory: widget.buyerCategory,
+        buyerSubcategory: widget.buyerSubcategory,
+      );
 
       if (mounted) {
         setState(() {
@@ -401,7 +386,6 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
         }
 
         final displayProducts = marketProvider.products;
-        final effectiveBoostedProducts = marketProvider.boostedProducts;
 
         // Loading completed - show empty state if no products found
         if (displayProducts.isEmpty) {
@@ -414,7 +398,6 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
 
         return _buildProductsList(
           displayProducts,
-          effectiveBoostedProducts,
           marketProvider,
         );
       },
@@ -475,13 +458,11 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
 
   Widget _buildProductsList(
   List<ProductSummary> displayProducts,
-  List<ProductSummary> boostedProducts,
   ShopMarketProvider marketProvider,
 ) {
     return RefreshIndicator(
       onRefresh: () async {
         await marketProvider.refresh();
-        await marketProvider.fetchBoosted();
       },
       child: NotificationListener<ScrollNotification>(
         onNotification: (scrollInfo) {
@@ -497,7 +478,7 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
           slivers: [
             ProductListSliver(
               products: displayProducts,
-              boostedProducts: boostedProducts,
+              boostedProducts: const [],
               hasMore: marketProvider.hasMore,
               isLoadingMore: marketProvider.isLoadingMore,
               screenName: 'dynamic_market_screen',

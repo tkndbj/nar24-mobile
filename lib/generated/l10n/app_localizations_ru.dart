@@ -4774,6 +4774,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get consoleVariant => 'Тип консоли';
 
   @override
+  String get productType => 'Тип продукта';
+
+  @override
   String get computerComponent => 'Компонент';
 
   @override

@@ -264,11 +264,10 @@ class _BoostScreenState extends State<BoostScreen>
           .where('isBoosted', isEqualTo: false)
           .orderBy('createdAt', descending: true);
     } else {
-      // only the user's own products
+      // only the user's own products (same query as listed_products_tab)
       query = _firestore
           .collection('products')
           .where('userId', isEqualTo: user.uid)
-          .where('isBoosted', isEqualTo: false)
           .orderBy('createdAt', descending: true);
     }
 
@@ -281,7 +280,7 @@ class _BoostScreenState extends State<BoostScreen>
           ? (data['imageUrls'] as List).first
           : '';
       return data;
-    }).toList();
+    }).where((data) => data['isBoosted'] != true).toList();
 
     // if you had a main product, remove it from that list
     if (widget.productId != null) {
