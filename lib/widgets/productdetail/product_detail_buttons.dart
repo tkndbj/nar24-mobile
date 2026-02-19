@@ -78,6 +78,36 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
     );
   }
 
+  bool _shouldShowOptionSelector(Product product) {
+    if (product.colorImages.isNotEmpty) return true;
+    if (product.subsubcategory.toLowerCase() == 'curtains') return true;
+    if ((product.clothingSizes?.length ?? 0) > 1) return true;
+    if ((product.pantSizes?.length ?? 0) > 1) return true;
+    if ((product.footwearSizes?.length ?? 0) > 1) return true;
+    if ((product.jewelryMaterials?.length ?? 0) > 1) return true;
+
+    // Backward compat — old products still in attributes map
+    const nonSelectable = {
+      'clothingType',
+      'clothingTypes',
+      'pantFabricType',
+      'pantFabricTypes',
+      'gender',
+      'clothingFit',
+      'productType',
+      'consoleBrand',
+      'curtainMaxWidth',
+      'curtainMaxHeight',
+    };
+    for (final entry in product.attributes.entries) {
+      if (nonSelectable.contains(entry.key)) continue;
+      final value = entry.value;
+      if (value is List && value.length > 1) return true;
+      if (value is String && value.split(',').length > 1) return true;
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
@@ -88,7 +118,7 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
 
     final isOutOfStock = widget.product.quantity == 0 &&
         widget.product.colorQuantities.entries.every((e) => e.value == 0);
-    final hasOptions = widget.product.attributes.isNotEmpty;
+    final hasOptions = _shouldShowOptionSelector(widget.product);
 
     String deliveryText;
     if (widget.product.deliveryOption == "Fast Delivery") {
@@ -184,7 +214,8 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
 
                                   // ✅ STEP 1: Check authentication FIRST (before any UI updates)
                                   if (isAdding) {
-                                    final user = FirebaseAuth.instance.currentUser;
+                                    final user =
+                                        FirebaseAuth.instance.currentUser;
                                     if (user == null) {
                                       await _showAuthModal(context);
                                       return;
@@ -203,7 +234,8 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                                       ),
                                     );
 
-                                    if (selections == null || !context.mounted) {
+                                    if (selections == null ||
+                                        !context.mounted) {
                                       return; // User cancelled
                                     }
                                   }
@@ -222,7 +254,8 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                                   }
 
                                   try {
-                                    final cartProvider = Provider.of<CartProvider>(
+                                    final cartProvider =
+                                        Provider.of<CartProvider>(
                                       context,
                                       listen: false,
                                     );
@@ -233,22 +266,30 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                                     String result;
 
                                     if (isAdding) {
-                                      final qty = selections?['quantity'] as int? ?? 1;
-                                      final selectedColor = selections?['selectedColor'] as String?;
+                                      final qty =
+                                          selections?['quantity'] as int? ?? 1;
+                                      final selectedColor =
+                                          selections?['selectedColor']
+                                              as String?;
                                       final attrs = selections != null
-                                          ? (Map<String, dynamic>.from(selections)
+                                          ? (Map<String, dynamic>.from(
+                                              selections)
                                             ..remove('quantity')
                                             ..remove('selectedColor'))
                                           : null;
 
-                                      result = await cartProvider.addProductToCart(
+                                      result =
+                                          await cartProvider.addProductToCart(
                                         widget.product,
                                         quantity: qty,
                                         selectedColor: selectedColor,
-                                        attributes: attrs?.isNotEmpty == true ? attrs : null,
+                                        attributes: attrs?.isNotEmpty == true
+                                            ? attrs
+                                            : null,
                                       );
                                     } else {
-                                      result = await cartProvider.removeFromCart(widget.product.id);
+                                      result = await cartProvider
+                                          .removeFromCart(widget.product.id);
                                     }
 
                                     // ✅ STEP 6: Handle actual errors (not auth - already checked)
@@ -265,7 +306,8 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                                   } catch (e) {
                                     debugPrint('Cart operation error: $e');
                                     if (context.mounted) {
-                                      _showErrorSnackbar(context, 'Operation failed');
+                                      _showErrorSnackbar(
+                                          context, 'Operation failed');
                                     }
                                     setState(() {
                                       _localCartState = null;
@@ -273,7 +315,9 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                                     });
                                   } finally {
                                     if (mounted) {
-                                      Future.delayed(const Duration(milliseconds: 300), () {
+                                      Future.delayed(
+                                          const Duration(milliseconds: 300),
+                                          () {
                                         if (mounted) {
                                           setState(() => _isPending = false);
                                         }
@@ -316,7 +360,8 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                               key: ValueKey('cart-$isInCart'),
                               fit: BoxFit.scaleDown,
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 4.0),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   mainAxisSize: MainAxisSize.min,
@@ -367,7 +412,8 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                               ? null
                               : () async {
                                   try {
-                                    final user = FirebaseAuth.instance.currentUser;
+                                    final user =
+                                        FirebaseAuth.instance.currentUser;
                                     if (user == null) {
                                       await _showAuthModal(context);
                                       return;
@@ -377,8 +423,9 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
 
                                     Map<String, dynamic>? selections;
                                     if (hasOptions) {
-                                      selections = await showCupertinoModalPopup<
-                                          Map<String, dynamic>?>(
+                                      selections =
+                                          await showCupertinoModalPopup<
+                                              Map<String, dynamic>?>(
                                         context: context,
                                         builder: (_) => ProductOptionSelector(
                                           product: widget.product,
@@ -386,17 +433,18 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                                         ),
                                       );
 
-                                      if (selections == null || !context.mounted)
-                                        return;
+                                      if (selections == null ||
+                                          !context.mounted) return;
                                     } else {
                                       selections = {'quantity': 1};
                                     }
 
-                                    final qty = selections['quantity'] as int? ?? 1;
+                                    final qty =
+                                        selections['quantity'] as int? ?? 1;
 
                                     // ✅ NEW: Build selectedAttributes map (excluding quantity)
-                                    final Map<String, dynamic> selectedAttributes =
-                                        {};
+                                    final Map<String, dynamic>
+                                        selectedAttributes = {};
 
                                     selections.forEach((key, value) {
                                       if (key != 'quantity' &&
@@ -424,14 +472,16 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                                                     selectedAttributes,
                                             }
                                           ],
-                                          totalPrice: widget.product.price * qty,
+                                          totalPrice:
+                                              widget.product.price * qty,
                                         ),
                                       ),
                                     );
                                   } catch (e) {
                                     debugPrint('Buy now error: $e');
                                     if (context.mounted) {
-                                      _showErrorSnackbar(context, 'Operation failed');
+                                      _showErrorSnackbar(
+                                          context, 'Operation failed');
                                     }
                                   }
                                 },
@@ -481,7 +531,10 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                                   ),
                                 ],
                               ),
-                              if (!isOutOfStock && !isSalesPaused && widget.product.quantity > 0 && widget.product.quantity <= 10)
+                              if (!isOutOfStock &&
+                                  !isSalesPaused &&
+                                  widget.product.quantity > 0 &&
+                                  widget.product.quantity <= 10)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 2.0),
                                   child: Row(
@@ -494,8 +547,8 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        localizations
-                                            .lastProducts(widget.product.quantity),
+                                        localizations.lastProducts(
+                                            widget.product.quantity),
                                         style: const TextStyle(
                                           fontFamily: 'Figtree',
                                           fontWeight: FontWeight.w600,
