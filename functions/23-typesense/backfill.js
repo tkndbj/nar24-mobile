@@ -217,6 +217,11 @@ async function backfillOrders(client) {
         shipmentStatus: data.shipmentStatus || null,
         buyerName: data.buyerName || null,
         sellerName: data.sellerName || null,
+        buyerId: data.buyerId || null,
+        sellerId: data.sellerId || null,
+        shopId: data.shopId || null,
+        orderId: data.orderId || orderDoc.id,
+        productId: data.productId || null,
         timestampForSorting: data.timestamp?.seconds || Math.floor(Date.now() / 1000),
         searchableText: [
           data.productName, data.buyerName, data.sellerName,
