@@ -304,23 +304,33 @@ class ProductSummary {
       availableColors: json['availableColors'] != null
           ? List<String>.from(json['availableColors'])
           : const [],
-      colorImages: json['colorImages'] is Map
-          ? (json['colorImages'] as Map).map(
+      colorImages: json['colorImagesJson'] != null
+          ? (jsonDecode(json['colorImagesJson'] as String) as Map).map(
               (k, v) => MapEntry(
                 k.toString(),
                 (v as List).map((e) => e.toString()).toList(),
               ),
             )
-          : const {},
+          : json['colorImages'] is Map
+              ? (json['colorImages'] as Map).map(
+                  (k, v) => MapEntry(
+                    k.toString(),
+                    (v as List).map((e) => e.toString()).toList(),
+                  ),
+                )
+              : const {},
       sellerName: json['sellerName']?.toString() ?? '',
       shopId: json['shopId']?.toString(),
       userId: json['userId']?.toString() ?? '',
       ownerId: json['ownerId']?.toString() ?? '',
       quantity: (json['quantity'] as num?)?.toInt() ?? 0,
-      colorQuantities: json['colorQuantities'] is Map
-          ? (json['colorQuantities'] as Map)
+      colorQuantities: json['colorQuantitiesJson'] != null
+          ? (jsonDecode(json['colorQuantitiesJson'] as String) as Map)
               .map((k, v) => MapEntry(k.toString(), (v as num).toInt()))
-          : const {},
+          : json['colorQuantities'] is Map
+              ? (json['colorQuantities'] as Map)
+                  .map((k, v) => MapEntry(k.toString(), (v as num).toInt()))
+              : const {},
       isBoosted: json['isBoosted'] as bool? ?? false,
       isFeatured: json['isFeatured'] as bool? ?? false,
       purchaseCount: (json['purchaseCount'] as num?)?.toInt() ?? 0,

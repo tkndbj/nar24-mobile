@@ -441,9 +441,11 @@ class TypeSenseService {
       'page': (page + 1).toString(),
       'include_fields':
           'id,productName,price,originalPrice,discountPercentage,brandModel,'
-              'category,subcategory,subsubcategory,gender,availableColors,colorImages,colorImagesJson,'
-              'shopId,ownerId,promotionScore,createdAt,imageUrls,'
-              'currency,discountThreshold,bulkDiscountPercentage',
+              'category,subcategory,subsubcategory,gender,availableColors,colorImagesJson,colorQuantitiesJson,'
+              'shopId,ownerId,userId,promotionScore,createdAt,imageUrls,'
+              'sellerName,condition,currency,quantity,averageRating,reviewCount,'
+              'isBoosted,isFeatured,purchaseCount,bestSellerRank,deliveryOption,paused,'
+              'bundleIds,videoUrl,campaignName,discountThreshold,bulkDiscountPercentage',
     };
 
     if (filterParts.isNotEmpty) {
