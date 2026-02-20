@@ -2,7 +2,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:rxdart/rxdart.dart';
-import '../../services/algolia_service_manager.dart';
+import '../../services/typesense_service_manager.dart';
 import '../../services/search_config_service.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -111,7 +111,7 @@ class ShopSearchBarState extends State<ShopSearchBar> {
       if (SearchConfigService.instance.useFirestore) {
         shopDocs = await _searchShopsFirestore(query);
       } else {
-        shopDocs = await _searchShopsAlgolia(query);
+        shopDocs = await _searchShopsTypesense(query);
       }
 
       if (!mounted) return;
@@ -212,12 +212,12 @@ class ShopSearchBarState extends State<ShopSearchBar> {
     return shopDocs;
   }
 
-  /// Algolia search: existing flow.
-  Future<List<DocumentSnapshot>> _searchShopsAlgolia(String query) async {
+  /// Typesense search flow.
+  Future<List<DocumentSnapshot>> _searchShopsTypesense(String query) async {
     final l10n = AppLocalizations.of(context);
     final languageCode = l10n.localeName ?? 'en';
 
-    final algoliaResults = await AlgoliaServiceManager.instance.shopsService
+    final typesenseResults = await TypeSenseServiceManager.instance.shopsService
         .searchShops(
           query: query,
           hitsPerPage: 50,
@@ -232,10 +232,10 @@ class ShopSearchBarState extends State<ShopSearchBar> {
       return [];
     }
 
-    // Extract shop IDs from Algolia results
-    final shopIds = algoliaResults
-        .map((hit) =>
-            hit['objectID']?.toString().replaceAll('shops_', '') ?? '')
+    // Extract shop IDs from Typesense results
+    final shopIds = typesenseResults
+        .map(
+            (hit) => hit['id']?.toString().replaceAll('shops_', '') ?? '')
         .where((id) => id.isNotEmpty)
         .toList();
 
@@ -258,7 +258,7 @@ class ShopSearchBarState extends State<ShopSearchBar> {
       shopDocs.addAll(querySnapshot.docs);
     }
 
-    // Sort results to match Algolia ranking
+    // Sort results to match Typesense ranking
     shopDocs.sort((a, b) {
       final indexA = shopIds.indexOf(a.id);
       final indexB = shopIds.indexOf(b.id);

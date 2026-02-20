@@ -10,7 +10,7 @@ import '../models/product.dart';
 import 'package:Nar24/models/mock_document_snapshot.dart';
 import 'package:flutter/foundation.dart';
 import 'package:Nar24/constants/all_in_one_category_data.dart';
-import '../services/algolia_service_manager.dart';
+import '../services/typesense_service_manager.dart';
 
 // Helper functions remain the same
 Map<String, dynamic> _decodeAndConvertShopData(String jsonString) {
@@ -71,13 +71,13 @@ class ShopProvider with ChangeNotifier {
   final ValueNotifier<bool> isLoadingCollectionsNotifier =
       ValueNotifier<bool>(false);
 
-  Timer? _algoliaSearchDebounce;
-  List<Product> _algoliaSearchResults = [];
-  bool _isAlgoliaSearching = false;
-  String _lastAlgoliaQuery = '';
+  Timer? _searchDebounce;
+  List<Product> _searchResults = [];
+  bool _isSearching = false;
+  String _lastSearchQuery = '';
 
   // Race token for search deduplication
-  int _algoliaSearchRaceToken = 0;
+  int _searchRaceToken = 0;
 
   // Memory management constants
   static const int _maxProductsInMemory = 200;
@@ -90,8 +90,8 @@ class ShopProvider with ChangeNotifier {
   static const int _maxConsecutiveFailures = 3;
   static const Duration _circuitBreakerResetDuration = Duration(minutes: 1);
 
-  List<Product> get algoliaSearchResults => _algoliaSearchResults;
-  bool get isAlgoliaSearching => _isAlgoliaSearching;
+  List<Product> get searchResults => _searchResults;
+  bool get isSearching => _isSearching;
 
 // Add getter
   List<Map<String, dynamic>> get collections => collectionsNotifier.value;
@@ -720,7 +720,7 @@ class ShopProvider with ChangeNotifier {
     cartCount.dispose();
     collectionsNotifier.dispose();
     isLoadingCollectionsNotifier.dispose();
-    _algoliaSearchDebounce?.cancel();
+    _searchDebounce?.cancel();
     super.dispose();
   }
 
@@ -1641,7 +1641,7 @@ class ShopProvider with ChangeNotifier {
     if (trimmedQuery.isEmpty) {
       // If query is empty, show original products
       _searchQuery = '';
-      _algoliaSearchResults = [];
+      _searchResults = [];
       _applyAllFilters(List.from(_unfilteredProducts));
       _safeNotifyListeners();
       return;
@@ -1650,30 +1650,30 @@ class ShopProvider with ChangeNotifier {
     _searchQuery = trimmedQuery;
 
     // Cancel previous search
-    _algoliaSearchDebounce?.cancel();
+    _searchDebounce?.cancel();
 
     // Start new debounced search
-    _algoliaSearchDebounce = Timer(const Duration(milliseconds: 500), () {
-      _performAlgoliaSearch(trimmedQuery);
+    _searchDebounce = Timer(const Duration(milliseconds: 500), () {
+      _performTypesenseSearch(trimmedQuery);
     });
   }
 
-  Future<void> _performAlgoliaSearch(String query) async {
+  Future<void> _performTypesenseSearch(String query) async {
     if (_shopDoc == null || query.isEmpty) return;
 
     // Check circuit breaker
     if (_isCircuitBreakerOpen()) {
-      debugPrint('Circuit breaker open, skipping Algolia search');
+      debugPrint('Circuit breaker open, skipping Typesense search');
       _fallbackToLocalSearch(query);
       return;
     }
 
     // Increment race token to invalidate previous searches
-    _algoliaSearchRaceToken++;
-    final currentToken = _algoliaSearchRaceToken;
+    _searchRaceToken++;
+    final currentToken = _searchRaceToken;
 
-    _isAlgoliaSearching = true;
-    _lastAlgoliaQuery = query;
+    _isSearching = true;
+    _lastSearchQuery = query;
     _safeNotifyListeners();
 
     try {
@@ -1727,7 +1727,7 @@ class ShopProvider with ChangeNotifier {
 
       // Use the shop-specific search method with retry logic
       final results = await _retryWithBackoff(() async {
-        return await AlgoliaServiceManager.instance.shopService
+        return await TypeSenseServiceManager.instance.shopService
             .searchShopProducts(
           shopId: shopId,
           query: query,
@@ -1738,8 +1738,8 @@ class ShopProvider with ChangeNotifier {
       });
 
       // Only update if this is still the latest search (race token check)
-      if (currentToken == _algoliaSearchRaceToken) {
-        _algoliaSearchResults = results;
+      if (currentToken == _searchRaceToken) {
+        _searchResults = results;
 
         // Update the main product lists with search results
         allProductsNotifier.value = results;
@@ -1752,11 +1752,11 @@ class ShopProvider with ChangeNotifier {
         debugPrint('Stale search result discarded (token mismatch)');
       }
     } catch (e) {
-      print('Algolia search error: $e');
-      // Fallback to local search if Algolia fails
+      print('Typesense search error: $e');
+      // Fallback to local search if Typesense fails
       _fallbackToLocalSearch(query);
     } finally {
-      _isAlgoliaSearching = false;
+      _isSearching = false;
       _safeNotifyListeners();
     }
   }
@@ -1791,8 +1791,8 @@ class ShopProvider with ChangeNotifier {
 
     // Clear search
     _searchQuery = '';
-    _algoliaSearchResults = [];
-    _lastAlgoliaQuery = '';
+    _searchResults = [];
+    _lastSearchQuery = '';
 
     _lastProductsFetch = null;
     fetchProducts();
@@ -1896,7 +1896,7 @@ class ShopProvider with ChangeNotifier {
 
     // If there's an active search, re-run it with new sort option
     if (_searchQuery.isNotEmpty) {
-      _performAlgoliaSearch(_searchQuery);
+      _performTypesenseSearch(_searchQuery);
     } else {
       _lastProductsFetch = null;
       fetchProducts();
@@ -1927,7 +1927,7 @@ class ShopProvider with ChangeNotifier {
 
     // If there's an active search, re-run it with new filters
     if (_searchQuery.isNotEmpty) {
-      _performAlgoliaSearch(_searchQuery);
+      _performTypesenseSearch(_searchQuery);
     } else {
       _lastProductsFetch = null;
       fetchProducts();
@@ -1939,7 +1939,7 @@ class ShopProvider with ChangeNotifier {
 
     // If there's an active search, re-run it with new subcategory filter
     if (_searchQuery.isNotEmpty) {
-      _performAlgoliaSearch(_searchQuery);
+      _performTypesenseSearch(_searchQuery);
     } else {
       _lastProductsFetch = null;
       fetchProducts();
@@ -1948,9 +1948,9 @@ class ShopProvider with ChangeNotifier {
 
   void clearSearch() {
     _searchQuery = '';
-    _algoliaSearchResults = [];
-    _lastAlgoliaQuery = '';
-    _algoliaSearchDebounce?.cancel();
+    _searchResults = [];
+    _lastSearchQuery = '';
+    _searchDebounce?.cancel();
 
     // Return to showing all products with current filters
     _applyAllFilters(List.from(_unfilteredProducts));

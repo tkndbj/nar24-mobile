@@ -613,7 +613,7 @@ class _SearchField extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Selector<ShopProvider, bool>(
-      selector: (_, p) => p.isAlgoliaSearching,
+      selector: (_, p) => p.isSearching,
       builder: (context, isSearching, _) {
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -1083,7 +1083,7 @@ class _ProductsTab extends StatelessWidget {
     return ValueListenableBuilder<bool>(
       valueListenable: provider.isLoadingProductsNotifier,
       builder: (context, isLoading, _) {
-        if (isLoading || provider.isAlgoliaSearching) {
+        if (isLoading || provider.isSearching) {
           return const _ProductShimmerGrid();
         }
 

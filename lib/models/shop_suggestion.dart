@@ -15,9 +15,8 @@ class ShopSuggestion {
     this.relevanceScore,
   });
 
-  factory ShopSuggestion.fromAlgolia(Map<String, dynamic> hit) {
-    // Handle objectID which could be prefixed
-    String shopId = hit['objectID'] ?? '';
+  factory ShopSuggestion.fromSearchHit(Map<String, dynamic> hit) {
+    String shopId = hit['id']?.toString() ?? '';
     if (shopId.startsWith('shops_')) {
       shopId = shopId.substring('shops_'.length);
     }

@@ -19,7 +19,7 @@ class CategorySuggestion {
     this.matchedKeywords,
   });
 
-  factory CategorySuggestion.fromAlgolia(Map<String, dynamic> hit) {
+  factory CategorySuggestion.fromSearchHit(Map<String, dynamic> hit) {
     return CategorySuggestion(
       categoryKey: hit['categoryKey'] ?? '',
       subcategoryKey: hit['subcategoryKey'],

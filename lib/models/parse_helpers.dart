@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Shared, zero-allocation-where-possible parsing helpers.
 ///
-/// Every `fromDocument`, `fromJson`, and `fromAlgolia` factory was
+/// Every `fromDocument`, `fromJson`, and `fromSearchHit` factory was
 /// re-declaring the same closures on every call. Moving them here:
 ///   • eliminates per-call closure allocation
 ///   • gives a single place to fix edge-case parsing bugs

@@ -11,7 +11,7 @@ import '../../generated/l10n/app_localizations.dart';
 import '../../screens/PAYMENT-RECEIPT/sold_product_screen.dart';
 import '../../screens/PAYMENT-RECEIPT/shipment_status_screen.dart';
 import '../../../providers/my_products_provider.dart';
-import '../../services/algolia_service_manager.dart';
+import '../../services/typesense_service_manager.dart';
 
 /// Shipment status enum matching Firestore structure (from shipments_tab.dart)
 enum BuyerShipmentStatus {
@@ -96,7 +96,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
   bool _isSearching = false;
   bool _isLoadingMoreSearchResults = false;
   List<DocumentSnapshot> _searchResults = [];
-  List<Map<String, dynamic>> _currentAlgoliaResults = [];
+  List<Map<String, dynamic>> _currentSearchResults = [];
   int _currentSearchPage = 0;
   bool _hasMoreSearchResults = true;
   String _lastSearchQuery = '';
@@ -140,7 +140,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
       setState(() {
         _isSearchMode = false;
         _searchResults = [];
-        _currentAlgoliaResults = [];
+        _currentSearchResults = [];
         _isSearching = false;
         _isLoadingMoreSearchResults = false;
         _lastSearchQuery = '';
@@ -155,13 +155,13 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
     _searchDebounce = Timer(_searchDebounceDelay, () {
       if (mounted) {
         if (trimmedQuery.isNotEmpty) {
-          _performAlgoliaSearch(trimmedQuery);
+          _performTypesenseSearch(trimmedQuery);
         } else {
           _currentSearchQuery = '';
           setState(() {
             _isSearchMode = false;
             _searchResults = [];
-            _currentAlgoliaResults = [];
+            _currentSearchResults = [];
             _isSearching = false;
             _isLoadingMoreSearchResults = false;
             _lastSearchQuery = '';
@@ -177,17 +177,17 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
     });
   }
 
-  Future<void> _performAlgoliaSearch(String query) async {
+  Future<void> _performTypesenseSearch(String query) async {
     final userId = _auth.currentUser?.uid;
 
     if (userId == null) {
-      debugPrint('❌ No authenticated user for Algolia search');
+      debugPrint('No authenticated user for search');
       return;
     }
 
     if (query == _lastSearchQuery && _isSearchMode) return;
 
-    debugPrint('🔍 === ALGOLIA ORDERS SEARCH DEBUG ===');
+    debugPrint('=== TYPESENSE ORDERS SEARCH DEBUG ===');
     debugPrint('🔍 Query: "$query"');
     debugPrint('🔍 User ID: "$userId"');
     debugPrint('🔍 Is Sold: ${widget.isSold}');
@@ -200,8 +200,8 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
     });
 
     try {
-      final results = await AlgoliaServiceManager.instance.ordersService
-          .searchOrdersInAlgolia(
+      final results = await TypeSenseServiceManager.instance.ordersService
+          .searchOrdersInTypeSense(
         query: query,
         userId: userId,
         isSold: widget.isSold,
@@ -209,7 +209,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
         hitsPerPage: 20,
       );
 
-      debugPrint('🔍 Algolia Results Count: ${results.length}');
+      debugPrint('Typesense Results Count: ${results.length}');
 
       if (results.isNotEmpty) {
         debugPrint('🔍 First 3 Results:');
@@ -223,18 +223,18 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
         }
       }
 
-      final documentSnapshots = await AlgoliaServiceManager
+      final documentSnapshots = await TypeSenseServiceManager
           .instance.ordersService
-          .fetchDocumentSnapshotsFromAlgoliaResults(results);
+          .fetchDocumentSnapshotsFromTypeSenseResults(results);
 
       setState(() {
-        _currentAlgoliaResults = results;
+        _currentSearchResults = results;
         _searchResults = documentSnapshots;
         _hasMoreSearchResults = results.length == 20;
         _isSearching = false;
       });
     } catch (e, stackTrace) {
-      debugPrint('❌ Algolia orders search error: $e');
+      debugPrint('Typesense orders search error: $e');
       debugPrint('❌ Stack trace: $stackTrace');
       setState(() {
         _searchResults = [];
@@ -260,8 +260,8 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
     });
 
     try {
-      final results = await AlgoliaServiceManager.instance.ordersService
-          .searchOrdersInAlgolia(
+      final results = await TypeSenseServiceManager.instance.ordersService
+          .searchOrdersInTypeSense(
         query: _lastSearchQuery,
         userId: userId,
         isSold: widget.isSold,
@@ -269,12 +269,12 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
         hitsPerPage: 20,
       );
 
-      final newDocumentSnapshots = await AlgoliaServiceManager
+      final newDocumentSnapshots = await TypeSenseServiceManager
           .instance.ordersService
-          .fetchDocumentSnapshotsFromAlgoliaResults(results);
+          .fetchDocumentSnapshotsFromTypeSenseResults(results);
 
       setState(() {
-        _currentAlgoliaResults.addAll(results);
+        _currentSearchResults.addAll(results);
         _searchResults.addAll(newDocumentSnapshots);
         _hasMoreSearchResults = results.length == 20;
         _isLoadingMoreSearchResults = false;
@@ -559,7 +559,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
     _currentSearchQuery = '';
     _isSearchMode = false;
     _searchResults = [];
-    _currentAlgoliaResults = [];
+    _currentSearchResults = [];
     _isSearching = false;
     _isLoadingMoreSearchResults = false;
     _lastSearchQuery = '';

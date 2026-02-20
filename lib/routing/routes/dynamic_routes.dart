@@ -8,7 +8,7 @@ import 'package:provider/provider.dart';
 import '../../providers/dynamic_market_provider.dart';
 
 // Import your services
-import '../../services/algolia_service_manager.dart';
+import '../../services/typesense_service_manager.dart';
 
 // Import your models
 import '../../models/dynamic_filter.dart';
@@ -55,8 +55,8 @@ class DynamicRoutes {
             child: (args != null && args.containsKey('subcategory'))
                 ? ChangeNotifierProvider(
                     create: (_) => ShopMarketProvider(
-                      algoliaService:
-                          AlgoliaServiceManager.instance.shopService,
+                      searchService:
+                          TypeSenseServiceManager.instance.shopService,
                     ),
                     child: DynamicMarketScreen(
                       selectedSubcategory: args['subcategory'] as String?,

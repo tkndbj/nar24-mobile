@@ -66,12 +66,12 @@ class ConnectivityHelper {
   /// Get current connectivity status without performing network check
   static bool get isCurrentlyConnected => _isConnected;
 
-  /// Check specific service reachability
-  static Future<bool> canReachAlgolia() async {
+  /// Check Typesense service reachability
+  static Future<bool> canReachTypesense() async {
     if (!await isConnected()) return false;
-    
+
     try {
-      final result = await InternetAddress.lookup('3qvvgqh4me-dsn.algolia.net')
+      final result = await InternetAddress.lookup('o17xr5q8psytcabup-1.a2.typesense.net')
           .timeout(const Duration(seconds: 5));
       return result.isNotEmpty;
     } catch (e) {

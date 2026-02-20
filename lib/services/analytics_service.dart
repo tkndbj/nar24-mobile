@@ -196,9 +196,9 @@ class AnalyticsService {
     }
   }
 
-  /// Track an Algolia search operation
+  /// Track an Typesense search operation
   /// Returns the result unchanged, tracks search in background
-  static Future<T> trackAlgoliaSearch<T>({
+  static Future<T> trackTypesenseSearch<T>({
     required String operation,
     required Future<T> Function() execute,
     Map<String, dynamic>? metadata,
@@ -220,7 +220,7 @@ class AnalyticsService {
       // Log analytics in background (fire-and-forget)
       _logOperationAsync(
         operation: operation,
-        type: 'algolia_search',
+        type: 'typesense_search',
         count: 1,
         duration: stopwatch.elapsedMilliseconds,
         metadata: metadata,
@@ -231,7 +231,7 @@ class AnalyticsService {
     } catch (e) {
       // Original operation failed - rethrow without analytics
       stopwatch.stop();
-      _logErrorAsync(operation, 'algolia_search', e);
+      _logErrorAsync(operation, 'typesense_search', e);
       rethrow;
     }
   }

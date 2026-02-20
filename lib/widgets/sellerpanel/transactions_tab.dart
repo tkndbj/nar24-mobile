@@ -5,8 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../widgets/product_card_4.dart';
 import 'dart:async';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import '../../services/typesense_service_manager.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../screens/SELLER-PANEL/seller_panel_order_details_screen.dart';
 import '../../utils/attribute_localization_utils.dart';
@@ -47,13 +46,12 @@ class _TransactionsTabState extends State<TransactionsTab>
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
   Timer? _throttle;
-  // Algolia search state
+  // Search state
   bool _isSearchMode = false;
   bool _isSearching = false;
   bool _isLoadingMoreSearchResults = false;
   List<DocumentSnapshot> _searchResults = [];
-  List<Map<String, dynamic>> _currentAlgoliaResults =
-      []; // Store current Algolia results
+  List<Map<String, dynamic>> _currentSearchResults = [];
   int _currentSearchPage = 0;
   bool _hasMoreSearchResults = true;
   String _lastSearchQuery = '';
@@ -125,7 +123,7 @@ class _TransactionsTabState extends State<TransactionsTab>
       setState(() {
         _isSearchMode = false;
         _searchResults = [];
-        _currentAlgoliaResults = [];
+        _currentSearchResults = [];
         _isSearching = false;
         _isLoadingMoreSearchResults = false;
         _lastSearchQuery = '';
@@ -140,7 +138,7 @@ class _TransactionsTabState extends State<TransactionsTab>
       if (mounted) {
         // This check is already there, good!
         if (query.isNotEmpty) {
-          _performAlgoliaSearch(query);
+          _performTypesenseSearch(query);
         } else {
           // Use the regular transaction search from the provider
           Provider.of<SellerPanelProvider>(context, listen: false)
@@ -150,22 +148,17 @@ class _TransactionsTabState extends State<TransactionsTab>
     });
   }
 
-  Future<void> _performAlgoliaSearch(String query) async {
+  Future<void> _performTypesenseSearch(String query) async {
     final provider = Provider.of<SellerPanelProvider>(context, listen: false);
     final selectedShop = provider.selectedShop;
 
     if (selectedShop == null) {
-      debugPrint('❌ No selected shop for Algolia search');
+      debugPrint('No selected shop for search');
       return;
     }
 
     if (query == _lastSearchQuery && _isSearchMode) return;
 
-    debugPrint('🔍 === ALGOLIA ORDERS SEARCH DEBUG ===');
-    debugPrint('🔍 Query: "$query"');
-    debugPrint('🔍 Current Shop ID: "${selectedShop.id}"');
-
-    // ADD MOUNTED CHECK HERE
     if (!mounted) return;
 
     setState(() {
@@ -176,44 +169,31 @@ class _TransactionsTabState extends State<TransactionsTab>
     });
 
     try {
-      // Search in the orders index directly using HTTP
-      final results = await _searchOrdersInAlgolia(
+      final results = await TypeSenseServiceManager.instance.ordersService
+          .searchOrdersByShopId(
         query: query,
         shopId: selectedShop.id,
         page: 0,
         hitsPerPage: 20,
       );
 
-      debugPrint('🔍 Algolia Results Count: ${results.length}');
+      // Convert results to DocumentSnapshot objects by fetching from Firestore
+      final documentSnapshots = await TypeSenseServiceManager
+          .instance.ordersService
+          .fetchDocumentSnapshotsFromTypeSenseResults(results);
 
-      if (results.isNotEmpty) {
-        debugPrint('🔍 First 3 Results:');
-        for (int i = 0; i < results.take(3).length; i++) {
-          final hit = results[i];
-          final productName = hit['productName'] ?? 'Unknown';
-          final shopId = hit['shopId'] ?? 'No Shop';
-          debugPrint('  ${i + 1}. $productName (ShopId: $shopId)');
-        }
-      }
-
-      // Convert Algolia results to DocumentSnapshot objects by fetching from Firestore
-      final documentSnapshots =
-          await _fetchDocumentSnapshotsFromAlgoliaResults(results);
-
-      // ADD MOUNTED CHECK HERE BEFORE setState
       if (!mounted) return;
 
       setState(() {
-        _currentAlgoliaResults = results; // Store the full Algolia results
+        _currentSearchResults = results;
         _searchResults = documentSnapshots;
         _hasMoreSearchResults = results.length == 20;
         _isSearching = false;
       });
     } catch (e, stackTrace) {
-      debugPrint('❌ Algolia orders search error: $e');
-      debugPrint('❌ Stack trace: $stackTrace');
+      debugPrint('Orders search error: $e');
+      debugPrint('Stack trace: $stackTrace');
 
-      // ADD MOUNTED CHECK HERE BEFORE setState
       if (!mounted) return;
 
       setState(() {
@@ -244,21 +224,23 @@ class _TransactionsTabState extends State<TransactionsTab>
     });
 
     try {
-      final results = await _searchOrdersInAlgolia(
+      final results = await TypeSenseServiceManager.instance.ordersService
+          .searchOrdersByShopId(
         query: _lastSearchQuery,
         shopId: selectedShop.id,
         page: _currentSearchPage,
         hitsPerPage: 20,
       );
 
-      final newDocumentSnapshots =
-          await _fetchDocumentSnapshotsFromAlgoliaResults(results);
+      final newDocumentSnapshots = await TypeSenseServiceManager
+          .instance.ordersService
+          .fetchDocumentSnapshotsFromTypeSenseResults(results);
 
       // ADD MOUNTED CHECK HERE BEFORE setState
       if (!mounted) return;
 
       setState(() {
-        _currentAlgoliaResults.addAll(results); // Add to stored Algolia results
+        _currentSearchResults.addAll(results);
         _searchResults.addAll(newDocumentSnapshots);
         _hasMoreSearchResults = results.length == 20;
         _isLoadingMoreSearchResults = false;
@@ -405,123 +387,6 @@ class _TransactionsTabState extends State<TransactionsTab>
     _memoizedCategorizedResult = result;
 
     return result;
-  }
-
-  /// Direct Algolia search for orders index
-  Future<List<Map<String, dynamic>>> _searchOrdersInAlgolia({
-    required String query,
-    required String shopId,
-    int page = 0,
-    int hitsPerPage = 20,
-  }) async {
-    final applicationId = '3QVVGQH4ME';
-    final apiKey = 'dcca6685e21c2baed748ccea7a6ddef1';
-
-    final uri = Uri.https(
-      '$applicationId-dsn.algolia.net',
-      '/1/indexes/orders/query',
-    );
-
-    final Map<String, String> paramsMap = {
-      'query': query,
-      'page': page.toString(),
-      'hitsPerPage': hitsPerPage.toString(),
-      'filters': 'shopId:"$shopId"',
-      'attributesToRetrieve':
-          'objectID,productName,brandModel,shopId,orderId,productId,price,currency,quantity,selectedColor,productImage,selectedColorImage,buyerName,sellerName,timestamp',
-      'attributesToHighlight': '',
-    };
-
-    final String params = paramsMap.entries
-        .map((e) =>
-            '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
-        .join('&');
-
-    final requestBody = jsonEncode({'params': params});
-
-    final response = await http
-        .post(
-          uri,
-          headers: {
-            'X-Algolia-Application-Id': applicationId,
-            'X-Algolia-API-Key': apiKey,
-            'Content-Type': 'application/json',
-            'User-Agent': 'YourApp/1.0 (Mobile)',
-          },
-          body: requestBody,
-        )
-        .timeout(const Duration(seconds: 5));
-
-    if (response.statusCode == 200) {
-      final Map<String, dynamic> data = jsonDecode(response.body);
-      final List hits = data['hits'] ?? [];
-      return hits.cast<Map<String, dynamic>>();
-    } else {
-      throw Exception('Algolia search failed: ${response.statusCode}');
-    }
-  }
-
-  /// Fetch actual DocumentSnapshot objects using Algolia search results
-  /// Optimized: Uses parallel fetching with Future.wait for better performance
-  Future<List<DocumentSnapshot>> _fetchDocumentSnapshotsFromAlgoliaResults(
-      List<Map<String, dynamic>> algoliaResults) async {
-    if (algoliaResults.isEmpty) return [];
-
-    try {
-      // Create futures for parallel execution
-      final futures = algoliaResults.map((hit) async {
-        try {
-          final orderId = hit['orderId'] as String?;
-          final productId = hit['productId'] as String?;
-
-          if (orderId == null || productId == null) {
-            return null;
-          }
-
-          // Search for the item in the specific order using productId
-          final itemsQuery = await FirebaseFirestore.instance
-              .collection('orders')
-              .doc(orderId)
-              .collection('items')
-              .where('productId', isEqualTo: productId)
-              .limit(1)
-              .get();
-
-          if (itemsQuery.docs.isNotEmpty) {
-            return itemsQuery.docs.first;
-          }
-
-          // Fallback: search in collection group (only if primary query fails)
-          final collectionGroupQuery = await FirebaseFirestore.instance
-              .collectionGroup('items')
-              .where('orderId', isEqualTo: orderId)
-              .where('productId', isEqualTo: productId)
-              .limit(1)
-              .get();
-
-          if (collectionGroupQuery.docs.isNotEmpty) {
-            return collectionGroupQuery.docs.first;
-          }
-
-          return null;
-        } catch (e) {
-          debugPrint('❌ Error fetching document for Algolia result: $e');
-          return null;
-        }
-      }).toList();
-
-      // Execute all queries in parallel
-      final results = await Future.wait(futures);
-
-      // Filter out nulls and return valid documents
-      final documents = results.whereType<DocumentSnapshot>().toList();
-
-      debugPrint('🔍 Total documents fetched: ${documents.length}');
-      return documents;
-    } catch (e) {
-      debugPrint('❌ Error in _fetchDocumentSnapshotsFromAlgoliaResults: $e');
-      return [];
-    }
   }
 
   Future<void> _onRefresh() async {

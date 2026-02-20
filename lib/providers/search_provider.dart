@@ -4,7 +4,7 @@ import 'package:rxdart/rxdart.dart';
 import '../models/suggestion.dart';
 import '../models/category_suggestion.dart';
 import '../models/shop_suggestion.dart';
-import '../services/algolia_service_manager.dart';
+import '../services/typesense_service_manager.dart';
 import '../services/enhanced_category_search.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../utils/connectivity_helper.dart';
@@ -38,7 +38,8 @@ class SearchProvider extends ChangeNotifier {
   bool _hasNetworkError = false;
   bool _disposed = false;
 
-  AlgoliaServiceManager get _algoliaManager => AlgoliaServiceManager.instance;
+  TypeSenseServiceManager get _typesenseManager =>
+      TypeSenseServiceManager.instance;
 
   SearchProvider() {
     _querySubject
@@ -246,7 +247,7 @@ class SearchProvider extends ChangeNotifier {
         return;
       }
 
-      // ✅ ADD: If Firestore mode, skip Algolia-dependent searches
+      // If Firestore mode, skip Typesense-dependent searches
       if (SearchConfigService.instance.useFirestore) {
         // Only fetch product suggestions via Firestore
         // Category and shop suggestions won't work in fallback mode
@@ -377,7 +378,7 @@ class SearchProvider extends ChangeNotifier {
       // Fetch full limit from each index, then merge and dedupe
       // This ensures we get maximum relevant results regardless of which index has more matches
       final results = await Future.wait([
-        _algoliaManager.mainService
+        _typesenseManager.mainService
             .searchProducts(
               query: searchTerm,
               sortOption: '',
@@ -385,7 +386,7 @@ class SearchProvider extends ChangeNotifier {
               hitsPerPage: limit,
             )
             .timeout(const Duration(seconds: 3)),
-        _algoliaManager.shopService
+        _typesenseManager.shopService
             .searchProducts(
               query: searchTerm,
               sortOption: '',
@@ -413,9 +414,9 @@ class SearchProvider extends ChangeNotifier {
       // Fetch _maxSuggestions from each index to ensure we can fill up to the cap
       // The _combineProductResults will filter out already-loaded products
       // This is more reliable than page-based pagination across two different indices
-      // and keeps Algolia requests minimal (max 20 products per index is cheap)
+      // and keeps Typesense requests minimal (max 20 products per index is cheap)
       final results = await Future.wait([
-        _algoliaManager.mainService
+        _typesenseManager.mainService
             .searchProducts(
               query: searchTerm,
               sortOption: '',
@@ -423,7 +424,7 @@ class SearchProvider extends ChangeNotifier {
               hitsPerPage: _maxSuggestions,
             )
             .timeout(const Duration(seconds: 3)),
-        _algoliaManager.shopService
+        _typesenseManager.shopService
             .searchProducts(
               query: searchTerm,
               sortOption: '',
@@ -474,7 +475,7 @@ class SearchProvider extends ChangeNotifier {
       String searchTerm, AppLocalizations? l10n) async {
     try {
       final languageCode = l10n?.localeName ?? 'en';
-      final results = await _algoliaManager.shopsService
+      final results = await _typesenseManager.shopsService
           .searchShops(
             query: searchTerm,
             hitsPerPage: 5,
@@ -489,7 +490,7 @@ class SearchProvider extends ChangeNotifier {
             [];
 
         return ShopSuggestion(
-          id: hit['objectID']?.toString().replaceAll('shops_', '') ?? '',
+          id: hit['id']?.toString().replaceAll('shops_', '') ?? '',
           name: hit['name'] ?? '',
           profileImageUrl: hit['profileImageUrl'],
           categories: categories.cast<String>(),
@@ -510,7 +511,7 @@ class SearchProvider extends ChangeNotifier {
         debugPrint('🔍 Fetching category suggestions for: "$searchTerm"');
       }
 
-      final rawResults = await _algoliaManager.mainService
+      final rawResults = await _typesenseManager.mainService
           .searchCategories(
             query: searchTerm,
             hitsPerPage: 50,
@@ -519,7 +520,7 @@ class SearchProvider extends ChangeNotifier {
           .timeout(const Duration(seconds: 3));
 
       if (kDebugMode) {
-        debugPrint('   Raw Algolia results: ${rawResults.length}');
+        debugPrint('   Raw Typesense results: ${rawResults.length}');
       }
 
       final scoredResults = CategorySearchScorer.sortAndLimitResults(

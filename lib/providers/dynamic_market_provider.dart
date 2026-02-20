@@ -3,30 +3,21 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../models/product_summary.dart';
 import '../utils/debouncer.dart';
-import '../services/algolia_service.dart';
+import '../services/typesense_service.dart';
 
-enum SearchBackend { firestore, algolia }
+enum SearchBackend { firestore, TypeSense }
 
 class ShopMarketProvider with ChangeNotifier {
-  final AlgoliaService algoliaService;
-  ShopMarketProvider({required this.algoliaService});
-
+  final TypeSenseService _searchService;
+  ShopMarketProvider({required TypeSenseService searchService})
+      : _searchService = searchService;
   // ──────────────────────────────────────────────────────────────────────────
-  // DOC CACHE (Algolia hydration)
+  // DOC CACHE (TypeSense hydration)
   // ──────────────────────────────────────────────────────────────────────────
   static const int _docCacheMax = 1000;
   final Map<String, ProductSummary> _docCache = {};
   final Map<String, DateTime> _docCacheTs = {};
   static const int _maxMainCacheEntries = 100;
-
-  // Algolia index config
-  static String algoliaBaseIndex = 'shop_products';
-  static Map<String, String> algoliaSortReplicas = {
-    'date': 'shop_products_createdAt_desc',
-    'price_asc': 'shop_products_price_asc',
-    'price_desc': 'shop_products_price_desc',
-    'alphabetical': 'shop_products_alphabetical',
-  };
 
   // ──────────────────────────────────────────────────────────────────────────
   // PAGED CACHE STATE
@@ -76,9 +67,6 @@ class ShopMarketProvider with ChangeNotifier {
 
   String get sortOption => _sortOption;
   String _sortOption = 'date';
-
-  String? get quickFilter => _quickFilter;
-  String? _quickFilter;
 
   // Dynamic filters
   List<String> get dynamicBrands => List.unmodifiable(_dynamicBrands);
@@ -151,7 +139,7 @@ class ShopMarketProvider with ChangeNotifier {
       parts.add('subsubs:${_dynamicSubSubcategories.join(",")}');
     if (_minPrice != null) parts.add('minP:$_minPrice');
     if (_maxPrice != null) parts.add('maxP:$_maxPrice');
-    if (_quickFilter != null) parts.add('quick:$_quickFilter');
+
     if (_buyerCategory != null) parts.add('buyer:$_buyerCategory');
     if (_buyerSubcategory != null) parts.add('buyerSub:$_buyerSubcategory');
     parts.add('backend:${_lastBackend.name}');
@@ -397,7 +385,10 @@ class ShopMarketProvider with ChangeNotifier {
       }
 
       _hasMore = _filterHasMore[key] ?? true;
-      _currentPage = _filterCurrentPage[key] ?? (cached.keys.isEmpty ? 0 : cached.keys.reduce((a, b) => a > b ? a : b));
+      _currentPage = _filterCurrentPage[key] ??
+          (cached.keys.isEmpty
+              ? 0
+              : cached.keys.reduce((a, b) => a > b ? a : b));
       _rebuildAllLoaded();
       _products
         ..clear()
@@ -415,32 +406,20 @@ class ShopMarketProvider with ChangeNotifier {
     }
   }
 
-  Future<void> setQuickFilter(String? filterKey) async {
-    if (_quickFilter == filterKey) return;
-
-    // Save current state before switching
-    _saveFilterSnapshot();
-
-    _quickFilter = filterKey;
-
-    // Try to restore the new filter's state from cache
-    await _restoreOrFetch();
-  }
-
   Future<void> fetchMoreProducts() async {
-  if (!_hasMore || _isLoadingMore) return;
-  _isLoadingMore = true;
-  _currentPage++;
-  try {
-    await _fetchPage(page: _currentPage);
-  } catch (e) {
-    _currentPage--;  // rollback
-    debugPrint('fetchMoreProducts error: $e');
-  } finally {
-    _isLoadingMore = false;
-    _notifyDebouncer.run(notifyListeners);
+    if (!_hasMore || _isLoadingMore) return;
+    _isLoadingMore = true;
+    _currentPage++;
+    try {
+      await _fetchPage(page: _currentPage);
+    } catch (e) {
+      _currentPage--; // rollback
+      debugPrint('fetchMoreProducts error: $e');
+    } finally {
+      _isLoadingMore = false;
+      _notifyDebouncer.run(notifyListeners);
+    }
   }
-}
 
   Future<void> refresh() async => _resetAndFetch();
 
@@ -482,11 +461,8 @@ class ShopMarketProvider with ChangeNotifier {
   }
 
   SearchBackend _decideBackend() {
-    // Route to Algolia for complex filters or non-default sort.
-    // Firestore only handles the 2 base queries (with/without gender).
-    if (_quickFilter != null) return SearchBackend.algolia;
-    if (_sortOption != 'date') return SearchBackend.algolia;
-    if (hasDynamicFilters) return SearchBackend.algolia;
+    if (_sortOption != 'date') return SearchBackend.TypeSense;
+    if (hasDynamicFilters) return SearchBackend.TypeSense;
     return SearchBackend.firestore;
   }
 
@@ -530,7 +506,7 @@ class ShopMarketProvider with ChangeNotifier {
     if (_lastBackend == SearchBackend.firestore) {
       await _fetchPageFromFirestore(page: page, seq: seq);
     } else {
-      await _fetchPageFromAlgolia(page: page, seq: seq);
+      await _fetchPageFromTypeSense(page: page, seq: seq);
     }
   }
 
@@ -560,8 +536,7 @@ class ShopMarketProvider with ChangeNotifier {
         _pageCursors.remove(page);
       }
 
-      final fetched =
-          docs.map((d) => ProductSummary.fromDocument(d)).toList();
+      final fetched = docs.map((d) => ProductSummary.fromDocument(d)).toList();
       _hasMore = fetched.length >= _limit;
 
       _storePage(page, fetched);
@@ -615,8 +590,6 @@ class ShopMarketProvider with ChangeNotifier {
   String _buildFilterCacheKey() {
     final parts = <String>[];
 
-    parts.add(_quickFilter ?? 'default');
-
     if (_dynamicBrands.isNotEmpty) {
       final sortedBrands = List<String>.from(_dynamicBrands)..sort();
       parts.add('b:${sortedBrands.join(",")}');
@@ -642,57 +615,61 @@ class ShopMarketProvider with ChangeNotifier {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // ALGOLIA PATH
+  // TypeSense PATH
   // ──────────────────────────────────────────────────────────────────────────
- Future<void> _fetchPageFromAlgolia({
-  required int page,
-  required int seq,
-}) async {
-  final svc = algoliaService;
+  Future<void> _fetchPageFromTypeSense({
+    required int page,
+    required int seq,
+  }) async {
+    final svc = _searchService;
 
-  final indexName = _algoliaIndexForCurrentIndex();
-  final facetFilters = _buildAlgoliaFacetFilters();
-  final numericFilters = _buildAlgoliaNumericFilters();
+    final indexName = _TypeSenseIndexForCurrentIndex();
+    final facetFilters = _buildTypeSenseFacetFilters();
+    final numericFilters = _buildTypeSenseNumericFilters();
 
-  try {
-    final res = await svc.searchIdsWithFacets(
-      indexName: indexName,
-      page: page,
-      hitsPerPage: _limit,
-      facetFilters: facetFilters,
-      numericFilters: numericFilters,
-    );
-    if (seq != _filterSeq) return;
+    try {
+      final res = await svc.searchIdsWithFacets(
+        indexName: indexName,
+        page: page,
+        hitsPerPage: _limit,
+        facetFilters: facetFilters,
+        numericFilters: numericFilters,
+        sortOption: _sortOption,
+      );
+      if (seq != _filterSeq) return;
 
-    // ✅ Parse directly from Algolia hits — no Firestore round-trip
-    final fetched = res.hits.map((hit) {
-      final summary = ProductSummary.fromAlgolia(hit);
-      _docCachePut(summary.id, summary); // still cache for other uses
-      return summary;
-    }).toList();
+      // ✅ Parse directly from TypeSense hits — no Firestore round-trip
+      final fetched = res.hits.map((hit) {
+        final summary = ProductSummary.fromTypeSense(hit);
+        _docCachePut(summary.id, summary); // still cache for other uses
+        return summary;
+      }).toList();
 
-    _hasMore = res.page < (res.nbPages - 1);
+      _hasMore = res.page < (res.nbPages - 1);
 
-    _storePage(page, fetched);
-  } catch (e) {
-    debugPrint('Algolia service query error: $e');
-    await _fetchPageFromFirestore(page: page, seq: seq);
-  }
-}
-
-  String _algoliaIndexForCurrentIndex() {
-    final replica = algoliaSortReplicas[_sortOption];
-    return replica ?? algoliaBaseIndex;
+      _storePage(page, fetched);
+    } catch (e) {
+      debugPrint('TypeSense service query error: $e');
+      await _fetchPageFromFirestore(page: page, seq: seq);
+    }
   }
 
-  List<List<String>> _buildAlgoliaFacetFilters() {
+  String _TypeSenseIndexForCurrentIndex() {
+    return 'shop_products';
+  }
+
+  List<String> _buildTypeSenseNumericFilters() {
+    final List<String> filters = [];
+    if (_minPrice != null) filters.add('price>=${_minPrice!.floor()}');
+    if (_maxPrice != null) filters.add('price<=${_maxPrice!.ceil()}');
+    return filters;
+  }
+
+  List<List<String>> _buildTypeSenseFacetFilters() {
     final List<List<String>> groups = [];
 
     debugPrint(
         'Building filters: category=$_category, subcategory=$_subcategory, subSubcategory=$_subSubcategory, buyerCategory=$_buyerCategory');
-
-    final bool isGenderedCategory =
-        (_buyerCategory == 'Women' || _buyerCategory == 'Men');
 
     if (_category != null) {
       groups.add(['category_en:${_category!}']);
@@ -722,77 +699,8 @@ class ShopMarketProvider with ChangeNotifier {
           _dynamicSubSubcategories.map((s) => 'subsubcategory_en:$s').toList());
     }
 
-    if (_quickFilter == 'boosted') {
-      groups.add(['isBoosted:true']);
-    }
-
     debugPrint('Final facet filters: $groups');
     return groups;
-  }
-
-  List<String> _buildAlgoliaNumericFilters() {
-    final List<String> filters = [];
-    if (_minPrice != null) filters.add('price>=${_minPrice!.floor()}');
-    if (_maxPrice != null) filters.add('price<=${_maxPrice!.ceil()}');
-
-    switch (_quickFilter) {
-      case 'deals':
-        filters.add('discountPercentage>0');
-        break;
-      case 'trending':
-        break;
-      case 'fiveStar':
-        break;
-      case 'bestSellers':
-      default:
-        break;
-    }
-    return filters;
-  }
-
-  Future<List<ProductSummary>> _fetchProductsByIdsPreservingOrder(
-      List<String> ids) async {
-    if (ids.isEmpty) {
-      debugPrint('No IDs to fetch from Firestore');
-      return [];
-    }
-
-    // Only fetch what's not cached
-    final need = <String>[];
-    for (final id in ids) {
-      if (!_docCache.containsKey(id)) need.add(id);
-    }
-
-    if (need.isNotEmpty) {
-      final futures = <Future<QuerySnapshot>>[];
-      for (final chunk in _chunks(need, 10)) {
-        futures.add(_firestore
-            .collection('shop_products')
-            .where(FieldPath.documentId, whereIn: chunk)
-            .get(const GetOptions(source: Source.serverAndCache)));
-      }
-      final snaps = await Future.wait(futures);
-      for (final d in snaps.expand((s) => s.docs)) {
-        final summary = ProductSummary.fromDocument(d);
-        _docCachePut(d.id, summary);
-      }
-    }
-
-    final ordered = <ProductSummary>[];
-    for (final id in ids) {
-      final p = _docCache[id];
-      if (p != null) {
-        ordered.add(p);
-        _docCacheTs[id] = DateTime.now();
-      }
-    }
-    return ordered;
-  }
-
-  Iterable<List<T>> _chunks<T>(List<T> list, int size) sync* {
-    for (var i = 0; i < list.length; i += size) {
-      yield list.sublist(i, i + size > list.length ? list.length : i + size);
-    }
   }
 
   // ──────────────────────────────────────────────────────────────────────────

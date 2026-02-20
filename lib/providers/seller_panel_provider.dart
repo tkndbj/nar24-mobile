@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../services/algolia_service_manager.dart';
+import '../services/typesense_service_manager.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../models/product.dart';
 import 'dart:async';
@@ -73,7 +73,7 @@ class SellerPanelProvider with ChangeNotifier {
   String _lastSearchQuery = '';
   bool _isSearchMode = false;
 
-  int _activeQueryId = 0; // race guard for Algolia
+  int _activeQueryId = 0; // race guard for search
   int _activeStockQueryId = 0; // ✅ OPTIMIZATION: race guard for stock filtering
   bool _initInFlight = false;
   bool _warmupInFlight = false;
@@ -1867,7 +1867,8 @@ class SellerPanelProvider with ChangeNotifier {
 
       // Verify shop hasn't changed
       if (_selectedShop?.id != shopId) {
-        debugPrint('⚠️ Shop changed during notification listener setup, aborting');
+        debugPrint(
+            '⚠️ Shop changed during notification listener setup, aborting');
         return;
       }
 
@@ -1916,7 +1917,8 @@ class SellerPanelProvider with ChangeNotifier {
 
       debugPrint('✅ Shop notifications listener setup for $shopId');
     } catch (e, stackTrace) {
-      debugPrint('⚠️ Failed to setup shop notifications listener: $e\n$stackTrace');
+      debugPrint(
+          '⚠️ Failed to setup shop notifications listener: $e\n$stackTrace');
       _shopNotificationsSub?.cancel();
       _shopNotificationsSub = null;
       _currentNotificationShopId = null;
@@ -2112,23 +2114,23 @@ class SellerPanelProvider with ChangeNotifier {
       // Exit search mode, show regular filtered products
       _exitSearchMode();
     } else {
-      // Enter search mode and perform Algolia search
-      _performAlgoliaSearch(query.trim());
+      // Enter search mode and perform Typesense search
+      _performSearch(query.trim());
     }
 
     notifyListeners();
   }
 
-  void _performAlgoliaSearch(String query) {
+  void _performSearch(String query) {
     if (query == _lastSearchQuery && _isSearchMode) return;
 
     _searchDebounceTimer?.cancel();
     _searchDebounceTimer = Timer(const Duration(milliseconds: 300), () {
-      _executeAlgoliaSearch(query);
+      _executeSearch(query);
     });
   }
 
-  Future<void> _executeAlgoliaSearch(String query) async {
+  Future<void> _executeSearch(String query) async {
     if (_selectedShop == null) {
       debugPrint('❌ No selected shop');
       return;
@@ -2146,14 +2148,14 @@ class SellerPanelProvider with ChangeNotifier {
     final myId = ++_activeQueryId;
 
     try {
-     final results =
-    await AlgoliaServiceManager.instance.shopService.searchShopProducts(
-  shopId: currentShopId,
-  query: query,
-  sortOption: 'date',
-  page: 0,
-  hitsPerPage: 20,
-);
+      final results =
+          await TypeSenseServiceManager.instance.shopService.searchShopProducts(
+        shopId: currentShopId,
+        query: query,
+        sortOption: 'date',
+        page: 0,
+        hitsPerPage: 20,
+      );
 
       // drop stale responses
       if (myId != _activeQueryId) return;
@@ -2162,7 +2164,7 @@ class SellerPanelProvider with ChangeNotifier {
       _hasMoreSearchResults = results.length == 20;
     } catch (e, st) {
       if (myId != _activeQueryId) return;
-      debugPrint('❌ Algolia search error: $e\n$st');
+      debugPrint('Typesense search error: $e\n$st');
       _searchResultsNotifier.value = [];
       _hasMoreSearchResults = false;
     } finally {
@@ -2185,14 +2187,14 @@ class SellerPanelProvider with ChangeNotifier {
     final myId = _activeQueryId;
 
     try {
-     final results =
-    await AlgoliaServiceManager.instance.shopService.searchShopProducts(
-  shopId: _selectedShop!.id,
-  query: _lastSearchQuery,
-  sortOption: 'date',
-  page: _currentSearchPage,
-  hitsPerPage: 20,
-);
+      final results =
+          await TypeSenseServiceManager.instance.shopService.searchShopProducts(
+        shopId: _selectedShop!.id,
+        query: _lastSearchQuery,
+        sortOption: 'date',
+        page: _currentSearchPage,
+        hitsPerPage: 20,
+      );
 
       if (myId != _activeQueryId)
         return; // user changed query -> drop this page

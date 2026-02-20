@@ -3,31 +3,20 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../models/product_summary.dart';
 import '../utils/debouncer.dart';
-import '../services/algolia_service.dart';
+import '../services/typesense_service.dart';
 
-enum SearchBackend { firestore, algolia }
+enum SearchBackend { firestore, TypeSense }
 
 class DynamicTerasProvider with ChangeNotifier {
-  final AlgoliaService algoliaService; 
-  DynamicTerasProvider({required this.algoliaService}); 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Algolia entegrasyonu: DI ile tek yerden verilecek
-  // main.dart: DynamicTerasProvider.algoliaService = AlgoliaServiceManager.instance.mainService;
-  // ──────────────────────────────────────────────────────────────────────────
+  final TypeSenseService _searchService;
+  DynamicTerasProvider({required TypeSenseService searchService})
+      : _searchService = searchService;
+
   static const int _docCacheMax = 1000; // tune
   final Map<String, ProductSummary> _docCache = {};
   final Map<String, DateTime> _docCacheTs = {};
   static const int _maxMainCacheEntries = 100;
-
-
-  // Base index ve replica eşlemesi (dashboard'da varsa)
-  static String algoliaBaseIndex = 'products';
-  static Map<String, String> algoliaSortReplicas = {
-    'date'        : 'products_createdAt_desc',
-    'price_asc'   : 'products_price_asc',
-    'price_desc'  : 'products_price_desc',
-    'alphabetical': 'products_alphabetical',
-  };
+  static String typesenseBaseIndex = 'products';
 
   // ──────────────────────────────────────────────────────────────────────────
   // PAGED CACHE STATE
@@ -52,7 +41,8 @@ class DynamicTerasProvider with ChangeNotifier {
 
   Future<void> fetchPage(int page) => _fetchPage(page: page);
 
-  List<String> get dynamicSubSubcategories => List.unmodifiable(_dynamicSubSubcategories);
+  List<String> get dynamicSubSubcategories =>
+      List.unmodifiable(_dynamicSubSubcategories);
   List<String> _dynamicSubSubcategories = [];
 
   // UI list
@@ -108,7 +98,8 @@ class DynamicTerasProvider with ChangeNotifier {
   SearchBackend _lastBackend = SearchBackend.firestore;
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final Debouncer _notifyDebouncer = Debouncer(delay: const Duration(milliseconds: 200));
+  final Debouncer _notifyDebouncer =
+      Debouncer(delay: const Duration(milliseconds: 200));
 
   static const int _maxCachedPages = 5;
 
@@ -133,8 +124,10 @@ class DynamicTerasProvider with ChangeNotifier {
     await _resetAndFetch();
   }
 
-  Future<void> setBuyerCategory(String buyerCategory, String? buyerSubcategory) async {
-    if (_buyerCategory == buyerCategory && _buyerSubcategory == buyerSubcategory) return;
+  Future<void> setBuyerCategory(
+      String buyerCategory, String? buyerSubcategory) async {
+    if (_buyerCategory == buyerCategory &&
+        _buyerSubcategory == buyerSubcategory) return;
     _buyerCategory = buyerCategory;
     _buyerSubcategory = buyerSubcategory;
     await _resetAndFetch();
@@ -142,9 +135,12 @@ class DynamicTerasProvider with ChangeNotifier {
 
   String _buildCacheKey(int page) {
     final parts = <String>[];
-    if (_dynamicBrands.isNotEmpty) parts.add('brands:${_dynamicBrands.join(",")}');
-    if (_dynamicColors.isNotEmpty) parts.add('colors:${_dynamicColors.join(",")}');
-    if (_dynamicSubSubcategories.isNotEmpty) parts.add('subsubs:${_dynamicSubSubcategories.join(",")}');
+    if (_dynamicBrands.isNotEmpty)
+      parts.add('brands:${_dynamicBrands.join(",")}');
+    if (_dynamicColors.isNotEmpty)
+      parts.add('colors:${_dynamicColors.join(",")}');
+    if (_dynamicSubSubcategories.isNotEmpty)
+      parts.add('subsubs:${_dynamicSubSubcategories.join(",")}');
     if (_minPrice != null) parts.add('minP:$_minPrice');
     if (_maxPrice != null) parts.add('maxP:$_maxPrice');
     if (_quickFilter != null) parts.add('quick:$_quickFilter');
@@ -183,176 +179,223 @@ class DynamicTerasProvider with ChangeNotifier {
   }
 
   void _docCachePut(String id, ProductSummary p) {
-  _docCache[id] = p;
-  _docCacheTs[id] = DateTime.now();
-  if (_docCache.length > _docCacheMax) {
-    // evict oldest ~10%
-    final nEvict = (_docCacheMax * 0.1).round();
-    final oldest = _docCacheTs.entries.toList()
-      ..sort((a,b) => a.value.compareTo(b.value));
-    for (final e in oldest.take(nEvict)) {
-      _docCache.remove(e.key);
-      _docCacheTs.remove(e.key);
+    _docCache[id] = p;
+    _docCacheTs[id] = DateTime.now();
+    if (_docCache.length > _docCacheMax) {
+      // evict oldest ~10%
+      final nEvict = (_docCacheMax * 0.1).round();
+      final oldest = _docCacheTs.entries.toList()
+        ..sort((a, b) => a.value.compareTo(b.value));
+      for (final e in oldest.take(nEvict)) {
+        _docCache.remove(e.key);
+        _docCacheTs.remove(e.key);
+      }
     }
   }
-}
 
-void _pruneMainCache() {
-  if (_cache.length > _maxMainCacheEntries) {
-    final oldest = _cacheTs.entries.toList()
-      ..sort((a,b) => a.value.compareTo(b.value));
-    final toRemove = oldest.take(_cache.length - _maxMainCacheEntries);
-    for (final e in toRemove) {
-      _cache.remove(e.key);
-      _cacheTs.remove(e.key);
+  void _pruneMainCache() {
+    if (_cache.length > _maxMainCacheEntries) {
+      final oldest = _cacheTs.entries.toList()
+        ..sort((a, b) => a.value.compareTo(b.value));
+      final toRemove = oldest.take(_cache.length - _maxMainCacheEntries);
+      for (final e in toRemove) {
+        _cache.remove(e.key);
+        _cacheTs.remove(e.key);
+      }
     }
   }
-}
 
-Future<void> setDynamicFilter({
-  List<String>? brands,
-  List<String>? colors,
-  List<String>? subSubcategories,
-  double? minPrice,
-  double? maxPrice,
-  bool additive = true,
-}) async {
-  bool changed = false;
-  _saveFilterSnapshot();
+  Future<void> setDynamicFilter({
+    List<String>? brands,
+    List<String>? colors,
+    List<String>? subSubcategories,
+    double? minPrice,
+    double? maxPrice,
+    bool additive = true,
+  }) async {
+    bool changed = false;
+    _saveFilterSnapshot();
 
-  if (additive) {
-    if (brands != null) for (final b in brands) if (!_dynamicBrands.contains(b)) { _dynamicBrands.add(b); changed = true; }
-    if (colors != null) for (final c in colors) if (!_dynamicColors.contains(c)) { _dynamicColors.add(c); changed = true; }
-    if (subSubcategories != null) for (final s in subSubcategories) if (!_dynamicSubSubcategories.contains(s)) { _dynamicSubSubcategories.add(s); changed = true; }
-  } else {
-    if (brands != null && !_listEquals(_dynamicBrands, brands)) { _dynamicBrands = List.from(brands); changed = true; }
-    if (colors != null && !_listEquals(_dynamicColors, colors)) { _dynamicColors = List.from(colors); changed = true; }
-    if (subSubcategories != null && !_listEquals(_dynamicSubSubcategories, subSubcategories)) { _dynamicSubSubcategories = List.from(subSubcategories); changed = true; }
+    if (additive) {
+      if (brands != null)
+        for (final b in brands)
+          if (!_dynamicBrands.contains(b)) {
+            _dynamicBrands.add(b);
+            changed = true;
+          }
+      if (colors != null)
+        for (final c in colors)
+          if (!_dynamicColors.contains(c)) {
+            _dynamicColors.add(c);
+            changed = true;
+          }
+      if (subSubcategories != null)
+        for (final s in subSubcategories)
+          if (!_dynamicSubSubcategories.contains(s)) {
+            _dynamicSubSubcategories.add(s);
+            changed = true;
+          }
+    } else {
+      if (brands != null && !_listEquals(_dynamicBrands, brands)) {
+        _dynamicBrands = List.from(brands);
+        changed = true;
+      }
+      if (colors != null && !_listEquals(_dynamicColors, colors)) {
+        _dynamicColors = List.from(colors);
+        changed = true;
+      }
+      if (subSubcategories != null &&
+          !_listEquals(_dynamicSubSubcategories, subSubcategories)) {
+        _dynamicSubSubcategories = List.from(subSubcategories);
+        changed = true;
+      }
+    }
+    if (minPrice != _minPrice) {
+      _minPrice = minPrice;
+      changed = true;
+    }
+    if (maxPrice != _maxPrice) {
+      _maxPrice = maxPrice;
+      changed = true;
+    }
+
+    if (changed) {
+      await _restoreOrFetch();
+    }
   }
-  if (minPrice != _minPrice) { _minPrice = minPrice; changed = true; }
-  if (maxPrice != _maxPrice) { _maxPrice = maxPrice; changed = true; }
 
-  if (changed) {
+  Future<void> removeDynamicFilter({
+    String? brand,
+    String? color,
+    String? subSubcategory,
+    bool clearPrice = false,
+  }) async {
+    bool changed = false;
+    _saveFilterSnapshot();
+
+    if (brand != null && _dynamicBrands.contains(brand)) {
+      _dynamicBrands.remove(brand);
+      changed = true;
+    }
+    if (color != null && _dynamicColors.contains(color)) {
+      _dynamicColors.remove(color);
+      changed = true;
+    }
+    if (subSubcategory != null &&
+        _dynamicSubSubcategories.contains(subSubcategory)) {
+      _dynamicSubSubcategories.remove(subSubcategory);
+      changed = true;
+    }
+    if (clearPrice && (_minPrice != null || _maxPrice != null)) {
+      _minPrice = null;
+      _maxPrice = null;
+      changed = true;
+    }
+
+    if (changed) {
+      await _restoreOrFetch();
+    }
+  }
+
+  Future<void> clearDynamicFilters() async {
+    if (!hasDynamicFilters) return;
+    _saveFilterSnapshot();
+    _dynamicBrands.clear();
+    _dynamicColors.clear();
+    _dynamicSubSubcategories.clear();
+    _minPrice = null;
+    _maxPrice = null;
     await _restoreOrFetch();
   }
-}
 
- Future<void> removeDynamicFilter({
-  String? brand,
-  String? color,
-  String? subSubcategory,
-  bool clearPrice = false,
-}) async {
-  bool changed = false;
-  _saveFilterSnapshot();
+  void _saveFilterSnapshot() {
+    if (_pageCache.isEmpty) return;
+    final key = _buildFilterCacheKey();
+    _filterPageCache[key] = Map<int, List<ProductSummary>>.from(
+      _pageCache.map((k, v) => MapEntry(k, List<ProductSummary>.from(v))),
+    );
+    _filterPageCursors[key] = Map<int, DocumentSnapshot>.from(_pageCursors);
+    _filterHasMore[key] = _hasMore;
+    _filterCurrentPage[key] = _currentPage;
+    _filterCacheTs[key] = DateTime.now();
+    _pruneFilterCache();
+  }
 
-  if (brand != null && _dynamicBrands.contains(brand)) { _dynamicBrands.remove(brand); changed = true; }
-  if (color != null && _dynamicColors.contains(color)) { _dynamicColors.remove(color); changed = true; }
-  if (subSubcategory != null && _dynamicSubSubcategories.contains(subSubcategory)) { _dynamicSubSubcategories.remove(subSubcategory); changed = true; }
-  if (clearPrice && (_minPrice != null || _maxPrice != null)) { _minPrice = null; _maxPrice = null; changed = true; }
+  Future<void> _restoreOrFetch() async {
+    final key = _buildFilterCacheKey();
+    final cached = _filterPageCache[key];
+    final ts = _filterCacheTs[key];
+    final now = DateTime.now();
 
-  if (changed) {
+    if (cached != null && ts != null && now.difference(ts) < _cacheTtl) {
+      _pageCache.clear();
+      _pageCache.addAll(cached);
+
+      _pageCursors.clear();
+      final cachedCursors = _filterPageCursors[key];
+      if (cachedCursors != null) {
+        _pageCursors.addAll(cachedCursors);
+      }
+
+      _hasMore = _filterHasMore[key] ?? true;
+      _currentPage = _filterCurrentPage[key] ??
+          (cached.keys.isEmpty
+              ? 0
+              : cached.keys.reduce((a, b) => a > b ? a : b));
+      _rebuildAllLoaded();
+      _products
+        ..clear()
+        ..addAll(_allLoaded);
+
+      _filterCacheTs[key] = now;
+      notifyListeners();
+    } else {
+      if (cached != null) {
+        _removeFilterCacheEntry(key);
+      }
+      await _resetAndFetch();
+    }
+  }
+
+  void _removeFilterCacheEntry(String key) {
+    _filterPageCache.remove(key);
+    _filterPageCursors.remove(key);
+    _filterHasMore.remove(key);
+    _filterCurrentPage.remove(key);
+    _filterCacheTs.remove(key);
+  }
+
+  void _pruneFilterCache() {
+    final now = DateTime.now();
+    final keysToRemove = <String>[];
+    _filterCacheTs.forEach((key, timestamp) {
+      if (now.difference(timestamp) >= _cacheTtl) {
+        keysToRemove.add(key);
+      }
+    });
+    for (final key in keysToRemove) {
+      _removeFilterCacheEntry(key);
+    }
+
+    const maxCacheEntries = 20;
+    if (_filterPageCache.length > maxCacheEntries) {
+      final sortedEntries = _filterCacheTs.entries.toList()
+        ..sort((a, b) => a.value.compareTo(b.value));
+      final entriesToRemove = sortedEntries
+          .take(_filterPageCache.length - maxCacheEntries)
+          .map((e) => e.key);
+      for (final key in entriesToRemove) {
+        _removeFilterCacheEntry(key);
+      }
+    }
+  }
+
+  Future<void> setQuickFilter(String? filterKey) async {
+    if (_quickFilter == filterKey) return;
+    _saveFilterSnapshot();
+    _quickFilter = filterKey;
     await _restoreOrFetch();
   }
-}
-
-Future<void> clearDynamicFilters() async {
-  if (!hasDynamicFilters) return;
-  _saveFilterSnapshot();
-  _dynamicBrands.clear();
-  _dynamicColors.clear();
-  _dynamicSubSubcategories.clear();
-  _minPrice = null;
-  _maxPrice = null;
-  await _restoreOrFetch();
-}
-
-void _saveFilterSnapshot() {
-  if (_pageCache.isEmpty) return;
-  final key = _buildFilterCacheKey();
-  _filterPageCache[key] = Map<int, List<ProductSummary>>.from(
-    _pageCache.map((k, v) => MapEntry(k, List<ProductSummary>.from(v))),
-  );
-  _filterPageCursors[key] = Map<int, DocumentSnapshot>.from(_pageCursors);
-  _filterHasMore[key] = _hasMore;
-  _filterCurrentPage[key] = _currentPage;
-  _filterCacheTs[key] = DateTime.now();
-  _pruneFilterCache();
-}
-
-Future<void> _restoreOrFetch() async {
-  final key = _buildFilterCacheKey();
-  final cached = _filterPageCache[key];
-  final ts = _filterCacheTs[key];
-  final now = DateTime.now();
-
-  if (cached != null && ts != null && now.difference(ts) < _cacheTtl) {
-    _pageCache.clear();
-    _pageCache.addAll(cached);
-
-    _pageCursors.clear();
-    final cachedCursors = _filterPageCursors[key];
-    if (cachedCursors != null) {
-      _pageCursors.addAll(cachedCursors);
-    }
-
-    _hasMore = _filterHasMore[key] ?? true;
-    _currentPage = _filterCurrentPage[key] ??
-        (cached.keys.isEmpty ? 0 : cached.keys.reduce((a, b) => a > b ? a : b));
-    _rebuildAllLoaded();
-    _products
-      ..clear()
-      ..addAll(_allLoaded);
-
-    _filterCacheTs[key] = now;
-    notifyListeners();
-  } else {
-    if (cached != null) {
-      _removeFilterCacheEntry(key);
-    }
-    await _resetAndFetch();
-  }
-}
-
-void _removeFilterCacheEntry(String key) {
-  _filterPageCache.remove(key);
-  _filterPageCursors.remove(key);
-  _filterHasMore.remove(key);
-  _filterCurrentPage.remove(key);
-  _filterCacheTs.remove(key);
-}
-
-void _pruneFilterCache() {
-  final now = DateTime.now();
-  final keysToRemove = <String>[];
-  _filterCacheTs.forEach((key, timestamp) {
-    if (now.difference(timestamp) >= _cacheTtl) {
-      keysToRemove.add(key);
-    }
-  });
-  for (final key in keysToRemove) {
-    _removeFilterCacheEntry(key);
-  }
-
-  const maxCacheEntries = 20;
-  if (_filterPageCache.length > maxCacheEntries) {
-    final sortedEntries = _filterCacheTs.entries.toList()
-      ..sort((a, b) => a.value.compareTo(b.value));
-    final entriesToRemove = sortedEntries
-        .take(_filterPageCache.length - maxCacheEntries)
-        .map((e) => e.key);
-    for (final key in entriesToRemove) {
-      _removeFilterCacheEntry(key);
-    }
-  }
-}
-
-Future<void> setQuickFilter(String? filterKey) async {
-  if (_quickFilter == filterKey) return;
-  _saveFilterSnapshot();
-  _quickFilter = filterKey;
-  await _restoreOrFetch();
-}
 
   Future<void> fetchMoreProducts() async {
     if (!_hasMore || _isLoadingMore) return;
@@ -384,7 +427,7 @@ Future<void> setQuickFilter(String? filterKey) async {
   // ──────────────────────────────────────────────────────────────────────────
   // CORE
   // ──────────────────────────────────────────────────────────────────────────
-   Future<void> _resetAndFetch() async {
+  Future<void> _resetAndFetch() async {
     _pageCache.clear();
     _pageCursors.clear();
     _allLoaded.clear();
@@ -403,11 +446,8 @@ Future<void> setQuickFilter(String? filterKey) async {
   }
 
   SearchBackend _decideBackend() {
-    // Route to Algolia for complex filters or non-default sort.
-    // Firestore only handles the 2 base queries (with/without gender).
-    if (_quickFilter != null) return SearchBackend.algolia;
-    if (_sortOption != 'date') return SearchBackend.algolia;
-    if (hasDynamicFilters) return SearchBackend.algolia;
+    if (_sortOption != 'date') return SearchBackend.TypeSense;
+    if (hasDynamicFilters) return SearchBackend.TypeSense;
     return SearchBackend.firestore;
   }
 
@@ -423,7 +463,10 @@ Future<void> setQuickFilter(String? filterKey) async {
     final now = DateTime.now();
     final cached = _cache[cacheKey];
     final ts = _cacheTs[cacheKey];
-    final useCache = !forceRefresh && cached != null && ts != null && now.difference(ts) < _cacheTtl;
+    final useCache = !forceRefresh &&
+        cached != null &&
+        ts != null &&
+        now.difference(ts) < _cacheTtl;
 
     if (page == 0 && !useCache) {
       _pageCache.clear();
@@ -438,7 +481,9 @@ Future<void> setQuickFilter(String? filterKey) async {
       _pageCache[page] = cached;
       _hasMore = cached.length >= _limit;
       _rebuildAllLoaded();
-      _products..clear()..addAll(_allLoaded);
+      _products
+        ..clear()
+        ..addAll(_allLoaded);
       _notifyDebouncer.run(notifyListeners);
       return;
     }
@@ -446,14 +491,14 @@ Future<void> setQuickFilter(String? filterKey) async {
     if (_lastBackend == SearchBackend.firestore) {
       await _fetchPageFromFirestore(page: page, seq: seq);
     } else {
-      await _fetchPageFromAlgolia(page: page, seq: seq);
+      await _fetchPageFromTypeSense(page: page, seq: seq);
     }
   }
 
   // ──────────────────────────────────────────────────────────────────────────
   // FIRESTORE PATH
   // ──────────────────────────────────────────────────────────────────────────
-    Future<void> _fetchPageFromFirestore({
+  Future<void> _fetchPageFromFirestore({
     required int page,
     required int seq,
   }) async {
@@ -487,7 +532,9 @@ Future<void> setQuickFilter(String? filterKey) async {
       _rebuildAllLoaded();
       _pruneIfNeeded();
 
-      _products..clear()..addAll(_allLoaded);
+      _products
+        ..clear()
+        ..addAll(_allLoaded);
       _notifyDebouncer.run(notifyListeners);
     } catch (e) {
       debugPrint('Firestore query error: $e');
@@ -520,207 +567,132 @@ Future<void> setQuickFilter(String? filterKey) async {
     return q;
   }
 
- String _buildFilterCacheKey() {
-  final parts = <String>[];
-  
-  // Include quick filter
-  parts.add(_quickFilter ?? 'default');
-  
-  // Include all dynamic filters (sorted for consistent keys)
-  if (_dynamicBrands.isNotEmpty) {
-    final sortedBrands = List<String>.from(_dynamicBrands)..sort();
-    parts.add('b:${sortedBrands.join(",")}');
-  }
-  if (_dynamicColors.isNotEmpty) {
-    final sortedColors = List<String>.from(_dynamicColors)..sort();
-    parts.add('c:${sortedColors.join(",")}');
-  }
-  if (_dynamicSubSubcategories.isNotEmpty) {
-    final sortedSubSubs = List<String>.from(_dynamicSubSubcategories)..sort();
-    parts.add('s:${sortedSubSubs.join(",")}');
-  }
-  if (_minPrice != null) parts.add('min:$_minPrice');
-  if (_maxPrice != null) parts.add('max:$_maxPrice');
-  if (_buyerCategory != null) parts.add('bc:$_buyerCategory');
-  if (_buyerSubcategory != null) parts.add('bs:$_buyerSubcategory');
-  if (_category != null) parts.add('cat:$_category');
-  if (_subcategory != null) parts.add('sub:$_subcategory');
-  if (_subSubcategory != null) parts.add('subsub:$_subSubcategory');
-  parts.add('sort:$_sortOption');
-  
-  return parts.join('|');
-}
+  String _buildFilterCacheKey() {
+    final parts = <String>[];
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // ALGOLIA PATH (AlgoliaService üzerinden id → Firestore hydrate)
-  // ──────────────────────────────────────────────────────────────────────────
- Future<void> _fetchPageFromAlgolia({
-  required int page,
-  required int seq,
-}) async {
-  final svc = algoliaService;
-  final indexName = _algoliaIndexForCurrentIndex();
-  final facetFilters = _buildAlgoliaFacetFilters();
-  final numericFilters = _buildAlgoliaNumericFilters();
+    // Include quick filter
+    parts.add(_quickFilter ?? 'default');
 
-  try {
-    final res = await svc.searchIdsWithFacets(
-      indexName: indexName,
-      page: page,
-      hitsPerPage: _limit,
-      facetFilters: facetFilters,
-      numericFilters: numericFilters,
-    );
-    if (seq != _filterSeq) return;
+    // Include all dynamic filters (sorted for consistent keys)
+    if (_dynamicBrands.isNotEmpty) {
+      final sortedBrands = List<String>.from(_dynamicBrands)..sort();
+      parts.add('b:${sortedBrands.join(",")}');
+    }
+    if (_dynamicColors.isNotEmpty) {
+      final sortedColors = List<String>.from(_dynamicColors)..sort();
+      parts.add('c:${sortedColors.join(",")}');
+    }
+    if (_dynamicSubSubcategories.isNotEmpty) {
+      final sortedSubSubs = List<String>.from(_dynamicSubSubcategories)..sort();
+      parts.add('s:${sortedSubSubs.join(",")}');
+    }
+    if (_minPrice != null) parts.add('min:$_minPrice');
+    if (_maxPrice != null) parts.add('max:$_maxPrice');
+    if (_buyerCategory != null) parts.add('bc:$_buyerCategory');
+    if (_buyerSubcategory != null) parts.add('bs:$_buyerSubcategory');
+    if (_category != null) parts.add('cat:$_category');
+    if (_subcategory != null) parts.add('sub:$_subcategory');
+    if (_subSubcategory != null) parts.add('subsub:$_subSubcategory');
+    parts.add('sort:$_sortOption');
 
-    // ✅ Parse directly from Algolia hits — no Firestore round-trip
-    final fetched = res.hits.map((hit) {
-      final summary = ProductSummary.fromAlgolia(hit);
-      _docCachePut(summary.id, summary);
-      return summary;
-    }).toList();
-
-    _hasMore = res.page < (res.nbPages - 1);
-
-    final key = _buildCacheKey(page);
-    _cache[key] = fetched;
-    _cacheTs[key] = DateTime.now();
-    _pruneMainCache();
-    _pageCache[page] = fetched;
-    _rebuildAllLoaded();
-    _pruneIfNeeded();
-
-    _products..clear()..addAll(_allLoaded);
-    _notifyDebouncer.run(notifyListeners);
-  } catch (e) {
-    debugPrint('Algolia service query error: $e');
-    await _fetchPageFromFirestore(page: page, seq: seq);
-  }
-}
-
-String _algoliaIndexForCurrentIndex() {
-  // Since you don't have filter replicas, always use sort replicas
-  // Filters (facet/numeric) work on any index/replica
-  final replica = algoliaSortReplicas[_sortOption];
-  return replica ?? algoliaBaseIndex;
-}
-
-List<List<String>> _buildAlgoliaFacetFilters() {
-  final List<List<String>> groups = [];
-  
-  debugPrint('Building filters: category=$_category, subcategory=$_subcategory, subSubcategory=$_subSubcategory, buyerCategory=$_buyerCategory');
-  
-  // For Women/Men categories with null subsubcategory, don't add subsubcategory filter
-  final bool isGenderedCategory = (_buyerCategory == 'Women' || _buyerCategory == 'Men');
-  final bool shouldSkipSubSubcategory = isGenderedCategory && _subSubcategory == null;
-  
-  if (_category != null) {
-    groups.add(['category_en:${_category!}']);
-  }
-  if (_subcategory != null) {
-    groups.add(['subcategory_en:${_subcategory!}']);
-  }
-  
-  // Only add subsubcategory filter if:
-  // 1. It's not null
-  // 2. OR it's not a gendered category (Women/Men)
-  if (_subSubcategory != null) {
-    groups.add(['subsubcategory_en:${_subSubcategory!}']);
-  } else if (!isGenderedCategory) {
-    // For non-gendered categories, we might still want the filter even if null
-    // This depends on your data structure
+    return parts.join('|');
   }
 
-  // Gender field appears to be without suffix in your data
-  if (_buyerCategory == 'Women' || _buyerCategory == 'Men') {
-    groups.add(['gender:${_buyerCategory!}', 'gender:Unisex']);
-  }
-
-  // brandModel appears to be without suffix
-  if (_dynamicBrands.isNotEmpty) {
-    groups.add(_dynamicBrands.map((b) => 'brandModel:$b').toList());
-  }
-  
-  // availableColors might need to be checked - it's not in your example
-  if (_dynamicColors.isNotEmpty) {
-    groups.add(_dynamicColors.map((c) => 'availableColors:$c').toList());
-  }
-  
-  // For dynamic subsubcategories, use language suffix
-  if (_dynamicSubSubcategories.isNotEmpty) {
-    groups.add(_dynamicSubSubcategories.map((s) => 'subsubcategory_en:$s').toList());
-  }
-
-  if (_quickFilter == 'boosted') {
-    groups.add(['isBoosted:true']);
-  }
-
-  debugPrint('Final facet filters: $groups');
-  return groups;
-}
-
-  List<String> _buildAlgoliaNumericFilters() {
+  List<String> _buildTypeSenseNumericFilters() {
     final List<String> filters = [];
     if (_minPrice != null) filters.add('price>=${_minPrice!.floor()}');
-if (_maxPrice != null) filters.add('price<=${_maxPrice!.ceil()}');
-
-    switch (_quickFilter) {
-      case 'deals':
-        filters.add('discountPercentage>0');
-        break;
-      case 'trending':
-        break;
-      case 'fiveStar':
-        break;
-      case 'bestSellers':
-      default:
-        break;
-    }
+    if (_maxPrice != null) filters.add('price<=${_maxPrice!.ceil()}');
     return filters;
   }
 
-  Future<List<ProductSummary>> _fetchProductsByIdsPreservingOrder(List<String> ids) async {
-    if (ids.isEmpty) {
-      debugPrint('No IDs to fetch from Firestore');
-      return [];
-    }
+  Future<void> _fetchPageFromTypeSense(
+      {required int page, required int seq}) async {
+    final svc = _searchService;
+    final indexName = 'products'; // hardcoded
+    final facetFilters = _buildTypeSenseFacetFilters();
+    final numericFilters = _buildTypeSenseNumericFilters();
 
-    // Yalnızca ihtiyaç olanları çek
-    final need = <String>[];
-    for (final id in ids) {
-      if (!_docCache.containsKey(id)) need.add(id);
-    }
+    try {
+      final res = await svc.searchIdsWithFacets(
+        indexName: indexName,
+        page: page,
+        hitsPerPage: _limit,
+        facetFilters: facetFilters,
+        numericFilters: numericFilters,
+        sortOption: _sortOption,
+      );
+      if (seq != _filterSeq) return;
 
-    if (need.isNotEmpty) {
-      final futures = <Future<QuerySnapshot>>[];
-      for (final chunk in _chunks(need, 10)) {
-        futures.add(_firestore
-            .collection('products')
-            .where(FieldPath.documentId, whereIn: chunk)
-            .get(const GetOptions(source: Source.serverAndCache))); // server doğruluğu
-      }
-      final snaps = await Future.wait(futures);
-      for (final d in snaps.expand((s) => s.docs)) {
-  final product = ProductSummary.fromDocument(d);
-  _docCachePut(d.id, product); // ⬅️ use the LRU-aware put
-}
-    }
+      // ✅ Parse directly from TypeSense hits — no Firestore round-trip
+      final fetched = res.hits.map((hit) {
+        final summary = ProductSummary.fromTypeSense(hit);
+        _docCachePut(summary.id, summary);
+        return summary;
+      }).toList();
 
-    final ordered = <ProductSummary>[];
-for (final id in ids) {
-  final p = _docCache[id];
-  if (p != null) {
-    ordered.add(p);
-    _docCacheTs[id] = DateTime.now(); // ⬅️ touch
+      _hasMore = res.page < (res.nbPages - 1);
+
+      final key = _buildCacheKey(page);
+      _cache[key] = fetched;
+      _cacheTs[key] = DateTime.now();
+      _pruneMainCache();
+      _pageCache[page] = fetched;
+      _rebuildAllLoaded();
+      _pruneIfNeeded();
+
+      _products
+        ..clear()
+        ..addAll(_allLoaded);
+      _notifyDebouncer.run(notifyListeners);
+    } catch (e) {
+      debugPrint('TypeSense service query error: $e');
+      await _fetchPageFromFirestore(page: page, seq: seq);
+    }
   }
-}
-    return ordered;
-  }
 
-  Iterable<List<T>> _chunks<T>(List<T> list, int size) sync* {
-    for (var i = 0; i < list.length; i += size) {
-      yield list.sublist(i, i + size > list.length ? list.length : i + size);
+  List<List<String>> _buildTypeSenseFacetFilters() {
+    final List<List<String>> groups = [];
+
+    debugPrint(
+        'Building filters: category=$_category, subcategory=$_subcategory, subSubcategory=$_subSubcategory, buyerCategory=$_buyerCategory');
+
+    if (_category != null) {
+      groups.add(['category_en:${_category!}']);
     }
+    if (_subcategory != null) {
+      groups.add(['subcategory_en:${_subcategory!}']);
+    }
+
+    if (_subSubcategory != null) {
+      groups.add(['subsubcategory_en:${_subSubcategory!}']);
+    }
+    if (_subSubcategory != null) {
+      groups.add(['subsubcategory_en:${_subSubcategory!}']);
+    }
+
+    // Gender field appears to be without suffix in your data
+    if (_buyerCategory == 'Women' || _buyerCategory == 'Men') {
+      groups.add(['gender:${_buyerCategory!}', 'gender:Unisex']);
+    }
+
+    // brandModel appears to be without suffix
+    if (_dynamicBrands.isNotEmpty) {
+      groups.add(_dynamicBrands.map((b) => 'brandModel:$b').toList());
+    }
+
+    // availableColors might need to be checked - it's not in your example
+    if (_dynamicColors.isNotEmpty) {
+      groups.add(_dynamicColors.map((c) => 'availableColors:$c').toList());
+    }
+
+    // For dynamic subsubcategories, use language suffix
+    if (_dynamicSubSubcategories.isNotEmpty) {
+      groups.add(
+          _dynamicSubSubcategories.map((s) => 'subsubcategory_en:$s').toList());
+    }
+
+    debugPrint('Final facet filters: $groups');
+    return groups;
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -735,18 +707,18 @@ for (final id in ids) {
   }
 
   void _rebuildAllLoaded() {
-  final sortedPages = _pageCache.keys.toList()..sort();
-  final seen = <String>{};
-  final combined = <ProductSummary>[];
-  for (final i in sortedPages) {
-    for (final p in _pageCache[i]!) {
-      if (seen.add(p.id)) combined.add(p);
+    final sortedPages = _pageCache.keys.toList()..sort();
+    final seen = <String>{};
+    final combined = <ProductSummary>[];
+    for (final i in sortedPages) {
+      for (final p in _pageCache[i]!) {
+        if (seen.add(p.id)) combined.add(p);
+      }
     }
+    _allLoaded
+      ..clear()
+      ..addAll(combined);
   }
-  _allLoaded
-    ..clear()
-    ..addAll(combined);
-}
 
   void _pruneIfNeeded() {
     while (_pageCache.length > _maxCachedPages) {

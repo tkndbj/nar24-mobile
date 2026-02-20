@@ -10,7 +10,7 @@ import '../DYNAMIC-SCREENS/dynamic_teras.dart';
 import '../../widgets/product_card.dart';
 import '../../models/product_summary.dart';
 import '../../route_observer.dart';
-import '../../services/algolia_service_manager.dart';
+import '../../services/typesense_service_manager.dart';
 import '../../widgets/product_card_shimmer.dart';
 
 class CategoriesTerasScreen extends StatefulWidget {
@@ -27,7 +27,7 @@ class _CategoriesTerasScreenState extends State<CategoriesTerasScreen>
   final ScrollController _scrollController = ScrollController();
   List<ProductSummary> _displayProducts = [];
   Set<String> _expandedSubcategories = {};
-  bool _isLoadingProducts = false; 
+  bool _isLoadingProducts = false;
 
   @override
   void initState() {
@@ -52,7 +52,7 @@ class _CategoriesTerasScreenState extends State<CategoriesTerasScreen>
   }
 
   @override
-   void didPopNext() {
+  void didPopNext() {
     setState(() {
       _expandedSubcategories.clear();
     });
@@ -60,7 +60,7 @@ class _CategoriesTerasScreenState extends State<CategoriesTerasScreen>
     _fetchProductsForBuyerCategory(_selectedBuyerCategory);
   }
 
- Future<void> _initializeBuyerCategory() async {
+  Future<void> _initializeBuyerCategory() async {
     // Fetch products for the selected buyer category
     await _fetchProductsForBuyerCategory(_selectedBuyerCategory);
   }
@@ -106,8 +106,7 @@ class _CategoriesTerasScreenState extends State<CategoriesTerasScreen>
   List<ProductSummary> _filterValidProducts(List<ProductSummary> products) {
     return products.where((p) {
       return p.productName.isNotEmpty &&
-          ((p.brandModel?.isNotEmpty ?? false) ||
-              (p.quantity > 0));
+          ((p.brandModel?.isNotEmpty ?? false) || (p.quantity > 0));
     }).toList();
   }
 
@@ -309,7 +308,8 @@ class _CategoriesTerasScreenState extends State<CategoriesTerasScreen>
                     return Column(
                       children: [
                         ExpansionTile(
-                          key: ValueKey('${_selectedBuyerCategory}_$rawBuyerSubcategory'),
+                          key: ValueKey(
+                              '${_selectedBuyerCategory}_$rawBuyerSubcategory'),
                           title: Text(
                             localizedSubcategory,
                             style: TextStyle(
@@ -323,15 +323,17 @@ class _CategoriesTerasScreenState extends State<CategoriesTerasScreen>
                           tilePadding: const EdgeInsets.only(left: 8),
                           shape: const RoundedRectangleBorder(),
                           collapsedShape: const RoundedRectangleBorder(),
-                           onExpansionChanged: (expanded) {
+                          onExpansionChanged: (expanded) {
                             setState(() {
                               if (expanded) {
                                 _expandedSubcategories.add(rawBuyerSubcategory);
                               } else {
-                                _expandedSubcategories.remove(rawBuyerSubcategory);
+                                _expandedSubcategories
+                                    .remove(rawBuyerSubcategory);
                                 // Reset to main category products when collapsed
                                 _displayProducts = [];
-                                _fetchProductsForBuyerCategory(_selectedBuyerCategory);
+                                _fetchProductsForBuyerCategory(
+                                    _selectedBuyerCategory);
                               }
                             });
                           },
@@ -415,8 +417,8 @@ class _CategoriesTerasScreenState extends State<CategoriesTerasScreen>
                                         builder: (_) => ChangeNotifierProvider<
                                             DynamicTerasProvider>(
                                           create: (_) => DynamicTerasProvider(
-                                            algoliaService:
-                                                AlgoliaServiceManager
+                                            searchService:
+                                                TypeSenseServiceManager
                                                     .instance.mainService,
                                           ),
                                           child: screen,
@@ -448,166 +450,188 @@ class _CategoriesTerasScreenState extends State<CategoriesTerasScreen>
                     );
                   }).toList(),
 
-                 if (_isLoadingProducts)
-  Padding(
-    padding: const EdgeInsets.only(top: 10),
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        // Tablet detection and orientation
-        final bool isTablet = constraints.maxWidth >= 600;
-        final bool isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
-        final bool isTabletPortrait = isTablet && !isLandscape;
+                  if (_isLoadingProducts)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          // Tablet detection and orientation
+                          final bool isTablet = constraints.maxWidth >= 600;
+                          final bool isLandscape =
+                              MediaQuery.of(context).orientation ==
+                                  Orientation.landscape;
+                          final bool isTabletPortrait =
+                              isTablet && !isLandscape;
 
-        // Horizontal spacing
-        final double crossAxisSpacing = isTablet ? 6.0 : 8.0;
+                          // Horizontal spacing
+                          final double crossAxisSpacing = isTablet ? 6.0 : 8.0;
 
-        // Vertical gap: tablet portrait increased (16px), tablet landscape (6px), mobile unchanged (18px)
-        final double mainAxisSpacing = isTabletPortrait
-            ? 16.0
-            : (isTablet ? 6.0 : 18.0);
+                          // Vertical gap: tablet portrait increased (16px), tablet landscape (6px), mobile unchanged (18px)
+                          final double mainAxisSpacing =
+                              isTabletPortrait ? 16.0 : (isTablet ? 6.0 : 18.0);
 
-        // Image height: increased for better tall/narrow image display
-        final double imageHeight = isTabletPortrait
-            ? 262.0  // Increased from 238
-            : (isTablet ? 132.0 : 155.0);  // Increased from 120/140
+                          // Image height: increased for better tall/narrow image display
+                          final double imageHeight = isTabletPortrait
+                              ? 262.0 // Increased from 238
+                              : (isTablet
+                                  ? 132.0
+                                  : 155.0); // Increased from 120/140
 
-        // For tablet portrait, use MaxCrossAxisExtent with explicit mainAxisExtent for precise control
-        if (isTabletPortrait) {
-          // Calculate item width based on 4 columns
-          final double availableWidth = constraints.maxWidth - 16 - (3 * crossAxisSpacing);
-          final double itemWidth = availableWidth / 4;
-          // Card height = image height + text content (~95px for price, name, etc.)
-          final double itemHeight = imageHeight + 95;
+                          // For tablet portrait, use MaxCrossAxisExtent with explicit mainAxisExtent for precise control
+                          if (isTabletPortrait) {
+                            // Calculate item width based on 4 columns
+                            final double availableWidth = constraints.maxWidth -
+                                16 -
+                                (3 * crossAxisSpacing);
+                            final double itemWidth = availableWidth / 4;
+                            // Card height = image height + text content (~95px for price, name, etc.)
+                            final double itemHeight = imageHeight + 95;
 
-          return GridView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: 6,
-            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: itemWidth + 1,
-              mainAxisExtent: itemHeight,
-              mainAxisSpacing: mainAxisSpacing,
-              crossAxisSpacing: crossAxisSpacing,
-            ),
-            itemBuilder: (ctx, i) {
-              return ProductCardShimmer(
-                portraitImageHeight: imageHeight,
-                scaleFactor: 0.9,
-              );
-            },
-          );
-        }
+                            return GridView.builder(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: 6,
+                              gridDelegate:
+                                  SliverGridDelegateWithMaxCrossAxisExtent(
+                                maxCrossAxisExtent: itemWidth + 1,
+                                mainAxisExtent: itemHeight,
+                                mainAxisSpacing: mainAxisSpacing,
+                                crossAxisSpacing: crossAxisSpacing,
+                              ),
+                              itemBuilder: (ctx, i) {
+                                return ProductCardShimmer(
+                                  portraitImageHeight: imageHeight,
+                                  scaleFactor: 0.9,
+                                );
+                              },
+                            );
+                          }
 
-        // Mobile and tablet landscape: use original approach
-        final int crossAxisCount = isTablet ? 5 : 2;
-        final double childAspectRatio = isTablet ? 0.50 : 0.46;  // Decreased for taller cards
+                          // Mobile and tablet landscape: use original approach
+                          final int crossAxisCount = isTablet ? 5 : 2;
+                          final double childAspectRatio = isTablet
+                              ? 0.50
+                              : 0.46; // Decreased for taller cards
 
-        return GridView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: 6,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            mainAxisSpacing: mainAxisSpacing,
-            crossAxisSpacing: crossAxisSpacing,
-            childAspectRatio: childAspectRatio,
-          ),
-          itemBuilder: (ctx, i) {
-            return ProductCardShimmer(
-              portraitImageHeight: imageHeight,
-              scaleFactor: isTablet ? 0.9 : 1.0,
-            );
-          },
-        );
-      },
-    ),
-  )
-else if (_displayProducts.isNotEmpty)
-  Padding(
-    padding: const EdgeInsets.only(top: 10),
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        // Tablet detection and orientation
-        final bool isTablet = constraints.maxWidth >= 600;
-        final bool isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
-        final bool isTabletPortrait = isTablet && !isLandscape;
+                          return GridView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: 6,
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: crossAxisCount,
+                              mainAxisSpacing: mainAxisSpacing,
+                              crossAxisSpacing: crossAxisSpacing,
+                              childAspectRatio: childAspectRatio,
+                            ),
+                            itemBuilder: (ctx, i) {
+                              return ProductCardShimmer(
+                                portraitImageHeight: imageHeight,
+                                scaleFactor: isTablet ? 0.9 : 1.0,
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    )
+                  else if (_displayProducts.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          // Tablet detection and orientation
+                          final bool isTablet = constraints.maxWidth >= 600;
+                          final bool isLandscape =
+                              MediaQuery.of(context).orientation ==
+                                  Orientation.landscape;
+                          final bool isTabletPortrait =
+                              isTablet && !isLandscape;
 
-        // Horizontal spacing
-        final double crossAxisSpacing = isTablet ? 6.0 : 8.0;
+                          // Horizontal spacing
+                          final double crossAxisSpacing = isTablet ? 6.0 : 8.0;
 
-        // Vertical gap: tablet portrait increased (16px), tablet landscape (6px), mobile unchanged (18px)
-        final double mainAxisSpacing = isTabletPortrait
-            ? 16.0
-            : (isTablet ? 6.0 : 18.0);
+                          // Vertical gap: tablet portrait increased (16px), tablet landscape (6px), mobile unchanged (18px)
+                          final double mainAxisSpacing =
+                              isTabletPortrait ? 16.0 : (isTablet ? 6.0 : 18.0);
 
-        // Image height: increased for better tall/narrow image display
-        final double imageHeight = isTabletPortrait
-            ? 262.0  // Increased from 238
-            : (isTablet ? 132.0 : 155.0);  // Increased from 120/140
+                          // Image height: increased for better tall/narrow image display
+                          final double imageHeight = isTabletPortrait
+                              ? 262.0 // Increased from 238
+                              : (isTablet
+                                  ? 132.0
+                                  : 155.0); // Increased from 120/140
 
-        // For tablet portrait, use MaxCrossAxisExtent with explicit mainAxisExtent for precise control
-        if (isTabletPortrait) {
-          // Calculate item width based on 4 columns
-          final double availableWidth = constraints.maxWidth - 16 - (3 * crossAxisSpacing);
-          final double itemWidth = availableWidth / 4;
-          // Card height = image height + text content (~95px for price, name, etc.)
-          final double itemHeight = imageHeight + 95;
+                          // For tablet portrait, use MaxCrossAxisExtent with explicit mainAxisExtent for precise control
+                          if (isTabletPortrait) {
+                            // Calculate item width based on 4 columns
+                            final double availableWidth = constraints.maxWidth -
+                                16 -
+                                (3 * crossAxisSpacing);
+                            final double itemWidth = availableWidth / 4;
+                            // Card height = image height + text content (~95px for price, name, etc.)
+                            final double itemHeight = imageHeight + 95;
 
-          return GridView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _displayProducts.length,
-            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: itemWidth + 1,
-              mainAxisExtent: itemHeight,
-              mainAxisSpacing: mainAxisSpacing,
-              crossAxisSpacing: crossAxisSpacing,
-            ),
-            itemBuilder: (ctx, i) {
-              final prod = _displayProducts[i];
-              return ProductCard(
-                key: ValueKey(prod.id),
-                product: prod,
-                scaleFactor: 0.9,
-                internalScaleFactor: 1.0,
-                portraitImageHeight: imageHeight,
-              );
-            },
-          );
-        }
+                            return GridView.builder(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: _displayProducts.length,
+                              gridDelegate:
+                                  SliverGridDelegateWithMaxCrossAxisExtent(
+                                maxCrossAxisExtent: itemWidth + 1,
+                                mainAxisExtent: itemHeight,
+                                mainAxisSpacing: mainAxisSpacing,
+                                crossAxisSpacing: crossAxisSpacing,
+                              ),
+                              itemBuilder: (ctx, i) {
+                                final prod = _displayProducts[i];
+                                return ProductCard(
+                                  key: ValueKey(prod.id),
+                                  product: prod,
+                                  scaleFactor: 0.9,
+                                  internalScaleFactor: 1.0,
+                                  portraitImageHeight: imageHeight,
+                                );
+                              },
+                            );
+                          }
 
-        // Mobile and tablet landscape: use original approach
-        final int crossAxisCount = isTablet ? 5 : 2;
-        final double childAspectRatio = isTablet ? 0.50 : 0.46;  // Decreased for taller cards
+                          // Mobile and tablet landscape: use original approach
+                          final int crossAxisCount = isTablet ? 5 : 2;
+                          final double childAspectRatio = isTablet
+                              ? 0.50
+                              : 0.46; // Decreased for taller cards
 
-        return GridView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: _displayProducts.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            mainAxisSpacing: mainAxisSpacing,
-            crossAxisSpacing: crossAxisSpacing,
-            childAspectRatio: childAspectRatio,
-          ),
-          itemBuilder: (ctx, i) {
-            final prod = _displayProducts[i];
-            return ProductCard(
-              key: ValueKey(prod.id),
-              product: prod,
-              scaleFactor: isTablet ? 0.9 : 1.0,
-              internalScaleFactor: 1.0,
-              portraitImageHeight: imageHeight,
-            );
-          },
-        );
-      },
-    ),
-  ),
+                          return GridView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _displayProducts.length,
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: crossAxisCount,
+                              mainAxisSpacing: mainAxisSpacing,
+                              crossAxisSpacing: crossAxisSpacing,
+                              childAspectRatio: childAspectRatio,
+                            ),
+                            itemBuilder: (ctx, i) {
+                              final prod = _displayProducts[i];
+                              return ProductCard(
+                                key: ValueKey(prod.id),
+                                product: prod,
+                                scaleFactor: isTablet ? 0.9 : 1.0,
+                                internalScaleFactor: 1.0,
+                                portraitImageHeight: imageHeight,
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
 
                   const SizedBox(height: 20),
                 ],

@@ -43,7 +43,6 @@ dependencies:
   video_player: ^2.9.3
   fluttertoast: ^8.2.12
   cloud_functions: ^6.0.3
-  algoliasearch: ^1.28.3
   marquee: ^2.3.0
   syncfusion_flutter_charts: ^31.2.16
   flutter_rating_bar: ^4.0.1

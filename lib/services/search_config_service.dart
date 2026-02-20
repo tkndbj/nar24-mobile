@@ -2,7 +2,7 @@
 // Remote Search Configuration Service
 //
 // Listens to Firestore `config/search` document in real-time.
-// Allows admin to remotely switch search provider (algolia ↔ firestore)
+// Allows admin to remotely switch search provider (typesense ↔ firestore)
 // without pushing an app update.
 //
 // Cost: 1 Firestore read on init + 1 read per config change (snapshot listener).
@@ -13,7 +13,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
 enum SearchBackend {
-  algolia,
+  typesense,
   firestore,
 }
 
@@ -23,21 +23,21 @@ class SearchConfig {
   final String? reason;
 
   const SearchConfig({
-    this.provider = SearchBackend.algolia,
+    this.provider = SearchBackend.typesense,
     this.updatedAt,
     this.reason,
   });
 
-  bool get useAlgolia => provider == SearchBackend.algolia;
+  bool get useTypesense => provider == SearchBackend.typesense;
   bool get useFirestore => provider == SearchBackend.firestore;
 
   factory SearchConfig.fromMap(Map<String, dynamic>? data) {
     if (data == null) return const SearchConfig();
 
-    final providerStr = data['provider'] as String? ?? 'algolia';
+    final providerStr = data['provider'] as String? ?? 'typesense';
     final provider = providerStr == 'firestore'
         ? SearchBackend.firestore
-        : SearchBackend.algolia;
+        : SearchBackend.typesense;
 
     DateTime? updatedAt;
     final ts = data['updatedAt'];
@@ -68,7 +68,7 @@ class SearchConfigService with ChangeNotifier {
 
   // ── State ──────────────────────────────────────────────────────────────────
 
-  SearchConfig _config = const SearchConfig(); // Default: Algolia
+  SearchConfig _config = const SearchConfig(); // Default: Typesense
   StreamSubscription<DocumentSnapshot>? _subscription;
   bool _initialized = false;
   bool _disposed = false;
@@ -78,8 +78,8 @@ class SearchConfigService with ChangeNotifier {
   /// Current search configuration (synchronous access).
   SearchConfig get config => _config;
 
-  /// Quick check: should we use Algolia? (default: true)
-  bool get useAlgolia => _config.useAlgolia;
+  /// Quick check: should we use Typesense? (default: true)
+  bool get useTypesense => _config.useTypesense;
 
   /// Quick check: should we use Firestore fallback?
   bool get useFirestore => _config.useFirestore;
@@ -131,11 +131,11 @@ class SearchConfigService with ChangeNotifier {
         }
       },
       onError: (error) {
-        // On error, default to Algolia (safe fallback).
+        // On error, default to Typesense (safe fallback).
         if (kDebugMode) {
-          debugPrint('⚠️ SearchConfig listener error: $error');
+          debugPrint('SearchConfig listener error: $error');
         }
-        _config = const SearchConfig(); // Algolia default
+        _config = const SearchConfig(); // Typesense default
         if (!_initialized) {
           _initialized = true;
           if (!completer.isCompleted) completer.complete();
@@ -144,7 +144,7 @@ class SearchConfigService with ChangeNotifier {
     );
 
     // Don't block app startup for more than 3 seconds.
-    // If Firestore is slow, default to Algolia and update when snapshot arrives.
+    // If Firestore is slow, default to Typesense and update when snapshot arrives.
     return completer.future.timeout(
       const Duration(seconds: 3),
       onTimeout: () {
@@ -152,7 +152,7 @@ class SearchConfigService with ChangeNotifier {
           _initialized = true;
           if (kDebugMode) {
             debugPrint(
-              '⚠️ SearchConfig timed out, defaulting to Algolia',
+              'SearchConfig timed out, defaulting to Typesense',
             );
           }
         }

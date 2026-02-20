@@ -35,7 +35,7 @@ class ProductRepository {
       return Future.error(ArgumentError('Product ID cannot be empty'));
     }
 
-    // 2️⃣ Normalize out any Algolia prefix:
+    // Normalize out any search index prefix:
     var rawId = id.trim();
     const p1 = 'products_';
     const p2 = 'shop_products_';

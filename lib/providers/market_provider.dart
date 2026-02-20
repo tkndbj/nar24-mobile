@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/product_summary.dart';
-import '../services/algolia_service.dart';
+import '../services/typesense_service.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../helpers/firestore_helper.dart';
 import '../constants/all_in_one_category_data.dart';
@@ -12,7 +12,7 @@ import '../user_provider.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'package:retry/retry.dart';
 import '../models/suggestion.dart';
-import '../services/algolia_service_manager.dart';
+import '../services/typesense_service_manager.dart';
 import 'package:flutter/foundation.dart';
 import '../services/analytics_service.dart';
 import '../services/click_tracking_service.dart';
@@ -64,9 +64,10 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
   final FirebaseFunctions _functions =
       FirebaseFunctions.instanceFor(region: 'europe-west3');
   final FirestoreHelper firestoreHelper = FirestoreHelper();
-  AlgoliaServiceManager get _algoliaManager => AlgoliaServiceManager.instance;
-  AlgoliaService get algoliaService => _algoliaManager.mainService;
-  AlgoliaService get algoliaShopService => _algoliaManager.shopService;
+  TypeSenseServiceManager get _typesenseManager =>
+      TypeSenseServiceManager.instance;
+  TypeSenseService get typesenseService => _typesenseManager.mainService;
+  TypeSenseService get typesenseShopService => _typesenseManager.shopService;
   final Debouncer _notifyDebouncer =
       Debouncer(delay: const Duration(milliseconds: 200));
 
@@ -100,9 +101,9 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
   /// How long we keep a suggestions list before dropping it
   static const Duration _suggestionCacheTTL = Duration(minutes: 1);
 
-  int _algoliaFailureCount = 0;
-  DateTime? _lastAlgoliaFailure;
-  bool _algoliaCircuitOpen = false;
+  int _TypseSenseFailureCount = 0;
+  DateTime? _lastTypseSenseFailure;
+  bool _TypseSenseCircuitOpen = false;
   static const int _maxFailures = 8;
   static const Duration _circuitCooldown = Duration(minutes: 5);
 
@@ -436,9 +437,9 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     _isLoadingMore = false;
     _isFiltering = false;
     _isSearchActive = false;
-    _algoliaFailureCount = 0;
-    _lastAlgoliaFailure = null;
-    _algoliaCircuitOpen = false;
+    _TypseSenseFailureCount = 0;
+    _lastTypseSenseFailure = null;
+    _TypseSenseCircuitOpen = false;
 
     debugPrint('✅ MarketProvider: Disposal complete');
     super.dispose();
@@ -493,7 +494,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
   }
 
   /// ---------------------------------------------------------------------------
-  /// Autocomplete Suggestions via Algolia
+  /// Autocomplete Suggestions via TypseSense
   /// ---------------------------------------------------------------------------
   Future<List<Suggestion>> fetchSuggestions(
     String query, {
@@ -507,8 +508,8 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     }
 
     // Check circuit breaker
-    if (_isAlgoliaCircuitOpen()) {
-      print('Algolia circuit breaker is open, using Firestore fallback');
+    if (_isTypseSenseCircuitOpen()) {
+      print('TypseSense circuit breaker is open, using Firestore fallback');
       return await _fetchSuggestionsFromFirestore(query, l10n: l10n);
     }
 
@@ -569,10 +570,10 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     }
 
     try {
-      // Execute dual Algolia search with circuit breaker protection
+      // Execute dual TypseSense search with circuit breaker protection
       final List<Future<List<ProductSummary>>> searchFutures = [
-        _safeAlgoliaSearch(algoliaService, searchQuery, filters),
-        _safeAlgoliaSearch(algoliaShopService, searchQuery, filters),
+        _safeTypseSenseSearch(typesenseService, searchQuery, filters),
+        _safeTypseSenseSearch(typesenseShopService, searchQuery, filters),
       ];
 
       final results = await Future.wait(
@@ -600,26 +601,26 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
 
       // If we got results, record success and cache
       if (combined.isNotEmpty) {
-        _recordAlgoliaSuccess();
+        _recordTypseSenseSuccess();
         _suggestionCache[query] = combined;
         _suggestionTimestamps[query] = now;
         return combined;
       } else {
-        // No results from Algolia, try Firestore fallback
-        print('No Algolia results, trying Firestore fallback');
+        // No results from TypseSense, try Firestore fallback
+        print('No TypseSense results, trying Firestore fallback');
         return await _fetchSuggestionsFromFirestore(query, l10n: l10n);
       }
     } catch (e) {
-      print('Algolia suggestions failed completely: $e');
-      _recordAlgoliaFailure();
+      print('TypseSense suggestions failed completely: $e');
+      _recordTypseSenseFailure();
 
       // Fall back to Firestore
       return await _fetchSuggestionsFromFirestore(query, l10n: l10n);
     }
   }
 
-  Future<List<ProductSummary>> _safeAlgoliaSearch(
-    AlgoliaService service,
+  Future<List<ProductSummary>> _safeTypseSenseSearch(
+    TypeSenseService service,
     String searchQuery,
     List<String> filters,
   ) async {
@@ -634,7 +635,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
           )
           .timeout(const Duration(seconds: 5));
     } catch (e) {
-      print('Safe Algolia search failed: $e');
+      print('Safe TypseSense search failed: $e');
       return <ProductSummary>[];
     }
   }
@@ -705,15 +706,16 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
   }
 
   /// Circuit breaker management
-  bool _isAlgoliaCircuitOpen() {
-    if (!_algoliaCircuitOpen) return false;
+  bool _isTypseSenseCircuitOpen() {
+    if (!_TypseSenseCircuitOpen) return false;
 
-    if (_lastAlgoliaFailure != null) {
-      final timeSinceFailure = DateTime.now().difference(_lastAlgoliaFailure!);
+    if (_lastTypseSenseFailure != null) {
+      final timeSinceFailure =
+          DateTime.now().difference(_lastTypseSenseFailure!);
       if (timeSinceFailure > _circuitCooldown) {
-        _algoliaCircuitOpen = false;
-        _algoliaFailureCount = 0;
-        print('Algolia circuit breaker reset after cooldown');
+        _TypseSenseCircuitOpen = false;
+        _TypseSenseFailureCount = 0;
+        print('TypseSense circuit breaker reset after cooldown');
         return false;
       }
     }
@@ -721,28 +723,28 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     return true;
   }
 
-  void _recordAlgoliaFailure() {
-    _algoliaFailureCount++;
-    _lastAlgoliaFailure = DateTime.now();
+  void _recordTypseSenseFailure() {
+    _TypseSenseFailureCount++;
+    _lastTypseSenseFailure = DateTime.now();
 
-    if (_algoliaFailureCount >= _maxFailures) {
-      _algoliaCircuitOpen = true;
+    if (_TypseSenseFailureCount >= _maxFailures) {
+      _TypseSenseCircuitOpen = true;
       print(
-          'Algolia circuit breaker opened after $_algoliaFailureCount failures');
+          'TypseSense circuit breaker opened after $_TypseSenseFailureCount failures');
     }
   }
 
-  void _recordAlgoliaSuccess() {
-    if (_algoliaFailureCount > 0 || _algoliaCircuitOpen) {
-      print('Algolia service recovered, resetting circuit breaker');
-      _algoliaFailureCount = 0;
-      _algoliaCircuitOpen = false;
-      _lastAlgoliaFailure = null;
+  void _recordTypseSenseSuccess() {
+    if (_TypseSenseFailureCount > 0 || _TypseSenseCircuitOpen) {
+      print('TypseSense service recovered, resetting circuit breaker');
+      _TypseSenseFailureCount = 0;
+      _TypseSenseCircuitOpen = false;
+      _lastTypseSenseFailure = null;
     }
   }
 
   /// ---------------------------------------------------------------------------
-  /// Searching via Algolia
+  /// Searching via TypseSense
   /// ---------------------------------------------------------------------------
   Future<void> searchProducts({
     String query = '',
@@ -764,11 +766,11 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
       if (SearchConfigService.instance.useFirestore) {
         await _searchProductsFirestore(
             query: query, page: page, hitsPerPage: hitsPerPage);
-        return; // skip Algolia entirely
+        return; // skip TypseSense entirely
       }
       // Check circuit breaker first
-      if (_isAlgoliaCircuitOpen()) {
-        print('Algolia circuit open, using Firestore for search');
+      if (_isTypseSenseCircuitOpen()) {
+        print('TypseSense circuit open, using Firestore for search');
         await _searchProductsFirestore(
             query: query, page: page, hitsPerPage: hitsPerPage);
         return;
@@ -804,17 +806,17 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
 
       // Execute search with timeout and fallback
       try {
-        final results = await AnalyticsService.trackAlgoliaSearch(
-          operation: 'market_search_algolia',
+        final results = await AnalyticsService.trackTypesenseSearch(
+          operation: 'market_search_TypseSense',
           execute: () => Future.wait([
-            algoliaService.searchProducts(
+            typesenseService.searchProducts(
               query: query,
               sortOption: _sortOption,
               page: page,
               hitsPerPage: hitsPerPage,
               filters: filters.isNotEmpty ? filters : null,
             ),
-            algoliaShopService.searchProducts(
+            typesenseShopService.searchProducts(
               query: query,
               sortOption: _sortOption,
               page: page,
@@ -850,11 +852,11 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
           _productIds.removeWhere((id) => !_products.any((p) => p.id == id));
         }
 
-        _recordAlgoliaSuccess();
+        _recordTypseSenseSuccess();
         _updateSearchResults(combined, page, hitsPerPage);
       } catch (e) {
-        print('Algolia search failed, falling back to Firestore: $e');
-        _recordAlgoliaFailure();
+        print('TypseSense search failed, falling back to Firestore: $e');
+        _recordTypseSenseFailure();
         await _searchProductsFirestore(
             query: query, page: page, hitsPerPage: hitsPerPage);
       }
@@ -1442,7 +1444,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     }
 
     return _searchDeduplicator.deduplicate(cacheKey, () async {
-      // ✅ ADD: Check remote config — if Firestore mode, skip Algolia entirely
+      // ✅ ADD: Check remote config — if Firestore mode, skip TypseSense entirely
       if (SearchConfigService.instance.useFirestore) {
         final fallback = await _firestoreSearchFallback(query);
         _searchCache[cacheKey] = fallback;
@@ -1471,16 +1473,16 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
           facetFilters = null;
       }
 
-      // 3) Wrap each Algolia call in a retry + timeout
+      // 3) Wrap each Typesense call in a retry + timeout
       final r = RetryOptions(
         maxAttempts: 3,
         delayFactor: const Duration(milliseconds: 200),
       );
 
       try {
-        // 3a) Algolia main index
+        // 3a) Typesense main index
         final mainResults = await r.retry(
-          () => algoliaService
+          () => typesenseService
               .searchProducts(
                 query: query,
                 sortOption: '', // Empty string for main products search
@@ -1493,7 +1495,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
 
 // Shop products can still use sorting if needed
         final shopResults = await r.retry(
-          () => algoliaShopService
+          () => typesenseShopService
               .searchProducts(
                 query: query,
                 sortOption: '', // Also use empty for consistency in search
@@ -1518,7 +1520,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
         _cacheTimestamps[cacheKey] = now;
         return merged;
       } catch (e) {
-        debugPrint('Algolia indexes failed: $e — falling back to Firestore');
+        debugPrint('Typesense indexes failed: $e — falling back to Firestore');
 
         // 6) Firestore fallback
         final fallback = await _firestoreSearchFallback(query);

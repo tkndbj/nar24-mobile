@@ -68,7 +68,7 @@ class CategorySearchScorer {
     score += _calculateFuzzyScore(query, displayName) * 10.0;
     score += _calculateFuzzyScore(query, categoryKey) * 8.0;
     
-    // 7. Keyword matching from Algolia search relevance
+    // 7. Keyword matching from search relevance
     if (suggestion.matchedKeywords?.isNotEmpty == true) {
       score += suggestion.matchedKeywords!.length * 2.0;
     }

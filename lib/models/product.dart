@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'parse_helpers.dart';
 import 'product_summary.dart';
+import 'dart:convert';
 
 /// Full product model — used on the detail screen and for
 /// write operations (create / update / cart / order).
@@ -295,8 +296,10 @@ class Product {
     return Product._fromMap(json, id: json['id'] as String? ?? '');
   }
 
-  factory Product.fromAlgolia(Map<String, dynamic> json) {
-    String id = json['objectID']?.toString() ?? '';
+  factory Product.fromTypeSense(Map<String, dynamic> json) {
+    // Typesense uses 'id', normalize to objectID for _fromMap compatibility
+    final rawId = (json['id'] ?? json['objectID'] ?? '').toString();
+    String id = rawId;
     String? sourceCollection;
 
     if (id.startsWith('products_')) {
@@ -312,8 +315,23 @@ class Product {
               : 'products';
     }
 
+    // Decode JSON-encoded nested maps from Typesense
+    final patched = Map<String, dynamic>.from(json);
+    if (patched['colorImagesJson'] != null) {
+      try {
+        patched['colorImages'] =
+            jsonDecode(patched['colorImagesJson'] as String);
+      } catch (_) {}
+    }
+    if (patched['colorQuantitiesJson'] != null) {
+      try {
+        patched['colorQuantities'] =
+            jsonDecode(patched['colorQuantitiesJson'] as String);
+      } catch (_) {}
+    }
+
     return Product._fromMap(
-      json,
+      patched,
       id: id,
       sourceCollectionOverride: sourceCollection,
     );

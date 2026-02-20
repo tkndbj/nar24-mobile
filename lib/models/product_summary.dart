@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
 import 'parse_helpers.dart';
 
 /// A lightweight, **read-only** projection of a product used exclusively
@@ -27,7 +28,7 @@ import 'parse_helpers.dart';
 /// *  **Never add admin / analytics / boost-internal fields here.**
 ///    If a card doesn't show it, it doesn't belong.
 /// *  If a new UI element is added to the card, add the field here
-///    **and** in the `fromDocument` / `fromJson` / `fromAlgolia` factories.
+///    **and** in the `fromDocument` / `fromJson` / `fromTypeSense` factories.
 class ProductSummary {
   final String id;
   final String? sourceCollection;
@@ -154,8 +155,9 @@ class ProductSummary {
       imageUrls: Parse.toStringList(d['imageUrls']),
       averageRating: Parse.toDouble(d['averageRating']),
       reviewCount: Parse.toInt(d['reviewCount']),
-      originalPrice:
-          d['originalPrice'] != null ? Parse.toDouble(d['originalPrice']) : null,
+      originalPrice: d['originalPrice'] != null
+          ? Parse.toDouble(d['originalPrice'])
+          : null,
       discountPercentage: d['discountPercentage'] != null
           ? Parse.toInt(d['discountPercentage'])
           : null,
@@ -217,23 +219,33 @@ class ProductSummary {
       availableColors: json['availableColors'] != null
           ? List<String>.from(json['availableColors'] as List)
           : const [],
-      colorImages: json['colorImages'] is Map
-          ? (json['colorImages'] as Map).map(
+      colorImages: json['colorImagesJson'] != null
+          ? (jsonDecode(json['colorImagesJson'] as String) as Map).map(
               (k, v) => MapEntry(
                 k.toString(),
                 (v as List).map((e) => e.toString()).toList(),
               ),
             )
-          : const {},
+          : json['colorImages'] is Map
+              ? (json['colorImages'] as Map).map(
+                  (k, v) => MapEntry(
+                    k.toString(),
+                    (v as List).map((e) => e.toString()).toList(),
+                  ),
+                )
+              : const {},
       sellerName: json['sellerName'] as String? ?? '',
       shopId: json['shopId'] as String?,
       userId: json['userId'] as String? ?? '',
       ownerId: json['ownerId'] as String? ?? '',
       quantity: (json['quantity'] as num?)?.toInt() ?? 0,
-      colorQuantities: json['colorQuantities'] is Map
-          ? (json['colorQuantities'] as Map)
+      colorQuantities: json['colorQuantitiesJson'] != null
+          ? (jsonDecode(json['colorQuantitiesJson'] as String) as Map)
               .map((k, v) => MapEntry(k.toString(), (v as num).toInt()))
-          : const {},
+          : json['colorQuantities'] is Map
+              ? (json['colorQuantities'] as Map)
+                  .map((k, v) => MapEntry(k.toString(), (v as num).toInt()))
+              : const {},
       isBoosted: json['isBoosted'] as bool? ?? false,
       isFeatured: json['isFeatured'] as bool? ?? false,
       purchaseCount: (json['purchaseCount'] as num?)?.toInt() ?? 0,
@@ -244,16 +256,15 @@ class ProductSummary {
           ? List<String>.from(json['bundleIds'] as List)
           : const [],
       discountThreshold: (json['discountThreshold'] as num?)?.toInt(),
-      bulkDiscountPercentage:
-          (json['bulkDiscountPercentage'] as num?)?.toInt(),
+      bulkDiscountPercentage: (json['bulkDiscountPercentage'] as num?)?.toInt(),
       videoUrl: json['videoUrl'] as String?,
       createdAt: Parse.toTimestamp(json['createdAt']),
       promotionScore: (json['promotionScore'] as num?)?.toDouble() ?? 0.0,
     );
   }
 
-  /// Parse from an Algolia hit.
-  factory ProductSummary.fromAlgolia(Map<String, dynamic> json) {
+  /// Parse from an Typesense hit.
+  factory ProductSummary.fromTypeSense(Map<String, dynamic> json) {
     String normalizedId = json['objectID']?.toString() ?? '';
     String? sourceCollection;
 
@@ -320,8 +331,7 @@ class ProductSummary {
           ? List<String>.from(json['bundleIds'])
           : const [],
       discountThreshold: (json['discountThreshold'] as num?)?.toInt(),
-      bulkDiscountPercentage:
-          (json['bulkDiscountPercentage'] as num?)?.toInt(),
+      bulkDiscountPercentage: (json['bulkDiscountPercentage'] as num?)?.toInt(),
       videoUrl: json['videoUrl']?.toString(),
       createdAt: Parse.toTimestamp(json['createdAt']),
       promotionScore: (json['promotionScore'] as num?)?.toDouble() ?? 0.0,
@@ -341,8 +351,7 @@ class ProductSummary {
   }
 
   /// Whether this product has a discount.
-  bool get hasDiscount =>
-      discountPercentage != null && discountPercentage! > 0;
+  bool get hasDiscount => discountPercentage != null && discountPercentage! > 0;
 
   /// Whether this product has a video.
   bool get hasVideo => videoUrl != null && videoUrl!.isNotEmpty;
