@@ -579,6 +579,109 @@ class TypeSenseService {
     return docs;
   }
 
+  // ── Facet queries ────────────────────────────────────────────────────────
+
+  /// All product spec fields that support faceted filtering.
+  static const String _specFacetFields =
+      'productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
+      'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes';
+
+  /// Fetches spec facets for a given category context.
+  /// Returns a map of facet field → list of {value, count} entries.
+  /// Only fields with actual data are returned.
+  /// Uses per_page=0 so no product documents are transferred — only facet counts.
+  Future<Map<String, List<Map<String, dynamic>>>> fetchSpecFacets({
+    required String indexName,
+    List<List<String>>? facetFilters,
+  }) async {
+    final uri = _searchUri(indexName);
+
+    // Build filter_by from facetFilters (same logic as searchIdsWithFacets)
+    final filterParts = <String>[];
+    if (facetFilters != null) {
+      for (final group in facetFilters) {
+        if (group.isEmpty) continue;
+        final orParts = group
+            .map((f) {
+              final colon = f.indexOf(':');
+              if (colon < 0) return null;
+              final field = f.substring(0, colon).trim();
+              final value =
+                  f.substring(colon + 1).trim().replaceAll('"', '');
+              return '$field:=$value';
+            })
+            .whereType<String>()
+            .toList();
+
+        if (orParts.length == 1) {
+          filterParts.add(orParts.first);
+        } else if (orParts.length > 1) {
+          filterParts.add('(${orParts.join(' || ')})');
+        }
+      }
+    }
+
+    final params = <String, String>{
+      'q': '*',
+      'query_by': 'productName',
+      'per_page': '0',
+      'facet_by': _specFacetFields,
+      'max_facet_values': '50',
+    };
+    if (filterParts.isNotEmpty) {
+      params['filter_by'] = filterParts.join(' && ');
+    }
+
+    try {
+      final resp = await _retryOptions.retry(
+        () async {
+          final r = await http
+              .get(uri.replace(queryParameters: params), headers: _headers)
+              .timeout(const Duration(seconds: 5));
+          if (r.statusCode >= 500) {
+            throw HttpException('Typesense 5xx: ${r.statusCode}', uri: uri);
+          }
+          return r;
+        },
+        retryIf: (e) =>
+            e is SocketException ||
+            e is TimeoutException ||
+            e is HttpException ||
+            e.toString().contains('Failed host lookup'),
+      );
+
+      if (resp.statusCode != 200) {
+        debugPrint('Typesense facet error ${resp.statusCode}: ${resp.body}');
+        return {};
+      }
+
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      final facetCounts = data['facet_counts'] as List? ?? [];
+
+      final result = <String, List<Map<String, dynamic>>>{};
+      for (final facet in facetCounts) {
+        final fieldName = facet['field_name'] as String? ?? '';
+        final counts = (facet['counts'] as List? ?? [])
+            .map((c) => {
+                  'value': (c as Map)['value']?.toString() ?? '',
+                  'count': (c['count'] as num?)?.toInt() ?? 0,
+                })
+            .where((c) =>
+                c['value'].toString().isNotEmpty && (c['count'] as int) > 0)
+            .toList();
+        if (counts.isNotEmpty) {
+          result[fieldName] = counts;
+        }
+      }
+
+      debugPrint('Typesense spec facets: ${result.keys}');
+      return result;
+    } catch (e) {
+      debugPrint('Typesense fetchSpecFacets error: $e');
+      return {};
+    }
+  }
+
   // ── Health check ──────────────────────────────────────────────────────────
 
   Future<bool> isServiceReachable() async {

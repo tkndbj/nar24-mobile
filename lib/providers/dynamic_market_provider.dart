@@ -79,6 +79,13 @@ class ShopMarketProvider with ChangeNotifier {
   double? _minPrice;
   double? _maxPrice;
 
+  /// Generic spec filters: field name → selected values
+  /// e.g. {'productType': ['CoffeeMachine'], 'clothingFit': ['Slim', 'Regular']}
+  final Map<String, List<String>> _dynamicSpecFilters = {};
+  Map<String, List<String>> get dynamicSpecFilters =>
+      Map.unmodifiable(_dynamicSpecFilters.map(
+          (k, v) => MapEntry(k, List<String>.unmodifiable(v))));
+
   // Pagination
   static const int _limit = 20;
   int _currentPage = 0;
@@ -102,6 +109,21 @@ class ShopMarketProvider with ChangeNotifier {
   static const int _maxCachedPages = 5;
 
   // ──────────────────────────────────────────────────────────────────────────
+  // SPEC FACETS (fetched from Typesense, cached per category context)
+  // ──────────────────────────────────────────────────────────────────────────
+  /// Available spec facets for the current category context.
+  /// Key: field name (e.g. 'productType', 'clothingFit')
+  /// Value: list of {'value': 'CoffeeMachine', 'count': 24}
+  Map<String, List<Map<String, dynamic>>> _specFacets = {};
+  Map<String, List<Map<String, dynamic>>> get specFacets =>
+      Map.unmodifiable(_specFacets);
+
+  /// Cache keyed by category context string
+  final Map<String, Map<String, List<Map<String, dynamic>>>> _facetCache = {};
+  final Map<String, DateTime> _facetCacheTs = {};
+  static const Duration _facetCacheTtl = Duration(minutes: 5);
+
+  // ──────────────────────────────────────────────────────────────────────────
   // PUBLIC API
   // ──────────────────────────────────────────────────────────────────────────
   /// Sets all category/gender state at once and fires a single query.
@@ -117,7 +139,12 @@ class ShopMarketProvider with ChangeNotifier {
     _subSubcategory = subSubcategory;
     _buyerCategory = buyerCategory;
     _buyerSubcategory = buyerSubcategory;
-    await _resetAndFetch();
+
+    // Fire product fetch and facet fetch in parallel
+    await Future.wait([
+      _resetAndFetch(),
+      _fetchSpecFacets(),
+    ]);
   }
 
   Future<void> setBuyerCategory(
@@ -137,6 +164,12 @@ class ShopMarketProvider with ChangeNotifier {
       parts.add('colors:${_dynamicColors.join(",")}');
     if (_dynamicSubSubcategories.isNotEmpty)
       parts.add('subsubs:${_dynamicSubSubcategories.join(",")}');
+    // Generic spec filters
+    for (final entry in _dynamicSpecFilters.entries) {
+      if (entry.value.isNotEmpty) {
+        parts.add('spec_${entry.key}:${entry.value.join(",")}');
+      }
+    }
     if (_minPrice != null) parts.add('minP:$_minPrice');
     if (_maxPrice != null) parts.add('maxP:$_maxPrice');
 
@@ -204,6 +237,7 @@ class ShopMarketProvider with ChangeNotifier {
     List<String>? brands,
     List<String>? colors,
     List<String>? subSubcategories,
+    Map<String, List<String>>? specFilters,
     double? minPrice,
     double? maxPrice,
     bool additive = true,
@@ -231,6 +265,17 @@ class ShopMarketProvider with ChangeNotifier {
             _dynamicSubSubcategories.add(s);
             changed = true;
           }
+      if (specFilters != null) {
+        for (final entry in specFilters.entries) {
+          final existing = _dynamicSpecFilters[entry.key] ??= [];
+          for (final v in entry.value) {
+            if (!existing.contains(v)) {
+              existing.add(v);
+              changed = true;
+            }
+          }
+        }
+      }
     } else {
       if (brands != null && !_listEquals(_dynamicBrands, brands)) {
         _dynamicBrands = List.from(brands);
@@ -244,6 +289,31 @@ class ShopMarketProvider with ChangeNotifier {
           !_listEquals(_dynamicSubSubcategories, subSubcategories)) {
         _dynamicSubSubcategories = List.from(subSubcategories);
         changed = true;
+      }
+      if (specFilters != null) {
+        // Replace all spec filters at once
+        final newKeys = specFilters.keys.toSet();
+        final oldKeys = _dynamicSpecFilters.keys.toSet();
+        // Check if anything changed
+        if (!newKeys.containsAll(oldKeys) || !oldKeys.containsAll(newKeys)) {
+          changed = true;
+        } else {
+          for (final key in newKeys) {
+            if (!_listEquals(
+                _dynamicSpecFilters[key] ?? [], specFilters[key] ?? [])) {
+              changed = true;
+              break;
+            }
+          }
+        }
+        if (changed) {
+          _dynamicSpecFilters.clear();
+          for (final entry in specFilters.entries) {
+            if (entry.value.isNotEmpty) {
+              _dynamicSpecFilters[entry.key] = List.from(entry.value);
+            }
+          }
+        }
       }
     }
     if (minPrice != _minPrice) {
@@ -264,6 +334,8 @@ class ShopMarketProvider with ChangeNotifier {
     String? brand,
     String? color,
     String? subSubcategory,
+    String? specField,
+    String? specValue,
     bool clearPrice = false,
   }) async {
     bool changed = false;
@@ -282,6 +354,14 @@ class ShopMarketProvider with ChangeNotifier {
         _dynamicSubSubcategories.contains(subSubcategory)) {
       _dynamicSubSubcategories.remove(subSubcategory);
       changed = true;
+    }
+    if (specField != null && specValue != null) {
+      final list = _dynamicSpecFilters[specField];
+      if (list != null && list.contains(specValue)) {
+        list.remove(specValue);
+        if (list.isEmpty) _dynamicSpecFilters.remove(specField);
+        changed = true;
+      }
     }
     if (clearPrice && (_minPrice != null || _maxPrice != null)) {
       _minPrice = null;
@@ -303,6 +383,7 @@ class ShopMarketProvider with ChangeNotifier {
     _dynamicBrands.clear();
     _dynamicColors.clear();
     _dynamicSubSubcategories.clear();
+    _dynamicSpecFilters.clear();
     _minPrice = null;
     _maxPrice = null;
 
@@ -427,6 +508,7 @@ class ShopMarketProvider with ChangeNotifier {
       _dynamicBrands.isNotEmpty ||
       _dynamicColors.isNotEmpty ||
       _dynamicSubSubcategories.isNotEmpty ||
+      _dynamicSpecFilters.isNotEmpty ||
       _minPrice != null ||
       _maxPrice != null;
 
@@ -435,6 +517,9 @@ class ShopMarketProvider with ChangeNotifier {
     c += _dynamicBrands.length;
     c += _dynamicColors.length;
     c += _dynamicSubSubcategories.length;
+    for (final vals in _dynamicSpecFilters.values) {
+      c += vals.length;
+    }
     if (_minPrice != null || _maxPrice != null) c++;
     return c;
   }
@@ -464,6 +549,68 @@ class ShopMarketProvider with ChangeNotifier {
     if (_sortOption != 'date') return SearchBackend.TypeSense;
     if (hasDynamicFilters) return SearchBackend.TypeSense;
     return SearchBackend.firestore;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // SPEC FACETS FETCH
+  // ──────────────────────────────────────────────────────────────────────────
+  String _buildFacetCacheKey() {
+    return 'facet|$_category|$_subcategory|$_subSubcategory|$_buyerCategory';
+  }
+
+  Future<void> _fetchSpecFacets() async {
+    final cacheKey = _buildFacetCacheKey();
+    final now = DateTime.now();
+
+    // Check cache first
+    final cached = _facetCache[cacheKey];
+    final ts = _facetCacheTs[cacheKey];
+    if (cached != null && ts != null && now.difference(ts) < _facetCacheTtl) {
+      _specFacets = cached;
+      return;
+    }
+
+    try {
+      // Build the same category filters used for product queries
+      final facetFilters = <List<String>>[];
+      if (_category != null) {
+        facetFilters.add(['category_en:${_category!}']);
+      }
+      if (_subcategory != null) {
+        facetFilters.add(['subcategory_en:${_subcategory!}']);
+      }
+      if (_subSubcategory != null) {
+        facetFilters.add(['subsubcategory_en:${_subSubcategory!}']);
+      }
+      if (_buyerCategory == 'Women' || _buyerCategory == 'Men') {
+        facetFilters
+            .add(['gender:${_buyerCategory!}', 'gender:Unisex']);
+      }
+
+      final result = await _searchService.fetchSpecFacets(
+        indexName: 'shop_products',
+        facetFilters: facetFilters,
+      );
+
+      _specFacets = result;
+
+      // Cache the result
+      _facetCache[cacheKey] = result;
+      _facetCacheTs[cacheKey] = now;
+
+      // Prune old cache entries
+      if (_facetCache.length > 20) {
+        final oldest = _facetCacheTs.entries.toList()
+          ..sort((a, b) => a.value.compareTo(b.value));
+        for (final e in oldest.take(_facetCache.length - 20)) {
+          _facetCache.remove(e.key);
+          _facetCacheTs.remove(e.key);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching spec facets: $e');
+      _specFacets = {};
+    }
   }
 
   Future<void> _fetchPage({
@@ -602,6 +749,15 @@ class ShopMarketProvider with ChangeNotifier {
       final sortedSubSubs = List<String>.from(_dynamicSubSubcategories)..sort();
       parts.add('s:${sortedSubSubs.join(",")}');
     }
+    // Generic spec filters
+    final sortedSpecKeys = _dynamicSpecFilters.keys.toList()..sort();
+    for (final field in sortedSpecKeys) {
+      final vals = _dynamicSpecFilters[field];
+      if (vals != null && vals.isNotEmpty) {
+        final sorted = List<String>.from(vals)..sort();
+        parts.add('sf_$field:${sorted.join(",")}');
+      }
+    }
     if (_minPrice != null) parts.add('min:$_minPrice');
     if (_maxPrice != null) parts.add('max:$_maxPrice');
     if (_buyerCategory != null) parts.add('bc:$_buyerCategory');
@@ -697,6 +853,13 @@ class ShopMarketProvider with ChangeNotifier {
     if (_dynamicSubSubcategories.isNotEmpty) {
       groups.add(
           _dynamicSubSubcategories.map((s) => 'subsubcategory_en:$s').toList());
+    }
+
+    // Generic spec filters — each field becomes its own filter group
+    for (final entry in _dynamicSpecFilters.entries) {
+      if (entry.value.isNotEmpty) {
+        groups.add(entry.value.map((v) => '${entry.key}:$v').toList());
+      }
     }
 
     debugPrint('Final facet filters: $groups');

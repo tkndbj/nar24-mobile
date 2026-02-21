@@ -92,6 +92,10 @@ class DynamicRoutes {
               initialColors: extra?['initialColors'] as List<String>?,
               initialSubSubcategories:
                   extra?['initialSubSubcategories'] as List<String>?,
+              initialSpecFilters:
+                  extra?['initialSpecFilters'] as Map<String, List<String>>?,
+              availableSpecFacets:
+                  (extra?['availableSpecFacets'] as Map<String, List<Map<String, dynamic>>>?) ?? const {},
               initialMinPrice: extra?['initialMinPrice'] as double?,
               initialMaxPrice: extra?['initialMaxPrice'] as double?,
             ),
