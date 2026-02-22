@@ -17,17 +17,11 @@ class SearchProvider extends ChangeNotifier {
   static const int _loadMorePageSize = 5;
   static const int _maxSuggestions = 20;
 
-  /// Number of autocomplete name chips shown above results.
-  static const int _autocompleteLimit = 5;
-
   // ==================== STATE ====================
   String _term = '';
   List<Suggestion> _suggestions = [];
   List<CategorySuggestion> _categorySuggestions = [];
   List<ShopSuggestion> _shopSuggestions = [];
-
-  // Autocomplete state
-  List<String> _autocompleteSuggestions = [];
 
   // Pagination state
   int _currentProductCount = 0;
@@ -35,13 +29,8 @@ class SearchProvider extends ChangeNotifier {
   bool _isLoadingMore = false;
   String? _lastSearchTerm;
 
-  // Debounce pipelines
-  //
-  // Two separate subjects let us tune debounce independently:
-  //  • _autocompleteSubject fires faster (150 ms) for instant chip updates.
-  //  • _querySubject fires at 300 ms for the heavier multi-fetch.
+  // Debounce pipeline – 300 ms for the search fetch.
   final _querySubject = BehaviorSubject<String>();
-  final _autocompleteSubject = BehaviorSubject<String>();
 
   // Loading & Error state
   bool _isLoading = false;
@@ -53,7 +42,7 @@ class SearchProvider extends ChangeNotifier {
       TypeSenseServiceManager.instance;
 
   SearchProvider() {
-    // Heavy search pipeline – 300 ms debounce
+    // Search pipeline – 300 ms debounce
     _querySubject
         .debounceTime(const Duration(milliseconds: 300))
         .listen((term) {
@@ -61,18 +50,6 @@ class SearchProvider extends ChangeNotifier {
         _clearResults();
       } else {
         _performInitialSearch(term, null);
-      }
-    });
-
-    // Lightweight autocomplete pipeline – 150 ms debounce.
-    // Skipped entirely when Firestore fallback mode is active.
-    _autocompleteSubject
-        .debounceTime(const Duration(milliseconds: 150))
-        .listen((term) {
-      if (term.isEmpty) {
-        _clearAutocompleteSuggestions();
-      } else if (!SearchConfigService.instance.useFirestore) {
-        _fetchAutocompleteSuggestions(term);
       }
     });
   }
@@ -84,16 +61,6 @@ class SearchProvider extends ChangeNotifier {
       List.unmodifiable(_categorySuggestions);
   List<ShopSuggestion> get shopSuggestions =>
       List.unmodifiable(_shopSuggestions);
-
-  /// Deduplicated product-name strings for autocomplete chips.
-  /// Already filters out any name that exactly matches the current query
-  /// to avoid showing a chip for what the user just typed.
-  List<String> get autocompleteSuggestions {
-    final queryLower = _term.toLowerCase();
-    return _autocompleteSuggestions
-        .where((s) => s.toLowerCase() != queryLower)
-        .toList();
-  }
 
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
@@ -115,7 +82,6 @@ class SearchProvider extends ChangeNotifier {
       return;
     }
 
-    _clearAutocompleteSuggestions(notify: false);
     _setLoadingState();
     _performInitialSearch(trimmed, l10n);
   }
@@ -123,6 +89,12 @@ class SearchProvider extends ChangeNotifier {
   /// Called on each keystroke to debounce both pipelines.
   void updateTerm(String newTerm, {AppLocalizations? l10n}) {
     final trimmed = newTerm.trim();
+
+    // Deduplicate: if the term hasn't changed, skip entirely.
+    // This prevents infinite rebuild loops when the delegate is
+    // recreated on every Provider notification.
+    if (trimmed == _term) return;
+
     _term = trimmed;
 
     if (trimmed.isEmpty) {
@@ -131,9 +103,7 @@ class SearchProvider extends ChangeNotifier {
       _setLoadingState();
     }
 
-    // Fire both subjects; each has its own debounce.
     if (!_querySubject.isClosed) _querySubject.add(trimmed);
-    if (!_autocompleteSubject.isClosed) _autocompleteSubject.add(trimmed);
   }
 
   /// Load more product suggestions (pagination).
@@ -207,9 +177,7 @@ class SearchProvider extends ChangeNotifier {
     if (_disposed) return;
     _term = '';
     _clearResults();
-    _clearAutocompleteSuggestions(notify: false);
     if (!_querySubject.isClosed) _querySubject.add('');
-    if (!_autocompleteSubject.isClosed) _autocompleteSubject.add('');
   }
 
   void clearError() {
@@ -230,46 +198,12 @@ class SearchProvider extends ChangeNotifier {
     }
   }
 
-  // ==================== PRIVATE: AUTOCOMPLETE ====================
-
-  /// Fetches a small list of product names from the main Typesense index
-  /// to populate the autocomplete chips. Errors are swallowed intentionally
-  /// because autocomplete is a non-critical enhancement.
-  Future<void> _fetchAutocompleteSuggestions(String searchTerm) async {
-    if (!mounted || searchTerm.isEmpty) return;
-
-    try {
-      final names = await _typesenseManager.mainService
-          .searchQuerySuggestions(
-            query: searchTerm,
-            hitsPerPage: _autocompleteLimit,
-          )
-          .timeout(const Duration(seconds: 3));
-
-      // Discard stale results if the user has since cleared or changed query.
-      if (!mounted || _term != searchTerm) return;
-
-      _autocompleteSuggestions = names;
-      notifyListeners();
-    } catch (e) {
-      if (kDebugMode) debugPrint('⚠️ Autocomplete fetch error: $e');
-      // Silently discard – do not pollute error state.
-    }
-  }
-
-  void _clearAutocompleteSuggestions({bool notify = true}) {
-    if (_autocompleteSuggestions.isEmpty) return;
-    _autocompleteSuggestions = [];
-    if (notify && mounted) notifyListeners();
-  }
-
   // ==================== PRIVATE: CORE SEARCH ====================
 
   void _clearResults() {
     _suggestions = [];
     _categorySuggestions = [];
     _shopSuggestions = [];
-    _autocompleteSuggestions = [];
     _currentProductCount = 0;
     _hasMoreProducts = true;
     _isLoadingMore = false;
@@ -609,7 +543,6 @@ class SearchProvider extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _querySubject.close();
-    _autocompleteSubject.close();
     super.dispose();
   }
 }

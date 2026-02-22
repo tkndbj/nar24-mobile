@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../generated/l10n/app_localizations.dart';
-import '../providers/search_provider.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
 import '../providers/badge_provider.dart';
 import 'package:go_router/go_router.dart';
@@ -172,7 +171,11 @@ Widget build(BuildContext context) {
         textAlignVertical: TextAlignVertical.center,
         style: TextStyle(color: isDark ? Colors.white : Colors.black),
         decoration: _buildInputDecoration(l10n, isDark),
-        onChanged: widget.isSearching ? _handleSearchChange : null,
+        // Text forwarding to SearchProvider is handled by the
+        // ValueListenableBuilder in MarketScreen's search overlay.
+        // The app bar context is outside the overlay's MultiProvider,
+        // so Provider.of<SearchProvider> would fail here.
+        onChanged: null,
         onSubmitted: (_) {
           debugPrint('🔍 MarketAppBar: Search submitted');
           widget.onSubmitSearch();
@@ -237,16 +240,6 @@ Widget build(BuildContext context) {
               ),
             ),
     );
-  }
-
-  // OPTIMIZATION 6: Extract search change handling
-  void _handleSearchChange(String value) {
-    try {
-      Provider.of<SearchProvider>(context, listen: false)
-          .updateTerm(value, l10n: _l10n!);
-    } catch (e) {
-      debugPrint('Error updating search term: $e');
-    }
   }
 
   // OPTIMIZATION 7: Extract icon row building

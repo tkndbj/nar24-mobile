@@ -577,14 +577,10 @@ Future<void> _initializeLayoutService() async {
 
   /// Setup controller listeners
   void _setupControllerListeners() {
-    // SADECE arama debouncesi
     _searchController.addListener(() {
-      _searchDebounce(() {
-        final currentText = _searchController.text;
-        if (kDebugMode) {
-          debugPrint('🔍 Search changed: "$currentText"');
-        }
-      });
+      if (kDebugMode) {
+        debugPrint('🔍 Search changed: "${_searchController.text}"');
+      }
     });
   }
 
@@ -2274,7 +2270,7 @@ Future<void> _initializeLayoutService() async {
     final marketProv = Provider.of<MarketProvider>(context, listen: false);
     final historyProv =
         Provider.of<SearchHistoryProvider>(context, listen: false);
-    final searchProv = Provider.of<SearchProvider>(context, listen: true);
+    final searchProv = Provider.of<SearchProvider>(context, listen: false);
 
     final delegate = MarketSearchDelegate(
       marketProv: marketProv,
@@ -2663,7 +2659,14 @@ Future<void> _initializeLayoutService() async {
                     color: isDarkMode
                         ? const Color(0xFF1C1A29)
                         : Colors.white,
-                    child: _buildSearchDelegateArea(ctx),
+                    // ValueListenableBuilder rebuilds on every keystroke,
+                    // ensuring the delegate gets the latest query text
+                    // and talks to the correct (overlay) SearchProvider.
+                    child: ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: _searchController,
+                      builder: (_, __, ___) =>
+                          _buildSearchDelegateArea(ctx),
+                    ),
                   ),
                 ),
               ),

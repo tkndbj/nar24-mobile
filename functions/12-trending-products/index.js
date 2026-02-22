@@ -296,6 +296,7 @@ class TrendingCalculator {
           })),
           stats: {
             ...existingData.stats,
+            avgScore: existingData.stats.avgTrendScore,
             cached: true,
             computationTimeMs: Date.now() - startTime,
           },

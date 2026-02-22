@@ -281,12 +281,11 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
       return _buildLoadingState(context, isDark);
     }
 
-    // 4. Show suggestions (products / categories / shops + autocomplete chips)
+    // 4. Show suggestions (products / categories / shops)
     if (kDebugMode) {
       debugPrint('🔍 SearchDelegate: Showing suggestions - '
           'Products: ${searchProvider.suggestions.length}, '
-          'Categories: ${searchProvider.categorySuggestions.length}, '
-          'Autocomplete: ${searchProvider.autocompleteSuggestions.length}');
+          'Categories: ${searchProvider.categorySuggestions.length}');
     }
 
     return _buildSearchSuggestions(
@@ -295,66 +294,7 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
       searchProvider.categorySuggestions,
       searchProvider.suggestions,
       searchProvider.shopSuggestions,
-      autocompleteSuggestions: searchProvider.autocompleteSuggestions,
       isLoading: searchProvider.isLoading,
-    );
-  }
-
-  // ── Autocomplete chips ────────────────────────────────────────────────────
-  //
-  // Shown as a horizontal scrollable row of tappable chips between the
-  // search bar and the main results. Tapping a chip fills the search field
-  // with that text and immediately fires `showResults`, saving the user
-  // from typing the full product name.
-  Widget _buildAutocompleteChips(
-    BuildContext context,
-    bool isDark,
-    List<String> suggestions,
-  ) {
-    if (suggestions.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          height: 38,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            itemCount: suggestions.length,
-            itemBuilder: (context, index) {
-              final suggestion = suggestions[index];
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: _AutocompleteChip(
-                  label: suggestion,
-                  isDark: isDark,
-                  onTap: () {
-                    // Fill the search field and navigate straight to results.
-                    query = suggestion;
-                    _saveSearchTerm(context, suggestion);
-                    _safelyClearSearchProvider(context);
-                    final marketState =
-                        context.findAncestorStateOfType<MarketScreenState>();
-                    marketState?.exitSearchMode();
-                    context
-                        .push('/search_results', extra: {'query': suggestion});
-                  },
-                ),
-              );
-            },
-          ),
-        ),
-        Divider(
-          height: 1,
-          thickness: 1,
-          indent: 14,
-          endIndent: 14,
-          color: isDark ? Colors.white.withOpacity(0.06) : Colors.grey.shade200,
-        ),
-        const SizedBox(height: 4),
-      ],
     );
   }
 
@@ -447,7 +387,6 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
     List<CategorySuggestion> categorySuggestions,
     List<Suggestion> productSuggestions,
     List<ShopSuggestion> shopSuggestions, {
-    List<String> autocompleteSuggestions = const [],
     bool isLoading = false,
   }) {
     return CustomScrollView(
@@ -462,15 +401,6 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
                 valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6B35)),
               ),
             ),
-          ),
-
-        // ── Autocomplete chips ────────────────────────────────────────────
-        // Shown whenever there are name completions to suggest, regardless
-        // of whether full results have loaded yet.
-        if (autocompleteSuggestions.isNotEmpty)
-          SliverToBoxAdapter(
-            child: _buildAutocompleteChips(
-                context, isDark, autocompleteSuggestions),
           ),
 
         // ── Shops section ─────────────────────────────────────────────────
@@ -1512,55 +1442,3 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
   }
 }
 
-// ── Private widget: _AutocompleteChip ─────────────────────────────────────────
-//
-// Extracted into its own StatelessWidget to keep the delegate lean and to give
-// Flutter the best chance to diff / reuse chip widgets during list rebuilds.
-class _AutocompleteChip extends StatelessWidget {
-  const _AutocompleteChip({
-    required this.label,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isDark ? const Color.fromARGB(255, 43, 41, 63) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color:
-                isDark ? Colors.white.withOpacity(0.12) : Colors.grey.shade300,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.north_west_rounded,
-              size: 11,
-              color: isDark ? Colors.white38 : Colors.grey.shade500,
-            ),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: isDark ? Colors.white70 : Colors.black87,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

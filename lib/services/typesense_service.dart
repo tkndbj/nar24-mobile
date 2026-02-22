@@ -310,64 +310,6 @@ class TypeSenseService {
     }
   }
 
-  // ── Query Suggestions / Autocomplete ──────────────────────────────────────
-  //
-  // Returns a deduplicated list of product name strings that can be shown
-  // as autocomplete chips while the user is typing. Uses prefix matching
-  // and only requests the `productName` field to keep the response tiny
-  // and latency low (typically < 100 ms on a warm connection).
-  //
-  // Deduplication is case-insensitive so "Apple" and "apple" collapse.
-  // Results are capped at [hitsPerPage] unique names.
-  Future<List<String>> searchQuerySuggestions({
-    required String query,
-    int hitsPerPage = 5,
-  }) async {
-    if (query.trim().isEmpty) return [];
-
-    try {
-      final uri = _searchUri(mainIndexName);
-      final params = <String, String>{
-        'q': query.trim(),
-        'query_by': 'productName',
-        'per_page': (hitsPerPage * 2).toString(), // over-fetch to allow dedup
-        'prefix': 'true',
-        'include_fields': 'productName',
-        // No sort needed – relevance order is fine for autocomplete
-      };
-
-      final response = await http
-          .get(uri.replace(queryParameters: params), headers: _headers)
-          .timeout(const Duration(seconds: 3));
-
-      if (response.statusCode != 200) return [];
-
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final hits = (data['hits'] as List?) ?? [];
-
-      final seen = <String>{};
-      final results = <String>[];
-
-      for (final h in hits) {
-        if (results.length >= hitsPerPage) break;
-        final doc =
-            (h as Map<String, dynamic>)['document'] as Map<String, dynamic>?;
-        final name = doc?['productName'] as String?;
-        if (name == null || name.trim().isEmpty) continue;
-        final normalised = name.trim().toLowerCase();
-        if (seen.add(normalised)) {
-          results.add(name.trim());
-        }
-      }
-
-      return results;
-    } catch (e) {
-      // Autocomplete is best-effort; never surface errors to the user.
-      if (kDebugMode) debugPrint('Typesense searchQuerySuggestions error: $e');
-      return [];
-    }
-  }
-
   Future<List<Map<String, dynamic>>> searchOrdersInTypeSense({
     required String query,
     required String userId,
@@ -575,15 +517,125 @@ class TypeSenseService {
     required String query,
     int hitsPerPage = 10,
     String? languageCode,
-  }) async =>
-      [];
+  }) async {
+    if (query.trim().isEmpty) return [];
+
+    try {
+      final lang = languageCode ?? 'en';
+      final uri = _searchUri(mainIndexName);
+
+      // Search primarily against category fields to find relevant categories.
+      // Also include productName so that e.g. "Nike" finds the categories
+      // those products belong to.
+      final params = <String, String>{
+        'q': query.trim(),
+        'query_by':
+            'category_$lang,subcategory_$lang,subsubcategory_$lang,'
+                'category_en,subcategory_en,subsubcategory_en,'
+                'productName',
+        'per_page': '50', // over-fetch to get diverse categories
+        'include_fields':
+            'category,subcategory,subsubcategory,'
+                'category_en,category_tr,category_ru,'
+                'subcategory_en,subcategory_tr,subcategory_ru,'
+                'subsubcategory_en,subsubcategory_tr,subsubcategory_ru',
+      };
+
+      final response = await http
+          .get(uri.replace(queryParameters: params), headers: _headers)
+          .timeout(const Duration(seconds: 3));
+
+      if (response.statusCode != 200) return [];
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final hits = (data['hits'] as List?) ?? [];
+
+      final seen = <String>{};
+      final results = <CategorySuggestion>[];
+
+      for (final h in hits) {
+        final doc = (h as Map<String, dynamic>)['document']
+            as Map<String, dynamic>?;
+        if (doc == null) continue;
+
+        final category = doc['category']?.toString() ?? '';
+        final subcategory = doc['subcategory']?.toString() ?? '';
+        final subsubcategory = doc['subsubcategory']?.toString() ?? '';
+
+        // Localized display names
+        final catDisplay = doc['category_$lang']?.toString() ??
+            doc['category_en']?.toString() ??
+            category;
+        final subDisplay = doc['subcategory_$lang']?.toString() ??
+            doc['subcategory_en']?.toString() ??
+            subcategory;
+        final subsubDisplay = doc['subsubcategory_$lang']?.toString() ??
+            doc['subsubcategory_en']?.toString() ??
+            subsubcategory;
+
+        // Add sub-subcategory level (most specific)
+        if (subsubcategory.isNotEmpty &&
+            subcategory.isNotEmpty &&
+            category.isNotEmpty) {
+          final key = '$category/$subcategory/$subsubcategory';
+          if (seen.add(key)) {
+            results.add(CategorySuggestion(
+              categoryKey: category,
+              subcategoryKey: subcategory,
+              subsubcategoryKey: subsubcategory,
+              displayName: '$catDisplay > $subDisplay > $subsubDisplay',
+              level: 2,
+              language: lang,
+            ));
+          }
+        }
+
+        // Add subcategory level
+        if (subcategory.isNotEmpty && category.isNotEmpty) {
+          final key = '$category/$subcategory';
+          if (seen.add(key)) {
+            results.add(CategorySuggestion(
+              categoryKey: category,
+              subcategoryKey: subcategory,
+              displayName: '$catDisplay > $subDisplay',
+              level: 1,
+              language: lang,
+            ));
+          }
+        }
+
+        // Add main category level
+        if (category.isNotEmpty) {
+          if (seen.add(category)) {
+            results.add(CategorySuggestion(
+              categoryKey: category,
+              displayName: catDisplay,
+              level: 0,
+              language: lang,
+            ));
+          }
+        }
+
+        if (results.length >= hitsPerPage) break;
+      }
+
+      return results;
+    } catch (e) {
+      if (kDebugMode) debugPrint('Typesense searchCategories error: $e');
+      return [];
+    }
+  }
 
   Future<List<CategorySuggestion>> searchCategoriesEnhanced({
     required String query,
     int hitsPerPage = 50,
     String? languageCode,
   }) async =>
-      [];
+      searchCategories(
+        query: query,
+        hitsPerPage: hitsPerPage,
+        languageCode: languageCode,
+      );
 
   Future<List<CategorySuggestion>> debouncedSearchCategories({
     required String query,
