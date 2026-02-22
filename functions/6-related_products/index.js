@@ -265,7 +265,7 @@ async function searchTypesense(client, currentProductId, params) {
     query_by: 'productName',
     filter_by: params.filterBy,
     per_page: params.perPage || 20,
-    include_fields: 'id,category,subcategory,subsubcategory,gender,price,promotionScore',
+    include_fields: 'id,category,subcategory,subsubcategory,gender,price',
   });
 
   const hits = (searchResult.hits || []).map((h) => h.document);
@@ -289,7 +289,6 @@ function addProduct(map, hit, baseScore) {
   if (!existing) {
     map.set(hitId, {
       baseScore,
-      promotionScore: hit.promotionScore || 0,
       price: hit.price,
       matchCount: 1,
     });
@@ -302,7 +301,6 @@ function addProduct(map, hit, baseScore) {
 function calculateFinalScore(data, originalProduct) {
   let score = data.baseScore;
   score += data.matchCount * 10;
-  score += (data.promotionScore || 0) * 0.5;
 
   const priceDiff = Math.abs(data.price - originalProduct.price) / originalProduct.price;
   if (priceDiff < 0.2) score += 15;

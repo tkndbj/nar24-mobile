@@ -5,6 +5,7 @@ import '../../constants/all_in_one_category_data.dart';
 import '../../models/product.dart';
 import 'package:Nar24/models/mock_document_snapshot.dart';
 import 'package:Nar24/constants/brands.dart';
+import '../../utils/attribute_localization_utils.dart';
 
 class ShopDetailFilterScreen extends StatefulWidget {
   final MockDocumentSnapshot shopDoc;
@@ -17,6 +18,8 @@ class ShopDetailFilterScreen extends StatefulWidget {
   final double? initialMinPrice;
   final double? initialMaxPrice;
   final List<Product> allProducts;
+  final Map<String, List<Map<String, dynamic>>> availableSpecFacets;
+  final Map<String, List<String>>? initialSpecFilters;
 
   const ShopDetailFilterScreen({
     Key? key,
@@ -30,6 +33,8 @@ class ShopDetailFilterScreen extends StatefulWidget {
     this.initialMinPrice,
     this.initialMaxPrice,
     required this.allProducts,
+    this.availableSpecFacets = const {},
+    this.initialSpecFilters,
   }) : super(key: key);
 
   @override
@@ -47,6 +52,9 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
   double? _minPrice;
   double? _maxPrice;
 
+  // Dynamic spec filters
+  Map<String, List<String>> _selectedSpecFilters = {};
+
   // Expansion states
   bool _isGenderExpanded = false;
   bool _isBrandExpanded = false;
@@ -55,6 +63,7 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
   bool _isSizeExpanded = false;
   bool _isColorExpanded = false;
   bool _isPriceExpanded = false;
+  final Map<String, bool> _specFieldExpanded = {};
 
   // Shop categories
   List<String> _shopCategories = [];
@@ -134,6 +143,12 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
 
     _minPriceController.text = _minPrice?.toString() ?? '';
     _maxPriceController.text = _maxPrice?.toString() ?? '';
+
+    if (widget.initialSpecFilters != null) {
+      _selectedSpecFilters = widget.initialSpecFilters!.map(
+        (key, value) => MapEntry(key, List<String>.from(value)),
+      );
+    }
   }
 
   void _initializeAvailableOptions() {
@@ -277,6 +292,9 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
     count += _selectedSizes.length;
     count += _selectedColors.length;
     if (_minPrice != null || _maxPrice != null) count++;
+    for (final vals in _selectedSpecFilters.values) {
+      count += vals.length;
+    }
     return count;
   }
 
@@ -288,6 +306,7 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
       _selectedFits.clear();
       _selectedSizes.clear();
       _selectedColors.clear();
+      _selectedSpecFilters.clear();
       _minPrice = null;
       _maxPrice = null;
       _minPriceController.clear();
@@ -1155,6 +1174,135 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
                         ),
                       ],
                     ),
+
+                    // Dynamic Spec Filter Sections (from Typesense facets)
+                    ...widget.availableSpecFacets.entries.map((specEntry) {
+                      final fieldName = specEntry.key;
+                      final facetValues = specEntry.value;
+                      if (facetValues.isEmpty) return const SizedBox.shrink();
+
+                      final selectedForField =
+                          _selectedSpecFilters[fieldName] ?? [];
+                      final isExpanded =
+                          _specFieldExpanded[fieldName] ?? false;
+                      final sectionTitle =
+                          AttributeLocalizationUtils.getLocalizedAttributeTitle(
+                              fieldName, l10n);
+
+                      return Column(
+                        children: [
+                          Divider(
+                            color: Colors.grey[300],
+                            thickness: 1,
+                            height: 1,
+                          ),
+                          ExpansionTile(
+                            title: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(sectionTitle),
+                                if (selectedForField.isNotEmpty)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      '${selectedForField.length}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            trailing: Icon(
+                              isExpanded
+                                  ? Icons.expand_less
+                                  : Icons.expand_more,
+                              color: Colors.orange,
+                            ),
+                            onExpansionChanged: (expanded) {
+                              setState(() {
+                                _specFieldExpanded[fieldName] = expanded;
+                              });
+                            },
+                            children: [
+                              ListTile(
+                                title: Text(
+                                  l10n.clear,
+                                  style: const TextStyle(
+                                    fontStyle: FontStyle.italic,
+                                    color: Colors.orange,
+                                  ),
+                                ),
+                                onTap: () {
+                                  setState(() {
+                                    _selectedSpecFilters.remove(fieldName);
+                                  });
+                                },
+                                trailing: selectedForField.isNotEmpty
+                                    ? const Icon(Icons.clear,
+                                        color: Colors.orange)
+                                    : null,
+                              ),
+                              const Divider(height: 1),
+                              Container(
+                                height: facetValues.length > 8 ? 300 : null,
+                                child: ListView.builder(
+                                  shrinkWrap: facetValues.length <= 8,
+                                  physics: facetValues.length <= 8
+                                      ? const NeverScrollableScrollPhysics()
+                                      : null,
+                                  itemCount: facetValues.length,
+                                  itemBuilder: (context, index) {
+                                    final facet = facetValues[index];
+                                    final value = facet['value'] as String;
+                                    final count = facet['count'] as int;
+                                    final localizedName =
+                                        AttributeLocalizationUtils
+                                            .getLocalizedSingleValue(
+                                                fieldName, value, l10n);
+
+                                    return CheckboxListTile(
+                                      title: Text('$localizedName ($count)'),
+                                      value: selectedForField.contains(value),
+                                      onChanged: (selected) {
+                                        setState(() {
+                                          final list =
+                                              _selectedSpecFilters[fieldName] ??=
+                                                  [];
+                                          if (selected == true) {
+                                            if (!list.contains(value)) {
+                                              list.add(value);
+                                            }
+                                          } else {
+                                            list.remove(value);
+                                            if (list.isEmpty) {
+                                              _selectedSpecFilters
+                                                  .remove(fieldName);
+                                            }
+                                          }
+                                        });
+                                      },
+                                      activeColor: Colors.orange,
+                                      dense: true,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 16, vertical: 0),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      );
+                    }),
                   ],
                 ),
               ),
@@ -1182,6 +1330,7 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
                       'minPrice': _minPrice,
                       'maxPrice': _maxPrice,
                       'totalFilters': totalFilters,
+                      'specFilters': _selectedSpecFilters,
                     });
                   },
                   style: ElevatedButton.styleFrom(

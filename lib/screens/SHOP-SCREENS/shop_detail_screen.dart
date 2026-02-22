@@ -708,10 +708,28 @@ class _FilterSection extends StatelessWidget {
 
   const _FilterSection({required this.onDismissKeyboard});
 
+  String _localizedSortLabel(String option, AppLocalizations l10n) {
+    switch (option) {
+      case 'alphabetical':
+        return l10n.alphabetical;
+      case 'price_asc':
+        return l10n.priceLowToHigh;
+      case 'price_desc':
+        return l10n.priceHighToLow;
+      case 'date':
+      default:
+        return l10n.date;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final provider = context.watch<ShopProvider>();
+    final sortLabel = provider.sortOption != 'date'
+        ? _localizedSortLabel(provider.sortOption, l10n)
+        : l10n.sort;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -720,7 +738,7 @@ class _FilterSection extends StatelessWidget {
           Expanded(
             child: _FilterButton(
               icon: Icons.sort,
-              label: l10n.sort,
+              label: sortLabel,
               onPressed: () => _showSortOptions(context),
             ),
           ),
@@ -946,6 +964,8 @@ class _FilterButtonWithBadge extends StatelessWidget {
           initialMinPrice: provider.minPrice,
           initialMaxPrice: provider.maxPrice,
           allProducts: provider.allProducts,
+          availableSpecFacets: provider.specFacets,
+          initialSpecFilters: provider.dynamicSpecFilters,
         ),
         transitionsBuilder: (_, animation, __, child) {
           return SlideTransition(
@@ -959,6 +979,16 @@ class _FilterButtonWithBadge extends StatelessWidget {
       ),
     ).then((result) {
       if (result != null) {
+        // Parse spec filters from result
+        final rawSpecFilters = result['specFilters'];
+        final specFilters = <String, List<String>>{};
+        if (rawSpecFilters is Map) {
+          for (final entry in rawSpecFilters.entries) {
+            specFilters[entry.key as String] =
+                List<String>.from(entry.value as List);
+          }
+        }
+
         provider.updateFilters(
           gender: result['gender'],
           brands: List<String>.from(result['brands'] ?? []),
@@ -969,6 +999,7 @@ class _FilterButtonWithBadge extends StatelessWidget {
           minPrice: result['minPrice'],
           maxPrice: result['maxPrice'],
           totalFilters: result['totalFilters'] ?? 0,
+          specFilters: specFilters,
         );
       }
     });

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -377,6 +378,16 @@ class _MarketScreenDynamicFiltersScreenState
   late final ServerSideFilterDebouncer _serverDebouncer;
   late final ServerSideResultCache _resultCache;
 
+  // Sort state
+  String _selectedSortOption = 'None';
+  final List<String> _sortOptions = [
+    'None',
+    'Alphabetical',
+    'Date',
+    'Price Low to High',
+    'Price High to Low',
+  ];
+
   // Filter state
   List<String> _selectedBrands = [];
   List<String> _selectedColors = [];
@@ -438,8 +449,8 @@ class _MarketScreenDynamicFiltersScreenState
       });
     }
 
-    // Use Typesense when spec filters are active
-    if (_dynamicSpecFilters.isNotEmpty) {
+    // Use Typesense when spec filters or user sort are active
+    if (_useTypesense) {
       try {
         _typesensePage = 0;
         final products = await _fetchFromTypesense(page: 0);
@@ -582,8 +593,28 @@ class _MarketScreenDynamicFiltersScreenState
     }
   }
 
-  /// Convert the DynamicFilter's Firestore sort fields to a Typesense sort code.
+  /// Whether to use Typesense instead of Firestore.
+  /// Typesense handles arbitrary filter+sort combos without composite indexes.
+  bool get _useTypesense =>
+      _dynamicSpecFilters.isNotEmpty || _selectedSortOption != 'None';
+
+  /// Convert sort to a Typesense sort code.
+  /// User-selected sort takes priority over the DynamicFilter's configured sort.
   String _typesenseSortCode() {
+    if (_selectedSortOption != 'None') {
+      switch (_selectedSortOption) {
+        case 'Alphabetical':
+          return 'alphabetical';
+        case 'Date':
+          return 'date';
+        case 'Price Low to High':
+          return 'price_asc';
+        case 'Price High to Low':
+          return 'price_desc';
+        default:
+          return 'date';
+      }
+    }
     final sortBy = widget.dynamicFilter.sortBy;
     final desc = widget.dynamicFilter.sortOrder == 'desc';
     switch (sortBy) {
@@ -655,7 +686,7 @@ class _MarketScreenDynamicFiltersScreenState
     if (_isLoadingMore || !_hasMore) return;
 
     // Typesense pagination
-    if (_dynamicSpecFilters.isNotEmpty) {
+    if (_useTypesense) {
       setState(() => _isLoadingMore = true);
       try {
         _typesensePage++;
@@ -741,6 +772,83 @@ class _MarketScreenDynamicFiltersScreenState
       if (!mounted) return;
       _loadProductsFromServer(isRefresh: true);
     });
+  }
+
+  String _localizedSortOption(String option, AppLocalizations l10n) {
+    switch (option) {
+      case 'None':
+        return l10n.none;
+      case 'Alphabetical':
+        return l10n.alphabetical;
+      case 'Date':
+        return l10n.date;
+      case 'Price Low to High':
+        return l10n.priceLowToHigh;
+      case 'Price High to Low':
+        return l10n.priceHighToLow;
+      default:
+        return option;
+    }
+  }
+
+  void _showSortOptionsModal() {
+    if (!mounted) return;
+
+    final l10n = AppLocalizations.of(context);
+    final textColor = Theme.of(context).brightness == Brightness.dark
+        ? Colors.white
+        : Colors.black;
+
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (_) => CupertinoActionSheet(
+        title: Text(
+          l10n.sortBy,
+          style: TextStyle(
+            color: textColor,
+            fontFamily: 'Figtree',
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        actions: _sortOptions.map((option) {
+          return CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _applySortOption(option);
+            },
+            child: Text(
+              _localizedSortOption(option, l10n),
+              style: TextStyle(
+                color: textColor,
+                fontFamily: 'Figtree',
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          );
+        }).toList(),
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(context),
+          child: Text(
+            l10n.cancel,
+            style: TextStyle(
+              color: textColor,
+              fontFamily: 'Figtree',
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _applySortOption(String option) {
+    if (!mounted) return;
+
+    setState(() => _selectedSortOption = option);
+    _loadProductsFromServer(isRefresh: true);
   }
 
   // Show filter screen
@@ -916,40 +1024,6 @@ class _MarketScreenDynamicFiltersScreenState
           ),
         ),
         actions: [
-          // Filter button
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
-            child: GestureDetector(
-              onTap: _showFilterScreen,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _hasActiveFilters ? Colors.orange : Colors.transparent,
-                  border: Border.all(
-                    color: _hasActiveFilters
-                        ? Colors.orange
-                        : (isDark ? Colors.white : Colors.black),
-                    width: 1,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _hasActiveFilters
-                      ? '${l10n.filter ?? "Filter"} ($_activeFiltersCount)'
-                      : (l10n.filter ?? "Filter"),
-                  style: TextStyle(
-                    color: _hasActiveFilters
-                        ? Colors.white
-                        : (isDark ? Colors.white : Colors.black),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ),
           if (widget.dynamicFilter.icon != null &&
               widget.dynamicFilter.icon!.isNotEmpty)
             Padding(
@@ -963,7 +1037,91 @@ class _MarketScreenDynamicFiltersScreenState
             ),
         ],
       ),
-      body: _buildBody(l10n, isDark),
+      body: Column(
+        children: [
+          // Header row with filter + sort buttons
+          _buildHeaderRow(l10n, isDark),
+          // Body content
+          Expanded(child: _buildBody(l10n, isDark)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderRow(AppLocalizations l10n, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      child: Row(
+        children: [
+          const Spacer(),
+          // Filter button
+          GestureDetector(
+            onTap: _showFilterScreen,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color:
+                    _hasActiveFilters ? Colors.orange : Colors.transparent,
+                border: Border.all(
+                  color: _hasActiveFilters
+                      ? Colors.orange
+                      : Colors.grey.shade300,
+                  width: 1,
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.tune,
+                    size: 16,
+                    color: _hasActiveFilters
+                        ? Colors.white
+                        : (isDark ? Colors.white : Colors.black),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _hasActiveFilters
+                        ? '${l10n.filter} ($_activeFiltersCount)'
+                        : l10n.filter,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: _hasActiveFilters
+                          ? Colors.white
+                          : (isDark ? Colors.white : Colors.black),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Sort button
+          GestureDetector(
+            onTap: _showSortOptionsModal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_selectedSortOption != 'None')
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4.0),
+                    child: Text(
+                      _localizedSortOption(_selectedSortOption, l10n),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                  ),
+                const Icon(CupertinoIcons.sort_down, size: 24),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

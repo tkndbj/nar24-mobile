@@ -109,6 +109,10 @@ class ShopProvider with ChangeNotifier {
   String? _selectedSubcategory;
   String? _selectedColorForDisplay;
 
+  // Dynamic spec filters (Typesense facets)
+  Map<String, List<Map<String, dynamic>>> _specFacets = {};
+  Map<String, List<String>> _dynamicSpecFilters = {};
+
   // Shop Detail Screen state
   MockDocumentSnapshot? _shopDoc;
   List<Map<String, dynamic>> _reviews = [];
@@ -188,6 +192,8 @@ class ShopProvider with ChangeNotifier {
   List<String> get selectedColors => _selectedColors;
   String? get selectedSubcategory => _selectedSubcategory;
   String? get selectedColorForDisplay => _selectedColorForDisplay;
+  Map<String, List<Map<String, dynamic>>> get specFacets => _specFacets;
+  Map<String, List<String>> get dynamicSpecFilters => _dynamicSpecFilters;
 
   List<QueryDocumentSnapshot> get shops => _shops;
   bool get hasMore => _hasMore;
@@ -579,6 +585,8 @@ class ShopProvider with ChangeNotifier {
     _selectedBrands = [];
     _minPrice = null;
     _maxPrice = null;
+    _specFacets = {};
+    _dynamicSpecFilters = {};
 
     _lastProductDocument = null;
     _hasMoreProducts = true;
@@ -600,6 +608,7 @@ class ShopProvider with ChangeNotifier {
       _fetchProductsWithTimeout(),
       _fetchReviewsWithTimeout(),
       fetchCollections(),
+      _fetchSpecFacets(),
     ];
 
     await Future.wait(futures, eagerError: false);
@@ -616,6 +625,7 @@ class ShopProvider with ChangeNotifier {
           _fetchProductsWithTimeout(),
           _fetchReviewsWithTimeout(),
           fetchCollections(),
+          _fetchSpecFacets(),
         ];
 
         await Future.wait(futures, eagerError: false);
@@ -1404,7 +1414,141 @@ class ShopProvider with ChangeNotifier {
     }
   }
 
+  bool _shouldUseTypesense() {
+    if (_sortOption != 'date') return true;
+    if (_dynamicSpecFilters.values.any((v) => v.isNotEmpty)) return true;
+    return false;
+  }
+
+  Future<void> _fetchSpecFacets() async {
+    if (_shopDoc == null) return;
+    try {
+      final shopId = _shopDoc!.id;
+      final facets = await TypeSenseServiceManager.instance.shopService
+          .fetchSpecFacets(
+        indexName: 'shop_products',
+        additionalFilterBy: 'shopId:=$shopId',
+      );
+      _specFacets = facets;
+      _safeNotifyListeners();
+    } catch (e) {
+      debugPrint('Error fetching spec facets for shop: $e');
+    }
+  }
+
+  Future<void> _fetchProductsFromTypesense({bool loadMore = false}) async {
+    if (_shopDoc == null) return;
+
+    if (loadMore) {
+      if (!_hasMoreProducts || _isLoadingMoreProducts) return;
+      _isLoadingMoreProducts = true;
+    } else {
+      _hasMoreProducts = true;
+      _allFetchedProducts = [];
+      _lastProductDocument = null;
+      isLoadingProductsNotifier.value = true;
+    }
+    _safeNotifyListeners();
+
+    try {
+      final shopId = _shopDoc!.id;
+
+      // Build facet filters
+      final facetFilters = <List<String>>[];
+      if (_selectedGender != null) {
+        facetFilters.add(['gender:$_selectedGender']);
+      }
+      if (_selectedSubcategory != null) {
+        facetFilters.add(['subcategory:$_selectedSubcategory']);
+      }
+      if (_selectedBrands.isNotEmpty) {
+        facetFilters.add(
+            _selectedBrands.map((b) => 'brandModel:$b').toList());
+      }
+      if (_selectedTypes.isNotEmpty) {
+        facetFilters.add(_selectedTypes
+            .map((t) => 'attributes.clothingType:$t')
+            .toList());
+      }
+      if (_selectedFits.isNotEmpty) {
+        facetFilters.add(
+            _selectedFits.map((f) => 'attributes.clothingFit:$f').toList());
+      }
+      if (_selectedColors.isNotEmpty) {
+        facetFilters.add(
+            _selectedColors.map((c) => 'colorImages.$c:*').toList());
+      }
+
+      // Dynamic spec filters
+      for (final entry in _dynamicSpecFilters.entries) {
+        if (entry.value.isNotEmpty) {
+          facetFilters.add(
+              entry.value.map((v) => '${entry.key}:$v').toList());
+        }
+      }
+
+      // Numeric filters
+      final numericFilters = <String>[];
+      if (_minPrice != null) numericFilters.add('price >= $_minPrice');
+      if (_maxPrice != null) numericFilters.add('price <= $_maxPrice');
+
+      final page = loadMore
+          ? (_allFetchedProducts.length / _productsLimit).floor()
+          : 0;
+
+      final result = await TypeSenseServiceManager.instance.shopService
+          .searchIdsWithFacets(
+        indexName: 'shop_products',
+        query: _searchQuery.isNotEmpty ? _searchQuery : '',
+        page: page,
+        hitsPerPage: _productsLimit,
+        facetFilters: facetFilters.isNotEmpty ? facetFilters : null,
+        numericFilters: numericFilters.isNotEmpty ? numericFilters : null,
+        sortOption: _sortOption,
+        additionalFilterBy: 'shopId:=$shopId',
+      );
+
+      final newProducts = result.hits
+          .map((hit) => Product.fromTypeSense(hit))
+          .toList();
+
+      if (newProducts.length < _productsLimit) {
+        _hasMoreProducts = false;
+      }
+
+      if (loadMore) {
+        _allFetchedProducts.addAll(newProducts);
+      } else {
+        _allFetchedProducts = newProducts;
+      }
+
+      _unfilteredProducts = List.from(_allFetchedProducts);
+      // No need for local _applyAllFilters — Typesense already filtered
+      allProductsNotifier.value = List.from(_allFetchedProducts);
+      dealProductsNotifier.value = _allFetchedProducts
+          .where((p) => (p.discountPercentage ?? 0) > 0)
+          .toList();
+      bestSellersNotifier.value = List.from(_allFetchedProducts)
+        ..sort(
+            (a, b) => (b.purchaseCount ?? 0).compareTo(a.purchaseCount ?? 0));
+    } catch (e) {
+      debugPrint('Error fetching products from Typesense: $e');
+    } finally {
+      if (loadMore) {
+        _isLoadingMoreProducts = false;
+      } else {
+        isLoadingProductsNotifier.value = false;
+      }
+      _safeNotifyListeners();
+    }
+  }
+
   Future<void> fetchProducts({bool loadMore = false}) async {
+    // Route to Typesense when sort or spec filters are active
+    if (_shouldUseTypesense()) {
+      return _fetchProductsFromTypesense(loadMore: loadMore);
+    }
+
     if (_shopDoc == null) {
       allProductsNotifier.value = [];
       dealProductsNotifier.value = [];
@@ -1787,6 +1931,7 @@ class ShopProvider with ChangeNotifier {
     _maxPrice = null;
     _selectedSubcategory = null;
     _selectedColorForDisplay = null;
+    _dynamicSpecFilters = {};
     totalFiltersAppliedNotifier.value = 0;
 
     // Clear search
@@ -1913,6 +2058,7 @@ class ShopProvider with ChangeNotifier {
     double? minPrice,
     double? maxPrice,
     int totalFilters = 0,
+    Map<String, List<String>> specFilters = const {},
   }) {
     _selectedGender = gender;
     _selectedBrands = brands;
@@ -1922,8 +2068,15 @@ class ShopProvider with ChangeNotifier {
     _selectedColors = colors;
     _minPrice = minPrice;
     _maxPrice = maxPrice;
+    _dynamicSpecFilters = Map.from(specFilters);
     _selectedColorForDisplay = colors.isNotEmpty ? colors.first : null;
-    totalFiltersAppliedNotifier.value = totalFilters;
+
+    // Count includes spec filter selections
+    int specCount = 0;
+    for (final vals in _dynamicSpecFilters.values) {
+      specCount += vals.length;
+    }
+    totalFiltersAppliedNotifier.value = totalFilters + specCount;
 
     // If there's an active search, re-run it with new filters
     if (_searchQuery.isNotEmpty) {

@@ -637,6 +637,8 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
                       ),
                       // Filter button

@@ -510,34 +510,40 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 4.0, horizontal: 8.0),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                            colors: [Colors.orange, Colors.pink]),
-                        borderRadius: BorderRadius.circular(8.0),
-                      ),
-                      child: const Text(
-                        'Nar24',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
+                Flexible(
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 4.0, horizontal: 8.0),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                              colors: [Colors.orange, Colors.pink]),
+                          borderRadius: BorderRadius.circular(8.0),
+                        ),
+                        child: const Text(
+                          'Nar24',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8.0),
-                    Text(
-                      displayText,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                      const SizedBox(width: 8.0),
+                      Flexible(
+                        child: Text(
+                          displayText,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 Row(
                   children: [

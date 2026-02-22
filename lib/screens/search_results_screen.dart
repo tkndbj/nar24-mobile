@@ -32,15 +32,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
   // Core dependencies
   late final MarketProvider _marketProvider;
 
-  // State management
-  final List<String> _filterTypes = [
-    '',
-    'deals',
-  ];
-
-  String _currentFilter = '';
-  int _currentFilterIndex = 0;
-
   // Pagination state
   final List<ProductSummary> _allSearchResults = [];
   int _currentPage = 0;
@@ -66,8 +57,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
   double? _maxPrice;
 
   // Controllers
-  late final PageController _pageController;
-  final ScrollController _pillScroll = ScrollController();
   final ScrollController _mainScrollController = ScrollController();
 
   // Debouncing
@@ -79,8 +68,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
   @override
   void initState() {
     super.initState();
-    _pageController = PageController();
-    _currentFilter = _filterTypes[0];
     _setupScrollListener();
   }
 
@@ -113,8 +100,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
   @override
   void dispose() {
     _debounce?.cancel();
-    _pageController.dispose();
-    _pillScroll.dispose();
     _mainScrollController.dispose();
     super.dispose();
   }
@@ -365,38 +350,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
   // FILTER / SORT UI
   // ──────────────────────────────────────────────────────────────────────────
 
-  void _onFilterTap(String filterKey, int index) {
-    if (filterKey == _currentFilter) return;
-    if (!mounted) return;
-
-    setState(() {
-      _currentFilter = filterKey;
-      _currentFilterIndex = index;
-    });
-
-    final provider = context.read<SearchResultsProvider>();
-    provider.setFilter(filterKey.isEmpty ? null : filterKey);
-
-    _pageController.jumpToPage(index);
-    _scrollFilterBar(index);
-  }
-
-  void _scrollFilterBar(int index) {
-    if (!_pillScroll.hasClients) return;
-    if (_pillScroll.positions.length != 1) return;
-
-    const pillWidth = 80.0;
-    final screenW = MediaQuery.of(context).size.width;
-    final offset = index * pillWidth - screenW / 2 + pillWidth / 2;
-
-    final position = _pillScroll.position;
-    _pillScroll.animateTo(
-      offset.clamp(0.0, position.maxScrollExtent),
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
-  }
-
   void _onSortChanged(String? sortOption) {
     if (sortOption == null || sortOption == _sortOption) return;
     if (!mounted) return;
@@ -428,75 +381,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
     }
   }
 
-  String _localizedFilterLabel(String key, AppLocalizations l) {
-    switch (key) {
-      case 'deals':
-        return l.deals;
-      case 'boosted':
-        return l.boosted;
-      case 'trending':
-        return l.trending;
-      case 'fiveStar':
-        return l.fiveStar;
-      case 'bestSellers':
-        return l.bestSellers;
-      default:
-        return l.all;
-    }
-  }
-
-  Widget _buildFilterBar(AppLocalizations l10n) {
-    return SizedBox(
-      height: 30,
-      child: ListView.separated(
-        controller: _pillScroll,
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        itemCount: _filterTypes.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 4),
-        itemBuilder: (ctx, i) {
-          final key = _filterTypes[i];
-          final isAll = key.isEmpty;
-          final label = isAll ? l10n.all : _localizedFilterLabel(key, l10n);
-          final isSelected = key == _currentFilter;
-
-          return InkWell(
-            borderRadius: BorderRadius.circular(30),
-            onTap: () => _onFilterTap(key, i),
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 2,
-              ),
-              decoration: BoxDecoration(
-                color: isSelected ? Colors.orange : Colors.transparent,
-                border: Border.all(
-                  color: isSelected ? Colors.orange : Colors.grey.shade300,
-                  width: 1,
-                ),
-                borderRadius: BorderRadius.circular(30),
-              ),
-              child: Center(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isSelected
-                        ? Colors.white
-                        : (Theme.of(context).brightness == Brightness.dark
-                            ? Colors.white
-                            : Colors.black),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   Widget _buildHeaderRow(AppLocalizations l10n) {
     final provider = context.read<SearchResultsProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -519,9 +403,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
       padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
       child: Row(
         children: [
-          // Filter bar pills
-          Expanded(child: _buildFilterBar(l10n)),
-          const SizedBox(width: 8),
+          const Spacer(),
           // Filter button
           GestureDetector(
             onTap: () async {
@@ -539,8 +421,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
               }
             },
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: hasFilters ? Colors.orange : Colors.transparent,
                 border: Border.all(
@@ -561,9 +442,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    hasFilters
-                        ? '${l10n.filter} ($filterCount)'
-                        : l10n.filter,
+                    hasFilters ? '${l10n.filter} ($filterCount)' : l10n.filter,
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -574,6 +453,49 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
                   ),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Sort button
+          GestureDetector(
+            onTap: () {
+              showCupertinoModalPopup(
+                context: context,
+                builder: (ctx) => CupertinoActionSheet(
+                  title: Text(l10n.sortBy),
+                  actions: _sortOptions.map((opt) {
+                    return CupertinoActionSheetAction(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _onSortChanged(opt);
+                      },
+                      child: Text(_localizedSortLabel(opt, l10n)),
+                    );
+                  }).toList(),
+                  cancelButton: CupertinoActionSheetAction(
+                    onPressed: () => Navigator.pop(ctx),
+                    isDefaultAction: true,
+                    child: Text(l10n.cancel),
+                  ),
+                ),
+              );
+            },
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_sortOption != 'None')
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4.0),
+                    child: Text(
+                      _localizedSortLabel(_sortOption, l10n),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                  ),
+                const Icon(CupertinoIcons.sort_down, size: 24),
+              ],
             ),
           ),
         ],
@@ -600,8 +522,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
             children: [
               Row(
                 children: [
-                  const Icon(Icons.filter_list,
-                      color: Colors.orange, size: 16),
+                  const Icon(Icons.filter_list, color: Colors.orange, size: 16),
                   const SizedBox(width: 8),
                   Text(
                     '${l10n.activeFilters ?? "Active Filters"} (${provider.activeFiltersCount})',
@@ -632,12 +553,10 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
                 runSpacing: 4,
                 children: [
                   ...provider.dynamicBrands.map((brand) =>
-                      _buildFilterChip(
-                          '${l10n.brand ?? "Brand"}: $brand', () {
+                      _buildFilterChip('${l10n.brand ?? "Brand"}: $brand', () {
                         _removeSingleDynamicFilter(brand: brand);
                       })),
-                  ...provider.dynamicColors.map((color) =>
-                      _buildFilterChip(
+                  ...provider.dynamicColors.map((color) => _buildFilterChip(
                           '${l10n.color ?? "Color"}: ${ColorLocalization.localizeColorName(color, l10n)}',
                           () {
                         _removeSingleDynamicFilter(color: color);
@@ -645,11 +564,13 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
                   // Generic spec filter chips
                   ...provider.dynamicSpecFilters.entries.expand((entry) {
                     final fieldName = entry.key;
-                    final fieldTitle = AttributeLocalizationUtils
-                        .getLocalizedAttributeTitle(fieldName, l10n);
+                    final fieldTitle =
+                        AttributeLocalizationUtils.getLocalizedAttributeTitle(
+                            fieldName, l10n);
                     return entry.value.map((value) {
-                      final localizedValue = AttributeLocalizationUtils
-                          .getLocalizedSingleValue(fieldName, value, l10n);
+                      final localizedValue =
+                          AttributeLocalizationUtils.getLocalizedSingleValue(
+                              fieldName, value, l10n);
                       return _buildFilterChip(
                         '$fieldTitle: $localizedValue',
                         () {
@@ -854,37 +775,11 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         leading: const BackButton(),
         title: Text(l10n.searchResults),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.sort),
-            onPressed: () {
-              showCupertinoModalPopup(
-                context: context,
-                builder: (context) => CupertinoActionSheet(
-                  title: Text(l10n.sortBy),
-                  actions: _sortOptions.map((opt) {
-                    return CupertinoActionSheetAction(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _onSortChanged(opt);
-                      },
-                      child: Text(_localizedSortLabel(opt, l10n)),
-                    );
-                  }).toList(),
-                  cancelButton: CupertinoActionSheetAction(
-                    onPressed: () => Navigator.pop(context),
-                    isDefaultAction: true,
-                    child: Text(l10n.cancel),
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
+        actions: const [],
       ),
       body: Column(
         children: [
-          // Header row with filter pills + filter button
+          // Header row with filter + sort buttons
           _buildHeaderRow(l10n),
 
           // Active filter chips
@@ -892,30 +787,18 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
 
           // Product list
           Expanded(
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: _filterTypes.length,
-              onPageChanged: (i) {
-                final key = _filterTypes[i];
-                if (key != _currentFilter && mounted) {
-                  _onFilterTap(key, i);
+            child: Consumer<SearchResultsProvider>(
+              builder: (context, provider, child) {
+                if (_isLoading && provider.hasNoData) {
+                  return _buildLoadingShimmer(isDarkMode);
                 }
-              },
-              itemBuilder: (_, idx) {
-                return Consumer<SearchResultsProvider>(
-                  builder: (context, provider, child) {
-                    if (_isLoading && provider.hasNoData) {
-                      return _buildLoadingShimmer(isDarkMode);
-                    }
-                    if (_hasError) {
-                      return _buildErrorState(l10n);
-                    }
-                    if (provider.isEmpty && !_isLoading) {
-                      return _buildEmptyState(l10n);
-                    }
-                    return _buildProductsList(provider);
-                  },
-                );
+                if (_hasError) {
+                  return _buildErrorState(l10n);
+                }
+                if (provider.isEmpty && !_isLoading) {
+                  return _buildEmptyState(l10n);
+                }
+                return _buildProductsList(provider);
               },
             ),
           ),
