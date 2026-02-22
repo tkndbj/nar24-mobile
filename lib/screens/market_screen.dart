@@ -15,7 +15,7 @@ import '../widgets/market_banner.dart';
 import '../widgets/market_app_bar.dart';
 import '../widgets/product_card.dart';
 import '../widgets/product_list_sliver.dart';
-import '../widgets/market_shimmer_card.dart';
+import 'package:shimmer/shimmer.dart';
 import '../models/product_summary.dart';
 import '../models/dynamic_filter.dart';
 import 'package:flutter/foundation.dart';
@@ -2011,6 +2011,14 @@ Future<void> _initializeLayoutService() async {
 
   /// Build lightweight shimmer placeholder for loading state
   Widget _buildShimmerPlaceholder() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDarkMode
+        ? const Color.fromARGB(255, 30, 28, 44)
+        : Colors.grey[300]!;
+    final highlightColor = isDarkMode
+        ? const Color.fromARGB(255, 33, 31, 49)
+        : Colors.grey[100]!;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 24.0),
       child: Column(
@@ -2024,40 +2032,31 @@ Future<void> _initializeLayoutService() async {
                 // Section header shimmer
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Builder(
-                    builder: (context) {
-                      final isDarkMode =
-                          Theme.of(context).brightness == Brightness.dark;
-                      final shimmerColor = isDarkMode
-                          ? const Color.fromARGB(255, 30, 28, 44)
-                          : Colors.grey[300]!;
-                      return Container(
-                        height: 20,
-                        width: 150,
-                        decoration: BoxDecoration(
-                          color: shimmerColor,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      );
-                    },
+                  child: Shimmer.fromColors(
+                    baseColor: baseColor,
+                    highlightColor: highlightColor,
+                    child: Container(
+                      height: 20,
+                      width: 150,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
-                // Horizontal product shimmer list
-                SafeArea(
-                  top: false,
-                  bottom: false,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    physics: const NeverScrollableScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: List.generate(
-                        3,
-                        (index) => const Padding(
-                          padding: EdgeInsets.only(right: 8.0),
-                          child: MarketShimmerCard(),
-                        ),
+                // Product shimmer (full-width, like dynamic_market)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Shimmer.fromColors(
+                    baseColor: baseColor,
+                    highlightColor: highlightColor,
+                    child: Container(
+                      height: 160,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                   ),

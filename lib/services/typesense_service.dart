@@ -165,7 +165,7 @@ class TypeSenseService {
     );
   }
 
-  // ── Public API (identical signatures to TypeSenseService) ───────────────────
+  // ── Public API ─────────────────────────────────────────────────────────────
 
   Future<List<ProductSummary>> searchProducts({
     required String query,
@@ -310,6 +310,64 @@ class TypeSenseService {
     }
   }
 
+  // ── Query Suggestions / Autocomplete ──────────────────────────────────────
+  //
+  // Returns a deduplicated list of product name strings that can be shown
+  // as autocomplete chips while the user is typing. Uses prefix matching
+  // and only requests the `productName` field to keep the response tiny
+  // and latency low (typically < 100 ms on a warm connection).
+  //
+  // Deduplication is case-insensitive so "Apple" and "apple" collapse.
+  // Results are capped at [hitsPerPage] unique names.
+  Future<List<String>> searchQuerySuggestions({
+    required String query,
+    int hitsPerPage = 5,
+  }) async {
+    if (query.trim().isEmpty) return [];
+
+    try {
+      final uri = _searchUri(mainIndexName);
+      final params = <String, String>{
+        'q': query.trim(),
+        'query_by': 'productName',
+        'per_page': (hitsPerPage * 2).toString(), // over-fetch to allow dedup
+        'prefix': 'true',
+        'include_fields': 'productName',
+        // No sort needed – relevance order is fine for autocomplete
+      };
+
+      final response = await http
+          .get(uri.replace(queryParameters: params), headers: _headers)
+          .timeout(const Duration(seconds: 3));
+
+      if (response.statusCode != 200) return [];
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final hits = (data['hits'] as List?) ?? [];
+
+      final seen = <String>{};
+      final results = <String>[];
+
+      for (final h in hits) {
+        if (results.length >= hitsPerPage) break;
+        final doc =
+            (h as Map<String, dynamic>)['document'] as Map<String, dynamic>?;
+        final name = doc?['productName'] as String?;
+        if (name == null || name.trim().isEmpty) continue;
+        final normalised = name.trim().toLowerCase();
+        if (seen.add(normalised)) {
+          results.add(name.trim());
+        }
+      }
+
+      return results;
+    } catch (e) {
+      // Autocomplete is best-effort; never surface errors to the user.
+      if (kDebugMode) debugPrint('Typesense searchQuerySuggestions error: $e');
+      return [];
+    }
+  }
+
   Future<List<Map<String, dynamic>>> searchOrdersInTypeSense({
     required String query,
     required String userId,
@@ -394,7 +452,6 @@ class TypeSenseService {
   }) async {
     final uri = _searchUri(indexName);
 
-    // Convert facetFilters → Typesense filter_by
     final filterParts = <String>[];
 
     if (additionalFilterBy != null && additionalFilterBy.isNotEmpty) {
@@ -425,8 +482,6 @@ class TypeSenseService {
 
     if (numericFilters != null) {
       for (final nf in numericFilters) {
-        // "price >= 100"  →  "price:>=100"
-        // "price <= 500"  →  "price:<=500"
         final converted = nf
             .replaceAllMapped(
               RegExp(r'(\w+)\s*(>=|<=|>|<|=)\s*(\S+)'),
@@ -444,13 +499,12 @@ class TypeSenseService {
       'sort_by': _sortBy(sortOption),
       'per_page': hitsPerPage.toString(),
       'page': (page + 1).toString(),
-      'include_fields':
-          'id,productName,price,originalPrice,discountPercentage,brandModel,'
-              'category,subcategory,subsubcategory,gender,availableColors,colorImagesJson,colorQuantitiesJson,'
-              'shopId,ownerId,userId,promotionScore,createdAt,imageUrls,'
-              'sellerName,condition,currency,quantity,averageRating,reviewCount,'
-              'isBoosted,isFeatured,purchaseCount,bestSellerRank,deliveryOption,paused,'
-              'bundleIds,videoUrl,campaignName,discountThreshold,bulkDiscountPercentage',
+      'include_fields': 'id,productName,price,originalPrice,discountPercentage,brandModel,'
+          'category,subcategory,subsubcategory,gender,availableColors,colorImagesJson,colorQuantitiesJson,'
+          'shopId,ownerId,userId,promotionScore,createdAt,imageUrls,'
+          'sellerName,condition,currency,quantity,averageRating,reviewCount,'
+          'isBoosted,isFeatured,purchaseCount,bestSellerRank,deliveryOption,paused,'
+          'bundleIds,videoUrl,campaignName,discountThreshold,bulkDiscountPercentage',
     };
 
     if (filterParts.isNotEmpty) {
@@ -545,7 +599,7 @@ class TypeSenseService {
     return completer.future;
   }
 
-  // ── Firestore document fetching (unchanged logic) ─────────────────────────
+  // ── Firestore document fetching ───────────────────────────────────────────
 
   Future<List<DocumentSnapshot>> fetchDocumentSnapshotsFromTypeSenseResults(
       List<Map<String, dynamic>> results) async {
@@ -584,17 +638,12 @@ class TypeSenseService {
     return docs;
   }
 
-  // ── Facet queries ────────────────────────────────────────────────────────
+  // ── Facet queries ─────────────────────────────────────────────────────────
 
-  /// All product spec fields that support faceted filtering.
   static const String _specFacetFields =
       'productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
       'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes';
 
-  /// Fetches spec facets for a given category context.
-  /// Returns a map of facet field → list of {value, count} entries.
-  /// Only fields with actual data are returned.
-  /// Uses per_page=0 so no product documents are transferred — only facet counts.
   Future<Map<String, List<Map<String, dynamic>>>> fetchSpecFacets({
     required String indexName,
     String query = '*',
@@ -603,7 +652,6 @@ class TypeSenseService {
   }) async {
     final uri = _searchUri(indexName);
 
-    // Build filter_by from facetFilters (same logic as searchIdsWithFacets)
     final filterParts = <String>[];
     if (additionalFilterBy != null && additionalFilterBy.isNotEmpty) {
       filterParts.add(additionalFilterBy);
@@ -616,8 +664,7 @@ class TypeSenseService {
               final colon = f.indexOf(':');
               if (colon < 0) return null;
               final field = f.substring(0, colon).trim();
-              final value =
-                  f.substring(colon + 1).trim().replaceAll('"', '');
+              final value = f.substring(colon + 1).trim().replaceAll('"', '');
               return '$field:=$value';
             })
             .whereType<String>()

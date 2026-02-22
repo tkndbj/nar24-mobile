@@ -31,6 +31,12 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
   ScrollController? _scrollController;
   static const double _loadMoreThreshold = 200.0;
 
+  // ── Query change tracking ─────────────────────────────────────────────────
+  // `buildSuggestions` is called by the framework on every keystroke.
+  // We track the last notified query so we only call `updateTerm` when
+  // the query actually changes, avoiding re-entrant notifyListeners calls.
+  String _lastNotifiedQuery = '';
+
   MarketSearchDelegate({
     required this.marketProv,
     required this.historyProv,
@@ -56,7 +62,6 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
     final maxScroll = _scrollController!.position.maxScrollExtent;
     final currentScroll = _scrollController!.position.pixels;
 
-    // Check if we're near the bottom
     if (maxScroll - currentScroll <= _loadMoreThreshold) {
       final searchProvider =
           Provider.of<SearchProvider>(context, listen: false);
@@ -104,7 +109,6 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
     try {
       final searchProv = Provider.of<SearchProvider>(context, listen: false);
       if (searchProv.mounted) {
-        // Check if not disposed
         searchProv.clear();
       }
     } catch (e) {
@@ -142,12 +146,29 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
     }
   }
 
+  // ── buildSuggestions ──────────────────────────────────────────────────────
+  //
+  // This is the core fix: `buildSuggestions` is called by the framework
+  // every time the query changes, but the old code never forwarded the new
+  // query to `SearchProvider.updateTerm`. That meant Typesense was never
+  // queried while the user was typing.
+  //
+  // We schedule the `updateTerm` call in a post-frame callback to stay
+  // outside the build phase and avoid "setState called during build" errors.
   @override
   Widget buildSuggestions(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       historyProv.ensureLoaded();
+
+      // Only forward when the query actually changed.
+      if (query != _lastNotifiedQuery) {
+        _lastNotifiedQuery = query;
+        searchProv.updateTerm(query, l10n: l10n);
+      }
     });
+
     return Listener(
       onPointerDown: (_) => _dismissKeyboard(context),
       behavior: HitTestBehavior.translucent,
@@ -156,7 +177,7 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
         child: Column(
           children: [
             _buildNetworkStatusBanner(context),
-            // Firestore fallback mode banner - always visible
+            // Firestore fallback mode banner
             if (SearchConfigService.instance.useFirestore)
               Padding(
                 padding:
@@ -201,7 +222,7 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
                   ),
                 ),
               ),
-            // Dynamic filters section - ALWAYS at top
+            // Dynamic filters section – always at top
             _buildDynamicFiltersSection(context, isDark),
             Expanded(
               child: Consumer<SearchProvider>(
@@ -217,17 +238,17 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
     );
   }
 
-  /// Build suggestions content based on current state
+  // ── Suggestions content ───────────────────────────────────────────────────
+
   Widget _buildSuggestionsContent(
       BuildContext context, bool isDark, SearchProvider searchProvider) {
-    // 1. Empty query = show history
+    // 1. Empty query → show history
     if (query.trim().isEmpty) {
       if (kDebugMode) {
         debugPrint('🔍 SearchDelegate: Empty query, showing history');
       }
       return Consumer<SearchHistoryProvider>(
         builder: (ctx, historyProv, _) {
-          // Check if we're loading history
           if (historyProv.isLoadingHistory) {
             return _buildLoadingState(ctx, isDark);
           }
@@ -250,32 +271,94 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
       return _buildErrorState(context, isDark, searchProvider);
     }
 
-    // 3. Loading state (only if no data)
+    // 3. Loading state (only if no data yet)
     final hasData = searchProvider.suggestions.isNotEmpty ||
         searchProvider.categorySuggestions.isNotEmpty ||
         searchProvider.shopSuggestions.isNotEmpty;
 
     if (searchProvider.isLoading && !hasData) {
-      if (kDebugMode) {
-        debugPrint('🔍 SearchDelegate: Loading state');
-      }
+      if (kDebugMode) debugPrint('🔍 SearchDelegate: Loading state');
       return _buildLoadingState(context, isDark);
     }
 
-    // 4. Show suggestions
+    // 4. Show suggestions (products / categories / shops + autocomplete chips)
     if (kDebugMode) {
-      debugPrint(
-          '🔍 SearchDelegate: Showing suggestions - Products: ${searchProvider.suggestions.length}, Categories: ${searchProvider.categorySuggestions.length}');
+      debugPrint('🔍 SearchDelegate: Showing suggestions - '
+          'Products: ${searchProvider.suggestions.length}, '
+          'Categories: ${searchProvider.categorySuggestions.length}, '
+          'Autocomplete: ${searchProvider.autocompleteSuggestions.length}');
     }
+
     return _buildSearchSuggestions(
       context,
       isDark,
       searchProvider.categorySuggestions,
       searchProvider.suggestions,
       searchProvider.shopSuggestions,
+      autocompleteSuggestions: searchProvider.autocompleteSuggestions,
       isLoading: searchProvider.isLoading,
     );
   }
+
+  // ── Autocomplete chips ────────────────────────────────────────────────────
+  //
+  // Shown as a horizontal scrollable row of tappable chips between the
+  // search bar and the main results. Tapping a chip fills the search field
+  // with that text and immediately fires `showResults`, saving the user
+  // from typing the full product name.
+  Widget _buildAutocompleteChips(
+    BuildContext context,
+    bool isDark,
+    List<String> suggestions,
+  ) {
+    if (suggestions.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: 38,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            itemCount: suggestions.length,
+            itemBuilder: (context, index) {
+              final suggestion = suggestions[index];
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: _AutocompleteChip(
+                  label: suggestion,
+                  isDark: isDark,
+                  onTap: () {
+                    // Fill the search field and navigate straight to results.
+                    query = suggestion;
+                    _saveSearchTerm(context, suggestion);
+                    _safelyClearSearchProvider(context);
+                    final marketState =
+                        context.findAncestorStateOfType<MarketScreenState>();
+                    marketState?.exitSearchMode();
+                    context
+                        .push('/search_results', extra: {'query': suggestion});
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+        Divider(
+          height: 1,
+          thickness: 1,
+          indent: 14,
+          endIndent: 14,
+          color: isDark ? Colors.white.withOpacity(0.06) : Colors.grey.shade200,
+        ),
+        const SizedBox(height: 4),
+      ],
+    );
+  }
+
+  // ── Loading / error / empty states ────────────────────────────────────────
 
   Widget _buildLoadingState(BuildContext context, bool isDark) {
     return Column(
@@ -356,16 +439,19 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
     );
   }
 
+  // ── Main suggestions list ─────────────────────────────────────────────────
+
   Widget _buildSearchSuggestions(
     BuildContext context,
     bool isDark,
     List<CategorySuggestion> categorySuggestions,
     List<Suggestion> productSuggestions,
     List<ShopSuggestion> shopSuggestions, {
+    List<String> autocompleteSuggestions = const [],
     bool isLoading = false,
   }) {
     return CustomScrollView(
-      controller: _getScrollController(context), // ADD THIS
+      controller: _getScrollController(context),
       slivers: [
         // Loading indicator at top if still loading
         if (isLoading)
@@ -378,7 +464,16 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
             ),
           ),
 
-        // Shops section (unchanged)
+        // ── Autocomplete chips ────────────────────────────────────────────
+        // Shown whenever there are name completions to suggest, regardless
+        // of whether full results have loaded yet.
+        if (autocompleteSuggestions.isNotEmpty)
+          SliverToBoxAdapter(
+            child: _buildAutocompleteChips(
+                context, isDark, autocompleteSuggestions),
+          ),
+
+        // ── Shops section ─────────────────────────────────────────────────
         if (shopSuggestions.isNotEmpty) ...[
           SliverToBoxAdapter(
             child: Padding(
@@ -513,7 +608,7 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
           const SliverToBoxAdapter(child: SizedBox(height: 16)),
         ],
 
-        // Categories section (unchanged)
+        // ── Categories section ────────────────────────────────────────────
         if (categorySuggestions.isNotEmpty) ...[
           SliverToBoxAdapter(
             child: Padding(
@@ -572,7 +667,7 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
           const SliverToBoxAdapter(child: SizedBox(height: 20)),
         ],
 
-        // Products section header
+        // ── Products section ──────────────────────────────────────────────
         if (productSuggestions.isNotEmpty) ...[
           SliverToBoxAdapter(
             child: Padding(
@@ -614,7 +709,6 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
               ),
             ),
           ),
-          // Products list
           SliverList(
             delegate: SliverChildBuilderDelegate(
               (context, index) {
@@ -732,7 +826,7 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
           ),
         ],
 
-        // ADD: Load more indicator at bottom
+        // ── Load more indicator ───────────────────────────────────────────
         SliverToBoxAdapter(
           child: Consumer<SearchProvider>(
             builder: (context, provider, _) {
@@ -774,7 +868,7 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
           ),
         ),
 
-        // No results state (unchanged)
+        // ── No results state ──────────────────────────────────────────────
         if (categorySuggestions.isEmpty &&
             productSuggestions.isEmpty &&
             shopSuggestions.isEmpty &&
@@ -828,7 +922,8 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
     );
   }
 
-  // Helper methods remain the same...
+  // ── Helper widgets ─────────────────────────────────────────────────────────
+
   Widget _buildCategoryCard(
       BuildContext context, bool isDark, CategorySuggestion categoryMatch) {
     String getDisplayName() {
@@ -845,13 +940,11 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
 
     String getBreadcrumb() {
       if (categoryMatch.level > 2) {
-        // For sub-subcategories: "Main Category • Subcategory"
         final parts = categoryMatch.displayName.split(' > ');
         if (parts.length >= 3) {
           return '${parts[0]} • ${parts[1]}';
         }
       } else if (categoryMatch.level > 1) {
-        // For subcategories: "Main Category"
         final parts = categoryMatch.displayName.split(' > ');
         if (parts.length >= 2) {
           return parts[0];
@@ -860,14 +953,13 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
       return '';
     }
 
-    // Get the appropriate image using the new mapper
     final imagePath = CategoryImageMapper.getImagePath(
       categoryMatch.categoryKey,
       subcategoryKey: categoryMatch.subcategoryKey,
     );
 
     return Container(
-      width: 200, // Slightly wider for better text display
+      width: 200,
       margin: const EdgeInsets.only(right: 10),
       child: Material(
         color: Colors.transparent,
@@ -910,7 +1002,6 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
                     ? Colors.white.withOpacity(0.08)
                     : Colors.grey.shade200,
               ),
-              // Add subtle shadow for better visual hierarchy
               boxShadow: [
                 BoxShadow(
                   color: (isDark ? Colors.black : Colors.grey).withOpacity(0.1),
@@ -921,7 +1012,6 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
             ),
             child: Row(
               children: [
-                // Image section
                 ClipRRect(
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(14),
@@ -935,7 +1025,6 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
                       imagePath,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
-                        // Enhanced error handling with category-appropriate fallback icon
                         IconData fallbackIcon;
                         switch (categoryMatch.categoryKey) {
                           case 'Clothing & Fashion':
@@ -969,7 +1058,6 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
                     ),
                   ),
                 ),
-                // Text section
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.all(12),
@@ -977,7 +1065,6 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Main category name
                         Text(
                           getDisplayName(),
                           style: TextStyle(
@@ -988,7 +1075,6 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        // Breadcrumb for nested categories
                         if (getBreadcrumb().isNotEmpty) ...[
                           const SizedBox(height: 3),
                           Text(
@@ -1114,9 +1200,9 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 12), // Reduced top padding
+              const SizedBox(height: 12),
               SizedBox(
-                height: 32, // Much more compact height
+                height: 32,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -1156,7 +1242,7 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
                   },
                 ),
               ),
-              const SizedBox(height: 6), // Reduced bottom padding
+              const SizedBox(height: 6),
             ],
           ),
         );
@@ -1177,7 +1263,7 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
         debugPrint('Error parsing color $colorString: $e');
       }
     }
-    return const Color(0xFFFF6B35); // Default orange color
+    return const Color(0xFFFF6B35);
   }
 
   Widget _buildSearchHistory(
@@ -1185,7 +1271,6 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Recent searches header
         Container(
           color: isDark ? const Color(0xFF1C1A29) : Colors.grey.shade50,
           child: Padding(
@@ -1264,8 +1349,6 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
             ),
           ),
         ),
-
-        // Search history list
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -1336,8 +1419,6 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
       builder: (context, historyProv, child) {
         final isDeleting = historyProv.isDeletingEntry(entry.id);
 
-        // Use Material + InkWell to reliably capture taps and prevent
-        // gesture competition with the parent ListTile's onTap handler.
         return Material(
           color: Colors.transparent,
           child: InkWell(
@@ -1380,7 +1461,6 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
         debugPrint('Failed to delete search entry: $e');
       }
 
-      // Show error message to user
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1409,9 +1489,6 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final term = query.trim();
 
-      // Fire-and-forget: Save search term in background without blocking navigation.
-      // This prevents UI stutter on lower-end devices while ensuring the search
-      // history is still saved reliably. Errors are handled internally.
       if (term.isNotEmpty) {
         _saveSearchTerm(context, term);
       }
@@ -1429,6 +1506,59 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
       child: const Center(
         child: CircularProgressIndicator(
           valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6B35)),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Private widget: _AutocompleteChip ─────────────────────────────────────────
+//
+// Extracted into its own StatelessWidget to keep the delegate lean and to give
+// Flutter the best chance to diff / reuse chip widgets during list rebuilds.
+class _AutocompleteChip extends StatelessWidget {
+  const _AutocompleteChip({
+    required this.label,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isDark ? const Color.fromARGB(255, 43, 41, 63) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color:
+                isDark ? Colors.white.withOpacity(0.12) : Colors.grey.shade300,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.north_west_rounded,
+              size: 11,
+              color: isDark ? Colors.white38 : Colors.grey.shade500,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: isDark ? Colors.white70 : Colors.black87,
+              ),
+            ),
+          ],
         ),
       ),
     );
