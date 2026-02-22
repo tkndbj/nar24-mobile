@@ -8,8 +8,10 @@ import 'package:Nar24/models/product_summary.dart';
 import 'package:Nar24/widgets/product_list_sliver.dart';
 import 'package:Nar24/providers/market_dynamic_filter_provider.dart';
 import 'package:Nar24/utils/color_localization.dart';
+import 'package:Nar24/utils/attribute_localization_utils.dart';
 import 'package:Nar24/screens/FILTER-SCREENS/market_screen_dynamic_filters_filter_screen.dart';
 import 'package:Nar24/constants/all_in_one_category_data.dart';
+import 'package:Nar24/services/typesense_service_manager.dart';
 import 'package:shimmer/shimmer.dart';
 
 // Enhanced debounced filter for server requests
@@ -240,8 +242,14 @@ class ServerSideResultCache {
     required double? maxPrice,
     required String? sortBy,
     required bool sortDescending,
+    Map<String, List<String>>? specFilters,
   }) {
-    return '${collection}_${baseFilter.id}_${selectedBrands.join(',')}_${selectedColors.join(',')}_${selectedCategory ?? ''}_${selectedSubcategory ?? ''}_${selectedSubSubcategory ?? ''}_${minPrice ?? ''}_${maxPrice ?? ''}_${sortBy ?? ''}_$sortDescending';
+    final specPart = specFilters != null && specFilters.isNotEmpty
+        ? specFilters.entries
+            .map((e) => '${e.key}=${e.value.join("+")}')
+            .join(';')
+        : '';
+    return '${collection}_${baseFilter.id}_${selectedBrands.join(',')}_${selectedColors.join(',')}_${selectedCategory ?? ''}_${selectedSubcategory ?? ''}_${selectedSubSubcategory ?? ''}_${minPrice ?? ''}_${maxPrice ?? ''}_${sortBy ?? ''}_${sortDescending}_$specPart';
   }
 
   List<ProductSummary>? getCachedResults({
@@ -256,6 +264,7 @@ class ServerSideResultCache {
     required double? maxPrice,
     required String? sortBy,
     required bool sortDescending,
+    Map<String, List<String>>? specFilters,
   }) {
     final key = _generateCacheKey(
       collection: collection,
@@ -269,6 +278,7 @@ class ServerSideResultCache {
       maxPrice: maxPrice,
       sortBy: sortBy,
       sortDescending: sortDescending,
+      specFilters: specFilters,
     );
 
     final entry = _cache[key];
@@ -292,6 +302,7 @@ class ServerSideResultCache {
     required String? sortBy,
     required bool sortDescending,
     required List<ProductSummary> products,
+    Map<String, List<String>>? specFilters,
   }) {
     final key = _generateCacheKey(
       collection: collection,
@@ -305,6 +316,7 @@ class ServerSideResultCache {
       maxPrice: maxPrice,
       sortBy: sortBy,
       sortDescending: sortDescending,
+      specFilters: specFilters,
     );
 
     // Remove oldest entry if cache is full
@@ -373,6 +385,14 @@ class _MarketScreenDynamicFiltersScreenState
   String? _selectedCategory;
   String? _selectedSubcategory;
   String? _selectedSubSubcategory;
+  Map<String, List<String>> _dynamicSpecFilters = {};
+
+  // Spec facets from Typesense
+  Map<String, List<Map<String, dynamic>>> _specFacets = {};
+
+  // Typesense pagination (used when spec filters are active)
+  int _typesensePage = 0;
+  bool _typesenseHasMore = true;
 
   // Performance constants
   static const int _limit = 25;
@@ -390,6 +410,7 @@ class _MarketScreenDynamicFiltersScreenState
     _setupScrollListener();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadProductsFromServer();
+      _fetchSpecFacets();
     });
   }
 
@@ -415,9 +436,34 @@ class _MarketScreenDynamicFiltersScreenState
         _error = null;
         _isLoading = true;
       });
-      // Don't clear the entire cache — let different filter combinations
-      // keep their separate cache entries for instant restore on toggle-back.
-      // The cache already has max 20 entries with 10-minute expiry.
+    }
+
+    // Use Typesense when spec filters are active
+    if (_dynamicSpecFilters.isNotEmpty) {
+      try {
+        _typesensePage = 0;
+        final products = await _fetchFromTypesense(page: 0);
+        if (mounted) {
+          final boosted = products.where((p) => p.isBoosted).toList();
+          final normal = products.where((p) => !p.isBoosted).toList();
+          setState(() {
+            _allProducts = normal;
+            _boostedProducts = boosted;
+            _hasMore = _typesenseHasMore;
+            _isLoading = false;
+            _error = null;
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _error = e.toString();
+            _isLoading = false;
+          });
+        }
+        debugPrint('Error loading products from Typesense: $e');
+      }
+      return;
     }
 
     try {
@@ -434,6 +480,7 @@ class _MarketScreenDynamicFiltersScreenState
         maxPrice: _maxPrice,
         sortBy: widget.dynamicFilter.sortBy,
         sortDescending: widget.dynamicFilter.sortOrder == 'desc',
+        specFilters: _dynamicSpecFilters,
       );
 
       if (cachedProducts != null && !isRefresh) {
@@ -498,6 +545,7 @@ class _MarketScreenDynamicFiltersScreenState
           sortBy: widget.dynamicFilter.sortBy,
           sortDescending: widget.dynamicFilter.sortOrder == 'desc',
           products: products,
+          specFilters: _dynamicSpecFilters,
         );
       }
     } catch (e) {
@@ -511,8 +559,128 @@ class _MarketScreenDynamicFiltersScreenState
     }
   }
 
+  Future<void> _fetchSpecFacets() async {
+    try {
+      final svc = TypeSenseServiceManager.instance.shopService;
+      // Build additionalFilterBy from the base filter's attribute
+      String? additionalFilter;
+      if (widget.dynamicFilter.type == FilterType.attribute &&
+          widget.dynamicFilter.attribute != null &&
+          widget.dynamicFilter.attributeValue != null) {
+        additionalFilter =
+            '${widget.dynamicFilter.attribute!}:=${widget.dynamicFilter.attributeValue!}';
+      }
+      final result = await svc.fetchSpecFacets(
+        indexName: widget.dynamicFilter.collection ?? 'shop_products',
+        additionalFilterBy: additionalFilter,
+      );
+      if (mounted) {
+        setState(() => _specFacets = result);
+      }
+    } catch (e) {
+      debugPrint('Error fetching spec facets: $e');
+    }
+  }
+
+  /// Convert the DynamicFilter's Firestore sort fields to a Typesense sort code.
+  String _typesenseSortCode() {
+    final sortBy = widget.dynamicFilter.sortBy;
+    final desc = widget.dynamicFilter.sortOrder == 'desc';
+    switch (sortBy) {
+      case 'createdAt':
+        return 'date';
+      case 'productName':
+        return 'alphabetical';
+      case 'price':
+        return desc ? 'price_desc' : 'price_asc';
+      default:
+        return 'date';
+    }
+  }
+
+  Future<List<ProductSummary>> _fetchFromTypesense({required int page}) async {
+    final svc = TypeSenseServiceManager.instance.shopService;
+
+    final facetFilters = <List<String>>[];
+    if (_selectedBrands.isNotEmpty) {
+      facetFilters.add(_selectedBrands.map((b) => 'brandModel:$b').toList());
+    }
+    if (_selectedColors.isNotEmpty) {
+      facetFilters
+          .add(_selectedColors.map((c) => 'availableColors:$c').toList());
+    }
+    if (_selectedCategory != null) {
+      facetFilters.add(['category_en:$_selectedCategory']);
+    }
+    if (_selectedSubcategory != null) {
+      facetFilters.add(['subcategory_en:$_selectedSubcategory']);
+    }
+    if (_selectedSubSubcategory != null) {
+      facetFilters.add(['subsubcategory_en:$_selectedSubSubcategory']);
+    }
+    for (final entry in _dynamicSpecFilters.entries) {
+      if (entry.value.isNotEmpty) {
+        facetFilters.add(entry.value.map((v) => '${entry.key}:$v').toList());
+      }
+    }
+
+    final numericFilters = <String>[];
+    if (_minPrice != null) numericFilters.add('price:>=${_minPrice!.toInt()}');
+    if (_maxPrice != null) numericFilters.add('price:<=${_maxPrice!.toInt()}');
+
+    // Build additionalFilterBy from base filter
+    String? additionalFilter;
+    if (widget.dynamicFilter.type == FilterType.attribute &&
+        widget.dynamicFilter.attribute != null &&
+        widget.dynamicFilter.attributeValue != null) {
+      additionalFilter =
+          '${widget.dynamicFilter.attribute!}:=${widget.dynamicFilter.attributeValue!}';
+    }
+
+    final res = await svc.searchIdsWithFacets(
+      indexName: widget.dynamicFilter.collection ?? 'shop_products',
+      page: page,
+      hitsPerPage: _limit,
+      facetFilters: facetFilters.isNotEmpty ? facetFilters : null,
+      numericFilters: numericFilters.isNotEmpty ? numericFilters : null,
+      sortOption: _typesenseSortCode(),
+      additionalFilterBy: additionalFilter,
+    );
+
+    _typesenseHasMore = res.page < (res.nbPages - 1);
+    return res.hits.map((hit) => ProductSummary.fromTypeSense(hit)).toList();
+  }
+
   Future<void> _loadMoreProducts() async {
-    if (_isLoadingMore || !_hasMore || _lastDocument == null) return;
+    if (_isLoadingMore || !_hasMore) return;
+
+    // Typesense pagination
+    if (_dynamicSpecFilters.isNotEmpty) {
+      setState(() => _isLoadingMore = true);
+      try {
+        _typesensePage++;
+        final newProducts = await _fetchFromTypesense(page: _typesensePage);
+        if (mounted) {
+          final existingIds = _allProducts.map((p) => p.id).toSet();
+          existingIds.addAll(_boostedProducts.map((p) => p.id));
+          final deduped =
+              newProducts.where((p) => !existingIds.contains(p.id)).toList();
+          setState(() {
+            _allProducts.addAll(deduped.where((p) => !p.isBoosted));
+            _boostedProducts.addAll(deduped.where((p) => p.isBoosted));
+            _hasMore = _typesenseHasMore;
+            _isLoadingMore = false;
+          });
+        }
+      } catch (e) {
+        debugPrint('Error loading more products (Typesense): $e');
+        if (mounted) setState(() => _isLoadingMore = false);
+      }
+      return;
+    }
+
+    // Firestore pagination
+    if (_lastDocument == null) return;
 
     setState(() {
       _isLoadingMore = true;
@@ -588,11 +756,19 @@ class _MarketScreenDynamicFiltersScreenState
           initialCategory: _selectedCategory,
           initialSubcategory: _selectedSubcategory,
           initialSubSubcategory: _selectedSubSubcategory,
+          initialSpecFilters: _dynamicSpecFilters,
+          availableSpecFacets: _specFacets,
         ),
       ),
     );
 
     if (result != null && mounted) {
+      final rawSpecFilters =
+          result['specFilters'] as Map<String, List<String>>? ?? {};
+      final specFilters = rawSpecFilters.map(
+        (k, v) => MapEntry(k, List<String>.from(v)),
+      );
+
       setState(() {
         _selectedBrands = List<String>.from(result['brands'] ?? []);
         _selectedColors = List<String>.from(result['colors'] ?? []);
@@ -601,6 +777,7 @@ class _MarketScreenDynamicFiltersScreenState
         _selectedCategory = result['category'];
         _selectedSubcategory = result['subcategory'];
         _selectedSubSubcategory = result['subSubcategory'];
+        _dynamicSpecFilters = specFilters;
       });
 
       _applyFiltersWithServerQuery();
@@ -617,6 +794,7 @@ class _MarketScreenDynamicFiltersScreenState
       _selectedCategory = null;
       _selectedSubcategory = null;
       _selectedSubSubcategory = null;
+      _dynamicSpecFilters.clear();
     });
 
     _applyFiltersWithServerQuery();
@@ -628,6 +806,8 @@ class _MarketScreenDynamicFiltersScreenState
     String? color,
     bool clearPrice = false,
     bool clearCategory = false,
+    String? specField,
+    String? specValue,
   }) {
     setState(() {
       if (brand != null) _selectedBrands.remove(brand);
@@ -640,6 +820,13 @@ class _MarketScreenDynamicFiltersScreenState
         _selectedCategory = null;
         _selectedSubcategory = null;
         _selectedSubSubcategory = null;
+      }
+      if (specField != null && specValue != null) {
+        final list = _dynamicSpecFilters[specField];
+        if (list != null) {
+          list.remove(specValue);
+          if (list.isEmpty) _dynamicSpecFilters.remove(specField);
+        }
       }
     });
 
@@ -654,7 +841,8 @@ class _MarketScreenDynamicFiltersScreenState
       _maxPrice != null ||
       _selectedCategory != null ||
       _selectedSubcategory != null ||
-      _selectedSubSubcategory != null;
+      _selectedSubSubcategory != null ||
+      _dynamicSpecFilters.isNotEmpty;
 
   int get _activeFiltersCount {
     int count = 0;
@@ -664,6 +852,9 @@ class _MarketScreenDynamicFiltersScreenState
     if (_selectedCategory != null) count++;
     if (_selectedSubcategory != null) count++;
     if (_selectedSubSubcategory != null) count++;
+    for (final vals in _dynamicSpecFilters.values) {
+      count += vals.length;
+    }
     return count;
   }
 
@@ -995,6 +1186,20 @@ class _MarketScreenDynamicFiltersScreenState
                     '${l10n.subSubcategory ?? "Sub-subcategory"}: ${AllInOneCategoryData.localizeSubSubcategoryKey(_selectedCategory!, _selectedSubcategory!, _selectedSubSubcategory!, l10n)}',
                     () => _removeFilter(clearCategory: true),
                   ),
+                // Spec filter chips
+                ..._dynamicSpecFilters.entries.expand((entry) {
+                  final fieldTitle = AttributeLocalizationUtils
+                      .getLocalizedAttributeTitle(entry.key, l10n);
+                  return entry.value.map((value) {
+                    final localizedValue = AttributeLocalizationUtils
+                        .getLocalizedSingleValue(entry.key, value, l10n);
+                    return _buildFilterChip(
+                      '$fieldTitle: $localizedValue',
+                      () => _removeFilter(
+                          specField: entry.key, specValue: value),
+                    );
+                  });
+                }),
               ],
             ),
           ],

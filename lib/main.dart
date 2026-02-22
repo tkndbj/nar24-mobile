@@ -5,6 +5,7 @@ import 'config/firebase_config.dart';
 import 'package:Nar24/providers/favorite_product_provider.dart';
 import 'package:Nar24/providers/market_banner_provider.dart';
 import 'package:Nar24/providers/special_filter_provider_market.dart';
+import 'package:Nar24/services/typesense_service_manager.dart';
 import 'package:Nar24/providers/product_repository.dart';
 import 'package:Nar24/providers/market_dynamic_filter_provider.dart';
 import 'package:Nar24/providers/product_detail_provider.dart';
@@ -300,7 +301,10 @@ Future<void> main() async {
                 ChangeNotifierProvider(create: (_) => MarketBannerProvider()),
                 ChangeNotifierProvider(create: (_) => DynamicFilterProvider()),
                 ChangeNotifierProvider(
-                  create: (context) => SpecialFilterProviderMarket(),
+                  create: (context) => SpecialFilterProviderMarket(
+                    searchService:
+                        TypeSenseServiceManager.instance.shopService,
+                  ),
                 ),
                 ChangeNotifierProvider(
                   create: (_) => ShopWidgetProvider(

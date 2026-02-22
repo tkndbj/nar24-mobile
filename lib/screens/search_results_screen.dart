@@ -7,11 +7,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:go_router/go_router.dart';
 import '../providers/market_provider.dart';
 import '../providers/search_results_provider.dart';
 import '../models/product_summary.dart';
 import '../widgets/product_list_sliver.dart';
 import '../generated/l10n/app_localizations.dart';
+import '../utils/attribute_localization_utils.dart';
+import '../utils/color_localization.dart';
 
 class SearchResultsScreen extends StatefulWidget {
   final String query;
@@ -55,6 +58,13 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
   ];
   String _sortOption = 'None';
 
+  // Dynamic filter state (local mirror for UI)
+  List<String> _dynamicBrands = [];
+  List<String> _dynamicColors = [];
+  Map<String, List<String>> _dynamicSpecFilters = {};
+  double? _minPrice;
+  double? _maxPrice;
+
   // Controllers
   late final PageController _pageController;
   final ScrollController _pillScroll = ScrollController();
@@ -81,6 +91,9 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
       _marketProvider = Provider.of<MarketProvider>(context, listen: false);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _fetchInitialResults();
+        // Fetch spec facets in parallel for the search query
+        final provider = context.read<SearchResultsProvider>();
+        provider.fetchSpecFacets(widget.query);
       });
       _didInit = true;
     }
@@ -91,6 +104,9 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
     super.didUpdateWidget(old);
     if (old.query != widget.query) {
       _resetAndFetch();
+      // Re-fetch facets for new query
+      final provider = context.read<SearchResultsProvider>();
+      provider.fetchSpecFacets(widget.query);
     }
   }
 
@@ -105,14 +121,9 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
 
   void _setupScrollListener() {
     _mainScrollController.addListener(() {
-      // Guard against multiple positions (happens during PageView transitions)
       if (!_mainScrollController.hasClients) return;
-
-      // Use positions.length to check if we have exactly one position
-      // During PageView swipes, we might have multiple positions temporarily
       if (_mainScrollController.positions.length != 1) return;
 
-      // Safe to access position now
       final position = _mainScrollController.position;
       if (position.pixels >= position.maxScrollExtent - 200) {
         _loadMoreIfNeeded();
@@ -129,9 +140,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
     }
   }
 
-  /// Checks if viewport is not filled with content and loads more if needed.
-  /// This handles the tablet/large screen case where initial content doesn't
-  /// require scrolling, so the scroll listener never triggers pagination.
   void _checkViewportAndLoadMoreIfNeeded() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -140,8 +148,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
       if (_mainScrollController.positions.length != 1) return;
 
       final position = _mainScrollController.position;
-
-      // If maxScrollExtent is 0 or very small, content doesn't fill viewport
       final viewportNotFilled = position.maxScrollExtent <= 50;
       final atOrNearBottom = position.pixels >= position.maxScrollExtent - 200;
 
@@ -202,13 +208,31 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
     setState(() => _isLoading = true);
 
     try {
-      final pageResults = await _marketProvider.searchOnly(
-        query: widget.query,
-        page: _currentPage,
-        hitsPerPage: 50,
-        l10n: l10n,
-        filterType: '', // No server-side filtering, handled in provider
-      );
+      List<ProductSummary> pageResults;
+
+      // Use Typesense when any filters or non-default sort are active.
+      // Typesense handles arbitrary filter+sort combos without composite
+      // indexes, ensuring correct server-side ordering.
+      final useTypesense =
+          provider.hasDynamicFilters || provider.sortOption != 'None';
+
+      if (useTypesense) {
+        // Filtered / sorted path — shop_products via Typesense
+        pageResults = await provider.fetchFilteredPage(
+          query: widget.query,
+          page: _currentPage,
+          hitsPerPage: 50,
+        );
+      } else {
+        // Unfiltered path — both indexes via MarketProvider
+        pageResults = await _marketProvider.searchOnly(
+          query: widget.query,
+          page: _currentPage,
+          hitsPerPage: 50,
+          l10n: l10n,
+          filterType: '',
+        );
+      }
 
       if (!mounted) return;
 
@@ -237,17 +261,109 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
       }
     }
 
-    // Scroll to top on reset
     if (reset && _mainScrollController.hasClients) {
-      // Only jump if we have exactly one position attached
       if (_mainScrollController.positions.length == 1) {
         _mainScrollController.jumpTo(0);
       }
     }
 
-    // Check if viewport needs more content (for tablets/large screens)
     _checkViewportAndLoadMoreIfNeeded();
   }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // DYNAMIC FILTER HANDLERS
+  // ──────────────────────────────────────────────────────────────────────────
+
+  Future<void> _handleDynamicFilterApplied(Map<String, dynamic> result) async {
+    if (!mounted) return;
+
+    final brands = List<String>.from(result['brands'] as List<dynamic>? ?? []);
+    final colors = List<String>.from(result['colors'] as List<dynamic>? ?? []);
+    final rawSpecFilters =
+        result['specFilters'] as Map<String, List<String>>? ?? {};
+    final specFilters = rawSpecFilters.map(
+      (k, v) => MapEntry(k, List<String>.from(v)),
+    );
+    final minPrice = result['minPrice'] as double?;
+    final maxPrice = result['maxPrice'] as double?;
+
+    setState(() {
+      _dynamicBrands = brands;
+      _dynamicColors = colors;
+      _dynamicSpecFilters = specFilters;
+      _minPrice = minPrice;
+      _maxPrice = maxPrice;
+    });
+
+    final provider = context.read<SearchResultsProvider>();
+    provider.setDynamicFilter(
+      brands: brands,
+      colors: colors,
+      specFilters: specFilters,
+      minPrice: minPrice,
+      maxPrice: maxPrice,
+    );
+
+    await _resetAndFetch();
+  }
+
+  Future<void> _removeSingleDynamicFilter({
+    String? brand,
+    String? color,
+    String? specField,
+    String? specValue,
+    bool clearPrice = false,
+  }) async {
+    if (!mounted) return;
+
+    setState(() {
+      if (brand != null) _dynamicBrands.remove(brand);
+      if (color != null) _dynamicColors.remove(color);
+      if (specField != null && specValue != null) {
+        final list = _dynamicSpecFilters[specField];
+        if (list != null) {
+          list.remove(specValue);
+          if (list.isEmpty) _dynamicSpecFilters.remove(specField);
+        }
+      }
+      if (clearPrice) {
+        _minPrice = null;
+        _maxPrice = null;
+      }
+    });
+
+    final provider = context.read<SearchResultsProvider>();
+    provider.removeDynamicFilter(
+      brand: brand,
+      color: color,
+      specField: specField,
+      specValue: specValue,
+      clearPrice: clearPrice,
+    );
+
+    await _resetAndFetch();
+  }
+
+  Future<void> _clearAllDynamicFilters() async {
+    if (!mounted) return;
+
+    setState(() {
+      _dynamicBrands.clear();
+      _dynamicColors.clear();
+      _dynamicSpecFilters.clear();
+      _minPrice = null;
+      _maxPrice = null;
+    });
+
+    final provider = context.read<SearchResultsProvider>();
+    provider.clearDynamicFilters();
+
+    await _resetAndFetch();
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // FILTER / SORT UI
+  // ──────────────────────────────────────────────────────────────────────────
 
   void _onFilterTap(String filterKey, int index) {
     if (filterKey == _currentFilter) return;
@@ -267,8 +383,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
 
   void _scrollFilterBar(int index) {
     if (!_pillScroll.hasClients) return;
-
-    // Guard against multiple positions
     if (_pillScroll.positions.length != 1) return;
 
     const pillWidth = 80.0;
@@ -291,6 +405,10 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
 
     final provider = context.read<SearchResultsProvider>();
     provider.setSortOption(sortOption);
+
+    // Always re-fetch: non-default sort routes through Typesense for
+    // correct server-side ordering; default sort restores relevance path.
+    _resetAndFetch();
   }
 
   String _localizedSortLabel(String opt, AppLocalizations l) {
@@ -378,6 +496,224 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
       ),
     );
   }
+
+  Widget _buildHeaderRow(AppLocalizations l10n) {
+    final provider = context.read<SearchResultsProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    int specCount = 0;
+    for (final vals in _dynamicSpecFilters.values) {
+      specCount += vals.length;
+    }
+    final hasFilters = _dynamicBrands.isNotEmpty ||
+        _dynamicColors.isNotEmpty ||
+        _dynamicSpecFilters.isNotEmpty ||
+        _minPrice != null ||
+        _maxPrice != null;
+    final filterCount = _dynamicBrands.length +
+        _dynamicColors.length +
+        specCount +
+        (_minPrice != null || _maxPrice != null ? 1 : 0);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      child: Row(
+        children: [
+          // Filter bar pills
+          Expanded(child: _buildFilterBar(l10n)),
+          const SizedBox(width: 8),
+          // Filter button
+          GestureDetector(
+            onTap: () async {
+              final result = await context.push('/dynamic_filter', extra: {
+                'category': '',
+                'initialBrands': _dynamicBrands,
+                'initialColors': _dynamicColors,
+                'initialSpecFilters': _dynamicSpecFilters,
+                'availableSpecFacets': provider.specFacets,
+                'initialMinPrice': _minPrice,
+                'initialMaxPrice': _maxPrice,
+              });
+              if (result is Map<String, dynamic>) {
+                _handleDynamicFilterApplied(result);
+              }
+            },
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: hasFilters ? Colors.orange : Colors.transparent,
+                border: Border.all(
+                  color: hasFilters ? Colors.orange : Colors.grey.shade300,
+                  width: 1,
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.tune,
+                    size: 16,
+                    color: hasFilters
+                        ? Colors.white
+                        : (isDark ? Colors.white : Colors.black),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    hasFilters
+                        ? '${l10n.filter} ($filterCount)'
+                        : l10n.filter,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: hasFilters
+                          ? Colors.white
+                          : (isDark ? Colors.white : Colors.black),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveFiltersChips(AppLocalizations l10n) {
+    return Consumer<SearchResultsProvider>(
+      builder: (context, provider, child) {
+        if (!provider.hasDynamicFilters) return const SizedBox.shrink();
+
+        return Container(
+          width: double.infinity,
+          margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+          padding: const EdgeInsets.all(12.0),
+          decoration: BoxDecoration(
+            color: Colors.orange.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8.0),
+            border: Border.all(color: Colors.orange.withOpacity(0.3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.filter_list,
+                      color: Colors.orange, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${l10n.activeFilters ?? "Active Filters"} (${provider.activeFiltersCount})',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.orange,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: _clearAllDynamicFilters,
+                    child: Text(
+                      l10n.clearAll ?? 'Clear All',
+                      style: const TextStyle(
+                        color: Colors.orange,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  ...provider.dynamicBrands.map((brand) =>
+                      _buildFilterChip(
+                          '${l10n.brand ?? "Brand"}: $brand', () {
+                        _removeSingleDynamicFilter(brand: brand);
+                      })),
+                  ...provider.dynamicColors.map((color) =>
+                      _buildFilterChip(
+                          '${l10n.color ?? "Color"}: ${ColorLocalization.localizeColorName(color, l10n)}',
+                          () {
+                        _removeSingleDynamicFilter(color: color);
+                      })),
+                  // Generic spec filter chips
+                  ...provider.dynamicSpecFilters.entries.expand((entry) {
+                    final fieldName = entry.key;
+                    final fieldTitle = AttributeLocalizationUtils
+                        .getLocalizedAttributeTitle(fieldName, l10n);
+                    return entry.value.map((value) {
+                      final localizedValue = AttributeLocalizationUtils
+                          .getLocalizedSingleValue(fieldName, value, l10n);
+                      return _buildFilterChip(
+                        '$fieldTitle: $localizedValue',
+                        () {
+                          _removeSingleDynamicFilter(
+                              specField: fieldName, specValue: value);
+                        },
+                      );
+                    });
+                  }),
+                  if (provider.minPrice != null || provider.maxPrice != null)
+                    _buildFilterChip(
+                      '${l10n.price ?? "Price"}: ${provider.minPrice?.toStringAsFixed(0) ?? '0'} - ${provider.maxPrice?.toStringAsFixed(0) ?? '∞'} TL',
+                      () {
+                        _removeSingleDynamicFilter(clearPrice: true);
+                      },
+                    ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFilterChip(String label, VoidCallback onRemove) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.withOpacity(0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.orange,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: onRemove,
+            child: const Icon(
+              Icons.close,
+              size: 14,
+              color: Colors.orange,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // BUILD HELPERS
+  // ──────────────────────────────────────────────────────────────────────────
 
   Widget _buildLoadingShimmer(bool isDarkMode) {
     final baseColor = isDarkMode
@@ -498,7 +834,8 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
             hasMore: _hasMore,
             screenName: 'search_results_screen',
             isLoadingMore: _isLoading && !provider.hasNoData,
-            selectedColor: null,
+            selectedColor:
+                _dynamicColors.isNotEmpty ? _dynamicColors.first : null,
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 80)),
         ],
@@ -547,7 +884,13 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
       ),
       body: Column(
         children: [
-          _buildFilterBar(l10n),
+          // Header row with filter pills + filter button
+          _buildHeaderRow(l10n),
+
+          // Active filter chips
+          _buildActiveFiltersChips(l10n),
+
+          // Product list
           Expanded(
             child: PageView.builder(
               controller: _pageController,
@@ -561,22 +904,15 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
               itemBuilder: (_, idx) {
                 return Consumer<SearchResultsProvider>(
                   builder: (context, provider, child) {
-                    // Loading state
                     if (_isLoading && provider.hasNoData) {
                       return _buildLoadingShimmer(isDarkMode);
                     }
-
-                    // Error state
                     if (_hasError) {
                       return _buildErrorState(l10n);
                     }
-
-                    // Empty state
                     if (provider.isEmpty && !_isLoading) {
                       return _buildEmptyState(l10n);
                     }
-
-                    // Products list
                     return _buildProductsList(provider);
                   },
                 );

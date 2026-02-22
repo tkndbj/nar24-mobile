@@ -5,7 +5,7 @@ import {onDocumentWritten, onDocumentCreated, onDocumentUpdated} from 'firebase-
 import {onSchedule} from 'firebase-functions/v2/scheduler';
 import {onRequest, onCall, HttpsError} from 'firebase-functions/v2/https';
 import admin from 'firebase-admin';
-
+import { computeScores, DEFAULT_THRESHOLDS } from './24-promotion-score/index.js';
 import {SecretManagerServiceClient} from '@google-cloud/secret-manager';
 // import {PredictionServiceClient, UserEventServiceClient} from '@google-cloud/retail';
 import {Storage} from '@google-cloud/storage';
@@ -4179,149 +4179,6 @@ export const createDailyAdAnalyticsSnapshot = onSchedule(
 //   },
 // );
 
-
-export const dailyComputeRankingScores = onSchedule(
-  {
-    schedule: '0 */12 * * *', // Every 12 hours - less frequent
-    timeZone: 'UTC',
-    region: 'europe-west3',
-    memory: '1GiB', // Increase for parallel processing
-    timeoutSeconds: 540, // 9 minutes max
-  },
-  async () => {
-    const db = admin.firestore();
-    console.log('[dailyComputeRankingScores] start');
-
-    // 1) Use static thresholds (update manually quarterly)
-    const thresholds = STATIC_THRESHOLDS;
-
-    // 2) Only process products with actual metric changes
-    const cutoff = admin.firestore.Timestamp.fromMillis(
-      Date.now() - 12 * 60 * 60 * 1000,
-    );
-
-    // 3) Process collections in parallel
-    const results = await Promise.allSettled([
-      processCollection(db, 'products', cutoff, thresholds),
-      processCollection(db, 'shop_products', cutoff, thresholds),
-    ]);
-
-    const totalUpdated = results
-      .filter((r) => r.status === 'fulfilled')
-      .reduce((sum, r) => sum + r.value, 0);
-
-    console.log(`[dailyComputeRankingScores] done. Updated ${totalUpdated} products`);
-  },
-);
-
-// Static thresholds - update these quarterly based on analytics
-const STATIC_THRESHOLDS = {
-  purchaseP95: 100,
-  cartP95: 50,
-  favP95: 50,
-};
-
-async function processCollection(db, collectionName, cutoff, thresholds) {
-  let totalProcessed = 0;
-  const updates = [];
-  let lastDoc = null;
-  let hasMore = true;
-  const QUERY_LIMIT = 500;
-
-  while (hasMore) {
-    let query = db.collection(collectionName)
-      .where('metricsUpdatedAt', '>=', cutoff)
-      .orderBy('metricsUpdatedAt')
-      .limit(QUERY_LIMIT);
-
-    if (lastDoc) {
-      query = query.startAfter(lastDoc);
-    }
-
-    const snapshot = await query.get();
-
-    if (snapshot.empty) {
-      hasMore = false;
-      break;
-    }
-
-    lastDoc = snapshot.docs[snapshot.docs.length - 1];
-    hasMore = snapshot.docs.length === QUERY_LIMIT;
-
-    snapshot.forEach((doc) => {
-      const data = computeRankingScore(doc.data(), thresholds);
-      if (data) {
-        updates.push({ref: doc.ref, data});
-      }
-    });
-
-    if (updates.length >= 450) {
-      const batch = updates.splice(0, 450); // Extract exactly 450
-      await commitBatch(db, batch);
-      totalProcessed += batch.length; // Count what you actually committed
-    }
-  }
-
-  if (updates.length > 0) {
-    await commitBatch(db, updates);
-    totalProcessed += updates.length;
-  }
-
-  console.log(`[${collectionName}] Processed ${totalProcessed} products`);
-  return totalProcessed;
-}
-
-function computeRankingScore(d, thresholds) {
-  // Skip if no meaningful metrics changed
-  if (!d.clickCount && !d.purchaseCount && !d.dailyClickCount) {
-    return null;
-  }
-
-  const impressions = Math.max(d.impressionCount || 0, 1);
-  const clicks = Math.max(d.clickCount || 0, 0);
-  const purchases = Math.max(d.purchaseCount || 0, 0);
-  const dailyClicks = Math.max(d.dailyClickCount || 0, 0);
-
-  const purchaseNorm = Math.min(purchases / thresholds.purchaseP95, 1.0);
-  const ctr = impressions > 10 ? Math.min(clicks / impressions, 1.0) : 0;
-  const conv = clicks > 5 ? Math.min(purchases / clicks, 1.0) : 0;
-  const ratingNorm = (d.averageRating || 0) / 5;
-  const cartNorm = Math.min((d.cartCount || 0) / thresholds.cartP95, 1.0);
-  const favNorm = Math.min((d.favoritesCount || 0) / thresholds.favP95, 1.0);
-
-  const ageDays = (Date.now() - d.createdAt.toMillis()) / (1000 * 60 * 60 * 24);
-  const recencyBoost = Math.exp(-ageDays / 30);
-  const coldStartBonus = ageDays <= 7 ? 0.2 : 0;
-  const trendingBonus = dailyClicks >= 10 ? 0.15 : 0;
-
-  const baseScore =
-    0.20 * purchaseNorm +
-    0.15 * ctr +
-    0.10 * conv +
-    0.10 * ratingNorm +
-    0.10 * cartNorm +
-    0.10 * favNorm +
-    0.25 * recencyBoost;
-
-  const enhancedScore = baseScore + coldStartBonus + trendingBonus;
-  const boostMultiplier = d.isBoosted ? 1.5 : 1.0;
-  const rankingScore = Math.min(enhancedScore * boostMultiplier, 2.0);
-  const promotionScore = d.isBoosted ? rankingScore + 1000 : rankingScore;
-
-  return {    
-    promotionScore,
-    lastRankingUpdate: admin.firestore.FieldValue.serverTimestamp(),
-  };
-}
-
-async function commitBatch(db, updates) {
-  const batch = db.batch();
-  updates.forEach(({ref, data}) => {
-    batch.update(ref, data);
-  });
-  await batch.commit();
-  console.log(`Committed batch of ${updates.length} updates`);
-}
 
 export const incrementImpressionCount = onCall(
   {
@@ -11060,7 +10917,11 @@ export const expireSingleBoost = onRequest(
         });
       }
 
-      // Expire the boost
+       // Expire the boost — recompute organic score at expiry time so the
+      // product drops from the boosted tier immediately without waiting for
+      // the next ranking job run (up to 12 hours later).
+      const scores = computeScores({ ...data, isBoosted: false }, DEFAULT_THRESHOLDS);
+
       ops.push({
         type: 'update',
         ref: productRef,
@@ -11070,7 +10931,13 @@ export const expireSingleBoost = onRequest(
           boostEndTime: admin.firestore.FieldValue.delete(),
           boostExpirationTaskName: admin.firestore.FieldValue.delete(),
           lastBoostExpiredAt: admin.firestore.FieldValue.serverTimestamp(),
-          promotionScore: Math.max((data.promotionScore || 0) - 1000, 0),
+          // If createdAt is missing scores will be null — fall back to 0
+          // so the product at minimum drops off the boosted tier correctly.
+          ...(scores && {
+            organicScore: scores.organicScore,
+            lastRankingUpdate: scores.lastRankingUpdate,
+          }),
+          promotionScore: scores ? scores.promotionScore : 0,
         },
       });
 
@@ -14074,3 +13941,4 @@ export {
   syncShopsWithTypesense,
   syncOrdersWithTypesense,
 } from './23-typesense/index.js';
+export { computeRankingScores } from './24-promotion-score/index.js';

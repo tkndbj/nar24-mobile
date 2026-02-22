@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../constants/brands.dart';
 import '../../utils/color_localization.dart';
+import '../../utils/attribute_localization_utils.dart';
 import '../../constants/all_in_one_category_data.dart';
 import '../../models/dynamic_filter.dart';
 
@@ -186,6 +187,8 @@ class MarketScreenDynamicFiltersFilterScreen extends StatefulWidget {
   final String? initialCategory;
   final String? initialSubcategory;
   final String? initialSubSubcategory;
+  final Map<String, List<String>>? initialSpecFilters;
+  final Map<String, List<Map<String, dynamic>>> availableSpecFacets;
 
   const MarketScreenDynamicFiltersFilterScreen({
     Key? key,
@@ -197,6 +200,8 @@ class MarketScreenDynamicFiltersFilterScreen extends StatefulWidget {
     this.initialCategory,
     this.initialSubcategory,
     this.initialSubSubcategory,
+    this.initialSpecFilters,
+    this.availableSpecFacets = const {},
   }) : super(key: key);
 
   @override
@@ -214,6 +219,7 @@ class _MarketScreenDynamicFiltersFilterScreenState
   String? _selectedCategory;
   String? _selectedSubcategory;
   String? _selectedSubSubcategory;
+  Map<String, List<String>> _selectedSpecFilters = {};
 
   // Available options - loaded immediately
   List<String> _availableBrands = [];
@@ -289,6 +295,10 @@ class _MarketScreenDynamicFiltersFilterScreenState
     _selectedCategory = widget.initialCategory;
     _selectedSubcategory = widget.initialSubcategory;
     _selectedSubSubcategory = widget.initialSubSubcategory;
+    _selectedSpecFilters = widget.initialSpecFilters != null
+        ? widget.initialSpecFilters!.map(
+            (k, v) => MapEntry(k, List<String>.from(v)))
+        : {};
 
     _minPriceController.text = _minPrice?.toString() ?? '';
     _maxPriceController.text = _maxPrice?.toString() ?? '';
@@ -361,6 +371,9 @@ class _MarketScreenDynamicFiltersFilterScreenState
     if (_selectedCategory != null) count++;
     if (_selectedSubcategory != null) count++;
     if (_selectedSubSubcategory != null) count++;
+    for (final vals in _selectedSpecFilters.values) {
+      count += vals.length;
+    }
     return count;
   }
 
@@ -373,6 +386,7 @@ class _MarketScreenDynamicFiltersFilterScreenState
       _selectedCategory = null;
       _selectedSubcategory = null;
       _selectedSubSubcategory = null;
+      _selectedSpecFilters.clear();
       _minPriceController.clear();
       _maxPriceController.clear();
     });
@@ -491,6 +505,13 @@ class _MarketScreenDynamicFiltersFilterScreenState
                     _buildBrandFilter(l10n, isDark),
                   _buildColorFilter(l10n, isDark),
                   _buildPriceFilter(l10n, isDark),
+                  ...widget.availableSpecFacets.entries.map((facetEntry) {
+                    final field = facetEntry.key;
+                    final values = facetEntry.value;
+                    if (values.isEmpty) return const SizedBox.shrink();
+                    return _buildSpecFilterSection(
+                        field, values, l10n, isDark);
+                  }),
                 ],
               ),
             ),
@@ -1217,6 +1238,101 @@ class _MarketScreenDynamicFiltersFilterScreenState
     );
   }
 
+  Widget _buildSpecFilterSection(
+    String field,
+    List<Map<String, dynamic>> facetValues,
+    AppLocalizations l10n,
+    bool isDark,
+  ) {
+    final fieldTitle =
+        AttributeLocalizationUtils.getLocalizedAttributeTitle(field, l10n);
+    final selected = _selectedSpecFilters[field] ?? [];
+
+    return Column(
+      children: [
+        Divider(
+          height: 1,
+          thickness: 1,
+          color: isDark ? Colors.grey[600] : Colors.grey[300],
+        ),
+        ExpansionTile(
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                fieldTitle,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : null,
+                ),
+              ),
+              if (selected.isNotEmpty)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.orange,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${selected.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          iconColor: isDark ? Colors.white : null,
+          collapsedIconColor: isDark ? Colors.white : null,
+          trailing: Icon(
+            Icons.expand_more,
+            color: Colors.orange,
+          ),
+          children: facetValues.map((facet) {
+            final value = facet['value'] as String? ?? '';
+            final count = facet['count'] as int? ?? 0;
+            if (value.isEmpty) return const SizedBox.shrink();
+
+            final localizedValue =
+                AttributeLocalizationUtils.getLocalizedSingleValue(
+                    field, value, l10n);
+            final isSelected = selected.contains(value);
+
+            return CheckboxListTile(
+              title: Text(
+                '$localizedValue ($count)',
+                style: TextStyle(color: isDark ? Colors.white : null),
+              ),
+              value: isSelected,
+              onChanged: (checked) {
+                setState(() {
+                  if (checked == true) {
+                    _selectedSpecFilters
+                        .putIfAbsent(field, () => [])
+                        .add(value);
+                  } else {
+                    _selectedSpecFilters[field]?.remove(value);
+                    if (_selectedSpecFilters[field]?.isEmpty ?? false) {
+                      _selectedSpecFilters.remove(field);
+                    }
+                  }
+                });
+              },
+              activeColor: Colors.orange,
+              dense: true,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
   Widget _buildApplyButton(AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.all(16.0),
@@ -1248,6 +1364,7 @@ class _MarketScreenDynamicFiltersFilterScreenState
                 'category': _selectedCategory,
                 'subcategory': _selectedSubcategory,
                 'subSubcategory': _selectedSubSubcategory,
+                'specFilters': _selectedSpecFilters,
               });
             },
             style: ElevatedButton.styleFrom(

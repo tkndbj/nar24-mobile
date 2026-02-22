@@ -5,9 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../models/product_summary.dart';
-import '../../models/dynamic_filter.dart';
 import '../../widgets/product_list_sliver.dart';
-import '../../screens/FILTER-SCREENS/market_screen_dynamic_filters_filter_screen.dart';
+import '../../services/typesense_service_manager.dart';
+import '../../utils/attribute_localization_utils.dart';
+import '../../utils/color_localization.dart';
 
 class DynamicCollectionScreen extends StatefulWidget {
   final String collectionId;
@@ -42,8 +43,19 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
   bool _hasMore = true;
 
   // Filter states
-  Map<String, dynamic>? _appliedFilters;
+  List<String> _dynamicBrands = [];
+  List<String> _dynamicColors = [];
+  Map<String, List<String>> _dynamicSpecFilters = {};
+  double? _minPrice;
+  double? _maxPrice;
   int _filterCount = 0;
+
+  // Spec facets from Typesense
+  Map<String, List<Map<String, dynamic>>> _specFacets = {};
+
+  // Typesense pagination (used when spec filters are active)
+  int _typesensePage = 0;
+  bool _typesenseHasMore = true;
 
   // Pagination
   static const int _pageSize = 20;
@@ -130,8 +142,11 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
         return;
       }
 
-      // Load products
-      await _loadProducts(productIds);
+      // Load products and fetch spec facets in parallel
+      await Future.wait([
+        _loadProducts(productIds),
+        _fetchSpecFacets(),
+      ]);
     } catch (e) {
       debugPrint('Error loading collection: $e');
       _showError('Failed to load collection');
@@ -139,6 +154,21 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  Future<void> _fetchSpecFacets() async {
+    try {
+      final svc = TypeSenseServiceManager.instance.shopService;
+      final result = await svc.fetchSpecFacets(
+        indexName: 'shop_products',
+        additionalFilterBy: 'shopId:=${widget.shopId}',
+      );
+      if (mounted) {
+        setState(() => _specFacets = result);
+      }
+    } catch (e) {
+      debugPrint('Error fetching spec facets: $e');
     }
   }
 
@@ -191,29 +221,55 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
   Future<void> _loadMoreProducts() async {
     if (_isLoadingMore || !_hasMore) return;
 
-    setState(() => _isLoadingMore = true);
-
-    try {
-      // Since we're loading from a predefined list, we don't need real pagination
-      // This is just for consistency with your existing pattern
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      setState(() {
-        _isLoadingMore = false;
-        _hasMore = false; // Collection has fixed products
-      });
-    } catch (e) {
-      debugPrint('Error loading more products: $e');
-      setState(() => _isLoadingMore = false);
+    // If in Typesense mode, load next page
+    if (_dynamicSpecFilters.isNotEmpty) {
+      setState(() => _isLoadingMore = true);
+      try {
+        _typesensePage++;
+        final newProducts = await _fetchFromTypesense(page: _typesensePage);
+        if (mounted) {
+          final existingIds = _filteredProducts.map((p) => p.id).toSet();
+          existingIds.addAll(_boostedProducts.map((p) => p.id));
+          final deduped = newProducts.where((p) => !existingIds.contains(p.id)).toList();
+          setState(() {
+            _filteredProducts.addAll(deduped.where((p) => !p.isBoosted));
+            _boostedProducts.addAll(deduped.where((p) => p.isBoosted));
+            _hasMore = _typesenseHasMore;
+            _isLoadingMore = false;
+          });
+        }
+      } catch (e) {
+        debugPrint('Error loading more products (Typesense): $e');
+        if (mounted) setState(() => _isLoadingMore = false);
+      }
+      return;
     }
+
+    // Client-side: collection has fixed products, no real pagination
+    setState(() {
+      _isLoadingMore = false;
+      _hasMore = false;
+    });
   }
 
   void _applyFilters() {
-    if (_appliedFilters == null) {
+    if (_dynamicSpecFilters.isNotEmpty) {
+      // Spec filters active — use Typesense
+      _applyTypesenseFilters();
+      return;
+    }
+
+    // Client-side filtering (brands, colors, price only)
+    final hasAnyFilter = _dynamicBrands.isNotEmpty ||
+        _dynamicColors.isNotEmpty ||
+        _minPrice != null ||
+        _maxPrice != null;
+
+    if (!hasAnyFilter) {
       _filteredProducts = List.from(_products);
     } else {
       _filteredProducts = _products.where((product) {
-        return _matchesFilters(product, _appliedFilters!);
+        return _matchesClientFilters(product);
       }).toList();
     }
 
@@ -221,76 +277,95 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
     _updateFilterCount();
   }
 
-  bool _matchesFilters(ProductSummary product, Map<String, dynamic> filters) {
+  bool _matchesClientFilters(ProductSummary product) {
     // Brand filter
-    final selectedBrands = filters['brands'] as List<String>?;
-    if (selectedBrands != null && selectedBrands.isNotEmpty) {
-      if (!selectedBrands.contains(product.brandModel)) {
+    if (_dynamicBrands.isNotEmpty) {
+      if (!_dynamicBrands.contains(product.brandModel)) {
         return false;
       }
     }
 
     // Color filter
-    final selectedColors = filters['colors'] as List<String>?;
-    if (selectedColors != null && selectedColors.isNotEmpty) {
+    if (_dynamicColors.isNotEmpty) {
       final productColors = product.colorImages.keys.toList();
-      if (!selectedColors.any((color) => productColors.contains(color))) {
+      if (!_dynamicColors.any((color) => productColors.contains(color))) {
         return false;
       }
     }
 
     // Price filter
-    final minPrice = filters['minPrice'] as double?;
-    final maxPrice = filters['maxPrice'] as double?;
     final productPrice = double.tryParse(product.price.toString()) ?? 0.0;
-
-    if (minPrice != null && productPrice < minPrice) {
+    if (_minPrice != null && productPrice < _minPrice!) {
       return false;
     }
-    if (maxPrice != null && productPrice > maxPrice) {
-      return false;
-    }
-
-    // Category filter
-    final selectedCategory = filters['category'] as String?;
-    if (selectedCategory != null && product.category != selectedCategory) {
-      return false;
-    }
-
-    // Subcategory filter
-    final selectedSubcategory = filters['subcategory'] as String?;
-    if (selectedSubcategory != null &&
-        product.subcategory != selectedSubcategory) {
-      return false;
-    }
-
-    // Sub-subcategory filter
-    final selectedSubSubcategory = filters['subSubcategory'] as String?;
-    if (selectedSubSubcategory != null &&
-        product.subsubcategory != selectedSubSubcategory) {
+    if (_maxPrice != null && productPrice > _maxPrice!) {
       return false;
     }
 
     return true;
   }
 
+  Future<void> _applyTypesenseFilters() async {
+    setState(() => _isLoading = true);
+    try {
+      _typesensePage = 0;
+      final products = await _fetchFromTypesense(page: 0);
+      if (mounted) {
+        setState(() {
+          _filteredProducts = products;
+          _separateBoostedProducts();
+          _hasMore = _typesenseHasMore;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error applying Typesense filters: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+    _updateFilterCount();
+  }
+
+  Future<List<ProductSummary>> _fetchFromTypesense({required int page}) async {
+    final svc = TypeSenseServiceManager.instance.shopService;
+
+    final facetFilters = <List<String>>[];
+    if (_dynamicBrands.isNotEmpty) {
+      facetFilters.add(_dynamicBrands.map((b) => 'brandModel:$b').toList());
+    }
+    if (_dynamicColors.isNotEmpty) {
+      facetFilters.add(_dynamicColors.map((c) => 'availableColors:$c').toList());
+    }
+    for (final entry in _dynamicSpecFilters.entries) {
+      if (entry.value.isNotEmpty) {
+        facetFilters.add(entry.value.map((v) => '${entry.key}:$v').toList());
+      }
+    }
+
+    final numericFilters = <String>[];
+    if (_minPrice != null) numericFilters.add('price:>=${_minPrice!.toInt()}');
+    if (_maxPrice != null) numericFilters.add('price:<=${_maxPrice!.toInt()}');
+
+    final res = await svc.searchIdsWithFacets(
+      indexName: 'shop_products',
+      page: page,
+      hitsPerPage: 20,
+      facetFilters: facetFilters.isNotEmpty ? facetFilters : null,
+      numericFilters: numericFilters.isNotEmpty ? numericFilters : null,
+      sortOption: 'date',
+      additionalFilterBy: 'shopId:=${widget.shopId}',
+    );
+
+    _typesenseHasMore = res.page < (res.nbPages - 1);
+    return res.hits.map((hit) => ProductSummary.fromTypeSense(hit)).toList();
+  }
+
   void _updateFilterCount() {
     int count = 0;
-    if (_appliedFilters != null) {
-      final brands = _appliedFilters!['brands'] as List<String>?;
-      final colors = _appliedFilters!['colors'] as List<String>?;
-      final minPrice = _appliedFilters!['minPrice'] as double?;
-      final maxPrice = _appliedFilters!['maxPrice'] as double?;
-      final category = _appliedFilters!['category'] as String?;
-      final subcategory = _appliedFilters!['subcategory'] as String?;
-      final subSubcategory = _appliedFilters!['subSubcategory'] as String?;
-
-      if (brands != null && brands.isNotEmpty) count++;
-      if (colors != null && colors.isNotEmpty) count++;
-      if (minPrice != null || maxPrice != null) count++;
-      if (category != null) count++;
-      if (subcategory != null) count++;
-      if (subSubcategory != null) count++;
+    count += _dynamicBrands.length;
+    count += _dynamicColors.length;
+    if (_minPrice != null || _maxPrice != null) count++;
+    for (final vals in _dynamicSpecFilters.values) {
+      count += vals.length;
     }
 
     setState(() {
@@ -311,41 +386,21 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
 
   Future<void> _openFilterScreen() async {
     try {
-      // Create base filter for shop products
-      final baseFilter = DynamicFilter(
-        id: 'shopId',
-        name: 'shopId',
-        displayName: {'en': 'shopId', 'tr': 'shopId', 'ru': 'shopId'},
-        isActive: true,
-        order: 0,
-        type: FilterType.attribute,
-        attribute: 'shopId',
-        operator: '==',
-        attributeValue: widget.shopId,
-        collection: 'shop_products',
+      final result = await context.push<Map<String, dynamic>?>(
+        '/dynamic_filter',
+        extra: {
+          'category': '',
+          'initialBrands': _dynamicBrands,
+          'initialColors': _dynamicColors,
+          'initialMinPrice': _minPrice,
+          'initialMaxPrice': _maxPrice,
+          'initialSpecFilters': _dynamicSpecFilters,
+          'availableSpecFacets': _specFacets,
+        },
       );
 
-      final result = await Navigator.push<Map<String, dynamic>?>(
-        context,
-        MaterialPageRoute(
-          builder: (context) => MarketScreenDynamicFiltersFilterScreen(
-            baseFilter: baseFilter,
-            initialBrands: _appliedFilters?['brands']?.cast<String>(),
-            initialColors: _appliedFilters?['colors']?.cast<String>(),
-            initialMinPrice: _appliedFilters?['minPrice']?.toDouble(),
-            initialMaxPrice: _appliedFilters?['maxPrice']?.toDouble(),
-            initialCategory: _appliedFilters?['category'],
-            initialSubcategory: _appliedFilters?['subcategory'],
-            initialSubSubcategory: _appliedFilters?['subSubcategory'],
-          ),
-        ),
-      );
-
-      if (result != null) {
-        setState(() {
-          _appliedFilters = result;
-          _applyFilters();
-        });
+      if (result is Map<String, dynamic>) {
+        _handleFilterResult(result);
       }
     } catch (e) {
       debugPrint('Error opening filter screen: $e');
@@ -353,12 +408,67 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
     }
   }
 
+  Future<void> _handleFilterResult(Map<String, dynamic> result) async {
+    final brands = List<String>.from(result['brands'] as List<dynamic>? ?? []);
+    final colors = List<String>.from(result['colors'] as List<dynamic>? ?? []);
+    final rawSpecFilters =
+        result['specFilters'] as Map<String, List<String>>? ?? {};
+    final specFilters = rawSpecFilters.map(
+      (k, v) => MapEntry(k, List<String>.from(v)),
+    );
+    final minPrice = result['minPrice'] as double?;
+    final maxPrice = result['maxPrice'] as double?;
+
+    setState(() {
+      _dynamicBrands = brands;
+      _dynamicColors = colors;
+      _dynamicSpecFilters = specFilters;
+      _minPrice = minPrice;
+      _maxPrice = maxPrice;
+    });
+
+    _applyFilters();
+  }
+
+  Future<void> _removeSingleDynamicFilter({
+    String? brand,
+    String? color,
+    String? specField,
+    String? specValue,
+    bool clearPrice = false,
+  }) async {
+    if (!mounted) return;
+
+    setState(() {
+      if (brand != null) _dynamicBrands.remove(brand);
+      if (color != null) _dynamicColors.remove(color);
+      if (specField != null && specValue != null) {
+        final list = _dynamicSpecFilters[specField];
+        if (list != null) {
+          list.remove(specValue);
+          if (list.isEmpty) _dynamicSpecFilters.remove(specField);
+        }
+      }
+      if (clearPrice) {
+        _minPrice = null;
+        _maxPrice = null;
+      }
+    });
+
+    _applyFilters();
+  }
+
   void _clearAllFilters() {
     setState(() {
-      _appliedFilters = null;
+      _dynamicBrands.clear();
+      _dynamicColors.clear();
+      _dynamicSpecFilters.clear();
+      _minPrice = null;
+      _maxPrice = null;
       _filteredProducts = List.from(_products);
       _separateBoostedProducts();
       _filterCount = 0;
+      _hasMore = false;
     });
   }
 
@@ -742,46 +852,108 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
 
   Widget _buildActiveFilters(AppLocalizations l10n, bool isDark) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(12),
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      padding: const EdgeInsets.all(12.0),
       decoration: BoxDecoration(
-        color: isDark
-            ? Colors.tealAccent.withOpacity(0.1)
-            : Colors.teal.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isDark ? Colors.tealAccent : Colors.teal,
-          width: 1,
-        ),
+        color: Colors.purple.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8.0),
+        border: Border.all(color: Colors.purple.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.filter_list, color: Colors.purple, size: 16),
+              const SizedBox(width: 8),
+              Text(
+                '${l10n.activeFilters} ($_filterCount)',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.purple,
+                  fontSize: 12,
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: _clearAllFilters,
+                child: Text(
+                  l10n.clearAll,
+                  style: const TextStyle(
+                    color: Colors.purple,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              ..._dynamicBrands.map((brand) => _buildFilterChip(
+                    '${l10n.brand}: $brand',
+                    () => _removeSingleDynamicFilter(brand: brand),
+                  )),
+              ..._dynamicColors.map((color) => _buildFilterChip(
+                    '${l10n.color}: ${ColorLocalization.localizeColorName(color, l10n)}',
+                    () => _removeSingleDynamicFilter(color: color),
+                  )),
+              ..._dynamicSpecFilters.entries.expand((entry) {
+                final fieldTitle = AttributeLocalizationUtils
+                    .getLocalizedAttributeTitle(entry.key, l10n);
+                return entry.value.map((value) {
+                  final localizedValue = AttributeLocalizationUtils
+                      .getLocalizedSingleValue(entry.key, value, l10n);
+                  return _buildFilterChip(
+                    '$fieldTitle: $localizedValue',
+                    () => _removeSingleDynamicFilter(
+                        specField: entry.key, specValue: value),
+                  );
+                });
+              }),
+              if (_minPrice != null || _maxPrice != null)
+                _buildFilterChip(
+                  '${l10n.price}: ${_minPrice?.toStringAsFixed(0) ?? '0'} - ${_maxPrice?.toStringAsFixed(0) ?? '∞'} TL',
+                  () => _removeSingleDynamicFilter(clearPrice: true),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, VoidCallback onRemove) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.purple.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.purple.withOpacity(0.5)),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.filter_list,
-            color: isDark ? Colors.tealAccent : Colors.teal,
-            size: 16,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
+          Flexible(
             child: Text(
-              '$_filterCount ${l10n.filtersApplied}',
-              style: TextStyle(
-                color: isDark ? Colors.tealAccent : Colors.teal,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
+              label,
+              style: const TextStyle(
+                color: Colors.purple,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          TextButton(
-            onPressed: _clearAllFilters,
-            child: Text(
-              l10n.clear,
-              style: TextStyle(
-                color: isDark ? Colors.tealAccent : Colors.teal,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
-            ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: onRemove,
+            child: const Icon(Icons.close, size: 14, color: Colors.purple),
           ),
         ],
       ),

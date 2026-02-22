@@ -1,13 +1,18 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:rxdart/rxdart.dart';
-import '../models/product_summary.dart';  
+import '../models/product_summary.dart';
 import '../models/dynamic_filter.dart';
+import '../services/typesense_service.dart';
 
 import 'package:flutter/foundation.dart';
 
 class SpecialFilterProviderMarket with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final TypeSenseService? _searchService;
+
+  SpecialFilterProviderMarket({TypeSenseService? searchService})
+      : _searchService = searchService;
 
   StreamSubscription<List<ProductSummary>>? _productsStreamSubscription;
 
@@ -31,6 +36,30 @@ class SpecialFilterProviderMarket with ChangeNotifier {
   ValueListenable<String> get searchTermListenable => _searchTermNotifier;
   ValueListenable<String?> get selectedFilterListenable =>
       _selectedFilterNotifier;
+
+  // ── Spec filters (Typesense-powered) ───────────────────────────────────
+  final Map<String, List<String>> _dynamicSpecFilters = {};
+  Map<String, List<String>> get dynamicSpecFilters =>
+      Map.unmodifiable(_dynamicSpecFilters.map(
+          (k, v) => MapEntry(k, List<String>.unmodifiable(v))));
+
+  Map<String, List<Map<String, dynamic>>> _specFacets = {};
+  Map<String, List<Map<String, dynamic>>> get specFacets =>
+      Map.unmodifiable(_specFacets);
+
+  bool get hasDynamicSpecFilters => _dynamicSpecFilters.isNotEmpty;
+
+  int get specFiltersCount {
+    int c = 0;
+    for (final vals in _dynamicSpecFilters.values) {
+      c += vals.length;
+    }
+    return c;
+  }
+
+  // Track current Typesense pagination
+  int _typesensePage = 0;
+  bool _typesenseHasMore = true;
 
   // Getters that access ValueNotifier values
   String? get specialFilter => _specialFilterNotifier.value;
@@ -138,13 +167,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
   // Setter for subcategory sort option
   void setSubcategorySortOption(String sortOption) {
     if (_subcategorySortOption != sortOption) {
-      // Save snapshot BEFORE changing sort so we can restore on toggle-back
-      if (_currentCategory != null && _currentSubcategoryId != null) {
-        final key = _getSubcategoryKey(
-            _currentCategory!, _currentSubcategoryId!,
-            gender: _currentGender);
-        _saveSubcategorySnapshot(key);
-      }
+      _invalidateSubcategorySnapshots();
       _subcategorySortOption = sortOption;
       notifyListeners();
     }
@@ -153,12 +176,22 @@ class SpecialFilterProviderMarket with ChangeNotifier {
   // Optimized setter methods using ValueNotifiers
   void setDynamicFilter({
     String? brand,
+    List<String>? brands,
     List<String>? colors,
     String? subsubcategory,
+    Map<String, List<String>>? specFilters,
   }) {
     bool hasChanges = false;
 
-    if (_dynamicBrandNotifier.value != brand) {
+    // Support both single brand and multi-brand
+    if (brands != null && brands.isNotEmpty) {
+      // Multi-brand mode: use first brand for backward compatibility
+      final newBrand = brands.first;
+      if (_dynamicBrandNotifier.value != newBrand) {
+        _dynamicBrandNotifier.value = newBrand;
+        hasChanges = true;
+      }
+    } else if (brand != _dynamicBrandNotifier.value) {
       _dynamicBrandNotifier.value = brand;
       hasChanges = true;
     }
@@ -174,10 +207,122 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       hasChanges = true;
     }
 
+    if (specFilters != null) {
+      _dynamicSpecFilters.clear();
+      for (final entry in specFilters.entries) {
+        if (entry.value.isNotEmpty) {
+          _dynamicSpecFilters[entry.key] = List.from(entry.value);
+        }
+      }
+      hasChanges = true;
+    }
+
     if (hasChanges) {
-      print(
-          'SpecialFilterProviderMarket: Set dynamic filters - brand: $brand, colors: $newColors, subsubcategory: $subsubcategory');
+      _invalidateSubcategorySnapshots();
       notifyListeners();
+    }
+  }
+
+  void removeDynamicSpecFilter(String specField, String specValue) {
+    final list = _dynamicSpecFilters[specField];
+    if (list != null) {
+      list.remove(specValue);
+      if (list.isEmpty) _dynamicSpecFilters.remove(specField);
+      _invalidateSubcategorySnapshots();
+      notifyListeners();
+    }
+  }
+
+  void clearDynamicSpecFilters() {
+    if (_dynamicSpecFilters.isEmpty) return;
+    _dynamicSpecFilters.clear();
+    _invalidateSubcategorySnapshots();
+    notifyListeners();
+  }
+
+  Future<void> fetchSpecFacets({
+    required String category,
+    required String subcategoryId,
+    String? gender,
+  }) async {
+    if (_searchService == null) return;
+
+    try {
+      final facetFilters = <List<String>>[];
+      facetFilters.add(['category_en:$category']);
+      if (subcategoryId.isNotEmpty) {
+        facetFilters.add(['subcategory_en:$subcategoryId']);
+      }
+      if (gender == 'Women' || gender == 'Men') {
+        facetFilters.add(['gender:$gender', 'gender:Unisex']);
+      }
+
+      final result = await _searchService!.fetchSpecFacets(
+        indexName: 'shop_products',
+        facetFilters: facetFilters,
+      );
+
+      _specFacets = result;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error fetching subcategory spec facets: $e');
+      _specFacets = {};
+    }
+  }
+
+  /// Typesense-based product fetch when spec filters are active.
+  Future<List<ProductSummary>> _fetchFromTypesense({
+    required String category,
+    required String subcategoryId,
+    String? gender,
+    required int page,
+    int hitsPerPage = 20,
+  }) async {
+    if (_searchService == null) return [];
+
+    final facetFilters = <List<String>>[];
+    facetFilters.add(['category_en:$category']);
+    if (subcategoryId.isNotEmpty) {
+      facetFilters.add(['subcategory_en:$subcategoryId']);
+    }
+    if (gender == 'Women' || gender == 'Men') {
+      facetFilters.add(['gender:$gender', 'gender:Unisex']);
+    }
+    if (dynamicBrand != null && dynamicBrand!.isNotEmpty) {
+      facetFilters.add(['brandModel:${dynamicBrand!}']);
+    }
+    if (dynamicColors.isNotEmpty) {
+      facetFilters.add(dynamicColors.map((c) => 'availableColors:$c').toList());
+    }
+    if (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty) {
+      if (subcategoryId.isEmpty) {
+        // Top-level category view (e.g. Women > Accessories "View All"):
+        // the selected value is a subcategory, not a subsubcategory
+        facetFilters.add(['subcategory_en:${dynamicSubsubcategory!}']);
+      } else {
+        facetFilters.add(['subsubcategory_en:${dynamicSubsubcategory!}']);
+      }
+    }
+    for (final entry in _dynamicSpecFilters.entries) {
+      if (entry.value.isNotEmpty) {
+        facetFilters.add(entry.value.map((v) => '${entry.key}:$v').toList());
+      }
+    }
+
+    try {
+      final res = await _searchService!.searchIdsWithFacets(
+        indexName: 'shop_products',
+        page: page,
+        hitsPerPage: hitsPerPage,
+        facetFilters: facetFilters,
+        sortOption: _subcategorySortOption,
+      );
+
+      _typesenseHasMore = res.page < (res.nbPages - 1);
+      return res.hits.map((hit) => ProductSummary.fromTypeSense(hit)).toList();
+    } catch (e) {
+      debugPrint('Typesense subcategory query error: $e');
+      return [];
     }
   }
 
@@ -214,11 +359,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     if (_selectedFilterNotifier.value == filterKey) return;
 
     if (_currentCategory != null && _currentSubcategoryId != null) {
-      // Save snapshot BEFORE changing quick filter so the key reflects OLD state
-      final key = _getSubcategoryKey(
-          _currentCategory!, _currentSubcategoryId!,
-          gender: _currentGender);
-      _saveSubcategorySnapshot(key);
+      _invalidateSubcategorySnapshots();
 
       await fetchSubcategoryProducts(
         _currentCategory!,
@@ -303,10 +444,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     return gender != null && gender.isNotEmpty && dynamicColors.isNotEmpty;
   }
 
-  // Subcategory snapshot cache — for instant restore on filter/sort/quickFilter toggle.
-  // Keyed by _buildSubcategorySnapshotKey(), stores full subcategory state per filter combo.
-  static const Duration _snapshotTtl = Duration(minutes: 5);
-  static const int _maxSnapshotEntries = 20;
+  // Subcategory snapshot state — invalidated on any filter/sort change.
   final Map<String, List<ProductSummary>> _snapshotProducts = {};
   final Map<String, Set<String>> _snapshotProductIds = {};
   final Map<String, int> _snapshotPages = {};
@@ -1258,101 +1396,18 @@ class SpecialFilterProviderMarket with ChangeNotifier {
   String? _currentGender;
 
   // ──────────────────────────────────────────────────────────────────────────
-  // SUBCATEGORY SNAPSHOT CACHE
+  // SUBCATEGORY SNAPSHOT INVALIDATION
   // ──────────────────────────────────────────────────────────────────────────
 
-  String _buildSubcategorySnapshotKey(String subcategoryKey) {
-    final parts = <String>[subcategoryKey];
-    parts.add('qf:${_selectedFilterNotifier.value ?? 'none'}');
-    parts.add('sort:$_subcategorySortOption');
-    if (_dynamicBrandNotifier.value != null) {
-      parts.add('brand:${_dynamicBrandNotifier.value}');
-    }
-    if (_dynamicColorsNotifier.value.isNotEmpty) {
-      final sorted = List<String>.from(_dynamicColorsNotifier.value)..sort();
-      parts.add('colors:${sorted.join(",")}');
-    }
-    if (_dynamicSubsubcategoryNotifier.value != null) {
-      parts.add('subsub:${_dynamicSubsubcategoryNotifier.value}');
-    }
-    return parts.join('|');
-  }
-
-  void _saveSubcategorySnapshot(String subcategoryKey) {
-    final products = _specificSubcategoryProducts[subcategoryKey];
-    if (products == null || products.isEmpty) return;
-
-    final snapshotKey = _buildSubcategorySnapshotKey(subcategoryKey);
-    _snapshotProducts[snapshotKey] = List<ProductSummary>.from(products);
-    _snapshotProductIds[snapshotKey] =
-        Set<String>.from(_specificSubcategoryProductIds[subcategoryKey] ?? {});
-    _snapshotPages[snapshotKey] = _specificSubcategoryPages[subcategoryKey] ?? 0;
-    _snapshotHasMore[snapshotKey] =
-        _specificSubcategoryHasMore[subcategoryKey] ?? false;
-    _snapshotLastDocs[snapshotKey] =
-        _specificSubcategoryLastDocs[subcategoryKey];
-    _snapshotTs[snapshotKey] = DateTime.now();
-    _pruneSubcategorySnapshots();
-  }
-
-  bool _tryRestoreSubcategorySnapshot(
-      String subcategoryKey, String snapshotKey) {
-    final cached = _snapshotProducts[snapshotKey];
-    final ts = _snapshotTs[snapshotKey];
-    final now = DateTime.now();
-
-    if (cached != null && ts != null && now.difference(ts) < _snapshotTtl) {
-      _specificSubcategoryProducts[subcategoryKey] =
-          List<ProductSummary>.from(cached);
-      _specificSubcategoryProductIds[subcategoryKey] =
-          Set<String>.from(_snapshotProductIds[snapshotKey] ?? {});
-      _specificSubcategoryPages[subcategoryKey] =
-          _snapshotPages[snapshotKey] ?? 0;
-      _specificSubcategoryHasMore[subcategoryKey] =
-          _snapshotHasMore[snapshotKey] ?? false;
-      _specificSubcategoryLastDocs[subcategoryKey] =
-          _snapshotLastDocs[snapshotKey];
-      _snapshotTs[snapshotKey] = now; // LRU touch
-      return true;
-    }
-
-    if (cached != null) {
-      _removeSubcategorySnapshotEntry(snapshotKey);
-    }
-    return false;
-  }
-
-  void _removeSubcategorySnapshotEntry(String snapshotKey) {
-    _snapshotProducts.remove(snapshotKey);
-    _snapshotProductIds.remove(snapshotKey);
-    _snapshotPages.remove(snapshotKey);
-    _snapshotHasMore.remove(snapshotKey);
-    _snapshotLastDocs.remove(snapshotKey);
-    _snapshotTs.remove(snapshotKey);
-  }
-
-  void _pruneSubcategorySnapshots() {
-    final now = DateTime.now();
-    final keysToRemove = <String>[];
-    _snapshotTs.forEach((key, timestamp) {
-      if (now.difference(timestamp) >= _snapshotTtl) {
-        keysToRemove.add(key);
-      }
-    });
-    for (final key in keysToRemove) {
-      _removeSubcategorySnapshotEntry(key);
-    }
-
-    if (_snapshotProducts.length > _maxSnapshotEntries) {
-      final sortedEntries = _snapshotTs.entries.toList()
-        ..sort((a, b) => a.value.compareTo(b.value));
-      final entriesToRemove = sortedEntries
-          .take(_snapshotProducts.length - _maxSnapshotEntries)
-          .map((e) => e.key);
-      for (final key in entriesToRemove) {
-        _removeSubcategorySnapshotEntry(key);
-      }
-    }
+  /// Invalidate all subcategory snapshots. Called whenever filter or sort state
+  /// changes to prevent stale snapshot data from being restored.
+  void _invalidateSubcategorySnapshots() {
+    _snapshotProducts.clear();
+    _snapshotProductIds.clear();
+    _snapshotPages.clear();
+    _snapshotHasMore.clear();
+    _snapshotLastDocs.clear();
+    _snapshotTs.clear();
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -1581,16 +1636,6 @@ class SpecialFilterProviderMarket with ChangeNotifier {
 
     if (_specificSubcategoryLoading[key] == true) return;
 
-    // Try to restore from snapshot cache for this filter combination
-    final snapshotKey = _buildSubcategorySnapshotKey(key);
-    if (_tryRestoreSubcategorySnapshot(key, snapshotKey)) {
-      _updateSubcategoryLoadingState(key, false);
-      _updateSubcategoryHasMoreState(
-          key, _specificSubcategoryHasMore[key] ?? false);
-      notifyListeners();
-      return;
-    }
-
     _updateSubcategoryLoadingState(key, true);
 
     _specificSubcategoryPages[key] = 0;
@@ -1610,13 +1655,19 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     final isCacheValid =
         cachedTime != null && now.difference(cachedTime) < _cacheTTL;
 
-    // ✅ FIX: Skip cache when any filters are applied (brand, colors, subsubcategory)
+    // ✅ FIX: Skip cache when any filters are applied (brand, colors, subsubcategory, specFilters)
     final hasFilters = selectedFilter != null ||
         (dynamicBrand != null && dynamicBrand!.isNotEmpty) ||
         dynamicColors.isNotEmpty ||
-        (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty);
+        (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty) ||
+        hasDynamicSpecFilters;
 
-    if (isCacheValid && _productCache.containsKey(cacheKey) && !hasFilters) {
+    // Cache is only valid for unfiltered, default-sorted results.
+    // Skip cache when sort is non-default to prevent returning default-sorted
+    // data when user expects a custom sort order.
+    final isDefaultSort = _subcategorySortOption == 'date';
+
+    if (isCacheValid && _productCache.containsKey(cacheKey) && !hasFilters && isDefaultSort) {
       final cachedProducts = _productCache[cacheKey]!;
       _specificSubcategoryProducts[key] = List.from(cachedProducts);
       _specificSubcategoryProductIds[key] =
@@ -1628,29 +1679,53 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     }
 
     try {
-      final baseQuery = _buildSubcategoryBaseQuery(
-        category: category,
-        subcategoryId: subcategoryId,
-        selectedFilter: selectedFilter,
-      );
+      List<ProductSummary> products;
 
-      final products = await _executeSubcategoryFetch(
-        baseQuery: baseQuery,
-        key: key,
-        limit: 20,
-        gender: gender,
-        isLoadMore: false,
-      );
+      // Use Typesense when any dynamic filters or non-default sort are active.
+      // Typesense handles arbitrary filter+sort combinations without composite
+      // index requirements, making it the reliable choice for combined queries.
+      final hasDynamicFilters =
+          (dynamicBrand != null && dynamicBrand!.isNotEmpty) ||
+          dynamicColors.isNotEmpty ||
+          (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty) ||
+          hasDynamicSpecFilters;
+      final useTypesense = _searchService != null &&
+          (hasDynamicFilters || _subcategorySortOption != 'date');
+
+      if (useTypesense) {
+        _typesensePage = 0;
+        products = await _fetchFromTypesense(
+          category: category,
+          subcategoryId: subcategoryId,
+          gender: gender,
+          page: 0,
+        );
+      } else {
+        final baseQuery = _buildSubcategoryBaseQuery(
+          category: category,
+          subcategoryId: subcategoryId,
+          selectedFilter: selectedFilter,
+        );
+
+        products = await _executeSubcategoryFetch(
+          baseQuery: baseQuery,
+          key: key,
+          limit: 20,
+          gender: gender,
+          isLoadMore: false,
+        );
+      }
 
       _specificSubcategoryProducts[key] = products;
       _specificSubcategoryProductIds[key] = products.map((p) => p.id).toSet();
 
-      // Only cache unfiltered results to avoid stale filtered data on filter clear
-      if (!hasFilters) {
+      // Only cache unfiltered, default-sorted results to keep cache consistent
+      if (!hasFilters && isDefaultSort) {
         _productCache[cacheKey] = List.from(products);
         _cacheTimestamps[cacheKey] = now;
       }
-      _updateSubcategoryHasMoreState(key, _computeHasMore(key, products.length, 20));
+      _updateSubcategoryHasMoreState(key,
+          useTypesense ? _typesenseHasMore : _computeHasMore(key, products.length, 20));
     } catch (e) {
       debugPrint('❌ fetchSubcategoryProducts error [$key]: $e');
       _updateSubcategoryHasMoreState(key, false);
@@ -1686,9 +1761,12 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     final hasFilters = (selectedFilter != null && selectedFilter.isNotEmpty) ||
         (dynamicBrand != null && dynamicBrand!.isNotEmpty) ||
         dynamicColors.isNotEmpty ||
-        (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty);
+        (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty) ||
+        hasDynamicSpecFilters;
 
-    if (isCacheValid && _productCache.containsKey(cacheKey) && !hasFilters) {
+    final isDefaultSort = _subcategorySortOption == 'date';
+
+    if (isCacheValid && _productCache.containsKey(cacheKey) && !hasFilters && isDefaultSort) {
       final cachedProducts = _productCache[cacheKey]!;
 
       final currentProducts = _specificSubcategoryProducts[key] ?? [];
@@ -1708,19 +1786,40 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     }
 
     try {
-      final baseQuery = _buildSubcategoryBaseQuery(
-        category: category,
-        subcategoryId: subcategoryId,
-        selectedFilter: selectedFilter,
-      );
+      List<ProductSummary> newProducts;
 
-      final newProducts = await _executeSubcategoryFetch(
-        baseQuery: baseQuery,
-        key: key,
-        limit: 20,
-        gender: _currentGender,
-        isLoadMore: true,
-      );
+      // Use Typesense when any dynamic filters or non-default sort are active
+      final hasDynamicFilters =
+          (dynamicBrand != null && dynamicBrand!.isNotEmpty) ||
+          dynamicColors.isNotEmpty ||
+          (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty) ||
+          hasDynamicSpecFilters;
+      final useTypesense = _searchService != null &&
+          (hasDynamicFilters || _subcategorySortOption != 'date');
+
+      if (useTypesense) {
+        _typesensePage = page;
+        newProducts = await _fetchFromTypesense(
+          category: category,
+          subcategoryId: subcategoryId,
+          gender: _currentGender,
+          page: page,
+        );
+      } else {
+        final baseQuery = _buildSubcategoryBaseQuery(
+          category: category,
+          subcategoryId: subcategoryId,
+          selectedFilter: selectedFilter,
+        );
+
+        newProducts = await _executeSubcategoryFetch(
+          baseQuery: baseQuery,
+          key: key,
+          limit: 20,
+          gender: _currentGender,
+          isLoadMore: true,
+        );
+      }
 
       final currentProducts = _specificSubcategoryProducts[key] ?? [];
       final currentProductIds =
@@ -1736,12 +1835,13 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       _specificSubcategoryProducts[key] = currentProducts;
       _specificSubcategoryProductIds[key] = currentProductIds;
 
-      // Only cache unfiltered results
-      if (!hasFilters) {
+      // Only cache unfiltered, default-sorted results
+      if (!hasFilters && isDefaultSort) {
         _productCache[cacheKey] = List.from(newProducts);
         _cacheTimestamps[cacheKey] = now;
       }
-      _updateSubcategoryHasMoreState(key, _computeHasMore(key, newProducts.length, 20));
+      _updateSubcategoryHasMoreState(key,
+          useTypesense ? _typesenseHasMore : _computeHasMore(key, newProducts.length, 20));
     } catch (e) {
       debugPrint('❌ fetchMoreSubcategoryProducts error [$key]: $e');
       _updateSubcategoryHasMoreState(key, false);

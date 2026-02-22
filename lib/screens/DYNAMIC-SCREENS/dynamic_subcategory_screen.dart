@@ -13,6 +13,9 @@ import 'dart:async';
 import '../../widgets/market_search_delegate.dart';
 import '../../providers/search_history_provider.dart';
 import '../../providers/search_provider.dart';
+import '../../utils/color_localization.dart';
+import '../../utils/attribute_localization_utils.dart';
+import '../../constants/all_in_one_category_data.dart';
 
 class DynamicSubcategoryScreen extends StatefulWidget {
   final String category;
@@ -40,9 +43,12 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
   Timer? _debounceTimer;
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  String? _dynamicBrand;
+  List<String> _dynamicBrands = [];
   List<String> _dynamicColors = [];
-  String? _dynamicSubsubcategory;
+  List<String> _dynamicSubSubcategories = [];
+  Map<String, List<String>> _dynamicSpecFilters = {};
+  double? _minPrice;
+  double? _maxPrice;
   String _searchTerm = '';
   bool _isSearching = false;
   late final MarketProvider _marketProvider;
@@ -72,13 +78,18 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
           limit: 20,
         );
       } else {
-        // ✅ FIX: Pass gender parameter for Women/Men View All navigation
         _specialFilterProvider.fetchSubcategoryProducts(
           widget.category,
           widget.subcategoryId,
           gender: widget.gender,
         );
       }
+      // Fetch spec facets in parallel
+      _specialFilterProvider.fetchSpecFacets(
+        category: widget.category,
+        subcategoryId: widget.subcategoryId,
+        gender: widget.gender,
+      );
     });
   }
 
@@ -153,18 +164,104 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
     context.push('/search_results', extra: {'query': term});
   }
 
-  Future<void> _handleDynamicFilterApplied(Map<String, dynamic> filters) async {
-    setState(() {
-      _dynamicBrand = filters['brand'] as String?;
-      _dynamicColors = List<String>.from(filters['colors'] as List<dynamic>);
-      _dynamicSubsubcategory = filters['subsubcategory'] as String?;
-    });
-    _specialFilterProvider.setDynamicFilter(
-      brand: _dynamicBrand,
-      colors: _dynamicColors,
-      subsubcategory: _dynamicSubsubcategory,
+  Future<void> _handleDynamicFilterApplied(Map<String, dynamic> result) async {
+    final brands = List<String>.from(result['brands'] as List<dynamic>? ?? []);
+    final colors = List<String>.from(result['colors'] as List<dynamic>? ?? []);
+    final subSubcategories = List<String>.from(
+        result['subSubcategories'] as List<dynamic>? ?? []);
+    final rawSpecFilters = result['specFilters'] as Map<String, List<String>>? ?? {};
+    final specFilters = rawSpecFilters.map(
+      (k, v) => MapEntry(k, List<String>.from(v)),
     );
-    // ✅ FIX: Pass gender parameter for Women/Men View All filter
+    final minPrice = result['minPrice'] as double?;
+    final maxPrice = result['maxPrice'] as double?;
+
+    setState(() {
+      _dynamicBrands = brands;
+      _dynamicColors = colors;
+      _dynamicSubSubcategories = subSubcategories;
+      _dynamicSpecFilters = specFilters;
+      _minPrice = minPrice;
+      _maxPrice = maxPrice;
+    });
+
+    _specialFilterProvider.setDynamicFilter(
+      brands: brands,
+      colors: colors,
+      subsubcategory: subSubcategories.isNotEmpty ? subSubcategories.first : null,
+      specFilters: specFilters,
+    );
+    await _specialFilterProvider.fetchSubcategoryProducts(
+      widget.category,
+      widget.subcategoryId,
+      gender: widget.gender,
+    );
+  }
+
+  Future<void> _removeSingleDynamicFilter({
+    String? brand,
+    String? color,
+    String? subSubcategory,
+    String? specField,
+    String? specValue,
+    bool clearPrice = false,
+  }) async {
+    if (!mounted) return;
+
+    setState(() {
+      if (brand != null) _dynamicBrands.remove(brand);
+      if (color != null) _dynamicColors.remove(color);
+      if (subSubcategory != null) _dynamicSubSubcategories.remove(subSubcategory);
+      if (specField != null && specValue != null) {
+        final list = _dynamicSpecFilters[specField];
+        if (list != null) {
+          list.remove(specValue);
+          if (list.isEmpty) _dynamicSpecFilters.remove(specField);
+        }
+      }
+      if (clearPrice) {
+        _minPrice = null;
+        _maxPrice = null;
+      }
+    });
+
+    _specialFilterProvider.setDynamicFilter(
+      brands: _dynamicBrands,
+      colors: _dynamicColors,
+      subsubcategory: _dynamicSubSubcategories.isNotEmpty
+          ? _dynamicSubSubcategories.first
+          : null,
+      specFilters: _dynamicSpecFilters,
+    );
+    if (specField != null) {
+      _specialFilterProvider.removeDynamicSpecFilter(specField, specValue!);
+    }
+    await _specialFilterProvider.fetchSubcategoryProducts(
+      widget.category,
+      widget.subcategoryId,
+      gender: widget.gender,
+    );
+  }
+
+  Future<void> _clearAllDynamicFilters() async {
+    if (!mounted) return;
+
+    setState(() {
+      _dynamicBrands.clear();
+      _dynamicColors.clear();
+      _dynamicSubSubcategories.clear();
+      _dynamicSpecFilters.clear();
+      _minPrice = null;
+      _maxPrice = null;
+    });
+
+    _specialFilterProvider.setDynamicFilter(
+      brands: [],
+      colors: [],
+      subsubcategory: null,
+      specFilters: {},
+    );
+    _specialFilterProvider.clearDynamicSpecFilters();
     await _specialFilterProvider.fetchSubcategoryProducts(
       widget.category,
       widget.subcategoryId,
@@ -273,6 +370,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
     await _specialFilterProvider.fetchSubcategoryProducts(
       widget.category,
       widget.subcategoryId,
+      gender: widget.gender,
     );
   }
 
@@ -424,16 +522,21 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                 onSubmitSearch: _submitSearch,
                 onBackPressed: () {
                   setState(() {
-                    _dynamicBrand = null;
+                    _dynamicBrands.clear();
                     _dynamicColors = [];
-                    _dynamicSubsubcategory = null;
+                    _dynamicSubSubcategories.clear();
+                    _dynamicSpecFilters.clear();
+                    _minPrice = null;
+                    _maxPrice = null;
                     _searchTerm = '';
                   });
                   _specialFilterProvider.setDynamicFilter(
-                    brand: null,
+                    brands: [],
                     colors: [],
                     subsubcategory: null,
+                    specFilters: {},
                   );
+                  _specialFilterProvider.clearDynamicSpecFilters();
                   _specialFilterProvider.fetchSubcategoryProducts(
                     widget.category,
                     widget.subcategoryId,
@@ -462,17 +565,21 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
         onSubmitSearch: _submitSearch,
         onBackPressed: () {
           setState(() {
-            _dynamicBrand = null;
+            _dynamicBrands.clear();
             _dynamicColors = [];
-            _dynamicSubsubcategory = null;
+            _dynamicSubSubcategories.clear();
+            _dynamicSpecFilters.clear();
+            _minPrice = null;
+            _maxPrice = null;
             _searchTerm = '';
           });
           _specialFilterProvider.setDynamicFilter(
-            brand: null,
+            brands: [],
             colors: [],
             subsubcategory: null,
+            specFilters: {},
           );
-          // ✅ FIX: Pass gender for Women/Men View All
+          _specialFilterProvider.clearDynamicSpecFilters();
           _specialFilterProvider.fetchSubcategoryProducts(
             widget.category,
             widget.subcategoryId,
@@ -536,13 +643,15 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                       Builder(
                         builder: (context) {
                           final l10n = AppLocalizations.of(context);
-                          // ✅ FIX: Include category filter in count
-                          final appliedCount = (_dynamicBrand != null ? 1 : 0) +
+                          int specFilterCount = 0;
+                          for (final vals in _dynamicSpecFilters.values) {
+                            specFilterCount += vals.length;
+                          }
+                          final appliedCount = _dynamicBrands.length +
                               _dynamicColors.length +
-                              (_dynamicSubsubcategory != null &&
-                                      _dynamicSubsubcategory!.isNotEmpty
-                                  ? 1
-                                  : 0);
+                              _dynamicSubSubcategories.length +
+                              specFilterCount +
+                              (_minPrice != null || _maxPrice != null ? 1 : 0);
                           final hasApplied = appliedCount > 0;
                           final filterLabel = hasApplied
                               ? '${l10n.filter} ($appliedCount)'
@@ -551,16 +660,17 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                           return GestureDetector(
                             onTap: () async {
                               final result = await context
-                                  .push('/dynamic_subcategory_filter', extra: {
+                                  .push('/dynamic_filter', extra: {
                                 'category': widget.category,
-                                'subcategoryId': widget.subcategoryId,
-                                'subcategoryName': widget.subcategoryName,
-                                'initialBrand': _dynamicBrand,
+                                'subcategory': widget.subcategoryId,
+                                'buyerCategory': (widget.gender == 'Women' || widget.gender == 'Men') ? widget.gender : null,
+                                'initialBrands': _dynamicBrands,
                                 'initialColors': _dynamicColors,
-                                'initialSubsubcategory': _dynamicSubsubcategory,
-                                'isGenderFilter':
-                                    widget.isGenderFilter, // Add this
-                                'gender': widget.gender, // Add this
+                                'initialSubSubcategories': _dynamicSubSubcategories,
+                                'initialSpecFilters': _dynamicSpecFilters,
+                                'availableSpecFacets': _specialFilterProvider.specFacets,
+                                'initialMinPrice': _minPrice,
+                                'initialMaxPrice': _maxPrice,
                               });
                               if (result is Map<String, dynamic>) {
                                 _handleDynamicFilterApplied(result);
@@ -644,6 +754,15 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                     ],
                   ),
                 ),
+                // Active Filters Display
+                if (_dynamicBrands.isNotEmpty ||
+                    _dynamicColors.isNotEmpty ||
+                    _dynamicSubSubcategories.isNotEmpty ||
+                    _dynamicSpecFilters.isNotEmpty ||
+                    _minPrice != null ||
+                    _maxPrice != null)
+                  _buildActiveFiltersDisplay(),
+
                 Expanded(
                   child: _buildFilterView(),
                 ),
@@ -651,6 +770,130 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildActiveFiltersDisplay() {
+    final l10n = AppLocalizations.of(context);
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      padding: const EdgeInsets.all(12.0),
+      decoration: BoxDecoration(
+        color: Colors.purple.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8.0),
+        border: Border.all(color: Colors.purple.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.filter_list, color: Colors.purple, size: 16),
+              const SizedBox(width: 8),
+              Text(
+                '${l10n.activeFilters} (${_dynamicBrands.length + _dynamicColors.length + _dynamicSubSubcategories.length + _dynamicSpecFilters.values.fold(0, (sum, v) => sum + v.length) + (_minPrice != null || _maxPrice != null ? 1 : 0)})',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.purple,
+                  fontSize: 12,
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: _clearAllDynamicFilters,
+                child: Text(
+                  l10n.clearAll,
+                  style: const TextStyle(
+                    color: Colors.purple,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              ..._dynamicBrands.map((brand) => _buildFilterChip(
+                    '${l10n.brand}: $brand',
+                    () => _removeSingleDynamicFilter(brand: brand),
+                  )),
+              ..._dynamicColors.map((color) => _buildFilterChip(
+                    '${l10n.color}: ${ColorLocalization.localizeColorName(color, l10n)}',
+                    () => _removeSingleDynamicFilter(color: color),
+                  )),
+              ..._dynamicSubSubcategories.map((value) {
+                final isSubcategoryLevel =
+                    widget.subcategoryId.isEmpty;
+                final localizedValue = isSubcategoryLevel
+                    ? AllInOneCategoryData.localizeSubcategoryKey(
+                        widget.category, value, l10n)
+                    : AllInOneCategoryData.localizeSubSubcategoryKey(
+                        widget.category, widget.subcategoryId, value, l10n);
+                return _buildFilterChip(
+                  '${l10n.category}: $localizedValue',
+                  () => _removeSingleDynamicFilter(subSubcategory: value),
+                );
+              }),
+              ..._dynamicSpecFilters.entries.expand((entry) {
+                final fieldTitle = AttributeLocalizationUtils
+                    .getLocalizedAttributeTitle(entry.key, l10n);
+                return entry.value.map((value) {
+                  final localizedValue = AttributeLocalizationUtils
+                      .getLocalizedSingleValue(entry.key, value, l10n);
+                  return _buildFilterChip(
+                    '$fieldTitle: $localizedValue',
+                    () => _removeSingleDynamicFilter(
+                        specField: entry.key, specValue: value),
+                  );
+                });
+              }),
+              if (_minPrice != null || _maxPrice != null)
+                _buildFilterChip(
+                  '${l10n.price}: ${_minPrice?.toStringAsFixed(0) ?? '0'} - ${_maxPrice?.toStringAsFixed(0) ?? '∞'} TL',
+                  () => _removeSingleDynamicFilter(clearPrice: true),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, VoidCallback onRemove) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.purple.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.purple.withOpacity(0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.purple,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: onRemove,
+            child: const Icon(Icons.close, size: 14, color: Colors.purple),
+          ),
+        ],
       ),
     );
   }

@@ -147,19 +147,32 @@ class _DynamicFilterScreenState extends State<DynamicFilterScreen> {
     return widget.buyerCategory == 'Women' || widget.buyerCategory == 'Men';
   }
 
-  /// Get available subsubcategories (seller's subsubcategories) for current subcategory
+  /// Whether we're showing subcategories (true) vs subsubcategories (false).
+  /// When subcategory is empty, we show subcategories of the product category.
+  bool get _isSubcategoryLevel =>
+      widget.subcategory == null || widget.subcategory!.isEmpty;
+
+  /// Get available category options for the filter section.
+  /// If subcategory is empty → returns subcategories of the product category.
+  /// If subcategory is set → returns subsubcategories as before.
   List<String> _getAvailableSubSubcategories() {
-    if (!_shouldShowCategoriesFilter() || widget.subcategory == null) {
+    if (!_shouldShowCategoriesFilter()) {
       return [];
     }
 
-    // Get subsubcategories from the category data
+    if (_isSubcategoryLevel) {
+      // No subcategory selected — show subcategories of the product category
+      final subcategories =
+          AllInOneCategoryData.kSubcategories[widget.category];
+      return subcategories ?? [];
+    }
+
+    // Normal case — show subsubcategories for the selected subcategory
     final subSubcategoriesMap =
         AllInOneCategoryData.kSubSubcategories[widget.category];
 
     if (subSubcategoriesMap != null) {
       final subSubcategories = subSubcategoriesMap[widget.subcategory] ?? [];
-
       return subSubcategories;
     }
 
@@ -357,16 +370,19 @@ class _DynamicFilterScreenState extends State<DynamicFilterScreen> {
                         const Divider(height: 1),
                         // Category options - now with checkboxes for multiple selection
                         ...availableSubSubcategories.map((subSubcategory) {
-                          // Get the product category to use for localization
-                          final localizedName =
-                              AllInOneCategoryData.localizeSubSubcategoryKey(
-                            widget
-                                .category, // The product category (e.g., "Clothing & Fashion")
-                            widget
-                                .subcategory!, // The product subcategory (e.g., "Dresses")
-                            subSubcategory, // The sub-subcategory (e.g., "Casual Dresses")
-                            l10n,
-                          );
+                          // Use subcategory or subsubcategory localization based on level
+                          final localizedName = _isSubcategoryLevel
+                              ? AllInOneCategoryData.localizeSubcategoryKey(
+                                  widget.category,
+                                  subSubcategory,
+                                  l10n,
+                                )
+                              : AllInOneCategoryData.localizeSubSubcategoryKey(
+                                  widget.category,
+                                  widget.subcategory!,
+                                  subSubcategory,
+                                  l10n,
+                                );
 
                           return CheckboxListTile(
                             title: Text(localizedName),

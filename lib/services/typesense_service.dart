@@ -74,7 +74,7 @@ class TypeSenseService {
       case 'price_desc':
         return 'price:desc';
       default:
-        return 'promotionScore:desc';
+        return 'promotionScore:desc,createdAt:desc';
     }
   }
 
@@ -390,11 +390,16 @@ class TypeSenseService {
     List<List<String>>? facetFilters,
     List<String>? numericFilters,
     String sortOption = 'date',
+    String? additionalFilterBy,
   }) async {
     final uri = _searchUri(indexName);
 
     // Convert facetFilters → Typesense filter_by
     final filterParts = <String>[];
+
+    if (additionalFilterBy != null && additionalFilterBy.isNotEmpty) {
+      filterParts.add(additionalFilterBy);
+    }
 
     if (facetFilters != null) {
       for (final group in facetFilters) {
@@ -592,12 +597,17 @@ class TypeSenseService {
   /// Uses per_page=0 so no product documents are transferred — only facet counts.
   Future<Map<String, List<Map<String, dynamic>>>> fetchSpecFacets({
     required String indexName,
+    String query = '*',
     List<List<String>>? facetFilters,
+    String? additionalFilterBy,
   }) async {
     final uri = _searchUri(indexName);
 
     // Build filter_by from facetFilters (same logic as searchIdsWithFacets)
     final filterParts = <String>[];
+    if (additionalFilterBy != null && additionalFilterBy.isNotEmpty) {
+      filterParts.add(additionalFilterBy);
+    }
     if (facetFilters != null) {
       for (final group in facetFilters) {
         if (group.isEmpty) continue;
@@ -622,8 +632,9 @@ class TypeSenseService {
     }
 
     final params = <String, String>{
-      'q': '*',
-      'query_by': 'productName',
+      'q': query.isEmpty ? '*' : query,
+      'query_by':
+          'productName,brandModel,sellerName,category_en,category_tr,category_ru,subcategory_en,subcategory_tr,subcategory_ru,subsubcategory_en,subsubcategory_tr,subsubcategory_ru',
       'per_page': '0',
       'facet_by': _specFacetFields,
       'max_facet_values': '50',

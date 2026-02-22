@@ -14,6 +14,7 @@ import 'package:shimmer/shimmer.dart';
 import '../../widgets/market_search_delegate.dart';
 import '../../providers/search_history_provider.dart';
 import '../../utils/color_localization.dart';
+import '../../utils/attribute_localization_utils.dart';
 import '../../constants/all_in_one_category_data.dart';
 
 class DynamicTerasScreen extends StatefulWidget {
@@ -55,6 +56,7 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
   List<String> _dynamicBrands = [];
   List<String> _dynamicColors = [];
   List<String> _dynamicSubSubcategories = [];
+  Map<String, List<String>> _dynamicSpecFilters = {};
   double? _minPrice;
   double? _maxPrice;
 
@@ -544,6 +546,7 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
                     // Filter button
                     GestureDetector(
                       onTap: () async {
+                        final terasProv = context.read<DynamicTerasProvider>();
                         final result =
                             await context.push('/dynamic_filter', extra: {
                           'category': widget.category,
@@ -552,6 +555,8 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
                           'initialBrands': _dynamicBrands,
                           'initialColors': _dynamicColors,
                           'initialSubSubcategories': _dynamicSubSubcategories,
+                          'initialSpecFilters': _dynamicSpecFilters,
+                          'availableSpecFacets': terasProv.specFacets,
                           'initialMinPrice': _minPrice,
                           'initialMaxPrice': _maxPrice,
                         });
@@ -559,23 +564,31 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
                           _handleDynamicFilterApplied(result);
                         }
                       },
-                      child: Container(
+                      child: Builder(builder: (context) {
+                        int specFilterCount = 0;
+                        for (final vals in _dynamicSpecFilters.values) {
+                          specFilterCount += vals.length;
+                        }
+                        final hasFilters = _dynamicBrands.isNotEmpty ||
+                            _dynamicColors.isNotEmpty ||
+                            _dynamicSubSubcategories.isNotEmpty ||
+                            _dynamicSpecFilters.isNotEmpty ||
+                            _minPrice != null ||
+                            _maxPrice != null;
+                        final filterCount = _dynamicBrands.length +
+                            _dynamicColors.length +
+                            _dynamicSubSubcategories.length +
+                            specFilterCount +
+                            (_minPrice != null || _maxPrice != null ? 1 : 0);
+                        return Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: (_dynamicBrands.isNotEmpty ||
-                                  _dynamicColors.isNotEmpty ||
-                                  _dynamicSubSubcategories.isNotEmpty ||
-                                  _minPrice != null ||
-                                  _maxPrice != null)
+                          color: hasFilters
                               ? Colors.orange
                               : Colors.transparent,
                           border: Border.all(
-                            color: (_dynamicBrands.isNotEmpty ||
-                                    _dynamicColors.isNotEmpty ||
-                                    _dynamicSubSubcategories.isNotEmpty ||
-                                    _minPrice != null ||
-                                    _maxPrice != null)
+                            color: hasFilters
                                 ? Colors.orange
                                 : Colors.grey.shade300,
                             width: 1,
@@ -588,11 +601,7 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
                             Icon(
                               Icons.tune,
                               size: 16,
-                              color: (_dynamicBrands.isNotEmpty ||
-                                      _dynamicColors.isNotEmpty ||
-                                      _dynamicSubSubcategories.isNotEmpty ||
-                                      _minPrice != null ||
-                                      _maxPrice != null)
+                              color: hasFilters
                                   ? Colors.white
                                   : (Theme.of(context).brightness ==
                                           Brightness.dark
@@ -601,21 +610,13 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              (_dynamicBrands.isNotEmpty ||
-                                      _dynamicColors.isNotEmpty ||
-                                      _dynamicSubSubcategories.isNotEmpty ||
-                                      _minPrice != null ||
-                                      _maxPrice != null)
-                                  ? '${l10n.filter} (${_dynamicBrands.length + _dynamicColors.length + _dynamicSubSubcategories.length + (_minPrice != null || _maxPrice != null ? 1 : 0)})'
+                              hasFilters
+                                  ? '${l10n.filter} ($filterCount)'
                                   : l10n.filter,
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: (_dynamicBrands.isNotEmpty ||
-                                        _dynamicColors.isNotEmpty ||
-                                        _dynamicSubSubcategories.isNotEmpty ||
-                                        _minPrice != null ||
-                                        _maxPrice != null)
+                                color: hasFilters
                                     ? Colors.white
                                     : (Theme.of(context).brightness ==
                                             Brightness.dark
@@ -625,7 +626,8 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
                             ),
                           ],
                         ),
-                      ),
+                      );
+                      }),
                     ),
                     const SizedBox(width: 8),
                     // Sort button
@@ -743,6 +745,27 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
                             },
                           );
                         }),
+                        // Generic spec filter chips
+                        ...provider.dynamicSpecFilters.entries
+                            .expand((entry) {
+                          final fieldName = entry.key;
+                          final fieldTitle =
+                              AttributeLocalizationUtils
+                                  .getLocalizedAttributeTitle(fieldName, l10n);
+                          return entry.value.map((value) {
+                            final localizedValue =
+                                AttributeLocalizationUtils
+                                    .getLocalizedSingleValue(
+                                        fieldName, value, l10n);
+                            return _buildFilterChip(
+                              '$fieldTitle: $localizedValue',
+                              () {
+                                _removeSingleDynamicFilter(
+                                    specField: fieldName, specValue: value);
+                              },
+                            );
+                          });
+                        }),
                         if (provider.minPrice != null ||
                             provider.maxPrice != null)
                           _buildFilterChip(
@@ -810,14 +833,19 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
     final brands = List<String>.from(result['brands'] as List<dynamic>? ?? []);
     final colors = List<String>.from(result['colors'] as List<dynamic>? ?? []);
     final subSubcategories = List<String>.from(
-        result['subSubcategories'] as List<dynamic>? ?? []); // Added
+        result['subSubcategories'] as List<dynamic>? ?? []);
+    final rawSpecFilters = result['specFilters'] as Map<String, List<String>>? ?? {};
+    final specFilters = rawSpecFilters.map(
+      (k, v) => MapEntry(k, List<String>.from(v)),
+    );
     final minPrice = result['minPrice'] as double?;
     final maxPrice = result['maxPrice'] as double?;
 
     setState(() {
       _dynamicBrands = brands;
       _dynamicColors = colors;
-      _dynamicSubSubcategories = subSubcategories; // Added
+      _dynamicSubSubcategories = subSubcategories;
+      _dynamicSpecFilters = specFilters;
       _minPrice = minPrice;
       _maxPrice = maxPrice;
     });
@@ -826,7 +854,8 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
     await terasProv.setDynamicFilter(
       brands: brands,
       colors: colors,
-      subSubcategories: subSubcategories, // Added
+      subSubcategories: subSubcategories,
+      specFilters: specFilters,
       minPrice: minPrice,
       maxPrice: maxPrice,
       additive: false,
@@ -836,7 +865,9 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
   Future<void> _removeSingleDynamicFilter({
     String? brand,
     String? color,
-    String? subSubcategory, // Added
+    String? subSubcategory,
+    String? specField,
+    String? specValue,
     bool clearPrice = false,
   }) async {
     if (!mounted) return;
@@ -845,7 +876,14 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
       if (brand != null) _dynamicBrands.remove(brand);
       if (color != null) _dynamicColors.remove(color);
       if (subSubcategory != null)
-        _dynamicSubSubcategories.remove(subSubcategory); // Added
+        _dynamicSubSubcategories.remove(subSubcategory);
+      if (specField != null && specValue != null) {
+        final list = _dynamicSpecFilters[specField];
+        if (list != null) {
+          list.remove(specValue);
+          if (list.isEmpty) _dynamicSpecFilters.remove(specField);
+        }
+      }
       if (clearPrice) {
         _minPrice = null;
         _maxPrice = null;
@@ -856,7 +894,9 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
     await terasProv.removeDynamicFilter(
       brand: brand,
       color: color,
-      subSubcategory: subSubcategory, // Added
+      subSubcategory: subSubcategory,
+      specField: specField,
+      specValue: specValue,
       clearPrice: clearPrice,
     );
   }
@@ -867,7 +907,8 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
     setState(() {
       _dynamicBrands.clear();
       _dynamicColors.clear();
-      _dynamicSubSubcategories.clear(); // Added
+      _dynamicSubSubcategories.clear();
+      _dynamicSpecFilters.clear();
       _minPrice = null;
       _maxPrice = null;
     });
@@ -952,13 +993,16 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
 
     final terasProv = context.read<DynamicTerasProvider>();
     terasProv.clearDynamicFilters();
+    terasProv.setSortOption('date');
 
     setState(() {
       _dynamicBrands.clear();
       _dynamicColors.clear();
-      _dynamicSubSubcategories.clear(); // Add this line
+      _dynamicSubSubcategories.clear();
+      _dynamicSpecFilters.clear();
       _minPrice = null;
       _maxPrice = null;
+      _selectedSortOption = 'None';
     });
 
     context.pop();

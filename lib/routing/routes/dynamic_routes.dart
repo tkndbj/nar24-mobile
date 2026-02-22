@@ -213,6 +213,8 @@ class DynamicRoutes {
               initialCategory: extra['initialCategory'] as String?,
               initialSubcategory: extra['initialSubcategory'] as String?,
               initialSubSubcategory: extra['initialSubSubcategory'] as String?,
+              initialSpecFilters: extra['initialSpecFilters'] as Map<String, List<String>>?,
+              availableSpecFacets: (extra['availableSpecFacets'] as Map<String, List<Map<String, dynamic>>>?) ?? const {},
             ),
             transitionsBuilder: _slideTransition,
             transitionDuration: const Duration(milliseconds: 200),

@@ -9,6 +9,7 @@ import '../../providers/search_results_provider.dart';
 
 // Import your services/handlers
 import '../../services/deep_link_handler.dart';
+import '../../services/typesense_service_manager.dart';
 
 // Import your screens
 import '../../screens/market_screen.dart';
@@ -70,7 +71,9 @@ class GeneralRoutes {
           return CustomTransitionPage(
             key: state.pageKey,
             child: ChangeNotifierProvider(
-              create: (_) => SearchResultsProvider(),
+              create: (_) => SearchResultsProvider(
+                searchService: TypeSenseServiceManager.instance.shopService,
+              ),
               child: SearchResultsScreen(query: query),
             ),
             transitionsBuilder: _slideTransition,
