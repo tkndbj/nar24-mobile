@@ -360,8 +360,8 @@ export const deleteCampaign = onCall(
         
         // Build update object - only touch campaign-related fields
         const updateData = {
-          campaign: admin.firestore.FieldValue.delete(),
-          campaignName: admin.firestore.FieldValue.delete(),
+          campaign: '',
+campaignName: '',
           campaignDiscount: admin.firestore.FieldValue.delete(),
           campaignPrice: admin.firestore.FieldValue.delete(),
           discountPercentage: admin.firestore.FieldValue.delete(),
@@ -421,8 +421,8 @@ export const deleteCampaign = onCall(
         const productData = doc.data();
         
         const updateData = {
-          campaign: admin.firestore.FieldValue.delete(),
-          campaignName: admin.firestore.FieldValue.delete(),
+          campaign: '',
+campaignName: '',
           campaignDiscount: admin.firestore.FieldValue.delete(),
           campaignPrice: admin.firestore.FieldValue.delete(),
           discountPercentage: admin.firestore.FieldValue.delete(),
