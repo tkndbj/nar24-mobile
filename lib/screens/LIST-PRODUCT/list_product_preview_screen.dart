@@ -968,6 +968,8 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
       productData['ibanOwnerName'] = widget.ibanOwnerName;
       productData['ibanOwnerSurname'] = widget.ibanOwnerSurname;
       productData['iban'] = widget.iban;
+      productData['campaign'] = '';          // ← ADD
+productData['campaignName'] = '';
       productData['updatedAt'] = FieldValue.serverTimestamp();
 
       productData = FirebaseDataCleaner.cleanData(productData);

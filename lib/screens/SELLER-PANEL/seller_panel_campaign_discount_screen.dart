@@ -36,8 +36,11 @@ class _SellerPanelCampaignDiscountScreenState
   /// Deduplicated list of products (ensures no duplicates by product ID)
   late List<Product> _uniqueProducts;
 
-  /// Real-time listener for product updates
-  StreamSubscription<QuerySnapshot>? _productsSubscription;
+  // ✅ CHANGE: Replaced full collection listener with targeted per-document
+  // listeners ONLY for blocked products (sale preference / bundle).
+  // Unblocked products don't need real-time updates on this screen.
+  final Map<String, StreamSubscription<DocumentSnapshot>>
+      _blockedProductListeners = {};
 
   late AnimationController _fabAnimationController;
   late AnimationController _bulkAnimationController;
@@ -72,7 +75,7 @@ class _SellerPanelCampaignDiscountScreenState
     _deduplicateProducts();
     _initializeAnimations();
     _initializeControllers();
-    _setupProductsListener();
+    _attachBlockedProductListeners(); // ✅ CHANGE: targeted listeners only
   }
 
   /// Removes duplicate products by keeping only the first occurrence of each product ID
@@ -87,43 +90,67 @@ class _SellerPanelCampaignDiscountScreenState
     }).toList();
   }
 
-  /// Sets up a real-time listener for the selected products
-  void _setupProductsListener() {
-    if (_uniqueProducts.isEmpty) return;
+  // ✅ CHANGE: Replaced _setupProductsListener with targeted listeners.
+  // Only listens to individual documents that are blocked (sale preference
+  // or bundle). When a blocked product becomes unblocked (e.g. user removed
+  // sale preference), its listener self-cancels. If zero products are blocked,
+  // zero listeners are created — completely free.
+  void _attachBlockedProductListeners() {
+    for (final product in _uniqueProducts) {
+      if (!_isProductBlocked(product)) continue;
 
-    // Get product IDs to listen for
-    final productIds = _uniqueProducts.map((p) => p.id).toList();
+      // Skip if already listening
+      if (_blockedProductListeners.containsKey(product.id)) continue;
 
-    // Firestore 'whereIn' has a limit of 30, so we batch if needed
-    // For most cases, we won't have more than 30 products in a campaign
-    final idsToQuery = productIds.take(30).toList();
+      _blockedProductListeners[product.id] = _firestore
+          .collection('shop_products')
+          .doc(product.id)
+          .snapshots()
+          .listen(
+        (docSnapshot) {
+          if (!mounted || !docSnapshot.exists) return;
 
-    _productsSubscription = _firestore
-        .collection('shop_products')
-        .where(FieldPath.documentId, whereIn: idsToQuery)
-        .snapshots()
-        .listen(
-      (snapshot) {
-        if (!mounted) return;
+          final updatedProduct = Product.fromDocument(docSnapshot);
+          final stillBlocked = _isProductBlocked(updatedProduct);
 
-        // Create a map of updated products
-        final updatedProducts = <String, Product>{};
-        for (final doc in snapshot.docs) {
-          final product = Product.fromDocument(doc);
-          updatedProducts[product.id] = product;
-        }
+          setState(() {
+            final index =
+                _uniqueProducts.indexWhere((p) => p.id == product.id);
+            if (index != -1) {
+              _uniqueProducts[index] = updatedProduct;
+            }
+          });
 
-        // Update _uniqueProducts with fresh data while maintaining order
-        setState(() {
-          _uniqueProducts = _uniqueProducts.map((product) {
-            return updatedProducts[product.id] ?? product;
-          }).toList();
-        });
-      },
-      onError: (error) {
-        debugPrint('Error listening to product updates: $error');
-      },
-    );
+          // Self-cancel when no longer blocked — listener served its purpose
+          if (!stillBlocked) {
+            _blockedProductListeners[product.id]?.cancel();
+            _blockedProductListeners.remove(product.id);
+          }
+        },
+        onError: (e) {
+          debugPrint('Error listening to blocked product ${product.id}: $e');
+          _blockedProductListeners[product.id]?.cancel();
+          _blockedProductListeners.remove(product.id);
+        },
+      );
+    }
+  }
+
+  /// Returns true if product cannot receive a campaign discount.
+  bool _isProductBlocked(Product product) {
+    final hasSalePreference = product.discountThreshold != null &&
+        product.bulkDiscountPercentage != null &&
+        product.discountThreshold! > 0 &&
+        product.bulkDiscountPercentage! > 0;
+    final isInBundle = product.bundleIds.isNotEmpty;
+    return hasSalePreference || isInBundle;
+  }
+
+  void _cancelBlockedListeners() {
+    for (final sub in _blockedProductListeners.values) {
+      sub.cancel();
+    }
+    _blockedProductListeners.clear();
   }
 
   void _initializeAnimations() {
@@ -168,30 +195,30 @@ class _SellerPanelCampaignDiscountScreenState
   }
 
   void _initializeControllers() {
-  // Initialize only the discount map, not controllers/focus nodes
-  for (final product in _uniqueProducts) {
-    _productDiscounts[product.id] = 0.0;
+    // Initialize only the discount map, not controllers/focus nodes
+    for (final product in _uniqueProducts) {
+      _productDiscounts[product.id] = 0.0;
+    }
   }
-}
 
-// Add these helper methods to get controllers lazily
-TextEditingController _getController(String productId) {
-  return _individualControllers.putIfAbsent(
-    productId,
-    () => TextEditingController(),
-  );
-}
+  // Lazy controller/focus node getters
+  TextEditingController _getController(String productId) {
+    return _individualControllers.putIfAbsent(
+      productId,
+      () => TextEditingController(),
+    );
+  }
 
-FocusNode _getFocusNode(String productId) {
-  return _focusNodes.putIfAbsent(
-    productId,
-    () => FocusNode(),
-  );
-}
+  FocusNode _getFocusNode(String productId) {
+    return _focusNodes.putIfAbsent(
+      productId,
+      () => FocusNode(),
+    );
+  }
 
   @override
   void dispose() {
-    _productsSubscription?.cancel();
+    _cancelBlockedListeners(); // ✅ CHANGE: cancel targeted listeners
     _fabAnimationController.dispose();
     _bulkAnimationController.dispose();
     _bulkDiscountController.dispose();
@@ -222,15 +249,8 @@ FocusNode _getFocusNode(String productId) {
 
   bool _allProductsHaveDiscount() {
     for (final product in _uniqueProducts) {
-      // Skip products with sale preferences
-      final hasSalePreference = product.discountThreshold != null &&
-                                 product.bulkDiscountPercentage != null &&
-                                 product.discountThreshold! > 0 &&
-                                 product.bulkDiscountPercentage! > 0;
-      if (hasSalePreference) continue;
-
-      // Skip products that are part of a bundle
-      if (product.bundleIds.isNotEmpty) continue;
+      // Skip blocked products
+      if (_isProductBlocked(product)) continue;
 
       final controller = _individualControllers[product.id];
       final inputValue = controller?.text.trim() ?? '';
@@ -305,17 +325,9 @@ FocusNode _getFocusNode(String productId) {
     // Animate the application
     await Future.delayed(const Duration(milliseconds: 300));
 
-    // Apply to all products (skip products with sale preferences or in bundles)
+    // Apply to all non-blocked products
     for (final product in _uniqueProducts) {
-      // Skip products with sale preferences
-      final hasSalePreference = product.discountThreshold != null &&
-                                 product.bulkDiscountPercentage != null &&
-                                 product.discountThreshold! > 0 &&
-                                 product.bulkDiscountPercentage! > 0;
-      if (hasSalePreference) continue;
-
-      // Skip products that are part of a bundle
-      if (product.bundleIds.isNotEmpty) continue;
+      if (_isProductBlocked(product)) continue;
 
       _getController(product.id).text = discount.toStringAsFixed(1);
       _productDiscounts[product.id] = discount;
@@ -330,8 +342,7 @@ FocusNode _getFocusNode(String productId) {
     _bulkDiscountController.clear();
 
     HapticFeedback.mediumImpact();
-    _showSuccessSnackBar(
-        l10n.bulkDiscountApplied(_uniqueProducts.length));
+    _showSuccessSnackBar(l10n.bulkDiscountApplied(_uniqueProducts.length));
   }
 
   void _updateIndividualDiscount(String productId, String value) {
@@ -353,18 +364,10 @@ FocusNode _getFocusNode(String productId) {
       return;
     }
 
-    // Validate all discounts (skip products with sale preferences or in bundles)
+    // Validate all discounts (skip blocked products)
     final invalidDiscounts = <String>[];
     for (final product in _uniqueProducts) {
-      // Skip products with sale preferences
-      final hasSalePreference = product.discountThreshold != null &&
-                                 product.bulkDiscountPercentage != null &&
-                                 product.discountThreshold! > 0 &&
-                                 product.bulkDiscountPercentage! > 0;
-      if (hasSalePreference) continue;
-
-      // Skip products that are part of a bundle
-      if (product.bundleIds.isNotEmpty) continue;
+      if (_isProductBlocked(product)) continue;
 
       final controller = _individualControllers[product.id];
       final value = controller?.text.trim() ?? '';
@@ -397,62 +400,64 @@ FocusNode _getFocusNode(String productId) {
     }
   }
 
- Future<void> _updateProductsWithCampaign() async {
-  const int batchSize = 450; // Stay safely under Firestore's 500 limit
-  final campaignId = widget.campaign['id'] as String;
+  Future<void> _updateProductsWithCampaign() async {
+    const int batchSize = 450; // Stay safely under Firestore's 500 limit
+    final campaignId = widget.campaign['id'] as String;
+    // ✅ CHANGE: Use 'name' with fallback to 'title' for consistency
+    final campaignName =
+        (widget.campaign['name'] ?? widget.campaign['title'] ?? '') as String;
 
-  // Filter out products with sale preferences or that are part of a bundle
-  final validProducts = _uniqueProducts.where((product) {
-    final hasSalePreference = product.discountThreshold != null &&
-                               product.bulkDiscountPercentage != null &&
-                               product.discountThreshold! > 0 &&
-                               product.bulkDiscountPercentage! > 0;
-    final isInBundle = product.bundleIds.isNotEmpty;
-    return !hasSalePreference && !isInBundle;
-  }).toList();
+    // Filter out blocked products
+    final validProducts = _uniqueProducts.where((product) {
+      return !_isProductBlocked(product);
+    }).toList();
 
-  final totalProducts = validProducts.length;
+    final totalProducts = validProducts.length;
 
-  // Process in batches
-  for (int i = 0; i < totalProducts; i += batchSize) {
-    final batch = _firestore.batch();
-    final end = (i + batchSize < totalProducts) ? i + batchSize : totalProducts;
+    // Process in batches
+    for (int i = 0; i < totalProducts; i += batchSize) {
+      final batch = _firestore.batch();
+      final end =
+          (i + batchSize < totalProducts) ? i + batchSize : totalProducts;
 
-    for (int j = i; j < end; j++) {
-      final product = validProducts[j];
-      final productRef = _firestore.collection('shop_products').doc(product.id);
+      for (int j = i; j < end; j++) {
+        final product = validProducts[j];
+        final productRef =
+            _firestore.collection('shop_products').doc(product.id);
 
-      final updateData = <String, dynamic>{
-        'campaign': campaignId,
-        'campaignName': widget.campaign['name'] as String? ?? '',
-      };
+        final updateData = <String, dynamic>{
+          'campaign': campaignId,
+          'campaignName': campaignName,
+        };
 
-      // Add discount if specified
-      final discount = _productDiscounts[product.id] ?? 0.0;
-      if (discount > 0) {
-        // Use original price if available, otherwise use current price
-        final basePrice = product.originalPrice ?? product.price;
-        final discountedPrice = basePrice * (1 - discount / 100);
+        // Add discount if specified
+        final discount = _productDiscounts[product.id] ?? 0.0;
+        if (discount > 0) {
+          // Use original price if available, otherwise use current price
+          final basePrice = product.originalPrice ?? product.price;
+          final discountedPrice = basePrice * (1 - discount / 100);
 
-        updateData['discountPercentage'] = discount;
-        updateData['originalPrice'] = basePrice;
-        updateData['price'] = discountedPrice;
+          updateData['discountPercentage'] = discount;
+          updateData['originalPrice'] = basePrice;
+          updateData['price'] = discountedPrice;
+        }
+
+        batch.update(productRef, updateData);
       }
 
-      batch.update(productRef, updateData);
-    }
+      await batch.commit();
 
-    await batch.commit();
-
-    // Update campaign participation status immediately for UI feedback
-    if (mounted) {
-      final campaignId = widget.campaign['id'] as String?;
-      if (campaignId != null) {
-        context.read<SellerPanelProvider>().setCampaignParticipation(campaignId, true);
+      // Update campaign participation status immediately for UI feedback
+      if (mounted) {
+        final cId = widget.campaign['id'] as String?;
+        if (cId != null) {
+          context
+              .read<SellerPanelProvider>()
+              .setCampaignParticipation(cId, true);
+        }
       }
     }
   }
-}
 
   void _navigateToSuccessScreen() {
     Navigator.pushReplacement(
@@ -565,11 +570,58 @@ FocusNode _getFocusNode(String productId) {
     );
   }
 
+  // ✅ CHANGE: Removed _removeSalePreference's use of product.reference!
+  // Now uses explicit document reference — safe regardless of product source.
+  Future<void> _removeSalePreference(Product product) async {
+    final l10n = AppLocalizations.of(context);
+
+    try {
+      await _firestore.collection('shop_products').doc(product.id).update({
+        'discountThreshold': FieldValue.delete(),
+        'bulkDiscountPercentage': FieldValue.delete(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.salePreferenceRemovedSuccessfully),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Note: if the product had a targeted listener, it will pick up this
+        // change automatically and update _uniqueProducts via setState.
+        // The listener will also self-cancel since the product is no longer blocked.
+        // If for some reason the listener isn't active, update manually:
+        if (!_blockedProductListeners.containsKey(product.id)) {
+          setState(() {
+            final index =
+                _uniqueProducts.indexWhere((p) => p.id == product.id);
+            if (index != -1) {
+              _uniqueProducts[index] = product.copyWith(
+                discountThreshold: null,
+                bulkDiscountPercentage: null,
+              );
+            }
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.errorRemovingSalePreference),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      // overall background
       backgroundColor: dark ? _darkBackground : _surfaceColor,
       appBar: _buildAppBar(),
       body: SafeArea(
@@ -596,7 +648,7 @@ FocusNode _getFocusNode(String productId) {
       backgroundColor: dark ? _darkBackground : _cardColor,
       iconTheme: IconThemeData(color: dark ? Colors.white : _textPrimary),
       foregroundColor: dark ? Colors.white : _textPrimary,
-      toolbarHeight: 60, // Reduced height
+      toolbarHeight: 60,
       leading: Container(
         margin: const EdgeInsets.all(6),
         decoration: BoxDecoration(
@@ -616,7 +668,7 @@ FocusNode _getFocusNode(String productId) {
           Text(
             l10n.configureDiscounts,
             style: TextStyle(
-              fontSize: 18, // Reduced font size
+              fontSize: 18,
               fontWeight: FontWeight.w700,
               color: dark ? Colors.white : _textPrimary,
               letterSpacing: -0.3,
@@ -631,7 +683,7 @@ FocusNode _getFocusNode(String productId) {
             child: Text(
               l10n.productsSelected(_uniqueProducts.length),
               style: const TextStyle(
-                fontSize: 10, // Reduced font size
+                fontSize: 10,
                 color: _primaryColor,
                 fontWeight: FontWeight.w600,
               ),
@@ -856,7 +908,6 @@ FocusNode _getFocusNode(String productId) {
                                     _primaryColor.withOpacity(0.8)
                                   ],
                           ),
-                          boxShadow: _isApplyingBulk ? null : [],
                         ),
                         child: ElevatedButton(
                           onPressed:
@@ -1011,7 +1062,6 @@ FocusNode _getFocusNode(String productId) {
 
   Widget _buildProductList() {
     return ListView.builder(
-      // Add extra bottom padding for the floating action button
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
       itemCount: _uniqueProducts.length,
       itemBuilder: (context, index) {
@@ -1024,21 +1074,20 @@ FocusNode _getFocusNode(String productId) {
   Widget _buildProductCard(Product product, int index) {
     final l10n = AppLocalizations.of(context);
     final controller = _getController(product.id);
-final focusNode = _getFocusNode(product.id);
+    final focusNode = _getFocusNode(product.id);
     final discount = _productDiscounts[product.id] ?? 0.0;
     final hasDiscount = discount >= _minDiscountPercentage;
 
+    final isBlocked = _isProductBlocked(product);
+
     // Check for sale preference (buy X to get Y% discount)
     final hasSalePreference = product.discountThreshold != null &&
-                               product.bulkDiscountPercentage != null &&
-                               product.discountThreshold! > 0 &&
-                               product.bulkDiscountPercentage! > 0;
+        product.bulkDiscountPercentage != null &&
+        product.discountThreshold! > 0 &&
+        product.bulkDiscountPercentage! > 0;
 
     // Check if product is part of a bundle
     final isInBundle = product.bundleIds.isNotEmpty;
-
-    // Product is blocked from discount input if it has sale preference or is in bundle
-    final isBlocked = hasSalePreference || isInBundle;
 
     // Use original price if available, otherwise use current price
     final basePrice = product.originalPrice ?? product.price;
@@ -1190,7 +1239,7 @@ final focusNode = _getFocusNode(product.id);
                   ),
                   const SizedBox(height: 8),
 
-                  // Discount Input - Hide when sale preference exists or product is in bundle
+                  // Discount Input - Hide when blocked
                   if (!isBlocked)
                     SizedBox(
                       width: 120,
@@ -1206,78 +1255,80 @@ final focusNode = _getFocusNode(product.id);
                           ],
                         ),
                         child: TextFormField(
-                        controller: controller,
-                        focusNode: focusNode,
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                              RegExp(r'^\d*\.?\d*')),
-                        ],
-                        onChanged: (value) =>
-                            _updateIndividualDiscount(product.id, value),
-                        decoration: InputDecoration(
-                          labelText: l10n.discount,
-                          labelStyle: const TextStyle(
-                            color: _textSecondary,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 12,
-                          ),
-                          hintText: '15.0',
-                          hintStyle: TextStyle(
-                            color: dark
-                                ? Colors.white70
-                                : _textSecondary.withOpacity(0.6),
-                            fontSize: 12,
-                          ),
-                          suffixIcon: Container(
-                            margin: const EdgeInsets.all(4),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: _primaryColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(4),
+                          controller: controller,
+                          focusNode: focusNode,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                                RegExp(r'^\d*\.?\d*')),
+                          ],
+                          onChanged: (value) =>
+                              _updateIndividualDiscount(product.id, value),
+                          decoration: InputDecoration(
+                            labelText: l10n.discount,
+                            labelStyle: const TextStyle(
+                              color: _textSecondary,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 12,
                             ),
-                            child: const Text(
-                              '%',
-                              style: TextStyle(
-                                color: _primaryColor,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 10,
+                            hintText: '15.0',
+                            hintStyle: TextStyle(
+                              color: dark
+                                  ? Colors.white70
+                                  : _textSecondary.withOpacity(0.6),
+                              fontSize: 12,
+                            ),
+                            suffixIcon: Container(
+                              margin: const EdgeInsets.all(4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: _primaryColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                '%',
+                                style: TextStyle(
+                                  color: _primaryColor,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 10,
+                                ),
                               ),
                             ),
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: _borderColor),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: _borderColor),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(
-                              color: _primaryColor,
-                              width: 2,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide:
+                                  const BorderSide(color: _borderColor),
                             ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide:
+                                  const BorderSide(color: _borderColor),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(
+                                color: _primaryColor,
+                                width: 2,
+                              ),
+                            ),
+                            filled: true,
+                            fillColor: dark
+                                ? _darkCard.withOpacity(0.5)
+                                : _surfaceColor.withOpacity(0.5),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            isDense: true,
                           ),
-                          filled: true,
-                          fillColor: dark
-                              ? _darkCard.withOpacity(0.5)
-                              : _surfaceColor.withOpacity(0.5),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 8,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                           ),
-                          isDense: true,
-                        ),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    ),
                     ),
 
                   if (!isBlocked) const SizedBox(height: 8),
@@ -1357,7 +1408,7 @@ final focusNode = _getFocusNode(product.id);
                     ),
                   ],
 
-                  // Sale preference warning (buy X to get Y% discount)
+                  // Sale preference warning
                   if (hasSalePreference) ...[
                     const SizedBox(height: 8),
                     Container(
@@ -1388,7 +1439,9 @@ final focusNode = _getFocusNode(product.id);
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
-                                    color: dark ? Colors.white : Colors.orange.shade700,
+                                    color: dark
+                                        ? Colors.white
+                                        : Colors.orange.shade700,
                                     height: 1.3,
                                   ),
                                 ),
@@ -1423,7 +1476,7 @@ final focusNode = _getFocusNode(product.id);
                     ),
                   ],
 
-                  // Bundle warning - product is part of a bundle
+                  // Bundle warning
                   if (isInBundle && !hasSalePreference) ...[
                     const SizedBox(height: 8),
                     Container(
@@ -1451,7 +1504,9 @@ final focusNode = _getFocusNode(product.id);
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
-                                color: dark ? Colors.purple.shade200 : Colors.purple.shade700,
+                                color: dark
+                                    ? Colors.purple.shade200
+                                    : Colors.purple.shade700,
                                 height: 1.3,
                               ),
                             ),
@@ -1536,7 +1591,6 @@ final focusNode = _getFocusNode(product.id);
                       ? [_textSecondary, _textSecondary]
                       : [_primaryColor, _primaryColor.withOpacity(0.8)],
                 ),
-                boxShadow: (!canContinue || _isSaving) ? null : [],
               ),
               child: SizedBox(
                 width: double.infinity,
@@ -1580,47 +1634,5 @@ final focusNode = _getFocusNode(product.id);
         );
       },
     );
-  }
-
-  Future<void> _removeSalePreference(Product product) async {
-    final l10n = AppLocalizations.of(context);
-
-    try {
-      await product.reference!.update({
-        'discountThreshold': FieldValue.delete(),
-        'bulkDiscountPercentage': FieldValue.delete(),
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.salePreferenceRemovedSuccessfully),
-            backgroundColor: Colors.green,
-          ),
-        );
-
-        // Update the product object to reflect the changes
-        setState(() {
-          // Find the product in the list and update it
-          final index = _uniqueProducts.indexWhere((p) => p.id == product.id);
-          if (index != -1) {
-            // Use copyWith to create a new product with cleared sale preferences
-            _uniqueProducts[index] = product.copyWith(
-              discountThreshold: null,
-              bulkDiscountPercentage: null,
-            );
-          }
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.errorRemovingSalePreference),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
   }
 }

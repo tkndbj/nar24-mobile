@@ -40,11 +40,25 @@ class _SellerPanelEditCampaignScreenState
   final Map<String, FocusNode> _focusNodes = {};
   final Set<String> _removingProducts = {}; // Track products being removed
 
-  /// Real-time listener for campaigned products
+  /// Real-time listener for campaigned products (kept — justified for
+  /// multi-member collaboration, but now with .limit())
   StreamSubscription<QuerySnapshot>? _campaignedProductsSubscription;
 
-  /// Real-time listener for available products
-  StreamSubscription<QuerySnapshot>? _availableProductsSubscription;
+  // ✅ CHANGE: Replaced full-collection available products listener with:
+  //   1. One-time paginated fetch (_loadAvailableProducts)
+  //   2. Targeted per-document listeners ONLY for blocked products
+  DocumentSnapshot? _lastAvailableDoc;
+  bool _hasMoreAvailable = true;
+  bool _isLoadingMoreAvailable = false;
+  final ScrollController _availableScrollController = ScrollController();
+  final Map<String, StreamSubscription<DocumentSnapshot>>
+      _blockedProductListeners = {};
+
+  // ✅ CHANGE: Added pagination for campaigned products tab
+  DocumentSnapshot? _lastCampaignedDoc;
+  bool _hasMoreCampaigned = true;
+  bool _isLoadingMoreCampaigned = false;
+  final ScrollController _campaignedScrollController = ScrollController();
 
   TabController? _tabController;
 
@@ -59,6 +73,7 @@ class _SellerPanelEditCampaignScreenState
 
   static const double _minDiscountPercentage = 5.0;
   static const double _maxDiscountPercentage = 90.0;
+  static const int _pageSize = 20;
 
   // Viewer role state
   bool _isViewer = false;
@@ -68,7 +83,30 @@ class _SellerPanelEditCampaignScreenState
   void initState() {
     super.initState();
     _checkUserRole();
-    _setupCampaignedProductsListener();
+    _loadCampaignedProducts();
+
+    // ✅ CHANGE: Scroll listeners for pagination
+    _campaignedScrollController.addListener(_onCampaignedScroll);
+    _availableScrollController.addListener(_onAvailableScroll);
+  }
+
+  // ── Scroll-based pagination triggers ─────────────────────────────────
+  void _onCampaignedScroll() {
+    if (_campaignedScrollController.position.pixels >=
+            _campaignedScrollController.position.maxScrollExtent - 200 &&
+        _hasMoreCampaigned &&
+        !_isLoadingMoreCampaigned) {
+      _loadMoreCampaignedProducts();
+    }
+  }
+
+  void _onAvailableScroll() {
+    if (_availableScrollController.position.pixels >=
+            _availableScrollController.position.maxScrollExtent - 200 &&
+        _hasMoreAvailable &&
+        !_isLoadingMoreAvailable) {
+      _loadMoreAvailableProducts();
+    }
   }
 
   /// Checks if the current user has only viewer role for the shop.
@@ -80,10 +118,8 @@ class _SellerPanelEditCampaignScreenState
         return;
       }
 
-      final shopDoc = await _firestore
-          .collection('shops')
-          .doc(widget.shopId)
-          .get();
+      final shopDoc =
+          await _firestore.collection('shops').doc(widget.shopId).get();
 
       if (shopDoc.exists && mounted) {
         final shopData = shopDoc.data();
@@ -108,12 +144,11 @@ class _SellerPanelEditCampaignScreenState
       vsync: this,
     );
 
-    // Only add listener for non-viewers (they can access second tab)
     if (!_isViewer) {
       _tabController!.addListener(() {
-        if (_tabController!.index == 1 &&
-            _availableProductsSubscription == null) {
-          _setupAvailableProductsListener();
+        // ✅ CHANGE: Load available products only once on first tab switch
+        if (_tabController!.index == 1 && _availableProducts.isEmpty) {
+          _loadAvailableProducts();
         }
       });
     }
@@ -122,9 +157,11 @@ class _SellerPanelEditCampaignScreenState
   @override
   void dispose() {
     _campaignedProductsSubscription?.cancel();
-    _availableProductsSubscription?.cancel();
+    _cancelBlockedListeners();
     _tabController?.dispose();
     _snackbarTimer?.cancel();
+    _campaignedScrollController.dispose();
+    _availableScrollController.dispose();
     for (final controller in _discountControllers.values) {
       controller.dispose();
     }
@@ -134,8 +171,79 @@ class _SellerPanelEditCampaignScreenState
     super.dispose();
   }
 
-  /// Sets up a real-time listener for products in this campaign
-  void _setupCampaignedProductsListener() {
+  // ═══════════════════════════════════════════════════════════════════════
+  // BLOCKED PRODUCT LISTENERS — targeted, per-document, self-cancelling
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /// Returns true if product cannot receive a campaign discount.
+  bool _isProductBlocked(Product product) {
+    final hasSalePreference = product.discountThreshold != null &&
+        product.bulkDiscountPercentage != null &&
+        product.discountThreshold! > 0 &&
+        product.bulkDiscountPercentage! > 0;
+    final isInBundle = product.bundleIds.isNotEmpty;
+    return hasSalePreference || isInBundle;
+  }
+
+  /// Attaches individual document listeners ONLY for blocked products.
+  /// When a blocked product becomes unblocked (e.g. sale preference removed),
+  /// the listener self-cancels. Cost: 1 read per change per blocked product.
+  void _attachBlockedProductListeners(List<Product> products) {
+    for (final product in products) {
+      if (!_isProductBlocked(product)) continue;
+      if (_blockedProductListeners.containsKey(product.id)) continue;
+
+      _blockedProductListeners[product.id] = _firestore
+          .collection('shop_products')
+          .doc(product.id)
+          .snapshots()
+          .listen(
+        (docSnapshot) {
+          if (!mounted || !docSnapshot.exists) return;
+
+          final updatedProduct = Product.fromDocument(docSnapshot);
+          final stillBlocked = _isProductBlocked(updatedProduct);
+
+          setState(() {
+            // Update in available products list
+            final availIdx =
+                _availableProducts.indexWhere((p) => p.id == product.id);
+            if (availIdx != -1) {
+              _availableProducts[availIdx] = updatedProduct;
+            }
+          });
+
+          // Self-cancel when no longer blocked
+          if (!stillBlocked) {
+            _blockedProductListeners[product.id]?.cancel();
+            _blockedProductListeners.remove(product.id);
+          }
+        },
+        onError: (e) {
+          debugPrint('Error listening to blocked product ${product.id}: $e');
+          _blockedProductListeners[product.id]?.cancel();
+          _blockedProductListeners.remove(product.id);
+        },
+      );
+    }
+  }
+
+  void _cancelBlockedListeners() {
+    for (final sub in _blockedProductListeners.values) {
+      sub.cancel();
+    }
+    _blockedProductListeners.clear();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // CAMPAIGNED PRODUCTS — real-time listener with limit (justified for
+  // multi-member collaboration)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /// Loads campaigned products with a real-time listener.
+  /// Listener is justified here because multiple team members may be
+  /// editing the same campaign simultaneously.
+  Future<void> _loadCampaignedProducts() async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -148,14 +256,16 @@ class _SellerPanelEditCampaignScreenState
         .collection('shop_products')
         .where('shopId', isEqualTo: widget.shopId)
         .where('campaign', isEqualTo: campaignId)
+        .orderBy('createdAt', descending: true)
+        // ✅ CHANGE: Added limit to prevent unbounded reads
+        .limit(50)
         .snapshots()
         .listen(
       (snapshot) {
         if (!mounted) return;
 
-        final products = snapshot.docs
-            .map((doc) => Product.fromDocument(doc))
-            .toList();
+        final products =
+            snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
 
         // Initialize controllers for new products only
         for (final product in products) {
@@ -182,6 +292,11 @@ class _SellerPanelEditCampaignScreenState
           _productDiscounts.remove(id);
         }
 
+        // ✅ CHANGE: Track pagination state from listener results
+        _lastCampaignedDoc =
+            snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
+        _hasMoreCampaigned = snapshot.docs.length == 50;
+
         setState(() {
           _campaignedProducts = products;
           _isLoading = false;
@@ -199,97 +314,146 @@ class _SellerPanelEditCampaignScreenState
     );
   }
 
-  Future<void> _loadCampaignedProducts() async {
-    // Now handled by listener, this is just for compatibility
-    _setupCampaignedProductsListener();
-  }
+  /// Loads more campaigned products beyond the listener's limit.
+  Future<void> _loadMoreCampaignedProducts() async {
+    if (!_hasMoreCampaigned || _isLoadingMoreCampaigned) return;
+    if (_lastCampaignedDoc == null) return;
 
-  /// Sets up a real-time listener for products available to add to campaign
-  void _setupAvailableProductsListener() {
-    setState(() {
-      _isLoadingAvailable = true;
-      _errorMessage = null;
-    });
+    setState(() => _isLoadingMoreCampaigned = true);
 
-    _availableProductsSubscription?.cancel();
-    _availableProductsSubscription = _firestore
-        .collection('shop_products')
-        .where('shopId', isEqualTo: widget.shopId)
-        .snapshots()
-        .listen(
-      (snapshot) {
-        if (!mounted) return;
+    try {
+      final campaignId = widget.campaign['id'] as String;
+      final snapshot = await _firestore
+          .collection('shop_products')
+          .where('shopId', isEqualTo: widget.shopId)
+          .where('campaign', isEqualTo: campaignId)
+          .orderBy('createdAt', descending: true)
+          .startAfterDocument(_lastCampaignedDoc!)
+          .limit(_pageSize)
+          .get();
 
-        // Filter to only include products not in any campaign
-        final availableProducts = snapshot.docs
-            .map((doc) => Product.fromDocument(doc))
-            .where((product) => product.campaign == null)
-            .toList();
+      final newProducts =
+          snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
 
-        // Update selected products with fresh data
-        final updatedSelections = <Product>[];
-        for (final selected in _selectedNewProducts) {
-          final freshProduct = availableProducts
-              .where((p) => p.id == selected.id)
-              .firstOrNull;
-          if (freshProduct != null) {
-            updatedSelections.add(freshProduct);
-          }
-          // If product is no longer available (added to campaign), remove from selection
+      for (final product in newProducts) {
+        if (!_discountControllers.containsKey(product.id)) {
+          _discountControllers[product.id] = TextEditingController(
+            text: (product.discountPercentage ?? 0).toStringAsFixed(1),
+          );
+          _focusNodes[product.id] = FocusNode();
         }
+        _productDiscounts[product.id] =
+            (product.discountPercentage ?? 0.0).toDouble();
+      }
 
-        setState(() {
-          _availableProducts = availableProducts;
-          _selectedNewProducts = updatedSelections;
-          _isLoadingAvailable = false;
-        });
-      },
-      onError: (error) {
-        debugPrint('Error listening to available products: $error');
-        if (mounted) {
-          setState(() {
-            _errorMessage = 'Error loading available products: $error';
-            _isLoadingAvailable = false;
-          });
+      setState(() {
+        _campaignedProducts.addAll(newProducts);
+        _lastCampaignedDoc =
+            snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
+        _hasMoreCampaigned = snapshot.docs.length == _pageSize;
+        _isLoadingMoreCampaigned = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading more campaigned products: $e');
+      setState(() => _isLoadingMoreCampaigned = false);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // AVAILABLE PRODUCTS — paginated one-time fetch + targeted blocked
+  // listeners. No full-collection listener.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /// ✅ CHANGE: Replaced full-collection real-time listener with paginated
+  /// one-time fetch. Reads only 20 docs per page instead of the entire shop.
+  /// Targeted per-document listeners are attached only for blocked products.
+  Future<void> _loadAvailableProducts({bool loadMore = false}) async {
+    if (!loadMore) {
+      setState(() {
+        _isLoadingAvailable = true;
+        _lastAvailableDoc = null;
+        _hasMoreAvailable = true;
+        _errorMessage = null;
+      });
+      _cancelBlockedListeners();
+    } else {
+      if (!_hasMoreAvailable || _isLoadingMoreAvailable) return;
+      setState(() => _isLoadingMoreAvailable = true);
+    }
+
+    try {
+      // ✅ CHANGE: Requires campaign field standardization.
+      // Products not in any campaign must have campaign == ''
+      // instead of the field being deleted. See migration note below.
+      Query query = _firestore
+          .collection('shop_products')
+          .where('shopId', isEqualTo: widget.shopId)
+          .where('campaign', isEqualTo: '')
+          .orderBy('createdAt', descending: true)
+          .limit(_pageSize);
+
+      if (loadMore && _lastAvailableDoc != null) {
+        query = query.startAfterDocument(_lastAvailableDoc!);
+      }
+
+      final snapshot = await query.get();
+      final products =
+          snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
+
+      setState(() {
+        if (loadMore) {
+          _availableProducts.addAll(products);
+        } else {
+          _availableProducts = products;
         }
-      },
-    );
+        _lastAvailableDoc =
+            snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
+        _hasMoreAvailable = snapshot.docs.length == _pageSize;
+        _isLoadingAvailable = false;
+        _isLoadingMoreAvailable = false;
+      });
+
+      // Attach listeners ONLY for blocked products in this page
+      _attachBlockedProductListeners(products);
+    } catch (e) {
+      debugPrint('Error loading available products: $e');
+      setState(() {
+        _isLoadingAvailable = false;
+        _isLoadingMoreAvailable = false;
+        _errorMessage = 'Error loading available products: $e';
+      });
+    }
   }
 
-  Future<void> _loadAvailableProducts() async {
-    // Now handled by listener, this is just for compatibility
-    _setupAvailableProductsListener();
+  /// Convenience method for scroll-triggered pagination.
+  Future<void> _loadMoreAvailableProducts() async {
+    await _loadAvailableProducts(loadMore: true);
   }
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // CAMPAIGN OPERATIONS
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // ✅ CHANGE: Removed redundant Firestore read — product data is already
+  // available in memory from the listener. Saves 1 read per removal.
   Future<void> _removeFromCampaign(Product product) async {
-    // Add to removing set to show loading indicator
     setState(() {
       _removingProducts.add(product.id);
     });
 
     try {
-      // Get the product document to check for original price
-      final productDoc =
-          await _firestore.collection('shop_products').doc(product.id).get();
-
       final updateData = <String, dynamic>{
-        'campaign': FieldValue.delete(),
-        'campaignName': FieldValue.delete(),
+        // ✅ CHANGE: Set to '' instead of FieldValue.delete() for queryability
+        'campaign': '',
+        'campaignName': '',
         'discountPercentage': FieldValue.delete(),
+        'originalPrice': FieldValue.delete(),
       };
 
-      if (productDoc.exists) {
-        final productData = productDoc.data() as Map<String, dynamic>;
-        final originalPrice = productData['originalPrice'];
-
-        if (originalPrice != null) {
-          // Restore the original price
-          updateData['price'] = originalPrice;
-        }
+      // ✅ CHANGE: Use in-memory product data — no extra read needed
+      if (product.originalPrice != null) {
+        updateData['price'] = product.originalPrice;
       }
-
-      // Always remove originalPrice field after restoration
-      updateData['originalPrice'] = FieldValue.delete();
 
       await _firestore
           .collection('shop_products')
@@ -305,20 +469,17 @@ class _SellerPanelEditCampaignScreenState
         _productDiscounts.remove(product.id);
         _removingProducts.remove(product.id);
 
-        // Add the product back to available products if we're on the second tab
-        if (_tabController?.index == 1 || _availableProducts.isNotEmpty) {
-          final updatedProduct = product.copyWith(
-            campaign: null,
-            setDiscountPercentageNull: true,
-            setOriginalPriceNull: true,
-          );
-          if (!_availableProducts.any((p) => p.id == product.id)) {
-            _availableProducts.add(updatedProduct);
-          }
+        // Add back to available list immediately for UX
+        final updatedProduct = product.copyWith(
+          setDiscountPercentageNull: true,
+          setOriginalPriceNull: true,
+        );
+        if (!_availableProducts.any((p) => p.id == product.id)) {
+          _availableProducts.insert(0, updatedProduct);
         }
       });
 
-      // Manage snackbar display with timer
+      // Batched snackbar display
       _pendingRemovalCount++;
       _snackbarTimer?.cancel();
       _snackbarTimer = Timer(const Duration(milliseconds: 500), () {
@@ -331,7 +492,6 @@ class _SellerPanelEditCampaignScreenState
         }
       });
 
-      // Refresh campaign status in provider
       Provider.of<SellerPanelProvider>(context, listen: false)
           .refreshCampaignStatus();
     } catch (e) {
@@ -347,16 +507,13 @@ class _SellerPanelEditCampaignScreenState
       final updateData = <String, dynamic>{};
 
       if (newDiscount > 0) {
-        // Use original price if available, otherwise use current price as base
         final basePrice = product.originalPrice ?? product.price;
         final discountedPrice = basePrice * (1 - newDiscount / 100);
 
         updateData['discountPercentage'] = newDiscount;
-        updateData['originalPrice'] =
-            basePrice; // Ensure original price is stored
+        updateData['originalPrice'] = basePrice;
         updateData['price'] = discountedPrice;
       } else {
-        // When removing discount, restore original price if available
         if (product.originalPrice != null) {
           updateData['price'] = product.originalPrice;
         }
@@ -386,7 +543,7 @@ class _SellerPanelEditCampaignScreenState
       return;
     }
 
-    // Deduplicate selected products by ID before passing to discount screen
+    // Deduplicate selected products by ID
     final seenIds = <String>{};
     final uniqueProducts = _selectedNewProducts.where((product) {
       if (seenIds.contains(product.id)) {
@@ -396,7 +553,6 @@ class _SellerPanelEditCampaignScreenState
       return true;
     }).toList();
 
-    // Navigate to discount screen instead of directly adding
     Navigator.push(
       context,
       PageRouteBuilder(
@@ -421,8 +577,9 @@ class _SellerPanelEditCampaignScreenState
         },
       ),
     ).then((_) {
-      // Refresh the data when returning from discount screen
+      // Refresh data when returning from discount screen
       _loadCampaignedProducts();
+      // ✅ CHANGE: Refresh available products (one-time fetch, not listener)
       _loadAvailableProducts();
       setState(() {
         _selectedNewProducts.clear();
@@ -433,8 +590,8 @@ class _SellerPanelEditCampaignScreenState
 
   void _toggleProductSelection(Product product) {
     setState(() {
-      // Check by ID to prevent duplicates even if product objects differ
-      final existingIndex = _selectedNewProducts.indexWhere((p) => p.id == product.id);
+      final existingIndex =
+          _selectedNewProducts.indexWhere((p) => p.id == product.id);
       if (existingIndex != -1) {
         _selectedNewProducts.removeAt(existingIndex);
       } else {
@@ -449,6 +606,185 @@ class _SellerPanelEditCampaignScreenState
     if (discount == null) return false;
     return discount >= _minDiscountPercentage &&
         discount <= _maxDiscountPercentage;
+  }
+
+  // ✅ CHANGE: Removed redundant Firestore read
+  Future<void> _removeFromCampaignKeepDiscount(Product product) async {
+    setState(() {
+      _removingProducts.add(product.id);
+    });
+
+    try {
+      await _firestore.collection('shop_products').doc(product.id).update({
+        // ✅ CHANGE: Set to '' instead of FieldValue.delete()
+        'campaign': '',
+        'campaignName': '',
+      });
+
+      setState(() {
+        _campaignedProducts.removeWhere((p) => p.id == product.id);
+        _discountControllers[product.id]?.dispose();
+        _discountControllers.remove(product.id);
+        _focusNodes[product.id]?.dispose();
+        _focusNodes.remove(product.id);
+        _productDiscounts.remove(product.id);
+        _removingProducts.remove(product.id);
+
+        // Add back to available list
+        if (!_availableProducts.any((p) => p.id == product.id)) {
+          _availableProducts.insert(0, product);
+        }
+      });
+
+      _showSuccessSnackBar(context.l10n.productRemovedDiscountKept);
+      Provider.of<SellerPanelProvider>(context, listen: false)
+          .refreshCampaignStatus();
+    } catch (e) {
+      setState(() {
+        _removingProducts.remove(product.id);
+      });
+      _showErrorSnackBar('${context.l10n.failedToRemoveProduct}: $e');
+    }
+  }
+
+  // ✅ CHANGE: Removed redundant Firestore read — uses in-memory data
+  Future<void> _removeFromCampaignAndDiscount(Product product) async {
+    setState(() {
+      _removingProducts.add(product.id);
+    });
+
+    try {
+      final updateData = <String, dynamic>{
+        // ✅ CHANGE: Set to '' instead of FieldValue.delete()
+        'campaign': '',
+        'campaignName': '',
+        'discountPercentage': FieldValue.delete(),
+        'originalPrice': FieldValue.delete(),
+      };
+
+      // ✅ CHANGE: Use in-memory product data — no extra read
+      if (product.originalPrice != null) {
+        updateData['price'] = product.originalPrice;
+      }
+
+      await _firestore
+          .collection('shop_products')
+          .doc(product.id)
+          .update(updateData);
+
+      setState(() {
+        _campaignedProducts.removeWhere((p) => p.id == product.id);
+        _discountControllers[product.id]?.dispose();
+        _discountControllers.remove(product.id);
+        _focusNodes[product.id]?.dispose();
+        _focusNodes.remove(product.id);
+        _productDiscounts.remove(product.id);
+        _removingProducts.remove(product.id);
+
+        final updatedProduct = product.copyWith(
+          setDiscountPercentageNull: true,
+          setOriginalPriceNull: true,
+        );
+        if (!_availableProducts.any((p) => p.id == product.id)) {
+          _availableProducts.insert(0, updatedProduct);
+        }
+      });
+
+      _showSuccessSnackBar(context.l10n.productRemovedDiscountRestored);
+      Provider.of<SellerPanelProvider>(context, listen: false)
+          .refreshCampaignStatus();
+    } catch (e) {
+      setState(() {
+        _removingProducts.remove(product.id);
+      });
+      _showErrorSnackBar('${context.l10n.failedToRemoveProduct}: $e');
+    }
+  }
+
+  void _showRemoveDialog(Product product, AppLocalizations l10n) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (BuildContext context) => CupertinoActionSheet(
+        title: Text(
+          l10n.removeFromCampaign,
+          style: GoogleFonts.figtree(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        message: Text(
+          '${l10n.chooseRemovalOption}',
+          style: GoogleFonts.figtree(
+            fontSize: 14,
+            color: CupertinoColors.secondaryLabel,
+          ),
+        ),
+        actions: <CupertinoActionSheetAction>[
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _removeFromCampaignKeepDiscount(product);
+            },
+            child: Column(
+              children: [
+                Text(
+                  l10n.keepDiscountRemoveFromCampaign,
+                  style: GoogleFonts.figtree(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF10B981),
+                  ),
+                ),
+                Text(
+                  l10n.keepDiscountDescription,
+                  style: GoogleFonts.figtree(
+                    fontSize: 13,
+                    color: CupertinoColors.secondaryLabel,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _removeFromCampaignAndDiscount(product);
+            },
+            child: Column(
+              children: [
+                Text(
+                  l10n.removeDiscountAndFromCampaign,
+                  style: GoogleFonts.figtree(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF6366F1),
+                  ),
+                ),
+                Text(
+                  l10n.removeDiscountDescription,
+                  style: GoogleFonts.figtree(
+                    fontSize: 13,
+                    color: CupertinoColors.secondaryLabel,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () {
+            Navigator.pop(context);
+          },
+          child: Text(
+            l10n.cancel,
+            style: GoogleFonts.figtree(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _showErrorSnackBar(String message) {
@@ -487,12 +823,15 @@ class _SellerPanelEditCampaignScreenState
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // BUILD
+  // ═══════════════════════════════════════════════════════════════════════
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Show loading while checking role or loading data
     if (_isLoading || _isCheckingRole || _tabController == null) {
       return Scaffold(
         backgroundColor:
@@ -532,7 +871,8 @@ class _SellerPanelEditCampaignScreenState
           ],
         ),
       ),
-      floatingActionButton: _isViewer ? null : _buildFloatingActionButton(l10n),
+      floatingActionButton:
+          _isViewer ? null : _buildFloatingActionButton(l10n),
     );
   }
 
@@ -729,7 +1069,9 @@ class _SellerPanelEditCampaignScreenState
         overlayColor: WidgetStateProperty.all(Colors.transparent),
         indicatorSize: TabBarIndicatorSize.tab,
         onTap: (index) {
-          if (index == 1 && !_isViewer) _loadAvailableProducts();
+          if (index == 1 && !_isViewer && _availableProducts.isEmpty) {
+            _loadAvailableProducts();
+          }
         },
         tabs: _isViewer
             ? [
@@ -737,13 +1079,8 @@ class _SellerPanelEditCampaignScreenState
                   height: 40,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Text(
-                            '${l10n.campaignProducts} (${_campaignedProducts.length})'),
-                      ],
-                    ),
+                    child: Text(
+                        '${l10n.campaignProducts} (${_campaignedProducts.length})'),
                   ),
                 ),
               ]
@@ -752,13 +1089,8 @@ class _SellerPanelEditCampaignScreenState
                   height: 40,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Text(
-                            '${l10n.campaignProducts} (${_campaignedProducts.length})'),
-                      ],
-                    ),
+                    child: Text(
+                        '${l10n.campaignProducts} (${_campaignedProducts.length})'),
                   ),
                 ),
                 Tab(
@@ -784,9 +1116,23 @@ class _SellerPanelEditCampaignScreenState
     }
 
     return ListView.builder(
+      controller: _campaignedScrollController, // ✅ CHANGE: pagination
       padding: const EdgeInsets.all(12),
-      itemCount: _campaignedProducts.length,
+      itemCount:
+          _campaignedProducts.length + (_isLoadingMoreCampaigned ? 1 : 0),
       itemBuilder: (context, index) {
+        if (index >= _campaignedProducts.length) {
+          return const Padding(
+            padding: EdgeInsets.all(16),
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
         final product = _campaignedProducts[index];
         return _buildCampaignedProductCard(product, l10n, isDark);
       },
@@ -794,7 +1140,7 @@ class _SellerPanelEditCampaignScreenState
   }
 
   Widget _buildAddProductsTab(AppLocalizations l10n, bool isDark) {
-    if (_isLoadingAvailable) {
+    if (_isLoadingAvailable && _availableProducts.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -823,18 +1169,50 @@ class _SellerPanelEditCampaignScreenState
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(12),
-              border:
-                  Border.all(color: const Color(0xFF4299E1).withOpacity(0.2)),
+              border: Border.all(
+                  color: const Color(0xFF4299E1).withOpacity(0.2)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.check_circle_outline,
+                  color: const Color(0xFF4299E1),
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${_selectedNewProducts.length} ${l10n.productsSelected(_selectedNewProducts.length)}',
+                  style: GoogleFonts.figtree(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF4299E1),
+                  ),
+                ),
+              ],
             ),
           ),
         Expanded(
           child: ListView.builder(
+            controller: _availableScrollController, // ✅ CHANGE: pagination
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            itemCount: _availableProducts.length,
+            itemCount:
+                _availableProducts.length + (_isLoadingMoreAvailable ? 1 : 0),
             itemBuilder: (context, index) {
+              if (index >= _availableProducts.length) {
+                return const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                );
+              }
               final product = _availableProducts[index];
-              // Use ID comparison for reliable selection check
-              final isSelected = _selectedNewProducts.any((p) => p.id == product.id);
+              final isSelected =
+                  _selectedNewProducts.any((p) => p.id == product.id);
               return _buildAvailableProductCard(product, isDark, isSelected);
             },
           ),
@@ -849,7 +1227,6 @@ class _SellerPanelEditCampaignScreenState
     final focusNode = _focusNodes[product.id]!;
     final discount = _productDiscounts[product.id] ?? 0.0;
     final hasDiscount = discount > 0;
-
     final isRemoving = _removingProducts.contains(product.id);
 
     return Container(
@@ -964,9 +1341,8 @@ class _SellerPanelEditCampaignScreenState
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          // Show only discounted price with currency after
                           Text(
-                            '${product.price.toStringAsFixed(2)} ${product.currency ?? '\$'}', // Show actual current price
+                            '${product.price.toStringAsFixed(2)} ${product.currency ?? '\$'}',
                             style: GoogleFonts.figtree(
                               color: hasDiscount
                                   ? const Color(0xFF38A169)
@@ -975,7 +1351,6 @@ class _SellerPanelEditCampaignScreenState
                               fontSize: 16,
                             ),
                           ),
-
                           if (hasDiscount) ...[
                             const SizedBox(width: 8),
                             Container(
@@ -1016,7 +1391,7 @@ class _SellerPanelEditCampaignScreenState
                   ),
                 ),
 
-                // Remove Button with loading indicator - hidden for viewers
+                // Remove Button — hidden for viewers
                 if (!_isViewer)
                   Container(
                     width: 40,
@@ -1040,7 +1415,8 @@ class _SellerPanelEditCampaignScreenState
                             ),
                           )
                         : IconButton(
-                            onPressed: () => _showRemoveDialog(product, l10n),
+                            onPressed: () =>
+                                _showRemoveDialog(product, l10n),
                             icon: const Icon(
                               Icons.remove_circle_rounded,
                               color: Color(0xFFE53E3E),
@@ -1053,7 +1429,7 @@ class _SellerPanelEditCampaignScreenState
               ],
             ),
 
-            // Discount controls - hidden for viewers
+            // Discount controls — hidden for viewers
             if (!_isViewer) ...[
               const SizedBox(height: 12),
               Container(
@@ -1062,7 +1438,9 @@ class _SellerPanelEditCampaignScreenState
                   gradient: LinearGradient(
                     colors: [
                       Colors.transparent,
-                      isDark ? const Color(0xFF4A5568) : const Color(0xFFE2E8F0),
+                      isDark
+                          ? const Color(0xFF4A5568)
+                          : const Color(0xFFE2E8F0),
                       Colors.transparent,
                     ],
                   ),
@@ -1077,10 +1455,11 @@ class _SellerPanelEditCampaignScreenState
                     child: TextFormField(
                       controller: controller,
                       focusNode: focusNode,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true),
                       inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                        FilteringTextInputFormatter.allow(
+                            RegExp(r'^\d*\.?\d*')),
                       ],
                       onChanged: (value) {
                         final discount = double.tryParse(value) ?? 0.0;
@@ -1244,7 +1623,9 @@ class _SellerPanelEditCampaignScreenState
             borderRadius: BorderRadius.circular(10),
             color: isDark ? const Color(0xFF2D3748) : const Color(0xFFF7FAFC),
             border: Border.all(
-              color: isDark ? const Color(0xFF4A5568) : const Color(0xFFE2E8F0),
+              color: isDark
+                  ? const Color(0xFF4A5568)
+                  : const Color(0xFFE2E8F0),
             ),
           ),
           child: ClipRRect(
@@ -1431,198 +1812,6 @@ class _SellerPanelEditCampaignScreenState
           style: GoogleFonts.figtree(
             fontWeight: FontWeight.w600,
             fontSize: 14,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _removeFromCampaignKeepDiscount(Product product) async {
-    setState(() {
-      _removingProducts.add(product.id);
-    });
-
-    try {
-      // Only remove campaign fields, keep discount fields intact
-      await _firestore.collection('shop_products').doc(product.id).update({
-        'campaign': FieldValue.delete(),
-        'campaignName': FieldValue.delete(),
-      });
-
-      setState(() {
-        _campaignedProducts.removeWhere((p) => p.id == product.id);
-        _discountControllers[product.id]?.dispose();
-        _discountControllers.remove(product.id);
-        _focusNodes[product.id]?.dispose();
-        _focusNodes.remove(product.id);
-        _productDiscounts.remove(product.id);
-        _removingProducts.remove(product.id);
-
-        // Add the product back to available products with discount kept
-        if (_tabController?.index == 1 || _availableProducts.isNotEmpty) {
-          final updatedProduct = product.copyWith(campaign: null);
-          if (!_availableProducts.any((p) => p.id == product.id)) {
-            _availableProducts.add(updatedProduct);
-          }
-        }
-      });
-
-      _showSuccessSnackBar(context.l10n.productRemovedDiscountKept);
-      Provider.of<SellerPanelProvider>(context, listen: false)
-          .refreshCampaignStatus();
-    } catch (e) {
-      setState(() {
-        _removingProducts.remove(product.id);
-      });
-      _showErrorSnackBar('${context.l10n.failedToRemoveProduct}: $e');
-    }
-  }
-
-  Future<void> _removeFromCampaignAndDiscount(Product product) async {
-    setState(() {
-      _removingProducts.add(product.id);
-    });
-
-    try {
-      // Get the product document to check for original price
-      final productDoc =
-          await _firestore.collection('shop_products').doc(product.id).get();
-
-      final updateData = <String, dynamic>{
-        'campaign': FieldValue.delete(),
-        'campaignName': FieldValue.delete(),
-        'discountPercentage': FieldValue.delete(),
-      };
-
-      if (productDoc.exists) {
-        final productData = productDoc.data() as Map<String, dynamic>;
-        final originalPrice = productData['originalPrice'];
-
-        if (originalPrice != null) {
-          updateData['price'] = originalPrice;
-        }
-      }
-
-      updateData['originalPrice'] = FieldValue.delete();
-
-      await _firestore
-          .collection('shop_products')
-          .doc(product.id)
-          .update(updateData);
-
-      setState(() {
-        _campaignedProducts.removeWhere((p) => p.id == product.id);
-        _discountControllers[product.id]?.dispose();
-        _discountControllers.remove(product.id);
-        _focusNodes[product.id]?.dispose();
-        _focusNodes.remove(product.id);
-        _productDiscounts.remove(product.id);
-        _removingProducts.remove(product.id);
-
-        // Add the product back to available products with discount removed
-        if (_tabController?.index == 1 || _availableProducts.isNotEmpty) {
-          final updatedProduct = product.copyWith(
-            campaign: null,
-            setDiscountPercentageNull: true,
-            setOriginalPriceNull: true,
-          );
-          if (!_availableProducts.any((p) => p.id == product.id)) {
-            _availableProducts.add(updatedProduct);
-          }
-        }
-      });
-
-      _showSuccessSnackBar(context.l10n.productRemovedDiscountRestored);
-      Provider.of<SellerPanelProvider>(context, listen: false)
-          .refreshCampaignStatus();
-    } catch (e) {
-      setState(() {
-        _removingProducts.remove(product.id);
-      });
-      _showErrorSnackBar('${context.l10n.failedToRemoveProduct}: $e');
-    }
-  }
-
-  void _showRemoveDialog(Product product, AppLocalizations l10n) {
-    showCupertinoModalPopup<void>(
-      context: context,
-      builder: (BuildContext context) => CupertinoActionSheet(
-        title: Text(
-          l10n.removeFromCampaign,
-          style: GoogleFonts.figtree(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        message: Text(
-          '${l10n.chooseRemovalOption}',
-          style: GoogleFonts.figtree(
-            fontSize: 14,
-            color: CupertinoColors.secondaryLabel,
-          ),
-        ),
-        actions: <CupertinoActionSheetAction>[
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(context);
-              _removeFromCampaignKeepDiscount(product);
-            },
-            child: Column(
-              children: [
-                Text(
-                  l10n.keepDiscountRemoveFromCampaign,
-                  style: GoogleFonts.figtree(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF10B981),
-                  ),
-                ),
-                Text(
-                  l10n.keepDiscountDescription,
-                  style: GoogleFonts.figtree(
-                    fontSize: 13,
-                    color: CupertinoColors.secondaryLabel,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(context);
-              _removeFromCampaignAndDiscount(product);
-            },
-            child: Column(
-              children: [
-                Text(
-                  l10n.removeDiscountAndFromCampaign,
-                  style: GoogleFonts.figtree(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF6366F1),
-                  ),
-                ),
-                Text(
-                  l10n.removeDiscountDescription,
-                  style: GoogleFonts.figtree(
-                    fontSize: 13,
-                    color: CupertinoColors.secondaryLabel,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () {
-            Navigator.pop(context);
-          },
-          child: Text(
-            l10n.cancel,
-            style: GoogleFonts.figtree(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
           ),
         ),
       ),

@@ -955,7 +955,7 @@ class _ProductRow extends StatelessWidget {
                     ? Map<String, List<String>>.from(product.colorImages)
                     : <String, List<String>>{},
                 productName: product.productName,
-                brandModel: product.brandModel,
+                brandModel: product.brandModel ?? '',
                 price: (product.price is num)
                     ? (product.price as num).toDouble()
                     : 0.0,
