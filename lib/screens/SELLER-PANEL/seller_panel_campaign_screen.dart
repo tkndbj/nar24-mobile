@@ -233,6 +233,8 @@ class _SellerPanelCampaignScreenState extends State<SellerPanelCampaignScreen>
         .where((product) => _selectedProductIds.contains(product.id))
         .toList();
 
+    final provider = Provider.of<SellerPanelProvider>(context, listen: false);
+
     Navigator.push(
       context,
       PageRouteBuilder(
@@ -240,6 +242,7 @@ class _SellerPanelCampaignScreenState extends State<SellerPanelCampaignScreen>
             SellerPanelCampaignDiscountScreen(
           campaign: widget.campaign,
           selectedProducts: selectedProducts,
+          shopId: provider.selectedShop!.id,
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           const begin = Offset(1.0, 0.0);

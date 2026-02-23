@@ -51,26 +51,6 @@ async function verifyShopAccess(uid, shopId) {
 }
 
 
-async function verifyCampaignAccess(campaignId, shopId) {
-  const campaignSnap = await getDb().collection('campaigns').doc(campaignId).get();
-
-  if (!campaignSnap.exists) {
-    throw new HttpsError('not-found', 'Campaign not found.');
-  }
-
-  const campaign = campaignSnap.data();
-
-  if (campaign.shopId !== shopId) {
-    throw new HttpsError(
-      'permission-denied',
-      'Campaign does not belong to this shop.'
-    );
-  }
-
-  return { id: campaignSnap.id, ...campaign };
-}
-
-
 function validateDiscount(discount) {
   if (typeof discount !== 'number' || isNaN(discount)) {
     throw new HttpsError('invalid-argument', 'Discount must be a number.');
@@ -132,7 +112,11 @@ export const addProductsToCampaign = onCall(
 
     // ── Auth & ownership ──────────────────────
     await verifyShopAccess(uid, shopId);
-    const campaign = await verifyCampaignAccess(campaignId, shopId);
+    const campaignSnap = await getDb().collection('campaigns').doc(campaignId).get();
+if (!campaignSnap.exists) {
+  throw new HttpsError('not-found', 'Campaign not found.');
+}
+const campaign = campaignSnap.data();
 
     // ── Validate all discounts up front ───────
     for (const item of products) {
@@ -276,7 +260,7 @@ export const removeProductFromCampaign = onCall(
 
     // ── Auth & ownership ──────────────────────
     await verifyShopAccess(uid, shopId);
-    await verifyCampaignAccess(campaignId, shopId);
+
 
     // ── Transaction — safe against concurrent edits ──
     const productRef = getDb().collection('shop_products').doc(productId);
@@ -291,11 +275,7 @@ export const removeProductFromCampaign = onCall(
 
       const product = productSnap.data();
 
-      // Ownership check
-      if (product.shopId !== shopId) {
-        throw new HttpsError('permission-denied', 'Product does not belong to this shop.');
-      }
-
+     
       // Idempotency — already removed, nothing to do
       if (!product.campaign || product.campaign !== campaignId) {
         return;
@@ -375,7 +355,7 @@ export const updateCampaignProductDiscount = onCall(
 
     // ── Auth & ownership ──────────────────────
     await verifyShopAccess(uid, shopId);
-    await verifyCampaignAccess(campaignId, shopId);
+
 
     // ── Transaction ───────────────────────────
     const productRef = getDb().collection('shop_products').doc(productId);
@@ -390,9 +370,6 @@ export const updateCampaignProductDiscount = onCall(
 
       const product = productSnap.data();
 
-      if (product.shopId !== shopId) {
-        throw new HttpsError('permission-denied', 'Product does not belong to this shop.');
-      }
 
       if (product.campaign !== campaignId) {
         throw new HttpsError(

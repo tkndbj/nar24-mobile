@@ -11,11 +11,13 @@ import 'package:cloud_functions/cloud_functions.dart';
 class SellerPanelCampaignDiscountScreen extends StatefulWidget {
   final Map<String, dynamic> campaign;
   final List<Product> selectedProducts;
+  final String shopId;
 
   const SellerPanelCampaignDiscountScreen({
     super.key,
     required this.campaign,
     required this.selectedProducts,
+    required this.shopId,
   });
 
   @override
@@ -400,7 +402,7 @@ class _SellerPanelCampaignDiscountScreenState
 
   Future<void> _updateProductsWithCampaign() async {
     final campaignId = widget.campaign['id'] as String;
-    final shopId = widget.campaign['shopId'] as String;
+    final shopId = widget.shopId;
 
     final validProducts =
         _uniqueProducts.where((p) => !_isProductBlocked(p)).toList();

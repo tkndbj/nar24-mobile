@@ -553,6 +553,7 @@ class _SellerPanelEditCampaignScreenState
             SellerPanelCampaignDiscountScreen(
           campaign: widget.campaign,
           selectedProducts: uniqueProducts,
+          shopId: widget.shopId,
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           const begin = Offset(1.0, 0.0);
