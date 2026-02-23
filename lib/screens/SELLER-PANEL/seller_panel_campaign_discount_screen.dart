@@ -3,11 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:provider/provider.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../models/product.dart';
-import '../../providers/seller_panel_provider.dart';
 import 'seller_panel_campaign_success_screen.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class SellerPanelCampaignDiscountScreen extends StatefulWidget {
   final Map<String, dynamic> campaign;
@@ -114,8 +113,7 @@ class _SellerPanelCampaignDiscountScreenState
           final stillBlocked = _isProductBlocked(updatedProduct);
 
           setState(() {
-            final index =
-                _uniqueProducts.indexWhere((p) => p.id == product.id);
+            final index = _uniqueProducts.indexWhere((p) => p.id == product.id);
             if (index != -1) {
               _uniqueProducts[index] = updatedProduct;
             }
@@ -401,61 +399,33 @@ class _SellerPanelCampaignDiscountScreenState
   }
 
   Future<void> _updateProductsWithCampaign() async {
-    const int batchSize = 450; // Stay safely under Firestore's 500 limit
     final campaignId = widget.campaign['id'] as String;
-    // ✅ CHANGE: Use 'name' with fallback to 'title' for consistency
-    final campaignName =
-        (widget.campaign['name'] ?? widget.campaign['title'] ?? '') as String;
+    final shopId = widget.campaign['shopId'] as String;
 
-    // Filter out blocked products
-    final validProducts = _uniqueProducts.where((product) {
-      return !_isProductBlocked(product);
+    final validProducts =
+        _uniqueProducts.where((p) => !_isProductBlocked(p)).toList();
+
+    final productsPayload = validProducts.map((product) {
+      double discount = _productDiscounts[product.id] ?? 0.0;
+      // Fall back to valid existing discount if no new input
+      if (discount < _minDiscountPercentage &&
+          (product.discountPercentage ?? 0) >= _minDiscountPercentage) {
+        discount = product.discountPercentage!.toDouble();
+      }
+      return {'productId': product.id, 'discount': discount};
     }).toList();
 
-    final totalProducts = validProducts.length;
+    final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+        .httpsCallable('addProductsToCampaign');
 
-    // Process in batches
-    for (int i = 0; i < totalProducts; i += batchSize) {
-      final batch = _firestore.batch();
-      final end =
-          (i + batchSize < totalProducts) ? i + batchSize : totalProducts;
+    final result = await callable.call({
+      'campaignId': campaignId,
+      'shopId': shopId,
+      'products': productsPayload,
+    });
 
-      for (int j = i; j < end; j++) {
-        final product = validProducts[j];
-        final productRef =
-            _firestore.collection('shop_products').doc(product.id);
-
-        final updateData = <String, dynamic>{
-          'campaign': campaignId,
-          'campaignName': campaignName,
-        };
-
-        // Add discount if specified
-        final discount = _productDiscounts[product.id] ?? 0.0;
-        if (discount > 0) {
-          // Use original price if available, otherwise use current price
-          final basePrice = product.originalPrice ?? product.price;
-          final discountedPrice = basePrice * (1 - discount / 100);
-
-          updateData['discountPercentage'] = discount;
-          updateData['originalPrice'] = basePrice;
-          updateData['price'] = discountedPrice;
-        }
-
-        batch.update(productRef, updateData);
-      }
-
-      await batch.commit();
-
-      // Update campaign participation status immediately for UI feedback
-      if (mounted) {
-        final cId = widget.campaign['id'] as String?;
-        if (cId != null) {
-          context
-              .read<SellerPanelProvider>()
-              .setCampaignParticipation(cId, true);
-        }
-      }
+    if (result.data['success'] != true) {
+      throw Exception('Failed to add products to campaign');
     }
   }
 
@@ -595,8 +565,7 @@ class _SellerPanelCampaignDiscountScreenState
         // If for some reason the listener isn't active, update manually:
         if (!_blockedProductListeners.containsKey(product.id)) {
           setState(() {
-            final index =
-                _uniqueProducts.indexWhere((p) => p.id == product.id);
+            final index = _uniqueProducts.indexWhere((p) => p.id == product.id);
             if (index != -1) {
               _uniqueProducts[index] = product.copyWith(
                 discountThreshold: null,
@@ -1298,13 +1267,11 @@ class _SellerPanelCampaignDiscountScreenState
                             ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide:
-                                  const BorderSide(color: _borderColor),
+                              borderSide: const BorderSide(color: _borderColor),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide:
-                                  const BorderSide(color: _borderColor),
+                              borderSide: const BorderSide(color: _borderColor),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),

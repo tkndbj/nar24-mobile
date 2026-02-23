@@ -13942,3 +13942,4 @@ export {
   syncOrdersWithTypesense,
 } from './23-typesense/index.js';
 export { computeRankingScores } from './24-promotion-score/index.js';
+export { addProductsToCampaign, removeProductFromCampaign, updateCampaignProductDiscount } from './25-shop-campaign/index.js';

@@ -11,6 +11,7 @@ import '../../generated/l10n/app_localizations.dart';
 import 'seller_panel_campaign_discount_screen.dart';
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class SellerPanelEditCampaignScreen extends StatefulWidget {
   final Map<String, dynamic> campaign;
@@ -503,36 +504,28 @@ class _SellerPanelEditCampaignScreenState
   }
 
   Future<void> _updateDiscount(Product product, double newDiscount) async {
+    // Snapshot for rollback
+    final prevDiscount = _productDiscounts[product.id] ?? 0.0;
+
+    // Optimistic update
+    setState(() => _productDiscounts[product.id] = newDiscount);
+
     try {
-      final updateData = <String, dynamic>{};
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+          .httpsCallable('updateCampaignProductDiscount');
 
-      if (newDiscount > 0) {
-        final basePrice = product.originalPrice ?? product.price;
-        final discountedPrice = basePrice * (1 - newDiscount / 100);
-
-        updateData['discountPercentage'] = newDiscount;
-        updateData['originalPrice'] = basePrice;
-        updateData['price'] = discountedPrice;
-      } else {
-        if (product.originalPrice != null) {
-          updateData['price'] = product.originalPrice;
-        }
-        updateData['discountPercentage'] = null;
-        updateData['originalPrice'] = null;
-      }
-
-      await _firestore
-          .collection('shop_products')
-          .doc(product.id)
-          .update(updateData);
-
-      setState(() {
-        _productDiscounts[product.id] = newDiscount;
+      await callable.call({
+        'productId': product.id,
+        'campaignId': widget.campaign['id'],
+        'shopId': widget.shopId,
+        'newDiscount': newDiscount,
       });
 
-      _showSuccessSnackBar(context.l10n.discountUpdatedSuccessfully ??
-          'Discount updated successfully');
+      _showSuccessSnackBar(
+          context.l10n.discountUpdatedSuccessfully ?? 'Discount updated');
     } catch (e) {
+      // Rollback
+      setState(() => _productDiscounts[product.id] = prevDiscount);
       _showErrorSnackBar('${context.l10n.failedToUpdateDiscount}: $e');
     }
   }
@@ -608,97 +601,117 @@ class _SellerPanelEditCampaignScreenState
         discount <= _maxDiscountPercentage;
   }
 
-  // ✅ CHANGE: Removed redundant Firestore read
   Future<void> _removeFromCampaignKeepDiscount(Product product) async {
+    setState(() => _removingProducts.add(product.id));
+
+    // Snapshot for rollback
+    final prevCampaigned = List<Product>.from(_campaignedProducts);
+    final prevAvailable = List<Product>.from(_availableProducts);
+    final prevDiscount = _productDiscounts[product.id];
+    final prevControllerText = _discountControllers[product.id]?.text ?? '';
+
+    // Optimistic update
     setState(() {
-      _removingProducts.add(product.id);
+      _campaignedProducts.removeWhere((p) => p.id == product.id);
+      if (!_availableProducts.any((p) => p.id == product.id)) {
+        _availableProducts.insert(0, product);
+      }
+      _discountControllers[product.id]?.dispose();
+      _discountControllers.remove(product.id);
+      _focusNodes[product.id]?.dispose();
+      _focusNodes.remove(product.id);
+      _productDiscounts.remove(product.id);
     });
 
     try {
-      await _firestore.collection('shop_products').doc(product.id).update({
-        // ✅ CHANGE: Set to '' instead of FieldValue.delete()
-        'campaign': '',
-        'campaignName': '',
-      });
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+          .httpsCallable('removeProductFromCampaign');
 
-      setState(() {
-        _campaignedProducts.removeWhere((p) => p.id == product.id);
-        _discountControllers[product.id]?.dispose();
-        _discountControllers.remove(product.id);
-        _focusNodes[product.id]?.dispose();
-        _focusNodes.remove(product.id);
-        _productDiscounts.remove(product.id);
-        _removingProducts.remove(product.id);
-
-        // Add back to available list
-        if (!_availableProducts.any((p) => p.id == product.id)) {
-          _availableProducts.insert(0, product);
-        }
+      await callable.call({
+        'productId': product.id,
+        'campaignId': widget.campaign['id'],
+        'shopId': widget.shopId,
+        'keepDiscount': true,
       });
 
       _showSuccessSnackBar(context.l10n.productRemovedDiscountKept);
       Provider.of<SellerPanelProvider>(context, listen: false)
           .refreshCampaignStatus();
     } catch (e) {
+      // Rollback lists AND recreate controller/focusNode
       setState(() {
+        _campaignedProducts = prevCampaigned;
+        _availableProducts = prevAvailable;
+        _productDiscounts[product.id] = prevDiscount ?? 0.0;
+        _discountControllers[product.id] =
+            TextEditingController(text: prevControllerText);
+        _focusNodes[product.id] = FocusNode();
         _removingProducts.remove(product.id);
       });
       _showErrorSnackBar('${context.l10n.failedToRemoveProduct}: $e');
+      return;
     }
+
+    setState(() => _removingProducts.remove(product.id));
   }
 
-  // ✅ CHANGE: Removed redundant Firestore read — uses in-memory data
   Future<void> _removeFromCampaignAndDiscount(Product product) async {
+    setState(() => _removingProducts.add(product.id));
+
+    // Snapshot for rollback
+    final prevCampaigned = List<Product>.from(_campaignedProducts);
+    final prevAvailable = List<Product>.from(_availableProducts);
+    final prevDiscount = _productDiscounts[product.id];
+    final prevControllerText = _discountControllers[product.id]?.text ?? '';
+
+    // Optimistic update
+    final restoredProduct = product.copyWith(
+      setDiscountPercentageNull: true,
+      setOriginalPriceNull: true,
+    );
+
     setState(() {
-      _removingProducts.add(product.id);
+      _campaignedProducts.removeWhere((p) => p.id == product.id);
+      if (!_availableProducts.any((p) => p.id == product.id)) {
+        _availableProducts.insert(0, restoredProduct);
+      }
+      _discountControllers[product.id]?.dispose();
+      _discountControllers.remove(product.id);
+      _focusNodes[product.id]?.dispose();
+      _focusNodes.remove(product.id);
+      _productDiscounts.remove(product.id);
     });
 
     try {
-      final updateData = <String, dynamic>{
-        // ✅ CHANGE: Set to '' instead of FieldValue.delete()
-        'campaign': '',
-        'campaignName': '',
-        'discountPercentage': FieldValue.delete(),
-        'originalPrice': FieldValue.delete(),
-      };
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+          .httpsCallable('removeProductFromCampaign');
 
-      // ✅ CHANGE: Use in-memory product data — no extra read
-      if (product.originalPrice != null) {
-        updateData['price'] = product.originalPrice;
-      }
-
-      await _firestore
-          .collection('shop_products')
-          .doc(product.id)
-          .update(updateData);
-
-      setState(() {
-        _campaignedProducts.removeWhere((p) => p.id == product.id);
-        _discountControllers[product.id]?.dispose();
-        _discountControllers.remove(product.id);
-        _focusNodes[product.id]?.dispose();
-        _focusNodes.remove(product.id);
-        _productDiscounts.remove(product.id);
-        _removingProducts.remove(product.id);
-
-        final updatedProduct = product.copyWith(
-          setDiscountPercentageNull: true,
-          setOriginalPriceNull: true,
-        );
-        if (!_availableProducts.any((p) => p.id == product.id)) {
-          _availableProducts.insert(0, updatedProduct);
-        }
+      await callable.call({
+        'productId': product.id,
+        'campaignId': widget.campaign['id'],
+        'shopId': widget.shopId,
+        'keepDiscount': false,
       });
 
       _showSuccessSnackBar(context.l10n.productRemovedDiscountRestored);
       Provider.of<SellerPanelProvider>(context, listen: false)
           .refreshCampaignStatus();
     } catch (e) {
+      // Rollback lists AND recreate controller/focusNode
       setState(() {
+        _campaignedProducts = prevCampaigned;
+        _availableProducts = prevAvailable;
+        _productDiscounts[product.id] = prevDiscount ?? 0.0;
+        _discountControllers[product.id] =
+            TextEditingController(text: prevControllerText);
+        _focusNodes[product.id] = FocusNode();
         _removingProducts.remove(product.id);
       });
       _showErrorSnackBar('${context.l10n.failedToRemoveProduct}: $e');
+      return;
     }
+
+    setState(() => _removingProducts.remove(product.id));
   }
 
   void _showRemoveDialog(Product product, AppLocalizations l10n) {
@@ -871,8 +884,7 @@ class _SellerPanelEditCampaignScreenState
           ],
         ),
       ),
-      floatingActionButton:
-          _isViewer ? null : _buildFloatingActionButton(l10n),
+      floatingActionButton: _isViewer ? null : _buildFloatingActionButton(l10n),
     );
   }
 
@@ -1169,8 +1181,8 @@ class _SellerPanelEditCampaignScreenState
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                  color: const Color(0xFF4299E1).withOpacity(0.2)),
+              border:
+                  Border.all(color: const Color(0xFF4299E1).withOpacity(0.2)),
             ),
             child: Row(
               children: [
@@ -1415,8 +1427,7 @@ class _SellerPanelEditCampaignScreenState
                             ),
                           )
                         : IconButton(
-                            onPressed: () =>
-                                _showRemoveDialog(product, l10n),
+                            onPressed: () => _showRemoveDialog(product, l10n),
                             icon: const Icon(
                               Icons.remove_circle_rounded,
                               color: Color(0xFFE53E3E),
@@ -1455,8 +1466,8 @@ class _SellerPanelEditCampaignScreenState
                     child: TextFormField(
                       controller: controller,
                       focusNode: focusNode,
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       inputFormatters: [
                         FilteringTextInputFormatter.allow(
                             RegExp(r'^\d*\.?\d*')),
@@ -1623,9 +1634,7 @@ class _SellerPanelEditCampaignScreenState
             borderRadius: BorderRadius.circular(10),
             color: isDark ? const Color(0xFF2D3748) : const Color(0xFFF7FAFC),
             border: Border.all(
-              color: isDark
-                  ? const Color(0xFF4A5568)
-                  : const Color(0xFFE2E8F0),
+              color: isDark ? const Color(0xFF4A5568) : const Color(0xFFE2E8F0),
             ),
           ),
           child: ClipRRect(
