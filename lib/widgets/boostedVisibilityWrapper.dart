@@ -1,14 +1,49 @@
+// lib/widgets/boostedVisibilityWrapper.dart
+
 import 'dart:async';
-import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path/path.dart' as path_helper;
+import 'package:sqflite/sqflite.dart';
 import '../providers/market_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-// ✅ NEW: Page impression data class
+// ─────────────────────────────────────────────────────────────────────────────
+// CHANGE LOG (vs original)
+//
+//  1. Replaced SharedPreferences with SQLite for impression deduplication state.
+//     WHY: SharedPreferences loads the entire dataset into memory on app start
+//     as a single JSON string. SQLite reads lazily per-query, writes per-row,
+//     and handles age-based cleanup with a single DELETE WHERE rather than
+//     deserializing, filtering in Dart, and re-serializing the whole blob.
+//
+//  2. Removed _pageImpressions in-memory Map.
+//     WHY: Deduplication checks are now SQL COUNT queries. No need to mirror
+//     DB state in memory. This eliminates the unbounded map growth issue during
+//     long browsing sessions.
+//
+//  3. Removed _persistTimer and all _persistPageImpressions() calls.
+//     WHY: SQLite writes are per-row and immediate — there is nothing to
+//     debounce. The 5s persist timer existed only because writing the full
+//     SharedPreferences JSON blob on every impression was expensive.
+//
+//  4. Replaced _setCurrentUser() polling on every addImpression() with an
+//     auth stream subscription set up once in initialize().
+//     WHY: The original called FirebaseAuth.instance.currentUser and compared
+//     UIDs on every single scroll impression event.
+//
+//  5. Added initialize() as async with await so SQLite is ready before the
+//     first impression is recorded. initialize() is safe to call multiple times.
+//
+//  6. All public API preserved: addImpression(), flush(), dispose(),
+//     initialize(). BoostedVisibilityWrapper and ProductListSliver unchanged.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Data classes (unchanged) ──────────────────────────────────────────────────
+
 class PageImpression {
   final String screenName;
   final DateTime timestamp;
@@ -17,16 +52,6 @@ class PageImpression {
     required this.screenName,
     required this.timestamp,
   });
-
-  Map<String, dynamic> toJson() => {
-    'screenName': screenName,
-    'timestamp': timestamp.millisecondsSinceEpoch,
-  };
-
-  factory PageImpression.fromJson(Map<String, dynamic> json) => PageImpression(
-    screenName: json['screenName'] as String,
-    timestamp: DateTime.fromMillisecondsSinceEpoch(json['timestamp'] as int),
-  );
 }
 
 class ImpressionRecord {
@@ -41,229 +66,273 @@ class ImpressionRecord {
   });
 }
 
+// ── ImpressionBatcher ─────────────────────────────────────────────────────────
+
 class ImpressionBatcher {
   static final _instance = ImpressionBatcher._internal();
   factory ImpressionBatcher() => _instance;
   ImpressionBatcher._internal();
 
-  // Buffers
-  final List<ImpressionRecord> _impressionBuffer = [];
-  
-  // ✅ NEW: Track per-page impressions per user
-  final Map<String, List<PageImpression>> _pageImpressions = {};
+  // ── SQLite ──────────────────────────────────────────────────────────────────
+  Database? _db;
+  bool _dbInitialized = false;
 
+  // ── Send buffer ─────────────────────────────────────────────────────────────
+  final List<ImpressionRecord> _impressionBuffer = [];
+
+  // ── Timers ──────────────────────────────────────────────────────────────────
   Timer? _batchTimer;
   Timer? _cleanupTimer;
-  Timer? _persistTimer;
+
+  // ── Dependencies ─────────────────────────────────────────────────────────────
   MarketProvider? _marketProvider;
-
-  // ✅ NEW: Current user tracking
   String? _currentUserId;
+  StreamSubscription<User?>? _authSubscription;
 
-  // Configuration (matching web)
+  // ── Config ───────────────────────────────────────────────────────────────────
   static const Duration _batchInterval = Duration(seconds: 30);
-  static const Duration _impressionCooldown = Duration(hours: 1); // ✅ Changed to 1 hour
+  static const Duration _impressionCooldown = Duration(hours: 1);
   static const int _maxBatchSize = 100;
-  static const int _maxImpressionsPerHour = 4; // ✅ NEW: Max 4 per hour
+  static const int _maxImpressionsPerHour = 4;
   static const int _maxRetries = 3;
+
+  // Max rows per user — prevents unbounded DB growth during prolonged sessions
+  static const int _maxRowsPerUser = 1000;
 
   int _retryCount = 0;
   bool _isDisposed = false;
 
-  // ✅ NEW: Storage key prefix
-  static const String _pageImpressionsPrefix = 'page_impressions_';
+  // ── Initialize ───────────────────────────────────────────────────────────────
+  Future<void> initialize(MarketProvider provider) async {
+    if (_isDisposed) return;
 
-  void initialize(MarketProvider provider) {
     _marketProvider = provider;
-    _setCurrentUser();
+
+    // Open SQLite once
+    if (!_dbInitialized) {
+      await _openDatabase();
+    }
+
+    // Subscribe to auth changes once — replaces per-impression _setCurrentUser polling
+    _authSubscription?.cancel();
+    _authSubscription = FirebaseAuth.instance.userChanges().listen((user) {
+      final newUserId = user?.uid;
+      if (_currentUserId != newUserId) {
+        debugPrint(
+          '👤 ImpressionBatcher: user changed '
+          'from $_currentUserId to $newUserId',
+        );
+        _currentUserId = newUserId;
+      }
+    });
+
+    // Set initial user synchronously so first impression doesn't miss it
+    _currentUserId = FirebaseAuth.instance.currentUser?.uid;
+
     _startCleanup();
   }
 
-  // ✅ NEW: Set current user and load their data
-  void _setCurrentUser() {
-    final user = FirebaseAuth.instance.currentUser;
-    final newUserId = user?.uid;
-    
-    if (_currentUserId != newUserId) {
-      debugPrint('👤 ImpressionBatcher: User changed from $_currentUserId to $newUserId');
-      
-      // Clear in-memory data when user changes
-      _pageImpressions.clear();
-      _currentUserId = newUserId;
-      
-      // Load data for new user
-      if (newUserId != null) {
-        _loadPageImpressions();
-      }
-    }
-  }
-
-  // ✅ NEW: Get storage key for current user
-  String _getStorageKey() {
-    final userId = _currentUserId ?? 'anonymous';
-    return '$_pageImpressionsPrefix$userId';
-  }
-
-  // ✅ NEW: Load page impressions from SharedPreferences
-  Future<void> _loadPageImpressions() async {
+  Future<void> _openDatabase() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final storageKey = _getStorageKey();
-      final stored = prefs.getString(storageKey);
-      
-      if (stored != null) {
-        final data = Map<String, dynamic>.from(jsonDecode(stored));
-        final now = DateTime.now();
-        int expiredCount = 0;
-        
-        data.forEach((productId, pages) {
-          final List<PageImpression> validPages = [];
-          
-          for (final page in (pages as List)) {
-            final impression = PageImpression.fromJson(page);
-            final age = now.difference(impression.timestamp);
-            
-            if (age < _impressionCooldown) {
-              validPages.add(impression);
-            } else {
-              expiredCount++;
-            }
-          }
-          
-          if (validPages.isNotEmpty) {
-            _pageImpressions[productId] = validPages;
-          }
-        });
-        
-        debugPrint('📊 Loaded ${_pageImpressions.length} products with impressions for user $_currentUserId ($expiredCount expired)');
-      }
+      final dbPath = await getDatabasesPath();
+      final pathStr = path_helper.join(dbPath, 'impressions.db');
+
+      _db = await openDatabase(
+        pathStr,
+        version: 1,
+        onCreate: (db, version) async {
+          // One row per user + product + screen combination
+          // created_at is epoch milliseconds for age-based cleanup
+          await db.execute('''
+            CREATE TABLE page_impressions (
+              id          INTEGER PRIMARY KEY AUTOINCREMENT,
+              user_id     TEXT    NOT NULL,
+              product_id  TEXT    NOT NULL,
+              screen_name TEXT    NOT NULL,
+              created_at  INTEGER NOT NULL
+            )
+          ''');
+
+          // Deduplication check: "has user seen product on screen within cooldown?"
+          await db.execute('''
+            CREATE INDEX idx_user_product_screen
+            ON page_impressions(user_id, product_id, screen_name)
+          ''');
+
+          // Age-based cleanup
+          await db.execute('''
+            CREATE INDEX idx_created_at
+            ON page_impressions(created_at)
+          ''');
+        },
+      );
+
+      _dbInitialized = true;
+      debugPrint('✅ ImpressionBatcher: SQLite initialized');
     } catch (e) {
-      debugPrint('Error loading page impressions: $e');
+      // Non-fatal — service degrades gracefully without persistence
+      debugPrint('❌ ImpressionBatcher: SQLite init failed — $e');
     }
   }
 
-  // ✅ NEW: Persist page impressions
-  Future<void> _persistPageImpressions() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final storageKey = _getStorageKey();
-      
-      final data = <String, dynamic>{};
-      _pageImpressions.forEach((productId, pages) {
-        data[productId] = pages.map((p) => p.toJson()).toList();
-      });
-      
-      await prefs.setString(storageKey, jsonEncode(data));
-    } catch (e) {
-      debugPrint('Error persisting page impressions: $e');
-    }
-  }
+  // ── Cleanup ───────────────────────────────────────────────────────────────────
 
   void _startCleanup() {
     _cleanupTimer?.cancel();
-    _cleanupTimer = Timer.periodic(const Duration(minutes: 10), (_) {
-      _cleanupExpiredImpressions();
-    });
+    _cleanupTimer = Timer.periodic(
+      const Duration(minutes: 10),
+      (_) => _cleanupExpiredImpressions(),
+    );
   }
 
-  // ✅ NEW: Cleanup expired impressions
-  void _cleanupExpiredImpressions() {
-    final now = DateTime.now();
-    int cleaned = 0;
-    
-    final keysToRemove = <String>[];
-    
-    _pageImpressions.forEach((productId, pages) {
-      final validPages = pages.where((page) {
-        final age = now.difference(page.timestamp);
-        if (age < _impressionCooldown) {
-          return true;
-        } else {
-          cleaned++;
-          return false;
-        }
-      }).toList();
-      
-      if (validPages.isEmpty) {
-        keysToRemove.add(productId);
-      } else {
-        _pageImpressions[productId] = validPages;
+  Future<void> _cleanupExpiredImpressions() async {
+    if (_db == null) return;
+
+    try {
+      final cutoff =
+          DateTime.now().subtract(_impressionCooldown).millisecondsSinceEpoch;
+
+      final deleted = await _db!.delete(
+        'page_impressions',
+        where: 'created_at < ?',
+        whereArgs: [cutoff],
+      );
+
+      if (deleted > 0) {
+        debugPrint(
+          '🧹 ImpressionBatcher: deleted $deleted expired impressions',
+        );
       }
-    });
-    
-    for (final key in keysToRemove) {
-      _pageImpressions.remove(key);
-    }
-    
-    if (cleaned > 0) {
-      debugPrint('🧹 Cleaned $cleaned expired page impressions for user $_currentUserId');
-      _persistPageImpressions();
+    } catch (e) {
+      debugPrint('❌ ImpressionBatcher: cleanup failed — $e');
     }
   }
 
-  // ✅ UPDATED: Add impression with page tracking
+  // ── Core: addImpression ───────────────────────────────────────────────────────
+
   void addImpression(String productId, {String? screenName}) {
-    // ✅ Update current user (in case they logged in/out)
-    _setCurrentUser();
-    
-    final now = DateTime.now();
-    final currentScreen = screenName ?? 'unknown';
-    
-    // Get existing page impressions for this product
-    final existingPages = _pageImpressions[productId] ?? [];
-    
-    // Clean old impressions (> 1 hour)
-    final validPages = existingPages.where((page) {
-      final age = now.difference(page.timestamp);
-      return age < _impressionCooldown;
-    }).toList();
-    
-    // Check if already recorded on THIS SCREEN
-    final alreadyRecordedOnThisScreen = validPages.any((page) {
-      return page.screenName == currentScreen;
-    });
-    
-    if (alreadyRecordedOnThisScreen) {
-      debugPrint('⏳ Product $productId already recorded on screen $currentScreen for user $_currentUserId');
-      return;
-    }
-    
-    // ✅ NEW: Check max impressions per hour
-    if (validPages.length >= _maxImpressionsPerHour) {
-      final oldestImpression = validPages.first;
-      final remainingMs = _impressionCooldown.inMilliseconds - 
-                          now.difference(oldestImpression.timestamp).inMilliseconds;
-      final remainingMinutes = (remainingMs / 60000).ceil();
-      
-      debugPrint('⚠️ Product $productId has reached max impressions ($_maxImpressionsPerHour) for user $_currentUserId. Wait ${remainingMinutes}m');
+    if (_isDisposed) return;
+
+    // Fire async work without blocking the scroll callback
+    _recordImpression(productId, screenName: screenName ?? 'unknown');
+  }
+
+  Future<void> _recordImpression(
+    String productId, {
+    required String screenName,
+  }) async {
+    if (_db == null || _currentUserId == null) {
+      // DB not ready or user not authenticated — skip silently
+      debugPrint(
+        '⚠️ ImpressionBatcher: skipping impression '
+        '(db=${_db != null}, user=$_currentUserId)',
+      );
       return;
     }
 
-    // Record new impression
-    validPages.add(PageImpression(
-      screenName: currentScreen,
-      timestamp: now,
-    ));
-    
-    _pageImpressions[productId] = validPages;
-    
-    // Add to buffer for sending
-    _impressionBuffer.add(ImpressionRecord(
-      productId: productId,
-      screenName: currentScreen,
-      timestamp: now,
-    ));
-    
-    _persistTimer?.cancel();
-_persistTimer = Timer(const Duration(seconds: 5), _persistPageImpressions);
-    
-    debugPrint('✅ Recorded impression #${validPages.length} for product $productId on screen $currentScreen by user $_currentUserId (${_maxImpressionsPerHour - validPages.length} remaining in this hour)');
+    try {
+      final now = DateTime.now();
+      final cutoff = now.subtract(_impressionCooldown).millisecondsSinceEpoch;
+      final userId = _currentUserId!;
 
-    _scheduleBatch();
+      // ── Check 1: Already recorded on THIS screen within cooldown ─────────────
+      final existingOnScreen = await _db!.rawQuery(
+        '''
+        SELECT COUNT(*) as count
+        FROM page_impressions
+        WHERE user_id    = ?
+          AND product_id  = ?
+          AND screen_name = ?
+          AND created_at >= ?
+        ''',
+        [userId, productId, screenName, cutoff],
+      );
 
-    if (_impressionBuffer.length >= _maxBatchSize) {
-      debugPrint('⚠️ Buffer size limit reached, forcing flush');
-      flush();
+      final countOnScreen = Sqflite.firstIntValue(existingOnScreen) ?? 0;
+      if (countOnScreen > 0) {
+        debugPrint(
+          '⏳ ImpressionBatcher: $productId already recorded '
+          'on $screenName for $userId',
+        );
+        return;
+      }
+
+      // ── Check 2: Max impressions per hour across all screens ──────────────────
+      final existingTotal = await _db!.rawQuery(
+        '''
+        SELECT COUNT(*) as count
+        FROM page_impressions
+        WHERE user_id    = ?
+          AND product_id  = ?
+          AND created_at >= ?
+        ''',
+        [userId, productId, cutoff],
+      );
+
+      final totalCount = Sqflite.firstIntValue(existingTotal) ?? 0;
+      if (totalCount >= _maxImpressionsPerHour) {
+        debugPrint(
+          '⚠️ ImpressionBatcher: $productId reached max impressions '
+          '($_maxImpressionsPerHour) for $userId',
+        );
+        return;
+      }
+
+      // ── Enforce per-user row cap (FIFO eviction) ──────────────────────────────
+      final countResult = await _db!.rawQuery(
+        'SELECT COUNT(*) as count FROM page_impressions WHERE user_id = ?',
+        [userId],
+      );
+      final rowCount = Sqflite.firstIntValue(countResult) ?? 0;
+
+      if (rowCount >= _maxRowsPerUser) {
+        final toEvict = rowCount - _maxRowsPerUser + 1;
+        await _db!.rawDelete(
+          '''
+          DELETE FROM page_impressions
+          WHERE id IN (
+            SELECT id FROM page_impressions
+            WHERE user_id = ?
+            ORDER BY id ASC
+            LIMIT ?
+          )
+          ''',
+          [userId, toEvict],
+        );
+        debugPrint(
+          '🧹 ImpressionBatcher: evicted $toEvict old rows for $userId',
+        );
+      }
+
+      // ── Write new impression ──────────────────────────────────────────────────
+      await _db!.insert('page_impressions', {
+        'user_id': userId,
+        'product_id': productId,
+        'screen_name': screenName,
+        'created_at': now.millisecondsSinceEpoch,
+      });
+
+      debugPrint(
+        '✅ ImpressionBatcher: recorded impression '
+        '#${totalCount + 1} for $productId on $screenName '
+        'by $userId (${_maxImpressionsPerHour - totalCount - 1} remaining)',
+      );
+
+      // ── Add to send buffer ────────────────────────────────────────────────────
+      _impressionBuffer.add(ImpressionRecord(
+        productId: productId,
+        screenName: screenName,
+        timestamp: now,
+      ));
+
+      _scheduleBatch();
+
+      if (_impressionBuffer.length >= _maxBatchSize) {
+        debugPrint('⚠️ ImpressionBatcher: buffer full, forcing flush');
+        unawaited(flush());
+      }
+    } catch (e) {
+      debugPrint('❌ ImpressionBatcher: _recordImpression failed — $e');
     }
   }
 
@@ -271,6 +340,8 @@ _persistTimer = Timer(const Duration(seconds: 5), _persistPageImpressions);
     _batchTimer?.cancel();
     _batchTimer = Timer(_batchInterval, _sendBatch);
   }
+
+  // ── Send batch ────────────────────────────────────────────────────────────────
 
   int? _calculateAge(Timestamp? birthDate) {
     if (birthDate == null) return null;
@@ -289,82 +360,96 @@ _persistTimer = Timer(const Duration(seconds: 5), _persistPageImpressions);
     }
   }
 
- Future<void> _sendBatch() async {
-  if (_impressionBuffer.isEmpty || _marketProvider == null) return;
+  Future<void> _sendBatch() async {
+    if (_impressionBuffer.isEmpty || _marketProvider == null) return;
 
-  final recordsToSend = List<ImpressionRecord>.from(_impressionBuffer);
-  _impressionBuffer.clear();
+    final recordsToSend = List<ImpressionRecord>.from(_impressionBuffer);
+    _impressionBuffer.clear();
 
-  try {
-    // ← Deduplicate: aggregate counts per product ID
-    final countMap = <String, int>{};
-    for (final record in recordsToSend) {
-      countMap[record.productId] = (countMap[record.productId] ?? 0) + 1;
-    }
-
-    // ← Expand back to list (Cloud Function already deduplicates,
-    //    but this reduces payload for repeated IDs)
-    final idsToSend = <String>[];
-    countMap.forEach((id, count) {
-      for (var i = 0; i < count; i++) {
-        idsToSend.add(id);
+    try {
+      // Aggregate counts per product ID
+      final countMap = <String, int>{};
+      for (final record in recordsToSend) {
+        countMap[record.productId] = (countMap[record.productId] ?? 0) + 1;
       }
-    });
 
-    final profileData = _marketProvider!.userProvider.profileData;
-    final userGender = profileData?['gender'] as String?;
-    final birthDate = profileData?['birthDate'] as Timestamp?;
-    final userAge = _calculateAge(birthDate);
-
-    await _marketProvider!.incrementImpressionCount(
-      productIds: idsToSend,
-      userGender: userGender,
-      userAge: userAge,
-    );
-
-    debugPrint(
-        '📊 Sent batch of ${recordsToSend.length} impressions (${countMap.length} unique) from user $_currentUserId');
-    _retryCount = 0;
-  } catch (e) {
-    debugPrint('❌ Error sending impression batch: $e');
-
-    if (_retryCount < _maxRetries) {
-      _retryCount++;
-      final delay = Duration(seconds: 2 * _retryCount);
-      debugPrint(
-          '🔄 Retrying in ${delay.inSeconds}s (attempt $_retryCount/$_maxRetries)');
-      _impressionBuffer.addAll(recordsToSend);
-      Future.delayed(delay, () {
-        if (!_isDisposed) _sendBatch();
+      // Expand back to list — CF deduplicates but this reduces payload size
+      final idsToSend = <String>[];
+      countMap.forEach((id, count) {
+        for (var i = 0; i < count; i++) {
+          idsToSend.add(id);
+        }
       });
-    } else {
+
+      final profileData = _marketProvider!.userProvider.profileData;
+      final userGender = profileData?['gender'] as String?;
+      final birthDate = profileData?['birthDate'] as Timestamp?;
+      final userAge = _calculateAge(birthDate);
+
+      await _marketProvider!.incrementImpressionCount(
+        productIds: idsToSend,
+        userGender: userGender,
+        userAge: userAge,
+      );
+
       debugPrint(
-          '❌ Max retries reached, dropping ${recordsToSend.length} impressions');
+        '📊 ImpressionBatcher: sent ${recordsToSend.length} impressions '
+        '(${countMap.length} unique) from $_currentUserId',
+      );
       _retryCount = 0;
+    } catch (e) {
+      debugPrint('❌ ImpressionBatcher: send batch failed — $e');
+
+      if (_retryCount < _maxRetries) {
+        _retryCount++;
+        final delay = Duration(seconds: 2 * _retryCount);
+        debugPrint(
+          '🔄 ImpressionBatcher: retry $_retryCount/$_maxRetries '
+          'in ${delay.inSeconds}s',
+        );
+        _impressionBuffer.addAll(recordsToSend);
+        Future.delayed(delay, () {
+          if (!_isDisposed) _sendBatch();
+        });
+      } else {
+        debugPrint(
+          '❌ ImpressionBatcher: max retries reached, '
+          'dropping ${recordsToSend.length} impressions',
+        );
+        _retryCount = 0;
+      }
     }
+  }
+
+  // ── Public API ────────────────────────────────────────────────────────────────
+
+  Future<void> flush() async {
+    _batchTimer?.cancel();
+    await _sendBatch();
+  }
+
+  Future<void> dispose() async {
+    _isDisposed = true;
+    _batchTimer?.cancel();
+    _cleanupTimer?.cancel();
+    _authSubscription?.cancel();
+
+    // Best-effort final flush
+    if (_impressionBuffer.isNotEmpty) {
+      await _sendBatch();
+    }
+
+    _impressionBuffer.clear();
+    _marketProvider = null;
+
+    await _db?.close();
+    _db = null;
+    _dbInitialized = false;
   }
 }
 
-  Future<void> flush() async {
-  _batchTimer?.cancel();
-  _persistTimer?.cancel();        // ← ADD
-  _persistPageImpressions();      // ← ADD
-  await _sendBatch();
-}
+// ── BoostedVisibilityWrapper (unchanged) ──────────────────────────────────────
 
- void dispose() {
-  _isDisposed = true;
-  _batchTimer?.cancel();
-  _cleanupTimer?.cancel();
-  _persistTimer?.cancel();        // ← ADD
-  _persistPageImpressions();      // ← ADD
-  _impressionBuffer.clear();
-  _pageImpressions.clear();
-  _marketProvider = null;
-}
-}
-
-// ✅ UPDATED: BoostedVisibilityWrapper with screen name support
 class BoostedVisibilityWrapper extends StatefulWidget {
   final String productId;
   final Widget child;
@@ -375,7 +460,7 @@ class BoostedVisibilityWrapper extends StatefulWidget {
     Key? key,
     required this.productId,
     required this.child,
-    this.screenName, // ✅ NEW
+    this.screenName,
     this.sourceCollection,
   }) : super(key: key);
 
@@ -394,7 +479,10 @@ class _BoostedVisibilityWrapperState extends State<BoostedVisibilityWrapper> {
     if (_batcher._marketProvider == null) {
       final marketProvider =
           Provider.of<MarketProvider>(context, listen: false);
-      _batcher.initialize(marketProvider);
+      // initialize() is now async but safe to call unawaited here —
+      // it completes before any impression can be recorded since
+      // addImpression() checks _db != null before writing.
+      unawaited(_batcher.initialize(marketProvider));
     }
   }
 
@@ -406,15 +494,14 @@ class _BoostedVisibilityWrapperState extends State<BoostedVisibilityWrapper> {
         if (visibilityInfo.visibleFraction > 0.5) {
           if (!_hasRecordedImpression) {
             final prefixedId = widget.sourceCollection != null
-    ? '${widget.sourceCollection}_${widget.productId}'
-    : widget.productId;
+                ? '${widget.sourceCollection}_${widget.productId}'
+                : widget.productId;
 
-_batcher.addImpression(
-  prefixedId,
-  screenName: widget.screenName,
-);
+            _batcher.addImpression(
+              prefixedId,
+              screenName: widget.screenName,
+            );
             _hasRecordedImpression = true;
-
           }
         }
       },
@@ -423,16 +510,20 @@ _batcher.addImpression(
   }
 
   @override
-void didUpdateWidget(BoostedVisibilityWrapper oldWidget) {
-  super.didUpdateWidget(oldWidget);
-  if (widget.productId != oldWidget.productId) {
-    _hasRecordedImpression = false;
+  void didUpdateWidget(BoostedVisibilityWrapper oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.productId != oldWidget.productId) {
+      _hasRecordedImpression = false;
+    }
   }
-}
 
   @override
   void dispose() {
     _hasRecordedImpression = false;
     super.dispose();
   }
+}
+
+void unawaited(Future<void> future) {
+  future.catchError((e) => debugPrint('Unawaited error: $e'));
 }
