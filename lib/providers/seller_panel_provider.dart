@@ -1406,6 +1406,11 @@ class SellerPanelProvider with ChangeNotifier {
       _isLoadingProducts = true;
       _currentProductPage = 0;
       _hasMoreProducts = true;
+      // Reset loadMore flag in case a previous loadMore was in-flight
+      // when this fresh fetch was triggered (e.g. filter change).
+      // Without this, the stale loadMore's finally block won't reset it
+      // (queryId mismatch), leaving it stuck true and blocking all future pagination.
+      _isFetchingMoreProductsNotifier.value = false;
       notifyListeners();
     }
 
@@ -2122,6 +2127,9 @@ class SellerPanelProvider with ChangeNotifier {
     _lastSearchQuery = query;
     _currentSearchPage = 0;
     _hasMoreSearchResults = true;
+    // Reset loadMore flag in case a previous loadMore was in-flight
+    // when this fresh search was triggered (e.g. new query typed).
+    _isLoadingMoreSearchResultsNotifier.value = false;
 
     // race token
     final myId = ++_activeQueryId;
@@ -2160,7 +2168,11 @@ class SellerPanelProvider with ChangeNotifier {
         _selectedShop == null) return;
 
     _isLoadingMoreSearchResultsNotifier.value = true;
-    _currentSearchPage++;
+
+    // Calculate next page WITHOUT pre-incrementing state.
+    // Only commit the page number after a successful fetch,
+    // so a failed request doesn't permanently skip a page.
+    final nextPage = _currentSearchPage + 1;
 
     // capture token
     final myId = _activeQueryId;
@@ -2171,15 +2183,20 @@ class SellerPanelProvider with ChangeNotifier {
         shopId: _selectedShop!.id,
         query: _lastSearchQuery,
         sortOption: 'date',
-        page: _currentSearchPage,
+        page: nextPage,
         hitsPerPage: 20,
       );
 
       if (myId != _activeQueryId)
         return; // user changed query -> drop this page
 
+      // Commit page number only on success
+      _currentSearchPage = nextPage;
+
+      // Dedup: skip products already in the list
       final current = List<Product>.from(_searchResultsNotifier.value);
-      current.addAll(results);
+      final existingIds = current.map((p) => p.id).toSet();
+      current.addAll(results.where((p) => !existingIds.contains(p.id)));
       _searchResultsNotifier.value = current;
       _hasMoreSearchResults = results.length == 20;
     } catch (e) {
