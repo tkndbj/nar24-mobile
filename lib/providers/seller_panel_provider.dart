@@ -8,27 +8,6 @@ import 'dart:async';
 import 'dart:collection';
 import '../services/analytics_service.dart';
 
-class _StockMemoizedData {
-  String? searchQuery;
-  String? category;
-  String? subcategory;
-  bool? outOfStock;
-  DocumentSnapshot? lastDoc;
-  List<Product>? products;
-
-  bool isUnchanged(
-      String? newSearchQuery,
-      String? newCategory,
-      String? newSubcategory,
-      bool? newOutOfStock,
-      DocumentSnapshot? newLastDoc) {
-    return searchQuery == newSearchQuery &&
-        category == newCategory &&
-        subcategory == newSubcategory &&
-        outOfStock == newOutOfStock &&
-        lastDoc == newLastDoc;
-  }
-}
 
 class SellerPanelProvider with ChangeNotifier {
   final FirebaseAuth _firebaseAuth;
@@ -43,6 +22,8 @@ class SellerPanelProvider with ChangeNotifier {
 
   // ValueNotifiers for frequently accessed/filtered data
   final ValueNotifier<List<Product>> _filteredProductsNotifier =
+      ValueNotifier([]);
+  final ValueNotifier<List<Product>> _filteredStockProductsNotifier =
       ValueNotifier([]);
   final ValueNotifier<List<DocumentSnapshot>> _filteredTransactionsNotifier =
       ValueNotifier([]);
@@ -74,7 +55,8 @@ class SellerPanelProvider with ChangeNotifier {
   bool _isSearchMode = false;
 
   int _activeQueryId = 0; // race guard for search
-  int _activeStockQueryId = 0; // ✅ OPTIMIZATION: race guard for stock filtering
+  int _activeProductQueryId = 0; // race guard for product filtering
+  int _activeStockQueryId = 0; // race guard for stock filtering
   bool _initInFlight = false;
   bool _warmupInFlight = false;
 
@@ -86,13 +68,13 @@ class SellerPanelProvider with ChangeNotifier {
   bool get isSearchMode => _isSearchMode;
   bool get hasMoreSearchResults => _hasMoreSearchResults;
 
-  // Keep existing private fields for backward compatibility
-  DocumentSnapshot? _lastProductDoc;
+  // Typesense page-based pagination for products
+  int _currentProductPage = 0;
   bool _hasMoreProducts = true;
 
-  final _stockMemoizedData = _StockMemoizedData();
-
-  Map<String, dynamic>? _activeCampaign;
+  // Typesense page-based pagination for stock
+  int _currentStockPage = 0;
+  bool _hasMoreStockProducts = true;  Map<String, dynamic>? _activeCampaign;
   bool _campaignDismissed = false;
 
   // Flag to request showing seller info modal on dashboard tab
@@ -165,7 +147,7 @@ class SellerPanelProvider with ChangeNotifier {
   String? _switchingToShopId; // Track ongoing switch operation
   final Map<String, Completer<void>> _switchCompleters = {};
 
-  bool get hasOutOfStock => _filteredProductsNotifier.value.any((p) =>
+  bool get hasOutOfStock => _filteredStockProductsNotifier.value.any((p) =>
       (p.quantity == 0) ||
       ((p.colorQuantities as Map<String, int>?)?.values.any((q) => q == 0) ??
           false));
@@ -204,7 +186,7 @@ class SellerPanelProvider with ChangeNotifier {
   List<DocumentSnapshot> get transactions =>
       _filteredTransactionsNotifier.value;
   List<DocumentSnapshot> _pastBoostHistory = [];
-  DocumentSnapshot? _lastTransactionDoc;
+  int _currentTransactionPage = 0;
   bool _hasMoreTransactions = true;
   String _transactionSearchQuery = '';
 
@@ -225,6 +207,8 @@ class SellerPanelProvider with ChangeNotifier {
   // ValueNotifier getters for UI to listen to specific changes
   ValueNotifier<List<Product>> get filteredProductsNotifier =>
       _filteredProductsNotifier;
+  ValueNotifier<List<Product>> get filteredStockProductsNotifier =>
+      _filteredStockProductsNotifier;
   ValueNotifier<List<DocumentSnapshot>> get filteredTransactionsNotifier =>
       _filteredTransactionsNotifier;
   ValueNotifier<bool> get isLoadingStockNotifier => _isLoadingStockNotifier;
@@ -370,6 +354,7 @@ class SellerPanelProvider with ChangeNotifier {
     _selectedShop = null;
     _products = [];
     _filteredProductsNotifier.value = [];
+    _filteredStockProductsNotifier.value = [];
     _transactions = [];
     _filteredTransactionsNotifier.value = [];
     _pastBoostHistory = [];
@@ -380,8 +365,10 @@ class SellerPanelProvider with ChangeNotifier {
     _selectedCategory = null;
     _selectedSubcategory = null;
     _transactionError = null;
-    _lastProductDoc = null;
+    _currentProductPage = 0;
     _hasMoreProducts = true;
+    _currentStockPage = 0;
+    _hasMoreStockProducts = true;
     _isFetchingMoreProductsNotifier.value = false;
     _productMap = {};
     _selectedDate = null;
@@ -447,6 +434,7 @@ class SellerPanelProvider with ChangeNotifier {
 
     // 4. Dispose ValueNotifiers
     _filteredProductsNotifier.dispose();
+    _filteredStockProductsNotifier.dispose();
     _filteredTransactionsNotifier.dispose();
     _isLoadingStockNotifier.dispose();
     _isFetchingMoreProductsNotifier.dispose();
@@ -736,57 +724,58 @@ class SellerPanelProvider with ChangeNotifier {
 
   Future<void> fetchStockProducts({String? shopId, int limit = 20}) async {
     if (_firebaseAuth.currentUser == null) {
-      _filteredProductsNotifier.value = [];
+      _filteredStockProductsNotifier.value = [];
       _isLoadingStockNotifier.value = false;
       return;
     }
 
-    // ✅ OPTIMIZATION: Request deduplication - cancel stale requests when filters change rapidly
+    // Request deduplication - cancel stale requests when filters change rapidly
     final myQueryId = ++_activeStockQueryId;
 
     _isLoadingStockNotifier.value = true;
-    _lastProductDoc = null;
-    _hasMoreProducts = true;
+    _currentStockPage = 0;
+    _hasMoreStockProducts = true;
 
     try {
-      Query query = _firestore
-          .collection('shop_products')
-          .where('shopId', isEqualTo: shopId ?? _selectedShop?.id);
+      final effectiveShopId = shopId ?? _selectedShop?.id;
+      final filters = <List<String>>[
+        if (effectiveShopId != null) ['shopId:$effectiveShopId'],
+      ];
 
       if (_stockCategoryNotifier.value != null) {
-        query =
-            query.where('category', isEqualTo: _stockCategoryNotifier.value);
+        filters.add(['category:${_stockCategoryNotifier.value}']);
       }
       if (_stockSubcategoryNotifier.value != null) {
-        query = query.where('subcategory',
-            isEqualTo: _stockSubcategoryNotifier.value);
+        filters.add(['subcategory:${_stockSubcategoryNotifier.value}']);
       }
+
+      String? additionalFilter;
       if (_stockOutOfStockNotifier.value) {
-        query = query.where('quantity', isEqualTo: 0);
+        additionalFilter = 'quantity:=0';
       }
 
-      query = query.orderBy('createdAt', descending: true).limit(limit);
-
-      final snapshot = await AnalyticsService.trackRead(
-        operation: 'seller_stock_fetch_inventory',
-        execute: () => query.get(),
-        metadata: {
-          'has_category_filter': _stockCategoryNotifier.value != null,
-          'has_subcategory_filter': _stockSubcategoryNotifier.value != null,
-          'out_of_stock_only': _stockOutOfStockNotifier.value,
-          'limit': limit,
-        },
+      final typesense = TypeSenseServiceManager.instance.shopService;
+      final result = await typesense.searchIdsWithFacets(
+        indexName: 'shop_products',
+        query: _stockSearchQueryNotifier.value.isEmpty
+            ? '*'
+            : _stockSearchQueryNotifier.value,
+        page: 0,
+        hitsPerPage: limit,
+        facetFilters: filters,
+        sortOption: 'date',
+        additionalFilterBy: additionalFilter,
       );
 
-      // ✅ OPTIMIZATION: Drop stale responses
+      // Drop stale responses
       if (myQueryId != _activeStockQueryId) {
         debugPrint(
-            '⚠️ Dropping stale stock query response (ID: $myQueryId, current: $_activeStockQueryId)');
+            'Dropping stale stock query response (ID: $myQueryId, current: $_activeStockQueryId)');
         return;
       }
 
-      var products = snapshot.docs
-          .map((doc) => Product.fromDocument(doc))
+      final products = result.hits
+          .map((hit) => Product.fromTypeSense(hit))
           .map(_normalizeProduct)
           .toList();
 
@@ -794,36 +783,15 @@ class SellerPanelProvider with ChangeNotifier {
         _updateProductMap(product);
       }
 
-      if (_stockSearchQueryNotifier.value.isNotEmpty) {
-        final q = _stockSearchQueryNotifier.value.toLowerCase();
-        products = products.where((p) {
-          return p.productName.toLowerCase().contains(q) ||
-              (p.brandModel?.toLowerCase() ?? '').contains(q) ||
-              (p.category ?? '').toLowerCase().contains(q) ||
-              (p.subcategory ?? '').toLowerCase().contains(q) ||
-              (p.subsubcategory ?? '').toLowerCase().contains(q);
-        }).toList();
-      }
-
-      _filteredProductsNotifier.value = products;
-      _lastProductDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
-      _hasMoreProducts = snapshot.docs.length == limit;
-
-      _stockMemoizedData
-        ..searchQuery = _stockSearchQueryNotifier.value
-        ..category = _stockCategoryNotifier.value
-        ..subcategory = _stockSubcategoryNotifier.value
-        ..outOfStock = _stockOutOfStockNotifier.value
-        ..lastDoc = _lastProductDoc
-        ..products = products;
+      _filteredStockProductsNotifier.value = products;
+      _currentStockPage = result.page;
+      _hasMoreStockProducts = result.page < result.nbPages - 1;
     } catch (e) {
       debugPrint('Error fetching stock products: $e');
-      // Only update on error if this is still the active query
       if (myQueryId == _activeStockQueryId) {
-        _filteredProductsNotifier.value = [];
+        _filteredStockProductsNotifier.value = [];
       }
     } finally {
-      // Only clear loading state if this is still the active query
       if (myQueryId == _activeStockQueryId) {
         _isLoadingStockNotifier.value = false;
       }
@@ -831,72 +799,60 @@ class SellerPanelProvider with ChangeNotifier {
   }
 
   Future<void> fetchNextStockPage({String? shopId, int limit = 20}) async {
-    if (!_hasMoreProducts || _isFetchingMoreProductsNotifier.value) return;
+    if (!_hasMoreStockProducts || _isFetchingMoreProductsNotifier.value) return;
 
     _isFetchingMoreProductsNotifier.value = true;
 
     try {
-      Query query = _firestore
-          .collection('shop_products')
-          .where('shopId', isEqualTo: shopId ?? _selectedShop?.id);
+      final effectiveShopId = shopId ?? _selectedShop?.id;
+      final filters = <List<String>>[
+        if (effectiveShopId != null) ['shopId:$effectiveShopId'],
+      ];
 
       if (_stockCategoryNotifier.value != null) {
-        query =
-            query.where('category', isEqualTo: _stockCategoryNotifier.value);
+        filters.add(['category:${_stockCategoryNotifier.value}']);
       }
       if (_stockSubcategoryNotifier.value != null) {
-        query = query.where('subcategory',
-            isEqualTo: _stockSubcategoryNotifier.value);
+        filters.add(['subcategory:${_stockSubcategoryNotifier.value}']);
       }
 
+      String? additionalFilter;
       if (_stockOutOfStockNotifier.value) {
-        query = query.where('quantity', isEqualTo: 0);
+        additionalFilter = 'quantity:=0';
       }
 
-      query = query.orderBy('createdAt', descending: true);
-      if (_lastProductDoc != null) {
-        query = query.startAfterDocument(_lastProductDoc!);
-      }
-      query = query.limit(limit);
+      final typesense = TypeSenseServiceManager.instance.shopService;
+      final result = await typesense.searchIdsWithFacets(
+        indexName: 'shop_products',
+        query: _stockSearchQueryNotifier.value.isEmpty
+            ? '*'
+            : _stockSearchQueryNotifier.value,
+        page: _currentStockPage + 1,
+        hitsPerPage: limit,
+        facetFilters: filters,
+        sortOption: 'date',
+        additionalFilterBy: additionalFilter,
+      );
 
-      final snapshot = await query.get();
-      final newProducts = snapshot.docs
-          .map((doc) => Product.fromDocument(doc))
-          .map(_normalizeProduct) // <- add this
+      final newProducts = result.hits
+          .map((hit) => Product.fromTypeSense(hit))
+          .map(_normalizeProduct)
           .toList();
 
       for (final product in newProducts) {
         _updateProductMap(product);
       }
 
-      final updatedProducts =
-          List<Product>.from(_filteredProductsNotifier.value)
-            ..addAll(newProducts);
+      // Dedup: skip products already in the list
+      final existingIds =
+          _filteredStockProductsNotifier.value.map((p) => p.id).toSet();
+      final deduped = newProducts.where((p) => !existingIds.contains(p.id));
+      _filteredStockProductsNotifier.value =
+          List<Product>.from(_filteredStockProductsNotifier.value)
+            ..addAll(deduped);
 
-      if (_stockSearchQueryNotifier.value.isNotEmpty) {
-        final q = _stockSearchQueryNotifier.value.toLowerCase();
-        final filteredUpdated = updatedProducts.where((p) {
-          return p.productName.toLowerCase().contains(q) ||
-              (p.brandModel?.toLowerCase() ?? '').contains(q) ||
-              (p.category ?? '').toLowerCase().contains(q) ||
-              (p.subcategory ?? '').toLowerCase().contains(q) ||
-              (p.subsubcategory ?? '').toLowerCase().contains(q);
-        }).toList();
-        _filteredProductsNotifier.value = filteredUpdated;
-      } else {
-        _filteredProductsNotifier.value = updatedProducts;
-      }
-
-      _lastProductDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
-      _hasMoreProducts = snapshot.docs.length == limit;
-
-      _stockMemoizedData
-        ..searchQuery = _stockSearchQueryNotifier.value
-        ..category = _stockCategoryNotifier.value
-        ..subcategory = _stockSubcategoryNotifier.value
-        ..outOfStock = _stockOutOfStockNotifier.value
-        ..lastDoc = _lastProductDoc
-        ..products = _filteredProductsNotifier.value;
+      _currentStockPage = result.page;
+      _hasMoreStockProducts = result.page < result.nbPages - 1;
     } catch (e) {
       debugPrint('Error fetching next stock page: $e');
     } finally {
@@ -908,8 +864,8 @@ class SellerPanelProvider with ChangeNotifier {
     if (_stockSearchQueryNotifier.value == query && !reset) return;
     _stockSearchQueryNotifier.value = query;
     if (reset) {
-      _lastProductDoc = null;
-      _hasMoreProducts = true;
+      _currentStockPage = 0;
+      _hasMoreStockProducts = true;
     }
     fetchStockProducts(shopId: _selectedShop?.id);
   }
@@ -918,24 +874,24 @@ class SellerPanelProvider with ChangeNotifier {
     if (_stockCategoryNotifier.value == category) return;
     _stockCategoryNotifier.value = category;
     _stockSubcategoryNotifier.value = null;
-    _lastProductDoc = null;
-    _hasMoreProducts = true;
+    _currentStockPage = 0;
+    _hasMoreStockProducts = true;
     fetchStockProducts(shopId: _selectedShop?.id);
   }
 
   void setStockSubcategory(String? subcategory) {
     if (_stockSubcategoryNotifier.value == subcategory) return;
     _stockSubcategoryNotifier.value = subcategory;
-    _lastProductDoc = null;
-    _hasMoreProducts = true;
+    _currentStockPage = 0;
+    _hasMoreStockProducts = true;
     fetchStockProducts(shopId: _selectedShop?.id);
   }
 
   void setOutOfStockFilter(bool value) {
     if (_stockOutOfStockNotifier.value == value) return;
     _stockOutOfStockNotifier.value = value;
-    _lastProductDoc = null;
-    _hasMoreProducts = true;
+    _currentStockPage = 0;
+    _hasMoreStockProducts = true;
     fetchStockProducts(shopId: _selectedShop?.id);
   }
 
@@ -1270,6 +1226,7 @@ class SellerPanelProvider with ChangeNotifier {
       );
 
       _products[index] = updatedProduct;
+      // Update products tab
       final filteredIndex =
           _filteredProductsNotifier.value.indexWhere((p) => p.id == productId);
       if (filteredIndex != -1) {
@@ -1277,6 +1234,15 @@ class SellerPanelProvider with ChangeNotifier {
             List<Product>.from(_filteredProductsNotifier.value);
         updatedFiltered[filteredIndex] = updatedProduct;
         _filteredProductsNotifier.value = updatedFiltered;
+      }
+      // Update stock tab
+      final stockIndex = _filteredStockProductsNotifier.value
+          .indexWhere((p) => p.id == productId);
+      if (stockIndex != -1) {
+        final updatedStock =
+            List<Product>.from(_filteredStockProductsNotifier.value);
+        updatedStock[stockIndex] = updatedProduct;
+        _filteredStockProductsNotifier.value = updatedStock;
       }
       notifyListeners();
     } catch (e) {
@@ -1308,6 +1274,12 @@ class SellerPanelProvider with ChangeNotifier {
             List<Product>.from(_filteredProductsNotifier.value);
         updatedFiltered.removeWhere((p) => p.id == productId);
         _filteredProductsNotifier.value = updatedFiltered;
+
+        // Remove from stock products
+        final updatedStock =
+            List<Product>.from(_filteredStockProductsNotifier.value);
+        updatedStock.removeWhere((p) => p.id == productId);
+        _filteredStockProductsNotifier.value = updatedStock;
 
         // Remove from search results if in search mode
         if (_isSearchMode) {
@@ -1362,6 +1334,17 @@ class SellerPanelProvider with ChangeNotifier {
           _filteredProductsNotifier.value = updatedFiltered;
         }
 
+        // Update stock products
+        final stockIndex = _filteredStockProductsNotifier.value
+            .indexWhere((p) => p.id == productId);
+        if (stockIndex != -1) {
+          final updatedStock =
+              List<Product>.from(_filteredStockProductsNotifier.value);
+          updatedStock[stockIndex] =
+              updatedStock[stockIndex].copyWith(paused: pauseStatus);
+          _filteredStockProductsNotifier.value = updatedStock;
+        }
+
         // Update search results if in search mode
         if (_isSearchMode) {
           final searchIndex =
@@ -1398,64 +1381,73 @@ class SellerPanelProvider with ChangeNotifier {
       _filteredProductsNotifier.value = updatedFiltered;
     }
 
+    final stockIndex = _filteredStockProductsNotifier.value
+        .indexWhere((p) => p.id == productId);
+    if (stockIndex != -1) {
+      final updatedStock =
+          List<Product>.from(_filteredStockProductsNotifier.value);
+      updatedStock[stockIndex] = updatedProduct;
+      _filteredStockProductsNotifier.value = updatedStock;
+    }
+
     if (_productMap.containsKey(productId)) {
-      _updateProductMap(updatedProduct); // ✅ Use the safe method
+      _updateProductMap(updatedProduct);
     }
 
     notifyListeners();
   }
 
   Future<void> fetchProducts({String? shopId, bool loadMore = false}) async {
+    final myQueryId = ++_activeProductQueryId;
+
     if (loadMore) {
       _isFetchingMoreProductsNotifier.value = true;
     } else {
       _isLoadingProducts = true;
-      _lastProductDoc = null;
+      _currentProductPage = 0;
       _hasMoreProducts = true;
       notifyListeners();
     }
 
     try {
-      Query query;
+      // Determine Typesense index and owner filter
+      final String indexName;
+      final List<List<String>> filters;
       if (shopId != null) {
-        query = _firestore
-            .collection('shop_products')
-            .where('shopId', isEqualTo: shopId);
+        indexName = 'shop_products';
+        filters = [
+          ['shopId:$shopId']
+        ];
       } else {
-        query = _firestore
-            .collection('products')
-            .where('ownerId', isEqualTo: userId);
+        indexName = 'products';
+        filters = [
+          ['ownerId:$userId']
+        ];
       }
 
-      // SERVER-SIDE CATEGORY FILTERING
+      // Category filtering via Typesense facets
       if (_selectedCategory != null) {
-        query = query.where('category', isEqualTo: _selectedCategory);
+        filters.add(['category:$_selectedCategory']);
       }
       if (_selectedSubcategory != null) {
-        query = query.where('subcategory', isEqualTo: _selectedSubcategory);
+        filters.add(['subcategory:$_selectedSubcategory']);
       }
 
-      query = query.orderBy('createdAt', descending: true);
-      if (loadMore && _lastProductDoc != null) {
-        query = query.startAfterDocument(_lastProductDoc!);
-      }
-      query = query.limit(20);
-
-      final productsSnapshot = await AnalyticsService.trackRead(
-        operation: loadMore
-            ? 'seller_products_load_more'
-            : 'seller_products_fetch_list',
-        execute: () => query.get(),
-        metadata: {
-          'is_shop_context': shopId != null,
-          'has_category_filter': _selectedCategory != null,
-          'has_subcategory_filter': _selectedSubcategory != null,
-          'limit': 20,
-        },
+      final typesense = TypeSenseServiceManager.instance.shopService;
+      final result = await typesense.searchIdsWithFacets(
+        indexName: indexName,
+        query: '*',
+        page: loadMore ? _currentProductPage + 1 : 0,
+        hitsPerPage: 20,
+        facetFilters: filters,
+        sortOption: 'date',
       );
 
-      final newProducts = productsSnapshot.docs
-          .map((doc) => Product.fromDocument(doc))
+      // Drop stale responses
+      if (myQueryId != _activeProductQueryId) return;
+
+      final newProducts = result.hits
+          .map((hit) => Product.fromTypeSense(hit))
           .map(_normalizeProduct)
           .toList();
 
@@ -1464,28 +1456,31 @@ class SellerPanelProvider with ChangeNotifier {
       }
 
       if (loadMore) {
-        _products.addAll(newProducts);
+        // Dedup: skip products already in the list
+        final existingIds = _products.map((p) => p.id).toSet();
+        _products.addAll(newProducts.where((p) => !existingIds.contains(p.id)));
       } else {
         _products = newProducts;
       }
 
-      _lastProductDoc =
-          productsSnapshot.docs.isNotEmpty ? productsSnapshot.docs.last : null;
-      _hasMoreProducts = productsSnapshot.docs.length == 20;
+      _currentProductPage = result.page;
+      _hasMoreProducts = result.page < result.nbPages - 1;
 
       _updateFilteredProducts();
     } catch (e) {
       debugPrint('Error fetching products: $e');
-      if (!loadMore) {
+      if (myQueryId == _activeProductQueryId && !loadMore) {
         _products = [];
         _filteredProductsNotifier.value = [];
       }
     } finally {
-      if (loadMore) {
-        _isFetchingMoreProductsNotifier.value = false;
-      } else {
-        _isLoadingProducts = false;
-        notifyListeners();
+      if (myQueryId == _activeProductQueryId) {
+        if (loadMore) {
+          _isFetchingMoreProductsNotifier.value = false;
+        } else {
+          _isLoadingProducts = false;
+          notifyListeners();
+        }
       }
     }
   }
@@ -1510,13 +1505,11 @@ class SellerPanelProvider with ChangeNotifier {
       return;
     }
 
-    // Better early return handling
+    // Early return if already loaded and no refresh requested
     if (!forceRefresh &&
         !loadMore &&
         _transactions.isNotEmpty &&
-        _transactionError == null &&
-        _transactionSubscription != null) {
-      // Check subscription exists
+        _transactionError == null) {
       return;
     }
 
@@ -1524,10 +1517,10 @@ class SellerPanelProvider with ChangeNotifier {
       _isLoadingMoreTransactionsNotifier.value = true;
     } else {
       _isLoadingTransactionsNotifier.value = true;
-      _lastTransactionDoc = null;
+      _currentTransactionPage = 0;
       _hasMoreTransactions = true;
 
-      // ✅ OPTIMIZATION: Fixed listener leak - cancel existing subscription before creating new one
+      // Cancel existing subscription if migrating from old real-time listener
       if (_transactionSubscription != null) {
         await _transactionSubscription!.cancel();
         _transactionSubscription = null;
@@ -1538,93 +1531,69 @@ class SellerPanelProvider with ChangeNotifier {
     _transactionError = null;
 
     try {
-      var query = _firestore
-          .collectionGroup('items')
-          .orderBy('timestamp', descending: true);
-
+      // Build Typesense filters
+      final filters = <List<String>>[];
       if (shopId != null) {
-        query = query.where('shopId', isEqualTo: shopId);
+        filters.add(['shopId:$shopId']);
       } else {
-        query = query.where('sellerId', isEqualTo: userId);
+        filters.add(['sellerId:$userId']);
       }
 
-      // ADD SERVER-SIDE DATE FILTERING
+      // Date filtering via Typesense numeric filter
+      String? additionalFilter;
+      final dateFilters = <String>[];
       if (startDate != null) {
-        query = query.where('timestamp',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(startDate));
+        final startUnix = startDate.millisecondsSinceEpoch ~/ 1000;
+        dateFilters.add('timestampForSorting:>=$startUnix');
       }
       if (endDate != null) {
-        query = query.where('timestamp',
-            isLessThanOrEqualTo: Timestamp.fromDate(endDate));
+        final endUnix = endDate.millisecondsSinceEpoch ~/ 1000;
+        dateFilters.add('timestampForSorting:<=$endUnix');
+      }
+      if (dateFilters.isNotEmpty) {
+        additionalFilter = dateFilters.join(' && ');
       }
 
-      query = query.limit(20);
-      if (loadMore && _lastTransactionDoc != null) {
-        query = query.startAfterDocument(_lastTransactionDoc!);
-      }
+      final typesense = TypeSenseServiceManager.instance.ordersService;
+      final page = loadMore ? _currentTransactionPage + 1 : 0;
+      final result = await typesense.searchIdsWithFacets(
+        indexName: 'orders',
+        query: '*',
+        page: page,
+        hitsPerPage: 20,
+        facetFilters: filters,
+        sortOption: 'timestamp',
+        additionalFilterBy: additionalFilter,
+        queryBy: 'searchableText,productName,buyerName,sellerName',
+        includeFields: 'id,orderId,productId,shopId,sellerId,buyerId,timestampForSorting',
+      );
+
+      // Hydrate from Firestore by ID (cheap reads, no composite indexes)
+      final docs = await typesense
+          .fetchDocumentSnapshotsFromTypeSenseResults(result.hits);
 
       if (loadMore) {
-        final snap = await AnalyticsService.trackRead(
-          operation: 'seller_transactions_load_more',
-          execute: () => query.get(),
-          metadata: {
-            'is_shop_context': shopId != null,
-            'has_date_filter': startDate != null || endDate != null,
-            'limit': 20,
-          },
-        );
-        final docs = snap.docs;
-
-        _transactions.addAll(docs);
-        _lastTransactionDoc = docs.isNotEmpty ? docs.last : null;
-        _hasMoreTransactions = docs.length == 20;
+        // Dedup: skip transactions already in the list
+        final existingIds = _transactions.map((d) => d.id).toSet();
+        _transactions.addAll(docs.where((d) => !existingIds.contains(d.id)));
         _isLoadingMoreTransactionsNotifier.value = false;
-        _updateFilteredTransactions();
       } else {
-        _transactionSubscription = query.snapshots().listen(
-          (snap) {
-            final docs = snap.docs;
-            _transactions = docs;
-            _lastTransactionDoc = docs.isNotEmpty ? docs.last : null;
-            _hasMoreTransactions = docs.length == 20;
-            _isLoadingTransactionsNotifier.value = false;
-            _transactionError = null;
-            _updateFilteredTransactions();
-            notifyListeners();
-          },
-          onError: (e) {
-            final msg = e.toString();
-            if (msg.contains('FAILED_PRECONDITION') ||
-                msg.toLowerCase().contains('index')) {
-              _transactionError =
-                  'An index is required for this view. Please create the suggested composite index in Firestore.';
-            } else if (msg.contains('permission-denied')) {
-              _transactionError = 'No permission to view transactions.';
-            } else {
-              _transactionError = 'Failed to load transactions.';
-            }
-            _transactions = [];
-            _filteredTransactionsNotifier.value = [];
-            _isLoadingTransactionsNotifier.value = false;
-            notifyListeners();
-            _transactionSubscription?.cancel();
-            _transactionSubscription = null;
-          },
-        );
+        _transactions = docs;
+        _isLoadingTransactionsNotifier.value = false;
       }
+
+      _currentTransactionPage = result.page;
+      _hasMoreTransactions = result.page < result.nbPages - 1;
+      _transactionError = null;
+      _updateFilteredTransactions();
+      notifyListeners();
     } catch (e) {
-      final msg = e.toString();
-      if (msg.contains('FAILED_PRECONDITION') ||
-          msg.toLowerCase().contains('index')) {
-        _transactionError =
-            'An index is required for this view. Please create the suggested composite index in Firestore.';
-      } else if (msg.contains('permission-denied')) {
-        _transactionError = 'No permission to view transactions.';
-      } else {
-        _transactionError = 'Failed to load transactions.';
+      debugPrint('Error fetching transactions: $e');
+      _transactionError = 'Failed to load transactions.';
+      if (!loadMore) {
+        _transactions = [];
+        _filteredTransactionsNotifier.value = [];
       }
-      _transactions = [];
-      _filteredTransactionsNotifier.value = [];
       _isLoadingTransactionsNotifier.value = false;
       _isLoadingMoreTransactionsNotifier.value = false;
       notifyListeners();
@@ -1951,8 +1920,11 @@ class SellerPanelProvider with ChangeNotifier {
     // Products state
     _products = [];
     _filteredProductsNotifier.value = [];
-    _lastProductDoc = null;
+    _filteredStockProductsNotifier.value = [];
+    _currentProductPage = 0;
     _hasMoreProducts = true;
+    _currentStockPage = 0;
+    _hasMoreStockProducts = true;
     _productMap.clear();
 
     // Cache state
@@ -1968,7 +1940,7 @@ class SellerPanelProvider with ChangeNotifier {
     // Transactions state
     _transactions = [];
     _filteredTransactionsNotifier.value = [];
-    _lastTransactionDoc = null;
+    _currentTransactionPage = 0;
     _hasMoreTransactions = true;
     _transactionError = null;
 
@@ -2060,45 +2032,52 @@ class SellerPanelProvider with ChangeNotifier {
 
       if (!snap.exists) {
         _products.removeAt(idx);
-        final updatedFiltered = _filteredProductsNotifier.value
+        _filteredProductsNotifier.value = _filteredProductsNotifier.value
             .where((p) => p.id != productId)
             .toList();
-        _filteredProductsNotifier.value = updatedFiltered;
+        _filteredStockProductsNotifier.value = _filteredStockProductsNotifier
+            .value
+            .where((p) => p.id != productId)
+            .toList();
         notifyListeners();
         return;
       }
 
       final updated = Product.fromDocument(snap);
+      final Product resolved;
 
       final now = DateTime.now();
       if (updated.boostEndTime != null &&
           updated.boostEndTime!.toDate().isBefore(now)) {
-        final expired = updated.copyWith(
+        resolved = updated.copyWith(
           isBoosted: false,
           boostStartTime: null,
           boostEndTime: null,
         );
-        _products[idx] = expired;
-
-        final filteredIndex = _filteredProductsNotifier.value
-            .indexWhere((p) => p.id == productId);
-        if (filteredIndex != -1) {
-          final updatedFiltered =
-              List<Product>.from(_filteredProductsNotifier.value);
-          updatedFiltered[filteredIndex] = expired;
-          _filteredProductsNotifier.value = updatedFiltered;
-        }
       } else {
-        _products[idx] = updated;
+        resolved = updated;
+      }
 
-        final filteredIndex = _filteredProductsNotifier.value
-            .indexWhere((p) => p.id == productId);
-        if (filteredIndex != -1) {
-          final updatedFiltered =
-              List<Product>.from(_filteredProductsNotifier.value);
-          updatedFiltered[filteredIndex] = updated;
-          _filteredProductsNotifier.value = updatedFiltered;
-        }
+      _products[idx] = resolved;
+
+      // Update products/ads tab
+      final filteredIndex = _filteredProductsNotifier.value
+          .indexWhere((p) => p.id == productId);
+      if (filteredIndex != -1) {
+        final updatedFiltered =
+            List<Product>.from(_filteredProductsNotifier.value);
+        updatedFiltered[filteredIndex] = resolved;
+        _filteredProductsNotifier.value = updatedFiltered;
+      }
+
+      // Update stock tab
+      final stockIndex = _filteredStockProductsNotifier.value
+          .indexWhere((p) => p.id == productId);
+      if (stockIndex != -1) {
+        final updatedStock =
+            List<Product>.from(_filteredStockProductsNotifier.value);
+        updatedStock[stockIndex] = resolved;
+        _filteredStockProductsNotifier.value = updatedStock;
       }
 
       notifyListeners();
@@ -2235,7 +2214,7 @@ class SellerPanelProvider with ChangeNotifier {
     _selectedSubcategory = null;
 
     // Reset pagination since we're changing the query
-    _lastProductDoc = null;
+    _currentProductPage = 0;
     _hasMoreProducts = true;
 
     // Refetch products with new category filter
@@ -2247,7 +2226,7 @@ class SellerPanelProvider with ChangeNotifier {
     _selectedSubcategory = subcategory;
 
     // Reset pagination since we're changing the query
-    _lastProductDoc = null;
+    _currentProductPage = 0;
     _hasMoreProducts = true;
 
     // Refetch products with new subcategory filter

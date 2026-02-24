@@ -59,6 +59,7 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 import 'services/sales_config_service.dart';
 import 'services/coupon_service.dart';
 import 'services/search_config_service.dart';
+import 'services/cart_favorite_metrics_service.dart';
 
 /// Background message handler for FCM.
 ///
@@ -176,6 +177,11 @@ Future<void> main() async {
     await UserActivityService.instance.initialize();
     if (kDebugMode) {
       debugPrint('✅ UserActivityService initialized');
+    }
+
+    await MetricsEventService.instance.initialize();
+    if (kDebugMode) {
+      debugPrint('✅ MetricsEventService initialized');
     }
 
     SalesConfigService().initialize();
@@ -302,8 +308,7 @@ Future<void> main() async {
                 ChangeNotifierProvider(create: (_) => DynamicFilterProvider()),
                 ChangeNotifierProvider(
                   create: (context) => SpecialFilterProviderMarket(
-                    searchService:
-                        TypeSenseServiceManager.instance.shopService,
+                    searchService: TypeSenseServiceManager.instance.shopService,
                   ),
                 ),
                 ChangeNotifierProvider(
@@ -548,6 +553,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       ImpressionBatcher().flush();
       UserActivityService.instance.forceFlush();
       ClickTrackingService.instance.flush();
+      MetricsEventService.instance.flush();
 
       // Clear static caches
       try {
@@ -566,6 +572,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
     if (state == AppLifecycleState.detached) {
       ClickTrackingService.instance.dispose();
+      MetricsEventService.instance.dispose();
       SearchConfigService.instance.shutdown();
     }
 

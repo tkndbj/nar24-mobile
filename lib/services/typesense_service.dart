@@ -73,6 +73,8 @@ class TypeSenseService {
         return 'price:asc';
       case 'price_desc':
         return 'price:desc';
+      case 'timestamp':
+        return 'timestampForSorting:desc';
       default:
         return 'promotionScore:desc,createdAt:desc';
     }
@@ -391,6 +393,8 @@ class TypeSenseService {
     List<String>? numericFilters,
     String sortOption = 'date',
     String? additionalFilterBy,
+    String? queryBy,
+    String? includeFields,
   }) async {
     final uri = _searchUri(indexName);
 
@@ -436,18 +440,23 @@ class TypeSenseService {
 
     final params = <String, String>{
       'q': query.isEmpty ? '*' : query,
-      'query_by':
+      'query_by': queryBy ??
           'productName,brandModel,sellerName,category_en,category_tr,category_ru,subcategory_en,subcategory_tr,subcategory_ru,subsubcategory_en,subsubcategory_tr,subsubcategory_ru',
       'sort_by': _sortBy(sortOption),
       'per_page': hitsPerPage.toString(),
       'page': (page + 1).toString(),
-      'include_fields': 'id,productName,price,originalPrice,discountPercentage,brandModel,'
+    };
+
+    if (includeFields != null) {
+      params['include_fields'] = includeFields;
+    } else {
+      params['include_fields'] = 'id,productName,price,originalPrice,discountPercentage,brandModel,'
           'category,subcategory,subsubcategory,gender,availableColors,colorImagesJson,colorQuantitiesJson,'
           'shopId,ownerId,userId,promotionScore,createdAt,imageUrls,'
           'sellerName,condition,currency,quantity,averageRating,reviewCount,'
           'isBoosted,isFeatured,purchaseCount,bestSellerRank,deliveryOption,paused,'
-          'bundleIds,videoUrl,campaignName,discountThreshold,bulkDiscountPercentage',
-    };
+          'bundleIds,videoUrl,campaignName,discountThreshold,bulkDiscountPercentage';
+    }
 
     if (filterParts.isNotEmpty) {
       params['filter_by'] = filterParts.join(' && ');
@@ -656,15 +665,23 @@ class TypeSenseService {
   Future<List<DocumentSnapshot>> fetchDocumentSnapshotsFromTypeSenseResults(
       List<Map<String, dynamic>> results) async {
     if (results.isEmpty) return [];
-    final docs = <DocumentSnapshot>[];
 
-    for (final hit in results) {
+    // Filter valid hits and pair with their original index to preserve order
+    final validHits = <(int, String, String)>[];
+    for (var i = 0; i < results.length; i++) {
+      final orderId = results[i]['orderId'] as String?;
+      final productId = results[i]['productId'] as String?;
+      if (orderId != null && productId != null) {
+        validHits.add((i, orderId, productId));
+      }
+    }
+    if (validHits.isEmpty) return [];
+
+    // Fire all Firestore fetches in parallel
+    final futures = validHits.map((entry) async {
+      final (_, orderId, productId) = entry;
       try {
-        final orderId = hit['orderId'] as String?;
-        final productId = hit['productId'] as String?;
-        if (orderId == null || productId == null) continue;
-
-        final itemsQuery = await FirebaseFirestore.instance
+        final snap = await FirebaseFirestore.instance
             .collection('orders')
             .doc(orderId)
             .collection('items')
@@ -672,22 +689,26 @@ class TypeSenseService {
             .limit(1)
             .get();
 
-        if (itemsQuery.docs.isNotEmpty) {
-          docs.add(itemsQuery.docs.first);
-        } else {
-          final fallback = await FirebaseFirestore.instance
-              .collectionGroup('items')
-              .where('orderId', isEqualTo: orderId)
-              .where('productId', isEqualTo: productId)
-              .limit(1)
-              .get();
-          if (fallback.docs.isNotEmpty) docs.add(fallback.docs.first);
-        }
+        if (snap.docs.isNotEmpty) return snap.docs.first;
+
+        // Fallback: collectionGroup query
+        final fallback = await FirebaseFirestore.instance
+            .collectionGroup('items')
+            .where('orderId', isEqualTo: orderId)
+            .where('productId', isEqualTo: productId)
+            .limit(1)
+            .get();
+        return fallback.docs.isNotEmpty ? fallback.docs.first : null;
       } catch (e) {
         debugPrint('fetchDocumentSnapshots error: $e');
+        return null;
       }
-    }
-    return docs;
+    }).toList();
+
+    final resolved = await Future.wait(futures);
+
+    // Return in original Typesense order, skip nulls (failed/missing)
+    return resolved.whereType<DocumentSnapshot>().toList();
   }
 
   // ── Facet queries ─────────────────────────────────────────────────────────

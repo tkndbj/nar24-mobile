@@ -220,7 +220,7 @@ const duration = Date.now() - startTime;
  * ✅ OPTIMIZED: Faster sync with monitoring
  */
 export const syncClickAnalytics = onSchedule({
-  schedule: 'every 2 minutes',
+  schedule: 'every 5 minutes',
   timeZone: 'UTC',
   timeoutSeconds: 540,
   memory: '1GiB',

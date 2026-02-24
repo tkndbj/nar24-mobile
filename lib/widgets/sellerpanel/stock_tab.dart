@@ -181,7 +181,7 @@ class _StockTabState extends State<StockTab> with TickerProviderStateMixin {
 
     return ValueListenableBuilder<List<dynamic>>(
       valueListenable:
-          context.read<SellerPanelProvider>().filteredProductsNotifier,
+          context.read<SellerPanelProvider>().filteredStockProductsNotifier,
       builder: (context, products, _) {
         if (products.isEmpty) {
           return _buildEmptyState(l10n.noProductsFound, isDark);

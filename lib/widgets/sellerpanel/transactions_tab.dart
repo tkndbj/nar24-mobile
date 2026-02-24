@@ -391,10 +391,31 @@ class _TransactionsTabState extends State<TransactionsTab>
 
   Future<void> _onRefresh() async {
     try {
-      await context.read<SellerPanelProvider>().fetchTransactions(
-            shopId: context.read<SellerPanelProvider>().selectedShop?.id,
-            forceRefresh: true,
-          );
+      final provider = context.read<SellerPanelProvider>();
+      final selectedDate = provider.selectedDate;
+      final selectedDateRange = provider.selectedDateRange;
+
+      await provider.fetchTransactions(
+        shopId: provider.selectedShop?.id,
+        forceRefresh: true,
+        startDate: selectedDate != null
+            ? DateTime(
+                selectedDate.year, selectedDate.month, selectedDate.day)
+            : selectedDateRange?.start,
+        endDate: selectedDate != null
+            ? DateTime(selectedDate.year, selectedDate.month,
+                selectedDate.day, 23, 59, 59, 999)
+            : selectedDateRange != null
+                ? DateTime(
+                    selectedDateRange.end.year,
+                    selectedDateRange.end.month,
+                    selectedDateRange.end.day,
+                    23,
+                    59,
+                    59,
+                    999)
+                : null,
+      );
     } catch (e) {
       // optionally show a SnackBar or log the error
     }

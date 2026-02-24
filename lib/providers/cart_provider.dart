@@ -56,7 +56,7 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
   // Rate limiters to prevent spam
   final _addToCartLimiter = _RateLimiter(Duration(milliseconds: 300));
   final _quantityLimiter = _RateLimiter(Duration(milliseconds: 200));
-  final MetricsEventService _metricsService = MetricsEventService();
+  final MetricsEventService _metricsService = MetricsEventService.instance;
 
   // Public reactive state using ValueNotifiers (optimal for listeners)
   final ValueNotifier<Set<String>> cartProductIdsNotifier = ValueNotifier({});
@@ -383,58 +383,59 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
   }
 
   Future<void> updateTotalsForExcluded(List<String> excludedProductIds) async {
-  // If all items are excluded, show zero
-  if (cartProductIds.isNotEmpty && 
-      excludedProductIds.length >= cartProductIds.length) {
-    cartTotalsNotifier.value = CartTotals(total: 0, items: [], currency: 'TL');
-    _currentTotalsProductIds = {};
-    return;
+    // If all items are excluded, show zero
+    if (cartProductIds.isNotEmpty &&
+        excludedProductIds.length >= cartProductIds.length) {
+      cartTotalsNotifier.value =
+          CartTotals(total: 0, items: [], currency: 'TL');
+      _currentTotalsProductIds = {};
+      return;
+    }
+
+    // Calculate which items are selected (for optimistic update)
+    final selectedIds =
+        cartProductIds.where((id) => !excludedProductIds.contains(id)).toList();
+
+    _currentTotalsProductIds = selectedIds.toSet();
+
+    // Step 1: Immediate optimistic update (instant UI feedback)
+    if (selectedIds.isNotEmpty) {
+      final optimistic = _calculateOptimisticTotals(selectedIds);
+      cartTotalsNotifier.value = optimistic;
+    }
+
+    // Step 2: Show loading for server verification
+    isTotalsLoadingNotifier.value = true;
+
+    try {
+      // ✅ Pass excluded IDs to Cloud Function
+      final serverTotals = await calculateCartTotals(
+        excludedProductIds:
+            excludedProductIds.isNotEmpty ? excludedProductIds : null,
+      );
+
+      cartTotalsNotifier.value = serverTotals;
+    } catch (e) {
+      debugPrint('⚠️ Server totals failed, using optimistic: $e');
+    } finally {
+      isTotalsLoadingNotifier.value = false;
+    }
   }
 
-  // Calculate which items are selected (for optimistic update)
-  final selectedIds = cartProductIds
-      .where((id) => !excludedProductIds.contains(id))
-      .toList();
-  
-  _currentTotalsProductIds = selectedIds.toSet();
+  Future<void> updateTotalsForSelection(List<String> selectedProductIds) async {
+    if (selectedProductIds.isEmpty) {
+      cartTotalsNotifier.value =
+          CartTotals(total: 0, items: [], currency: 'TL');
+      _currentTotalsProductIds = {};
+      return;
+    }
 
-  // Step 1: Immediate optimistic update (instant UI feedback)
-  if (selectedIds.isNotEmpty) {
-    final optimistic = _calculateOptimisticTotals(selectedIds);
-    cartTotalsNotifier.value = optimistic;
+    // Convert selected IDs to excluded IDs
+    final excludedIds =
+        cartProductIds.where((id) => !selectedProductIds.contains(id)).toList();
+
+    await updateTotalsForExcluded(excludedIds);
   }
-
-  // Step 2: Show loading for server verification
-  isTotalsLoadingNotifier.value = true;
-
-  try {
-    // ✅ Pass excluded IDs to Cloud Function
-    final serverTotals = await calculateCartTotals(
-      excludedProductIds: excludedProductIds.isNotEmpty ? excludedProductIds : null,
-    );
-
-    cartTotalsNotifier.value = serverTotals;
-  } catch (e) {
-    debugPrint('⚠️ Server totals failed, using optimistic: $e');
-  } finally {
-    isTotalsLoadingNotifier.value = false;
-  }
-}
-
-Future<void> updateTotalsForSelection(List<String> selectedProductIds) async {
-  if (selectedProductIds.isEmpty) {
-    cartTotalsNotifier.value = CartTotals(total: 0, items: [], currency: 'TL');
-    _currentTotalsProductIds = {};
-    return;
-  }
-
-  // Convert selected IDs to excluded IDs
-  final excludedIds = cartProductIds
-      .where((id) => !selectedProductIds.contains(id))
-      .toList();
-  
-  await updateTotalsForExcluded(excludedIds);
-}
 
   Future<void> _processCartChanges(List<DocumentChange> changes) async {
     final itemsMap = <String, Map<String, dynamic>>{};
@@ -782,18 +783,18 @@ Future<void> updateTotalsForSelection(List<String> selectedProductIds) async {
     }
   }
 
-Future<void> _backgroundRefreshTotals() async {
-  final user = _auth.currentUser;
-  if (user == null || cartProductIds.isEmpty) return;
+  Future<void> _backgroundRefreshTotals() async {
+    final user = _auth.currentUser;
+    if (user == null || cartProductIds.isEmpty) return;
 
-  try {
-    // ✅ FIXED: No parameters = calculate all items
-    await calculateCartTotals();
-    debugPrint('⚡ Background totals cached');
-  } catch (e) {
-    debugPrint('⚠️ Background total refresh failed: $e');
+    try {
+      // ✅ FIXED: No parameters = calculate all items
+      await calculateCartTotals();
+      debugPrint('⚡ Background totals cached');
+    } catch (e) {
+      debugPrint('⚠️ Background total refresh failed: $e');
+    }
   }
-}
 
   Future<String> addToCart({
     required String productId,
@@ -1082,28 +1083,28 @@ Future<void> _backgroundRefreshTotals() async {
     }
   }
 
-void _debouncedTotalsVerification() {
-  _totalsVerificationTimer?.cancel();
-  _totalsVerificationTimer =
-      Timer(const Duration(milliseconds: 500), () async {
-    if (_currentTotalsProductIds.isEmpty) return;
+  void _debouncedTotalsVerification() {
+    _totalsVerificationTimer?.cancel();
+    _totalsVerificationTimer =
+        Timer(const Duration(milliseconds: 500), () async {
+      if (_currentTotalsProductIds.isEmpty) return;
 
-    try {
-      // ✅ FIXED: Convert selected to excluded IDs
-      final excludedIds = cartProductIds
-          .where((id) => !_currentTotalsProductIds.contains(id))
-          .toList();
-      
-      final serverTotals = await calculateCartTotals(
-        excludedProductIds: excludedIds.isNotEmpty ? excludedIds : null,
-      );
-      cartTotalsNotifier.value = serverTotals;
-      debugPrint('✅ Server verified totals: ${serverTotals.total}');
-    } catch (e) {
-      debugPrint('⚠️ Server verification failed: $e');
-    }
-  });
-}
+      try {
+        // ✅ FIXED: Convert selected to excluded IDs
+        final excludedIds = cartProductIds
+            .where((id) => !_currentTotalsProductIds.contains(id))
+            .toList();
+
+        final serverTotals = await calculateCartTotals(
+          excludedProductIds: excludedIds.isNotEmpty ? excludedIds : null,
+        );
+        cartTotalsNotifier.value = serverTotals;
+        debugPrint('✅ Server verified totals: ${serverTotals.total}');
+      } catch (e) {
+        debugPrint('⚠️ Server verification failed: $e');
+      }
+    });
+  }
 
   void _applyOptimisticQuantityChange(String productId, int newQuantity) {
     final items = List<Map<String, dynamic>>.from(cartItemsNotifier.value);
@@ -1223,49 +1224,28 @@ void _debouncedTotalsVerification() {
   // TOTALS CALCULATION (with Local Caching)
   // ========================================================================
 
- Future<CartTotals> calculateCartTotals({
-  List<String>? excludedProductIds,
-}) async {
-  final user = _auth.currentUser;
-  if (user == null) {
-    return CartTotals(total: 0, items: [], currency: 'TL');
-  }
+  Future<CartTotals> calculateCartTotals({
+    List<String>? excludedProductIds,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      return CartTotals(total: 0, items: [], currency: 'TL');
+    }
 
-  // Build cache key based on excluded IDs (empty = all items)
+    // Build cache key based on excluded IDs (empty = all items)
 // Build cache key based on excluded IDs (empty = all items)
-final excludedSorted = List<String>.from(excludedProductIds ?? <String>[])..sort();
-final cacheKey = 'all_minus_${excludedSorted.join(",")}';
+    final excludedSorted = List<String>.from(excludedProductIds ?? <String>[])
+      ..sort();
+    final cacheKey = 'all_minus_${excludedSorted.join(",")}';
 
-  // ✅ Check local cache first
-  final cached = _totalsCache.get(user.uid, [cacheKey]);
-  if (cached != null) {
-    debugPrint('⚡ Cache hit - instant total');
-    return CartTotals(
-      total: cached.total,
-      currency: cached.currency,
-      items: cached.items
-          .map((i) => CartItemTotal(
-                productId: i.productId,
-                unitPrice: i.unitPrice,
-                total: i.total,
-                quantity: i.quantity,
-                isBundleItem: i.isBundleItem,
-              ))
-          .toList(),
-    );
-  }
-
-  // Request deduplication
-  if (_pendingFetches.containsKey('totals_$cacheKey')) {
-    debugPrint('⏳ Waiting for existing totals calculation...');
-    await _pendingFetches['totals_$cacheKey']!.future;
-
-    final cachedAfterWait = _totalsCache.get(user.uid, [cacheKey]);
-    if (cachedAfterWait != null) {
+    // ✅ Check local cache first
+    final cached = _totalsCache.get(user.uid, [cacheKey]);
+    if (cached != null) {
+      debugPrint('⚡ Cache hit - instant total');
       return CartTotals(
-        total: cachedAfterWait.total,
-        currency: cachedAfterWait.currency,
-        items: cachedAfterWait.items
+        total: cached.total,
+        currency: cached.currency,
+        items: cached.items
             .map((i) => CartItemTotal(
                   productId: i.productId,
                   unitPrice: i.unitPrice,
@@ -1276,76 +1256,98 @@ final cacheKey = 'all_minus_${excludedSorted.join(",")}';
             .toList(),
       );
     }
-  }
 
-  final completer = Completer<void>();
-  _pendingFetches['totals_$cacheKey'] = completer;
+    // Request deduplication
+    if (_pendingFetches.containsKey('totals_$cacheKey')) {
+      debugPrint('⏳ Waiting for existing totals calculation...');
+      await _pendingFetches['totals_$cacheKey']!.future;
 
-  try {
-    final totals = await _retryWithBackoff(
-      operation: () async {
-        final token = await user.getIdToken();
-        if (token == null) {
-          throw Exception('No auth token available');
-        }
-
-        final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-            .httpsCallable('calculateCartTotals');
-
-       final result = await callable.call({
-  'excludedProductIds': excludedProductIds ?? <String>[],
-});
-
-        final dynamic rawData = result.data;
-        Map<String, dynamic> totalsData;
-
-        if (rawData is Map<String, dynamic>) {
-          totalsData = rawData;
-        } else if (rawData is Map) {
-          totalsData = _deepConvertMap(rawData);
-        } else {
-          throw Exception('Unexpected response type: ${rawData.runtimeType}');
-        }
-
-        final totals = CartTotals.fromJson(totalsData);
-
-        // ✅ Cache result locally
-        _totalsCache.set(
-          user.uid,
-          [cacheKey],
-          CachedCartTotals(
-            total: totals.total,
-            currency: totals.currency,
-            items: totals.items
-                .map((i) => CachedItemTotal(
-                      productId: i.productId,
-                      unitPrice: i.unitPrice,
-                      total: i.total,
-                      quantity: i.quantity,
-                      isBundleItem: i.isBundleItem,
-                    ))
-                .toList(),
-          ),
+      final cachedAfterWait = _totalsCache.get(user.uid, [cacheKey]);
+      if (cachedAfterWait != null) {
+        return CartTotals(
+          total: cachedAfterWait.total,
+          currency: cachedAfterWait.currency,
+          items: cachedAfterWait.items
+              .map((i) => CartItemTotal(
+                    productId: i.productId,
+                    unitPrice: i.unitPrice,
+                    total: i.total,
+                    quantity: i.quantity,
+                    isBundleItem: i.isBundleItem,
+                  ))
+              .toList(),
         );
+      }
+    }
 
-        return totals;
-      },
-      operationName: 'Calculate Totals',
-      maxRetries: 3,
-    );
+    final completer = Completer<void>();
+    _pendingFetches['totals_$cacheKey'] = completer;
 
-    debugPrint('✅ Total calculated: ${totals.total} ${totals.currency}');
-    completer.complete();
-    return totals;
-  } catch (e, stackTrace) {
-    debugPrint('❌ Cloud Function failed after retries: $e');
-    debugPrint('Stack trace: $stackTrace');
-    completer.completeError(e);
-    rethrow;
-  } finally {
-    _pendingFetches.remove('totals_$cacheKey');
+    try {
+      final totals = await _retryWithBackoff(
+        operation: () async {
+          final token = await user.getIdToken();
+          if (token == null) {
+            throw Exception('No auth token available');
+          }
+
+          final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+              .httpsCallable('calculateCartTotals');
+
+          final result = await callable.call({
+            'excludedProductIds': excludedProductIds ?? <String>[],
+          });
+
+          final dynamic rawData = result.data;
+          Map<String, dynamic> totalsData;
+
+          if (rawData is Map<String, dynamic>) {
+            totalsData = rawData;
+          } else if (rawData is Map) {
+            totalsData = _deepConvertMap(rawData);
+          } else {
+            throw Exception('Unexpected response type: ${rawData.runtimeType}');
+          }
+
+          final totals = CartTotals.fromJson(totalsData);
+
+          // ✅ Cache result locally
+          _totalsCache.set(
+            user.uid,
+            [cacheKey],
+            CachedCartTotals(
+              total: totals.total,
+              currency: totals.currency,
+              items: totals.items
+                  .map((i) => CachedItemTotal(
+                        productId: i.productId,
+                        unitPrice: i.unitPrice,
+                        total: i.total,
+                        quantity: i.quantity,
+                        isBundleItem: i.isBundleItem,
+                      ))
+                  .toList(),
+            ),
+          );
+
+          return totals;
+        },
+        operationName: 'Calculate Totals',
+        maxRetries: 3,
+      );
+
+      debugPrint('✅ Total calculated: ${totals.total} ${totals.currency}');
+      completer.complete();
+      return totals;
+    } catch (e, stackTrace) {
+      debugPrint('❌ Cloud Function failed after retries: $e');
+      debugPrint('Stack trace: $stackTrace');
+      completer.completeError(e);
+      rethrow;
+    } finally {
+      _pendingFetches.remove('totals_$cacheKey');
+    }
   }
-}
 
   Map<String, dynamic> _deepConvertMap(Map<dynamic, dynamic> map) {
     final result = <String, dynamic>{};

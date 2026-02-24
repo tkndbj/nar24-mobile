@@ -209,7 +209,7 @@ class ClickTrackingService {
 
   void _scheduleFlush() {
     _flushTimer?.cancel();
-    _flushTimer = Timer(Duration(seconds: 20), _flushClicks);
+    _flushTimer = Timer(Duration(seconds: 60), _flushClicks);
   }
 
   /// Flush clicks to Cloud Function
