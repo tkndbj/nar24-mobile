@@ -98,6 +98,7 @@ class DynamicRoutes {
                   (extra?['availableSpecFacets'] as Map<String, List<Map<String, dynamic>>>?) ?? const {},
               initialMinPrice: extra?['initialMinPrice'] as double?,
               initialMaxPrice: extra?['initialMaxPrice'] as double?,
+              initialMinRating: extra?['initialMinRating'] as double?,
             ),
             transitionsBuilder: _slideTransition,
             transitionDuration: const Duration(milliseconds: 200),

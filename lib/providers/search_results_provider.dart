@@ -31,6 +31,7 @@ class SearchResultsProvider with ChangeNotifier {
   final Map<String, List<String>> _dynamicSpecFilters = {};
   double? _minPrice;
   double? _maxPrice;
+  double? _minRating;
 
   List<String> get dynamicBrands => List.unmodifiable(_dynamicBrands);
   List<String> get dynamicColors => List.unmodifiable(_dynamicColors);
@@ -39,13 +40,15 @@ class SearchResultsProvider with ChangeNotifier {
           (k, v) => MapEntry(k, List<String>.unmodifiable(v))));
   double? get minPrice => _minPrice;
   double? get maxPrice => _maxPrice;
+  double? get minRating => _minRating;
 
   bool get hasDynamicFilters =>
       _dynamicBrands.isNotEmpty ||
       _dynamicColors.isNotEmpty ||
       _dynamicSpecFilters.isNotEmpty ||
       _minPrice != null ||
-      _maxPrice != null;
+      _maxPrice != null ||
+      _minRating != null;
 
   int get activeFiltersCount {
     int c = 0;
@@ -55,6 +58,7 @@ class SearchResultsProvider with ChangeNotifier {
       c += vals.length;
     }
     if (_minPrice != null || _maxPrice != null) c++;
+    if (_minRating != null) c++;
     return c;
   }
 
@@ -198,11 +202,12 @@ class SearchResultsProvider with ChangeNotifier {
     return groups;
   }
 
-  /// Build numeric filter strings for price range.
+  /// Build numeric filter strings for price range and rating.
   List<String> _buildNumericFilters() {
     final filters = <String>[];
     if (_minPrice != null) filters.add('price>=${_minPrice!.floor()}');
     if (_maxPrice != null) filters.add('price<=${_maxPrice!.ceil()}');
+    if (_minRating != null) filters.add('averageRating>=${_minRating!}');
     return filters;
   }
 
@@ -243,6 +248,7 @@ class SearchResultsProvider with ChangeNotifier {
     Map<String, List<String>>? specFilters,
     double? minPrice,
     double? maxPrice,
+    double? minRating,
   }) {
     if (brands != null) _dynamicBrands = List.from(brands);
     if (colors != null) _dynamicColors = List.from(colors);
@@ -256,6 +262,7 @@ class SearchResultsProvider with ChangeNotifier {
     }
     _minPrice = minPrice;
     _maxPrice = maxPrice;
+    _minRating = minRating;
     notifyListeners();
   }
 
@@ -265,6 +272,7 @@ class SearchResultsProvider with ChangeNotifier {
     String? specField,
     String? specValue,
     bool clearPrice = false,
+    bool clearRating = false,
   }) {
     if (brand != null) _dynamicBrands.remove(brand);
     if (color != null) _dynamicColors.remove(color);
@@ -279,6 +287,9 @@ class SearchResultsProvider with ChangeNotifier {
       _minPrice = null;
       _maxPrice = null;
     }
+    if (clearRating) {
+      _minRating = null;
+    }
     notifyListeners();
   }
 
@@ -288,6 +299,7 @@ class SearchResultsProvider with ChangeNotifier {
     _dynamicSpecFilters.clear();
     _minPrice = null;
     _maxPrice = null;
+    _minRating = null;
     notifyListeners();
   }
 }

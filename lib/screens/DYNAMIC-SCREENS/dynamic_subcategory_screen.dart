@@ -49,6 +49,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
   Map<String, List<String>> _dynamicSpecFilters = {};
   double? _minPrice;
   double? _maxPrice;
+  double? _minRating;
   String _searchTerm = '';
   bool _isSearching = false;
   late final MarketProvider _marketProvider;
@@ -175,6 +176,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
     );
     final minPrice = result['minPrice'] as double?;
     final maxPrice = result['maxPrice'] as double?;
+    final minRating = result['minRating'] as double?;
 
     setState(() {
       _dynamicBrands = brands;
@@ -183,6 +185,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
       _dynamicSpecFilters = specFilters;
       _minPrice = minPrice;
       _maxPrice = maxPrice;
+      _minRating = minRating;
     });
 
     _specialFilterProvider.setDynamicFilter(
@@ -190,6 +193,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
       colors: colors,
       subsubcategory: subSubcategories.isNotEmpty ? subSubcategories.first : null,
       specFilters: specFilters,
+      minRating: minRating,
     );
     await _specialFilterProvider.fetchSubcategoryProducts(
       widget.category,
@@ -205,6 +209,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
     String? specField,
     String? specValue,
     bool clearPrice = false,
+    bool clearRating = false,
   }) async {
     if (!mounted) return;
 
@@ -223,6 +228,9 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
         _minPrice = null;
         _maxPrice = null;
       }
+      if (clearRating) {
+        _minRating = null;
+      }
     });
 
     _specialFilterProvider.setDynamicFilter(
@@ -232,6 +240,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
           ? _dynamicSubSubcategories.first
           : null,
       specFilters: _dynamicSpecFilters,
+      minRating: _minRating,
     );
     if (specField != null) {
       _specialFilterProvider.removeDynamicSpecFilter(specField, specValue!);
@@ -253,6 +262,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
       _dynamicSpecFilters.clear();
       _minPrice = null;
       _maxPrice = null;
+      _minRating = null;
     });
 
     _specialFilterProvider.setDynamicFilter(
@@ -260,6 +270,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
       colors: [],
       subsubcategory: null,
       specFilters: {},
+      minRating: null,
     );
     _specialFilterProvider.clearDynamicSpecFilters();
     await _specialFilterProvider.fetchSubcategoryProducts(
@@ -528,6 +539,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                     _dynamicSpecFilters.clear();
                     _minPrice = null;
                     _maxPrice = null;
+                    _minRating = null;
                     _searchTerm = '';
                   });
                   _specialFilterProvider.setDynamicFilter(
@@ -535,6 +547,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                     colors: [],
                     subsubcategory: null,
                     specFilters: {},
+                    minRating: null,
                   );
                   _specialFilterProvider.clearDynamicSpecFilters();
                   _specialFilterProvider.fetchSubcategoryProducts(
@@ -571,6 +584,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
             _dynamicSpecFilters.clear();
             _minPrice = null;
             _maxPrice = null;
+            _minRating = null;
             _searchTerm = '';
           });
           _specialFilterProvider.setDynamicFilter(
@@ -578,6 +592,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
             colors: [],
             subsubcategory: null,
             specFilters: {},
+            minRating: null,
           );
           _specialFilterProvider.clearDynamicSpecFilters();
           _specialFilterProvider.fetchSubcategoryProducts(
@@ -653,7 +668,8 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                               _dynamicColors.length +
                               _dynamicSubSubcategories.length +
                               specFilterCount +
-                              (_minPrice != null || _maxPrice != null ? 1 : 0);
+                              (_minPrice != null || _maxPrice != null ? 1 : 0) +
+                              (_minRating != null ? 1 : 0);
                           final hasApplied = appliedCount > 0;
                           final filterLabel = hasApplied
                               ? '${l10n.filter} ($appliedCount)'
@@ -673,6 +689,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                                 'availableSpecFacets': _specialFilterProvider.specFacets,
                                 'initialMinPrice': _minPrice,
                                 'initialMaxPrice': _maxPrice,
+                                'initialMinRating': _minRating,
                               });
                               if (result is Map<String, dynamic>) {
                                 _handleDynamicFilterApplied(result);
@@ -762,7 +779,8 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                     _dynamicSubSubcategories.isNotEmpty ||
                     _dynamicSpecFilters.isNotEmpty ||
                     _minPrice != null ||
-                    _maxPrice != null)
+                    _maxPrice != null ||
+                    _minRating != null)
                   _buildActiveFiltersDisplay(),
 
                 Expanded(
@@ -795,7 +813,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
               const Icon(Icons.filter_list, color: Colors.purple, size: 16),
               const SizedBox(width: 8),
               Text(
-                '${l10n.activeFilters} (${_dynamicBrands.length + _dynamicColors.length + _dynamicSubSubcategories.length + _dynamicSpecFilters.values.fold(0, (sum, v) => sum + v.length) + (_minPrice != null || _maxPrice != null ? 1 : 0)})',
+                '${l10n.activeFilters} (${_dynamicBrands.length + _dynamicColors.length + _dynamicSubSubcategories.length + _dynamicSpecFilters.values.fold(0, (sum, v) => sum + v.length) + (_minPrice != null || _maxPrice != null ? 1 : 0) + (_minRating != null ? 1 : 0)})',
                 style: const TextStyle(
                   fontWeight: FontWeight.w600,
                   color: Colors.purple,
@@ -860,6 +878,11 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                 _buildFilterChip(
                   '${l10n.price}: ${_minPrice?.toStringAsFixed(0) ?? '0'} - ${_maxPrice?.toStringAsFixed(0) ?? '∞'} TL',
                   () => _removeSingleDynamicFilter(clearPrice: true),
+                ),
+              if (_minRating != null)
+                _buildFilterChip(
+                  '${l10n.rating}: ${_minRating!.toInt()}+',
+                  () => _removeSingleDynamicFilter(clearRating: true),
                 ),
             ],
           ),

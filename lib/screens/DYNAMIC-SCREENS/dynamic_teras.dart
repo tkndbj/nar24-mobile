@@ -59,6 +59,7 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
   Map<String, List<String>> _dynamicSpecFilters = {};
   double? _minPrice;
   double? _maxPrice;
+  double? _minRating;
 
   final List<String> _sortOptions = [
     'None',
@@ -559,6 +560,7 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
                           'availableSpecFacets': terasProv.specFacets,
                           'initialMinPrice': _minPrice,
                           'initialMaxPrice': _maxPrice,
+                          'initialMinRating': _minRating,
                         });
                         if (result is Map<String, dynamic>) {
                           _handleDynamicFilterApplied(result);
@@ -574,12 +576,14 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
                             _dynamicSubSubcategories.isNotEmpty ||
                             _dynamicSpecFilters.isNotEmpty ||
                             _minPrice != null ||
-                            _maxPrice != null;
+                            _maxPrice != null ||
+                            _minRating != null;
                         final filterCount = _dynamicBrands.length +
                             _dynamicColors.length +
                             _dynamicSubSubcategories.length +
                             specFilterCount +
-                            (_minPrice != null || _maxPrice != null ? 1 : 0);
+                            (_minPrice != null || _maxPrice != null ? 1 : 0) +
+                            (_minRating != null ? 1 : 0);
                         return Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 4),
@@ -774,6 +778,13 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
                               _removeSingleDynamicFilter(clearPrice: true);
                             },
                           ),
+                        if (provider.minRating != null)
+                          _buildFilterChip(
+                            '${l10n.rating}: ${provider.minRating!.toInt()}+',
+                            () {
+                              _removeSingleDynamicFilter(clearRating: true);
+                            },
+                          ),
                       ],
                     ),
                   ],
@@ -840,6 +851,7 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
     );
     final minPrice = result['minPrice'] as double?;
     final maxPrice = result['maxPrice'] as double?;
+    final minRating = result['minRating'] as double?;
 
     setState(() {
       _dynamicBrands = brands;
@@ -848,6 +860,7 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
       _dynamicSpecFilters = specFilters;
       _minPrice = minPrice;
       _maxPrice = maxPrice;
+      _minRating = minRating;
     });
 
     final terasProv = context.read<DynamicTerasProvider>();
@@ -858,6 +871,7 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
       specFilters: specFilters,
       minPrice: minPrice,
       maxPrice: maxPrice,
+      minRating: minRating,
       additive: false,
     );
   }
@@ -869,6 +883,7 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
     String? specField,
     String? specValue,
     bool clearPrice = false,
+    bool clearRating = false,
   }) async {
     if (!mounted) return;
 
@@ -888,6 +903,9 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
         _minPrice = null;
         _maxPrice = null;
       }
+      if (clearRating) {
+        _minRating = null;
+      }
     });
 
     final terasProv = context.read<DynamicTerasProvider>();
@@ -898,6 +916,7 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
       specField: specField,
       specValue: specValue,
       clearPrice: clearPrice,
+      clearRating: clearRating,
     );
   }
 
@@ -911,6 +930,7 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
       _dynamicSpecFilters.clear();
       _minPrice = null;
       _maxPrice = null;
+      _minRating = null;
     });
 
     final terasProv = context.read<DynamicTerasProvider>();
@@ -1002,6 +1022,7 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
       _dynamicSpecFilters.clear();
       _minPrice = null;
       _maxPrice = null;
+      _minRating = null;
       _selectedSortOption = 'None';
     });
 

@@ -75,11 +75,13 @@ class DynamicTerasProvider with ChangeNotifier {
   List<String> get dynamicColors => List.unmodifiable(_dynamicColors);
   double? get minPrice => _minPrice;
   double? get maxPrice => _maxPrice;
+  double? get minRating => _minRating;
 
   List<String> _dynamicBrands = [];
   List<String> _dynamicColors = [];
   double? _minPrice;
   double? _maxPrice;
+  double? _minRating;
 
   /// Generic spec filters: field name → selected values
   final Map<String, List<String>> _dynamicSpecFilters = {};
@@ -168,6 +170,7 @@ class DynamicTerasProvider with ChangeNotifier {
     }
     if (_minPrice != null) parts.add('minP:$_minPrice');
     if (_maxPrice != null) parts.add('maxP:$_maxPrice');
+    if (_minRating != null) parts.add('minR:$_minRating');
     if (_quickFilter != null) parts.add('quick:$_quickFilter');
     if (_buyerCategory != null) parts.add('buyer:$_buyerCategory');
     if (_buyerSubcategory != null) parts.add('buyerSub:$_buyerSubcategory');
@@ -237,6 +240,7 @@ class DynamicTerasProvider with ChangeNotifier {
     Map<String, List<String>>? specFilters,
     double? minPrice,
     double? maxPrice,
+    double? minRating,
     bool additive = true,
   }) async {
     bool changed = false;
@@ -318,6 +322,10 @@ class DynamicTerasProvider with ChangeNotifier {
       _maxPrice = maxPrice;
       changed = true;
     }
+    if (minRating != _minRating) {
+      _minRating = minRating;
+      changed = true;
+    }
 
     if (changed) {
       await _restoreOrFetch();
@@ -331,6 +339,7 @@ class DynamicTerasProvider with ChangeNotifier {
     String? specField,
     String? specValue,
     bool clearPrice = false,
+    bool clearRating = false,
   }) async {
     bool changed = false;
     _saveFilterSnapshot();
@@ -361,6 +370,10 @@ class DynamicTerasProvider with ChangeNotifier {
       _maxPrice = null;
       changed = true;
     }
+    if (clearRating && _minRating != null) {
+      _minRating = null;
+      changed = true;
+    }
 
     if (changed) {
       await _restoreOrFetch();
@@ -376,6 +389,7 @@ class DynamicTerasProvider with ChangeNotifier {
     _dynamicSpecFilters.clear();
     _minPrice = null;
     _maxPrice = null;
+    _minRating = null;
     await _restoreOrFetch();
   }
 
@@ -485,7 +499,8 @@ class DynamicTerasProvider with ChangeNotifier {
       _dynamicSubSubcategories.isNotEmpty ||
       _dynamicSpecFilters.isNotEmpty ||
       _minPrice != null ||
-      _maxPrice != null;
+      _maxPrice != null ||
+      _minRating != null;
 
   int get activeFiltersCount {
     int c = 0;
@@ -496,6 +511,7 @@ class DynamicTerasProvider with ChangeNotifier {
       c += vals.length;
     }
     if (_minPrice != null || _maxPrice != null) c++;
+    if (_minRating != null) c++;
     return c;
   }
 
@@ -729,6 +745,7 @@ class DynamicTerasProvider with ChangeNotifier {
     }
     if (_minPrice != null) parts.add('min:$_minPrice');
     if (_maxPrice != null) parts.add('max:$_maxPrice');
+    if (_minRating != null) parts.add('rat:$_minRating');
     if (_buyerCategory != null) parts.add('bc:$_buyerCategory');
     if (_buyerSubcategory != null) parts.add('bs:$_buyerSubcategory');
     if (_category != null) parts.add('cat:$_category');
@@ -743,6 +760,7 @@ class DynamicTerasProvider with ChangeNotifier {
     final List<String> filters = [];
     if (_minPrice != null) filters.add('price>=${_minPrice!.floor()}');
     if (_maxPrice != null) filters.add('price<=${_maxPrice!.ceil()}');
+    if (_minRating != null) filters.add('averageRating>=${_minRating!}');
     return filters;
   }
 

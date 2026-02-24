@@ -37,6 +37,10 @@ class SpecialFilterProviderMarket with ChangeNotifier {
   ValueListenable<String?> get selectedFilterListenable =>
       _selectedFilterNotifier;
 
+  // ── Rating filter ──────────────────────────────────────────────────────
+  double? _minRating;
+  double? get minRating => _minRating;
+
   // ── Spec filters (Typesense-powered) ───────────────────────────────────
   final Map<String, List<String>> _dynamicSpecFilters = {};
   Map<String, List<String>> get dynamicSpecFilters =>
@@ -180,6 +184,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     List<String>? colors,
     String? subsubcategory,
     Map<String, List<String>>? specFilters,
+    double? minRating,
   }) {
     bool hasChanges = false;
 
@@ -214,6 +219,11 @@ class SpecialFilterProviderMarket with ChangeNotifier {
           _dynamicSpecFilters[entry.key] = List.from(entry.value);
         }
       }
+      hasChanges = true;
+    }
+
+    if (minRating != _minRating) {
+      _minRating = minRating;
       hasChanges = true;
     }
 
@@ -309,12 +319,16 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       }
     }
 
+    final numericFilters = <String>[];
+    if (_minRating != null) numericFilters.add('averageRating>=${_minRating!}');
+
     try {
       final res = await _searchService!.searchIdsWithFacets(
         indexName: 'shop_products',
         page: page,
         hitsPerPage: hitsPerPage,
         facetFilters: facetFilters,
+        numericFilters: numericFilters,
         sortOption: _subcategorySortOption,
       );
 
@@ -1655,12 +1669,13 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     final isCacheValid =
         cachedTime != null && now.difference(cachedTime) < _cacheTTL;
 
-    // ✅ FIX: Skip cache when any filters are applied (brand, colors, subsubcategory, specFilters)
+    // ✅ FIX: Skip cache when any filters are applied (brand, colors, subsubcategory, specFilters, rating)
     final hasFilters = selectedFilter != null ||
         (dynamicBrand != null && dynamicBrand!.isNotEmpty) ||
         dynamicColors.isNotEmpty ||
         (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty) ||
-        hasDynamicSpecFilters;
+        hasDynamicSpecFilters ||
+        _minRating != null;
 
     // Cache is only valid for unfiltered, default-sorted results.
     // Skip cache when sort is non-default to prevent returning default-sorted
@@ -1688,7 +1703,8 @@ class SpecialFilterProviderMarket with ChangeNotifier {
           (dynamicBrand != null && dynamicBrand!.isNotEmpty) ||
           dynamicColors.isNotEmpty ||
           (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty) ||
-          hasDynamicSpecFilters;
+          hasDynamicSpecFilters ||
+          _minRating != null;
       final useTypesense = _searchService != null &&
           (hasDynamicFilters || _subcategorySortOption != 'date');
 
@@ -1762,7 +1778,8 @@ class SpecialFilterProviderMarket with ChangeNotifier {
         (dynamicBrand != null && dynamicBrand!.isNotEmpty) ||
         dynamicColors.isNotEmpty ||
         (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty) ||
-        hasDynamicSpecFilters;
+        hasDynamicSpecFilters ||
+        _minRating != null;
 
     final isDefaultSort = _subcategorySortOption == 'date';
 
@@ -1793,7 +1810,8 @@ class SpecialFilterProviderMarket with ChangeNotifier {
           (dynamicBrand != null && dynamicBrand!.isNotEmpty) ||
           dynamicColors.isNotEmpty ||
           (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty) ||
-          hasDynamicSpecFilters;
+          hasDynamicSpecFilters ||
+          _minRating != null;
       final useTypesense = _searchService != null &&
           (hasDynamicFilters || _subcategorySortOption != 'date');
 

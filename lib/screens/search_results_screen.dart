@@ -55,6 +55,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
   Map<String, List<String>> _dynamicSpecFilters = {};
   double? _minPrice;
   double? _maxPrice;
+  double? _minRating;
 
   // Controllers
   final ScrollController _mainScrollController = ScrollController();
@@ -271,6 +272,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
     );
     final minPrice = result['minPrice'] as double?;
     final maxPrice = result['maxPrice'] as double?;
+    final minRating = result['minRating'] as double?;
 
     setState(() {
       _dynamicBrands = brands;
@@ -278,6 +280,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
       _dynamicSpecFilters = specFilters;
       _minPrice = minPrice;
       _maxPrice = maxPrice;
+      _minRating = minRating;
     });
 
     final provider = context.read<SearchResultsProvider>();
@@ -287,6 +290,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
       specFilters: specFilters,
       minPrice: minPrice,
       maxPrice: maxPrice,
+      minRating: minRating,
     );
 
     await _resetAndFetch();
@@ -298,6 +302,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
     String? specField,
     String? specValue,
     bool clearPrice = false,
+    bool clearRating = false,
   }) async {
     if (!mounted) return;
 
@@ -315,6 +320,9 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
         _minPrice = null;
         _maxPrice = null;
       }
+      if (clearRating) {
+        _minRating = null;
+      }
     });
 
     final provider = context.read<SearchResultsProvider>();
@@ -324,6 +332,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
       specField: specField,
       specValue: specValue,
       clearPrice: clearPrice,
+      clearRating: clearRating,
     );
 
     await _resetAndFetch();
@@ -338,6 +347,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
       _dynamicSpecFilters.clear();
       _minPrice = null;
       _maxPrice = null;
+      _minRating = null;
     });
 
     final provider = context.read<SearchResultsProvider>();
@@ -393,11 +403,13 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
         _dynamicColors.isNotEmpty ||
         _dynamicSpecFilters.isNotEmpty ||
         _minPrice != null ||
-        _maxPrice != null;
+        _maxPrice != null ||
+        _minRating != null;
     final filterCount = _dynamicBrands.length +
         _dynamicColors.length +
         specCount +
-        (_minPrice != null || _maxPrice != null ? 1 : 0);
+        (_minPrice != null || _maxPrice != null ? 1 : 0) +
+        (_minRating != null ? 1 : 0);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
@@ -415,6 +427,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
                 'availableSpecFacets': provider.specFacets,
                 'initialMinPrice': _minPrice,
                 'initialMaxPrice': _maxPrice,
+                'initialMinRating': _minRating,
               });
               if (result is Map<String, dynamic>) {
                 _handleDynamicFilterApplied(result);
@@ -585,6 +598,13 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
                       '${l10n.price ?? "Price"}: ${provider.minPrice?.toStringAsFixed(0) ?? '0'} - ${provider.maxPrice?.toStringAsFixed(0) ?? '∞'} TL',
                       () {
                         _removeSingleDynamicFilter(clearPrice: true);
+                      },
+                    ),
+                  if (provider.minRating != null)
+                    _buildFilterChip(
+                      '${l10n.rating}: ${provider.minRating!.toInt()}+',
+                      () {
+                        _removeSingleDynamicFilter(clearRating: true);
                       },
                     ),
                 ],

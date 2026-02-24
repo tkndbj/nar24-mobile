@@ -59,6 +59,7 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
   Map<String, List<String>> _dynamicSpecFilters = {};
   double? _minPrice;
   double? _maxPrice;
+  double? _minRating;
 
   final List<String> _sortOptions = [
     'None',
@@ -563,6 +564,7 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
                           'availableSpecFacets': shopProv.specFacets,
                           'initialMinPrice': _minPrice,
                           'initialMaxPrice': _maxPrice,
+                          'initialMinRating': _minRating,
                         });
                         if (result is Map<String, dynamic>) {
                           _handleDynamicFilterApplied(result);
@@ -578,12 +580,14 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
                             _dynamicSubSubcategories.isNotEmpty ||
                             _dynamicSpecFilters.isNotEmpty ||
                             _minPrice != null ||
-                            _maxPrice != null;
+                            _maxPrice != null ||
+                            _minRating != null;
                         final filterCount = _dynamicBrands.length +
                             _dynamicColors.length +
                             _dynamicSubSubcategories.length +
                             specFilterCount +
-                            (_minPrice != null || _maxPrice != null ? 1 : 0);
+                            (_minPrice != null || _maxPrice != null ? 1 : 0) +
+                            (_minRating != null ? 1 : 0);
                         final isDark =
                             Theme.of(context).brightness == Brightness.dark;
 
@@ -779,6 +783,13 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
                               _removeSingleDynamicFilter(clearPrice: true);
                             },
                           ),
+                        if (provider.minRating != null)
+                          _buildFilterChip(
+                            '${l10n.rating}: ${provider.minRating!.toInt()}+',
+                            () {
+                              _removeSingleDynamicFilter(clearRating: true);
+                            },
+                          ),
                       ],
                     ),
                   ],
@@ -845,6 +856,7 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
     );
     final minPrice = result['minPrice'] as double?;
     final maxPrice = result['maxPrice'] as double?;
+    final minRating = result['minRating'] as double?;
 
     setState(() {
       _dynamicBrands = brands;
@@ -853,6 +865,7 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
       _dynamicSpecFilters = specFilters;
       _minPrice = minPrice;
       _maxPrice = maxPrice;
+      _minRating = minRating;
     });
 
     final shopProv = context.read<ShopMarketProvider>();
@@ -863,6 +876,7 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
       specFilters: specFilters,
       minPrice: minPrice,
       maxPrice: maxPrice,
+      minRating: minRating,
       additive: false,
     );
   }
@@ -874,6 +888,7 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
     String? specField,
     String? specValue,
     bool clearPrice = false,
+    bool clearRating = false,
   }) async {
     if (!mounted) return;
 
@@ -893,6 +908,9 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
         _minPrice = null;
         _maxPrice = null;
       }
+      if (clearRating) {
+        _minRating = null;
+      }
     });
 
     final shopProv = context.read<ShopMarketProvider>();
@@ -903,6 +921,7 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
       specField: specField,
       specValue: specValue,
       clearPrice: clearPrice,
+      clearRating: clearRating,
     );
   }
 
@@ -916,6 +935,7 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
       _dynamicSpecFilters.clear();
       _minPrice = null;
       _maxPrice = null;
+      _minRating = null;
     });
 
     final shopProv = context.read<ShopMarketProvider>();
@@ -1006,6 +1026,7 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
       _dynamicSpecFilters.clear();
       _minPrice = null;
       _maxPrice = null;
+      _minRating = null;
     });
 
     context.pop();
