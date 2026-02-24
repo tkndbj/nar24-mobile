@@ -2252,16 +2252,16 @@ class SellerPanelProvider with ChangeNotifier {
   }
 
   void _updateFilteredProducts() {
-    var filtered = _products;
-
-    // Only apply search query filtering on client-side
-    // Category filtering is now handled server-side
-    if (_searchQuery.isNotEmpty) {
-      filtered = filtered.where((product) {
-        final name = product.productName.toLowerCase();
-        return name.contains(_searchQuery.toLowerCase());
-      }).toList();
-    }
+    // Always create a NEW list so ValueNotifier detects the change.
+    // ValueNotifier uses == (reference equality for lists), so mutating
+    // _products in-place and re-assigning the same reference is a no-op.
+    final filtered = _searchQuery.isNotEmpty
+        ? _products
+            .where((product) => product.productName
+                .toLowerCase()
+                .contains(_searchQuery.toLowerCase()))
+            .toList()
+        : List<Product>.from(_products);
 
     _filteredProductsNotifier.value = filtered;
   }
