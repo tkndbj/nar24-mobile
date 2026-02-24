@@ -19038,11 +19038,17 @@ abstract class AppLocalizations {
   /// **'Ürün durumu'**
   String get productCondition;
 
-  /// No description provided for @detailedDescriptionOptional.
+  /// No description provided for @detailedDescription.
   ///
   /// In tr, this message translates to:
-  /// **'Detaylı açıklama (Opsiyonel)'**
-  String get detailedDescriptionOptional;
+  /// **'Detaylı açıklama'**
+  String get detailedDescription;
+
+  /// No description provided for @pleaseEnterDescription.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lütfen bir açıklama girin'**
+  String get pleaseEnterDescription;
 
   /// No description provided for @selectVideo.
   ///

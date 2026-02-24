@@ -45,7 +45,7 @@ class DeliveryOptionsAccordion extends StatelessWidget {
               children: [
                 _buildDeliveryRadio(l10n.selfDelivery, 'Self Delivery'),
                 const SizedBox(width: 16),
-                _buildDeliveryRadio(l10n.nar24Delivery, 'Nar24 Delivery'),
+                _buildDeliveryRadio(l10n.nar24Delivery, 'Fast Delivery'),
               ],
             ),
           ),

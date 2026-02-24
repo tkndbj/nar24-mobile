@@ -10024,8 +10024,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get productCondition => 'Состояние товара';
 
   @override
-  String get detailedDescriptionOptional =>
-      'Подробное описание (необязательно)';
+  String get detailedDescription => 'Подробное описание';
+
+  @override
+  String get pleaseEnterDescription => 'Пожалуйста, введите описание';
 
   @override
   String get selectVideo => 'Выберите видео';

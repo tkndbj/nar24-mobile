@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/product.dart';
 import 'dart:convert';
@@ -24,7 +24,7 @@ class ListProductPreviewScreen extends StatefulWidget {
   final String ibanOwnerName;
   final String ibanOwnerSurname;
   final String iban;
-  final bool isEditMode; // Add this
+  final bool isEditMode;
   final Product? originalProduct;
   final bool isFromArchivedCollection;
 
@@ -39,7 +39,7 @@ class ListProductPreviewScreen extends StatefulWidget {
     required this.ibanOwnerName,
     required this.ibanOwnerSurname,
     required this.iban,
-    this.isEditMode = false, // Add this
+    this.isEditMode = false,
     this.originalProduct,
     this.isFromArchivedCollection = false,
   }) : super(key: key);
@@ -70,7 +70,7 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
     if (p.curtainMaxWidth != null) map['curtainMaxWidth'] = p.curtainMaxWidth;
     if (p.curtainMaxHeight != null)
       map['curtainMaxHeight'] = p.curtainMaxHeight;
-    map.addAll(p.attributes); // truly misc remainder
+    map.addAll(p.attributes);
     return map;
   }
 
@@ -80,7 +80,6 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
     final textTheme = Theme.of(context).textTheme;
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    // Localize category and subcategory
     String localizedCategory =
         AllInOneCategoryData.localizeCategoryKey(widget.product.category, l10n);
     String localizedSubcategory = AllInOneCategoryData.localizeSubcategoryKey(
@@ -95,7 +94,6 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
           l10n);
     }
 
-    // Get color names for display
     String? colorDisplay;
     if (widget.product.colorImages.isNotEmpty) {
       List<String> localizedColors =
@@ -155,7 +153,6 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Display Images
                             if (widget.imageFiles.isNotEmpty ||
                                 (widget.isEditMode &&
                                     widget.product.imageUrls.isNotEmpty))
@@ -163,7 +160,6 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
                                 spacing: 8.0,
                                 runSpacing: 8.0,
                                 children: [
-                                  // Show existing images first (in edit mode)
                                   if (widget.isEditMode &&
                                       widget.product.imageUrls.isNotEmpty)
                                     ...widget.product.imageUrls.map((imageUrl) {
@@ -221,8 +217,6 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
                                         ),
                                       );
                                     }).toList(),
-
-                                  // Show new images (if any)
                                   ...widget.imageFiles.map((image) {
                                     return ClipRRect(
                                       borderRadius: BorderRadius.circular(8.0),
@@ -237,7 +231,6 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
                                 ],
                               ),
                             const SizedBox(height: 16),
-                            // Display Product Details
                             _buildDetailRow(
                               context: context,
                               title: l10n.productTitle,
@@ -255,8 +248,7 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
                             ),
                             _buildDetailRow(
                               context: context,
-                              title: l10n.subSubcategory ??
-                                  'Sub-subcategory', // Add this to your l10n if missing
+                              title: l10n.subSubcategory ?? 'Sub-subcategory',
                               value: localizedSubSubcategory ?? '',
                             ),
                             _buildDetailRow(
@@ -290,8 +282,6 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
                               title: l10n.description,
                               value: widget.product.description,
                             ),
-
-                            // Display Dynamic Attributes
                             if (_buildDisplayAttributes().isNotEmpty) ...[
                               const SizedBox(height: 16),
                               Text(
@@ -304,7 +294,6 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
                               const SizedBox(height: 8),
                               ..._buildDisplayAttributes().entries.map((entry) {
                                 try {
-                                  // Use the utility to get localized title and value
                                   String localizedTitle =
                                       AttributeLocalizationUtils
                                           .getLocalizedAttributeTitle(
@@ -313,8 +302,6 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
                                       AttributeLocalizationUtils
                                           .getLocalizedAttributeValue(
                                               entry.key, entry.value, l10n);
-
-                                  // Only display if value is not empty
                                   if (localizedValue.isNotEmpty) {
                                     return _buildDetailRow(
                                       context: context,
@@ -324,7 +311,6 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
                                   }
                                   return const SizedBox.shrink();
                                 } catch (e) {
-                                  // Fallback to original logic
                                   String displayValue = '';
                                   if (entry.value is List) {
                                     displayValue =
@@ -332,7 +318,6 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
                                   } else {
                                     displayValue = entry.value.toString();
                                   }
-
                                   if (displayValue.isNotEmpty) {
                                     return _buildDetailRow(
                                       context: context,
@@ -344,8 +329,6 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
                                 }
                               }).toList(),
                             ],
-
-                            // Display Video if it exists
                             if (widget.videoFile != null)
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -363,7 +346,6 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
                                       file: File(widget.videoFile!.path)),
                                 ],
                               ),
-                            // Display Color Images if any
                             if (widget.product.colorImages.isNotEmpty) ...[
                               const SizedBox(height: 16),
                               Text(
@@ -378,11 +360,9 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: widget.product.colorImages.entries
                                     .map((entry) {
-                                  // Get localized color name
                                   String localizedColorName =
                                       AttributeLocalizationUtils
                                           .localizeColorName(entry.key, l10n);
-
                                   return Padding(
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 8.0),
@@ -391,7 +371,7 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          localizedColorName, // Use localized color name
+                                          localizedColorName,
                                           style: textTheme.bodyMedium?.copyWith(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w600,
@@ -634,7 +614,7 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
                             const SizedBox(width: 16),
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: _submitProduct,
+                                onPressed: _isLoading ? null : _submitProduct,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF00A86B),
                                   foregroundColor: Colors.white,
@@ -666,9 +646,23 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
             Container(
               color: Colors.black54,
               child: Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                      Theme.of(context).colorScheme.secondary),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                          Theme.of(context).colorScheme.secondary),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      AppLocalizations.of(context)
+                          .pleaseWaitWhileWeLoadYourProduct,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -715,12 +709,367 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
     );
   }
 
-  // Add this method after _buildDetailRow and before _submitProduct
+  // ═══════════════════════════════════════════════════════════════════
+  // SUBMIT PRODUCT — Routes to CF (shop) or direct Firestore (vitrin)
+  // ═══════════════════════════════════════════════════════════════════
+
+  Future<void> _submitProduct() async {
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context);
+
+    setState(() => _isLoading = true);
+
+    try {
+      User? user = _auth.currentUser;
+      if (user == null) {
+        if (mounted) context.push('/login');
+        return;
+      }
+
+      final isShopProduct = widget.product.shopId != null;
+
+      if (isShopProduct) {
+        // ═══ SHOP PRODUCT: Use Cloud Functions (same as web app) ═══
+        await _submitViaCloudFunction(user);
+      } else {
+        // ═══ VITRIN (personal) PRODUCT: Direct Firestore write ═══
+        await _submitVitrinProduct(user);
+      }
+
+      if (!mounted) return;
+      context.go('/success');
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      String errorMessage = l10n.errorListingProduct;
+      switch (e.code) {
+        case 'invalid-argument':
+          errorMessage = e.message ?? errorMessage;
+          break;
+        case 'permission-denied':
+          errorMessage = e.message ?? errorMessage;
+          break;
+        case 'unauthenticated':
+          errorMessage = l10n.pleaseLoginToContinue;
+          break;
+        case 'not-found':
+          errorMessage = e.message ?? errorMessage;
+          break;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.errorListingProduct)),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // CLOUD FUNCTION PATH (shop products — matches web app exactly)
+  //
+  // All files were already uploaded to Storage by
+  // ListProductScreen._navigateToPreview(). We just pass the URLs.
+  // ═══════════════════════════════════════════════════════════════════
+
+  Future<void> _submitViaCloudFunction(User user) async {
+    final functions = FirebaseFunctions.instanceFor(region: 'europe-west3');
+
+    // URLs already uploaded by ListProductScreen._navigateToPreview()
+    final imageUrls = widget.product.imageUrls;
+    final videoUrl = widget.product.videoUrl;
+    final colorImages = widget.product.colorImages;
+    final colorQuantities = widget.product.colorQuantities;
+
+    // Build availableColors from final color data
+    final Set<String> allColors = {};
+    allColors.addAll(colorImages.keys);
+    allColors.addAll(colorQuantities.keys);
+    final availableColors = allColors.toList();
+
+    // Build payload matching what the web app sends to the CF
+    final Map<String, dynamic> payload = {
+      // Core product info
+      'productName': widget.product.productName,
+      'description': widget.product.description,
+      'price': widget.product.price,
+      'condition': widget.product.condition,
+      'brandModel': widget.product.brandModel,
+      'category': widget.product.category,
+      'subcategory': widget.product.subcategory,
+      'subsubcategory': widget.product.subsubcategory,
+      'gender': widget.product.gender,
+      'productType': widget.product.productType,
+      'quantity': widget.product.quantity,
+      'deliveryOption': widget.product.deliveryOption,
+      'shopId': widget.product.shopId,
+
+      // Media (already uploaded to Storage)
+      'imageUrls': imageUrls,
+      'videoUrl': videoUrl,
+      'colorImages': colorImages,
+      'colorQuantities': colorQuantities,
+      'availableColors': availableColors,
+
+      // Spec fields (top-level, same as web)
+      if (widget.product.clothingSizes != null)
+        'clothingSizes': widget.product.clothingSizes,
+      if (widget.product.clothingFit != null)
+        'clothingFit': widget.product.clothingFit,
+      if (widget.product.clothingTypes != null)
+        'clothingTypes': widget.product.clothingTypes,
+      if (widget.product.pantSizes != null)
+        'pantSizes': widget.product.pantSizes,
+      if (widget.product.pantFabricTypes != null)
+        'pantFabricTypes': widget.product.pantFabricTypes,
+      if (widget.product.footwearSizes != null)
+        'footwearSizes': widget.product.footwearSizes,
+      if (widget.product.jewelryMaterials != null)
+        'jewelryMaterials': widget.product.jewelryMaterials,
+      if (widget.product.consoleBrand != null)
+        'consoleBrand': widget.product.consoleBrand,
+      if (widget.product.curtainMaxWidth != null)
+        'curtainMaxWidth': widget.product.curtainMaxWidth,
+      if (widget.product.curtainMaxHeight != null)
+        'curtainMaxHeight': widget.product.curtainMaxHeight,
+
+      // Misc attributes
+      'attributes': widget.product.attributes,
+
+      // Seller info
+      'phone': widget.phone,
+      'region': widget.region,
+      'address': widget.address,
+      'ibanOwnerName': widget.ibanOwnerName,
+      'ibanOwnerSurname': widget.ibanOwnerSurname,
+      'iban': widget.iban,
+    };
+
+    if (widget.isEditMode && widget.originalProduct != null) {
+      // ─── EDIT MODE: Call submitProductEdit ───
+      final originalColors = widget.originalProduct!.colorImages.keys.toSet();
+      final currentColors = colorImages.keys.toSet();
+      final deletedColors = originalColors.difference(currentColors).toList();
+
+      payload['originalProductId'] = widget.originalProduct!.id;
+      payload['isArchivedEdit'] = widget.isFromArchivedCollection;
+      payload['deletedColors'] = deletedColors;
+
+      final callable = functions.httpsCallable('submitProductEdit');
+      final result = await callable.call(payload);
+
+      debugPrint(
+          '✅ Edit submitted via CF: ${result.data['applicationId']} '
+          '(${result.data['editedFieldCount']} fields changed)');
+    } else {
+      // ─── NEW PRODUCT: Call submitProduct ───
+      final callable = functions.httpsCallable('submitProduct');
+      final result = await callable.call(payload);
+
+      debugPrint('✅ Product submitted via CF: ${result.data['productId']}');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // VITRIN (personal) PRODUCT PATH — Direct Firestore write
+  // (No Cloud Function exists for vitrin products yet)
+  //
+  // All files were already uploaded to Storage by
+  // ListProductScreen._navigateToPreview(). No re-uploads needed.
+  // ═══════════════════════════════════════════════════════════════════
+
+  Future<void> _submitVitrinProduct(User user) async {
+    // URLs already uploaded by ListProductScreen._navigateToPreview()
+    final imageUrls = widget.product.imageUrls;
+    final videoUrl = widget.product.videoUrl;
+    final colorImages = widget.product.colorImages;
+    final colorQuantities = widget.product.colorQuantities;
+
+    // Build availableColors
+    final Set<String> allColors = {};
+    allColors.addAll(colorImages.keys);
+    allColors.addAll(colorQuantities.keys);
+    final availableColors = allColors.toList();
+
+    // Compute deleted colors for edit mode
+    List<String> deletedColors = [];
+    if (widget.isEditMode && widget.originalProduct != null) {
+      final originalColors = widget.originalProduct!.colorImages.keys.toSet();
+      final currentColors = colorImages.keys.toSet();
+      deletedColors = originalColors.difference(currentColors).toList();
+    }
+
+    final uuid = Uuid();
+    final productId =
+        widget.isEditMode ? widget.originalProduct!.id : uuid.v4();
+
+    Product product = Product(
+      id: productId,
+      ownerId: user.uid,
+      productName: widget.product.productName,
+      description: widget.product.description,
+      price: widget.product.price,
+      condition: widget.product.condition,
+      brandModel: widget.product.brandModel,
+      currency: "TL",
+      gender: widget.product.gender,
+      boostClickCountAtStart: widget.product.boostClickCountAtStart,
+      imageUrls: imageUrls,
+      averageRating:
+          widget.isEditMode ? widget.originalProduct!.averageRating : 0.0,
+      reviewCount:
+          widget.isEditMode ? widget.originalProduct!.reviewCount : 0,
+      clickCount:
+          widget.isEditMode ? widget.originalProduct!.clickCount : 0,
+      favoritesCount:
+          widget.isEditMode ? widget.originalProduct!.favoritesCount : 0,
+      cartCount: widget.isEditMode ? widget.originalProduct!.cartCount : 0,
+      purchaseCount:
+          widget.isEditMode ? widget.originalProduct!.purchaseCount : 0,
+      userId: user.uid,
+      shopId: null,
+      ilanNo: productId,
+      createdAt: widget.isEditMode
+          ? widget.originalProduct!.createdAt
+          : Timestamp.now(),
+      sellerName: widget.product.sellerName,
+      category: widget.product.category,
+      subcategory: widget.product.subcategory,
+      subsubcategory: widget.product.subsubcategory,
+      quantity: widget.product.quantity,
+      deliveryOption: widget.product.deliveryOption,
+      isFeatured:
+          widget.isEditMode ? widget.originalProduct!.isFeatured : false,
+      isBoosted:
+          widget.isEditMode ? widget.originalProduct!.isBoosted : false,
+      boostedImpressionCount: widget.isEditMode
+          ? widget.originalProduct!.boostedImpressionCount
+          : 0,
+      boostImpressionCountAtStart: widget.isEditMode
+          ? widget.originalProduct!.boostImpressionCountAtStart
+          : 0,
+      promotionScore:
+          widget.isEditMode ? widget.originalProduct!.promotionScore : 0,
+      paused: widget.isEditMode ? widget.originalProduct!.paused : false,
+      boostStartTime:
+          widget.isEditMode ? widget.originalProduct!.boostStartTime : null,
+      boostEndTime:
+          widget.isEditMode ? widget.originalProduct!.boostEndTime : null,
+      lastClickDate:
+          widget.isEditMode ? widget.originalProduct!.lastClickDate : null,
+      clickCountAtStart:
+          widget.isEditMode ? widget.originalProduct!.clickCountAtStart : 0,
+      colorImages: colorImages,
+      colorQuantities: colorQuantities,
+      availableColors: availableColors,
+      videoUrl: videoUrl,
+      attributes: widget.product.attributes,
+      productType: widget.product.productType,
+      clothingSizes: widget.product.clothingSizes,
+      clothingFit: widget.product.clothingFit,
+      clothingTypes: widget.product.clothingTypes,
+      pantSizes: widget.product.pantSizes,
+      pantFabricTypes: widget.product.pantFabricTypes,
+      footwearSizes: widget.product.footwearSizes,
+      jewelryMaterials: widget.product.jewelryMaterials,
+      consoleBrand: widget.product.consoleBrand,
+      curtainMaxWidth: widget.product.curtainMaxWidth,
+      curtainMaxHeight: widget.product.curtainMaxHeight,
+      relatedProductIds: widget.isEditMode
+          ? (widget.originalProduct!.relatedProductIds ?? [])
+          : [],
+      relatedLastUpdated: widget.isEditMode
+          ? (widget.originalProduct!.relatedLastUpdated ??
+              Timestamp.fromDate(DateTime(1970, 1, 1)))
+          : Timestamp.fromDate(DateTime(1970, 1, 1)),
+      relatedCount:
+          widget.isEditMode ? (widget.originalProduct!.relatedCount ?? 0) : 0,
+    );
+
+    Map<String, dynamic> productData = product.toMap();
+    productData['phone'] = widget.phone;
+    productData['region'] = widget.region;
+    productData['address'] = widget.address;
+    productData['ibanOwnerName'] = widget.ibanOwnerName;
+    productData['ibanOwnerSurname'] = widget.ibanOwnerSurname;
+    productData['iban'] = widget.iban;
+    productData['campaign'] =
+        widget.isEditMode ? (widget.originalProduct?.campaign ?? '') : '';
+    productData['campaignName'] =
+        widget.isEditMode ? (widget.originalProduct?.campaignName ?? '') : '';
+    productData['updatedAt'] = FieldValue.serverTimestamp();
+
+    productData = FirebaseDataCleaner.cleanData(productData);
+
+    if (widget.isEditMode) {
+      final changeDetection =
+          _detectChanges(widget.originalProduct!, product);
+      final List<String> editedFields =
+          changeDetection['editedFields'] as List<String>;
+      final Map<String, dynamic> changes =
+          changeDetection['changes'] as Map<String, dynamic>;
+
+      if (deletedColors.isNotEmpty) {
+        productData['deletedColors'] = deletedColors;
+        if (!editedFields.contains('colorImages')) {
+          editedFields.add('colorImages');
+        }
+        if (!changes.containsKey('colorImages')) {
+          changes['colorImages'] = {
+            'old': widget.originalProduct!.colorImages,
+            'new': colorImages,
+          };
+        }
+      }
+
+      productData['originalProductId'] = widget.originalProduct!.id;
+      productData['originalProductData'] = FirebaseDataCleaner.cleanData(
+          widget.originalProduct?.toMap() ?? {});
+      productData['submittedAt'] = FieldValue.serverTimestamp();
+      productData['status'] = 'pending';
+      productData['editedFields'] = editedFields;
+      productData['changes'] = changes;
+
+      if (widget.isFromArchivedCollection) {
+        productData['editType'] = 'archived_product_update';
+        productData['sourceCollection'] = 'paused_shop_products';
+        productData['needsUpdate'] = false;
+        productData['archiveReason'] = null;
+        productData['archivedByAdmin'] = false;
+        productData['archivedByAdminAt'] = null;
+        productData['archivedByAdminId'] = null;
+        productData['paused'] = false;
+      } else {
+        productData['editType'] = 'product_edit';
+        productData['sourceCollection'] = 'shop_products';
+      }
+
+      final editApplicationId = const Uuid().v4();
+      await _firestore
+          .collection('vitrin_edit_product_applications')
+          .doc(editApplicationId)
+          .set(productData);
+    } else {
+      productData['status'] = 'pending';
+      await _firestore
+          .collection('vitrin_product_applications')
+          .doc(productId)
+          .set(productData);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // CHANGE DETECTION (only used for vitrin products)
+  // For shop products, the Cloud Function handles this server-side.
+  // ═══════════════════════════════════════════════════════════════════
+
   Map<String, dynamic> _detectChanges(Product original, Product updated) {
     final List<String> editedFields = [];
     final Map<String, dynamic> changes = {};
 
-    // Helper to normalize empty values for comparison
     dynamic normalizeValue(dynamic val) {
       if (val == null ||
           val == '' ||
@@ -731,21 +1080,15 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
       return val;
     }
 
-    // Helper to compare values
     void compareField(String fieldName, dynamic oldValue, dynamic newValue) {
       final normalizedOld = normalizeValue(oldValue);
       final normalizedNew = normalizeValue(newValue);
-
       if (jsonEncode(normalizedOld) != jsonEncode(normalizedNew)) {
         editedFields.add(fieldName);
-        changes[fieldName] = {
-          'old': oldValue,
-          'new': newValue,
-        };
+        changes[fieldName] = {'old': oldValue, 'new': newValue};
       }
     }
 
-    // Compare each field
     compareField('productName', original.productName, updated.productName);
     compareField('description', original.description, updated.description);
     compareField('price', original.price, updated.price);
@@ -788,301 +1131,11 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
       'changes': changes,
     };
   }
-
-  Future<void> _submitProduct() async {
-    if (!mounted) return;
-    final l10n = AppLocalizations.of(context);
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      User? user = _auth.currentUser;
-      if (user == null) {
-        if (mounted) context.push('/login');
-        return;
-      }
-
-      // Handle images properly - DON'T duplicate existing ones
-      List<String> imageUrls = [];
-
-      // In edit mode, start with existing images (DON'T upload them again)
-      if (widget.isEditMode && widget.product.imageUrls.isNotEmpty) {
-        imageUrls.addAll(widget.product.imageUrls);
-      }
-
-      // ONLY upload NEW images (not existing ones)
-      if (widget.imageFiles.isNotEmpty) {
-        List<String> newImageUrls = await _uploadFiles(
-          widget.imageFiles.map((xfile) => File(xfile.path)).toList(),
-          'default_images',
-        );
-        imageUrls.addAll(newImageUrls);
-      }
-
-      // Handle video
-      String? videoUrl;
-      if (widget.isEditMode && widget.originalProduct?.videoUrl != null) {
-        videoUrl = widget.originalProduct!.videoUrl;
-      }
-
-      if (widget.videoFile != null) {
-        List<String> videoUrls = await _uploadFiles(
-          [File(widget.videoFile!.path)],
-          'preview_videos',
-        );
-        if (videoUrls.isNotEmpty) {
-          videoUrl = videoUrls[0];
-        }
-      }
-
-      // ✅ FIXED: Handle color images and quantities properly
-      Map<String, List<String>> colorImages = {};
-      Map<String, int> colorQuantities = {};
-      List<String> availableColors = [];
-      List<String> deletedColors = [];
-
-      if (widget.isEditMode && widget.originalProduct != null) {
-        // ✅ START WITH CURRENT (not original)
-        if (widget.product.colorImages.isNotEmpty) {
-          colorImages.addAll(widget.product.colorImages);
-        }
-        if (widget.product.colorQuantities.isNotEmpty) {
-          colorQuantities.addAll(widget.product.colorQuantities);
-        }
-
-        // ✅ THEN detect deletions by comparing
-        final originalColors = widget.originalProduct!.colorImages.keys.toSet();
-        final currentColors = colorImages.keys.toSet();
-        deletedColors = originalColors.difference(currentColors).toList();
-      } else {
-        // ✅ NEW PRODUCT MODE: Just use current colors
-        if (widget.product.colorImages.isNotEmpty) {
-          colorImages.addAll(widget.product.colorImages);
-        }
-        if (widget.product.colorQuantities.isNotEmpty) {
-          colorQuantities.addAll(widget.product.colorQuantities);
-        }
-      }
-
-      // ✅ Build availableColors from FINAL color data
-      Set<String> allColors = {};
-      allColors.addAll(colorImages.keys);
-      allColors.addAll(colorQuantities.keys);
-      availableColors = allColors.toList();
-
-      final uuid = Uuid();
-      final productId =
-          widget.isEditMode ? widget.originalProduct!.id : uuid.v4();
-
-      Product product = Product(
-        id: productId,
-        ownerId: widget.product.shopId ?? user.uid,
-        productName: widget.product.productName,
-        description: widget.product.description,
-        price: widget.product.price,
-        condition: widget.product.condition,
-        brandModel: widget.product.brandModel,
-        currency: "TL",
-        gender: widget.product.gender,
-        boostClickCountAtStart: widget.product.boostClickCountAtStart,
-        imageUrls: imageUrls,
-        averageRating:
-            widget.isEditMode ? widget.originalProduct!.averageRating : 0.0,
-        reviewCount:
-            widget.isEditMode ? widget.originalProduct!.reviewCount : 0,
-        clickCount: widget.isEditMode ? widget.originalProduct!.clickCount : 0,
-        favoritesCount:
-            widget.isEditMode ? widget.originalProduct!.favoritesCount : 0,
-        cartCount: widget.isEditMode ? widget.originalProduct!.cartCount : 0,
-        purchaseCount:
-            widget.isEditMode ? widget.originalProduct!.purchaseCount : 0,
-        userId: user.uid,
-        shopId: widget.product.shopId,
-        ilanNo: productId,
-        createdAt: widget.isEditMode
-            ? widget.originalProduct!.createdAt
-            : Timestamp.now(),
-        sellerName: widget.product.sellerName,
-        category: widget.product.category,
-        subcategory: widget.product.subcategory,
-        subsubcategory: widget.product.subsubcategory,
-        quantity: widget.product.quantity,
-        deliveryOption: widget.product.deliveryOption,
-        isFeatured: widget.isEditMode
-            ? widget.originalProduct!.isFeatured
-            : widget.product.isFeatured,
-        isBoosted:
-            widget.isEditMode ? widget.originalProduct!.isBoosted : false,
-        boostedImpressionCount: widget.isEditMode
-            ? widget.originalProduct!.boostedImpressionCount
-            : 0,
-        boostImpressionCountAtStart: widget.isEditMode
-            ? widget.originalProduct!.boostImpressionCountAtStart
-            : 0,
-        promotionScore:
-            widget.isEditMode ? widget.originalProduct!.promotionScore : 0,
-        paused: widget.isEditMode ? widget.originalProduct!.paused : false,
-        boostStartTime:
-            widget.isEditMode ? widget.originalProduct!.boostStartTime : null,
-        boostEndTime:
-            widget.isEditMode ? widget.originalProduct!.boostEndTime : null,
-        lastClickDate:
-            widget.isEditMode ? widget.originalProduct!.lastClickDate : null,
-        clickCountAtStart:
-            widget.isEditMode ? widget.originalProduct!.clickCountAtStart : 0,
-        colorImages: colorImages,
-        colorQuantities: colorQuantities,
-        availableColors: availableColors,
-        videoUrl: videoUrl,
-        attributes: widget.product.attributes,
-        productType: widget.product.productType,
-        clothingSizes: widget.product.clothingSizes,
-        clothingFit: widget.product.clothingFit,
-        clothingTypes: widget.product.clothingTypes,
-        pantSizes: widget.product.pantSizes,
-        pantFabricTypes: widget.product.pantFabricTypes,
-        footwearSizes: widget.product.footwearSizes,
-        jewelryMaterials: widget.product.jewelryMaterials,
-        consoleBrand: widget.product.consoleBrand,
-        curtainMaxWidth: widget.product.curtainMaxWidth,
-        curtainMaxHeight: widget.product.curtainMaxHeight,
-        relatedProductIds: widget.isEditMode
-            ? (widget.originalProduct!.relatedProductIds ?? [])
-            : [],
-        relatedLastUpdated: widget.isEditMode
-            ? (widget.originalProduct!.relatedLastUpdated ??
-                Timestamp.fromDate(DateTime(1970, 1, 1)))
-            : Timestamp.fromDate(DateTime(
-                1970, 1, 1)), // Epoch date so Cloud Function processes it first
-        relatedCount:
-            widget.isEditMode ? (widget.originalProduct!.relatedCount ?? 0) : 0,
-      );
-
-      Map<String, dynamic> productData = product.toMap();
-      productData['shopId'] = widget.product.shopId;
-      productData['phone'] = widget.phone;
-      productData['region'] = widget.region;
-      productData['address'] = widget.address;
-      productData['ibanOwnerName'] = widget.ibanOwnerName;
-      productData['ibanOwnerSurname'] = widget.ibanOwnerSurname;
-      productData['iban'] = widget.iban;
-      productData['campaign'] =
-          widget.isEditMode ? (widget.originalProduct?.campaign ?? '') : '';
-      productData['campaignName'] =
-          widget.isEditMode ? (widget.originalProduct?.campaignName ?? '') : '';
-      productData['updatedAt'] = FieldValue.serverTimestamp();
-
-      productData = FirebaseDataCleaner.cleanData(productData);
-
-      if (widget.isEditMode) {
-        final changeDetection =
-            _detectChanges(widget.originalProduct!, product);
-        final List<String> editedFields =
-            changeDetection['editedFields'] as List<String>;
-        final Map<String, dynamic> changes =
-            changeDetection['changes'] as Map<String, dynamic>;
-
-        // ✅ Include deleted colors in metadata
-        if (deletedColors.isNotEmpty) {
-          productData['deletedColors'] = deletedColors;
-
-          if (!editedFields.contains('colorImages')) {
-            editedFields.add('colorImages');
-          }
-
-          if (!changes.containsKey('colorImages')) {
-            changes['colorImages'] = {
-              'old': widget.originalProduct!.colorImages,
-              'new': colorImages,
-            };
-          }
-        }
-
-        productData['originalProductId'] = widget.originalProduct!.id;
-        productData['originalProductData'] = FirebaseDataCleaner.cleanData(
-            widget.originalProduct?.toMap() ?? {});
-        productData['submittedAt'] = FieldValue.serverTimestamp();
-        productData['status'] = 'pending';
-        productData['editedFields'] = editedFields;
-        productData['changes'] = changes;
-
-        // ✅ NEW: Handle archived product updates differently
-        if (widget.isFromArchivedCollection) {
-          productData['editType'] = 'archived_product_update';
-          productData['sourceCollection'] = 'paused_shop_products';
-          // Clear the archive flags in the submitted data (will be applied on approval)
-          productData['needsUpdate'] = false;
-          productData['archiveReason'] = null;
-          productData['archivedByAdmin'] = false;
-          productData['archivedByAdminAt'] = null;
-          productData['archivedByAdminId'] = null;
-          productData['paused'] = false; // Will be unpaused on approval
-        } else {
-          productData['editType'] = 'product_edit';
-          productData['sourceCollection'] = 'shop_products';
-        }
-
-        final editCollection = widget.product.shopId == null
-            ? 'vitrin_edit_product_applications'
-            : 'product_edit_applications';
-
-        final editApplicationId = uuid.v4();
-        await _firestore
-            .collection(editCollection)
-            .doc(editApplicationId)
-            .set(productData);
-      } else {
-        productData['status'] = 'pending';
-
-        // Normal users go to vitrin_product_applications, shops go to product_applications
-        final collection = widget.product.shopId == null
-            ? 'vitrin_product_applications'
-            : 'product_applications';
-
-        await _firestore.collection(collection).doc(productId).set(productData);
-      }
-      if (!mounted) return;
-      context.go('/success');
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.errorListingProduct)),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<List<String>> _uploadFiles(List<File> files, String folder) async {
-    List<String> urls = [];
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) return urls;
-    String userId = user.uid;
-
-    for (File file in files) {
-      try {
-        String fileName =
-            '${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
-        Reference ref = FirebaseStorage.instance
-            .ref()
-            .child('products/$userId/$folder/$fileName');
-        UploadTask uploadTask = ref.putFile(file);
-        TaskSnapshot snapshot = await uploadTask;
-        String url = await snapshot.ref.getDownloadURL();
-        urls.add(url);
-      } catch (e) {
-        continue;
-      }
-    }
-    return urls;
-  }
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// VIDEO PLAYER WIDGET (unchanged)
+// ═══════════════════════════════════════════════════════════════════════
 
 class VideoPlayerWidget extends StatefulWidget {
   final File file;

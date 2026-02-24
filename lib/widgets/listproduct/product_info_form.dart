@@ -113,7 +113,7 @@ class ProductInfoForm extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           child: Text(
-            l10n.detailedDescriptionOptional,
+            l10n.detailedDescription,
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -150,6 +150,12 @@ class ProductInfoForm extends StatelessWidget {
                 color: Colors.grey,
                 fontSize: 14,
               ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return l10n.pleaseEnterDescription;
+                }
+                return null;
+              },
             ),
           ),
         ),

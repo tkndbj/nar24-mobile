@@ -9951,7 +9951,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get productCondition => 'Product Condition';
 
   @override
-  String get detailedDescriptionOptional => 'Detailed Description (Optional)';
+  String get detailedDescription => 'Detailed Description';
+
+  @override
+  String get pleaseEnterDescription => 'Please Enter A Description';
 
   @override
   String get selectVideo => 'Select Video';

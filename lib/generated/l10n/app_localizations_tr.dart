@@ -9969,7 +9969,10 @@ class AppLocalizationsTr extends AppLocalizations {
   String get productCondition => 'Ürün durumu';
 
   @override
-  String get detailedDescriptionOptional => 'Detaylı açıklama (Opsiyonel)';
+  String get detailedDescription => 'Detaylı açıklama';
+
+  @override
+  String get pleaseEnterDescription => 'Lütfen bir açıklama girin';
 
   @override
   String get selectVideo => 'Video seç';

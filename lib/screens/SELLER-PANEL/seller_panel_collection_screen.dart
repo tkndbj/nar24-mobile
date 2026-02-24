@@ -763,7 +763,8 @@ class _SellerPanelCollectionScreenState
               curve: Curves.easeInOut,
               child: Material(
                 color: Colors.transparent,
-                child: Container(
+                child: SafeArea(
+                  child: Container(
                   margin: const EdgeInsets.all(16),
                   constraints: BoxConstraints(
                     maxHeight: MediaQuery.of(context).size.height * 0.6,
@@ -1100,6 +1101,7 @@ class _SellerPanelCollectionScreenState
                     ],
                   ),
                 ),
+                ),
               ),
             ),
           );
@@ -1130,7 +1132,8 @@ class _SellerPanelCollectionScreenState
               curve: Curves.easeInOut,
               child: Material(
                 color: Colors.transparent,
-                child: Container(
+                child: SafeArea(
+                  child: Container(
                   margin: const EdgeInsets.all(16),
                   constraints: BoxConstraints(
                     maxHeight: MediaQuery.of(context).size.height * 0.6,
@@ -1462,6 +1465,7 @@ class _SellerPanelCollectionScreenState
                       ),
                     ],
                   ),
+                ),
                 ),
               ),
             ),
