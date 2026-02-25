@@ -40,6 +40,15 @@ const toUnixSeconds = (val) => {
   return null;
 };
 
+// ─── Field comparison (handles arrays / objects that fail ===) ────────────────
+const fieldChanged = (a, b) => {
+  if (a === b) return false;
+  if (a == null || b == null) return a !== b;
+  if (Array.isArray(a) && Array.isArray(b)) return JSON.stringify(a) !== JSON.stringify(b);
+  if (typeof a === 'object' && typeof b === 'object') return JSON.stringify(a) !== JSON.stringify(b);
+  return a !== b;
+};
+
 // ─── Sanitize ─────────────────────────────────────────────────────────────────
 const sanitizeForShopProducts = (data) => {
   const d = {};
@@ -360,7 +369,7 @@ export const syncProductsWithTypesense = onDocumentWritten(
       const searchFields = ['productName', 'category', 'subcategory',
         'price', 'brandModel', 'subsubcategory', 'averageRating',
         'imageUrls', 'sellerName', 'isBoosted', 'paused'];
-      const hasRelevantChanges = searchFields.some((f) => beforeData[f] !== afterData[f]);
+      const hasRelevantChanges = searchFields.some((f) => fieldChanged(beforeData[f], afterData[f]));
       if (!hasRelevantChanges) return;
     }
 
@@ -424,7 +433,7 @@ export const syncShopProductsWithTypesense = onDocumentWritten(
         'price', 'brandModel', 'subsubcategory', 'averageRating',
         'discountPercentage', 'campaignName', 'isBoosted', 'imageUrls',
         'sellerName', 'paused', 'quantity'];
-      const hasRelevantChanges = searchFields.some((f) => beforeData[f] !== afterData[f]);
+      const hasRelevantChanges = searchFields.some((f) => fieldChanged(beforeData[f], afterData[f]));
       if (!hasRelevantChanges) return;
     }
 
@@ -485,7 +494,7 @@ export const syncShopsWithTypesense = onDocumentWritten(
 
     if (beforeData && afterData) {
       const relevantFields = ['name', 'profileImageUrl', 'isActive', 'categories'];
-      const hasRelevantChanges = relevantFields.some((f) => beforeData[f] !== afterData[f]);
+      const hasRelevantChanges = relevantFields.some((f) => fieldChanged(beforeData[f], afterData[f]));
       if (!hasRelevantChanges) return;
     }
 
