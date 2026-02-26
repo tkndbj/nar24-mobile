@@ -317,6 +317,48 @@ const initTypesenseCollections = async (dropExisting = false) => {
       ],
       token_separators: ['-', '_'],
     },
+    {
+      name: 'foods',
+      fields: [
+        {name: 'id', type: 'string'},
+        {name: 'name', type: 'string', optional: true},
+        {name: 'description', type: 'string', optional: true},
+        {name: 'price', type: 'float', optional: true},
+        {name: 'foodCategory', type: 'string', facet: true, optional: true},
+        {name: 'foodType', type: 'string', facet: true, optional: true},
+        {name: 'imageUrl', type: 'string', optional: true},
+        {name: 'isAvailable', type: 'bool', optional: true},
+        {name: 'preparationTime', type: 'int32', optional: true},
+        {name: 'restaurantId', type: 'string', facet: true, optional: true},
+        {name: 'extras', type: 'string[]', optional: true},
+        {name: 'createdAt', type: 'int64', optional: true},
+      ],
+      token_separators: ['-', '_'],
+    },
+    {
+      name: 'restaurants',
+      fields: [
+        {name: 'id', type: 'string'},
+        {name: 'name', type: 'string', optional: true},
+        {name: 'address', type: 'string', optional: true},
+        {name: 'contactNo', type: 'string', optional: true},
+        {name: 'profileImageUrl', type: 'string', optional: true},
+        {name: 'ownerId', type: 'string', optional: true},
+        {name: 'isActive', type: 'bool', optional: true},
+        {name: 'isBoosted', type: 'bool', optional: true},
+        {name: 'latitude', type: 'float', optional: true},
+        {name: 'longitude', type: 'float', optional: true},
+        {name: 'averageRating', type: 'float', optional: true},
+        {name: 'reviewCount', type: 'int32', optional: true},
+        {name: 'clickCount', type: 'int32', optional: true},
+        {name: 'followerCount', type: 'int32', optional: true},
+        {name: 'foodType', type: 'string[]', facet: true, optional: true},
+        {name: 'cuisineTypes', type: 'string[]', facet: true, optional: true},
+{name: 'workingDays', type: 'string[]', facet: true, optional: true},
+        {name: 'createdAt', type: 'int64', optional: true},
+      ],
+      token_separators: ['-', '_'],
+    },
   ];
 
   for (const schema of collections) {
@@ -543,5 +585,92 @@ export const syncOrdersWithTypesense = onDocumentWritten(
     };
 
     await syncDocumentToTypesense('orders', itemId, beforeData, augmented, sanitizeForOrders);
+  },
+);
+
+// ─── Sanitize for Foods ───────────────────────────────────────────────────────
+const sanitizeForFoods = (data) => {
+  const d = {};
+  const pick = (key) => {if (data[key] != null) d[key] = data[key];};
+  const pickArr = (key) => {if (Array.isArray(data[key]) && data[key].length > 0) d[key] = data[key];};
+
+  pick('name');
+  pick('description');
+  pick('price');
+  pick('foodCategory');
+  pick('foodType');
+  pick('imageUrl');
+  pick('isAvailable');
+  pick('preparationTime');
+  pick('restaurantId');
+  pickArr('extras');
+
+  const ts = toUnixSeconds(data.createdAt);
+  if (ts != null) d.createdAt = ts;
+
+  return d;
+};
+
+// ─── Sanitize for Restaurants ─────────────────────────────────────────────────
+const sanitizeForRestaurants = (data) => {
+  const d = {};
+  const pick = (key) => {if (data[key] != null) d[key] = data[key];};
+  const pickArr = (key) => {if (Array.isArray(data[key]) && data[key].length > 0) d[key] = data[key];};
+
+  pick('name');
+  pick('address');
+  pick('contactNo');
+  pick('profileImageUrl');
+  pick('ownerId');
+  pick('isActive');
+  pick('isBoosted');
+  pick('latitude');
+  pick('longitude');
+  pick('averageRating');
+  pick('reviewCount');
+  pick('clickCount');
+  pick('followerCount');
+  pickArr('foodType');
+  pickArr('cuisineTypes');
+  pickArr('workingDays'); 
+
+  const ts = toUnixSeconds(data.createdAt);
+  if (ts != null) d.createdAt = ts;
+
+  return d;
+};
+
+
+export const syncFoodsWithTypesense = onDocumentWritten(
+  {region: 'europe-west3', document: 'foods/{foodId}'},
+  async (event) => {
+    const foodId = event.params.foodId;
+    const beforeData = event.data.before?.data() ?? null;
+    const afterData = event.data.after?.data() ?? null;
+
+    if (beforeData && afterData) {
+      const searchFields = ['name', 'foodCategory', 'foodType', 'price', 'isAvailable', 'restaurantId'];
+      const hasRelevantChanges = searchFields.some((f) => fieldChanged(beforeData[f], afterData[f]));
+      if (!hasRelevantChanges) return;
+    }
+
+    return syncDocumentToTypesense('foods', foodId, beforeData, afterData, sanitizeForFoods);
+  },
+);
+
+export const syncRestaurantsWithTypesense = onDocumentWritten(
+  {region: 'europe-west3', document: 'restaurants/{restaurantId}'},
+  async (event) => {
+    const restaurantId = event.params.restaurantId;
+    const beforeData = event.data.before?.data() ?? null;
+    const afterData = event.data.after?.data() ?? null;
+
+    if (beforeData && afterData) {
+      const searchFields = ['name', 'address', 'isActive', 'isBoosted', 'foodType', 'averageRating', 'profileImageUrl', 'cuisineTypes'];
+      const hasRelevantChanges = searchFields.some((f) => fieldChanged(beforeData[f], afterData[f]));
+      if (!hasRelevantChanges) return;
+    }
+
+    return syncDocumentToTypesense('restaurants', restaurantId, beforeData, afterData, sanitizeForRestaurants);
   },
 );
