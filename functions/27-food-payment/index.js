@@ -1,23 +1,53 @@
-// ============================================================================
-// FOOD ORDER CLOUD FUNCTIONS
-// ============================================================================
-// Add these exports to your main functions/index.js
-// Import: import { processFoodOrder, initializeFoodPayment, foodPaymentCallback } from './food-orders.js';
-//
-// This module handles:
-//   1. processFoodOrder       – callable: creates order for pay_at_door
-//   2. initializeFoodPayment  – callable: starts İşbank 3D flow for card payments
-//   3. foodPaymentCallback    – HTTP: İşbank callback → creates order on success
-// ============================================================================
-
 import crypto from 'crypto';
 import { onRequest, onCall, HttpsError } from 'firebase-functions/v2/https';
 import admin from 'firebase-admin';
 import { transliterate } from 'transliteration';
+import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
 
-// Re-use your existing getIsbankConfig & generateHashVer3 from index.js,
-// or import them here. For self-containment, we duplicate the helpers below.
-// In production you'd import: import { getIsbankConfig, generateHashVer3 } from './index.js';
+const secretClient = new SecretManagerServiceClient();
+
+async function getSecret(secretName) {
+  const [version] = await secretClient.accessSecretVersion({ name: secretName });
+  return version.payload.data.toString('utf8');
+}
+
+let isbankConfig = null;
+
+async function getIsbankConfig() {
+  if (!isbankConfig) {
+    const [clientId, apiUser, apiPassword, storeKey] = await Promise.all([
+      getSecret('projects/emlak-mobile-app/secrets/ISBANK_CLIENT_ID/versions/latest'),
+      getSecret('projects/emlak-mobile-app/secrets/ISBANK_API_USER/versions/latest'),
+      getSecret('projects/emlak-mobile-app/secrets/ISBANK_API_PASSWORD/versions/latest'),
+      getSecret('projects/emlak-mobile-app/secrets/ISBANK_STORE_KEY/versions/latest'),
+    ]);
+
+    isbankConfig = {
+      clientId,
+      apiUser,
+      apiPassword,
+      storeKey,
+      gatewayUrl: 'https://sanalpos.isbank.com.tr/fim/est3Dgate',
+      currency: '949',
+      storeType: '3d_pay_hosting',
+    };
+  }
+  return isbankConfig;
+}
+
+async function generateHashVer3(params) {
+  const keys = Object.keys(params)
+    .filter((key) => key !== 'hash' && key !== 'encoding')
+    .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  const config = await getIsbankConfig();
+  const values = keys.map((key) => {
+    let value = String(params[key] || '');
+    value = value.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
+    return value;
+  });
+  const plainText = values.join('|') + '|' + config.storeKey;
+  return crypto.createHash('sha512').update(plainText, 'utf8').digest('base64');
+}
 
 const REGION = 'europe-west3';
 
@@ -522,7 +552,6 @@ export const initializeFoodPayment = onCall(
     // ── 2. Generate İşbank payment parameters ────────────────────────
     // NOTE: Import getIsbankConfig & generateHashVer3 from your index.js
     // For this module, we assume they're available. Replace with your actual import.
-    const { getIsbankConfig, generateHashVer3 } = await import('./index.js');
     const isbankConfig = await getIsbankConfig();
 
     const sanitizedName = (() => {
@@ -697,8 +726,7 @@ export const foodPaymentCallback = onRequest(
 
         // Verify hash
         if (HASHPARAMSVAL && HASH) {
-          const { getIsbankConfig: getConfig } = await import('./index.js');
-          const config = await getConfig();
+          const config = await getIsbankConfig();          
           const hashInput = HASHPARAMSVAL + config.storeKey;
           const calculated = crypto.createHash('sha512').update(hashInput, 'utf8').digest('base64');
 
