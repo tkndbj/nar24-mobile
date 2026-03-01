@@ -4764,6 +4764,14 @@ export const TEMPLATES = {
       title: 'Order Delivered! 🎉',
       body: 'Your order from {restaurantName} has been delivered.',
     },
+    food_order_delivered_review: {
+      title: 'Order Delivered! 🎉',
+      body: 'Your order from {restaurantName} has arrived. Tap to leave a review!',
+    },
+    restaurant_new_review: {
+      title: 'New Review! ⭐',
+      body: 'One of your customers left a {rating}-star review.',
+    },
     default: {
       title: 'New Notification',
       body: 'You have a new notification!',
@@ -4883,6 +4891,14 @@ export const TEMPLATES = {
       title: 'Sipariş Teslim Edildi! 🎉',
       body: '{restaurantName} siparişiniz teslim edildi.',
     },
+    food_order_delivered_review: {
+      title: 'Sipariş Teslim Edildi! 🎉',
+      body: '{restaurantName} siparişiniz ulaştı. Değerlendirme yapmak için tıklayın!',
+    },
+    restaurant_new_review: {
+      title: 'Yeni Değerlendirme! ⭐',
+      body: 'Bir müşteriniz {rating} yıldız verdi.',
+    },
     default: {
       title: 'Yeni Bildirim',
       body: 'Yeni bir bildiriminiz var!',
@@ -5001,7 +5017,15 @@ export const TEMPLATES = {
     food_order_status_update_delivered: {
       title: 'Заказ доставлен! 🎉',
       body: 'Ваш заказ из {restaurantName} доставлен.',
+    }, 
+    food_order_delivered_review: {
+      title: 'Заказ доставлен! 🎉',
+      body: 'Ваш заказ из {restaurantName} прибыл. Нажмите, чтобы оставить отзыв!',
     },
+    restaurant_new_review: {
+      title: 'Новый отзыв! ⭐',
+      body: 'Один из ваших клиентов оставил оценку {rating} звезды.',
+    },  
     default: {
       title: 'Новое Уведомление',
       body: 'У вас новое уведомление!',
@@ -5116,6 +5140,9 @@ if (payload.orderId) {
       route = `/seller_panel_reviews/${notificationData.shopId}`;
     }
     break;
+    case 'food_order_delivered_review':
+      route = payload.orderId ? `/food-order-detail/${payload.orderId}` : '/orders?tab=food';
+      break;
     case 'food_order_status_update':
       route = payload.orderId ? `/food-order/${payload.orderId}` : '/food-orders';
       break;
@@ -5312,6 +5339,7 @@ export const sendRestaurantNotificationOnCreation = onDocumentCreated({
     '{totalPrice}': notificationData.totalPrice,
     '{restaurantName}': notificationData.restaurantName,
     '{orderId}': notificationData.orderId,
+    '{rating}': notificationData.rating,
   };
 
   Object.entries(replacements).forEach(([placeholder, value]) => {
@@ -14200,4 +14228,4 @@ export {
 export { computeRankingScores } from './24-promotion-score/index.js';
 export { addProductsToCampaign, removeProductFromCampaign, updateCampaignProductDiscount } from './25-shop-campaign/index.js';
 export { submitProduct, submitProductEdit } from './26-list-product/index.js';
-export { processFoodOrder, initializeFoodPayment, foodPaymentCallback, checkFoodPaymentStatus, generateFoodReceiptBackground, updateFoodOrderStatus } from './27-food-payment/index.js';
+export { processFoodOrder, initializeFoodPayment, foodPaymentCallback, checkFoodPaymentStatus, generateFoodReceiptBackground, updateFoodOrderStatus, submitRestaurantReview } from './27-food-payment/index.js';

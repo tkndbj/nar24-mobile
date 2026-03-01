@@ -379,6 +379,7 @@ async function createFoodOrderCore(buyerId, requestData, paymentOrderId = null) 
       // Meta
       orderNotes: typeof orderNotes === 'string' ? orderNotes.substring(0, 1000) : '',
       estimatedPrepTime,
+      needsReview: false,
       status: 'pending', // pending → confirmed → preparing → ready → delivered / completed
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1674,9 +1675,7 @@ export const updateFoodOrderStatus = onCall(
 
       const VALID_TRANSITIONS = {
         pending: ['accepted', 'rejected'],
-        accepted: ['preparing', 'rejected'],
-        preparing: ['ready'],
-        ready: ['delivered'],
+        accepted: ['delivered', 'rejected'], // ← simplified: skip preparing/ready
       };
 
       const allowed = VALID_TRANSITIONS[order.status] || [];
@@ -1691,6 +1690,7 @@ export const updateFoodOrderStatus = onCall(
       tx.update(orderRef, {
         status: newStatus,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        ...(newStatus === 'delivered' ? { needsReview: true } : {}),
       });
 
       // 2. Write notification to users/{buyerId}/notifications
@@ -1702,18 +1702,126 @@ export const updateFoodOrderStatus = onCall(
         .collection('notifications')
         .doc();
 
-      tx.set(notifRef, {
-        type: 'food_order_status_update',  // app switches on this to pick the right translation key
-        payload: {
-          orderId,
-          orderStatus: newStatus,
-          previousStatus: order.status,
-          restaurantId: order.restaurantId,
-          restaurantName: order.restaurantName,
-        },
-        isRead: false,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        tx.set(notifRef, {
+          type: newStatus === 'delivered' ? 'food_order_delivered_review' : 'food_order_status_update',
+          payload: {
+            orderId,
+            orderStatus: newStatus,
+            previousStatus: order.status,
+            restaurantId: order.restaurantId,
+            restaurantName: order.restaurantName,
+          },
+          isRead: false,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+    });
+
+    return { success: true };
+  }
+);
+
+export const submitRestaurantReview = onCall(
+  {
+    region: REGION,
+    memory: '256MiB',
+    timeoutSeconds: 30,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be signed in.');
+    }
+
+    const { orderId, restaurantId, rating, comment } = request.data;
+
+    if (!orderId || !restaurantId) {
+      throw new HttpsError('invalid-argument', 'orderId and restaurantId are required.');
+    }
+    if (!rating || rating < 1 || rating > 5) {
+      throw new HttpsError('invalid-argument', 'Rating must be between 1 and 5.');
+    }
+
+    const db = admin.firestore();
+    const buyerId = request.auth.uid;
+
+    await db.runTransaction(async (tx) => {
+      // 1. Validate order
+      const orderRef = db.collection('orders-food').doc(orderId);
+      const orderSnap = await tx.get(orderRef);
+
+      if (!orderSnap.exists) throw new HttpsError('not-found', 'Order not found.');
+
+      const order = orderSnap.data();
+
+      if (order.buyerId !== buyerId) {
+        throw new HttpsError('permission-denied', 'This is not your order.');
+      }
+      if (order.status !== 'delivered') {
+        throw new HttpsError('failed-precondition', 'Order has not been delivered yet.');
+      }
+      if (!order.needsReview) {
+        throw new HttpsError('already-exists', 'You have already reviewed this order.');
+      }
+
+      // 2. Fetch buyer info
+      const buyerSnap = await tx.get(db.collection('users').doc(buyerId));
+      const buyerData = buyerSnap.data() || {};
+      const buyerName = buyerData.displayName || buyerData.name || 'Customer';
+
+      // 3. Fetch restaurant for current rating
+      const restaurantRef = db.collection('restaurants').doc(restaurantId);
+      const restaurantSnap = await tx.get(restaurantRef);
+
+      if (!restaurantSnap.exists) throw new HttpsError('not-found', 'Restaurant not found.');
+
+      const restaurantData = restaurantSnap.data();
+      const currentCount = restaurantData.reviewCount || 0;
+      const currentAvg = restaurantData.averageRating || 0;
+
+      // 4. Compute new average
+      const newCount = currentCount + 1;
+      const newAvg = Math.round(((currentAvg * currentCount + rating) / newCount) * 10) / 10;
+
+      // 5. Create review document
+      const reviewRef = db.collection('restaurants').doc(restaurantId).collection('reviews').doc();
+tx.set(reviewRef, {
+  orderId,
+  buyerId,
+  buyerName,
+  restaurantId,
+  restaurantName: restaurantData.name || '',  // ← add this
+  rating,
+  comment: typeof comment === 'string' ? comment.substring(0, 1000) : '',
+  timestamp: admin.firestore.FieldValue.serverTimestamp(),
+});
+
+      // 6. Update restaurant averageRating
+      tx.update(restaurantRef, {
+        averageRating: newAvg,
+        reviewCount: newCount,
       });
+
+      // 7. Mark order as reviewed
+      tx.update(orderRef, {
+        needsReview: false,
+        reviewId: reviewRef.id,
+      });
+
+      // 8. Notify restaurant owner
+      const restaurantOwnerId = restaurantData.ownerId;
+      if (restaurantOwnerId) {
+        const notifRef = db.collection('restaurant_notifications').doc();
+        tx.set(notifRef, {
+          type: 'restaurant_new_review',
+          restaurantId,
+          restaurantOwnerId,
+          orderId,
+          buyerName,
+          rating,
+          comment: typeof comment === 'string' ? comment.substring(0, 200) : '',
+          isRead: {},
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
     });
 
     return { success: true };
