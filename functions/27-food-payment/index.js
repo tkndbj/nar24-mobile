@@ -1782,7 +1782,7 @@ export const submitRestaurantReview = onCall(
       const newAvg = Math.round(((currentAvg * currentCount + rating) / newCount) * 10) / 10;
 
       // 5. Create review document
-      const reviewRef = db.collection('restaurants').doc(restaurantId).collection('reviews').doc();
+      const reviewRef = db.collection('restaurants').doc(restaurantId).collection('food-reviews').doc();
 tx.set(reviewRef, {
   orderId,
   buyerId,
