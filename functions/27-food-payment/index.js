@@ -1637,3 +1637,85 @@ async function generateFoodReceipt(data) {
     doc.end();
   });
 }
+
+export const updateFoodOrderStatus = onCall(
+  {
+    region: REGION,
+    memory: '256MiB',
+    timeoutSeconds: 30,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be signed in.');
+    }
+
+    const { orderId, newStatus } = request.data;
+    const ALLOWED_STATUSES = ['accepted', 'rejected', 'preparing', 'ready', 'delivered'];
+
+    if (!orderId || !ALLOWED_STATUSES.includes(newStatus)) {
+      throw new HttpsError('invalid-argument', 'Invalid orderId or status.');
+    }
+
+    const db = admin.firestore();
+
+    await db.runTransaction(async (tx) => {
+      const orderRef = db.collection('orders-food').doc(orderId);
+      const orderSnap = await tx.get(orderRef);
+
+      if (!orderSnap.exists) {
+        throw new HttpsError('not-found', 'Order not found.');
+      }
+
+      const order = orderSnap.data();
+
+      if (order.restaurantOwnerId !== request.auth.uid) {
+        throw new HttpsError('permission-denied', 'You do not own this restaurant.');
+      }
+
+      const VALID_TRANSITIONS = {
+        pending: ['accepted', 'rejected'],
+        accepted: ['preparing', 'rejected'],
+        preparing: ['ready'],
+        ready: ['delivered'],
+      };
+
+      const allowed = VALID_TRANSITIONS[order.status] || [];
+      if (!allowed.includes(newStatus)) {
+        throw new HttpsError(
+          'failed-precondition',
+          `Cannot transition from "${order.status}" to "${newStatus}".`
+        );
+      }
+
+      // 1. Update order
+      tx.update(orderRef, {
+        status: newStatus,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // 2. Write notification to users/{buyerId}/notifications
+      // No hardcoded text — store the event type and payload only.
+      // The app resolves the localized string using its own i18n system.
+      const notifRef = db
+        .collection('users')
+        .doc(order.buyerId)
+        .collection('notifications')
+        .doc();
+
+      tx.set(notifRef, {
+        type: 'food_order_status_update',  // app switches on this to pick the right translation key
+        payload: {
+          orderId,
+          orderStatus: newStatus,
+          previousStatus: order.status,
+          restaurantId: order.restaurantId,
+          restaurantName: order.restaurantName,
+        },
+        isRead: false,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+
+    return { success: true };
+  }
+);

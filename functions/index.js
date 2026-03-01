@@ -4740,6 +4740,30 @@ export const TEMPLATES = {
       title: 'Question Answered! 💬',
       body: 'Your question about "{productName}" has been answered!',
     },
+    new_food_order: {
+      title: 'New Order! 🍽️',
+      body: 'A new order has been placed.',
+    },
+    food_order_status_update_accepted: {
+      title: 'Order Accepted! ✅',
+      body: '{restaurantName} has accepted your order.',
+    },
+    food_order_status_update_rejected: {
+      title: 'Order Rejected ❌',
+      body: '{restaurantName} has rejected your order.',
+    },
+    food_order_status_update_preparing: {
+      title: 'Being Prepared! 🍳',
+      body: '{restaurantName} is now preparing your order.',
+    },
+    food_order_status_update_ready: {
+      title: 'Order Ready! 📦',
+      body: 'Your order from {restaurantName} is ready!',
+    },
+    food_order_status_update_delivered: {
+      title: 'Order Delivered! 🎉',
+      body: 'Your order from {restaurantName} has been delivered.',
+    },
     default: {
       title: 'New Notification',
       body: 'You have a new notification!',
@@ -4834,6 +4858,30 @@ export const TEMPLATES = {
     product_question_answered: {
       title: 'Soru Yanıtlandı! 💬',
       body: '"{productName}" hakkındaki sorunuz yanıtlandı!',
+    },
+    new_food_order: {
+      title: 'Yeni Sipariş! 🍽️',
+      body: 'Yeni sipariş verildi.',
+    },
+    food_order_status_update_accepted: {
+      title: 'Sipariş Onaylandı! ✅',
+      body: '{restaurantName} siparişinizi onayladı.',
+    },
+    food_order_status_update_rejected: {
+      title: 'Sipariş Reddedildi ❌',
+      body: '{restaurantName} siparişinizi reddetti.',
+    },
+    food_order_status_update_preparing: {
+      title: 'Hazırlanıyor! 🍳',
+      body: '{restaurantName} siparişinizi hazırlamaya başladı.',
+    },
+    food_order_status_update_ready: {
+      title: 'Sipariş Hazır! 📦',
+      body: '{restaurantName} siparişiniz teslimata hazır!',
+    },
+    food_order_status_update_delivered: {
+      title: 'Sipariş Teslim Edildi! 🎉',
+      body: '{restaurantName} siparişiniz teslim edildi.',
     },
     default: {
       title: 'Yeni Bildirim',
@@ -4930,6 +4978,30 @@ export const TEMPLATES = {
       title: 'Вопрос Отвечен! 💬',
       body: 'На ваш вопрос о "{productName}" ответили!',
     },
+    new_food_order: {
+      title: 'Новый заказ! 🍽️',
+      body: 'Был размещен новый заказ.',
+    },
+    food_order_status_update_accepted: {
+      title: 'Заказ принят! ✅',
+      body: '{restaurantName} принял ваш заказ.',
+    },
+    food_order_status_update_rejected: {
+      title: 'Заказ отклонён ❌',
+      body: '{restaurantName} отклонил ваш заказ.',
+    },
+    food_order_status_update_preparing: {
+      title: 'Готовится! 🍳',
+      body: '{restaurantName} начал готовить ваш заказ.',
+    },
+    food_order_status_update_ready: {
+      title: 'Заказ готов! 📦',
+      body: 'Ваш заказ из {restaurantName} готов!',
+    },
+    food_order_status_update_delivered: {
+      title: 'Заказ доставлен! 🎉',
+      body: 'Ваш заказ из {restaurantName} доставлен.',
+    },
     default: {
       title: 'Новое Уведомление',
       body: 'У вас новое уведомление!',
@@ -4962,7 +5034,11 @@ export const sendNotificationOnCreation = onDocumentCreated({
 
   // 2) Pick and interpolate the template
   const localeSet = TEMPLATES[locale] || TEMPLATES.en;
-  const type = notificationData.type || 'default';
+  const originalType = notificationData.type || 'default';
+  let type = originalType;
+  if (type === 'food_order_status_update' && notificationData.payload?.orderStatus) {
+    type = `food_order_status_update_${notificationData.payload.orderStatus}`;
+  }
   const tmpl = localeSet[type] || localeSet.default;
 
   let title = tmpl.title;
@@ -5003,11 +5079,24 @@ export const sendNotificationOnCreation = onDocumentCreated({
     title = title.replace('{receiptNo}', notificationData.receiptNo);
     body = body.replace('{receiptNo}', notificationData.receiptNo);
   }
+  const payload = notificationData.payload || {};
+if (payload.restaurantName) {
+  title = title.replace('{restaurantName}', payload.restaurantName);
+  body  = body .replace('{restaurantName}', payload.restaurantName);
+}
+if (payload.orderStatus) {
+  title = title.replace('{orderStatus}', payload.orderStatus);
+  body  = body .replace('{orderStatus}', payload.orderStatus);
+}
+if (payload.orderId) {
+  title = title.replace('{orderId}', payload.orderId);
+  body  = body .replace('{orderId}', payload.orderId);
+}
 
   // 3) Compute the deep-link route for GoRouter
   //    (defaults to your in-app notifications list)
   let route = '/notifications';
-  switch (type) {
+  switch (originalType) {
   case 'product_out_of_stock':
     route = '/myproducts';
     break;
@@ -5027,6 +5116,9 @@ export const sendNotificationOnCreation = onDocumentCreated({
       route = `/seller_panel_reviews/${notificationData.shopId}`;
     }
     break;
+    case 'food_order_status_update':
+      route = payload.orderId ? `/food-order/${payload.orderId}` : '/food-orders';
+      break;
   case 'product_review_user':
     if (notificationData.productId) {
       route = `/product/${notificationData.productId}`; 
@@ -5149,6 +5241,168 @@ export const sendNotificationOnCreation = onDocumentCreated({
       .doc(`users/${userId}`)
       .update(updates);
   }
+});
+
+export const sendRestaurantNotificationOnCreation = onDocumentCreated({
+  region: 'europe-west3',
+  document: 'restaurant_notifications/{notificationId}',
+  memory: '256MiB',
+  timeoutSeconds: 60,
+}, async (event) => {
+  const snap = event.data;
+  const notificationData = snap?.data();
+  const { notificationId } = event.params;
+
+  if (!notificationData) {
+    console.log('No notification data, exiting.');
+    return;
+  }
+
+  const ownerId = notificationData.restaurantOwnerId;
+  if (!ownerId) {
+    console.log('No restaurantOwnerId in notification, exiting.');
+    return;
+  }
+
+  // Idempotency guard
+  const notifRef = admin.firestore()
+    .collection('restaurant_notifications')
+    .doc(notificationId);
+
+  try {
+    const shouldProcess = await admin.firestore().runTransaction(async (tx) => {
+      const doc = await tx.get(notifRef);
+      if (doc.data()?.fcmSent === true) return false;
+      tx.update(notifRef, { fcmSent: true });
+      return true;
+    });
+
+    if (!shouldProcess) {
+      console.log(`FCM already sent for restaurant notification ${notificationId}, skipping.`);
+      return;
+    }
+  } catch (error) {
+    console.error(`Idempotency check failed for ${notificationId}:`, error);
+    return;
+  }
+
+  // Load owner's FCM tokens and locale
+  const userDoc = await admin.firestore().doc(`users/${ownerId}`).get();
+  const userData = userDoc.data() || {};
+  const tokens = userData.fcmTokens && typeof userData.fcmTokens === 'object' ? Object.keys(userData.fcmTokens) : [];
+
+  if (tokens.length === 0) {
+    console.log(`No FCM tokens for restaurant owner ${ownerId}.`);
+    return;
+  }
+
+  const locale = ['en', 'tr', 'ru'].includes(userData.languageCode) ? userData.languageCode : 'en';
+
+  // Pick and interpolate template
+  const type = notificationData.type || 'default';
+  const localeSet = TEMPLATES[locale] || TEMPLATES.en;
+  const tmpl = localeSet[type] || localeSet.default;
+
+  let title = tmpl.title;
+  let body  = tmpl.body;
+
+  const replacements = {
+    '{buyerName}': notificationData.buyerName,
+    '{itemCount}': notificationData.itemCount,
+    '{totalPrice}': notificationData.totalPrice,
+    '{restaurantName}': notificationData.restaurantName,
+    '{orderId}': notificationData.orderId,
+  };
+
+  Object.entries(replacements).forEach(([placeholder, value]) => {
+    if (value !== undefined && value !== null) {
+      title = title.replace(placeholder, String(value));
+      body  = body .replace(placeholder, String(value));
+    }
+  });
+
+  // Deep-link route
+  const route = notificationData.orderId ? `/restaurant-order/${notificationData.orderId}` : '/restaurant-orders';
+
+  // Data payload
+  const dataPayload = {
+    notificationId: String(notificationId),
+    route,
+    type,
+  };
+  Object.entries(notificationData).forEach(([key, value]) => {
+    if (key === 'isRead' || key === 'timestamp') return;
+    dataPayload[key] = typeof value === 'string' ? value : JSON.stringify(value);
+  });
+
+  // Send — batch if somehow >500 tokens (defensive)
+  const FCM_BATCH_SIZE = 500;
+  let successCount = 0;
+  let failureCount = 0;
+  const badTokens = [];
+
+  for (let i = 0; i < tokens.length; i += FCM_BATCH_SIZE) {
+    const batch = tokens.slice(i, i + FCM_BATCH_SIZE);
+    const message = {
+      tokens: batch,
+      notification: { title, body },
+      data: dataPayload,
+      apns: {
+        headers: { 'apns-priority': '10' },
+        payload: { aps: { sound: 'default', badge: 1 } },
+      },
+      android: {
+        priority: 'high',
+        notification: {
+          channelId: 'high_importance_channel',
+          sound: 'default',
+          icon: 'ic_notification',
+        },
+      },
+    };
+
+    try {
+      const batchResponse = await getMessaging().sendEachForMulticast(message);
+      successCount += batchResponse.successCount;
+      failureCount += batchResponse.failureCount;
+
+      batchResponse.responses.forEach((resp, idx) => {
+        if (resp.error) {
+          const code = resp.error.code;
+          if (
+            code === 'messaging/invalid-registration-token' ||
+            code === 'messaging/registration-token-not-registered'
+          ) {
+            badTokens.push(batch[idx]);
+          }
+        }
+      });
+    } catch (err) {
+      console.error('FCM send error for restaurant notification:', err);
+      failureCount += batch.length;
+    }
+  }
+
+  // Update stats
+  await notifRef.update({
+    fcmSentAt: admin.firestore.FieldValue.serverTimestamp(),
+    fcmStats: { successCount, failureCount, totalTokens: tokens.length },
+  });
+
+  // Clean up bad tokens
+  if (badTokens.length > 0) {
+    const updates = {};
+    badTokens.forEach((token) => {
+      updates[`fcmTokens.${token}`] = admin.firestore.FieldValue.delete();
+    });
+    await admin.firestore().doc(`users/${ownerId}`).update(updates).catch((err) => {
+      console.error('Failed to clean bad tokens:', err);
+    });
+  }
+
+  console.log(
+    `Restaurant notification ${notificationId} (${type}) → ${successCount} sent, ${failureCount} failed`
+  );
 });
 
 function getWebRoute(type, shopId, orderId) {
@@ -13946,4 +14200,4 @@ export {
 export { computeRankingScores } from './24-promotion-score/index.js';
 export { addProductsToCampaign, removeProductFromCampaign, updateCampaignProductDiscount } from './25-shop-campaign/index.js';
 export { submitProduct, submitProductEdit } from './26-list-product/index.js';
-export { processFoodOrder, initializeFoodPayment, foodPaymentCallback, checkFoodPaymentStatus, generateFoodReceiptBackground } from './27-food-payment/index.js';
+export { processFoodOrder, initializeFoodPayment, foodPaymentCallback, checkFoodPaymentStatus, generateFoodReceiptBackground, updateFoodOrderStatus } from './27-food-payment/index.js';
