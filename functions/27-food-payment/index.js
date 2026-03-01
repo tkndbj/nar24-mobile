@@ -1,8 +1,11 @@
 import crypto from 'crypto';
 import { onRequest, onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import admin from 'firebase-admin';
 import { transliterate } from 'transliteration';
 import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
+import PDFDocument from 'pdfkit';
+import path from 'path';
 
 const secretClient = new SecretManagerServiceClient();
 
@@ -259,6 +262,7 @@ async function createFoodOrderCore(buyerId, requestData, paymentOrderId = null) 
 
   const db = admin.firestore();
   let orderResult;
+  let orderDoc = null;
 
   await db.runTransaction(async (tx) => {
     // ── 1. Fetch & validate restaurant ───────────────────────────────
@@ -313,11 +317,12 @@ async function createFoodOrderCore(buyerId, requestData, paymentOrderId = null) 
       );
     }
 
+  
     // ── 5. Create order document ─────────────────────────────────────
     const orderRef = db.collection('orders-food').doc();
     const orderId = orderRef.id;
 
-    const orderDoc = {
+    orderDoc = {
       // Buyer
       buyerId,
       buyerName,
@@ -418,12 +423,15 @@ async function createFoodOrderCore(buyerId, requestData, paymentOrderId = null) 
       totalPrice,
       estimatedPrepTime,
     };
-  });
+  }); 
 
   // ── 7. Clear user's food cart (fire-and-forget) ──────────────────
   if (orderResult && !orderResult.duplicate) {
     clearFoodCartAsync(buyerId).catch((err) =>
       console.error('[FoodOrder] Cart clear failed:', err)
+    );
+    scheduleFoodReceiptTask(orderDoc, orderResult.orderId).catch((err) =>  // ✅ moved here
+      console.error('[FoodOrder] Receipt task scheduling failed:', err)
     );
   }
 
@@ -925,4 +933,690 @@ function buildRedirectHtml(deepLink, title, subtitle = '') {
     </body>
     </html>
   `;
+}
+
+export const generateFoodReceiptBackground = onDocumentCreated(
+  {
+    document: 'foodReceiptTasks/{taskId}',
+    region: REGION,
+    memory: '1GiB',
+    timeoutSeconds: 120,
+  },
+  async (event) => {
+    const taskData = event.data.data();
+    const taskId = event.params.taskId;
+    const db = admin.firestore();
+
+    try {
+      // Convert Firestore Timestamp → Date
+      const orderDate =
+        taskData.orderDate?.toDate ? taskData.orderDate.toDate() : new Date();
+
+      const receiptPdf = await generateFoodReceipt({ ...taskData, orderDate });
+
+      // ── Save PDF to Cloud Storage ───────────────────────────────
+      const bucket = admin.storage().bucket();
+      const receiptFileName = `food-receipts/${taskData.orderId}.pdf`;
+      const file = bucket.file(receiptFileName);
+
+      await file.save(receiptPdf, {
+        metadata: { contentType: 'application/pdf' },
+      });
+
+      // ── Create receipt document in user's subcollection ─────────
+      const receiptRef = db
+        .collection('users')
+        .doc(taskData.buyerId)
+        .collection('foodReceipts')
+        .doc();
+
+      await receiptRef.set({
+        receiptId: receiptRef.id,
+        receiptType: 'food_order',
+        orderId: taskData.orderId,
+        buyerId: taskData.buyerId,
+        buyerName: taskData.buyerName || '',
+        restaurantId: taskData.restaurantId,
+        restaurantName: taskData.restaurantName || '',
+        // Pricing
+        subtotal: taskData.subtotal,
+        deliveryFee: taskData.deliveryFee || 0,
+        totalPrice: taskData.totalPrice,
+        currency: taskData.currency || 'TL',
+        // Payment
+        paymentMethod: taskData.paymentMethod,
+        isPaid: taskData.isPaid || false,
+        // Delivery
+        deliveryType: taskData.deliveryType,
+        deliveryAddress: taskData.deliveryAddress || null,
+        // PDF path
+        filePath: receiptFileName,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // ── Mark task as complete ────────────────────────────────────
+      await db.collection('foodReceiptTasks').doc(taskId).update({
+        status: 'completed',
+        filePath: receiptFileName,
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log(`[FoodReceipt] Generated successfully for order ${taskData.orderId}`);
+    } catch (error) {
+      console.error('[FoodReceipt] Error generating receipt:', error);
+
+      const taskRef = db.collection('foodReceiptTasks').doc(taskId);
+      const taskDoc = await taskRef.get();
+      const retryCount = (taskDoc.data()?.retryCount || 0) + 1;
+
+      await taskRef.update({
+        status: retryCount >= 3 ? 'failed' : 'pending',
+        retryCount,
+        lastError: error.message,
+        failedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      if (retryCount >= 3) {
+        // Log to payment alerts for manual resolution
+        await db.collection('_payment_alerts').add({
+          type: 'food_receipt_generation_failed',
+          severity: 'medium',
+          orderId: taskData.orderId,
+          buyerId: taskData.buyerId,
+          errorMessage: error.message,
+          isRead: false,
+          isResolved: false,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+
+      // Throw to trigger automatic Cloud Functions retry (only if under limit)
+      if (retryCount < 3) {
+        throw error;
+      }
+    }
+  },
+);
+
+// ============================================================================
+// HELPER: Schedule receipt task creation after order is placed
+// Call this from createFoodOrderCore after the transaction commits.
+// ============================================================================
+
+export async function scheduleFoodReceiptTask(orderDoc, orderId) {
+  const db = admin.firestore();
+  await db.collection('foodReceiptTasks').doc(orderId).set({
+    orderId,
+    buyerId: orderDoc.buyerId,
+    buyerName: orderDoc.buyerName,
+    buyerPhone: orderDoc.buyerPhone || '',
+    restaurantId: orderDoc.restaurantId,
+    restaurantName: orderDoc.restaurantName || '',
+    restaurantPhone: orderDoc.restaurantPhone || '',
+    items: orderDoc.items,
+    subtotal: orderDoc.subtotal,
+    deliveryFee: orderDoc.deliveryFee || 0,
+    totalPrice: orderDoc.totalPrice,
+    currency: orderDoc.currency || 'TL',
+    paymentMethod: orderDoc.paymentMethod,
+    isPaid: orderDoc.isPaid || false,
+    deliveryType: orderDoc.deliveryType,
+    deliveryAddress: orderDoc.deliveryAddress || null,
+    orderNotes: orderDoc.orderNotes || '',
+    estimatedPrepTime: orderDoc.estimatedPrepTime || 0,
+    orderDate: admin.firestore.FieldValue.serverTimestamp(),
+    language: 'tr', // default; pass from user profile if available
+    status: 'pending',
+    retryCount: 0,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+// ============================================================================
+// PDF GENERATOR
+// ============================================================================
+
+async function generateFoodReceipt(data) {
+  const lang = data.language || 'tr';
+
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: 'A4',
+      margin: 50,
+      bufferPages: true,
+      compress: true,
+    });
+
+    const chunks = [];
+    doc.on('data', (chunk) => chunks.push(chunk));
+    doc.on('end', () => {
+      const result = Buffer.concat(chunks);
+      chunks.length = 0;
+      resolve(result);
+    });
+    doc.on('error', reject);
+
+    // ── Fonts ──────────────────────────────────────────────────────
+    const fontPath = path.join(__dirname, 'fonts', 'Inter-Light.ttf');
+    const fontBoldPath = path.join(__dirname, 'fonts', 'Inter-Medium.ttf');
+    doc.registerFont('Inter', fontPath);
+    doc.registerFont('Inter-Bold', fontBoldPath);
+
+    const titleFont = 'Inter-Bold';
+    const normalFont = 'Inter';
+
+    // ── Localised labels ───────────────────────────────────────────
+    const labels = {
+      en: {
+        title: 'Nar24 Food Receipt',
+        orderInfo: 'Order Information',
+        restaurantInfo: 'Restaurant',
+        buyerInfo: 'Customer Information',
+        deliveryInfo: 'Delivery Address',
+        pickupInfo: 'Pickup Order',
+        orderedItems: 'Ordered Items',
+        orderId: 'Order ID',
+        date: 'Date',
+        paymentMethod: 'Payment Method',
+        deliveryType: 'Delivery Type',
+        name: 'Name',
+        phone: 'Phone',
+        address: 'Address',
+        city: 'City',
+        restaurant: 'Restaurant',
+        restaurantPhone: 'Rest. Phone',
+        extras: 'Extras',
+        specialNotes: 'Note',
+        qty: 'Qty',
+        unitPrice: 'Unit Price',
+        total: 'Total',
+        subtotal: 'Subtotal',
+        deliveryFee: 'Delivery Fee',
+        free: 'Free',
+        grandTotal: 'Total',
+        prepTime: 'Est. Prep Time',
+        minutes: 'min',
+        orderNotes: 'Order Notes',
+        payAtDoor: 'Pay at Door',
+        card: 'Credit/Debit Card',
+        paid: 'PAID',
+        pending: 'TO BE PAID',
+        deliveryLabel: 'Delivery',
+        pickupLabel: 'Pickup',
+        footer: 'This is a computer-generated receipt and does not require a signature.',
+      },
+      tr: {
+        title: 'Nar24 Yemek Faturası',
+        orderInfo: 'Sipariş Bilgileri',
+        restaurantInfo: 'Restoran',
+        buyerInfo: 'Müşteri Bilgileri',
+        deliveryInfo: 'Teslimat Adresi',
+        pickupInfo: 'Gel-Al Siparişi',
+        orderedItems: 'Sipariş Edilen Ürünler',
+        orderId: 'Sipariş No',
+        date: 'Tarih',
+        paymentMethod: 'Ödeme Yöntemi',
+        deliveryType: 'Teslimat',
+        name: 'Ad-Soyad',
+        phone: 'Telefon',
+        address: 'Adres',
+        city: 'Şehir',
+        restaurant: 'Restoran',
+        restaurantPhone: 'Rest. Tel',
+        extras: 'Ekstralar',
+        specialNotes: 'Not',
+        qty: 'Adet',
+        unitPrice: 'Birim Fiyat',
+        total: 'Toplam',
+        subtotal: 'Ara Toplam',
+        deliveryFee: 'Kargo Ücreti',
+        free: 'Ücretsiz',
+        grandTotal: 'Genel Toplam',
+        prepTime: 'Tahmini Hazırlık',
+        minutes: 'dk',
+        orderNotes: 'Sipariş Notu',
+        payAtDoor: 'Kapıda Ödeme',
+        card: 'Kredi / Banka Kartı',
+        paid: 'ÖDENDİ',
+        pending: 'KAPIDA ÖDENECEK',
+        deliveryLabel: 'Teslimat',
+        pickupLabel: 'Gel-Al',
+        footer: 'Bu bilgisayar tarafından oluşturulan bir makbuzdur ve imza gerektirmez.',
+      },
+      ru: {
+        title: 'Nar24 Счет за еду',
+        orderInfo: 'Информация о заказе',
+        restaurantInfo: 'Ресторан',
+        buyerInfo: 'Информация о клиенте',
+        deliveryInfo: 'Адрес доставки',
+        pickupInfo: 'Самовывоз',
+        orderedItems: 'Заказанные блюда',
+        orderId: 'Номер заказа',
+        date: 'Дата',
+        paymentMethod: 'Способ оплаты',
+        deliveryType: 'Доставка',
+        name: 'Имя',
+        phone: 'Телефон',
+        address: 'Адрес',
+        city: 'Город',
+        restaurant: 'Ресторан',
+        restaurantPhone: 'Тел. рест.',
+        extras: 'Дополнения',
+        specialNotes: 'Примечание',
+        qty: 'Кол-во',
+        unitPrice: 'Цена за ед.',
+        total: 'Итого',
+        subtotal: 'Промежуточный итог',
+        deliveryFee: 'Стоимость доставки',
+        free: 'Бесплатно',
+        grandTotal: 'Итого',
+        prepTime: 'Время приготовления',
+        minutes: 'мин',
+        orderNotes: 'Примечания к заказу',
+        payAtDoor: 'Оплата при получении',
+        card: 'Банковская карта',
+        paid: 'ОПЛАЧЕНО',
+        pending: 'ОПЛАТА ПРИ ПОЛУЧЕНИИ',
+        deliveryLabel: 'Доставка',
+        pickupLabel: 'Самовывоз',
+        footer: 'Это компьютерный чек и не требует подписи.',
+      },
+    };
+
+    const t = labels[lang] || labels.tr;
+
+    const locale =
+      lang === 'tr' ? 'tr-TR' : lang === 'ru' ? 'ru-RU' : 'en-US';
+
+    const formattedDate = data.orderDate.toLocaleDateString(locale, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    // ── Layout constants ───────────────────────────────────────────
+    const PAGE_LEFT = 50;
+    const PAGE_RIGHT = 550;
+    const PAGE_WIDTH = PAGE_RIGHT - PAGE_LEFT; // 500
+    const COL_RIGHT = 320;
+
+    // ── Helper: horizontal rule ────────────────────────────────────
+    const hRule = (y, color = '#e0e0e0', weight = 1) => {
+      doc
+        .moveTo(PAGE_LEFT, y)
+        .lineTo(PAGE_RIGHT, y)
+        .strokeColor(color)
+        .lineWidth(weight)
+        .stroke();
+    };
+
+    // ── Helper: two-column label/value row ─────────────────────────
+    const labelValue = (labelText, valueText, x, y, labelW = 120, valueW = 130, valueColor = '#000') => {
+      doc
+        .font(normalFont)
+        .fontSize(10)
+        .fillColor('#666')
+        .text(`${labelText}:`, x, y, { width: labelW, align: 'left' })
+        .fillColor(valueColor)
+        .font(normalFont)
+        .text(valueText, x + labelW, y, { width: valueW });
+    };
+
+    // ──────────────────────────────────────────────────────────────
+    // HEADER
+    // ──────────────────────────────────────────────────────────────
+    doc.fontSize(24).font(titleFont).fillColor('#333').text(t.title, PAGE_LEFT, 50);
+
+    // Logo (top-right, same as product receipt)
+    try {
+      const logoPath = path.join(__dirname, 'siyahlogo.png');
+      doc.image(logoPath, 460, 0, { width: 70 });
+    } catch (_) {
+      // logo optional
+    }
+
+    // Payment status badge (top-right under logo)
+    const isPaid = data.isPaid || data.paymentMethod === 'card';
+    const badgeLabel = isPaid ? t.paid : t.pending;
+    const badgeColor = isPaid ? '#00A86B' : '#E67E22';
+    const badgeBgColor = isPaid ? '#e8f8f0' : '#fdf3e7';
+
+    doc
+      .rect(COL_RIGHT, 52, PAGE_RIGHT - COL_RIGHT, 22)
+      .fillColor(badgeBgColor)
+      .fill();
+    doc
+      .fontSize(9)
+      .font(titleFont)
+      .fillColor(badgeColor)
+      .text(badgeLabel, COL_RIGHT, 59, { width: PAGE_RIGHT - COL_RIGHT, align: 'center' });
+
+    hRule(100);
+
+    // ──────────────────────────────────────────────────────────────
+    // TWO-COLUMN INFO BLOCK
+    // LEFT: Order details | RIGHT: Customer / delivery info
+    // ──────────────────────────────────────────────────────────────
+
+    // ── LEFT COLUMN: Order info ────────────────────────────────────
+    doc
+      .fontSize(14)
+      .font(titleFont)
+      .fillColor('#333')
+      .text(t.orderInfo, PAGE_LEFT, 115);
+
+    let leftY = 140;
+    const labelW = 110;
+
+    // Order ID
+    doc.font(titleFont).fontSize(10).fillColor('#666')
+      .text(`${t.orderId}:`, PAGE_LEFT, leftY, { width: labelW })
+      .fillColor('#000')
+      .text(data.orderId.substring(0, 8).toUpperCase(), PAGE_LEFT + labelW, leftY);
+    leftY += 20;
+
+    // Date
+    labelValue(t.date, formattedDate, PAGE_LEFT, leftY, labelW, 155);
+    leftY += 20;
+
+    // Payment method
+    const paymentLabel =
+      data.paymentMethod === 'pay_at_door' ? t.payAtDoor : t.card;
+    labelValue(t.paymentMethod, paymentLabel, PAGE_LEFT, leftY, labelW, 155);
+    leftY += 20;
+
+    // Delivery type
+    const deliveryLabel =
+      data.deliveryType === 'pickup' ? t.pickupLabel : t.deliveryLabel;
+    labelValue(t.deliveryType, deliveryLabel, PAGE_LEFT, leftY, labelW, 155);
+    leftY += 20;
+
+    // Estimated prep time
+    if (data.estimatedPrepTime > 0) {
+      labelValue(
+        t.prepTime,
+        `${data.estimatedPrepTime} ${t.minutes}`,
+        PAGE_LEFT,
+        leftY,
+        labelW,
+        155,
+      );
+      leftY += 20;
+    }
+
+    // Restaurant block (below order meta)
+    leftY += 5;
+    doc.fontSize(11).font(titleFont).fillColor('#333').text(t.restaurantInfo, PAGE_LEFT, leftY);
+    leftY += 18;
+    labelValue(t.restaurant, data.restaurantName || '-', PAGE_LEFT, leftY, labelW, 155);
+    leftY += 18;
+    if (data.restaurantPhone) {
+      labelValue(t.restaurantPhone, data.restaurantPhone, PAGE_LEFT, leftY, labelW, 155);
+      leftY += 18;
+    }
+
+    // ── RIGHT COLUMN: Customer / delivery ─────────────────────────
+    const rightLabelW = 90;
+    const rightValueX = COL_RIGHT + rightLabelW;
+    let rightY = 115;
+
+    const isPickup = data.deliveryType === 'pickup';
+
+    doc
+      .fontSize(14)
+      .font(titleFont)
+      .fillColor('#333')
+      .text(isPickup ? t.pickupInfo : t.buyerInfo, COL_RIGHT, rightY);
+    rightY += 25;
+
+    // Customer name
+    doc.font(normalFont).fontSize(10).fillColor('#666')
+      .text(`${t.name}:`, COL_RIGHT, rightY, { width: rightLabelW })
+      .fillColor('#000')
+      .text(data.buyerName || 'N/A', rightValueX, rightY, { width: 160 });
+    rightY += 18;
+
+    // Phone
+    if (data.buyerPhone) {
+      doc.fillColor('#666')
+        .text(`${t.phone}:`, COL_RIGHT, rightY, { width: rightLabelW })
+        .fillColor('#000')
+        .text(data.buyerPhone, rightValueX, rightY, { width: 160 });
+      rightY += 18;
+    }
+
+    // Delivery address (only for delivery orders)
+    if (!isPickup && data.deliveryAddress) {
+      doc.fontSize(12).font(titleFont).fillColor('#333')
+        .text(t.deliveryInfo, COL_RIGHT, rightY);
+      rightY += 18;
+
+      const addr = data.deliveryAddress;
+
+      doc.font(normalFont).fontSize(10).fillColor('#666')
+        .text(`${t.address}:`, COL_RIGHT, rightY, { width: rightLabelW })
+        .fillColor('#000')
+        .text(addr.addressLine1, rightValueX, rightY, { width: 160 });
+      rightY += 18;
+
+      if (addr.addressLine2) {
+        doc.fillColor('#000')
+          .text(addr.addressLine2, rightValueX, rightY, { width: 160 });
+        rightY += 18;
+      }
+
+      if (addr.city) {
+        doc.fillColor('#666')
+          .text(`${t.city}:`, COL_RIGHT, rightY, { width: rightLabelW })
+          .fillColor('#000')
+          .text(addr.city, rightValueX, rightY, { width: 160 });
+        rightY += 18;
+      }
+
+      if (addr.phoneNumber && addr.phoneNumber !== data.buyerPhone) {
+        doc.fillColor('#666')
+          .text(`${t.phone}:`, COL_RIGHT, rightY, { width: rightLabelW })
+          .fillColor('#000')
+          .text(addr.phoneNumber, rightValueX, rightY, { width: 160 });
+        rightY += 18;
+      }
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // ITEMS TABLE
+    // ──────────────────────────────────────────────────────────────
+    let yPos = Math.max(leftY, rightY) + 20;
+
+    hRule(yPos);
+    yPos += 15;
+
+    doc.fontSize(14).font(titleFont).fillColor('#333').text(t.orderedItems, PAGE_LEFT, yPos);
+    yPos += 25;
+
+    // Table header row
+    const COL = {
+      item: 55,
+      extras: 230,
+      qty: 360,
+      unitPrice: 395,
+      total: 480,
+    };
+
+    doc.fontSize(9).font(titleFont).fillColor('#666')
+      .text(t.name,      COL.item,      yPos, { width: 170 })
+      .text(t.extras,    COL.extras,    yPos, { width: 125 })
+      .text(t.qty,       COL.qty,       yPos, { width: 30, align: 'center' })
+      .text(t.unitPrice, COL.unitPrice, yPos, { width: 80, align: 'right' })
+      .text(t.total,     COL.total,     yPos, { width: 65, align: 'right' });
+
+    yPos += 16;
+
+    doc.moveTo(COL.item, yPos - 2)
+      .lineTo(PAGE_RIGHT - 5, yPos - 2)
+      .strokeColor('#e0e0e0')
+      .lineWidth(0.5)
+      .stroke();
+
+    // ── Item rows ──────────────────────────────────────────────────
+    for (const item of data.items) {
+      // Page overflow guard
+      if (yPos > 680) {
+        doc.addPage();
+        yPos = 50;
+      }
+
+      const rowStart = yPos;
+
+      // Item name
+      doc.font(titleFont).fontSize(9).fillColor('#000')
+        .text(item.name || 'Item', COL.item, yPos, { width: 170 });
+
+      // Extras + special note in middle column
+      doc.font(normalFont).fontSize(8);
+
+      if (item.extras && item.extras.length > 0) {
+        const extrasText = item.extras
+          .map((e) => (e.quantity > 1 ? `${e.name} x${e.quantity}` : e.name))
+          .join(', ');
+        doc.fillColor('#555').text(extrasText, COL.extras, yPos, { width: 125 });
+        yPos += doc.heightOfString(extrasText, { width: 125, fontSize: 8 });
+      }
+
+      if (item.specialNotes) {
+        doc.fillColor('#888').fontSize(7)
+          .text(`${t.specialNotes}: ${item.specialNotes}`, COL.extras, yPos, { width: 125 });
+        yPos += doc.heightOfString(item.specialNotes, { width: 125, fontSize: 7 });
+      }
+
+      // Measure actual row height — at least one line
+      const rowHeight = Math.max(yPos - rowStart, 16);
+      const midRowY = rowStart + (rowHeight / 2) - 5;
+
+      // Qty, unit price, total (vertically centred)
+      const extrasTotal = (item.extras || []).reduce(
+        (sum, e) => sum + (e.price || 0) * (e.quantity || 1),
+        0,
+      );
+      const effectiveUnitPrice = item.price + extrasTotal;
+
+      doc.font(normalFont).fontSize(9).fillColor('#000')
+        .text(String(item.quantity), COL.qty, midRowY, { width: 30, align: 'center' })
+        .text(
+          `${effectiveUnitPrice.toFixed(0)} ${data.currency}`,
+          COL.unitPrice,
+          midRowY,
+          { width: 80, align: 'right' },
+        )
+        .text(
+          `${(item.itemTotal || effectiveUnitPrice * item.quantity).toFixed(0)} ${data.currency}`,
+          COL.total,
+          midRowY,
+          { width: 65, align: 'right' },
+        );
+
+      yPos = Math.max(yPos, rowStart + rowHeight) + 8;
+
+      // Light separator between items
+      doc.moveTo(COL.item, yPos - 4)
+        .lineTo(PAGE_RIGHT - 5, yPos - 4)
+        .strokeColor('#f0f0f0')
+        .lineWidth(0.3)
+        .stroke();
+    }
+
+    // ── Order notes ────────────────────────────────────────────────
+    if (data.orderNotes) {
+      yPos += 6;
+      doc.fontSize(9).font(titleFont).fillColor('#666')
+        .text(`${t.orderNotes}:`, PAGE_LEFT, yPos)
+        .font(normalFont)
+        .fillColor('#444')
+        .text(data.orderNotes, PAGE_LEFT + 90, yPos, { width: PAGE_WIDTH - 90 });
+      yPos += doc.heightOfString(data.orderNotes, { width: PAGE_WIDTH - 90 }) + 10;
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // TOTALS BLOCK
+    // ──────────────────────────────────────────────────────────────
+    if (yPos > 670) {
+      doc.addPage();
+      yPos = 50;
+    }
+
+    hRule(yPos + 5);
+    yPos += 20;
+
+    const totalLabelX = 380;
+    const totalValueX = 460;
+    const totalValueWidth = 80;
+
+    // Subtotal
+    doc.font(titleFont).fontSize(11).fillColor('#666')
+      .text(`${t.subtotal}:`, totalLabelX, yPos)
+      .fillColor('#333')
+      .text(
+        `${(data.subtotal || 0).toFixed(0)} ${data.currency}`,
+        totalValueX,
+        yPos,
+        { width: totalValueWidth, align: 'right' },
+      );
+    yPos += 20;
+
+    // Delivery fee
+    const deliveryFee = data.deliveryFee || 0;
+    const deliveryText =
+      deliveryFee === 0 ? t.free : `${deliveryFee.toFixed(0)} ${data.currency}`;
+    const deliveryColor = deliveryFee === 0 ? '#00A86B' : '#333';
+
+    if (data.deliveryType === 'delivery') {
+      doc.font(titleFont).fontSize(11).fillColor('#666')
+        .text(`${t.deliveryFee}:`, totalLabelX, yPos)
+        .fillColor(deliveryColor)
+        .text(deliveryText, totalValueX, yPos, { width: totalValueWidth, align: 'right' });
+      yPos += 20;
+    }
+
+    // Grand total divider
+    doc.moveTo(totalLabelX, yPos)
+      .lineTo(PAGE_RIGHT, yPos)
+      .strokeColor('#333')
+      .lineWidth(1.5)
+      .stroke();
+    yPos += 10;
+
+    // Grand total with green background
+    doc.rect(totalLabelX, yPos - 8, PAGE_RIGHT - totalLabelX, 34)
+      .fillColor('#f0f8f0')
+      .fill();
+
+    doc.font(titleFont).fontSize(14).fillColor('#333')
+      .text(`${t.grandTotal}:`, totalLabelX + 10, yPos)
+      .fillColor('#00A86B')
+      .fontSize(16)
+      .text(
+        `${(data.totalPrice || 0).toFixed(0)} ${data.currency}`,
+        totalValueX,
+        yPos,
+        { width: totalValueWidth, align: 'right' },
+      );
+
+    // Payment status note below total
+    yPos += 36;
+    doc.fontSize(9).font(normalFont)
+      .fillColor(isPaid ? '#00A86B' : '#E67E22')
+      .text(
+        isPaid ? (lang === 'tr' ? '✓ Online ödeme alındı' : lang === 'ru' ? '✓ Оплата получена онлайн' : '✓ Paid online') : (lang === 'tr' ? '⚠ Teslimat sırasında ödenecek' : lang === 'ru' ? '⚠ Оплата при получении' : '⚠ Payment due at delivery'),
+        totalLabelX,
+        yPos,
+        { width: PAGE_RIGHT - totalLabelX, align: 'right' },
+      );
+
+    // ── Footer ─────────────────────────────────────────────────────
+    doc.fontSize(8).font(normalFont).fillColor('#999')
+      .text(t.footer, PAGE_LEFT, 750, { align: 'center', width: PAGE_WIDTH });
+
+    doc.end();
+  });
 }
