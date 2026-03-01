@@ -6,6 +6,11 @@ import { transliterate } from 'transliteration';
 import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
 import PDFDocument from 'pdfkit';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { v4 as uuidv4 } from 'uuid';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const secretClient = new SecretManagerServiceClient();
 
@@ -956,12 +961,22 @@ export const generateFoodReceiptBackground = onDocumentCreated(
 
       // ── Save PDF to Cloud Storage ───────────────────────────────
       const bucket = admin.storage().bucket();
-      const receiptFileName = `food-receipts/${taskData.orderId}.pdf`;
+      const receiptFileName = `food-receipts/${taskData.buyerId}/${taskData.orderId}.pdf`;
       const file = bucket.file(receiptFileName);
 
-      await file.save(receiptPdf, {
-        metadata: { contentType: 'application/pdf' },
-      });
+      const downloadToken = uuidv4();
+
+await file.save(receiptPdf, {
+  metadata: {
+    contentType: 'application/pdf',
+    metadata: {
+      firebaseStorageDownloadTokens: downloadToken,  // ← this makes it permanent
+    },
+  },
+});
+
+const bucketName = bucket.name;
+const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(receiptFileName)}?alt=media&token=${downloadToken}`;
 
       // ── Create receipt document in user's subcollection ─────────
       const receiptRef = db
@@ -991,6 +1006,7 @@ export const generateFoodReceiptBackground = onDocumentCreated(
         deliveryAddress: taskData.deliveryAddress || null,
         // PDF path
         filePath: receiptFileName,
+        downloadUrl,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
 
@@ -998,6 +1014,7 @@ export const generateFoodReceiptBackground = onDocumentCreated(
       await db.collection('foodReceiptTasks').doc(taskId).update({
         status: 'completed',
         filePath: receiptFileName,
+        downloadUrl,
         completedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
