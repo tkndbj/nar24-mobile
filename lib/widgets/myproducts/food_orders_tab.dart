@@ -836,16 +836,7 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
 
     return SafeArea(
       child: Container(
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1C1A29) : null,
-          gradient: isDark
-              ? null
-              : LinearGradient(
-                  colors: [Colors.grey[100]!, Colors.white],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-        ),
+        color: isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
         child: Builder(builder: (_) {
           if (_errorMessage != null) return _buildError();
           if (_isLoadingInitial) return _buildShimmer();
