@@ -60,6 +60,7 @@ import 'services/sales_config_service.dart';
 import 'services/coupon_service.dart';
 import 'services/search_config_service.dart';
 import 'services/cart_favorite_metrics_service.dart';
+import 'providers/food_cart_provider.dart';
 
 /// Background message handler for FCM.
 ///
@@ -327,6 +328,12 @@ Future<void> main() async {
                 ),
                 ChangeNotifierProvider(
                   create: (context) => CartProvider(
+                    context.read<FirebaseAuth>(),
+                    context.read<FirebaseFirestore>(),
+                  ),
+                ),
+                ChangeNotifierProvider(
+                  create: (context) => FoodCartProvider(
                     context.read<FirebaseAuth>(),
                     context.read<FirebaseFirestore>(),
                   ),

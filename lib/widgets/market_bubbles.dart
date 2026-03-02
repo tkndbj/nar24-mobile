@@ -29,7 +29,7 @@ class MarketBubbles extends StatelessWidget {
             'image': 'assets/images/foodbubble.png',
             'borderColor': Colors.blue,
             'backgroundColor': Colors.blue.withOpacity(0.2),
-            'showComingSoon': true,
+            'showComingSoon': false,
           },
           {
             'label': (BuildContext context) => 'Market',
@@ -56,6 +56,8 @@ class MarketBubbles extends StatelessWidget {
               context.push("/shop"); // Navigate to /shop for Shops bubble
             } else if (index == 1) {
               onNavItemTapped(4); // Use the callback for Vitrin bubble
+            } else if (index == 2) {
+              context.push("/restaurants"); // Navigate to restaurants screen
             }
           },
           child: Column(

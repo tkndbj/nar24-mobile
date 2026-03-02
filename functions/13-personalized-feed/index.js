@@ -1,9 +1,16 @@
-// functions/15-personalized-feed/index.js
+// functions/13-personalized-feed/index.js
 // Production-grade personalized feed with trending-based candidates and batch operations
-// ✅ UPDATED: Progressive personalization + subcategory support
+// ✅ UPDATED: Progressive personalization + subcategory support + Cloud Tasks batching
 
 import {onSchedule} from 'firebase-functions/v2/scheduler';
+import {onRequest} from 'firebase-functions/v2/https';
 import admin from 'firebase-admin';
+import {CloudTasksClient} from '@google-cloud/tasks';
+
+const PROJECT = 'emlak-mobile-app';
+const LOCATION = 'europe-west3';
+const QUEUE = 'personalized-feeds';
+const tasksClient = new CloudTasksClient();
 
 // ============================================================================
 // CONFIGURATION
@@ -652,40 +659,35 @@ class PersonalizedFeedGenerator {
 }
 
 // ============================================================================
-// CLOUD SCHEDULER
+// CLOUD SCHEDULER (DISPATCHER) — Creates Cloud Tasks for batches of users
 // ============================================================================
 
 export const updatePersonalizedFeeds = onSchedule(
   {
     schedule: 'every 48 hours',
     timeZone: 'UTC',
-    timeoutSeconds: 540,
-    memory: '2GiB',
-    region: 'europe-west3',
-    maxInstances: 5,
+    timeoutSeconds: 300,
+    memory: '512MiB',
+    region: LOCATION,
+    maxInstances: 1,
   },
   async () => {
     const startTime = Date.now();
     const db = admin.firestore();
-    const generator = new PersonalizedFeedGenerator(db);
 
     try {
-      console.log('🚀 Starting personalized feed update...');
+      console.log('Starting personalized feed dispatch...');
 
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-      const totalResults = {
-        updated: 0,
-        skipped: 0,
-        failed: 0,
-        reasons: {},
-      };
-
+      const parent = tasksClient.queuePath(PROJECT, LOCATION, QUEUE);
       let lastDoc = null;
       let totalFetched = 0;
+      let tasksCreated = 0;
       const PAGE_SIZE = 2000;
-      const MAX_USERS = 30000;
+      const BATCH_SIZE = 50;
+      const MAX_USERS = 50000;
 
       while (totalFetched < MAX_USERS) {
         let query = db
@@ -702,7 +704,7 @@ export const updatePersonalizedFeeds = onSchedule(
 
         if (usersSnapshot.empty) {
           if (totalFetched === 0) {
-            console.log('✅ No active users');
+            console.log('No active users found');
           }
           break;
         }
@@ -710,37 +712,41 @@ export const updatePersonalizedFeeds = onSchedule(
         totalFetched += usersSnapshot.size;
         lastDoc = usersSnapshot.docs[usersSnapshot.docs.length - 1];
 
-        console.log(`📊 Page loaded: ${usersSnapshot.size} users (${totalFetched} total)`);
-
-        const batches = generator.chunkArray(usersSnapshot.docs, CONFIG.BATCH_SIZE);
-
-        for (const [index, batch] of batches.entries()) {
-          if (index % 10 === 0) {
-            console.log(`🔄 Batch ${index + 1}/${batches.length}...`);
-          }
-
-          const batchResults = await generator.processBatch(batch);
-
-          totalResults.updated += batchResults.updated;
-          totalResults.skipped += batchResults.skipped;
-          totalResults.failed += batchResults.failed;
-
-          for (const [reason, count] of Object.entries(batchResults.reasons)) {
-            totalResults.reasons[reason] = (totalResults.reasons[reason] || 0) + count;
-          }
-
-          const elapsed = Date.now() - startTime;
-          if (elapsed > 480000) {
-            console.warn(`⏰ Approaching timeout after ${totalFetched} users, stopping`);
-            break;
-          }
+        // Collect user IDs and chunk into batches
+        const userIds = usersSnapshot.docs.map((doc) => doc.id);
+        const chunks = [];
+        for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+          chunks.push(userIds.slice(i, i + BATCH_SIZE));
         }
 
-        // Timeout check at page level too
-        const elapsed = Date.now() - startTime;
-        if (elapsed > 480000) break;
+        // Create Cloud Tasks for each batch
+        const taskPromises = chunks.map(async (chunk) => {
+          const task = {
+            httpRequest: {
+              httpMethod: 'POST',
+              url: `https://${LOCATION}-${PROJECT}.cloudfunctions.net/processPersonalizedFeedBatch`,
+              body: Buffer.from(JSON.stringify({userIds: chunk})).toString('base64'),
+              headers: {'Content-Type': 'application/json'},
+              oidcToken: {
+                serviceAccountEmail: `${PROJECT}@appspot.gserviceaccount.com`,
+              },
+            },
+          };
 
-        // End of collection
+          try {
+            await tasksClient.createTask({parent, task});
+            return true;
+          } catch (error) {
+            console.error('Failed to create task:', error.message);
+            return false;
+          }
+        });
+
+        const results = await Promise.all(taskPromises);
+        tasksCreated += results.filter(Boolean).length;
+
+        console.log(`Page: ${usersSnapshot.size} users, ${results.filter(Boolean).length} tasks created (${totalFetched} total users)`);
+
         if (usersSnapshot.size < PAGE_SIZE) break;
       }
 
@@ -749,43 +755,21 @@ export const updatePersonalizedFeeds = onSchedule(
       console.log(
         JSON.stringify({
           level: 'INFO',
-          event: 'feeds_updated',
+          event: 'feed_dispatch_complete',
           totalUsers: totalFetched,
-          updated: totalResults.updated,
-          skipped: totalResults.skipped,
-          failed: totalResults.failed,
-          reasons: totalResults.reasons,
+          tasksCreated,
           duration,
         }),
       );
 
-      if (totalFetched > 0 && totalResults.failed > totalFetched * 0.1) {
-        console.error(
-          JSON.stringify({
-            level: 'ERROR',
-            event: 'high_failure_rate',
-            failureRate: ((totalResults.failed / totalFetched) * 100).toFixed(2) + '%',
-            alert: true,
-          }),
-        );
-      }
-
-      return {
-        success: true,
-        totalUsers: totalFetched,
-        updated: totalResults.updated,
-        skipped: totalResults.skipped,
-        failed: totalResults.failed,
-        reasons: totalResults.reasons,
-        duration,
-      };
+      return {success: true, totalUsers: totalFetched, tasksCreated, duration};
     } catch (error) {
       const duration = Date.now() - startTime;
 
       console.error(
         JSON.stringify({
           level: 'ERROR',
-          event: 'feed_update_failed',
+          event: 'feed_dispatch_failed',
           error: error.message,
           stack: error.stack,
           duration,
@@ -793,11 +777,77 @@ export const updatePersonalizedFeeds = onSchedule(
         }),
       );
 
-      return {
-        success: false,
-        error: error.message,
-        duration,
-      };
+      return {success: false, error: error.message, duration};
+    }
+  },
+);
+
+// ============================================================================
+// CLOUD TASK HANDLER — Processes a batch of user IDs
+// ============================================================================
+
+export const processPersonalizedFeedBatch = onRequest(
+  {
+    region: LOCATION,
+    memory: '1GiB',
+    timeoutSeconds: 540,
+    maxInstances: 20,
+  },
+  async (req, res) => {
+    const startTime = Date.now();
+    const db = admin.firestore();
+    const generator = new PersonalizedFeedGenerator(db);
+
+    try {
+      const {userIds} = req.body;
+
+      if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+        res.status(400).json({error: 'Missing or invalid userIds'});
+        return;
+      }
+
+      // Load user profiles for this batch
+      const refs = userIds.map((id) => db.collection('user_profiles').doc(id));
+      const docs = await db.getAll(...refs);
+
+      const users = docs.filter((doc) => doc.exists);
+
+      if (users.length === 0) {
+        res.status(200).json({success: true, updated: 0, skipped: 0, failed: 0});
+        return;
+      }
+
+      const results = await generator.processBatch(users);
+      const duration = Date.now() - startTime;
+
+      console.log(
+        JSON.stringify({
+          level: 'INFO',
+          event: 'feed_batch_complete',
+          batchSize: userIds.length,
+          updated: results.updated,
+          skipped: results.skipped,
+          failed: results.failed,
+          reasons: results.reasons,
+          duration,
+        }),
+      );
+
+      if (results.failed > users.length * 0.5) {
+        console.error(
+          JSON.stringify({
+            level: 'ERROR',
+            event: 'batch_high_failure_rate',
+            failureRate: ((results.failed / users.length) * 100).toFixed(2) + '%',
+            alert: true,
+          }),
+        );
+      }
+
+      res.status(200).json({success: true, ...results, duration});
+    } catch (error) {
+      console.error('Batch processing failed:', error.message);
+      res.status(500).json({error: error.message});
     }
   },
 );

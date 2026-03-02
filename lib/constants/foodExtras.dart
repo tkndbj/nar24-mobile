@@ -1,0 +1,413 @@
+// lib/constants/food_extras.dart
+//
+// Dart mirror of foodExtras.ts — FoodExtrasData.
+// Extras are mapped per food category (not per individual food type).
+// All keys are identical to the TypeScript source.
+
+class FoodExtrasData {
+  FoodExtrasData._();
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 1) Extras per category
+  //    Keys must match FoodCategoryData.kCategories exactly.
+  //    The string values are the extra names stored in Firestore
+  //    on both the food document (food.extras) and the cart item
+  //    (SelectedExtra.name).
+  // ─────────────────────────────────────────────────────────────────────────
+  static const Map<String, List<String>> kExtras = {
+    'Kebabs & Grills': [
+      'Extra Bread',
+      'Rice Portion',
+      'Bulgur Portion',
+      'Grilled Vegetables',
+      'Yogurt',
+      'Hot Pepper',
+      'Lavash',
+      'Onion Salad',
+      'Butter',
+      'Sumac Onion',
+    ],
+    'Pide & Lahmacun': [
+      'Extra Cheese',
+      'Lemon',
+      'Hot Pepper',
+      'Butter',
+      'Yogurt',
+      'Ayran Side',
+      'Parsley',
+      'Sumac Onion',
+      'Pomegranate Syrup',
+    ],
+    'Soups': [
+      'Extra Bread',
+      'Lemon',
+      'Chili Flakes',
+      'Croutons',
+      'Dried Mint',
+      'Vinegar',
+      'Hot Pepper',
+      'Butter',
+    ],
+    'Salads': [
+      'Extra Dressing',
+      'Croutons',
+      'Feta Cheese',
+      'Olive Oil',
+      'Lemon',
+      'Pomegranate Syrup',
+      'Grilled Chicken',
+      'Corn',
+      'Avocado',
+    ],
+    'Appetizers & Meze': [
+      'Extra Bread',
+      'Olive Oil',
+      'Lemon',
+      'Hot Pepper',
+      'Pomegranate Syrup',
+      'Pita Chips',
+      'Sumac Onion',
+      'Parsley',
+      'Walnut',
+    ],
+    'Stews & Casseroles': [
+      'Extra Bread',
+      'Rice Portion',
+      'Bulgur Portion',
+      'Yogurt',
+      'Salad Side',
+      'Hot Pepper',
+      'Butter',
+      'Pickles',
+    ],
+    'Dolma & Sarma': [
+      'Extra Bread',
+      'Rice Portion',
+      'Yogurt',
+      'Lemon',
+      'Olive Oil',
+      'Salad Side',
+    ],
+    'Steak & Roast': [
+      'Rice Portion',
+      'Bulgur Portion',
+      'Grilled Vegetables',
+      'French Fries Side',
+      'Salad Side',
+      'Hot Pepper',
+      'Butter',
+    ],
+    'Stir Fry & Wok': [
+      'Extra Rice',
+      'Soy Sauce',
+      'Chili Oil',
+      'Sesame Oil',
+      'Hot Pepper',
+      'Salad Side',
+    ],
+    'Fried Chicken': [
+      'French Fries Side',
+      'Ketchup',
+      'Mayonnaise',
+      'Mustard',
+      'Hot Pepper',
+      'Garlic Sauce',
+      'Pickles',
+      'Lemon',
+    ],
+    'Rice & Pilaf': [
+      'Yogurt',
+      'Chicken Side',
+      'Salad Side',
+      'Pickles',
+      'Butter',
+      'Dried Fruits',
+      'Chickpea Topping',
+    ],
+    'Wraps': [
+      'Extra Meat',
+      'Extra Cheese',
+      'French Fries Side',
+      'Hot Pepper',
+      'Pickles',
+      'Corn',
+      'Garlic Sauce',
+      'Yogurt',
+      'Onion Salad',
+      'Sumac Onion',
+    ],
+    'Doner': [
+      'Extra Meat',
+      'Extra Bread',
+      'French Fries Side',
+      'Hot Pepper',
+      'Pickles',
+      'Yogurt',
+      'Butter',
+      'Onion Salad',
+      'Sumac Onion',
+      'Rice Portion',
+    ],
+    'Seafood': [
+      'Lemon',
+      'Tartar Sauce',
+      'Rice Portion',
+      'Salad Side',
+      'Grilled Vegetables',
+      'Extra Bread',
+      'Arugula Side',
+      'French Fries Side',
+      'Hot Pepper',
+    ],
+    'Breakfast': [
+      'Extra Egg',
+      'Extra Cheese',
+      'Honey Portion',
+      'Kaymak Portion',
+      'Olive Portion',
+      'Butter',
+      'Jam Portion',
+      'Simit Side',
+      'Tea Glass',
+    ],
+    'Desserts & Pastry': [
+      'Ice Cream Scoop',
+      'Whipped Cream',
+      'Kaymak Portion',
+      'Chocolate Sauce',
+      'Pistachio Topping',
+      'Extra Syrup',
+      'Fresh Fruits',
+      'Tahini',
+    ],
+    'Beverages': [
+      'Extra Sugar',
+      'Ice',
+      'Lemon',
+      'Mint Leaves',
+      'Milk',
+      'Honey Portion',
+      'Simit Side',
+    ],
+    'Hamburger': [
+      'Extra Cheese',
+      'French Fries Side',
+      'Onion Rings',
+      'Ketchup',
+      'Mayonnaise',
+      'Mustard',
+      'Garlic Sauce',
+      'Hot Pepper',
+      'Pickles',
+      'Corn',
+      'Jalapeno',
+    ],
+    'Sandwich & Toast': [
+      'Extra Cheese',
+      'French Fries Side',
+      'Ketchup',
+      'Mayonnaise',
+      'Mustard',
+      'Hot Pepper',
+      'Pickles',
+      'Garlic Sauce',
+    ],
+    'Pizza': [
+      'Extra Cheese',
+      'Pepperoni Topping',
+      'Mushroom Topping',
+      'Olive Topping',
+      'Onion Topping',
+      'Corn',
+      'Jalapeno',
+      'Garlic Sauce',
+      'Sucuk Topping',
+      'Green Pepper Topping',
+      'Tomato Slices',
+    ],
+    'Pasta': [
+      'Extra Cheese',
+      'Parmesan',
+      'Garlic Bread',
+      'Olive Oil',
+      'Chili Flakes',
+      'Mushroom Topping',
+      'Grilled Chicken',
+      'Cream Sauce Extra',
+    ],
+    'Noodles': [
+      'Soy Sauce',
+      'Chili Oil',
+      'Sesame Oil',
+      'Extra Rice',
+      'Chili Flakes',
+      'Hot Pepper',
+      'Egg Topping',
+      'Seaweed Salad',
+    ],
+    'Sushi & Sashimi': [
+      'Soy Sauce',
+      'Wasabi',
+      'Pickled Ginger',
+      'Edamame Side',
+      'Extra Rice',
+      'Seaweed Salad',
+    ],
+    'Curry': [
+      'Rice Portion',
+      'Extra Bread',
+      'Hot Pepper',
+      'Yogurt',
+      'Pickles',
+      'Lemon',
+      'Salad Side',
+    ],
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 2) Extra name → localization key
+  // ─────────────────────────────────────────────────────────────────────────
+  static const Map<String, String> kExtrasTranslationKeys = {
+    // Bread & Carbs
+    'Extra Bread': 'foodExtraBread',
+    'Rice Portion': 'foodExtraRicePortion',
+    'Bulgur Portion': 'foodExtraBulgurPortion',
+    'Extra Rice': 'foodExtraRice',
+    'Garlic Bread': 'foodExtraGarlicBread',
+    'Lavash': 'foodExtraLavash',
+    'Simit Side': 'foodExtraSimiSide',
+    'Pita Chips': 'foodExtraPitaChips',
+    'Croutons': 'foodExtraCroutons',
+    // Dairy & Eggs
+    'Extra Cheese': 'foodExtraCheese',
+    'Parmesan': 'foodExtraParmesan',
+    'Yogurt': 'foodExtraYogurt',
+    'Butter': 'foodExtraButter',
+    'Feta Cheese': 'foodExtraFetaCheese',
+    'Extra Egg': 'foodExtraEgg',
+    'Kaymak Portion': 'foodExtraKaymakPortion',
+    'Milk': 'foodExtraMilk',
+    'Saffron Butter': 'foodExtraSaffronButter',
+    'Cream Sauce Extra': 'foodExtraCreamSauce',
+    // Sauces & Condiments
+    'Garlic Sauce': 'foodExtraGarlicSauce',
+    'Ketchup': 'foodExtraKetchup',
+    'Mayonnaise': 'foodExtraMayonnaise',
+    'Mustard': 'foodExtraMustard',
+    'Soy Sauce': 'foodExtraSoySauce',
+    'Tartar Sauce': 'foodExtraTartarSauce',
+    'Sweet Chili Sauce': 'foodExtraSweetChiliSauce',
+    'Teriyaki Sauce': 'foodExtraTeriyakiSauce',
+    'Gochujang Sauce': 'foodExtraGochujangSauce',
+    'Balsamic Glaze': 'foodExtraBalsamicGlaze',
+    'Truffle Oil': 'foodExtraTruffleOil',
+    'Chili Oil': 'foodExtraChiliOil',
+    'Hot Mustard': 'foodExtraHotMustard',
+    'Sesame Oil': 'foodExtraSesameOil',
+    'Chocolate Sauce': 'foodExtraChocolateSauce',
+    'Extra Syrup': 'foodExtraExtraSyrup',
+    'Pomegranate Syrup': 'foodExtraPomegranateSyrup',
+    'Tahini': 'foodExtraTahini',
+    'Extra Dressing': 'foodExtraExtraDressing',
+    'Extra Sugar': 'foodExtraExtraSugar',
+    // Vegetables & Toppings
+    'Grilled Vegetables': 'foodExtraGrilledVegetables',
+    'Grilled Chicken': 'foodExtraGrilledChicken',
+    'Hot Pepper': 'foodExtraHotPepper',
+    'Onion Salad': 'foodExtraOnionSalad',
+    'Sumac Onion': 'foodExtraSumacOnion',
+    'Parsley': 'foodExtraParsley',
+    'Lemon': 'foodExtraLemon',
+    'Corn': 'foodExtraCorn',
+    'Jalapeno': 'foodExtraJalapeno',
+    'Avocado': 'foodExtraAvocado',
+    'Pickles': 'foodExtraPickles',
+    'Mushroom Topping': 'foodExtraMushroomTopping',
+    'Olive Topping': 'foodExtraOliveTopping',
+    'Onion Topping': 'foodExtraOnionTopping',
+    'Pepperoni Topping': 'foodExtraPepperoniTopping',
+    'Sucuk Topping': 'foodExtraSucukTopping',
+    'Green Pepper Topping': 'foodExtraGreenPepperTopping',
+    'Tomato Slices': 'foodExtraTomatoSlices',
+    'Grilled Tomato': 'foodExtraGrilledTomato',
+    'Fresh Herbs': 'foodExtraFreshHerbs',
+    'Steamed Vegetables': 'foodExtraSteamedVegetables',
+    'Mint Leaves': 'foodExtraMintLeaves',
+    'Fresh Fruits': 'foodExtraFreshFruits',
+    'Arugula Side': 'foodExtraArugulaSide',
+    // Sides
+    'French Fries Side': 'foodExtraFrenchFriesSide',
+    'Onion Rings': 'foodExtraOnionRings',
+    'Salad Side': 'foodExtraSaladSide',
+    'Chicken Side': 'foodExtraChickenSide',
+    'Edamame Side': 'foodExtraEdamameSide',
+    'Miso Soup Side': 'foodExtraMisoSoupSide',
+    'Spring Roll Side': 'foodExtraSpringRollSide',
+    'Hummus Side': 'foodExtraHummusSide',
+    'Bruschetta Side': 'foodExtraBruschettaSide',
+    'Fattoush Side': 'foodExtraFattoushSide',
+    'Seaweed Salad': 'foodExtraSeaweedSalad',
+    'Glass Noodles Side': 'foodExtraGlassNoodlesSide',
+    'Doogh Side': 'foodExtraDooghSide',
+    'Egg Fried Rice Side': 'foodExtraEggFriedRiceSide',
+    'Kimchi Side': 'foodExtraKimchiSide',
+    'Pickled Radish': 'foodExtraPickledRadish',
+    'Pickled Ginger': 'foodExtraPickledGinger',
+    'Pickled Garlic': 'foodExtraPickledGarlic',
+    'Prawn Crackers': 'foodExtraPrawnCrackers',
+    // Toppings & Extras
+    'Extra Meat': 'foodExtraExtraMeat',
+    'Egg Topping': 'foodExtraEggTopping',
+    'Cheese Topping': 'foodExtraCheeseTopping',
+    'Prosciutto Topping': 'foodExtraProsciuttoTopping',
+    'Pistachio Topping': 'foodExtraPistachioTopping',
+    'Tempura Bits': 'foodExtraTempuraBits',
+    'Wasabi': 'foodExtraWasabi',
+    'Tofu Extra': 'foodExtraTofuExtra',
+    'Nutritional Yeast': 'foodExtraNutritionalYeast',
+    'Chickpea Topping': 'foodExtraChickpeaTopping',
+    // Spreads & Portions
+    'Honey Portion': 'foodExtraHoneyPortion',
+    'Olive Portion': 'foodExtraOlivePortion',
+    'Jam Portion': 'foodExtraJamPortion',
+    'Olive Oil': 'foodExtraOliveOil',
+    'Ayran Side': 'foodExtraAyranSide',
+    'Tea Glass': 'foodExtraTeaGlass',
+    'Walnut': 'foodExtraWalnut',
+    'Dried Fruits': 'foodExtraDriedFruits',
+    'Sumac': 'foodExtraSumac',
+    // Spices & Seasonings
+    'Chili Flakes': 'foodExtraChiliFlakes',
+    'Dried Mint': 'foodExtraDriedMint',
+    'Vinegar': 'foodExtraVinegar',
+    // Dessert / Sweets
+    'Ice Cream Scoop': 'foodExtraIceCreamScoop',
+    'Whipped Cream': 'foodExtraWhippedCream',
+    'Ice': 'foodExtraIce',
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Convenience helpers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Returns the allowed extras for [category], or an empty list.
+  static List<String> extrasForCategory(String category) =>
+      kExtras[category] ?? const [];
+
+  /// Given the extras list stored on a [Food] document (List<String> of
+  /// extra names) and the food's [category], returns only the names that
+  /// are both on the food AND valid for that category.
+  ///
+  /// Pass [allowedExtras] as null to use all category extras.
+  static List<String> resolveExtras({
+    required String category,
+    List<String>? allowedExtras,
+  }) {
+    final categoryExtras = extrasForCategory(category);
+    if (allowedExtras == null || allowedExtras.isEmpty) {
+      return categoryExtras;
+    }
+    // Intersect: keep only extras that exist in the category definition
+    return allowedExtras.where((e) => categoryExtras.contains(e)).toList();
+  }
+}

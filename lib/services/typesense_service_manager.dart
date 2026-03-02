@@ -1,6 +1,8 @@
 import 'typesense_service.dart';
+import 'restaurant_typesense_service.dart';
 
 export 'typesense_service.dart' show TypeSenseService, TypeSensePage;
+export 'restaurant_typesense_service.dart' show RestaurantTypesenseService;
 
 class TypeSenseServiceManager {
   static TypeSenseServiceManager? _instance;
@@ -11,18 +13,15 @@ class TypeSenseServiceManager {
 
   TypeSenseServiceManager._internal();
 
-  // ── Typesense configuration ───────────────────────────────────────────────
-  // Get your Search-Only API key from:
-  // Typesense Cloud → your cluster → API Keys → "Search-only API Key"
   static const String _typesenseHost = 'o17xr5q8psytcabup-1.a2.typesense.net';
-  static const String _typesenseSearchKey =
-      'wYjR4e0aCTTy9GVCImW1U30xlBQTYK51'; // ← replace this
+  static const String _typesenseSearchKey = 'wYjR4e0aCTTy9GVCImW1U30xlBQTYK51';
 
   // ── Service instances (lazy) ──────────────────────────────────────────────
   TypeSenseService? _mainService;
   TypeSenseService? _shopService;
   TypeSenseService? _ordersService;
   TypeSenseService? _shopsService;
+  RestaurantTypesenseService? _restaurantService; // ← NEW
 
   TypeSenseService get mainService {
     _mainService ??= TypeSenseService(
@@ -72,17 +71,30 @@ class TypeSenseServiceManager {
     return _shopsService!;
   }
 
+  // ← NEW: shared host/key, dedicated collections for restaurants & foods
+  RestaurantTypesenseService get restaurantService {
+    _restaurantService ??= RestaurantTypesenseService(
+      typesenseHost: _typesenseHost,
+      typesenseSearchKey: _typesenseSearchKey,
+    );
+    return _restaurantService!;
+  }
+
   bool get isInitialized =>
       _mainService != null &&
       _shopService != null &&
       _ordersService != null &&
       _shopsService != null;
+  // Note: restaurantService is excluded — it's lazily created on first use
+  // and doesn't need to be pre-warmed like the others.
 
   void resetServices() {
     _mainService = null;
     _shopService = null;
     _ordersService = null;
     _shopsService = null;
+    _restaurantService?.dispose(); // ← clean up debounce timer
+    _restaurantService = null;
   }
 
   Future<bool> isHealthy() async {

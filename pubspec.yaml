@@ -1,7 +1,7 @@
 name: Nar24
 description: Kuzey Kıbrıs'ın En Gelişmiş E-Ticaret Platformu.
 publish_to: none
-version: 1.0.5+59
+version: 1.0.6+60
 
 environment:
   sdk: '>=3.5.3 <4.0.0'
@@ -107,6 +107,35 @@ flutter:
   assets:
     - assets/agreements/
     - lib/constants/categories.json
+    - assets/images/foods/beverages.png
+    - assets/images/foods/breakfast.png
+    - assets/images/1.png
+    - assets/images/2.png
+    - assets/images/3.png
+    - assets/images/foods/chinese.png
+    - assets/images/foods/curry.png
+    - assets/images/foods/desert.png
+    - assets/images/foods/dolma.png
+    - assets/images/foods/doner.png
+    - assets/images/foods/friedchicken.png
+    - assets/images/foods/hamburger.png
+    - assets/images/foods/kebab.png
+    - assets/images/foods/lahmacun.png
+    - assets/images/foods/meze.png
+    - assets/images/foods/noodle.png
+    - assets/images/foods/pasta.png
+    - assets/images/foods/pizza.png
+    - assets/images/foods/rice.png
+    - assets/images/foods/salad.png
+    - assets/images/foods/sandwich.png
+    - assets/images/foods/seafood.png
+    - assets/images/foods/soup.png
+    - assets/images/foods/steak.png
+    - assets/images/foods/stew.png
+    - assets/images/foods/stir.png
+    - assets/images/foods/sushi.png
+    - assets/images/foods/vegan.png
+    - assets/images/foods/wrap.png
     - assets/images/narsplash.mp4
     - assets/images/naricon.png
     - assets/images/nargri.png

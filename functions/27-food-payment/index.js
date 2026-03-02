@@ -475,6 +475,7 @@ export const processFoodOrder = onCall(
   {
     region: REGION,
     memory: '512MiB',
+    concurrency: 80,
     timeoutSeconds: 60,
   },
   async (request) => {
@@ -503,7 +504,8 @@ export const processFoodOrder = onCall(
 export const initializeFoodPayment = onCall(
   {
     region: REGION,
-    memory: '256MiB',
+    memory: '512MiB',
+    concurrency: 80,
     timeoutSeconds: 30,
   },
   async (request) => {
@@ -1642,7 +1644,8 @@ async function generateFoodReceipt(data) {
 export const updateFoodOrderStatus = onCall(
   {
     region: REGION,
-    memory: '256MiB',
+    memory: '512MiB',
+    concurrency: 80,
     timeoutSeconds: 30,
   },
   async (request) => {

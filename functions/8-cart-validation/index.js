@@ -52,6 +52,7 @@ export const validateCartCheckout = onCall(
     region: 'europe-west3',
     timeoutSeconds: 120,
     memory: '1GiB',
+    concurrency: 80,
     maxInstances: 200,
   },
   async (request) => {
@@ -524,6 +525,7 @@ export const updateCartCache = onCall(
     region: 'europe-west3',
     timeoutSeconds: 60,
     memory: '512MiB',
+    concurrency: 80,
     maxInstances: 100,
   },
   async (request) => {
