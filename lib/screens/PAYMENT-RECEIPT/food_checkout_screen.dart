@@ -73,8 +73,10 @@ class SavedAddress {
   factory SavedAddress.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final d = doc.data()!;
     LatLng? loc;
-    final l = d['location'] as Map<String, dynamic>?;
-    if (l != null) {
+    final l = d['location'];
+    if (l is GeoPoint) {
+      loc = LatLng(l.latitude, l.longitude);
+    } else if (l is Map<String, dynamic>) {
       loc = LatLng(
         (l['latitude'] as num).toDouble(),
         (l['longitude'] as num).toDouble(),
@@ -157,7 +159,7 @@ class _FoodCheckoutContent extends StatefulWidget {
 
 class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
   PaymentMethod _paymentMethod = PaymentMethod.payAtDoor;
-  DeliveryType _deliveryType = DeliveryType.delivery;
+  final DeliveryType _deliveryType = DeliveryType.delivery;
   DeliveryAddress _address = const DeliveryAddress();
   String _orderNotes = '';
   bool _saveAddress = false;
@@ -495,7 +497,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
         if (!cart.isInitialized) {
           return Scaffold(
             backgroundColor:
-                isDark ? const Color(0xFF030712) : const Color(0xFFF9FAFB),
+                isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
             body: SafeArea(child: _FoodCheckoutSkeleton(isDark: isDark)),
           );
         }
@@ -506,32 +508,23 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
 
         return Scaffold(
           backgroundColor:
-              isDark ? const Color(0xFF030712) : const Color(0xFFF9FAFB),
+              isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+          appBar: AppBar(
+            backgroundColor:
+                isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_rounded,
+                  color: isDark ? Colors.grey[400] : Colors.grey[700]),
+              onPressed: () => context.pop(),
+            ),
+          ),
           body: Stack(
             children: [
-              SafeArea(
-                child: ListView(
+              ListView(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
                   children: [
-                    // Back link
-                    GestureDetector(
-                      onTap: () => context.pop(),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.chevron_left_rounded,
-                            size: 18,
-                            color:
-                                isDark ? Colors.grey[400] : Colors.grey[500]),
-                        Text('Back to Menu',
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: isDark
-                                    ? Colors.grey[400]
-                                    : Colors.grey[500])),
-                      ]),
-                    ),
-                    const SizedBox(height: 16),
-
                     Text('Checkout',
                         style: TextStyle(
                             fontSize: 24,
@@ -562,37 +555,8 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                     ),
                     const SizedBox(height: 12),
 
-                    // Delivery method
-                    _Section(
-                      title: 'DELIVERY METHOD',
-                      isDark: isDark,
-                      child: Row(
-                          children: DeliveryType.values
-                              .map((type) => Expanded(
-                                    child: Padding(
-                                      padding: EdgeInsets.only(
-                                          right: type == DeliveryType.delivery
-                                              ? 6
-                                              : 0,
-                                          left: type == DeliveryType.pickup
-                                              ? 6
-                                              : 0),
-                                      child: _DeliveryTypeButton(
-                                          type: type,
-                                          isSelected: _deliveryType == type,
-                                          isDark: isDark,
-                                          onTap: () => setState(() {
-                                                _deliveryType = type;
-                                                _errors.clear();
-                                              })),
-                                    ),
-                                  ))
-                              .toList()),
-                    ),
-                    const SizedBox(height: 12),
-
                     // Delivery address
-                    if (_deliveryType == DeliveryType.delivery) ...[
+                    ...[
                       _Section(
                         title: 'DELIVERY ADDRESS',
                         isDark: isDark,
@@ -626,20 +590,6 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                           onSaveAddressToggle: (v) =>
                               setState(() => _saveAddress = v),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-
-                    // Phone for pickup
-                    if (_deliveryType == DeliveryType.pickup) ...[
-                      _Section(
-                        title: 'CONTACT INFO',
-                        isDark: isDark,
-                        child: _PhoneField(
-                            controller: _phoneController,
-                            isDark: isDark,
-                            error: _errors['phoneNumber'],
-                            onChanged: _handlePhoneChange),
                       ),
                       const SizedBox(height: 12),
                     ],
@@ -699,7 +649,6 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                     ),
                   ],
                 ),
-              ),
 
               // Sticky bottom bar
               Positioned(
@@ -789,12 +738,12 @@ class _RestaurantInfoRow extends StatelessWidget {
             Row(children: [
               Icon(Icons.access_time_rounded,
                   size: 12,
-                  color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                  color: isDark ? Colors.grey[500] : Colors.grey[600]),
               const SizedBox(width: 4),
               Text('~$prepTime min prep time',
                   style: TextStyle(
                       fontSize: 11,
-                      color: isDark ? Colors.grey[500] : Colors.grey[400])),
+                      color: isDark ? Colors.grey[500] : Colors.grey[700])),
             ]),
         ])),
       ]),
@@ -830,7 +779,7 @@ class _Section extends StatelessWidget {
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 0.8,
-                color: isDark ? Colors.grey[400] : Colors.grey[500])),
+                color: isDark ? Colors.grey[400] : Colors.grey[800])),
         const SizedBox(height: 12),
         child,
       ]),
@@ -898,7 +847,7 @@ class _CartItemRow extends StatelessWidget {
           Text(item.foodType,
               style: TextStyle(
                   fontSize: 11,
-                  color: isDark ? Colors.grey[500] : Colors.grey[400])),
+                  color: isDark ? Colors.grey[500] : Colors.grey[700])),
           if (item.extras.isNotEmpty)
             Padding(
                 padding: const EdgeInsets.only(top: 4),
@@ -928,14 +877,14 @@ class _CartItemRow extends StatelessWidget {
                 child: Row(children: [
                   Icon(Icons.sticky_note_2_outlined,
                       size: 11,
-                      color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                      color: isDark ? Colors.grey[500] : Colors.grey[600]),
                   const SizedBox(width: 4),
                   Expanded(
                       child: Text(item.specialNotes!,
                           style: TextStyle(
                               fontSize: 11,
                               color:
-                                  isDark ? Colors.grey[500] : Colors.grey[400]),
+                                  isDark ? Colors.grey[500] : Colors.grey[700]),
                           overflow: TextOverflow.ellipsis)),
                 ])),
           const SizedBox(height: 8),
@@ -1126,13 +1075,13 @@ class _AddressForm extends StatelessWidget {
       if (savedAddresses.isNotEmpty) ...[
         Row(children: [
           Icon(Icons.star_rounded,
-              size: 13, color: isDark ? Colors.grey[400] : Colors.grey[500]),
+              size: 13, color: isDark ? Colors.grey[400] : Colors.grey[700]),
           const SizedBox(width: 6),
           Text('Saved Addresses',
               style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.grey[400] : Colors.grey[500])),
+                  color: isDark ? Colors.grey[400] : Colors.grey[800])),
         ]),
         const SizedBox(height: 8),
         ...savedAddresses.map((s) => Padding(
@@ -1270,7 +1219,7 @@ class _AddressForm extends StatelessWidget {
               style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
-                  color: isDark ? Colors.grey[400] : Colors.grey[500])),
+                  color: isDark ? Colors.grey[400] : Colors.grey[800])),
         ]),
     ]);
   }
@@ -1338,18 +1287,18 @@ class _SavedAddressTile extends StatelessWidget {
                         style: TextStyle(
                             fontSize: 11,
                             color:
-                                isDark ? Colors.grey[500] : Colors.grey[400])),
+                                isDark ? Colors.grey[500] : Colors.grey[700])),
                   if (saved!.phoneNumber.isNotEmpty)
                     Text(saved!.phoneNumber,
                         style: TextStyle(
                             fontSize: 11,
                             color:
-                                isDark ? Colors.grey[500] : Colors.grey[400])),
+                                isDark ? Colors.grey[500] : Colors.grey[700])),
                   if (saved!.location != null)
                     Row(children: [
                       Icon(Icons.location_on_rounded,
                           size: 10,
-                          color: isDark ? Colors.grey[600] : Colors.grey[300]),
+                          color: isDark ? Colors.grey[600] : Colors.grey[600]),
                       const SizedBox(width: 2),
                       Text(
                           '${saved!.location!.latitude.toStringAsFixed(4)}, ${saved!.location!.longitude.toStringAsFixed(4)}',
@@ -1357,7 +1306,7 @@ class _SavedAddressTile extends StatelessWidget {
                               fontSize: 10,
                               color: isDark
                                   ? Colors.grey[600]
-                                  : Colors.grey[300])),
+                                  : Colors.grey[600])),
                     ]),
                 ])),
         ]),
@@ -1498,7 +1447,7 @@ class _PhoneField extends StatelessWidget {
           child: Text('Turkish format: 5XX XXX XX XX',
               style: TextStyle(
                   fontSize: 10,
-                  color: isDark ? Colors.grey[600] : Colors.grey[400]))),
+                  color: isDark ? Colors.grey[600] : Colors.grey[600]))),
       if (error != null) _ErrorText(error!),
     ]);
   }
@@ -1515,7 +1464,7 @@ class _FormLabel extends StatelessWidget {
           style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w500,
-              color: isDark ? Colors.grey[500] : Colors.grey[400])));
+              color: isDark ? Colors.grey[500] : Colors.grey[700])));
 }
 
 class _FormField extends StatelessWidget {
@@ -1653,7 +1602,7 @@ class _PaymentMethodButton extends StatelessWidget {
                         : 'Secure online payment via İşbank 3D',
                     style: TextStyle(
                         fontSize: 11,
-                        color: isDark ? Colors.grey[500] : Colors.grey[400])),
+                        color: isDark ? Colors.grey[500] : Colors.grey[700])),
               ])),
         ]),
       ),
@@ -1726,7 +1675,7 @@ class _StickyBottomBar extends StatelessWidget {
             Text('Total ($itemCount item${itemCount == 1 ? '' : 's'})',
                 style: TextStyle(
                     fontSize: 11,
-                    color: isDark ? Colors.grey[500] : Colors.grey[400])),
+                    color: isDark ? Colors.grey[500] : Colors.grey[700])),
             Text('${subtotal.toStringAsFixed(0)} $currency',
                 style: TextStyle(
                     fontSize: 20,
@@ -1974,7 +1923,7 @@ class _OrderSuccessScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor:
-          isDark ? const Color(0xFF030712) : const Color(0xFFF9FAFB),
+          isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
       body: SafeArea(
           child: Center(
               child: Padding(
@@ -2087,7 +2036,7 @@ class _EmptyCartScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor:
-          isDark ? const Color(0xFF030712) : const Color(0xFFF9FAFB),
+          isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
       body: SafeArea(
           child: Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [

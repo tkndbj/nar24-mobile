@@ -12054,7 +12054,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scanToView => 'Scan to view';
 
   @override
-  String get minutes => 'mins';
+  String get minutes => 'min';
 
   @override
   String get totalListings => 'Total listings';
@@ -12813,4 +12813,137 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sending => 'Sending...';
+
+  @override
+  String get foodOrders => 'Food Orders';
+
+  @override
+  String get foodStatusPending => 'Pending';
+
+  @override
+  String get foodStatusAccepted => 'Accepted';
+
+  @override
+  String get foodStatusRejected => 'Rejected';
+
+  @override
+  String get foodStatusPreparing => 'Preparing';
+
+  @override
+  String get foodStatusReady => 'Ready';
+
+  @override
+  String get foodStatusDelivered => 'Delivered';
+
+  @override
+  String get foodStatusCompleted => 'Completed';
+
+  @override
+  String get foodStatusCancelled => 'Cancelled';
+
+  @override
+  String get noFoodOrders => 'No Food Orders';
+
+  @override
+  String get searchRestaurants => 'Search restaurants or items...';
+
+  @override
+  String get pickup => 'Pickup';
+
+  @override
+  String get payAtDoor => 'Pay at Door';
+
+  @override
+  String get foodOrderDetails => 'Food Order Details';
+
+  @override
+  String get prepTime => 'Est. Prep Time';
+
+  @override
+  String get restaurantPhone => 'Restaurant Tel';
+
+  @override
+  String get deliveryFee => 'Delivery Fee';
+
+  @override
+  String get orderNotes => 'Order Notes';
+
+  @override
+  String get paidOnlineNote => 'Payment received online';
+
+  @override
+  String get payAtDoorNote => 'Payment due at delivery';
+
+  @override
+  String get productOrders => 'Products';
+
+  @override
+  String get foodReceiptsWillAppearHere =>
+      'Your food order receipts will appear here';
+
+  @override
+  String get foodOrder => 'Food Order';
+
+  @override
+  String get orderStatus => 'Order Status';
+
+  @override
+  String get orderedItems => 'Ordered Items';
+
+  @override
+  String get paidOnline => 'Paid Online';
+
+  @override
+  String get each => 'each';
+
+  @override
+  String get receiptPdfNotAvailable => 'PDF not available yet';
+
+  @override
+  String get foodReceipt => 'Food Receipt';
+
+  @override
+  String get goBack => 'Go Back';
+
+  @override
+  String get notifFoodOrderStatusTitle => 'Food Order Status Updated 🔔';
+
+  @override
+  String notifFoodOrderStatusAccepted(String restaurantName) {
+    return '$restaurantName accepted your food order.';
+  }
+
+  @override
+  String notifFoodOrderStatusRejected(String restaurantName) {
+    return '$restaurantName rejected your food order.';
+  }
+
+  @override
+  String notifFoodOrderStatusPreparing(String restaurantName) {
+    return '$restaurantName started preparing your food order.';
+  }
+
+  @override
+  String notifFoodOrderStatusReady(String restaurantName) {
+    return '$restaurantName your food order is ready!';
+  }
+
+  @override
+  String notifFoodOrderStatusDelivered(String restaurantName) {
+    return '$restaurantName your food order is delivered.';
+  }
+
+  @override
+  String get notifFoodReviewTitle => 'Order Delivered! 🎉';
+
+  @override
+  String notifFoodReviewBody(String restaurantName) {
+    return 'Your order from $restaurantName has arrived. Tap to leave a review!';
+  }
+
+  @override
+  String get restaurantReview => 'Restaurant Review';
+
+  @override
+  String get writeRestaurantReview => 'Write Restaurant Review';
 }

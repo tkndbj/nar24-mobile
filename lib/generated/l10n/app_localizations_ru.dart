@@ -4227,7 +4227,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get shippingAddress => 'Адрес доставки';
 
   @override
-  String get orderSummary => 'Резюме заказа';
+  String get orderSummary => 'Итог заказа';
 
   @override
   String get shipping => 'Доставка';
@@ -4486,7 +4486,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get tax => 'Налог (20%)';
 
   @override
-  String get subtotal => 'Промежуточный итог';
+  String get subtotal => 'Подытог';
 
   @override
   String get oneWeek => '1 Неделя';
@@ -5312,7 +5312,7 @@ class AppLocalizationsRu extends AppLocalizations {
       'Отправьте первое объявление для продвижения вашего магазина';
 
   @override
-  String get pending => 'На рассмотрении';
+  String get pending => 'Ожидание';
 
   @override
   String get approved => 'Одобрено';
@@ -6549,7 +6549,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get paymentInformation => 'Платежная информация';
 
   @override
-  String get paymentStatus => 'Статус платежа';
+  String get paymentStatus => 'Статус оплаты';
 
   @override
   String get seconds => 'секунд';
@@ -7685,7 +7685,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get deliveryOption3 => 'Обычная доставка';
 
   @override
-  String get priceSummary => 'Сводка цены';
+  String get priceSummary => 'Сводка цен';
 
   @override
   String get deliveryText3 => '1-3 рабочих дня';
@@ -8673,7 +8673,7 @@ class AppLocalizationsRu extends AppLocalizations {
       'У вас нет разрешения на усиление этой недвижимости.';
 
   @override
-  String get extras => 'Дополнительно';
+  String get extras => 'Дополнения';
 
   @override
   String get requestInfo => 'Запросить информацию';
@@ -10365,7 +10365,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get noReceiptsFound => 'Квитанции не найдены.';
 
   @override
-  String get receiptDetails => 'Детали квитанции';
+  String get receiptDetails => 'Детали чека';
 
   @override
   String get receipt => 'Квитанция';
@@ -10389,7 +10389,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get soldProductDetails => 'Детали проданного товара';
 
   @override
-  String get receiptNotFound => 'Квитанция не найдена';
+  String get receiptNotFound => 'Чек не найден';
 
   @override
   String get copyReceiptNumber => 'Скопировать номер квитанции';
@@ -12151,7 +12151,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get scanToView => 'Отсканируйте для просмотра';
 
   @override
-  String get minutes => 'минут';
+  String get minutes => 'мин';
 
   @override
   String get totalListings => 'Списки';
@@ -12910,4 +12910,137 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get sending => 'Отправка...';
+
+  @override
+  String get foodOrders => 'Заказы еды';
+
+  @override
+  String get foodStatusPending => 'Ожидание';
+
+  @override
+  String get foodStatusAccepted => 'Принят';
+
+  @override
+  String get foodStatusRejected => 'Отклонён';
+
+  @override
+  String get foodStatusPreparing => 'Готовится';
+
+  @override
+  String get foodStatusReady => 'Готов';
+
+  @override
+  String get foodStatusDelivered => 'Доставлен';
+
+  @override
+  String get foodStatusCompleted => 'Завершён';
+
+  @override
+  String get foodStatusCancelled => 'Отменён';
+
+  @override
+  String get noFoodOrders => 'Заказов еды нет';
+
+  @override
+  String get searchRestaurants => 'Поиск ресторанов или блюд...';
+
+  @override
+  String get pickup => 'Самовывоз';
+
+  @override
+  String get payAtDoor => 'Оплата при получении';
+
+  @override
+  String get foodOrderDetails => 'Детали заказа еды';
+
+  @override
+  String get prepTime => 'Примерное время приготовления';
+
+  @override
+  String get restaurantPhone => 'Тел. ресторана';
+
+  @override
+  String get deliveryFee => 'Стоимость доставки';
+
+  @override
+  String get orderNotes => 'Примечания к заказу';
+
+  @override
+  String get paidOnlineNote => 'Оплата получена онлайн';
+
+  @override
+  String get payAtDoorNote => 'Оплата при получении';
+
+  @override
+  String get productOrders => 'Товары';
+
+  @override
+  String get foodReceiptsWillAppearHere =>
+      'Ваши чеки по заказам еды появятся здесь';
+
+  @override
+  String get foodOrder => 'Заказ еды';
+
+  @override
+  String get orderStatus => 'Статус заказа';
+
+  @override
+  String get orderedItems => 'Заказанные позиции';
+
+  @override
+  String get paidOnline => 'Оплачено онлайн';
+
+  @override
+  String get each => 'шт.';
+
+  @override
+  String get receiptPdfNotAvailable => 'PDF пока недоступен';
+
+  @override
+  String get foodReceipt => 'Чек за еду';
+
+  @override
+  String get goBack => 'Назад';
+
+  @override
+  String get notifFoodOrderStatusTitle => 'Статус заказа еды обновлён 🔔';
+
+  @override
+  String notifFoodOrderStatusAccepted(String restaurantName) {
+    return '$restaurantName принял ваш заказ.';
+  }
+
+  @override
+  String notifFoodOrderStatusRejected(String restaurantName) {
+    return '$restaurantName отклонил ваш заказ.';
+  }
+
+  @override
+  String notifFoodOrderStatusPreparing(String restaurantName) {
+    return '$restaurantName начал готовить ваш заказ.';
+  }
+
+  @override
+  String notifFoodOrderStatusReady(String restaurantName) {
+    return '$restaurantName ваш заказ готов!';
+  }
+
+  @override
+  String notifFoodOrderStatusDelivered(String restaurantName) {
+    return '$restaurantName ваш заказ доставлен.';
+  }
+
+  @override
+  String get notifFoodReviewTitle => 'Заказ доставлен! 🎉';
+
+  @override
+  String notifFoodReviewBody(String restaurantName) {
+    return 'Ваш заказ из $restaurantName прибыл. Нажмите, чтобы оставить отзыв!';
+  }
+
+  @override
+  String get restaurantReview => 'Отзыв о ресторане';
+
+  @override
+  String get writeRestaurantReview => 'Написать отзыв о ресторане';
 }

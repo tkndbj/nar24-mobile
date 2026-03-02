@@ -8,6 +8,7 @@ import '../../screens/RESTAURANTS/restaurant_detail_screen.dart';
 import '../../screens/CART-FAVORITE/food_cart.dart';
 import '../../screens/PAYMENT-RECEIPT/food_checkout_screen.dart';
 import '../../screens/PAYMENT-RECEIPT/isbank_food_payment_screen.dart';
+import '../../screens/PAYMENT-RECEIPT/food_order_detail_screen.dart';
 
 class RestaurantRoutes {
   // Reusable slide transition
@@ -90,6 +91,18 @@ class RestaurantRoutes {
             transitionDuration: const Duration(milliseconds: 200),
           );
         },
+      ),
+      GoRoute(
+        path: '/food-order-detail/:id',
+        name: 'food-order-detail',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: FoodOrderDetailScreen(
+            orderId: state.pathParameters['id']!,
+          ),
+          transitionsBuilder: _slideTransition,
+          transitionDuration: const Duration(milliseconds: 200),
+        ),
       ),
     ];
   }

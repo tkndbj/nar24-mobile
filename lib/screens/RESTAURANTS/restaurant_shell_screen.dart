@@ -157,9 +157,17 @@ class _RestaurantShellScreenState extends State<RestaurantShellScreen> {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
-    return Scaffold(
-      body: _buildBodyContent(),
-      bottomNavigationBar: _buildBottomNavigation(dark, bottomPad),
+    return PopScope(
+      canPop: _selectedIndex == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          setState(() => _selectedIndex = 0);
+        }
+      },
+      child: Scaffold(
+        body: _buildBodyContent(),
+        bottomNavigationBar: _buildBottomNavigation(dark, bottomPad),
+      ),
     );
   }
 }

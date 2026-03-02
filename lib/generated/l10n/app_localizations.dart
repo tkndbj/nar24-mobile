@@ -11167,7 +11167,7 @@ abstract class AppLocalizations {
   /// No description provided for @deliveryType.
   ///
   /// In tr, this message translates to:
-  /// **'Teslimat Tipi'**
+  /// **'Teslimat Türü'**
   String get deliveryType;
 
   /// No description provided for @normalDelivery.
@@ -19743,7 +19743,7 @@ abstract class AppLocalizations {
   /// No description provided for @receiptNotFound.
   ///
   /// In tr, this message translates to:
-  /// **'Makbuz bulunamadı'**
+  /// **'Fiş Bulunamadı'**
   String get receiptNotFound;
 
   /// No description provided for @copyReceiptNumber.
@@ -23091,7 +23091,7 @@ abstract class AppLocalizations {
   /// No description provided for @minutes.
   ///
   /// In tr, this message translates to:
-  /// **'dakika'**
+  /// **'dk'**
   String get minutes;
 
   /// No description provided for @totalListings.
@@ -24473,6 +24473,246 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Gönderiliyor...'**
   String get sending;
+
+  /// No description provided for @foodOrders.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek Siparişleri'**
+  String get foodOrders;
+
+  /// No description provided for @foodStatusPending.
+  ///
+  /// In tr, this message translates to:
+  /// **'Beklemede'**
+  String get foodStatusPending;
+
+  /// No description provided for @foodStatusAccepted.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kabul Edildi'**
+  String get foodStatusAccepted;
+
+  /// No description provided for @foodStatusRejected.
+  ///
+  /// In tr, this message translates to:
+  /// **'Reddedildi'**
+  String get foodStatusRejected;
+
+  /// No description provided for @foodStatusPreparing.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hazırlanıyor'**
+  String get foodStatusPreparing;
+
+  /// No description provided for @foodStatusReady.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hazır'**
+  String get foodStatusReady;
+
+  /// No description provided for @foodStatusDelivered.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslim Edildi'**
+  String get foodStatusDelivered;
+
+  /// No description provided for @foodStatusCompleted.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tamamlandı'**
+  String get foodStatusCompleted;
+
+  /// No description provided for @foodStatusCancelled.
+  ///
+  /// In tr, this message translates to:
+  /// **'İptal Edildi'**
+  String get foodStatusCancelled;
+
+  /// No description provided for @noFoodOrders.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek Siparişi Bulunamadı'**
+  String get noFoodOrders;
+
+  /// No description provided for @searchRestaurants.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoran veya ürün ara...'**
+  String get searchRestaurants;
+
+  /// No description provided for @pickup.
+  ///
+  /// In tr, this message translates to:
+  /// **'Gel Al'**
+  String get pickup;
+
+  /// No description provided for @payAtDoor.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kapıda Öde'**
+  String get payAtDoor;
+
+  /// No description provided for @foodOrderDetails.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek Sipariş Detayı'**
+  String get foodOrderDetails;
+
+  /// No description provided for @prepTime.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tahmini Hazırlık Süresi'**
+  String get prepTime;
+
+  /// No description provided for @restaurantPhone.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoran Tel'**
+  String get restaurantPhone;
+
+  /// No description provided for @deliveryFee.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimat Ücreti'**
+  String get deliveryFee;
+
+  /// No description provided for @orderNotes.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş Notları'**
+  String get orderNotes;
+
+  /// No description provided for @paidOnlineNote.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme online olarak alındı'**
+  String get paidOnlineNote;
+
+  /// No description provided for @payAtDoorNote.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme teslimatta yapılacak'**
+  String get payAtDoorNote;
+
+  /// No description provided for @productOrders.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ürünler'**
+  String get productOrders;
+
+  /// No description provided for @foodReceiptsWillAppearHere.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek sipariş fişleriniz burada görünecek'**
+  String get foodReceiptsWillAppearHere;
+
+  /// No description provided for @foodOrder.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek Siparişi'**
+  String get foodOrder;
+
+  /// No description provided for @orderStatus.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş Durumu'**
+  String get orderStatus;
+
+  /// No description provided for @orderedItems.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş Edilen Ürünler'**
+  String get orderedItems;
+
+  /// No description provided for @paidOnline.
+  ///
+  /// In tr, this message translates to:
+  /// **'Online Ödendi'**
+  String get paidOnline;
+
+  /// No description provided for @each.
+  ///
+  /// In tr, this message translates to:
+  /// **'adet'**
+  String get each;
+
+  /// No description provided for @receiptPdfNotAvailable.
+  ///
+  /// In tr, this message translates to:
+  /// **'PDF henüz mevcut değil'**
+  String get receiptPdfNotAvailable;
+
+  /// No description provided for @foodReceipt.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek Fişi'**
+  String get foodReceipt;
+
+  /// No description provided for @goBack.
+  ///
+  /// In tr, this message translates to:
+  /// **'Geri Dön'**
+  String get goBack;
+
+  /// No description provided for @notifFoodOrderStatusTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek Siparişi Güncellendi 🔔'**
+  String get notifFoodOrderStatusTitle;
+
+  /// No description provided for @notifFoodOrderStatusAccepted.
+  ///
+  /// In tr, this message translates to:
+  /// **'{restaurantName} yemek siparişinizi kabul etti.'**
+  String notifFoodOrderStatusAccepted(String restaurantName);
+
+  /// No description provided for @notifFoodOrderStatusRejected.
+  ///
+  /// In tr, this message translates to:
+  /// **'{restaurantName} yemek siparişinizi reddetti.'**
+  String notifFoodOrderStatusRejected(String restaurantName);
+
+  /// No description provided for @notifFoodOrderStatusPreparing.
+  ///
+  /// In tr, this message translates to:
+  /// **'{restaurantName} siparişinizi hazırlamaya başladı.'**
+  String notifFoodOrderStatusPreparing(String restaurantName);
+
+  /// No description provided for @notifFoodOrderStatusReady.
+  ///
+  /// In tr, this message translates to:
+  /// **'{restaurantName} siparişiniz hazır!'**
+  String notifFoodOrderStatusReady(String restaurantName);
+
+  /// No description provided for @notifFoodOrderStatusDelivered.
+  ///
+  /// In tr, this message translates to:
+  /// **'{restaurantName} siparişiniz teslim edildi.'**
+  String notifFoodOrderStatusDelivered(String restaurantName);
+
+  /// No description provided for @notifFoodReviewTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş Teslim Edildi! 🎉'**
+  String get notifFoodReviewTitle;
+
+  /// No description provided for @notifFoodReviewBody.
+  ///
+  /// In tr, this message translates to:
+  /// **'{restaurantName} siparişiniz geldi. Değerlendirmek için dokunun!'**
+  String notifFoodReviewBody(String restaurantName);
+
+  /// No description provided for @restaurantReview.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoran Değerlendirmesi'**
+  String get restaurantReview;
+
+  /// No description provided for @writeRestaurantReview.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoran Değerlendirmesi Yaz'**
+  String get writeRestaurantReview;
 }
 
 class _AppLocalizationsDelegate

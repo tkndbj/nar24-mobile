@@ -437,6 +437,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
         }
         break;
 
+      case 'food_order_status_update':
+        context.push('/my_orders?tab=food');
+        break;
+
+      case 'food_order_delivered_review':
+        context.push('/my-reviews');
+        break;
+
       case 'order_delivered':
         final orderId = notification.orderId;
         if (orderId != null) {
@@ -1321,6 +1329,30 @@ class _NotificationScreenState extends State<NotificationScreen> {
                         } else {
                           message = l10n.boostExpiredGeneric(productName);
                         }
+                      } else if (type == 'food_order_status_update') {
+                        final name = notification.restaurantName ?? '';
+                        switch (notification.orderStatus) {
+                          case 'accepted':
+                            message = l10n.notifFoodOrderStatusAccepted(name);
+                            break;
+                          case 'rejected':
+                            message = l10n.notifFoodOrderStatusRejected(name);
+                            break;
+                          case 'preparing':
+                            message = l10n.notifFoodOrderStatusPreparing(name);
+                            break;
+                          case 'ready':
+                            message = l10n.notifFoodOrderStatusReady(name);
+                            break;
+                          case 'delivered':
+                            message = l10n.notifFoodOrderStatusDelivered(name);
+                            break;
+                          default:
+                            message = name;
+                        }
+                      } else if (type == 'food_order_delivered_review') {
+                        message = l10n.notifFoodReviewBody(
+                            notification.restaurantName ?? '');
                       } else if (type == 'shop_approved') {
                         message = l10n.tapToVisitYourShop;
                       } else if (type == 'shop_disapproved') {
@@ -1380,6 +1412,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
                         case 'order_delivered':
                           notificationIcon = Icons.local_shipping;
                           iconColor = const Color(0xFF00A86B);
+                          break;
+                        case 'food_order_status_update':
+                          notificationIcon = Icons.restaurant_menu_rounded;
+                          iconColor = const Color(0xFFF97316);
+                          break;
+                        case 'food_order_delivered_review':
+                          notificationIcon = Icons.star_rounded;
+                          iconColor = const Color(0xFFFB923C);
                           break;
                         case 'product_archived_by_admin':
                           notificationIcon = Icons.archive_rounded;
@@ -1679,6 +1719,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
         return l10n.productArchivedByAdmin;
       case 'order_delivered':
         return l10n.orderDelivered ?? 'Order Delivered';
+      case 'food_order_status_update':
+        return l10n.notifFoodOrderStatusTitle;
+      case 'food_order_delivered_review':
+        return l10n.notifFoodReviewTitle;
       case 'shipment':
         return l10n.shipment;
       case 'shop_approved':

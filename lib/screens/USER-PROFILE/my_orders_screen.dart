@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../widgets/myproducts/sold_bought_products_tab.dart';
+import '../../widgets/myproducts/food_orders_tab.dart'; // ← NEW
 import 'package:provider/provider.dart';
 import '../../providers/my_products_provider.dart';
 
@@ -30,6 +31,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
   // Keys to communicate with child widgets
   final GlobalKey<SoldBoughtProductsTabState> _soldTabKey = GlobalKey();
   final GlobalKey<SoldBoughtProductsTabState> _boughtTabKey = GlobalKey();
+  final GlobalKey<FoodOrdersTabState> _foodTabKey = GlobalKey(); // ← NEW
 
   // Track if tabs are syncing to prevent infinite loops
   bool _isTabSyncing = false;
@@ -37,7 +39,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this); // ← CHANGED 2→3
     _pageController = PageController();
 
     // Sync tab controller with page controller
@@ -71,9 +73,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
   }
 
   void _onSearchFocusChange() {
-    // This helps with focus management but the main solution is in GestureDetector
     if (!_searchFocusNode.hasFocus) {
-      // Additional cleanup when focus is lost
       FocusScope.of(context).unfocus();
     }
   }
@@ -92,9 +92,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
   }
 
   void _applySearchToAllTabs() {
-    // Apply search to both tabs to maintain consistency
     _soldTabKey.currentState?.applySearch(_currentSearchQuery);
     _boughtTabKey.currentState?.applySearch(_currentSearchQuery);
+    _foodTabKey.currentState?.applySearch(_currentSearchQuery); // ← NEW
   }
 
   void _clearSearch() {
@@ -103,7 +103,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
     setState(() {
       _currentSearchQuery = '';
     });
-    // Reset both tabs to show all data
     _applySearchToAllTabs();
   }
 
@@ -134,7 +133,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
   }
 
   Future<void> _pickDateRange() async {
-    // Dismiss keyboard when opening date picker
     _dismissKeyboard();
 
     final l10n = AppLocalizations.of(context);
@@ -165,7 +163,8 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
               style: TextButton.styleFrom(
                 foregroundColor: isLight ? Colors.black : Colors.white,
               ),
-            ), dialogTheme: DialogThemeData(backgroundColor: backgroundColor),
+            ),
+            dialogTheme: DialogThemeData(backgroundColor: backgroundColor),
           ),
           child: child!,
         );
@@ -193,8 +192,8 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
       ),
       child: TabBar(
         controller: _tabController,
-        isScrollable: false,  // ← CHANGED: Makes tabs fill available width
-        // tabAlignment removed - not needed when isScrollable is false
+        isScrollable: true,
+        tabAlignment: TabAlignment.start,
         padding: const EdgeInsets.all(4),
         dividerColor: Colors.transparent,
         indicator: BoxDecoration(
@@ -225,10 +224,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
         overlayColor: WidgetStateProperty.all(Colors.transparent),
         indicatorSize: TabBarIndicatorSize.tab,
         onTap: (index) {
-          // Dismiss keyboard when switching tabs
           _dismissKeyboard();
-
-          // Apply current search to newly selected tab after a brief delay
           if (_currentSearchQuery.isNotEmpty) {
             Future.delayed(const Duration(milliseconds: 100), () {
               _applySearchToAllTabs();
@@ -238,6 +234,8 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
         tabs: [
           _buildModernTab(l10n.soldProducts, Icons.sell_rounded),
           _buildModernTab(l10n.boughtProducts, Icons.shopping_cart_rounded),
+          _buildModernTab(
+              l10n.foodOrders, Icons.restaurant_menu_rounded), // ← NEW
         ],
       ),
     );
@@ -247,12 +245,12 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
     return Tab(
       height: 40,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16),
-            const SizedBox(width: 6),
+            Icon(icon, size: 15),
+            const SizedBox(width: 5),
             Text(text),
           ],
         ),
@@ -264,6 +262,10 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
+    // Show restaurant-oriented hint when on the food tab
+    final isOnFoodTab = _tabController.index == 2;
+    final hintText = isOnFoodTab ? l10n.searchRestaurants : l10n.searchOrders;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -312,7 +314,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
               ),
             ),
             suffixIcon: _buildSuffixIcon(isDark),
-            hintText: l10n.searchOrders,
+            hintText: hintText,
             hintStyle: GoogleFonts.inter(
               fontSize: 14,
               color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
@@ -338,13 +340,11 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
             ),
           ),
           onTap: () {
-            // Ensure proper focus behavior
             if (!_searchFocusNode.hasFocus) {
               _searchFocusNode.requestFocus();
             }
           },
           onSubmitted: (value) {
-            // Dismiss keyboard when user presses enter
             _dismissKeyboard();
           },
         ),
@@ -386,7 +386,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
     return ChangeNotifierProvider(
       create: (_) => MyProductsProvider(),
       child: GestureDetector(
-        // Dismiss keyboard when tapping outside the search field
         onTap: _dismissKeyboard,
         child: Scaffold(
           backgroundColor:
@@ -429,26 +428,18 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
             ),
             child: Column(
               children: [
-                // Functional search box
                 _buildSearchBox(),
-
-                // Tab bar
                 _buildModernTabBar(),
-
-                // Tab content
                 Expanded(
                   child: PageView(
                     controller: _pageController,
-                    physics: const BouncingScrollPhysics(), // Smoother physics
+                    physics: const BouncingScrollPhysics(),
                     onPageChanged: (index) {
                       if (_tabController.index != index && !_isTabSyncing) {
                         _isTabSyncing = true;
                         _tabController.animateTo(index);
-
-                        // Dismiss keyboard when swiping
                         _dismissKeyboard();
 
-                        // Apply current search to newly selected tab
                         if (_currentSearchQuery.isNotEmpty) {
                           Future.delayed(const Duration(milliseconds: 100), () {
                             _applySearchToAllTabs();
@@ -461,16 +452,21 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                       }
                     },
                     children: [
-                      // Sold products tab
+                      // ── Sold products tab (unchanged) ──────────────────
                       SoldBoughtProductsTab(
                         key: _soldTabKey,
                         isSold: true,
                       ),
 
-                      // Bought products tab
+                      // ── Bought products tab (unchanged) ────────────────
                       SoldBoughtProductsTab(
                         key: _boughtTabKey,
                         isSold: false,
+                      ),
+
+                      // ── Food orders tab (NEW) ──────────────────────────
+                      FoodOrdersTab(
+                        key: _foodTabKey,
                       ),
                     ],
                   ),

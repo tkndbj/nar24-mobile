@@ -5763,7 +5763,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get orderItems => 'Sipariş Ürünleri';
 
   @override
-  String get deliveryType => 'Teslimat Tipi';
+  String get deliveryType => 'Teslimat Türü';
 
   @override
   String get normalDelivery => 'Normal Teslimat';
@@ -10330,7 +10330,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get soldProductDetails => 'Satılan Ürün Detayları';
 
   @override
-  String get receiptNotFound => 'Makbuz bulunamadı';
+  String get receiptNotFound => 'Fiş Bulunamadı';
 
   @override
   String get copyReceiptNumber => 'Makbuzu Kopyala';
@@ -12077,7 +12077,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get scanToView => 'Görüntülemek için tara';
 
   @override
-  String get minutes => 'dakika';
+  String get minutes => 'dk';
 
   @override
   String get totalListings => 'Listelemeler';
@@ -12837,4 +12837,137 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get sending => 'Gönderiliyor...';
+
+  @override
+  String get foodOrders => 'Yemek Siparişleri';
+
+  @override
+  String get foodStatusPending => 'Beklemede';
+
+  @override
+  String get foodStatusAccepted => 'Kabul Edildi';
+
+  @override
+  String get foodStatusRejected => 'Reddedildi';
+
+  @override
+  String get foodStatusPreparing => 'Hazırlanıyor';
+
+  @override
+  String get foodStatusReady => 'Hazır';
+
+  @override
+  String get foodStatusDelivered => 'Teslim Edildi';
+
+  @override
+  String get foodStatusCompleted => 'Tamamlandı';
+
+  @override
+  String get foodStatusCancelled => 'İptal Edildi';
+
+  @override
+  String get noFoodOrders => 'Yemek Siparişi Bulunamadı';
+
+  @override
+  String get searchRestaurants => 'Restoran veya ürün ara...';
+
+  @override
+  String get pickup => 'Gel Al';
+
+  @override
+  String get payAtDoor => 'Kapıda Öde';
+
+  @override
+  String get foodOrderDetails => 'Yemek Sipariş Detayı';
+
+  @override
+  String get prepTime => 'Tahmini Hazırlık Süresi';
+
+  @override
+  String get restaurantPhone => 'Restoran Tel';
+
+  @override
+  String get deliveryFee => 'Teslimat Ücreti';
+
+  @override
+  String get orderNotes => 'Sipariş Notları';
+
+  @override
+  String get paidOnlineNote => 'Ödeme online olarak alındı';
+
+  @override
+  String get payAtDoorNote => 'Ödeme teslimatta yapılacak';
+
+  @override
+  String get productOrders => 'Ürünler';
+
+  @override
+  String get foodReceiptsWillAppearHere =>
+      'Yemek sipariş fişleriniz burada görünecek';
+
+  @override
+  String get foodOrder => 'Yemek Siparişi';
+
+  @override
+  String get orderStatus => 'Sipariş Durumu';
+
+  @override
+  String get orderedItems => 'Sipariş Edilen Ürünler';
+
+  @override
+  String get paidOnline => 'Online Ödendi';
+
+  @override
+  String get each => 'adet';
+
+  @override
+  String get receiptPdfNotAvailable => 'PDF henüz mevcut değil';
+
+  @override
+  String get foodReceipt => 'Yemek Fişi';
+
+  @override
+  String get goBack => 'Geri Dön';
+
+  @override
+  String get notifFoodOrderStatusTitle => 'Yemek Siparişi Güncellendi 🔔';
+
+  @override
+  String notifFoodOrderStatusAccepted(String restaurantName) {
+    return '$restaurantName yemek siparişinizi kabul etti.';
+  }
+
+  @override
+  String notifFoodOrderStatusRejected(String restaurantName) {
+    return '$restaurantName yemek siparişinizi reddetti.';
+  }
+
+  @override
+  String notifFoodOrderStatusPreparing(String restaurantName) {
+    return '$restaurantName siparişinizi hazırlamaya başladı.';
+  }
+
+  @override
+  String notifFoodOrderStatusReady(String restaurantName) {
+    return '$restaurantName siparişiniz hazır!';
+  }
+
+  @override
+  String notifFoodOrderStatusDelivered(String restaurantName) {
+    return '$restaurantName siparişiniz teslim edildi.';
+  }
+
+  @override
+  String get notifFoodReviewTitle => 'Sipariş Teslim Edildi! 🎉';
+
+  @override
+  String notifFoodReviewBody(String restaurantName) {
+    return '$restaurantName siparişiniz geldi. Değerlendirmek için dokunun!';
+  }
+
+  @override
+  String get restaurantReview => 'Restoran Değerlendirmesi';
+
+  @override
+  String get writeRestaurantReview => 'Restoran Değerlendirmesi Yaz';
 }

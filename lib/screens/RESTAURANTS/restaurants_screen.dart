@@ -204,10 +204,13 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      body: SafeArea(
-        child: _isLoadingData
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.translucent,
+      child: Scaffold(
+        backgroundColor: isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+        body: SafeArea(
+          child: _isLoadingData
             ? _buildSkeleton(isDark)
             : RefreshIndicator(
                 onRefresh: () async {
@@ -220,8 +223,10 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                       title: const Text('Restaurants'),
                       floating: true,
                       snap: true,
-                      backgroundColor: theme.scaffoldBackgroundColor,
+                      backgroundColor: isDark ? const Color(0xFF030712) : Colors.white,
                       surfaceTintColor: Colors.transparent,
+                      elevation: 0.5,
+                      shadowColor: isDark ? Colors.black54 : Colors.black26,
                     ),
 
                     // ── Content ──────────────────────────────────────────
@@ -374,6 +379,7 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                 ),
               ),
       ),
+    ),
     );
   }
 

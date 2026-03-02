@@ -78,10 +78,19 @@ class _FoodCartContentState extends State<_FoodCartContent> {
 
         return Scaffold(
           backgroundColor:
-              isDark ? const Color(0xFF030712) : const Color(0xFFF9FAFB),
-          body: SafeArea(
-            child: _buildBody(context, isDark, cart, prepTime),
+              isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+          appBar: AppBar(
+            backgroundColor:
+                isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_rounded,
+                  color: isDark ? Colors.grey[400] : Colors.grey[700]),
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
           ),
+          body: _buildBody(context, isDark, cart, prepTime),
         );
       },
     );
@@ -102,14 +111,6 @@ class _FoodCartContentState extends State<_FoodCartContent> {
       children: [
         CustomScrollView(
           slivers: [
-            // ── Back button ──────────────────────────────────────────────
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
-                child: _BackButton(isDark: isDark),
-              ),
-            ),
-
             // ── Empty cart ───────────────────────────────────────────────
             if (cart.items.isEmpty) ...[
               SliverFillRemaining(
@@ -226,7 +227,7 @@ class _BackButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => context.pop(),
+      onTap: () => Navigator.of(context).maybePop(),
       child: Container(
         width: 36,
         height: 36,
@@ -343,7 +344,7 @@ class _RestaurantHeaderCard extends StatelessWidget {
         color: isDark ? const Color(0xFF111827) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? const Color(0xFF1F2937) : const Color(0xFFF3F4F6),
+          color: isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB),
         ),
       ),
       child: Column(
@@ -399,7 +400,7 @@ class _RestaurantHeaderCard extends StatelessWidget {
                         'Ordering from this restaurant',
                         style: TextStyle(
                           fontSize: 11,
-                          color: isDark ? Colors.grey[500] : Colors.grey[400],
+                          color: isDark ? Colors.grey[500] : Colors.grey[600],
                         ),
                       ),
                     ],
@@ -414,7 +415,7 @@ class _RestaurantHeaderCard extends StatelessWidget {
                     child: Icon(
                       Icons.chevron_right_rounded,
                       size: 18,
-                      color: isDark ? Colors.grey[500] : Colors.grey[400],
+                      color: isDark ? Colors.grey[500] : Colors.grey[600],
                     ),
                   ),
                 ),
@@ -434,7 +435,7 @@ class _RestaurantHeaderCard extends StatelessWidget {
                   top: BorderSide(
                     color: isDark
                         ? const Color(0xFF1F2937)
-                        : const Color(0xFFF9FAFB),
+                        : const Color(0xFFE5E7EB),
                   ),
                 ),
                 borderRadius:
@@ -445,7 +446,7 @@ class _RestaurantHeaderCard extends StatelessWidget {
                   Icon(
                     Icons.access_time_rounded,
                     size: 13,
-                    color: isDark ? Colors.grey[500] : Colors.grey[400],
+                    color: isDark ? Colors.grey[500] : Colors.grey[600],
                   ),
                   const SizedBox(width: 6),
                   Text.rich(
@@ -454,7 +455,7 @@ class _RestaurantHeaderCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
-                        color: isDark ? Colors.grey[500] : Colors.grey[400],
+                        color: isDark ? Colors.grey[500] : Colors.grey[600],
                       ),
                       children: [
                         TextSpan(
@@ -530,7 +531,7 @@ class _FoodCartItemCard extends StatelessWidget {
           color: isDark ? const Color(0xFF111827) : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isDark ? const Color(0xFF1F2937) : const Color(0xFFF3F4F6),
+            color: isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB),
           ),
         ),
         child: Padding(
@@ -576,7 +577,7 @@ class _FoodCartItemCard extends StatelessWidget {
                                       fontSize: 11,
                                       color: isDark
                                           ? Colors.grey[500]
-                                          : Colors.grey[400],
+                                          : Colors.grey[600],
                                     ),
                                   ),
                                 ],
@@ -593,7 +594,7 @@ class _FoodCartItemCard extends StatelessWidget {
                                   size: 16,
                                   color: isDark
                                       ? Colors.grey[600]
-                                      : Colors.grey[300],
+                                      : Colors.grey[500],
                                 ),
                               ),
                             ),
@@ -621,7 +622,7 @@ class _FoodCartItemCard extends StatelessWidget {
                                     fontSize: 10,
                                     color: isDark
                                         ? Colors.grey[500]
-                                        : Colors.grey[400],
+                                        : Colors.grey[600],
                                   ),
                                 ),
                               ],
@@ -709,7 +710,7 @@ class _FoodCartItemCard extends StatelessWidget {
                           border: Border.all(
                             color: isDark
                                 ? const Color(0xFF374151)
-                                : const Color(0xFFF3F4F6),
+                                : const Color(0xFFD1D5DB),
                           ),
                         ),
                         child: Row(
@@ -737,7 +738,7 @@ class _FoodCartItemCard extends StatelessWidget {
                                   fontSize: 10,
                                   color: isDark
                                       ? Colors.grey[600]
-                                      : Colors.grey[300],
+                                      : Colors.grey[500],
                                 ),
                               ),
                             ],
@@ -782,7 +783,7 @@ class _FoodCartItemCard extends StatelessWidget {
                               fontSize: 11,
                               height: 1.4,
                               color:
-                                  isDark ? Colors.grey[400] : Colors.grey[500],
+                                  isDark ? Colors.grey[400] : Colors.grey[700],
                             ),
                           ),
                         ),
@@ -952,8 +953,8 @@ class _QtyBtn extends StatelessWidget {
           icon,
           size: 14,
           color: onTap == null
-              ? (isDark ? Colors.grey[600] : Colors.grey[300])
-              : (isDark ? Colors.grey[400] : Colors.grey[500]),
+              ? (isDark ? Colors.grey[600] : Colors.grey[400])
+              : (isDark ? Colors.grey[400] : Colors.grey[700]),
         ),
       ),
     );
@@ -982,7 +983,7 @@ class _OrderSummary extends StatelessWidget {
         color: isDark ? const Color(0xFF111827) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? const Color(0xFF1F2937) : const Color(0xFFF3F4F6),
+          color: isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB),
         ),
       ),
       child: Padding(
@@ -1015,7 +1016,7 @@ class _OrderSummary extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
-                        color: isDark ? Colors.grey[500] : Colors.grey[400],
+                        color: isDark ? Colors.grey[500] : Colors.grey[600],
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -1024,7 +1025,7 @@ class _OrderSummary extends StatelessWidget {
                         item.name,
                         style: TextStyle(
                           fontSize: 11,
-                          color: isDark ? Colors.grey[300] : Colors.grey[600],
+                          color: isDark ? Colors.grey[300] : Colors.grey[800],
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1035,7 +1036,7 @@ class _OrderSummary extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
-                        color: isDark ? Colors.grey[400] : Colors.grey[500],
+                        color: isDark ? Colors.grey[400] : Colors.grey[700],
                       ),
                     ),
                   ],
@@ -1045,7 +1046,7 @@ class _OrderSummary extends StatelessWidget {
 
             // Divider
             Divider(
-              color: isDark ? const Color(0xFF1F2937) : const Color(0xFFF3F4F6),
+              color: isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB),
               height: 24,
             ),
 
@@ -1062,7 +1063,7 @@ class _OrderSummary extends StatelessWidget {
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.8,
-                        color: isDark ? Colors.grey[600] : Colors.grey[400],
+                        color: isDark ? Colors.grey[600] : Colors.grey[600],
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -1090,7 +1091,7 @@ class _OrderSummary extends StatelessWidget {
                   'Delivery fee at checkout',
                   style: TextStyle(
                     fontSize: 11,
-                    color: isDark ? Colors.grey[600] : Colors.grey[400],
+                    color: isDark ? Colors.grey[600] : Colors.grey[600],
                   ),
                 ),
               ],
@@ -1335,6 +1336,22 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
                               borderRadius: BorderRadius.circular(10),
                               borderSide: BorderSide.none,
                             ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(
+                                color: isDark
+                                    ? Colors.grey[600]!
+                                    : Colors.grey[400]!,
+                                width: 1,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(
+                                color: Colors.orange,
+                                width: 1.5,
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -1440,7 +1457,7 @@ class _ClearCartDialog extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color:
-                    isDark ? const Color(0xFF1F2937) : const Color(0xFFF3F4F6),
+                    isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB),
               ),
             ),
             child: Column(
@@ -1478,7 +1495,7 @@ class _ClearCartDialog extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 13,
-                          color: isDark ? Colors.grey[400] : Colors.grey[500],
+                          color: isDark ? Colors.grey[400] : Colors.grey[700],
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -1497,7 +1514,7 @@ class _ClearCartDialog extends StatelessWidget {
                       top: BorderSide(
                         color: isDark
                             ? const Color(0xFF1F2937)
-                            : Colors.grey[100]!,
+                            : Colors.grey[300]!,
                       ),
                     ),
                     borderRadius: const BorderRadius.vertical(
@@ -1615,7 +1632,7 @@ class _EmptyCart extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
-                color: isDark ? Colors.grey[500] : Colors.grey[400],
+                color: isDark ? Colors.grey[500] : Colors.grey[600],
               ),
             ),
             const SizedBox(height: 24),
@@ -1653,7 +1670,7 @@ class _FoodCartSkeleton extends StatelessWidget {
     final bg = isDark ? const Color(0xFF1F2937) : const Color(0xFFE5E7EB);
     final card = isDark ? const Color(0xFF111827) : Colors.white;
     final cardBorder =
-        isDark ? const Color(0xFF1F2937) : const Color(0xFFF3F4F6);
+        isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB);
 
     return ListView(
       padding: const EdgeInsets.all(12),

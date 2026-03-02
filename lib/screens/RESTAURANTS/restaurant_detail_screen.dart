@@ -7,6 +7,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../widgets/restaurants/reviews.dart';
 import '../../constants/foodData.dart';
@@ -332,6 +333,16 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
     // Not found state — mirrors the !restaurant early return
     if (restaurant == null) {
       return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_rounded,
+                color: isDark ? Colors.grey[400] : Colors.grey[700]),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -363,8 +374,21 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
         final grouped = _groupedFoods();
 
         return Scaffold(
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          body: CustomScrollView(
+          backgroundColor: isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+          appBar: AppBar(
+            backgroundColor: isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_rounded,
+                  color: isDark ? Colors.grey[400] : Colors.grey[700]),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ),
+          body: GestureDetector(
+            onTap: () => FocusScope.of(context).unfocus(),
+            behavior: HitTestBehavior.translucent,
+            child: CustomScrollView(
             slivers: [
               // ── Restaurant Header ─────────────────────────────────────
               _RestaurantHeader(restaurant: restaurant, isDark: isDark),
@@ -463,6 +487,7 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
                   ),
                 ),
             ],
+          ),
           ),
 
           // Cart FAB — mirrors FoodCartSidebar mode="mobile"
@@ -575,35 +600,15 @@ class _RestaurantHeader extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Back button — mirrors <Link href="/restaurants">
-            GestureDetector(
-              onTap: () => Navigator.of(context).pop(),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.chevron_left_rounded,
-                      size: 18,
-                      color: isDark ? Colors.grey[400] : Colors.grey[500]),
-                  Text(
-                    'Back to Restaurants',
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: isDark ? Colors.grey[400] : Colors.grey[500]),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-
             // Header card
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF111827) : Colors.white,
                 border: Border.all(
                   color: isDark
-                      ? Colors.grey[700]!.withOpacity(0.4)
-                      : Colors.grey[200]!,
+                      ? const Color(0xFF1F2937)
+                      : const Color(0xFFD1D5DB),
                 ),
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -783,39 +788,29 @@ class _TabAndSearchRow extends StatelessWidget {
       children: [
         Row(
           children: [
-            // Tab buttons
-            Row(
-              children: [
-                _TabBtn(
-                  label: 'Menu',
-                  badge: '($foodCount)',
-                  isActive: activeTab == 'menu',
-                  isDark: isDark,
-                  onTap: () => onTabChange('menu'),
-                ),
-                const SizedBox(width: 4),
-                _TabBtn(
-                  label: 'Reviews',
-                  isActive: activeTab == 'reviews',
-                  isDark: isDark,
-                  onTap: () => onTabChange('reviews'),
-                ),
-              ],
+            _TabBtn(
+              label: 'Menu',
+              badge: '($foodCount)',
+              isActive: activeTab == 'menu',
+              isDark: isDark,
+              onTap: () => onTabChange('menu'),
             ),
-
-            const Spacer(),
-
-            // Search — only when on menu tab
-            if (activeTab == 'menu')
-              SizedBox(
-                width: 200,
-                child: _SearchBar(
-                    controller: searchController,
-                    isDark: isDark,
-                    hint: 'Search food…'),
-              ),
+            const SizedBox(width: 4),
+            _TabBtn(
+              label: 'Reviews',
+              isActive: activeTab == 'reviews',
+              isDark: isDark,
+              onTap: () => onTabChange('reviews'),
+            ),
           ],
         ),
+        if (activeTab == 'menu') ...[
+          const SizedBox(height: 12),
+          _SearchBar(
+              controller: searchController,
+              isDark: isDark,
+              hint: 'Search food…'),
+        ],
       ],
     );
   }
@@ -935,8 +930,8 @@ class _FoodTypeIconRow extends StatelessWidget {
                       color: isActive
                           ? Colors.orange
                           : isDark
-                              ? Colors.grey[800]
-                              : Colors.grey[100],
+                              ? const Color(0xFF111827)
+                              : Colors.white,
                       borderRadius: BorderRadius.circular(12),
                       border: isActive
                           ? Border.all(color: Colors.orange, width: 2)
@@ -1040,7 +1035,7 @@ class _GroupedFoodList extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 24),
                     child: Divider(
-                      color: isDark ? Colors.grey[700] : Colors.grey[200],
+                      color: isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB),
                       height: 1,
                     ),
                   ),
@@ -1163,10 +1158,11 @@ class _FoodCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF111827) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color:
-              isDark ? Colors.grey[700]!.withOpacity(0.4) : Colors.grey[200]!,
+              isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB),
         ),
       ),
       child: Row(
@@ -1599,10 +1595,25 @@ class _FoodExtrasSheetState extends State<_FoodExtrasSheet> {
                     decoration: InputDecoration(
                       hintText: 'E.g. no onions…',
                       filled: true,
-                      fillColor: isDark ? Colors.grey[800] : Colors.grey[50],
+                      fillColor: isDark ? const Color(0xFF111827) : Colors.white,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: isDark
+                              ? const Color(0xFF1F2937)
+                              : const Color(0xFFD1D5DB),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                          color: Colors.orange,
+                          width: 1.5,
+                        ),
                       ),
                     ),
                   ),
@@ -1815,48 +1826,50 @@ class _CartBottomSheet extends StatelessWidget {
                 },
               ),
             ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                  20, 8, 20, MediaQuery.of(context).viewInsets.bottom + 20),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Subtotal',
-                          style: TextStyle(
-                              fontSize: 14,
-                              color: isDark
-                                  ? Colors.grey[400]
-                                  : Colors.grey[600])),
-                      Text(
-                        '${cart.totals.subtotal.toStringAsFixed(2)} TL',
-                        style: const TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        // TODO: navigate to checkout screen
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
-                      ),
-                      child: const Text('Proceed to Checkout',
-                          style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.bold)),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Subtotal',
+                            style: TextStyle(
+                                fontSize: 14,
+                                color: isDark
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600])),
+                        Text(
+                          '${cart.totals.subtotal.toStringAsFixed(2)} TL',
+                          style: const TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.bold),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          context.push('/food-checkout');
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: const Text('Proceed to Checkout',
+                            style: TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -2096,6 +2109,7 @@ class _LoadingSkeleton extends StatelessWidget {
     final bg = isDark ? Colors.grey[700]! : Colors.grey[200]!;
 
     return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -2108,10 +2122,10 @@ class _LoadingSkeleton extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: isDark ? Colors.grey[900] : Colors.white,
+                color: isDark ? const Color(0xFF111827) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                    color: isDark ? Colors.grey[800]! : Colors.grey[100]!),
+                    color: isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2148,13 +2162,13 @@ class _LoadingSkeleton extends StatelessWidget {
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: isDark
-                        ? Colors.grey[800]!.withOpacity(0.6)
+                        ? const Color(0xFF111827)
                         : Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                         color: isDark
-                            ? Colors.grey[700]!.withOpacity(0.5)
-                            : Colors.grey[100]!),
+                            ? const Color(0xFF1F2937)
+                            : const Color(0xFFD1D5DB)),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2215,10 +2229,17 @@ class _SearchBar extends StatelessWidget {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         filled: true,
-        fillColor: isDark ? Colors.grey[800] : Colors.grey[50],
+        fillColor: isDark ? const Color(0xFF111827) : Colors.white,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB),
+            width: 1,
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
