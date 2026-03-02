@@ -612,10 +612,19 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                           filled: true,
                           fillColor: isDark
                               ? const Color(0xFF1F2937)
-                              : Colors.grey[50],
+                              : const Color(0xFFE5E7EB),
                           border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none),
+                              borderSide: BorderSide(
+                                  color: isDark
+                                      ? const Color(0xFF374151)
+                                      : const Color(0xFFD1D5DB))),
+                          enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                  color: isDark
+                                      ? const Color(0xFF374151)
+                                      : const Color(0xFFD1D5DB))),
                           focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide:
@@ -767,11 +776,12 @@ class _Section extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
+        color: isDark ? Colors.transparent : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
             color: isDark
                 ? Colors.grey[700]!.withOpacity(0.4)
-                : Colors.grey[200]!),
+                : const Color(0xFFD1D5DB)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(title,
@@ -807,8 +817,12 @@ class _CartItemRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isDark ? Colors.grey[800]!.withOpacity(0.6) : Colors.grey[50],
+        color: isDark ? Colors.grey[800]!.withOpacity(0.6) : const Color(0xFFE5E7EB),
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+            color: isDark
+                ? Colors.transparent
+                : const Color(0xFFD1D5DB)),
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // Image
@@ -966,7 +980,7 @@ class _QtyBtn extends StatelessWidget {
               border: Border.all(
                   color: isDark
                       ? const Color(0xFF374151)
-                      : const Color(0xFFE5E7EB))),
+                      : const Color(0xFFD1D5DB))),
           child: Icon(icon,
               size: 12, color: isDark ? Colors.grey[400] : Colors.grey[500])));
 }
@@ -1159,8 +1173,8 @@ class _AddressForm extends StatelessWidget {
             border: Border.all(
                 color: errors['location'] != null
                     ? Colors.red
-                    : (isDark ? const Color(0xFF374151) : Colors.grey[200]!)),
-            color: isDark ? const Color(0xFF1F2937) : Colors.grey[50],
+                    : (isDark ? const Color(0xFF374151) : const Color(0xFFD1D5DB))),
+            color: isDark ? const Color(0xFF1F2937) : const Color(0xFFE5E7EB),
           ),
           child: Row(children: [
             Container(
@@ -1245,14 +1259,14 @@ class _SavedAddressTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected
               ? (isDark ? Colors.orange.withOpacity(0.10) : Colors.orange[50])
-              : Colors.transparent,
+              : (isDark ? Colors.transparent : const Color(0xFFE5E7EB)),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
               color: isSelected
                   ? (isDark
                       ? Colors.orange.withOpacity(0.5)
                       : Colors.orange[400]!)
-                  : (isDark ? const Color(0xFF374151) : Colors.grey[200]!)),
+                  : (isDark ? const Color(0xFF374151) : const Color(0xFFD1D5DB))),
         ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Radio<bool>(
@@ -1337,12 +1351,12 @@ class _CityDropdown extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1F2937) : Colors.grey[50],
+            color: isDark ? const Color(0xFF1F2937) : const Color(0xFFE5E7EB),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
                 color: error != null
                     ? Colors.red
-                    : (isDark ? const Color(0xFF374151) : Colors.grey[200]!)),
+                    : (isDark ? const Color(0xFF374151) : const Color(0xFFD1D5DB))),
           ),
           child: Row(children: [
             Expanded(
@@ -1408,12 +1422,12 @@ class _PhoneField extends StatelessWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Container(
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1F2937) : Colors.grey[50],
+          color: isDark ? const Color(0xFF1F2937) : const Color(0xFFE5E7EB),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
               color: error != null
                   ? Colors.red
-                  : (isDark ? const Color(0xFF374151) : Colors.grey[200]!)),
+                  : (isDark ? const Color(0xFF374151) : const Color(0xFFD1D5DB))),
         ),
         child: Row(children: [
           Padding(
@@ -1487,12 +1501,12 @@ class _FormField extends StatelessWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Container(
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1F2937) : Colors.grey[50],
+          color: isDark ? const Color(0xFF1F2937) : const Color(0xFFE5E7EB),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
               color: error != null
                   ? Colors.red
-                  : (isDark ? const Color(0xFF374151) : Colors.grey[200]!)),
+                  : (isDark ? const Color(0xFF374151) : const Color(0xFFD1D5DB))),
         ),
         child: Row(children: [
           Padding(
@@ -1560,14 +1574,14 @@ class _PaymentMethodButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected
               ? (isDark ? Colors.orange.withOpacity(0.10) : Colors.orange[50])
-              : Colors.transparent,
+              : (isDark ? Colors.transparent : const Color(0xFFE5E7EB)),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
               color: isSelected
                   ? (isDark
                       ? Colors.orange.withOpacity(0.5)
                       : Colors.orange[400]!)
-                  : (isDark ? const Color(0xFF374151) : Colors.grey[200]!)),
+                  : (isDark ? const Color(0xFF374151) : const Color(0xFFD1D5DB))),
         ),
         child: Row(children: [
           Container(

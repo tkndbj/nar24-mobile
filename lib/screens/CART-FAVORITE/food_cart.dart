@@ -114,10 +114,7 @@ class _FoodCartContentState extends State<_FoodCartContent> {
             // ── Empty cart ───────────────────────────────────────────────
             if (cart.items.isEmpty) ...[
               SliverFillRemaining(
-                child: _EmptyCart(
-                  isDark: isDark,
-                  onBrowse: () => context.go('/restaurants'),
-                ),
+                child: _EmptyCart(isDark: isDark),
               ),
             ] else ...[
               // ── Title row ────────────────────────────────────────────
@@ -1592,9 +1589,8 @@ class _ClearCartDialog extends StatelessWidget {
 
 class _EmptyCart extends StatelessWidget {
   final bool isDark;
-  final VoidCallback onBrowse;
 
-  const _EmptyCart({required this.isDark, required this.onBrowse});
+  const _EmptyCart({required this.isDark});
 
   @override
   Widget build(BuildContext context) {
@@ -1633,21 +1629,6 @@ class _EmptyCart extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 color: isDark ? Colors.grey[500] : Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: onBrowse,
-              icon: const Icon(Icons.store_rounded, size: 16),
-              label: const Text('Browse Restaurants'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
               ),
             ),
           ],

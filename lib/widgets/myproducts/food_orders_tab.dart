@@ -1,13 +1,18 @@
 import 'dart:async';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:intl/intl.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../models/food_order_model.dart';
+import '../../models/restaurant.dart';
+import '../../providers/food_cart_provider.dart';
+import '../../utils/restaurant_utils.dart';
 
 class FoodOrdersTab extends StatefulWidget {
   const FoodOrdersTab({Key? key}) : super(key: key);
@@ -42,6 +47,9 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
   String? _errorMessage;
 
   String _currentSearchQuery = '';
+
+  // Track which order is currently being repeated (for loading state)
+  String? _repeatingOrderId;
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
   @override
@@ -226,6 +234,201 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
     }
   }
 
+  // ── Repeat order ─────────────────────────────────────────────────────────
+  Future<void> _repeatOrder(FoodOrder order) async {
+    if (_repeatingOrderId != null) return; // already in progress
+    if (!mounted) return;
+
+    final l10n = AppLocalizations.of(context);
+    final cartProvider = context.read<FoodCartProvider>();
+
+    setState(() => _repeatingOrderId = order.id);
+
+    try {
+      // 1. Fetch restaurant document to check open status
+      final restaurantDoc =
+          await _firestore.collection('restaurants').doc(order.restaurantId).get();
+
+      if (!mounted) return;
+
+      if (!restaurantDoc.exists) {
+        _showClosedDialog(l10n);
+        return;
+      }
+
+      final restaurant = Restaurant.fromMap(
+        restaurantDoc.data()!,
+        id: restaurantDoc.id,
+      );
+
+      // 2. Check if restaurant is open
+      if (!isRestaurantOpen(restaurant)) {
+        _showClosedDialog(l10n);
+        return;
+      }
+
+      // 3. Build cart restaurant
+      final cartRestaurant = FoodCartRestaurant(
+        id: order.restaurantId,
+        name: order.restaurantName,
+        profileImageUrl: order.restaurantProfileImage,
+      );
+
+      // 4. Fetch food documents to get current imageUrl, category, etc.
+      final foodIds = order.items.map((i) => i.foodId).toSet().toList();
+      final foodDataMap = <String, Map<String, dynamic>>{};
+      // Firestore whereIn supports max 10 items per query
+      for (int batch = 0; batch < foodIds.length; batch += 10) {
+        final chunk = foodIds.sublist(
+          batch,
+          batch + 10 > foodIds.length ? foodIds.length : batch + 10,
+        );
+        final snap = await _firestore
+            .collection('foods')
+            .where(FieldPath.documentId, whereIn: chunk)
+            .get();
+        for (final doc in snap.docs) {
+          foodDataMap[doc.id] = doc.data();
+        }
+      }
+
+      if (!mounted) return;
+
+      // 5. Add each item to cart
+      for (int i = 0; i < order.items.length; i++) {
+        final item = order.items[i];
+        final foodDoc = foodDataMap[item.foodId];
+        final extras = item.extras
+            .map((e) => SelectedExtra(
+                  name: e.name,
+                  quantity: e.quantity,
+                  price: e.price,
+                ))
+            .toList();
+
+        final imageUrl = (foodDoc?['imageUrl'] as String?) ?? '';
+        final foodCategory = (foodDoc?['foodCategory'] as String?) ?? '';
+        final foodType = (foodDoc?['foodType'] as String?) ?? '';
+        final foodDescription = (foodDoc?['description'] as String?) ?? '';
+        final preparationTime = (foodDoc?['preparationTime'] as num?)?.toInt();
+
+        if (i == 0) {
+          // First item — may trigger restaurant conflict
+          final result = await cartProvider.addItem(
+            foodId: item.foodId,
+            foodName: item.name,
+            foodDescription: foodDescription,
+            price: item.price,
+            imageUrl: imageUrl,
+            foodCategory: foodCategory,
+            foodType: foodType,
+            preparationTime: preparationTime,
+            restaurant: cartRestaurant,
+            quantity: item.quantity,
+            extras: extras,
+          );
+
+          if (!mounted) return;
+
+          if (result == AddItemResult.restaurantConflict) {
+            final shouldReplace = await _showReplaceCartDialog(l10n);
+            if (shouldReplace != true || !mounted) return;
+
+            final clearResult = await cartProvider.clearAndAddFromNewRestaurant(
+              foodId: item.foodId,
+              foodName: item.name,
+              foodDescription: foodDescription,
+              price: item.price,
+              imageUrl: imageUrl,
+              foodCategory: foodCategory,
+              foodType: foodType,
+              preparationTime: preparationTime,
+              restaurant: cartRestaurant,
+              quantity: item.quantity,
+              extras: extras,
+            );
+
+            if (!mounted) return;
+            if (clearResult != ClearAndAddResult.added) continue;
+          } else if (result == AddItemResult.error) {
+            continue;
+          }
+        } else {
+          // Subsequent items — same restaurant, just add
+          await cartProvider.addItem(
+            foodId: item.foodId,
+            foodName: item.name,
+            foodDescription: foodDescription,
+            price: item.price,
+            imageUrl: imageUrl,
+            foodCategory: foodCategory,
+            foodType: foodType,
+            preparationTime: preparationTime,
+            restaurant: cartRestaurant,
+            quantity: item.quantity,
+            extras: extras,
+          );
+          if (!mounted) return;
+        }
+      }
+
+      // 5. Show success
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.orderItemsAddedToCart),
+            backgroundColor: const Color(0xFF00A86B),
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('FoodOrdersTab: repeat order error: $e');
+    } finally {
+      if (mounted) setState(() => _repeatingOrderId = null);
+    }
+  }
+
+  void _showClosedDialog(AppLocalizations l10n) {
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text(l10n.restaurantCurrentlyClosed),
+        content: Text(l10n.restaurantClosedCannotRepeat),
+        actions: [
+          CupertinoDialogAction(
+            child: Text(l10n.ok),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool?> _showReplaceCartDialog(AppLocalizations l10n) {
+    return showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text(l10n.replaceCartItems),
+        content: Text(l10n.cartHasItemsFromAnotherRestaurant),
+        actions: [
+          CupertinoDialogAction(
+            child: Text(l10n.cancel),
+            onPressed: () => Navigator.pop(ctx, false),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            child: Text(l10n.replaceCart),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Widgets ───────────────────────────────────────────────────────────────
   Widget _buildShimmer() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -352,6 +555,50 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildRepeatOrderButton(
+      FoodOrder order, AppLocalizations l10n, bool isDark) {
+    final isLoading = _repeatingOrderId == order.id;
+    return GestureDetector(
+      onTap: isLoading ? null : () => _repeatOrder(order),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFF00A86B).withOpacity(0.1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: const Color(0xFF00A86B).withOpacity(0.35),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isLoading)
+              const SizedBox(
+                width: 11,
+                height: 11,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1.5,
+                  color: Color(0xFF00A86B),
+                ),
+              )
+            else
+              const Icon(Icons.replay_rounded,
+                  size: 11, color: Color(0xFF00A86B)),
+            const SizedBox(width: 4),
+            Text(
+              l10n.repeatOrder,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF00A86B),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -493,13 +740,20 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
                   ),
                 ),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _buildStatusBadge(order.status, l10n),
+                  const Spacer(),
+                  // Repeat order button (only for delivered/completed)
+                  if (order.status == FoodOrderStatus.delivered ||
+                      order.status == FoodOrderStatus.completed) ...[
+                    _buildRepeatOrderButton(order, l10n, isDark),
+                    const SizedBox(width: 8),
+                  ],
                   // Payment indicator
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
                         order.isPaid

@@ -6,7 +6,7 @@ import 'package:flutter_feather_icons/flutter_feather_icons.dart';
 
 import 'restaurants_screen.dart';
 import '../CART-FAVORITE/food_cart.dart';
-import '../USER-PROFILE/my_orders_screen.dart';
+import '../USER-PROFILE/my_food_orders.dart';
 import '../USER-PROFILE/profile_screen.dart';
 
 class RestaurantShellScreen extends StatefulWidget {
@@ -43,7 +43,7 @@ class _RestaurantShellScreenState extends State<RestaurantShellScreen> {
       case 1:
         return const FoodCartScreen();
       case 2:
-        return const MyOrdersScreen();
+        return const MyFoodOrdersScreen();
       case 3:
         return const ProfileScreen();
       default:

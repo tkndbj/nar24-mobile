@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../widgets/myproducts/sold_bought_products_tab.dart';
-import '../../widgets/myproducts/food_orders_tab.dart'; // ← NEW
 import 'package:provider/provider.dart';
 import '../../providers/my_products_provider.dart';
 
@@ -31,15 +30,13 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
   // Keys to communicate with child widgets
   final GlobalKey<SoldBoughtProductsTabState> _soldTabKey = GlobalKey();
   final GlobalKey<SoldBoughtProductsTabState> _boughtTabKey = GlobalKey();
-  final GlobalKey<FoodOrdersTabState> _foodTabKey = GlobalKey(); // ← NEW
-
   // Track if tabs are syncing to prevent infinite loops
   bool _isTabSyncing = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this); // ← CHANGED 2→3
+    _tabController = TabController(length: 2, vsync: this);
     _pageController = PageController();
 
     // Sync tab controller with page controller
@@ -94,7 +91,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
   void _applySearchToAllTabs() {
     _soldTabKey.currentState?.applySearch(_currentSearchQuery);
     _boughtTabKey.currentState?.applySearch(_currentSearchQuery);
-    _foodTabKey.currentState?.applySearch(_currentSearchQuery); // ← NEW
   }
 
   void _clearSearch() {
@@ -234,8 +230,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
         tabs: [
           _buildModernTab(l10n.soldProducts, Icons.sell_rounded),
           _buildModernTab(l10n.boughtProducts, Icons.shopping_cart_rounded),
-          _buildModernTab(
-              l10n.foodOrders, Icons.restaurant_menu_rounded), // ← NEW
         ],
       ),
     );
@@ -263,9 +257,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    // Show restaurant-oriented hint when on the food tab
-    final isOnFoodTab = _tabController.index == 2;
-    final hintText = isOnFoodTab ? l10n.searchRestaurants : l10n.searchOrders;
+    final hintText = l10n.searchOrders;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -462,11 +454,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                       SoldBoughtProductsTab(
                         key: _boughtTabKey,
                         isSold: false,
-                      ),
-
-                      // ── Food orders tab (NEW) ──────────────────────────
-                      FoodOrdersTab(
-                        key: _foodTabKey,
                       ),
                     ],
                   ),

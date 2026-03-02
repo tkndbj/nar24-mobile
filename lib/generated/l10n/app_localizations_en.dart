@@ -12903,6 +12903,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get foodReceipt => 'Food Receipt';
 
   @override
+  String get repeatOrder => 'Repeat Order';
+
+  @override
+  String get restaurantCurrentlyClosed => 'Restaurant Closed';
+
+  @override
+  String get restaurantClosedCannotRepeat =>
+      'This restaurant is currently closed. You can repeat this order when it opens.';
+
+  @override
+  String get orderItemsAddedToCart => 'Items added to cart!';
+
+  @override
+  String get replaceCartItems => 'Replace Cart Items?';
+
+  @override
+  String get cartHasItemsFromAnotherRestaurant =>
+      'Your cart has items from another restaurant. Do you want to clear it and add items from this order?';
+
+  @override
+  String get replaceCart => 'Replace';
+
+  @override
   String get goBack => 'Go Back';
 
   @override

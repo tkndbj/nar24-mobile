@@ -12927,6 +12927,29 @@ class AppLocalizationsTr extends AppLocalizations {
   String get foodReceipt => 'Yemek Fişi';
 
   @override
+  String get repeatOrder => 'Siparişi Tekrarla';
+
+  @override
+  String get restaurantCurrentlyClosed => 'Restoran Kapalı';
+
+  @override
+  String get restaurantClosedCannotRepeat =>
+      'Bu restoran şu anda kapalı. Restoran açıldığında siparişi tekrarlayabilirsiniz.';
+
+  @override
+  String get orderItemsAddedToCart => 'Ürünler sepete eklendi!';
+
+  @override
+  String get replaceCartItems => 'Sepet Değiştirilsin mi?';
+
+  @override
+  String get cartHasItemsFromAnotherRestaurant =>
+      'Sepetinizde başka bir restorandan ürünler var. Sepeti temizleyip bu siparişin ürünlerini eklemek ister misiniz?';
+
+  @override
+  String get replaceCart => 'Değiştir';
+
+  @override
   String get goBack => 'Geri Dön';
 
   @override

@@ -24648,6 +24648,48 @@ abstract class AppLocalizations {
   /// **'Yemek Fişi'**
   String get foodReceipt;
 
+  /// No description provided for @repeatOrder.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişi Tekrarla'**
+  String get repeatOrder;
+
+  /// No description provided for @restaurantCurrentlyClosed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoran Kapalı'**
+  String get restaurantCurrentlyClosed;
+
+  /// No description provided for @restaurantClosedCannotRepeat.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bu restoran şu anda kapalı. Restoran açıldığında siparişi tekrarlayabilirsiniz.'**
+  String get restaurantClosedCannotRepeat;
+
+  /// No description provided for @orderItemsAddedToCart.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ürünler sepete eklendi!'**
+  String get orderItemsAddedToCart;
+
+  /// No description provided for @replaceCartItems.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sepet Değiştirilsin mi?'**
+  String get replaceCartItems;
+
+  /// No description provided for @cartHasItemsFromAnotherRestaurant.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sepetinizde başka bir restorandan ürünler var. Sepeti temizleyip bu siparişin ürünlerini eklemek ister misiniz?'**
+  String get cartHasItemsFromAnotherRestaurant;
+
+  /// No description provided for @replaceCart.
+  ///
+  /// In tr, this message translates to:
+  /// **'Değiştir'**
+  String get replaceCart;
+
   /// No description provided for @goBack.
   ///
   /// In tr, this message translates to:

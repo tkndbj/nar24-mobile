@@ -223,10 +223,11 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                       title: const Text('Restaurants'),
                       floating: true,
                       snap: true,
-                      backgroundColor: isDark ? const Color(0xFF030712) : Colors.white,
+                      backgroundColor: isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
                       surfaceTintColor: Colors.transparent,
-                      elevation: 0.5,
-                      shadowColor: isDark ? Colors.black54 : Colors.black26,
+                      elevation: 0,
+                      shadowColor: Colors.transparent,
+                      scrolledUnderElevation: 0,
                     ),
 
                     // ── Content ──────────────────────────────────────────

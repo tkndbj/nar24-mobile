@@ -13000,6 +13000,29 @@ class AppLocalizationsRu extends AppLocalizations {
   String get foodReceipt => 'Чек за еду';
 
   @override
+  String get repeatOrder => 'Повторить заказ';
+
+  @override
+  String get restaurantCurrentlyClosed => 'Ресторан закрыт';
+
+  @override
+  String get restaurantClosedCannotRepeat =>
+      'Этот ресторан сейчас закрыт. Вы сможете повторить заказ, когда он откроется.';
+
+  @override
+  String get orderItemsAddedToCart => 'Товары добавлены в корзину!';
+
+  @override
+  String get replaceCartItems => 'Заменить товары в корзине?';
+
+  @override
+  String get cartHasItemsFromAnotherRestaurant =>
+      'В вашей корзине есть товары из другого ресторана. Хотите очистить корзину и добавить товары из этого заказа?';
+
+  @override
+  String get replaceCart => 'Заменить';
+
+  @override
   String get goBack => 'Назад';
 
   @override

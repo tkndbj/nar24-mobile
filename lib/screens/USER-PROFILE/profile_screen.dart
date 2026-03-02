@@ -932,10 +932,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     : () => _handleUnauthenticatedTap(context),
                                 theme: theme,
                               )
-                            : Container(), // Empty container for non-shop owners
+                            : _buildRectButton(
+                                icon: Icons.restaurant_menu_rounded,
+                                label: localization.foodOrders,
+                                onTap: isAuthenticated
+                                    ? () =>
+                                        context.push('/my_food_orders')
+                                    : () => _handleUnauthenticatedTap(context),
+                                theme: theme,
+                              ),
                       ),
                     ],
                   ),
+                  // Food orders row for shop owners
+                  if (userOwnsShop) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildRectButton(
+                            icon: Icons.restaurant_menu_rounded,
+                            label: localization.foodOrders,
+                            onTap: isAuthenticated
+                                ? () => context.push('/my_food_orders')
+                                : () => _handleUnauthenticatedTap(context),
+                            theme: theme,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(child: Container()),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 20),
                   SizedBox(
                     height:
