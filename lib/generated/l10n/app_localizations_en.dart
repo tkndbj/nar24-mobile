@@ -12969,4 +12969,46 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get writeRestaurantReview => 'Write Restaurant Review';
+
+  @override
+  String get foodCartConflictTitle => 'Start a new order?';
+
+  @override
+  String foodCartConflictBody(String currentRestaurant, String newRestaurant) {
+    return 'Your cart has items from $currentRestaurant. Adding from $newRestaurant will clear your current cart.';
+  }
+
+  @override
+  String get foodCartConflictKeep => 'Keep current';
+
+  @override
+  String get foodCartConflictReplace => 'Start new order';
+
+  @override
+  String get foodDeliveryAddress => 'Delivery Address';
+
+  @override
+  String get selectDeliveryAddress =>
+      'Select where your food will be delivered';
+
+  @override
+  String get useThisAddress => 'Use This Address';
+
+  @override
+  String get addAddressHint => 'Add an address to get started with delivery';
+
+  @override
+  String get addressSelectedSuccess => 'Delivery address updated';
+
+  @override
+  String minOrderBadge(String amount) {
+    return 'Min. $amount TL';
+  }
+
+  @override
+  String get noDeliveryLabel => 'Does not deliver to your area';
+
+  @override
+  String get noDeliveryBanner =>
+      'This restaurant does not deliver to your selected address.';
 }

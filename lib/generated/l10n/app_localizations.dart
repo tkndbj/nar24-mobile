@@ -24755,6 +24755,78 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Restoran Değerlendirmesi Yaz'**
   String get writeRestaurantReview;
+
+  /// No description provided for @foodCartConflictTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yeni sipariş başlat?'**
+  String get foodCartConflictTitle;
+
+  /// No description provided for @foodCartConflictBody.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sepetinizde {currentRestaurant} restoranından ürünler var. {newRestaurant} restoranından ekleme yaparsanız mevcut sepetiniz temizlenecek.'**
+  String foodCartConflictBody(String currentRestaurant, String newRestaurant);
+
+  /// No description provided for @foodCartConflictKeep.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mevcut siparişi koru'**
+  String get foodCartConflictKeep;
+
+  /// No description provided for @foodCartConflictReplace.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yeni sipariş başlat'**
+  String get foodCartConflictReplace;
+
+  /// No description provided for @foodDeliveryAddress.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimat Adresi'**
+  String get foodDeliveryAddress;
+
+  /// No description provided for @selectDeliveryAddress.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemeğinizin teslim edileceği adresi seçin'**
+  String get selectDeliveryAddress;
+
+  /// No description provided for @useThisAddress.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bu Adresi Kullan'**
+  String get useThisAddress;
+
+  /// No description provided for @addAddressHint.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimat için bir adres ekleyin'**
+  String get addAddressHint;
+
+  /// No description provided for @addressSelectedSuccess.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimat adresi güncellendi'**
+  String get addressSelectedSuccess;
+
+  /// No description provided for @minOrderBadge.
+  ///
+  /// In tr, this message translates to:
+  /// **'Min. {amount} TL'**
+  String minOrderBadge(String amount);
+
+  /// No description provided for @noDeliveryLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bölgenize teslimat yapılmıyor'**
+  String get noDeliveryLabel;
+
+  /// No description provided for @noDeliveryBanner.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bu restoran seçtiğiniz adrese teslimat yapmıyor.'**
+  String get noDeliveryBanner;
 }
 
 class _AppLocalizationsDelegate

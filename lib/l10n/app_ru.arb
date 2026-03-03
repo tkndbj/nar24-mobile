@@ -5394,5 +5394,19 @@
 "notifFoodReviewBody": "Ваш заказ из {restaurantName} прибыл. Нажмите, чтобы оставить отзыв!",
 "@notifFoodReviewBody": { "placeholders": { "restaurantName": { "type": "String" } } },
 "restaurantReview": "Отзыв о ресторане",
-"writeRestaurantReview": "Написать отзыв о ресторане"
+"writeRestaurantReview": "Написать отзыв о ресторане",
+"foodCartConflictTitle": "Начать новый заказ?",
+"foodCartConflictBody": "В вашей корзине есть товары из {currentRestaurant}. При добавлении из {newRestaurant} текущая корзина будет очищена.",
+"@foodCartConflictBody": { "placeholders": { "currentRestaurant": { "type": "String" }, "newRestaurant": { "type": "String" } } },
+"foodCartConflictKeep": "Оставить текущий",
+"foodCartConflictReplace": "Начать новый заказ",
+"foodDeliveryAddress": "Адрес доставки",
+"selectDeliveryAddress": "Выберите адрес доставки еды",
+"useThisAddress": "Использовать этот адрес",
+"addAddressHint": "Добавьте адрес для начала доставки",
+"addressSelectedSuccess": "Адрес доставки обновлён",
+"minOrderBadge": "Мин. {amount} TL",
+"@minOrderBadge": { "placeholders": { "amount": { "type": "String" } } },
+"noDeliveryLabel": "Не доставляет в ваш район",
+"noDeliveryBanner": "Этот ресторан не доставляет по выбранному адресу."
 }

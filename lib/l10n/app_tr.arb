@@ -5676,5 +5676,19 @@
 "notifFoodReviewBody": "{restaurantName} siparişiniz geldi. Değerlendirmek için dokunun!",
 "@notifFoodReviewBody": { "placeholders": { "restaurantName": { "type": "String" } } },
 "restaurantReview": "Restoran Değerlendirmesi",
-"writeRestaurantReview": "Restoran Değerlendirmesi Yaz"
+"writeRestaurantReview": "Restoran Değerlendirmesi Yaz",
+"foodCartConflictTitle": "Yeni sipariş başlat?",
+"foodCartConflictBody": "Sepetinizde {currentRestaurant} restoranından ürünler var. {newRestaurant} restoranından ekleme yaparsanız mevcut sepetiniz temizlenecek.",
+"@foodCartConflictBody": { "placeholders": { "currentRestaurant": { "type": "String" }, "newRestaurant": { "type": "String" } } },
+"foodCartConflictKeep": "Mevcut siparişi koru",
+"foodCartConflictReplace": "Yeni sipariş başlat",
+"foodDeliveryAddress": "Teslimat Adresi",
+"selectDeliveryAddress": "Yemeğinizin teslim edileceği adresi seçin",
+"useThisAddress": "Bu Adresi Kullan",
+"addAddressHint": "Teslimat için bir adres ekleyin",
+"addressSelectedSuccess": "Teslimat adresi güncellendi",
+"minOrderBadge": "Min. {amount} TL",
+"@minOrderBadge": { "placeholders": { "amount": { "type": "String" } } },
+"noDeliveryLabel": "Bölgenize teslimat yapılmıyor",
+"noDeliveryBanner": "Bu restoran seçtiğiniz adrese teslimat yapmıyor."
 }

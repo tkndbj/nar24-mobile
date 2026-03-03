@@ -5725,5 +5725,19 @@
 "notifFoodReviewBody": "Your order from {restaurantName} has arrived. Tap to leave a review!",
 "@notifFoodReviewBody": { "placeholders": { "restaurantName": { "type": "String" } } },
 "restaurantReview": "Restaurant Review",
-"writeRestaurantReview": "Write Restaurant Review"
+"writeRestaurantReview": "Write Restaurant Review",
+"foodCartConflictTitle": "Start a new order?",
+"foodCartConflictBody": "Your cart has items from {currentRestaurant}. Adding from {newRestaurant} will clear your current cart.",
+"@foodCartConflictBody": { "placeholders": { "currentRestaurant": { "type": "String" }, "newRestaurant": { "type": "String" } } },
+"foodCartConflictKeep": "Keep current",
+"foodCartConflictReplace": "Start new order",
+"foodDeliveryAddress": "Delivery Address",
+"selectDeliveryAddress": "Select where your food will be delivered",
+"useThisAddress": "Use This Address",
+"addAddressHint": "Add an address to get started with delivery",
+"addressSelectedSuccess": "Delivery address updated",
+"minOrderBadge": "Min. {amount} TL",
+"@minOrderBadge": { "placeholders": { "amount": { "type": "String" } } },
+"noDeliveryLabel": "Does not deliver to your area",
+"noDeliveryBanner": "This restaurant does not deliver to your selected address."
 }

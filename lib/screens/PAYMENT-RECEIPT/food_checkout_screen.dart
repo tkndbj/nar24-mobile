@@ -309,7 +309,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
       final normalizedPhone = _address.phoneNumber.isNotEmpty
           ? _normalizePhone(_address.phoneNumber)
           : '';
-      final fn = FirebaseFunctions.instance.httpsCallable('processFoodOrder');
+      final fn = FirebaseFunctions.instanceFor(region: 'europe-west3').httpsCallable('processFoodOrder');
       final result = await fn.call({
         'restaurantId': cart.currentRestaurant!.id,
         'items': cart.items
@@ -387,7 +387,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
           ? _normalizePhone(_address.phoneNumber)
           : '';
       final fn =
-          FirebaseFunctions.instance.httpsCallable('initializeFoodPayment');
+          FirebaseFunctions.instanceFor(region: 'europe-west3').httpsCallable('initializeFoodPayment');
       final result = await fn.call({
         'restaurantId': cart.currentRestaurant!.id,
         'items': cart.items

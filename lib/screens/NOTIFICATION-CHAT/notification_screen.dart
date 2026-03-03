@@ -438,7 +438,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         break;
 
       case 'food_order_status_update':
-        context.push('/my_orders?tab=food');
+        context.push('/my_food_orders');
         break;
 
       case 'food_order_delivered_review':

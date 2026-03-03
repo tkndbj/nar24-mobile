@@ -165,12 +165,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
   void initState() {
     super.initState();
 
-    _tabController = TabController(length: 2, vsync: this)
-      ..addListener(() {
-        if (_tabController.index != 1) {
-          setState(() => _filter = ReviewFilter.all);
-        }
-      });
+    _tabController = TabController(length: 2, vsync: this);
 
     _pendingController = ScrollController()..addListener(_pendingOnScroll);
     _myController = ScrollController()..addListener(_myOnScroll);
@@ -1143,19 +1138,6 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
           child: Column(
             children: [
               _buildModernTabBar(),
-              // Filter row only visible on "My Reviews" tab
-              AnimatedBuilder(
-                animation: _tabController.animation!,
-                builder: (context, _) {
-                  final opacity =
-                      _tabController.animation!.value.clamp(0.0, 1.0);
-                  if (opacity == 0) return const SizedBox(height: 8);
-                  return Opacity(
-                    opacity: opacity,
-                    child: _buildFilterRow(isDarkMode, l10n),
-                  );
-                },
-              ),
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
@@ -1470,70 +1452,81 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
   // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildMyReviewsList(bool isDark, AppLocalizations l10n) {
+    final Widget content;
+
     if (_myInitialLoading && _myFoodInitialLoading) {
-      return _buildShimmerList(isDark);
-    }
+      content = _buildShimmerList(isDark);
+    } else {
+      final showFood =
+          _filter == ReviewFilter.all || _filter == ReviewFilter.food;
+      final showProduct = _filter != ReviewFilter.food;
 
-    final showFood =
-        _filter == ReviewFilter.all || _filter == ReviewFilter.food;
-    final showProduct = _filter != ReviewFilter.food;
+      final displayedDocs = showProduct
+          ? _myDocs.where((doc) {
+              final collId = doc.reference.parent.parent?.parent.id;
+              switch (_filter) {
+                case ReviewFilter.product:
+                  return collId == 'products' || collId == 'shop_products';
+                case ReviewFilter.seller:
+                  return collId == 'users' || collId == 'shops';
+                default:
+                  return true;
+              }
+            }).toList()
+          : <QueryDocumentSnapshot<Map<String, dynamic>>>[];
 
-    final displayedDocs = showProduct
-        ? _myDocs.where((doc) {
-            final collId = doc.reference.parent.parent?.parent.id;
-            switch (_filter) {
-              case ReviewFilter.product:
-                return collId == 'products' || collId == 'shop_products';
-              case ReviewFilter.seller:
-                return collId == 'users' || collId == 'shops';
-              default:
-                return true;
+      final foodReviews = showFood ? _myFoodReviews : <FoodReview>[];
+      final totalCount = displayedDocs.length + foodReviews.length;
+
+      if (totalCount == 0 && !_myLoading && !_myFoodLoading) {
+        content = Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset('assets/images/reviews.png', width: 140),
+              const SizedBox(height: 12),
+              Text(
+                l10n.youHaveNoReviews,
+                style: TextStyle(
+                    fontSize: 16,
+                    color: Theme.of(context).colorScheme.onSurface),
+              ),
+            ],
+          ),
+        );
+      } else {
+        content = ListView.separated(
+          controller: _myController,
+          padding: const EdgeInsets.only(top: 8.0),
+          itemCount: displayedDocs.length +
+              foodReviews.length +
+              (_myLoading || _myFoodLoading ? 1 : 0),
+          separatorBuilder: (_, __) => const SizedBox(height: 16),
+          itemBuilder: (context, index) {
+            // Product / seller reviews
+            if (index < displayedDocs.length) {
+              return _buildProductReviewCard(
+                  displayedDocs[index], isDark, l10n);
             }
-          }).toList()
-        : <QueryDocumentSnapshot<Map<String, dynamic>>>[];
 
-    final foodReviews = showFood ? _myFoodReviews : <FoodReview>[];
-    final totalCount = displayedDocs.length + foodReviews.length;
+            // Food reviews
+            final foodIndex = index - displayedDocs.length;
+            if (foodIndex < foodReviews.length) {
+              return _buildFoodReviewCard(foodReviews[foodIndex], isDark, l10n);
+            }
 
-    if (totalCount == 0 && !_myLoading && !_myFoodLoading) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset('assets/images/reviews.png', width: 140),
-            const SizedBox(height: 12),
-            Text(
-              l10n.youHaveNoReviews,
-              style: TextStyle(
-                  fontSize: 16, color: Theme.of(context).colorScheme.onSurface),
-            ),
-          ],
-        ),
-      );
+            // Loading shimmer
+            return _buildReviewShimmerItem(isDark);
+          },
+        );
+      }
     }
 
-    return ListView.separated(
-      controller: _myController,
-      padding: const EdgeInsets.only(top: 8.0),
-      itemCount: displayedDocs.length +
-          foodReviews.length +
-          (_myLoading || _myFoodLoading ? 1 : 0),
-      separatorBuilder: (_, __) => const SizedBox(height: 16),
-      itemBuilder: (context, index) {
-        // Product / seller reviews
-        if (index < displayedDocs.length) {
-          return _buildProductReviewCard(displayedDocs[index], isDark, l10n);
-        }
-
-        // Food reviews
-        final foodIndex = index - displayedDocs.length;
-        if (foodIndex < foodReviews.length) {
-          return _buildFoodReviewCard(foodReviews[foodIndex], isDark, l10n);
-        }
-
-        // Loading shimmer
-        return _buildReviewShimmerItem(isDark);
-      },
+    return Column(
+      children: [
+        _buildFilterRow(isDark, l10n),
+        Expanded(child: content),
+      ],
     );
   }
 

@@ -6,30 +6,25 @@
 
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../auth_service.dart';
+import '../../generated/l10n/app_localizations.dart';
+import '../../widgets/login_modal.dart';
 import '../../widgets/restaurants/reviews.dart';
 import '../../constants/foodData.dart';
-import '../../constants/foodExtras.dart';
+import '../../models/food_address.dart';
 import '../../models/restaurant.dart';
 import '../../models/food.dart';
 import '../../providers/food_cart_provider.dart';
+import '../../user_provider.dart';
 import '../../utils/restaurant_utils.dart';
 import '../../services/typesense_service_manager.dart';
 import '../../services/restaurant_typesense_service.dart';
 
-// ─── Route ────────────────────────────────────────────────────────────────────
-// GoRoute(
-//   path: '/restaurant-detail/:id',
-//   builder: (_, state) =>
-//       RestaurantDetailScreen(restaurantId: state.pathParameters['id']!),
-// )
-
-// =============================================================================
-// ENTRY POINT
-// Mirrors RestaurantDetailPage — client-side data fetch via useCallback/useEffect
-// =============================================================================
 
 class RestaurantDetailScreen extends StatefulWidget {
   final String restaurantId;
@@ -286,35 +281,39 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
 
   void _showConflictDialog(_PendingConflict pending) {
     final cart = context.read<FoodCartProvider>();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    showDialog(
+    showCupertinoDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => _RestaurantConflictDialog(
         currentRestaurantName: cart.currentRestaurant?.name ?? '',
         newRestaurantName: pending.restaurant.name,
-        isDark: isDark,
-        // Mirrors handleConflictReplace
         onReplace: () async {
           Navigator.of(context).pop();
-          await context.read<FoodCartProvider>().clearAndAddFromNewRestaurant(
-                foodId: pending.food.id,
-                foodName: pending.food.name,
-                foodDescription: pending.food.description ?? '',
-                price: pending.food.price,
-                imageUrl: pending.food.imageUrl ?? '',
-                foodCategory: pending.food.foodCategory,
-                foodType: pending.food.foodType,
-                preparationTime: pending.food.preparationTime,
-                restaurant: pending.restaurant,
-                quantity: pending.quantity,
-                extras: pending.extras,
-                specialNotes: pending.specialNotes,
-              );
           setState(() => _pendingConflict = null);
+
+          if (pending.onAfterReplace != null) {
+            // Pre-extras conflict: clear cart, then open extras sheet
+            await cart.clearCart();
+            pending.onAfterReplace!();
+          } else {
+            // Post-extras conflict: clear cart and add item directly
+            await cart.clearAndAddFromNewRestaurant(
+                  foodId: pending.food.id,
+                  foodName: pending.food.name,
+                  foodDescription: pending.food.description ?? '',
+                  price: pending.food.price,
+                  imageUrl: pending.food.imageUrl ?? '',
+                  foodCategory: pending.food.foodCategory,
+                  foodType: pending.food.foodType,
+                  preparationTime: pending.food.preparationTime,
+                  restaurant: pending.restaurant,
+                  quantity: pending.quantity,
+                  extras: pending.extras,
+                  specialNotes: pending.specialNotes,
+                );
+          }
         },
-        // Mirrors onCancel={() => setPendingConflict(null)}
         onCancel: () {
           Navigator.of(context).pop();
           setState(() => _pendingConflict = null);
@@ -367,6 +366,14 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
 
     final isOpen = isRestaurantOpen(restaurant);
 
+    // ── Delivery check ────────────────────────────────────────────────
+    final rawFoodAddress =
+        context.watch<UserProvider>().profileData?['foodAddress'];
+    final foodAddress = rawFoodAddress is Map<String, dynamic>
+        ? FoodAddress.fromMap(rawFoodAddress)
+        : null;
+    final deliversToUser = _deliversToAddress(restaurant, foodAddress);
+
     return Consumer<FoodCartProvider>(
       builder: (context, cart, _) {
         final cartQtyMap = _cartQuantityMap(cart.items);
@@ -395,6 +402,9 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
 
               // ── Closed banner ─────────────────────────────────────────
               if (!isOpen) _buildClosedBanner(isDark),
+
+              // ── No-delivery banner ──────────────────────────────────────
+              if (!deliversToUser) _buildNoDeliveryBanner(isDark),
 
               // ── Tab buttons + search row ──────────────────────────────
               SliverToBoxAdapter(
@@ -444,6 +454,7 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
                           restaurant: restaurant,
                           isDark: isDark,
                           isOpen: isOpen,
+                          deliversToUser: deliversToUser,
                           cartQtyMap: cartQtyMap,
                           onConflict: _handleConflict,
                           onRemove: (id) =>
@@ -454,6 +465,7 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
                           restaurant: restaurant,
                           isDark: isDark,
                           isOpen: isOpen,
+                          deliversToUser: deliversToUser,
                           cartQtyMap: cartQtyMap,
                           onConflict: _handleConflict,
                           onRemove: (id) =>
@@ -549,6 +561,49 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
     );
   }
 
+  // ── Delivery check helper ────────────────────────────────────────────
+  bool _deliversToAddress(Restaurant r, FoodAddress? foodAddress) {
+    if (foodAddress == null || r.minOrderPrices == null || r.minOrderPrices!.isEmpty) return true;
+    for (final e in r.minOrderPrices!) {
+      if (e['subregion'] == foodAddress.city || e['subregion'] == foodAddress.mainRegion) return true;
+    }
+    return false;
+  }
+
+  SliverToBoxAdapter _buildNoDeliveryBanner(bool isDark) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.orange.withOpacity(0.10) : Colors.orange[50],
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? Colors.orange.withOpacity(0.20) : Colors.orange[200]!,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.location_off_rounded,
+                  size: 20, color: isDark ? Colors.orange[400] : Colors.orange[700]),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  AppLocalizations.of(context).noDeliveryBanner,
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.orange[400] : Colors.orange[800]),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showCartSheet(
       BuildContext context, FoodCartProvider cart, bool isDark) {
     showModalBottomSheet(
@@ -570,6 +625,7 @@ class _PendingConflict {
   final int quantity;
   final List<SelectedExtra> extras;
   final String specialNotes;
+  final VoidCallback? onAfterReplace;
 
   const _PendingConflict({
     required this.food,
@@ -577,6 +633,7 @@ class _PendingConflict {
     required this.quantity,
     required this.extras,
     required this.specialNotes,
+    this.onAfterReplace,
   });
 }
 
@@ -1001,6 +1058,7 @@ class _GroupedFoodList extends StatelessWidget {
   final Restaurant restaurant;
   final bool isDark;
   final bool isOpen;
+  final bool deliversToUser;
   final Map<String, int> cartQtyMap;
   final ValueChanged<_PendingConflict> onConflict;
   final ValueChanged<String> onRemove;
@@ -1010,6 +1068,7 @@ class _GroupedFoodList extends StatelessWidget {
     required this.restaurant,
     required this.isDark,
     required this.isOpen,
+    this.deliversToUser = true,
     required this.cartQtyMap,
     required this.onConflict,
     required this.onRemove,
@@ -1061,6 +1120,7 @@ class _GroupedFoodList extends StatelessWidget {
                         restaurant: restaurant,
                         isDark: isDark,
                         isOpen: isOpen,
+                        deliversToUser: deliversToUser,
                         cartQuantity: cartQtyMap[food.id] ?? 0,
                         onConflict: onConflict,
                         onRemoveFromCart: () => onRemove(food.id),
@@ -1085,6 +1145,7 @@ class _FlatFoodList extends StatelessWidget {
   final Restaurant restaurant;
   final bool isDark;
   final bool isOpen;
+  final bool deliversToUser;
   final Map<String, int> cartQtyMap;
   final ValueChanged<_PendingConflict> onConflict;
   final ValueChanged<String> onRemove;
@@ -1094,6 +1155,7 @@ class _FlatFoodList extends StatelessWidget {
     required this.restaurant,
     required this.isDark,
     required this.isOpen,
+    this.deliversToUser = true,
     required this.cartQtyMap,
     required this.onConflict,
     required this.onRemove,
@@ -1112,6 +1174,7 @@ class _FlatFoodList extends StatelessWidget {
               restaurant: restaurant,
               isDark: isDark,
               isOpen: isOpen,
+              deliversToUser: deliversToUser,
               cartQuantity: cartQtyMap[foods[i].id] ?? 0,
               onConflict: onConflict,
               onRemoveFromCart: () => onRemove(foods[i].id),
@@ -1133,6 +1196,7 @@ class _FoodCard extends StatelessWidget {
   final Restaurant restaurant;
   final bool isDark;
   final bool isOpen;
+  final bool deliversToUser;
   final int cartQuantity;
   final ValueChanged<_PendingConflict> onConflict;
   final VoidCallback onRemoveFromCart;
@@ -1142,6 +1206,7 @@ class _FoodCard extends StatelessWidget {
     required this.restaurant,
     required this.isDark,
     required this.isOpen,
+    this.deliversToUser = true,
     required this.cartQuantity,
     required this.onConflict,
     required this.onRemoveFromCart,
@@ -1263,6 +1328,7 @@ class _FoodCard extends StatelessWidget {
                     // Add / in-cart button
                     _CartButton(
                       isOpen: isOpen,
+                      deliversToUser: deliversToUser,
                       cartQuantity: cartQuantity,
                       isDark: isDark,
                       onAdd: () => _openExtrasSheet(context),
@@ -1279,6 +1345,38 @@ class _FoodCard extends StatelessWidget {
   }
 
   void _openExtrasSheet(BuildContext context) {
+    if (FirebaseAuth.instance.currentUser == null) {
+      showCupertinoModalPopup(
+        context: context,
+        builder: (_) => LoginPromptModal(authService: AuthService()),
+      );
+      return;
+    }
+
+    final cart = context.read<FoodCartProvider>();
+    final hasConflict = cart.currentRestaurant != null &&
+        cart.currentRestaurant!.id != restaurant.id;
+
+    if (hasConflict) {
+      onConflict(_PendingConflict(
+        food: food,
+        restaurant: FoodCartRestaurant(
+          id: restaurant.id,
+          name: restaurant.name,
+          profileImageUrl: restaurant.profileImageUrl,
+        ),
+        quantity: 1,
+        extras: const [],
+        specialNotes: '',
+        onAfterReplace: () => _showExtrasSheet(context),
+      ));
+      return;
+    }
+
+    _showExtrasSheet(context);
+  }
+
+  void _showExtrasSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1286,7 +1384,6 @@ class _FoodCard extends StatelessWidget {
       builder: (_) => _FoodExtrasSheet(
         food: food,
         isDark: isDark,
-        // Mirrors handleExtrasConfirm
         onConfirm: (extras, specialNotes, quantity) async {
           final cartRestaurant = FoodCartRestaurant(
             id: restaurant.id,
@@ -1294,7 +1391,7 @@ class _FoodCard extends StatelessWidget {
             profileImageUrl: restaurant.profileImageUrl,
           );
 
-          final result = await context.read<FoodCartProvider>().addItem(
+          await context.read<FoodCartProvider>().addItem(
                 foodId: food.id,
                 foodName: food.name,
                 foodDescription: food.description ?? '',
@@ -1308,16 +1405,6 @@ class _FoodCard extends StatelessWidget {
                 extras: extras,
                 specialNotes: specialNotes,
               );
-
-          if (result == AddItemResult.restaurantConflict) {
-            onConflict(_PendingConflict(
-              food: food,
-              restaurant: cartRestaurant,
-              quantity: quantity,
-              extras: extras,
-              specialNotes: specialNotes,
-            ));
-          }
         },
       ),
     );
@@ -1328,6 +1415,7 @@ class _FoodCard extends StatelessWidget {
 
 class _CartButton extends StatelessWidget {
   final bool isOpen;
+  final bool deliversToUser;
   final int cartQuantity;
   final bool isDark;
   final VoidCallback onAdd;
@@ -1335,6 +1423,7 @@ class _CartButton extends StatelessWidget {
 
   const _CartButton({
     required this.isOpen,
+    this.deliversToUser = true,
     required this.cartQuantity,
     required this.isDark,
     required this.onAdd,
@@ -1355,6 +1444,20 @@ class _CartButton extends StatelessWidget {
             style: TextStyle(
                 fontSize: 12,
                 color: isDark ? Colors.grey[500] : Colors.grey[400])),
+      );
+    }
+
+    // Disabled state (no delivery)
+    if (!deliversToUser) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.grey[700] : Colors.grey[200],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(Icons.block_rounded,
+            size: 16,
+            color: isDark ? Colors.grey[500] : Colors.grey[400]),
       );
     }
 
@@ -1449,14 +1552,11 @@ class _FoodExtrasSheetState extends State<_FoodExtrasSheet> {
 
   late final List<String> _resolvedExtras;
 
-  @override
-  void initState() {
-    super.initState();
-    _resolvedExtras = FoodExtrasData.resolveExtras(
-      category: widget.food.foodCategory,
-      allowedExtras: widget.food.extras,
-    );
-  }
+ @override
+void initState() {
+  super.initState();
+  _resolvedExtras = widget.food.extras ?? [];
+}
 
   @override
   void dispose() {
@@ -1622,29 +1722,32 @@ class _FoodExtrasSheetState extends State<_FoodExtrasSheet> {
             ),
 
             // Add to cart button
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                  20, 8, 20, MediaQuery.of(context).viewInsets.bottom + 16),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _submitting ? null : _confirm,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                    20, 8, 20, MediaQuery.of(context).viewInsets.bottom + 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _submitting ? null : _confirm,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: _submitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
+                        : Text('Add to cart — ${total.toStringAsFixed(0)} TL',
+                            style: const TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.bold)),
                   ),
-                  child: _submitting
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2))
-                      : Text('Add to cart — ${total.toStringAsFixed(0)} TL',
-                          style: const TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.bold)),
                 ),
               ),
             ),
@@ -1941,47 +2044,36 @@ class _CartItemRow extends StatelessWidget {
 class _RestaurantConflictDialog extends StatelessWidget {
   final String currentRestaurantName;
   final String newRestaurantName;
-  final bool isDark;
   final VoidCallback onReplace;
   final VoidCallback onCancel;
 
   const _RestaurantConflictDialog({
     required this.currentRestaurantName,
     required this.newRestaurantName,
-    required this.isDark,
     required this.onReplace,
     required this.onCancel,
   });
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: isDark ? Colors.grey[900] : Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text('Start a new order?',
-          style: TextStyle(fontWeight: FontWeight.bold)),
-      content: Text(
-        'Your cart has items from $currentRestaurantName. '
-        'Adding from $newRestaurantName will clear your current cart.',
-        style: TextStyle(
-            fontSize: 14, color: isDark ? Colors.grey[300] : Colors.grey[700]),
+    final l10n = AppLocalizations.of(context);
+    return CupertinoAlertDialog(
+      title: Text(l10n.foodCartConflictTitle),
+      content: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(
+          l10n.foodCartConflictBody(currentRestaurantName, newRestaurantName),
+        ),
       ),
       actions: [
-        TextButton(
+        CupertinoDialogAction(
           onPressed: onCancel,
-          child: Text('Keep current',
-              style: TextStyle(
-                  color: isDark ? Colors.grey[400] : Colors.grey[700])),
+          child: Text(l10n.foodCartConflictKeep),
         ),
-        ElevatedButton(
+        CupertinoDialogAction(
+          isDestructiveAction: true,
           onPressed: onReplace,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.orange,
-            foregroundColor: Colors.white,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-          child: const Text('Start new order'),
+          child: Text(l10n.foodCartConflictReplace),
         ),
       ],
     );

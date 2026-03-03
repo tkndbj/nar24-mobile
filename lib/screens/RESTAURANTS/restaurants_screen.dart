@@ -4,15 +4,19 @@
 //        +  components/restaurants/RestaurantsPage.tsx  (UI)
 
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../constants/foodData.dart';
+import '../../generated/l10n/app_localizations.dart';
+import '../../models/food_address.dart';
 import '../../models/restaurant.dart';
+import '../../user_provider.dart';
 import '../../utils/restaurant_utils.dart';
 import '../../services/typesense_service_manager.dart';
 import '../../services/restaurant_typesense_service.dart';
+import '../../widgets/restaurants/food_location_picker.dart';
 
 // ─── Banner images ───────────────────────────────────────────────────────────
 // Add these to pubspec.yaml under flutter: assets:
@@ -20,9 +24,9 @@ import '../../services/restaurant_typesense_service.dart';
 //   - assets/images/banner2.png
 //   - assets/images/banner3.png
 const _kBannerAssets = [
-  'assets/images/banner1.png',
-  'assets/images/banner2.png',
-  'assets/images/banner3.png',
+  'assets/images/1.png',
+  'assets/images/2.png',
+  'assets/images/3.png',
 ];
 const _kBannerInterval = Duration(seconds: 5);
 
@@ -57,6 +61,12 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
   // ── Debounce ───────────────────────────────────────────────────────────
   Timer? _searchDebounce;
 
+  // ── Auto-show picker guard ────────────────────────────────────────────
+  bool _hasShownPicker = false;
+
+  // ── Track food address for re-fetching on change ────────────────────
+  FoodAddress? _lastFoodAddress;
+
   RestaurantTypesenseService get _typesense =>
       TypeSenseServiceManager.instance.restaurantService;
 
@@ -70,6 +80,17 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
     _fetchRestaurants();
     _fetchFacets();
     _searchController.addListener(_onSearchChanged);
+
+    // Auto-show food location picker if user has no foodAddress
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_hasShownPicker) return;
+      final foodAddress =
+          context.read<UserProvider>().profileData?['foodAddress'];
+      if (foodAddress == null) {
+        _hasShownPicker = true;
+        showFoodLocationPicker(context, isDismissible: false);
+      }
+    });
   }
 
   @override
@@ -84,25 +105,19 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
   // DATA FETCHING
   // ============================================================================
 
-  /// Initial load from Firestore — mirrors the server `getRestaurants()`.
+  /// Initial load via Typesense (with delivery-region filter).
   Future<void> _fetchRestaurants() async {
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('restaurants')
-          .where('isActive', isEqualTo: true)
-          .get();
-
-      final loaded = <Restaurant>[];
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        if (data['name'] == null) continue;
-        loaded.add(Restaurant.fromMap(data, id: doc.id));
-      }
+      final result = await _typesense.searchRestaurants(
+        isActive: true,
+        deliveryRegions: _deliveryFilterRegions(),
+        hitsPerPage: 100,
+      );
 
       if (mounted) {
         setState(() {
-          _allRestaurants = loaded;
-          _filteredRestaurants = loaded;
+          _allRestaurants = result.items;
+          _filteredRestaurants = result.items;
           _isLoadingData = false;
         });
       }
@@ -110,6 +125,18 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
       debugPrint('[RestaurantsScreen] Fetch error: $e');
       if (mounted) setState(() => _isLoadingData = false);
     }
+  }
+
+  /// Returns [city, mainRegion] from the user's foodAddress for Typesense
+  /// delivery-region filtering, or null if no address is set.
+  List<String>? _deliveryFilterRegions() {
+    final raw = context.read<UserProvider>().profileData?['foodAddress'];
+    if (raw is! Map<String, dynamic>) return null;
+    final addr = FoodAddress.fromMap(raw);
+    final regions = <String>{};
+    if (addr.city.isNotEmpty) regions.add(addr.city);
+    if (addr.mainRegion.isNotEmpty) regions.add(addr.mainRegion);
+    return regions.isEmpty ? null : regions.toList();
   }
 
   /// Fetch cuisine facets from Typesense for the filter pills.
@@ -162,7 +189,7 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
     final hasFilters = _selectedCuisine != null || _selectedFoodType != null;
     final hasSort = _sortOption != RestaurantSortOption.defaultSort;
 
-    // Nothing active → use Firestore data directly
+    // Nothing active → use cached Typesense results
     if (!hasFilters && !hasSort && query.isEmpty) {
       setState(() {
         _filteredRestaurants = _allRestaurants;
@@ -180,7 +207,8 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
         foodType: _selectedFoodType != null ? [_selectedFoodType!] : null,
         isActive: true,
         sort: _sortOption,
-        hitsPerPage: 50,
+        deliveryRegions: _deliveryFilterRegions(),
+        hitsPerPage: 100,
       );
 
       if (mounted) {
@@ -195,6 +223,24 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
     }
   }
 
+  // ── Min order price helper ─────────────────────────────────────────────
+  int? _getMinOrderPrice(Restaurant r, FoodAddress? foodAddress) {
+    if (foodAddress == null || r.minOrderPrices == null) return null;
+    // Exact subregion match
+    for (final e in r.minOrderPrices!) {
+      if (e['subregion'] == foodAddress.city) {
+        return (e['minOrderPrice'] as num?)?.toInt();
+      }
+    }
+    // Fallback: mainRegion-level entry
+    for (final e in r.minOrderPrices!) {
+      if (e['subregion'] == foodAddress.mainRegion) {
+        return (e['minOrderPrice'] as num?)?.toInt();
+      }
+    }
+    return null;
+  }
+
   // ============================================================================
   // BUILD
   // ============================================================================
@@ -203,6 +249,19 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final rawFoodAddress =
+        context.watch<UserProvider>().profileData?['foodAddress'];
+    final foodAddress = rawFoodAddress is Map<String, dynamic>
+        ? FoodAddress.fromMap(rawFoodAddress)
+        : null;
+
+    // Re-fetch when the user's delivery address changes
+    if (foodAddress != _lastFoodAddress) {
+      _lastFoodAddress = foodAddress;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _fetchRestaurants();
+      });
+    }
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
@@ -308,6 +367,54 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                       ),
                     ),
 
+                    // ── Current delivery address pill ────────────────────────
+                    if (foodAddress != null)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                          child: GestureDetector(
+                            onTap: () => showFoodLocationPicker(context),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.orange,
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.location_on_rounded,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      foodAddress.displayLabel,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    color: Colors.white70,
+                                    size: 20,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+
                     // ── Restaurant list ────────────────────────────────────
                     if (_isSearching)
                       SliverPadding(
@@ -336,6 +443,8 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                               child: _RestaurantCard(
                                 restaurant: _filteredRestaurants[i],
                                 isDark: isDark,
+                                minOrderPrice: _getMinOrderPrice(
+                                    _filteredRestaurants[i], foodAddress),
                                 onTap: () => context.push(
                                   '/restaurant-detail/${_filteredRestaurants[i].id}',
                                 ),
@@ -798,12 +907,14 @@ class _FoodTypeIconRow extends StatelessWidget {
 class _RestaurantCard extends StatelessWidget {
   final Restaurant restaurant;
   final bool isDark;
+  final int? minOrderPrice;
   final VoidCallback onTap;
 
   const _RestaurantCard({
     required this.restaurant,
     required this.isDark,
     required this.onTap,
+    this.minOrderPrice,
   });
 
   @override
@@ -940,23 +1051,54 @@ class _RestaurantCard extends StatelessWidget {
               ),
             ),
 
-            // ── Closed badge ───────────────────────────────────────────
-            if (!isOpen)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Text(
-                  'Closed',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+            // ── Badges column ──────────────────────────────────────────
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (!isOpen)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Closed',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
-                ),
-              ),
+                if (minOrderPrice != null) ...[
+                  if (!isOpen) const SizedBox(height: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF00A36C).withOpacity(0.2)
+                          : const Color(0xFF00A36C).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      AppLocalizations.of(context)
+                          .minOrderBadge(minOrderPrice.toString()),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: isDark
+                            ? const Color(0xFF4ADE80)
+                            : const Color(0xFF00A36C),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ],
         ),
       ),

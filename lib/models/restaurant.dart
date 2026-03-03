@@ -1,5 +1,7 @@
 // models/restaurant.dart
 
+import 'dart:convert';
+
 class WorkingHours {
   /// "HH:mm" format, e.g. "08:00"
   final String open;
@@ -57,6 +59,7 @@ class Restaurant {
   final List<String>? cuisineTypes;
   final List<String>? workingDays;
   final WorkingHours? workingHours;
+  final List<Map<String, dynamic>>? minOrderPrices;
 
   const Restaurant({
     required this.id,
@@ -79,6 +82,7 @@ class Restaurant {
     this.cuisineTypes,
     this.workingDays,
     this.workingHours,
+    this.minOrderPrices,
   });
 
   factory Restaurant.fromMap(Map<String, dynamic> map, {String? id}) {
@@ -116,7 +120,21 @@ class Restaurant {
           ? WorkingHours.fromMap(
               Map<String, dynamic>.from(map['workingHours'] as Map))
           : null,
+      minOrderPrices: (map['minOrderPrices'] as List<dynamic>?)
+              ?.map((e) => Map<String, dynamic>.from(e as Map))
+              .toList() ??
+          _parseMinOrderPricesJson(map['minOrderPricesJson'] as String?),
     );
+  }
+
+  static List<Map<String, dynamic>>? _parseMinOrderPricesJson(String? json) {
+    if (json == null || json.isEmpty) return null;
+    try {
+      final list = jsonDecode(json) as List;
+      return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (_) {
+      return null;
+    }
   }
 
   Map<String, dynamic> toMap() => {
@@ -140,6 +158,7 @@ class Restaurant {
         if (cuisineTypes != null) 'cuisineTypes': cuisineTypes,
         if (workingDays != null) 'workingDays': workingDays,
         if (workingHours != null) 'workingHours': workingHours!.toMap(),
+        if (minOrderPrices != null) 'minOrderPrices': minOrderPrices,
       };
 
   Restaurant copyWith({
@@ -163,6 +182,7 @@ class Restaurant {
     List<String>? cuisineTypes,
     List<String>? workingDays,
     WorkingHours? workingHours,
+    List<Map<String, dynamic>>? minOrderPrices,
   }) {
     return Restaurant(
       id: id ?? this.id,
@@ -185,6 +205,7 @@ class Restaurant {
       cuisineTypes: cuisineTypes ?? this.cuisineTypes,
       workingDays: workingDays ?? this.workingDays,
       workingHours: workingHours ?? this.workingHours,
+      minOrderPrices: minOrderPrices ?? this.minOrderPrices,
     );
   }
 

@@ -12993,4 +12993,46 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get writeRestaurantReview => 'Restoran Değerlendirmesi Yaz';
+
+  @override
+  String get foodCartConflictTitle => 'Yeni sipariş başlat?';
+
+  @override
+  String foodCartConflictBody(String currentRestaurant, String newRestaurant) {
+    return 'Sepetinizde $currentRestaurant restoranından ürünler var. $newRestaurant restoranından ekleme yaparsanız mevcut sepetiniz temizlenecek.';
+  }
+
+  @override
+  String get foodCartConflictKeep => 'Mevcut siparişi koru';
+
+  @override
+  String get foodCartConflictReplace => 'Yeni sipariş başlat';
+
+  @override
+  String get foodDeliveryAddress => 'Teslimat Adresi';
+
+  @override
+  String get selectDeliveryAddress =>
+      'Yemeğinizin teslim edileceği adresi seçin';
+
+  @override
+  String get useThisAddress => 'Bu Adresi Kullan';
+
+  @override
+  String get addAddressHint => 'Teslimat için bir adres ekleyin';
+
+  @override
+  String get addressSelectedSuccess => 'Teslimat adresi güncellendi';
+
+  @override
+  String minOrderBadge(String amount) {
+    return 'Min. $amount TL';
+  }
+
+  @override
+  String get noDeliveryLabel => 'Bölgenize teslimat yapılmıyor';
+
+  @override
+  String get noDeliveryBanner =>
+      'Bu restoran seçtiğiniz adrese teslimat yapmıyor.';
 }

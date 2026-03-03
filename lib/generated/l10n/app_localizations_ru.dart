@@ -13066,4 +13066,45 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get writeRestaurantReview => 'Написать отзыв о ресторане';
+
+  @override
+  String get foodCartConflictTitle => 'Начать новый заказ?';
+
+  @override
+  String foodCartConflictBody(String currentRestaurant, String newRestaurant) {
+    return 'В вашей корзине есть товары из $currentRestaurant. При добавлении из $newRestaurant текущая корзина будет очищена.';
+  }
+
+  @override
+  String get foodCartConflictKeep => 'Оставить текущий';
+
+  @override
+  String get foodCartConflictReplace => 'Начать новый заказ';
+
+  @override
+  String get foodDeliveryAddress => 'Адрес доставки';
+
+  @override
+  String get selectDeliveryAddress => 'Выберите адрес доставки еды';
+
+  @override
+  String get useThisAddress => 'Использовать этот адрес';
+
+  @override
+  String get addAddressHint => 'Добавьте адрес для начала доставки';
+
+  @override
+  String get addressSelectedSuccess => 'Адрес доставки обновлён';
+
+  @override
+  String minOrderBadge(String amount) {
+    return 'Мин. $amount TL';
+  }
+
+  @override
+  String get noDeliveryLabel => 'Не доставляет в ваш район';
+
+  @override
+  String get noDeliveryBanner =>
+      'Этот ресторан не доставляет по выбранному адресу.';
 }

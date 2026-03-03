@@ -246,6 +246,7 @@ class RestaurantTypesenseService {
     List<String>? cuisineTypes,
     List<String>? foodType,
     bool? isActive,
+    List<String>? deliveryRegions,
   }) async {
     final filterParts = <String>[];
 
@@ -265,6 +266,12 @@ class RestaurantTypesenseService {
           orParts.length == 1 ? orParts.first : '(${orParts.join(' || ')})');
     }
 
+    if (deliveryRegions != null && deliveryRegions.isNotEmpty) {
+      final orParts = deliveryRegions.map((r) => 'deliveryRegions:=`$r`').toList();
+      orParts.add('deliveryRegions:=`__ALL__`');
+      filterParts.add('(${orParts.join(' || ')})');
+    }
+
     final params = <String, String>{
       'q': query.trim().isEmpty ? '*' : query.trim(),
       'query_by': 'name,address',
@@ -274,7 +281,7 @@ class RestaurantTypesenseService {
       'include_fields':
           'id,name,address,contactNo,profileImageUrl,ownerId,isActive,isBoosted,'
               'latitude,longitude,averageRating,reviewCount,clickCount,followerCount,'
-              'foodType,cuisineTypes,workingDays,workingHours,createdAt',
+              'foodType,cuisineTypes,workingDays,workingHours,createdAt,minOrderPricesJson',
     };
 
     final filterBy = _buildFilterBy(filterParts);

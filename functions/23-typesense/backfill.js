@@ -259,26 +259,62 @@ async function backfillOrders(client) {
 async function main() {
   const client = await getTypesenseClient();
 
-  await backfillCollection(client, 'products', 'products',
-    (id, data) => buildProductDoc(id, 'products', data));
+  // await backfillCollection(client, 'products', 'products',
+  //   (id, data) => buildProductDoc(id, 'products', data));
 
-  await backfillCollection(client, 'shop_products', 'shop_products',
-    (id, data) => buildProductDoc(id, 'shop_products', data));
+  // await backfillCollection(client, 'shop_products', 'shop_products',
+  //   (id, data) => buildProductDoc(id, 'shop_products', data));
 
-  await backfillCollection(client, 'shops', 'shops', (id, data) => {
-    const doc = {
-      id: `shops_${id}`,
-      name: data.name || null,
-      profileImageUrl: data.profileImageUrl || null,
-      isActive: data.isActive ?? true,
-      categories: Array.isArray(data.categories) && data.categories.length > 0 ? data.categories : undefined,
-      searchableText: [data.name, ...(data.categories || [])].filter(Boolean).join(' '),
-    };
-    Object.keys(doc).forEach((k) => doc[k] == null && delete doc[k]);
-    return doc;
+  // await backfillCollection(client, 'shops', 'shops', (id, data) => {
+  //   const doc = {
+  //     id: `shops_${id}`,
+  //     name: data.name || null,
+  //     profileImageUrl: data.profileImageUrl || null,
+  //     isActive: data.isActive ?? true,
+  //     categories: Array.isArray(data.categories) && data.categories.length > 0 ? data.categories : undefined,
+  //     searchableText: [data.name, ...(data.categories || [])].filter(Boolean).join(' '),
+  //   };
+  //   Object.keys(doc).forEach((k) => doc[k] == null && delete doc[k]);
+  //   return doc;
+  // });
+
+  await backfillCollection(client, 'restaurants', 'restaurants', (id, data) => {
+    const d = {id: `restaurants_${id}`};
+    const pick = (key) => {if (data[key] != null) d[key] = data[key];};
+    const pickArr = (key) => {if (Array.isArray(data[key]) && data[key].length > 0) d[key] = data[key];};
+
+    pick('name');
+    pick('address');
+    pick('contactNo');
+    pick('profileImageUrl');
+    pick('ownerId');
+    pick('isActive');
+    pick('isBoosted');
+    pick('latitude');
+    pick('longitude');
+    pick('averageRating');
+    pick('reviewCount');
+    pick('clickCount');
+    pick('followerCount');
+    pickArr('foodType');
+    pickArr('cuisineTypes');
+    pickArr('workingDays');
+
+    if (Array.isArray(data.minOrderPrices) && data.minOrderPrices.length > 0) {
+      const regions = [...new Set(data.minOrderPrices.map((e) => e.subregion).filter(Boolean))];
+      if (regions.length > 0) d.deliveryRegions = regions;
+      d.minOrderPricesJson = JSON.stringify(data.minOrderPrices);
+    } else {
+      d.deliveryRegions = ['__ALL__'];
+    }
+
+    const ts = toUnixSeconds(data.createdAt);
+    if (ts != null) d.createdAt = ts;
+
+    return d;
   });
 
-  await backfillOrders(client);
+  // await backfillOrders(client);
 
   console.log('\n✅ Backfill complete!');
   process.exit(0);

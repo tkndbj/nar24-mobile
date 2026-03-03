@@ -355,6 +355,8 @@ const initTypesenseCollections = async (dropExisting = false) => {
         {name: 'foodType', type: 'string[]', facet: true, optional: true},
         {name: 'cuisineTypes', type: 'string[]', facet: true, optional: true},
 {name: 'workingDays', type: 'string[]', facet: true, optional: true},
+        {name: 'deliveryRegions', type: 'string[]', facet: true, optional: true},
+        {name: 'minOrderPricesJson', type: 'string', optional: true},
         {name: 'createdAt', type: 'int64', optional: true},
       ],
       token_separators: ['-', '_'],
@@ -632,7 +634,16 @@ const sanitizeForRestaurants = (data) => {
   pick('followerCount');
   pickArr('foodType');
   pickArr('cuisineTypes');
-  pickArr('workingDays'); 
+  pickArr('workingDays');
+
+  // Delivery regions — extract unique subregion values for server-side filtering
+  if (Array.isArray(data.minOrderPrices) && data.minOrderPrices.length > 0) {
+    const regions = [...new Set(data.minOrderPrices.map((e) => e.subregion).filter(Boolean))];
+    if (regions.length > 0) d.deliveryRegions = regions;
+    d.minOrderPricesJson = JSON.stringify(data.minOrderPrices);
+  } else {
+    d.deliveryRegions = ['__ALL__'];
+  }
 
   const ts = toUnixSeconds(data.createdAt);
   if (ts != null) d.createdAt = ts;
@@ -666,7 +677,7 @@ export const syncRestaurantsWithTypesense = onDocumentWritten(
     const afterData = event.data.after?.data() ?? null;
 
     if (beforeData && afterData) {
-      const searchFields = ['name', 'address', 'isActive', 'isBoosted', 'foodType', 'averageRating', 'profileImageUrl', 'cuisineTypes'];
+      const searchFields = ['name', 'address', 'isActive', 'isBoosted', 'foodType', 'averageRating', 'profileImageUrl', 'cuisineTypes', 'minOrderPrices'];
       const hasRelevantChanges = searchFields.some((f) => fieldChanged(beforeData[f], afterData[f]));
       if (!hasRelevantChanges) return;
     }

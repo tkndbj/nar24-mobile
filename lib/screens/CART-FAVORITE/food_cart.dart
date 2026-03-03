@@ -2,6 +2,7 @@
 //
 // Mirrors: app/food-cart/page.tsx + FoodCartPageContent + FoodCartItemCard
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -104,6 +105,10 @@ class _FoodCartContentState extends State<_FoodCartContent> {
   ) {
     // ── Not initialized (loading) — mirrors !isInitialized skeleton ───────
     if (!cart.isInitialized) {
+      // Unauthenticated users will never initialize; show empty cart directly.
+      if (FirebaseAuth.instance.currentUser == null) {
+        return _EmptyCart(isDark: isDark);
+      }
       return _FoodCartSkeleton(isDark: isDark);
     }
 
