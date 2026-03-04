@@ -39,10 +39,29 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
   List<Food> _foods = [];
   bool _loading = true;
 
+  /// Whether the user was unauthenticated when they entered this screen.
+  /// Used to detect fresh logins that should redirect to /restaurants.
+  final bool _wasUnauthenticated =
+      FirebaseAuth.instance.currentUser == null;
+  StreamSubscription<User?>? _authSubscription;
+
   @override
   void initState() {
     super.initState();
     _fetchData();
+
+    // If the user was unauthenticated when entering this screen, listen
+    // for auth changes. When they log in (e.g. via the login modal),
+    // redirect to /restaurants so the list is re-fetched with proper
+    // delivery-region filtering and the food address picker is shown.
+    if (_wasUnauthenticated) {
+      _authSubscription =
+          FirebaseAuth.instance.authStateChanges().listen((user) {
+        if (user != null && mounted) {
+          context.go('/restaurants');
+        }
+      });
+    }
   }
 
   /// Mirrors fetchData in RestaurantDetailPage — Promise.all parallel fetch.
@@ -90,6 +109,12 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
       debugPrint('[RestaurantDetail] Fetch error: $e');
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -1350,6 +1375,16 @@ class _FoodCard extends StatelessWidget {
         context: context,
         builder: (_) => LoginPromptModal(authService: AuthService()),
       );
+      return;
+    }
+
+    // Authenticated but no delivery address — send back to restaurants screen
+    // where the food location picker will auto-show and restaurants will be
+    // re-fetched filtered by the chosen delivery region.
+    final rawFoodAddress =
+        context.read<UserProvider>().profileData?['foodAddress'];
+    if (rawFoodAddress == null) {
+      context.go('/restaurants');
       return;
     }
 

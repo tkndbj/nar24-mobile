@@ -282,8 +282,24 @@ class _FoodLocationPickerSheetState extends State<_FoodLocationPickerSheet> {
         );
       } else {
         // Use selected existing address
-        final addr =
-            _addresses!.firstWhere((a) => a.id == _selectedAddressId);
+        final addr = _addresses!
+            .cast<_SavedAddress?>()
+            .firstWhere((a) => a!.id == _selectedAddressId, orElse: () => null);
+        if (addr == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(AppLocalizations.of(context).errorOccurred),
+                backgroundColor: Colors.red,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            );
+          }
+          setState(() => _saving = false);
+          return;
+        }
         final derivedMainRegion = getMainRegion(addr.city) ?? addr.city;
 
         foodAddress = FoodAddress(

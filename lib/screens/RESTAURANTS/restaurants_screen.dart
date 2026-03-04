@@ -43,8 +43,7 @@ class RestaurantsScreen extends StatefulWidget {
 
 class _RestaurantsScreenState extends State<RestaurantsScreen> {
   // ── Data ───────────────────────────────────────────────────────────────
-  List<Restaurant> _allRestaurants = [];
-  List<Restaurant> _filteredRestaurants = [];
+  List<Restaurant> _restaurants = [];
   List<FacetValue> _cuisineFacets = [];
 
   // ── Filters / sort ─────────────────────────────────────────────────────
@@ -53,6 +52,12 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
   RestaurantSortOption _sortOption = RestaurantSortOption.defaultSort;
   final _searchController = TextEditingController();
   String _searchQuery = '';
+
+  // ── Pagination ─────────────────────────────────────────────────────────
+  static const _kPageSize = 30;
+  int _currentPage = 0;
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
 
   // ── Loading ────────────────────────────────────────────────────────────
   bool _isLoadingData = true;
@@ -67,6 +72,9 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
   // ── Track food address for re-fetching on change ────────────────────
   FoodAddress? _lastFoodAddress;
 
+  // ── Scroll controller for infinite scrolling ──────────────────────────
+  final _scrollController = ScrollController();
+
   RestaurantTypesenseService get _typesense =>
       TypeSenseServiceManager.instance.restaurantService;
 
@@ -80,12 +88,14 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
     _fetchRestaurants();
     _fetchFacets();
     _searchController.addListener(_onSearchChanged);
+    _scrollController.addListener(_onScroll);
 
-    // Auto-show food location picker if user has no foodAddress
+    // Auto-show food location picker if authenticated user has no foodAddress
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_hasShownPicker) return;
-      final foodAddress =
-          context.read<UserProvider>().profileData?['foodAddress'];
+      final userProvider = context.read<UserProvider>();
+      if (userProvider.user == null) return;
+      final foodAddress = userProvider.profileData?['foodAddress'];
       if (foodAddress == null) {
         _hasShownPicker = true;
         showFoodLocationPicker(context, isDismissible: false);
@@ -98,7 +108,19 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
     _searchDebounce?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (_isLoadingMore || !_hasMore) return;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.position.pixels;
+    // Trigger load when within 200px of the bottom
+    if (currentScroll >= maxScroll - 200) {
+      _loadNextPage();
+    }
   }
 
   // ============================================================================
@@ -106,24 +128,61 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
   // ============================================================================
 
   /// Initial load via Typesense (with delivery-region filter).
+  /// Resets pagination and fetches page 0.
   Future<void> _fetchRestaurants() async {
     try {
       final result = await _typesense.searchRestaurants(
         isActive: true,
         deliveryRegions: _deliveryFilterRegions(),
-        hitsPerPage: 100,
+        hitsPerPage: _kPageSize,
+        page: 0,
       );
 
       if (mounted) {
         setState(() {
-          _allRestaurants = result.items;
-          _filteredRestaurants = result.items;
+          _restaurants = result.items;
+          _currentPage = 0;
+          _hasMore = result.page < result.nbPages - 1;
           _isLoadingData = false;
         });
       }
     } catch (e) {
       debugPrint('[RestaurantsScreen] Fetch error: $e');
       if (mounted) setState(() => _isLoadingData = false);
+    }
+  }
+
+  /// Loads the next page and appends results.
+  Future<void> _loadNextPage() async {
+    if (_isLoadingMore || !_hasMore) return;
+    setState(() => _isLoadingMore = true);
+
+    final nextPage = _currentPage + 1;
+
+    try {
+      final query = _searchQuery.trim();
+      final result = await _typesense.searchRestaurants(
+        query: query,
+        cuisineTypes: _selectedCuisine != null ? [_selectedCuisine!] : null,
+        foodType: _selectedFoodType != null ? [_selectedFoodType!] : null,
+        isActive: true,
+        sort: _sortOption,
+        deliveryRegions: _deliveryFilterRegions(),
+        hitsPerPage: _kPageSize,
+        page: nextPage,
+      );
+
+      if (mounted) {
+        setState(() {
+          _restaurants = [..._restaurants, ...result.items];
+          _currentPage = nextPage;
+          _hasMore = nextPage < result.nbPages - 1;
+        });
+      }
+    } catch (e) {
+      debugPrint('[RestaurantsScreen] LoadMore error: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingMore = false);
     }
   }
 
@@ -184,23 +243,12 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
     _performSearch();
   }
 
+  /// Resets pagination and performs a fresh search with current filters.
   Future<void> _performSearch() async {
-    final query = _searchQuery.trim();
-    final hasFilters = _selectedCuisine != null || _selectedFoodType != null;
-    final hasSort = _sortOption != RestaurantSortOption.defaultSort;
-
-    // Nothing active → use cached Typesense results
-    if (!hasFilters && !hasSort && query.isEmpty) {
-      setState(() {
-        _filteredRestaurants = _allRestaurants;
-        _isSearching = false;
-      });
-      return;
-    }
-
     setState(() => _isSearching = true);
 
     try {
+      final query = _searchQuery.trim();
       final result = await _typesense.searchRestaurants(
         query: query,
         cuisineTypes: _selectedCuisine != null ? [_selectedCuisine!] : null,
@@ -208,12 +256,15 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
         isActive: true,
         sort: _sortOption,
         deliveryRegions: _deliveryFilterRegions(),
-        hitsPerPage: 100,
+        hitsPerPage: _kPageSize,
+        page: 0,
       );
 
       if (mounted) {
         setState(() {
-          _filteredRestaurants = result.items;
+          _restaurants = result.items;
+          _currentPage = 0;
+          _hasMore = result.page < result.nbPages - 1;
           _isSearching = false;
         });
       }
@@ -221,6 +272,23 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
       debugPrint('[RestaurantsScreen] Search error: $e');
       if (mounted) setState(() => _isSearching = false);
     }
+  }
+
+  bool get _hasActiveFilters =>
+      _searchQuery.trim().isNotEmpty ||
+      _selectedCuisine != null ||
+      _selectedFoodType != null ||
+      _sortOption != RestaurantSortOption.defaultSort;
+
+  void _clearFilters() {
+    _searchController.clear();
+    setState(() {
+      _searchQuery = '';
+      _selectedCuisine = null;
+      _selectedFoodType = null;
+      _sortOption = RestaurantSortOption.defaultSort;
+    });
+    _fetchRestaurants();
   }
 
   // ── Min order price helper ─────────────────────────────────────────────
@@ -276,6 +344,7 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                   await Future.wait([_fetchRestaurants(), _fetchFacets()]);
                 },
                 child: CustomScrollView(
+                  controller: _scrollController,
                   slivers: [
                     // ── App bar ──────────────────────────────────────────
                     SliverAppBar(
@@ -433,28 +502,51 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                           ),
                         ),
                       )
-                    else if (_filteredRestaurants.isNotEmpty)
+                    else if (_restaurants.isNotEmpty) ...[
                       SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
                         sliver: SliverList(
                           delegate: SliverChildBuilderDelegate(
                             (_, i) => Padding(
                               padding: const EdgeInsets.only(bottom: 12),
                               child: _RestaurantCard(
-                                restaurant: _filteredRestaurants[i],
+                                restaurant: _restaurants[i],
                                 isDark: isDark,
                                 minOrderPrice: _getMinOrderPrice(
-                                    _filteredRestaurants[i], foodAddress),
+                                    _restaurants[i], foodAddress),
                                 onTap: () => context.push(
-                                  '/restaurant-detail/${_filteredRestaurants[i].id}',
+                                  '/restaurant-detail/${_restaurants[i].id}',
                                 ),
                               ),
                             ),
-                            childCount: _filteredRestaurants.length,
+                            childCount: _restaurants.length,
                           ),
                         ),
-                      )
-                    else if (_allRestaurants.isEmpty)
+                      ),
+                      // Loading indicator at bottom
+                      if (_isLoadingMore)
+                        const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 20),
+                            child: Center(
+                              child: SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  valueColor:
+                                      AlwaysStoppedAnimation(Colors.orange),
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        // Bottom padding
+                        const SliverToBoxAdapter(
+                          child: SizedBox(height: 24),
+                        ),
+                    ] else if (!_hasActiveFilters)
                       // No restaurants at all
                       SliverFillRemaining(
                         child: _EmptyState(
@@ -465,7 +557,7 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                         ),
                       )
                     else
-                      // Has restaurants but none match filter
+                      // Has filters active but no results
                       SliverFillRemaining(
                         child: _EmptyState(
                           emoji: '🔍',
@@ -473,16 +565,7 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                           subtitle:
                               'Try a different cuisine type or search term.',
                           actionLabel: 'Clear filters',
-                          onAction: () {
-                            _searchController.clear();
-                            setState(() {
-                              _searchQuery = '';
-                              _selectedCuisine = null;
-                              _selectedFoodType = null;
-                              _sortOption = RestaurantSortOption.defaultSort;
-                              _filteredRestaurants = _allRestaurants;
-                            });
-                          },
+                          onAction: _clearFilters,
                         ),
                       ),
                   ],

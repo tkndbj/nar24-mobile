@@ -124,7 +124,8 @@ class RestaurantTypesenseService {
   final String _host;
   final String _searchKey;
 
-  Timer? _debounceTimer;
+  Timer? _restaurantDebounceTimer;
+  Timer? _foodDebounceTimer;
   static const _debounceDuration = Duration(milliseconds: 300);
 
   static const _retryOptions = RetryOptions(
@@ -329,9 +330,9 @@ class RestaurantTypesenseService {
     List<String>? foodType,
     bool? isActive,
   }) {
-    _debounceTimer?.cancel();
+    _restaurantDebounceTimer?.cancel();
     final completer = Completer<RestaurantSearchPage>();
-    _debounceTimer = Timer(_debounceDuration, () async {
+    _restaurantDebounceTimer = Timer(_debounceDuration, () async {
       try {
         completer.complete(await searchRestaurants(
           query: query,
@@ -518,9 +519,9 @@ class RestaurantTypesenseService {
     double? minPrice,
     double? maxPrice,
   }) {
-    _debounceTimer?.cancel();
+    _foodDebounceTimer?.cancel();
     final completer = Completer<FoodSearchPage>();
-    _debounceTimer = Timer(_debounceDuration, () async {
+    _foodDebounceTimer = Timer(_debounceDuration, () async {
       try {
         completer.complete(await searchFoods(
           query: query,
@@ -647,6 +648,7 @@ class RestaurantTypesenseService {
   }
 
   void dispose() {
-    _debounceTimer?.cancel();
+    _restaurantDebounceTimer?.cancel();
+    _foodDebounceTimer?.cancel();
   }
 }

@@ -37,18 +37,15 @@ class _RestaurantShellScreenState extends State<RestaurantShellScreen> {
   }
 
   Widget _buildBodyContent() {
-    switch (_selectedIndex) {
-      case 0:
-        return const RestaurantsScreen();
-      case 1:
-        return const FoodCartScreen();
-      case 2:
-        return const MyFoodOrdersScreen();
-      case 3:
-        return const ProfileScreen();
-      default:
-        return const RestaurantsScreen();
-    }
+    return IndexedStack(
+      index: _selectedIndex,
+      children: const [
+        RestaurantsScreen(),
+        FoodCartScreen(),
+        MyFoodOrdersScreen(),
+        ProfileScreen(),
+      ],
+    );
   }
 
   Widget _buildNavItem(IconData icon, String label, bool isSelected) {
