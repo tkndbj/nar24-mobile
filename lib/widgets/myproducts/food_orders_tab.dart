@@ -15,7 +15,9 @@ import '../../providers/food_cart_provider.dart';
 import '../../utils/restaurant_utils.dart';
 
 class FoodOrdersTab extends StatefulWidget {
-  const FoodOrdersTab({Key? key}) : super(key: key);
+  final ValueChanged<bool>? onHasOrders;
+
+  const FoodOrdersTab({Key? key, this.onHasOrders}) : super(key: key);
 
   @override
   State<FoodOrdersTab> createState() => FoodOrdersTabState();
@@ -114,7 +116,10 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
   Future<void> _fetchPage({required bool isInitial}) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) {
-      if (mounted) setState(() => _isLoadingInitial = false);
+      if (mounted) {
+        setState(() => _isLoadingInitial = false);
+        widget.onHasOrders?.call(false);
+      }
       return;
     }
 
@@ -146,6 +151,7 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
         _isLoadingMore = false;
         _errorMessage = null;
       });
+      widget.onHasOrders?.call(_allOrders.isNotEmpty);
     } catch (e) {
       debugPrint('FoodOrdersTab: error fetching orders: $e');
       if (!mounted) return;
@@ -496,25 +502,25 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
 
   Widget _buildEmpty(AppLocalizations l10n) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.restaurant_menu_rounded,
-              size: 72, color: isDark ? Colors.grey[600] : Colors.grey[300]),
-          const SizedBox(height: 16),
-          Text(
-            _currentSearchQuery.isNotEmpty
-                ? l10n.noOrdersFoundForSearch
-                : l10n.noFoodOrders,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white70 : Colors.grey[700],
+
+    // Search-specific empty state
+    if (_currentSearchQuery.isNotEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search_off_rounded,
+                size: 72, color: isDark ? Colors.grey[600] : Colors.grey[300]),
+            const SizedBox(height: 16),
+            Text(
+              l10n.noOrdersFoundForSearch,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white70 : Colors.grey[700],
+              ),
             ),
-          ),
-          if (_currentSearchQuery.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
               l10n.trySearchingWithDifferentKeywords,
@@ -525,7 +531,50 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
               ),
             ),
           ],
-        ],
+        ),
+      );
+    }
+
+    // Empty orders — same placeholder as food cart
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF2D2B3F) : Colors.orange[50],
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Icon(
+                Icons.no_food_rounded,
+                size: 40,
+                color: isDark ? Colors.grey[600] : Colors.orange[300],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              l10n.noFoodOrders,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.grey[900],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              l10n.foodCartBrowseMessage,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: isDark ? Colors.grey[500] : Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -636,7 +685,7 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
                     height: 48,
                     decoration: BoxDecoration(
                       color:
-                          isDark ? Colors.grey[800] : const Color(0xFFFFF3EC),
+                          isDark ? const Color(0xFF2D2B3F) : const Color(0xFFFFF3EC),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     clipBehavior: Clip.antiAlias,
@@ -826,17 +875,51 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
 
     if (_auth.currentUser == null) {
       return Center(
-        child: Text(
-          'Please log in to see your food orders.',
-          style: GoogleFonts.inter(
-              color: isDark ? Colors.white70 : Colors.grey[700]),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF2D2B3F) : Colors.orange[50],
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Icon(
+                  Icons.no_food_rounded,
+                  size: 40,
+                  color: isDark ? Colors.grey[600] : Colors.orange[300],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                l10n.noFoodOrders,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.grey[900],
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                l10n.foodCartBrowseMessage,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? Colors.grey[500] : Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
 
     return SafeArea(
       child: Container(
-        color: isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+        color: isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
         child: Builder(builder: (_) {
           if (_errorMessage != null) return _buildError();
           if (_isLoadingInitial) return _buildShimmer();

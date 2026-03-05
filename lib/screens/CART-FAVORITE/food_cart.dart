@@ -81,10 +81,10 @@ class _FoodCartContentState extends State<_FoodCartContent> {
 
         return Scaffold(
           backgroundColor:
-              isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+              isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
           appBar: AppBar(
             backgroundColor:
-                isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+                isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
             elevation: 0,
             scrolledUnderElevation: 0,
             leading: IconButton(
@@ -236,10 +236,10 @@ class _BackButton extends StatelessWidget {
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1F2937) : Colors.white,
+          color: isDark ? const Color(0xFF2D2B3F) : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isDark ? const Color(0xFF374151) : const Color(0xFFE5E7EB),
+            color: isDark ? const Color(0xFF2D2B3F) : const Color(0xFFE5E7EB),
           ),
         ),
         child: Icon(
@@ -347,10 +347,10 @@ class _RestaurantHeaderCard extends StatelessWidget {
     final loc = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF111827) : Colors.white,
+        color: isDark ? const Color(0xFF211F31) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB),
+          color: isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB),
         ),
       ),
       child: Column(
@@ -435,12 +435,12 @@ class _RestaurantHeaderCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: isDark
-                    ? Colors.grey[800]!.withOpacity(0.4)
+                    ? const Color(0xFF211F31)
                     : Colors.grey[50]!.withOpacity(0.6),
                 border: Border(
                   top: BorderSide(
                     color: isDark
-                        ? const Color(0xFF1F2937)
+                        ? const Color(0xFF2D2B3F)
                         : const Color(0xFFE5E7EB),
                   ),
                 ),
@@ -527,10 +527,10 @@ class _FoodCartItemCard extends StatelessWidget {
       duration: const Duration(milliseconds: 200),
       child: Container(
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF111827) : Colors.white,
+          color: isDark ? const Color(0xFF211F31) : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB),
+            color: isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB),
           ),
         ),
         child: Padding(
@@ -703,12 +703,12 @@ class _FoodCartItemCard extends StatelessWidget {
                             horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: isDark
-                              ? const Color(0xFF1F2937)
+                              ? const Color(0xFF2D2B3F)
                               : Colors.grey[50],
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: isDark
-                                ? const Color(0xFF374151)
+                                ? const Color(0xFF2D2B3F)
                                 : const Color(0xFFD1D5DB),
                           ),
                         ),
@@ -770,7 +770,7 @@ class _FoodCartItemCard extends StatelessWidget {
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     decoration: BoxDecoration(
                       color: isDark
-                          ? Colors.grey[800]!.withOpacity(0.6)
+                          ? const Color(0xFF211F31)
                           : Colors.amber[50]!.withOpacity(0.6),
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -831,7 +831,7 @@ class _ItemThumbnail extends StatelessWidget {
           height: 80,
           decoration: BoxDecoration(
             border: Border.all(
-              color: isDark ? const Color(0xFF374151) : const Color(0xFFE5E7EB),
+              color: isDark ? const Color(0xFF2D2B3F) : const Color(0xFFE5E7EB),
             ),
             borderRadius: BorderRadius.circular(12),
           ),
@@ -861,7 +861,7 @@ class _CategoryIconBox extends StatelessWidget {
       width: 80,
       height: 80,
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1F2937) : Colors.orange[50],
+        color: isDark ? const Color(0xFF2D2B3F) : Colors.orange[50],
         borderRadius: BorderRadius.circular(12),
       ),
       padding: const EdgeInsets.all(16),
@@ -909,7 +909,7 @@ class _QuantitySelector extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isDark ? const Color(0xFF374151) : const Color(0xFFE5E7EB),
+          color: isDark ? const Color(0xFF2D2B3F) : const Color(0xFFE5E7EB),
         ),
       ),
       child: Row(
@@ -993,10 +993,10 @@ class _OrderSummary extends StatelessWidget {
     final loc = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF111827) : Colors.white,
+        color: isDark ? const Color(0xFF211F31) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB),
+          color: isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB),
         ),
       ),
       child: Padding(
@@ -1059,7 +1059,7 @@ class _OrderSummary extends StatelessWidget {
 
             // Divider
             Divider(
-              color: isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB),
+              color: isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB),
               height: 24,
             ),
 
@@ -1243,7 +1243,7 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
             maxChildSize: 0.9,
             builder: (_, sc) => Container(
               decoration: BoxDecoration(
-                color: isDark ? Colors.grey[900] : Colors.white,
+                color: isDark ? const Color(0xFF211F31) : Colors.white,
                 borderRadius:
                     const BorderRadius.vertical(top: Radius.circular(20)),
               ),
@@ -1256,7 +1256,7 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
                       width: 36,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: isDark ? Colors.grey[700] : Colors.grey[300],
+                        color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[300],
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -1363,7 +1363,7 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
                             hintText: loc.foodNotesHint,
                             filled: true,
                             fillColor:
-                                isDark ? Colors.grey[800] : Colors.grey[50],
+                                isDark ? const Color(0xFF2D2B3F) : Colors.grey[50],
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
                               borderSide: BorderSide.none,
@@ -1372,7 +1372,7 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
                               borderRadius: BorderRadius.circular(10),
                               borderSide: BorderSide(
                                 color: isDark
-                                    ? Colors.grey[600]!
+                                    ? Colors.white.withOpacity(0.1)
                                     : Colors.grey[400]!,
                                 width: 1,
                               ),
@@ -1486,11 +1486,11 @@ class _ClearCartDialog extends StatelessWidget {
           child: Container(
             width: 320,
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF111827) : Colors.white,
+              color: isDark ? const Color(0xFF211F31) : Colors.white,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color:
-                    isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB),
+                    isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB),
               ),
             ),
             child: Column(
@@ -1541,12 +1541,12 @@ class _ClearCartDialog extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
                   decoration: BoxDecoration(
                     color: isDark
-                        ? Colors.grey[800]!.withOpacity(0.5)
+                        ? const Color(0xFF211F31)
                         : Colors.grey[50],
                     border: Border(
                       top: BorderSide(
                         color: isDark
-                            ? const Color(0xFF1F2937)
+                            ? const Color(0xFF2D2B3F)
                             : Colors.grey[300]!,
                       ),
                     ),
@@ -1565,7 +1565,7 @@ class _ClearCartDialog extends StatelessWidget {
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: isDark
-                                    ? const Color(0xFF374151)
+                                    ? const Color(0xFF2D2B3F)
                                     : const Color(0xFFE5E7EB),
                               ),
                             ),
@@ -1641,7 +1641,7 @@ class _EmptyCart extends StatelessWidget {
               width: 96,
               height: 96,
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1F2937) : Colors.orange[50],
+                color: isDark ? const Color(0xFF2D2B3F) : Colors.orange[50],
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Icon(
@@ -1685,10 +1685,10 @@ class _FoodCartSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = isDark ? const Color(0xFF1F2937) : const Color(0xFFE5E7EB);
-    final card = isDark ? const Color(0xFF111827) : Colors.white;
+    final bg = isDark ? const Color(0xFF2D2B3F) : const Color(0xFFE5E7EB);
+    final card = isDark ? const Color(0xFF211F31) : Colors.white;
     final cardBorder =
-        isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB);
+        isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB);
 
     return ListView(
       padding: const EdgeInsets.all(12),

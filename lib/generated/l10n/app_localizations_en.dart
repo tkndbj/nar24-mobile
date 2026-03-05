@@ -6891,7 +6891,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get favoritesShared => 'Favorites shared successfully!';
 
   @override
-  String get myOrders => 'My Orders';
+  String get myOrders => 'Product Orders';
 
   @override
   String get addNewAddress => 'Add a new address';
@@ -10359,10 +10359,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get enterNewAddress => 'Enter New Address';
 
   @override
-  String get addressLine1 => 'Address Line 1';
+  String get addressLine1 => 'Address Line';
 
   @override
-  String get addressLine2 => 'Address Line 2';
+  String get addressLine2 => 'Address Description';
 
   @override
   String get city => 'City';
@@ -15208,4 +15208,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get compressing => 'Compressing...';
+
+  @override
+  String get navRestaurants => 'Nar24';
+
+  @override
+  String get navFoodCart => 'Food Cart';
+
+  @override
+  String get navMyOrders => 'My Orders';
+
+  @override
+  String get navProfile => 'Profile';
 }

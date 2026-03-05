@@ -113,6 +113,7 @@ flutter:
     - assets/images/2.png
     - assets/images/3.png
     - assets/images/foods/chinese.png
+    - assets/images/foods/foodsuccess.png
     - assets/images/foods/curry.png
     - assets/images/foods/desert.png
     - assets/images/foods/dolma.png

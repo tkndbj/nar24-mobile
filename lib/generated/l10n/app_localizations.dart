@@ -13249,7 +13249,7 @@ abstract class AppLocalizations {
   /// No description provided for @myOrders.
   ///
   /// In tr, this message translates to:
-  /// **'Tüm Siparişlerim'**
+  /// **'Ürün Siparişleri'**
   String get myOrders;
 
   /// No description provided for @addNewAddress.
@@ -19827,13 +19827,13 @@ abstract class AppLocalizations {
   /// No description provided for @addressLine1.
   ///
   /// In tr, this message translates to:
-  /// **'Adres Satırı 1'**
+  /// **'Adres Satırı'**
   String get addressLine1;
 
   /// No description provided for @addressLine2.
   ///
   /// In tr, this message translates to:
-  /// **'Adres Satırı 2'**
+  /// **'Adres Açıklaması'**
   String get addressLine2;
 
   /// No description provided for @city.
@@ -29075,6 +29075,30 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Sıkıştırılıyor...'**
   String get compressing;
+
+  /// No description provided for @navRestaurants.
+  ///
+  /// In tr, this message translates to:
+  /// **'Nar24'**
+  String get navRestaurants;
+
+  /// No description provided for @navFoodCart.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek Sepeti'**
+  String get navFoodCart;
+
+  /// No description provided for @navMyOrders.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişlerim'**
+  String get navMyOrders;
+
+  /// No description provided for @navProfile.
+  ///
+  /// In tr, this message translates to:
+  /// **'Profil'**
+  String get navProfile;
 }
 
 class _AppLocalizationsDelegate

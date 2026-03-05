@@ -370,7 +370,7 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
     // Not found state — mirrors the !restaurant early return
     if (restaurant == null) {
       return Scaffold(
-        backgroundColor: isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+        backgroundColor: isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
@@ -419,9 +419,9 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
         final grouped = _groupedFoods();
 
         return Scaffold(
-          backgroundColor: isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+          backgroundColor: isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
           appBar: AppBar(
-            backgroundColor: isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+            backgroundColor: isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
             elevation: 0,
             scrolledUnderElevation: 0,
             leading: IconButton(
@@ -649,7 +649,10 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _CartBottomSheet(cart: cart, isDark: isDark),
+      builder: (_) => ChangeNotifierProvider<FoodCartProvider>.value(
+        value: cart,
+        child: _CartBottomSheet(isDark: isDark),
+      ),
     );
   }
 }
@@ -701,10 +704,10 @@ class _RestaurantHeader extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF111827) : Colors.white,
+                color: isDark ? const Color(0xFF211F31) : Colors.white,
                 border: Border.all(
                   color: isDark
-                      ? const Color(0xFF1F2937)
+                      ? const Color(0xFF2D2B3F)
                       : const Color(0xFFD1D5DB),
                 ),
                 borderRadius: BorderRadius.circular(16),
@@ -720,7 +723,7 @@ class _RestaurantHeader extends StatelessWidget {
                       height: 72,
                       decoration: BoxDecoration(
                         border: Border.all(
-                          color: isDark ? Colors.grey[700]! : Colors.white,
+                          color: isDark ? Colors.white.withOpacity(0.1) : Colors.white,
                           width: 2,
                         ),
                         borderRadius: BorderRadius.circular(16),
@@ -815,7 +818,7 @@ class _RestaurantHeader extends StatelessWidget {
                                               horizontal: 8, vertical: 2),
                                           decoration: BoxDecoration(
                                             color: isDark
-                                                ? Colors.grey[700]
+                                                ? const Color(0xFF2D2B3F)
                                                 : Colors.grey[100],
                                             borderRadius:
                                                 BorderRadius.circular(20),
@@ -853,7 +856,7 @@ class _Placeholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        color: isDark ? Colors.grey[700] : Colors.grey[100],
+        color: isDark ? const Color(0xFF2D2B3F) : Colors.grey[100],
         alignment: Alignment.center,
         child: const Text('🍽️', style: TextStyle(fontSize: 28)),
       );
@@ -1028,7 +1031,7 @@ class _FoodTypeIconRow extends StatelessWidget {
                       color: isActive
                           ? Colors.orange
                           : isDark
-                              ? const Color(0xFF111827)
+                              ? const Color(0xFF211F31)
                               : Colors.white,
                       borderRadius: BorderRadius.circular(12),
                       border: isActive
@@ -1135,7 +1138,7 @@ class _GroupedFoodList extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 24),
                     child: Divider(
-                      color: isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB),
+                      color: isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB),
                       height: 1,
                     ),
                   ),
@@ -1265,11 +1268,11 @@ class _FoodCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF111827) : Colors.white,
+        color: isDark ? const Color(0xFF211F31) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color:
-              isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB),
+              isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB),
         ),
       ),
       child: Row(
@@ -1286,7 +1289,7 @@ class _FoodCard extends StatelessWidget {
                   food.imageUrl!,
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => Container(
-                    color: isDark ? Colors.grey[800] : Colors.grey[100],
+                    color: isDark ? const Color(0xFF2D2B3F) : Colors.grey[100],
                     alignment: Alignment.center,
                     child: const Text('🍽️', style: TextStyle(fontSize: 24)),
                   ),
@@ -1550,7 +1553,7 @@ class _CartButton extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isDark ? Colors.grey[700] : Colors.grey[200],
+          color: isDark ? const Color(0xFF2D2B3F) : Colors.grey[200],
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(loc.foodClosedButton,
@@ -1565,7 +1568,7 @@ class _CartButton extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isDark ? Colors.grey[700] : Colors.grey[200],
+          color: isDark ? const Color(0xFF2D2B3F) : Colors.grey[200],
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(Icons.block_rounded,
@@ -1713,7 +1716,7 @@ void initState() {
       maxChildSize: 0.9,
       builder: (_, sc) => Container(
         decoration: BoxDecoration(
-          color: isDark ? Colors.grey[900] : Colors.white,
+          color: isDark ? const Color(0xFF211F31) : Colors.white,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(
@@ -1725,7 +1728,7 @@ void initState() {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.grey[700] : Colors.grey[300],
+                  color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[300],
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -1864,7 +1867,7 @@ void initState() {
                     decoration: InputDecoration(
                       hintText: loc.foodNotesHint,
                       filled: true,
-                      fillColor: isDark ? const Color(0xFF111827) : Colors.white,
+                      fillColor: isDark ? const Color(0xFF211F31) : Colors.white,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
@@ -1873,7 +1876,7 @@ void initState() {
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide(
                           color: isDark
-                              ? const Color(0xFF1F2937)
+                              ? const Color(0xFF2D2B3F)
                               : const Color(0xFFD1D5DB),
                         ),
                       ),
@@ -1982,7 +1985,7 @@ class _QtyBtn extends StatelessWidget {
           color: enabled
               ? Colors.orange
               : isDark
-                  ? Colors.grey[800]
+                  ? const Color(0xFF2D2B3F)
                   : Colors.grey[200],
           borderRadius: BorderRadius.circular(8),
         ),
@@ -2030,125 +2033,154 @@ class _CartFab extends StatelessWidget {
 // CART BOTTOM SHEET  —  mirrors FoodCartSidebar drawer/sheet content
 // =============================================================================
 
-class _CartBottomSheet extends StatelessWidget {
-  final FoodCartProvider cart;
+class _CartBottomSheet extends StatefulWidget {
   final bool isDark;
 
-  const _CartBottomSheet({required this.cart, required this.isDark});
+  const _CartBottomSheet({required this.isDark});
+
+  @override
+  State<_CartBottomSheet> createState() => _CartBottomSheetState();
+}
+
+class _CartBottomSheetState extends State<_CartBottomSheet> {
+  bool _dismissed = false;
 
   @override
   Widget build(BuildContext context) {
+    final isDark = widget.isDark;
     final loc = AppLocalizations.of(context);
-    return DraggableScrollableSheet(
-      initialChildSize: 0.55,
-      minChildSize: 0.35,
-      maxChildSize: 0.9,
-      builder: (_, sc) => Container(
-        decoration: BoxDecoration(
-          color: isDark ? Colors.grey[900] : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.grey[700] : Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
+    return Consumer<FoodCartProvider>(
+      builder: (context, cart, _) {
+        // Auto-close when cart becomes empty — guard against double-pop
+        if (cart.items.isEmpty && !_dismissed) {
+          _dismissed = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
+          });
+          return const SizedBox.shrink();
+        }
+        if (_dismissed) return const SizedBox.shrink();
+
+        return DraggableScrollableSheet(
+          initialChildSize: 0.55,
+          minChildSize: 0.35,
+          maxChildSize: 0.9,
+          builder: (_, sc) => Container(
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF211F31) : Colors.white,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  Text(loc.foodYourOrder,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.bold)),
-                  const Spacer(),
-                  if (cart.currentRestaurant != null)
-                    Text(cart.currentRestaurant!.name,
-                        style: TextStyle(
-                            fontSize: 13,
-                            color:
-                                isDark ? Colors.grey[400] : Colors.grey[600])),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView.builder(
-                controller: sc,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                itemCount: cart.items.length,
-                itemBuilder: (_, i) {
-                  final item = cart.items[i];
-                  return _CartItemRow(
-                    item: item,
-                    isDark: isDark,
-                    onIncrease: () =>
-                        cart.updateQuantity(item.foodId, item.quantity + 1),
-                    onDecrease: () =>
-                        cart.updateQuantity(item.foodId, item.quantity - 1),
-                  );
-                },
-              ),
-            ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(loc.foodSubtotal,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    children: [
+                      Text(loc.foodYourOrder,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      if (cart.currentRestaurant != null)
+                        Text(cart.currentRestaurant!.name,
                             style: TextStyle(
-                                fontSize: 14,
+                                fontSize: 13,
                                 color: isDark
                                     ? Colors.grey[400]
                                     : Colors.grey[600])),
-                        Text(
-                          loc.foodPriceTL(cart.totals.subtotal.toStringAsFixed(2)),
-                          style: const TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.bold),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView.builder(
+                    controller: sc,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
+                    itemCount: cart.items.length,
+                    itemBuilder: (_, i) {
+                      final item = cart.items[i];
+                      return _CartItemRow(
+                        item: item,
+                        isDark: isDark,
+                        onIncrease: () => cart.updateQuantity(
+                            item.foodId, item.quantity + 1),
+                        onDecrease: () => cart.updateQuantity(
+                            item.foodId, item.quantity - 1),
+                        onRemove: () => cart.removeItem(item.foodId),
+                      );
+                    },
+                  ),
+                ),
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(loc.foodSubtotal,
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    color: isDark
+                                        ? Colors.grey[400]
+                                        : Colors.grey[600])),
+                            Text(
+                              loc.foodPriceTL(
+                                  cart.totals.subtotal.toStringAsFixed(2)),
+                              style: const TextStyle(
+                                  fontSize: 15, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              context.push('/food-checkout');
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                              foregroundColor: Colors.white,
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14)),
+                            ),
+                            child: Text(loc.foodProceedToCheckout,
+                                style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold)),
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          context.push('/food-checkout');
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                        ),
-                        child: Text(loc.foodProceedToCheckout,
-                            style: const TextStyle(
-                                fontSize: 15, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -2158,12 +2190,14 @@ class _CartItemRow extends StatelessWidget {
   final bool isDark;
   final VoidCallback onIncrease;
   final VoidCallback onDecrease;
+  final VoidCallback onRemove;
 
   const _CartItemRow({
     required this.item,
     required this.isDark,
     required this.onIncrease,
     required this.onDecrease,
+    required this.onRemove,
   });
 
   @override
@@ -2173,37 +2207,132 @@ class _CartItemRow extends StatelessWidget {
         item.extras.fold<double>(0, (s, e) => s + e.price * e.quantity);
     final total = (item.price + extrasTotal) * item.quantity;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          _QuantityPicker(
-            value: item.quantity,
-            onChanged: (v) => v > item.quantity ? onIncrease() : onDecrease(),
-            isDark: isDark,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Dismissible(
+      key: ValueKey(item.foodId),
+      direction: DismissDirection.endToStart,
+      onDismissed: (_) => onRemove(),
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 16),
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.red.shade400,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: const Icon(Icons.delete_rounded, color: Colors.white, size: 20),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: _QuantityPicker(
+                value: item.quantity,
+                onChanged: (v) =>
+                    v > item.quantity ? onIncrease() : onDecrease(),
+                isDark: isDark,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(item.name,
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600)),
+                  if (item.extras.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: item.extras.map((ext) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFF2D2B3F)
+                                  : Colors.grey[50],
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: isDark
+                                    ? const Color(0xFF2D2B3F)
+                                    : const Color(0xFFD1D5DB),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('+',
+                                    style: TextStyle(
+                                        fontSize: 9, color: Colors.orange)),
+                                const SizedBox(width: 2),
+                                Text(
+                                  localizeExtra(ext.name, loc),
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w500,
+                                    color: isDark
+                                        ? Colors.grey[400]
+                                        : Colors.grey[500],
+                                  ),
+                                ),
+                                if (ext.quantity > 1) ...[
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    '×${ext.quantity}',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      color: isDark
+                                          ? Colors.grey[600]
+                                          : Colors.grey[500],
+                                    ),
+                                  ),
+                                ],
+                                if (ext.price > 0) ...[
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    loc.foodPriceTL(
+                                        ext.price.toStringAsFixed(0)),
+                                    style: TextStyle(
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark
+                                          ? Colors.orange[300]
+                                          : Colors.orange[700],
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(item.name,
+                Text(loc.foodPriceTL(total.toStringAsFixed(0)),
                     style: const TextStyle(
                         fontSize: 13, fontWeight: FontWeight.w600)),
-                if (item.extras.isNotEmpty)
-                  Text(
-                    item.extras.map((e) => localizeExtra(e.name, loc)).join(', '),
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? Colors.grey[500] : Colors.grey[500]),
-                  ),
+                const SizedBox(height: 4),
+                GestureDetector(
+                  onTap: onRemove,
+                  child: Icon(Icons.delete_outline_rounded,
+                      size: 18,
+                      color: isDark ? Colors.red[300] : Colors.red[400]),
+                ),
               ],
             ),
-          ),
-          Text(loc.foodPriceTL(total.toStringAsFixed(0)),
-              style:
-                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -2372,10 +2501,10 @@ class _LoadingSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = isDark ? Colors.grey[700]! : Colors.grey[200]!;
+    final bg = isDark ? const Color(0xFF2D2B3F) : Colors.grey[200]!;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+      backgroundColor: isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -2388,10 +2517,10 @@ class _LoadingSkeleton extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF111827) : Colors.white,
+                color: isDark ? const Color(0xFF211F31) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                    color: isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB)),
+                    color: isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2428,12 +2557,12 @@ class _LoadingSkeleton extends StatelessWidget {
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: isDark
-                        ? const Color(0xFF111827)
+                        ? const Color(0xFF211F31)
                         : Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                         color: isDark
-                            ? const Color(0xFF1F2937)
+                            ? const Color(0xFF2D2B3F)
                             : const Color(0xFFD1D5DB)),
                   ),
                   child: Row(
@@ -2495,7 +2624,7 @@ class _SearchBar extends StatelessWidget {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         filled: true,
-        fillColor: isDark ? const Color(0xFF111827) : Colors.white,
+        fillColor: isDark ? const Color(0xFF211F31) : Colors.white,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
@@ -2503,7 +2632,7 @@ class _SearchBar extends StatelessWidget {
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: isDark ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB),
+            color: isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB),
             width: 1,
           ),
         ),

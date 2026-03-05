@@ -1068,12 +1068,12 @@ class _OrderCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(8)),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Icon(Icons.description_outlined,
-              size: 13, color: Color(0xFFD97706)),
+              size: 15, color: Color(0xFFD97706)),
           const SizedBox(width: 6),
           Expanded(
               child: Text(order.orderNotes,
                   style: GoogleFonts.figtree(
-                      fontSize: 11,
+                      fontSize: 13,
                       fontStyle: FontStyle.italic,
                       color: const Color(0xFFB45309)))),
         ]),
@@ -1139,19 +1139,24 @@ class _OrderCard extends StatelessWidget {
   }
 
   Widget _buildAddressRow() {
-    final addr = order.deliveryAddress!.formatted;
-    if (addr.isEmpty) return const SizedBox.shrink();
+    final da = order.deliveryAddress!;
+    if (da.addressLine1.isEmpty && da.city.isEmpty) return const SizedBox.shrink();
+    final lines = <String>[
+      da.addressLine1,
+      if (da.addressLine2.isNotEmpty) da.addressLine2,
+      if (da.city.isNotEmpty) da.city,
+    ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Icon(Icons.location_on_outlined,
-            size: 13,
+            size: 15,
             color: isDark ? Colors.grey[500] : const Color(0xFF9CA3AF)),
         const SizedBox(width: 4),
         Expanded(
-            child: Text(addr,
+            child: Text(lines.join('\n'),
                 style: GoogleFonts.figtree(
-                    fontSize: 10,
+                    fontSize: 12,
                     color:
                         isDark ? Colors.grey[400] : const Color(0xFF6B7280)))),
       ]),
@@ -1165,18 +1170,18 @@ class _OrderCard extends StatelessWidget {
         Text(
             '${locale == 'tr' ? 'Ara toplam' : 'Subtotal'}: ${order.subtotal.toStringAsFixed(2)}',
             style: GoogleFonts.figtree(
-                fontSize: 11,
+                fontSize: 13,
                 color: isDark ? Colors.grey[500] : const Color(0xFF9CA3AF))),
         if (order.deliveryFee > 0)
           Text(
               '${locale == 'tr' ? 'Teslimat' : 'Delivery'}: ${order.deliveryFee.toStringAsFixed(2)}',
               style: GoogleFonts.figtree(
-                  fontSize: 11,
+                  fontSize: 13,
                   color: isDark ? Colors.grey[500] : const Color(0xFF9CA3AF))),
         Text(
             '${locale == 'tr' ? 'Toplam' : 'Total'}: ${order.totalPrice.toStringAsFixed(2)} ${order.currency}',
             style: GoogleFonts.figtree(
-                fontSize: 11,
+                fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: isDark ? Colors.grey[300] : const Color(0xFF374151))),
       ]),
@@ -1195,7 +1200,7 @@ class _OrderCard extends StatelessWidget {
             ? '$created · ${locale == 'tr' ? 'güncellendi' : 'updated'} ${_formatTime(order.updatedAt)}'
             : created,
         style: GoogleFonts.figtree(
-            fontSize: 10,
+            fontSize: 12,
             color: isDark ? Colors.grey[600] : const Color(0xFFD1D5DB)),
         textAlign: TextAlign.center,
       ),
@@ -1361,12 +1366,12 @@ class _InfoChip extends StatelessWidget {
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(icon,
-              size: 11,
+              size: 13,
               color: isDark ? Colors.grey[400] : const Color(0xFF9CA3AF)),
           const SizedBox(width: 4),
           Text(label,
               style: GoogleFonts.figtree(
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: tappable ? FontWeight.w600 : FontWeight.normal,
                   color: isDark ? Colors.grey[300] : const Color(0xFF6B7280))),
           if (trailing != null) ...[const SizedBox(width: 3), trailing!],

@@ -3,7 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
+import 'package:provider/provider.dart';
 
+import '../../generated/l10n/app_localizations.dart';
+import '../../providers/food_cart_provider.dart';
 import 'restaurants_screen.dart';
 import '../CART-FAVORITE/food_cart.dart';
 import '../USER-PROFILE/my_food_orders.dart';
@@ -48,10 +51,37 @@ class _RestaurantShellScreenState extends State<RestaurantShellScreen> {
     );
   }
 
-  Widget _buildNavItem(IconData icon, String label, bool isSelected) {
+  Widget _buildNavItem(IconData icon, String label, bool isSelected,
+      {int badgeCount = 0}) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final Color unselectedFill =
         dark ? Colors.white : const Color.fromARGB(255, 58, 58, 58);
+
+    Widget iconWidget = isSelected
+        ? ShaderMask(
+            shaderCallback: (bounds) => const LinearGradient(
+              colors: [Colors.orange, Colors.pink],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ).createShader(bounds),
+            child: Icon(icon, size: 22, color: Colors.white),
+          )
+        : Icon(icon, size: 22, color: unselectedFill);
+
+    if (badgeCount > 0) {
+      iconWidget = Badge(
+        label: Text(
+          badgeCount > 99 ? '99+' : '$badgeCount',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 9,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        backgroundColor: Colors.orange,
+        child: iconWidget,
+      );
+    }
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -59,16 +89,7 @@ class _RestaurantShellScreenState extends State<RestaurantShellScreen> {
         AnimatedScale(
           scale: isSelected ? 1.2 : 1.0,
           duration: const Duration(milliseconds: 200),
-          child: isSelected
-              ? ShaderMask(
-                  shaderCallback: (bounds) => const LinearGradient(
-                    colors: [Colors.orange, Colors.pink],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ).createShader(bounds),
-                  child: Icon(icon, size: 22, color: Colors.white),
-                )
-              : Icon(icon, size: 22, color: unselectedFill),
+          child: iconWidget,
         ),
         const SizedBox(height: 2),
         isSelected
@@ -100,6 +121,9 @@ class _RestaurantShellScreenState extends State<RestaurantShellScreen> {
   }
 
   Widget _buildBottomNavigation(bool dark, double bottomPad) {
+    final loc = AppLocalizations.of(context);
+    final cartCount = context.watch<FoodCartProvider>().itemCount;
+
     return Container(
       height: 55 + bottomPad,
       decoration: BoxDecoration(
@@ -126,22 +150,23 @@ class _RestaurantShellScreenState extends State<RestaurantShellScreen> {
         items: [
           BottomNavigationBarItem(
             icon: _buildNavItem(
-                FeatherIcons.home, 'Nar24', _selectedIndex == 0),
+                FeatherIcons.home, loc.navRestaurants, _selectedIndex == 0),
             label: '',
           ),
           BottomNavigationBarItem(
             icon: _buildNavItem(
-                FeatherIcons.shoppingBag, 'Food Cart', _selectedIndex == 1),
+                FeatherIcons.shoppingBag, loc.navFoodCart, _selectedIndex == 1,
+                badgeCount: cartCount),
             label: '',
           ),
           BottomNavigationBarItem(
             icon: _buildNavItem(
-                FeatherIcons.clipboard, 'My Orders', _selectedIndex == 2),
+                FeatherIcons.clipboard, loc.navMyOrders, _selectedIndex == 2),
             label: '',
           ),
           BottomNavigationBarItem(
             icon: _buildNavItem(
-                FeatherIcons.user, 'Profile', _selectedIndex == 3),
+                FeatherIcons.user, loc.navProfile, _selectedIndex == 3),
             label: '',
           ),
         ],

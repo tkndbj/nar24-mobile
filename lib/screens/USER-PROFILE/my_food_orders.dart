@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../widgets/myproducts/food_orders_tab.dart';
+import 'package:go_router/go_router.dart';
 
 class MyFoodOrdersScreen extends StatefulWidget {
   const MyFoodOrdersScreen({Key? key}) : super(key: key);
@@ -19,6 +21,10 @@ class _MyFoodOrdersScreenState extends State<MyFoodOrdersScreen> {
   Timer? _searchDebounce;
 
   final GlobalKey<FoodOrdersTabState> _foodTabKey = GlobalKey();
+  bool _hasOrders = false;
+
+  bool get _isAuthenticated => FirebaseAuth.instance.currentUser != null;
+  bool get _showSearchBar => _isAuthenticated && _hasOrders;
 
   @override
   void initState() {
@@ -144,11 +150,13 @@ class _MyFoodOrdersScreenState extends State<MyFoodOrdersScreen> {
             contentPadding:
                 const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
             filled: true,
-            fillColor: isDark ? const Color(0xFF2A2D3A) : Colors.white,
+            fillColor: isDark ? const Color(0xFF2D2B3F) : Colors.white,
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
-                color: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
+                color: isDark
+                    ? Colors.white.withOpacity(0.1)
+                    : Colors.grey.shade200,
                 width: 1,
               ),
             ),
@@ -208,13 +216,23 @@ class _MyFoodOrdersScreenState extends State<MyFoodOrdersScreen> {
       onTap: _dismissKeyboard,
       child: Scaffold(
         backgroundColor:
-            isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+            isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
         appBar: AppBar(
           elevation: 0,
-          backgroundColor: isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+          backgroundColor:
+              isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
           iconTheme: IconThemeData(
             color: Theme.of(context).colorScheme.onSurface,
           ),
+          leading: context.canPop()
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => context.pop(),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => context.go('/'),
+                ),
           title: Text(
             l10n.foodOrders,
             style: GoogleFonts.inter(
@@ -237,10 +255,15 @@ class _MyFoodOrdersScreenState extends State<MyFoodOrdersScreen> {
           ),
           child: Column(
             children: [
-              _buildSearchBox(),
+              if (_showSearchBar) _buildSearchBox(),
               Expanded(
                 child: FoodOrdersTab(
                   key: _foodTabKey,
+                  onHasOrders: (hasOrders) {
+                    if (_hasOrders != hasOrders) {
+                      setState(() => _hasOrders = hasOrders);
+                    }
+                  },
                 ),
               ),
             ],

@@ -18,7 +18,8 @@
       "Bash(grep:*)",
       "Bash(fi)",
       "Bash(done)",
-      "Bash(flutter build:*)"
+      "Bash(flutter build:*)",
+      "Bash(flutter:*)"
     ],
     "deny": [],
     "ask": []

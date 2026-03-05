@@ -250,7 +250,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
         if (!cart.isInitialized) {
           return Scaffold(
             backgroundColor:
-                isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+                isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
             body: SafeArea(child: _FoodCheckoutSkeleton(isDark: isDark)),
           );
         }
@@ -264,10 +264,10 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
 
         return Scaffold(
           backgroundColor:
-              isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+              isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
           appBar: AppBar(
             backgroundColor:
-                isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+                isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
             elevation: 0,
             scrolledUnderElevation: 0,
             leading: IconButton(
@@ -312,34 +312,6 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Delivery Method
-                  _Section(
-                    title: loc.foodCheckoutDeliveryMethod,
-                    isDark: isDark,
-                    child: Row(children: [
-                      Expanded(
-                          child: _DeliveryTypeButton(
-                              type: DeliveryType.delivery,
-                              isSelected: _deliveryType == DeliveryType.delivery,
-                              isDark: isDark,
-                              onTap: () => setState(() {
-                                    _deliveryType = DeliveryType.delivery;
-                                    _error = null;
-                                  }))),
-                      const SizedBox(width: 10),
-                      Expanded(
-                          child: _DeliveryTypeButton(
-                              type: DeliveryType.pickup,
-                              isSelected: _deliveryType == DeliveryType.pickup,
-                              isDark: isDark,
-                              onTap: () => setState(() {
-                                    _deliveryType = DeliveryType.pickup;
-                                    _error = null;
-                                  }))),
-                    ]),
-                  ),
-                  const SizedBox(height: 12),
-
                   // Delivery Address — read-only from profile
                   if (_deliveryType == DeliveryType.delivery) ...[
                     _Section(
@@ -367,19 +339,19 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                             fontSize: 13),
                         filled: true,
                         fillColor: isDark
-                            ? const Color(0xFF1F2937)
-                            : const Color(0xFFE5E7EB),
+                            ? const Color(0xFF1A1D2E)
+                            : const Color(0xFFF3F4F6),
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide(
                                 color: isDark
-                                    ? const Color(0xFF374151)
+                                    ? const Color(0xFF2D2B3F)
                                     : const Color(0xFFD1D5DB))),
                         enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide(
                                 color: isDark
-                                    ? const Color(0xFF374151)
+                                    ? const Color(0xFF2D2B3F)
                                     : const Color(0xFFD1D5DB))),
                         focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -459,7 +431,7 @@ class _FoodAddressCard extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isDark ? Colors.grey[800]!.withOpacity(0.6) : const Color(0xFFF9FAFB),
+          color: isDark ? const Color(0xFF211F31) : const Color(0xFFF9FAFB),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -503,14 +475,6 @@ class _FoodAddressCard extends StatelessWidget {
                           fontSize: 11,
                           color: isDark ? Colors.grey[500] : Colors.grey[400]))),
           ])),
-          GestureDetector(
-            onTap: () => context.push('/food-address'),
-            child: Text(loc.foodCheckoutChange,
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: isDark ? Colors.orange[400] : Colors.orange[600])),
-          ),
         ]),
       );
     }
@@ -522,7 +486,7 @@ class _FoodAddressCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
             style: BorderStyle.solid,
-            color: isDark ? const Color(0xFF374151) : Colors.grey[300]!,
+            color: isDark ? const Color(0xFF2D2B3F) : Colors.grey[300]!,
             width: 1.5),
       ),
       child: Row(children: [
@@ -572,12 +536,12 @@ class _RestaurantInfoRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: isDark
-            ? Colors.grey[800]!.withOpacity(0.6)
+            ? const Color(0xFF211F31)
             : Colors.orange[50]!.withOpacity(0.6),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
             color: isDark
-                ? Colors.grey[700]!.withOpacity(0.4)
+                ? Colors.white.withOpacity(0.08)
                 : Colors.orange[100]!),
       ),
       child: Row(children: [
@@ -638,7 +602,7 @@ class _Section extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
             color: isDark
-                ? Colors.grey[700]!.withOpacity(0.4)
+                ? Colors.white.withOpacity(0.08)
                 : const Color(0xFFD1D5DB)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -677,11 +641,11 @@ class _CartItemRow extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: isDark
-            ? Colors.grey[800]!.withOpacity(0.6)
-            : const Color(0xFFE5E7EB),
+            ? const Color(0xFF1A1D2E)
+            : const Color(0xFFF3F4F6),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-            color: isDark ? Colors.transparent : const Color(0xFFD1D5DB)),
+            color: isDark ? const Color(0xFF2A2D3E) : const Color(0xFFD1D5DB)),
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         ClipRRect(
@@ -790,7 +754,7 @@ class _NoImgBox extends StatelessWidget {
         width: 64,
         height: 64,
         decoration: BoxDecoration(
-            color: isDark ? Colors.grey[700] : Colors.grey[200],
+            color: isDark ? const Color(0xFF2D2B3F) : Colors.grey[200],
             borderRadius: BorderRadius.circular(8)),
         child:
             Icon(Icons.shopping_bag_outlined, size: 24, color: Colors.grey[400]),
@@ -838,69 +802,11 @@ class _QtyBtn extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                   color: isDark
-                      ? const Color(0xFF374151)
+                      ? const Color(0xFF2D2B3F)
                       : const Color(0xFFD1D5DB))),
           child: Icon(icon,
               size: 12,
               color: isDark ? Colors.grey[400] : Colors.grey[500])));
-}
-
-// =============================================================================
-// DELIVERY TYPE BUTTON
-// =============================================================================
-
-class _DeliveryTypeButton extends StatelessWidget {
-  final DeliveryType type;
-  final bool isSelected, isDark;
-  final VoidCallback onTap;
-  const _DeliveryTypeButton(
-      {required this.type,
-      required this.isSelected,
-      required this.isDark,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final loc = AppLocalizations.of(context)!;
-    final isDelivery = type == DeliveryType.delivery;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? (isDark ? Colors.orange.withOpacity(0.10) : Colors.orange[50])
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: isSelected
-                  ? (isDark
-                      ? Colors.orange.withOpacity(0.5)
-                      : Colors.orange[400]!)
-                  : (isDark ? const Color(0xFF374151) : Colors.grey[200]!)),
-        ),
-        child: Row(children: [
-          Icon(
-              isDelivery
-                  ? Icons.location_on_rounded
-                  : Icons.shopping_bag_rounded,
-              size: 18,
-              color: isSelected
-                  ? Colors.orange
-                  : (isDark ? Colors.grey[500] : Colors.grey[400])),
-          const SizedBox(width: 8),
-          Text(isDelivery ? loc.foodCheckoutDelivery : loc.foodCheckoutPickup,
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: isSelected
-                      ? (isDark ? Colors.orange[400] : Colors.orange[700])
-                      : (isDark ? Colors.grey[300] : Colors.grey[700]))),
-        ]),
-      ),
-    );
-  }
 }
 
 // =============================================================================
@@ -937,7 +843,7 @@ class _PaymentMethodButton extends StatelessWidget {
                       ? Colors.orange.withOpacity(0.5)
                       : Colors.orange[400]!)
                   : (isDark
-                      ? const Color(0xFF374151)
+                      ? const Color(0xFF2D2B3F)
                       : const Color(0xFFD1D5DB))),
         ),
         child: Row(children: [
@@ -947,7 +853,7 @@ class _PaymentMethodButton extends StatelessWidget {
               decoration: BoxDecoration(
                   color: isSelected
                       ? Colors.orange.withOpacity(0.2)
-                      : (isDark ? const Color(0xFF1F2937) : Colors.grey[100]),
+                      : (isDark ? const Color(0xFF2D2B3F) : Colors.grey[100]),
                   borderRadius: BorderRadius.circular(12)),
               child: Icon(
                   isPay ? Icons.payments_rounded : Icons.credit_card_rounded,
@@ -1015,11 +921,11 @@ class _StickyBottomBar extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: isDark
-            ? Colors.grey[900]!.withOpacity(0.95)
+            ? const Color(0xFF1C1A29)
             : Colors.white.withOpacity(0.95),
         border: Border(
             top: BorderSide(
-                color: isDark ? const Color(0xFF1F2937) : Colors.grey[200]!)),
+                color: isDark ? const Color(0xFF2D2B3F) : Colors.grey[200]!)),
       ),
       padding: EdgeInsets.fromLTRB(
           16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
@@ -1065,7 +971,7 @@ class _StickyBottomBar extends StatelessWidget {
               backgroundColor: Colors.orange,
               foregroundColor: Colors.white,
               disabledBackgroundColor:
-                  isDark ? Colors.grey[700] : Colors.grey[300],
+                  isDark ? const Color(0xFF2D2B3F) : Colors.grey[300],
               padding:
                   const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               shape: RoundedRectangleBorder(
@@ -1114,7 +1020,7 @@ class _OrderSuccessScreen extends StatelessWidget {
     final loc = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor:
-          isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+          isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
       body: SafeArea(
           child: Center(
               child: Padding(
@@ -1125,17 +1031,25 @@ class _OrderSuccessScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                   color: isDark
-                      ? Colors.grey[700]!.withOpacity(0.4)
-                      : Colors.grey[200]!)),
+                      ? Colors.white.withOpacity(0.08)
+                      : Colors.grey[200]!,
+                  width: 2.5)),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.15),
-                    shape: BoxShape.circle),
-                child: const Icon(Icons.check_circle_rounded,
-                    size: 32, color: Colors.green)),
+            ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.asset(
+                    'assets/images/foods/foodsuccess.png',
+                    width: 80,
+                    height: 80,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.15),
+                            shape: BoxShape.circle),
+                        child: const Icon(Icons.check_circle_rounded,
+                            size: 40, color: Colors.green)))),
             const SizedBox(height: 16),
             Text(loc.foodCheckoutOrderPlaced,
                 style: TextStyle(
@@ -1182,7 +1096,7 @@ class _OrderSuccessScreen extends StatelessWidget {
             SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                    onPressed: () => context.go('/my_food_orders'),
+                    onPressed: () => context.go('/restaurants'),
                     style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.orange,
                         foregroundColor: Colors.white,
@@ -1190,25 +1104,8 @@ class _OrderSuccessScreen extends StatelessWidget {
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12))),
-                    child: Text(loc.foodCheckoutViewOrders,
-                        style: const TextStyle(fontWeight: FontWeight.bold)))),
-            const SizedBox(height: 8),
-            SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                    onPressed: () => context.go('/restaurants'),
-                    style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        side: BorderSide(
-                            color: isDark
-                                ? Colors.grey[600]!
-                                : Colors.grey[300]!),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12))),
                     child: Text(loc.backToRestaurants,
-                        style: TextStyle(
-                            color: isDark ? Colors.grey[300] : Colors.grey[700],
-                            fontWeight: FontWeight.w500)))),
+                        style: const TextStyle(fontWeight: FontWeight.bold)))),
           ]),
         ),
       ))),
@@ -1228,7 +1125,7 @@ class _EmptyCartScreen extends StatelessWidget {
     final loc = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor:
-          isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+          isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
       body: SafeArea(
           child: Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -1273,9 +1170,9 @@ class _FoodCheckoutSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = isDark ? const Color(0xFF1F2937) : const Color(0xFFE5E7EB);
+    final bg = isDark ? const Color(0xFF2D2B3F) : const Color(0xFFE5E7EB);
     final border =
-        isDark ? Colors.grey[700]!.withOpacity(0.4) : Colors.grey[200]!;
+        isDark ? Colors.white.withOpacity(0.08) : Colors.grey[200]!;
     Widget box(double h, double? w) => Container(
         height: h,
         width: w,
@@ -1316,7 +1213,7 @@ class _FoodCheckoutSkeleton extends StatelessWidget {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                         color: isDark
-                            ? Colors.grey[800]!.withOpacity(0.6)
+                            ? const Color(0xFF211F31)
                             : Colors.grey[50],
                         borderRadius: BorderRadius.circular(12)),
                     child: Row(children: [

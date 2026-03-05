@@ -6900,7 +6900,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get favoritesShared => 'Favoriler başarıyla paylaşıldı!';
 
   @override
-  String get myOrders => 'Tüm Siparişlerim';
+  String get myOrders => 'Ürün Siparişleri';
 
   @override
   String get addNewAddress => 'Yeni adres ekle';
@@ -10375,10 +10375,10 @@ class AppLocalizationsTr extends AppLocalizations {
   String get enterNewAddress => 'Yeni adres girin';
 
   @override
-  String get addressLine1 => 'Adres Satırı 1';
+  String get addressLine1 => 'Adres Satırı';
 
   @override
-  String get addressLine2 => 'Adres Satırı 2';
+  String get addressLine2 => 'Adres Açıklaması';
 
   @override
   String get city => 'Şehir';
@@ -15236,4 +15236,16 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get compressing => 'Sıkıştırılıyor...';
+
+  @override
+  String get navRestaurants => 'Nar24';
+
+  @override
+  String get navFoodCart => 'Yemek Sepeti';
+
+  @override
+  String get navMyOrders => 'Siparişlerim';
+
+  @override
+  String get navProfile => 'Profil';
 }

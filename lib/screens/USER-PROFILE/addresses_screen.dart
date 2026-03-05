@@ -943,6 +943,13 @@ class _AddressFormModalState extends State<AddressFormModal> {
   String? _city;
   LatLng? _pinnedLocation;
 
+  bool get _isFormValid =>
+      _addressLine1Controller.text.trim().isNotEmpty &&
+      _addressLine2Controller.text.trim().isNotEmpty &&
+      _phoneNumberController.text.replaceAll(RegExp(r'\D'), '').length == 10 &&
+      _city != null &&
+      _pinnedLocation != null;
+
   /// Format stored phone "05XXXXXXXXX" to display format "(5XX) XXX XX XX"
   String _formatPhoneForDisplay(String phone) {
     final digitsOnly = phone.replaceAll(RegExp(r'\D'), '');
@@ -975,6 +982,10 @@ class _AddressFormModalState extends State<AddressFormModal> {
         ? widget.addressDoc!.get('city') ?? null
         : null;
 
+    _addressLine1Controller.addListener(_onFormChanged);
+    _addressLine2Controller.addListener(_onFormChanged);
+    _phoneNumberController.addListener(_onFormChanged);
+
     // If editing an existing address, try to retrieve previously saved location coordinates.
     if (widget.addressDoc != null && widget.addressDoc!.data() != null) {
       var data = widget.addressDoc!.data() as Map<String, dynamic>;
@@ -998,8 +1009,15 @@ class _AddressFormModalState extends State<AddressFormModal> {
     }
   }
 
+  void _onFormChanged() {
+    setState(() {});
+  }
+
   @override
   void dispose() {
+    _addressLine1Controller.removeListener(_onFormChanged);
+    _addressLine2Controller.removeListener(_onFormChanged);
+    _phoneNumberController.removeListener(_onFormChanged);
     _addressLine1Controller.dispose();
     _addressLine2Controller.dispose();
     _phoneNumberController.dispose();
@@ -1243,35 +1261,29 @@ class _AddressFormModalState extends State<AddressFormModal> {
                           const SizedBox(width: 16),
                           Expanded(
                             child: CupertinoButton(
-                              color: (_addressLine1Controller.text.isEmpty ||
-                                      _phoneNumberController.text.isEmpty ||
-                                      _city == null)
-                                  ? CupertinoColors.inactiveGray
-                                  : const Color(0xFF00A36C),
-                              onPressed: (_addressLine1Controller.text.isEmpty ||
-                                      _phoneNumberController.text.isEmpty ||
-                                      _city == null)
-                                  ? null
-                                  : () {
+                              color: _isFormValid
+                                  ? const Color(0xFF00A36C)
+                                  : CupertinoColors.inactiveGray,
+                              onPressed: _isFormValid
+                                  ? () {
                                       // Normalize phone: "(5XX) XXX XX XX" -> "05XXXXXXXXX"
                                       final normalizedPhone = '0${_phoneNumberController.text.replaceAll(RegExp(r'\D'), '')}';
                                       final Map<String, dynamic> addressData = {
                                         'addressLine1':
-                                            _addressLine1Controller.text,
+                                            _addressLine1Controller.text.trim(),
                                         'addressLine2':
-                                            _addressLine2Controller.text,
+                                            _addressLine2Controller.text.trim(),
                                         'phoneNumber': normalizedPhone,
                                         'city': _city,
-                                      };
-                                      if (_pinnedLocation != null) {
-                                        addressData['location'] = GeoPoint(
+                                        'location': GeoPoint(
                                           _pinnedLocation!.latitude,
                                           _pinnedLocation!.longitude,
-                                        );
-                                      }
+                                        ),
+                                      };
                                       Navigator.pop(context);
                                       widget.onSave(addressData);
-                                    },
+                                    }
+                                  : null,
                               child: Text(
                                 localization.save,
                                 style: const TextStyle(

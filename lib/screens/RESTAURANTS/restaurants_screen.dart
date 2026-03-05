@@ -340,333 +340,339 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
       onTap: () => FocusScope.of(context).unfocus(),
       behavior: HitTestBehavior.translucent,
       child: Scaffold(
-        backgroundColor: isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
+        backgroundColor:
+            isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
         body: SafeArea(
           child: _isLoadingData
-            ? _buildSkeleton(isDark)
-            : RefreshIndicator(
-                onRefresh: () async {
-                  await Future.wait([_fetchRestaurants(), _fetchFacets()]);
-                },
-                child: CustomScrollView(
-                  controller: _scrollController,
-                  slivers: [
-                    // ── App bar ──────────────────────────────────────────
-                    SliverAppBar(
-                      title: Text(loc.restaurantsTitle),
-                      floating: true,
-                      snap: true,
-                      backgroundColor: isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
-                      surfaceTintColor: Colors.transparent,
-                      elevation: 0,
-                      shadowColor: Colors.transparent,
-                      scrolledUnderElevation: 0,
-                    ),
+              ? _buildSkeleton(isDark)
+              : RefreshIndicator(
+                  onRefresh: () async {
+                    await Future.wait([_fetchRestaurants(), _fetchFacets()]);
+                  },
+                  child: CustomScrollView(
+                    controller: _scrollController,
+                    slivers: [
+                      // ── App bar ──────────────────────────────────────────
+                      SliverAppBar(
+                        title: Text(loc.restaurantsTitle),
+                        floating: true,
+                        snap: true,
+                        backgroundColor: isDark
+                            ? const Color(0xFF1C1A29)
+                            : const Color(0xFFE5E7EB),
+                        surfaceTintColor: Colors.transparent,
+                        elevation: 0,
+                        shadowColor: Colors.transparent,
+                        scrolledUnderElevation: 0,
+                        leading: context.canPop()
+                            ? IconButton(
+                                icon: const Icon(Icons.arrow_back),
+                                onPressed: () => context.pop(),
+                              )
+                            : IconButton(
+                                icon: const Icon(Icons.arrow_back),
+                                onPressed: () => context.go('/'),
+                              ),
+                        automaticallyImplyLeading:
+                            false, // prevent Flutter adding its own
+                      ),
 
-                    // ── Content ──────────────────────────────────────────
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Banner
-                            _BannerCarousel(assets: _kBannerAssets),
-                            const SizedBox(height: 20),
+                      // ── Content ──────────────────────────────────────────
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Banner
+                              _BannerCarousel(assets: _kBannerAssets),
+                              const SizedBox(height: 20),
 
-                            // Title row
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        loc.restaurantsTitle,
-                                        style: theme.textTheme.headlineSmall
-                                            ?.copyWith(
-                                                fontWeight: FontWeight.bold),
-                                      ),
-                                      Text(
-                                        loc.discoverNearbyRestaurants,
-                                        style: theme.textTheme.bodySmall
-                                            ?.copyWith(
-                                                color: isDark
-                                                    ? Colors.grey[400]
-                                                    : Colors.grey[600]),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                // Sort button
-                                _SortButton(
-                                  sortOption: _sortOption,
-                                  isDark: isDark,
-                                  onTap: _cycleSortOption,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-
-                            // Address prompt banner
-                            Builder(builder: (context) {
-                              final userProvider =
-                                  context.watch<UserProvider>();
-                              final isLoggedIn =
-                                  userProvider.user != null;
-                              final hasFoodAddress =
-                                  userProvider.profileData?['foodAddress'] !=
-                                      null;
-                              if (isLoggedIn && hasFoodAddress) {
-                                return const SizedBox.shrink();
-                              }
-                              final l10n =
-                                  AppLocalizations.of(context);
-                              return Padding(
-                                padding:
-                                    const EdgeInsets.only(bottom: 12),
-                                child: GestureDetector(
-                                  onTap: () {
-                                    if (!isLoggedIn) {
-                                      showCupertinoModalPopup(
-                                        context: context,
-                                        builder: (_) => LoginPromptModal(
-                                          authService: AuthService(),
-                                        ),
-                                      );
-                                    } else {
-                                      showFoodLocationPicker(context);
-                                    }
-                                  },
-                                  child: Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 14, vertical: 10),
-                                    decoration: BoxDecoration(
-                                      color: isDark
-                                          ? Colors.orange
-                                              .withValues(alpha: 0.12)
-                                          : Colors.orange
-                                              .withValues(alpha: 0.08),
-                                      borderRadius:
-                                          BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: isDark
-                                            ? Colors.orange
-                                                .withValues(alpha: 0.3)
-                                            : Colors.orange
-                                                .withValues(alpha: 0.25),
-                                      ),
-                                    ),
-                                    child: Row(
+                              // Title row
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Icon(
-                                          Icons.location_on_outlined,
-                                          size: 18,
-                                          color: isDark
-                                              ? Colors.orange[300]
-                                              : Colors.orange[700],
+                                        Text(
+                                          loc.restaurantsTitle,
+                                          style: theme.textTheme.headlineSmall
+                                              ?.copyWith(
+                                                  fontWeight: FontWeight.bold),
                                         ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            isLoggedIn
-                                                ? l10n
-                                                    .setAddressBanner
-                                                : l10n
-                                                    .setAddressLoginBanner,
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              color: isDark
-                                                  ? Colors.orange[300]
-                                                  : Colors.orange[800],
-                                            ),
-                                          ),
-                                        ),
-                                        Icon(
-                                          Icons.chevron_right,
-                                          size: 18,
-                                          color: isDark
-                                              ? Colors.orange[300]
-                                              : Colors.orange[700],
+                                        Text(
+                                          loc.discoverNearbyRestaurants,
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                                  color: isDark
+                                                      ? Colors.grey[400]
+                                                      : Colors.grey[600]),
                                         ),
                                       ],
                                     ),
                                   ),
-                                ),
-                              );
-                            }),
-
-                            // Search bar
-                            _SearchBar(
-                              controller: _searchController,
-                              isDark: isDark,
-                              hint: loc.searchRestaurantsHint,
-                            ),
-                            const SizedBox(height: 12),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // ── Cuisine pills ──────────────────────────────────────
-                    if (_cuisineFacets.isNotEmpty)
-                      SliverToBoxAdapter(
-                        child: _CuisinePillRow(
-                          facets: _cuisineFacets,
-                          selected: _selectedCuisine,
-                          isDark: isDark,
-                          onSelect: _onCuisineChanged,
-                        ),
-                      ),
-
-                    // ── Food type icon row ─────────────────────────────────
-                    SliverToBoxAdapter(
-                      child: _FoodTypeIconRow(
-                        selected: _selectedFoodType,
-                        isDark: isDark,
-                        onSelect: _onFoodTypeChanged,
-                      ),
-                    ),
-
-                    // ── Current delivery address pill ────────────────────────
-                    if (foodAddress != null)
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                          child: GestureDetector(
-                            onTap: () => showFoodLocationPicker(context),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: Colors.orange,
-                                borderRadius: BorderRadius.circular(24),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.location_on_rounded,
-                                    color: Colors.white,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Flexible(
-                                    child: Text(
-                                      foodAddress.displayLabel,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  const Icon(
-                                    Icons.keyboard_arrow_down_rounded,
-                                    color: Colors.white70,
-                                    size: 20,
+                                  // Sort button
+                                  _SortButton(
+                                    sortOption: _sortOption,
+                                    isDark: isDark,
+                                    onTap: _cycleSortOption,
                                   ),
                                 ],
                               ),
-                            ),
+                              const SizedBox(height: 12),
+
+                              // Address prompt banner
+                              Builder(builder: (context) {
+                                final userProvider =
+                                    context.watch<UserProvider>();
+                                final isLoggedIn = userProvider.user != null;
+                                final hasFoodAddress =
+                                    userProvider.profileData?['foodAddress'] !=
+                                        null;
+                                if (isLoggedIn && hasFoodAddress) {
+                                  return const SizedBox.shrink();
+                                }
+                                final l10n = AppLocalizations.of(context);
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      if (!isLoggedIn) {
+                                        showCupertinoModalPopup(
+                                          context: context,
+                                          builder: (_) => LoginPromptModal(
+                                            authService: AuthService(),
+                                          ),
+                                        );
+                                      } else {
+                                        showFoodLocationPicker(context);
+                                      }
+                                    },
+                                    child: Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? Colors.orange
+                                                .withValues(alpha: 0.12)
+                                            : Colors.orange
+                                                .withValues(alpha: 0.08),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: isDark
+                                              ? Colors.orange
+                                                  .withValues(alpha: 0.3)
+                                              : Colors.orange
+                                                  .withValues(alpha: 0.25),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.location_on_outlined,
+                                            size: 18,
+                                            color: isDark
+                                                ? Colors.orange[300]
+                                                : Colors.orange[700],
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              isLoggedIn
+                                                  ? l10n.setAddressBanner
+                                                  : l10n.setAddressLoginBanner,
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: isDark
+                                                    ? Colors.orange[300]
+                                                    : Colors.orange[800],
+                                              ),
+                                            ),
+                                          ),
+                                          Icon(
+                                            Icons.chevron_right,
+                                            size: 18,
+                                            color: isDark
+                                                ? Colors.orange[300]
+                                                : Colors.orange[700],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }),
+
+                              // Search bar
+                              _SearchBar(
+                                controller: _searchController,
+                                isDark: isDark,
+                                hint: loc.searchRestaurantsHint,
+                              ),
+                              const SizedBox(height: 12),
+                            ],
                           ),
                         ),
                       ),
 
-                    // ── Restaurant list ────────────────────────────────────
-                    if (_isSearching)
-                      SliverPadding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        sliver: SliverGrid(
-                          delegate: SliverChildBuilderDelegate(
-                            (_, i) => _RestaurantCardSkeleton(isDark: isDark),
-                            childCount: 6,
-                          ),
-                          gridDelegate:
-                              const SliverGridDelegateWithMaxCrossAxisExtent(
-                            maxCrossAxisExtent: 600,
-                            mainAxisExtent: 96,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
+                      // ── Cuisine pills ──────────────────────────────────────
+                      if (_cuisineFacets.isNotEmpty)
+                        SliverToBoxAdapter(
+                          child: _CuisinePillRow(
+                            facets: _cuisineFacets,
+                            selected: _selectedCuisine,
+                            isDark: isDark,
+                            onSelect: _onCuisineChanged,
                           ),
                         ),
-                      )
-                    else if (_restaurants.isNotEmpty) ...[
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                        sliver: SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (_, i) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: _RestaurantCard(
-                                restaurant: _restaurants[i],
-                                isDark: isDark,
-                                minOrderPrice: _getMinOrderPrice(
-                                    _restaurants[i], foodAddress),
-                                onTap: () => context.push(
-                                  '/restaurant-detail/${_restaurants[i].id}',
+
+                      // ── Food type icon row ─────────────────────────────────
+                      SliverToBoxAdapter(
+                        child: _FoodTypeIconRow(
+                          selected: _selectedFoodType,
+                          isDark: isDark,
+                          onSelect: _onFoodTypeChanged,
+                        ),
+                      ),
+
+                      // ── Current delivery address pill ────────────────────────
+                      if (foodAddress != null)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                            child: GestureDetector(
+                              onTap: () => showFoodLocationPicker(context),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange,
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.location_on_rounded,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(
+                                        foodAddress.displayLabel,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    const Icon(
+                                      Icons.keyboard_arrow_down_rounded,
+                                      color: Colors.white70,
+                                      size: 20,
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
-                            childCount: _restaurants.length,
                           ),
                         ),
-                      ),
-                      // Loading indicator at bottom
-                      if (_isLoadingMore)
-                        const SliverToBoxAdapter(
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(vertical: 20),
-                            child: Center(
-                              child: SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  valueColor:
-                                      AlwaysStoppedAnimation(Colors.orange),
-                                ),
-                              ),
+
+                      // ── Restaurant list ────────────────────────────────────
+                      if (_isSearching)
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          sliver: SliverGrid(
+                            delegate: SliverChildBuilderDelegate(
+                              (_, i) => _RestaurantCardSkeleton(isDark: isDark),
+                              childCount: 6,
+                            ),
+                            gridDelegate:
+                                const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 600,
+                              mainAxisExtent: 96,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
                             ),
                           ),
                         )
+                      else if (_restaurants.isNotEmpty) ...[
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                          sliver: SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (_, i) => Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _RestaurantCard(
+                                  restaurant: _restaurants[i],
+                                  isDark: isDark,
+                                  minOrderPrice: _getMinOrderPrice(
+                                      _restaurants[i], foodAddress),
+                                  onTap: () => context.push(
+                                    '/restaurant-detail/${_restaurants[i].id}',
+                                  ),
+                                ),
+                              ),
+                              childCount: _restaurants.length,
+                            ),
+                          ),
+                        ),
+                        // Loading indicator at bottom
+                        if (_isLoadingMore)
+                          const SliverToBoxAdapter(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(vertical: 20),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    valueColor:
+                                        AlwaysStoppedAnimation(Colors.orange),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          // Bottom padding
+                          const SliverToBoxAdapter(
+                            child: SizedBox(height: 24),
+                          ),
+                      ] else if (!_hasActiveFilters)
+                        // No restaurants at all
+                        SliverFillRemaining(
+                          child: _EmptyState(
+                            emoji: '🍽️',
+                            title: loc.noRestaurantsYet,
+                            subtitle: loc.checkBackSoonRestaurants,
+                          ),
+                        )
                       else
-                        // Bottom padding
-                        const SliverToBoxAdapter(
-                          child: SizedBox(height: 24),
+                        // Has filters active but no results
+                        SliverFillRemaining(
+                          child: _EmptyState(
+                            emoji: '🔍',
+                            title: loc.foodNoResults,
+                            subtitle: loc.tryDifferentCuisine,
+                            actionLabel: loc.clearFilters,
+                            onAction: _clearFilters,
+                          ),
                         ),
-                    ] else if (!_hasActiveFilters)
-                      // No restaurants at all
-                      SliverFillRemaining(
-                        child: _EmptyState(
-                          emoji: '🍽️',
-                          title: loc.noRestaurantsYet,
-                          subtitle:
-                              loc.checkBackSoonRestaurants,
-                        ),
-                      )
-                    else
-                      // Has filters active but no results
-                      SliverFillRemaining(
-                        child: _EmptyState(
-                          emoji: '🔍',
-                          title: loc.foodNoResults,
-                          subtitle:
-                              loc.tryDifferentCuisine,
-                          actionLabel: loc.clearFilters,
-                          onAction: _clearFilters,
-                        ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
+        ),
       ),
-    ),
     );
   }
 
@@ -679,7 +685,7 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
         Container(
           height: 180,
           decoration: BoxDecoration(
-            color: isDark ? Colors.grey[800] : Colors.grey[200],
+            color: isDark ? const Color(0xFF2D2B3F) : Colors.grey[200],
             borderRadius: BorderRadius.circular(16),
           ),
         ),
@@ -905,14 +911,14 @@ class _CuisinePill extends StatelessWidget {
             color: isActive
                 ? Colors.orange
                 : isDark
-                    ? Colors.grey[800]
+                    ? const Color(0xFF2D2B3F)
                     : Colors.white,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: isActive
                   ? Colors.orange
                   : isDark
-                      ? Colors.grey[700]!
+                      ? Colors.white.withOpacity(0.1)
                       : Colors.grey[300]!,
             ),
           ),
@@ -1013,7 +1019,7 @@ class _FoodTypeIconRow extends StatelessWidget {
                         color: isActive
                             ? Colors.orange
                             : isDark
-                                ? Colors.grey[800]
+                                ? const Color(0xFF2D2B3F)
                                 : Colors.grey[100],
                         borderRadius: BorderRadius.circular(12),
                         border: isActive
@@ -1051,7 +1057,8 @@ class _FoodTypeIconRow extends StatelessWidget {
                     SizedBox(
                       width: 56,
                       child: Text(
-                        localizeCategory(category, AppLocalizations.of(context)),
+                        localizeCategory(
+                            category, AppLocalizations.of(context)),
                         textAlign: TextAlign.center,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1106,11 +1113,10 @@ class _RestaurantCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isDark ? Colors.grey[900] : Colors.white,
+          color: isDark ? const Color(0xFF211F31) : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color:
-                isDark ? Colors.grey[700]!.withOpacity(0.5) : Colors.grey[200]!,
+            color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey[200]!,
           ),
         ),
         child: Row(
@@ -1155,7 +1161,8 @@ class _RestaurantCard extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(
-                        localizeCuisines(restaurant.cuisineTypes!, AppLocalizations.of(context)),
+                        localizeCuisines(restaurant.cuisineTypes!,
+                            AppLocalizations.of(context)),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: isDark ? Colors.grey[400] : Colors.grey[600],
                         ),
@@ -1178,12 +1185,13 @@ class _RestaurantCard extends StatelessWidget {
                                     horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: isDark
-                                      ? Colors.grey[800]
+                                      ? const Color(0xFF2D2B3F)
                                       : Colors.grey[100],
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
-                                  localizeFoodType(ft, AppLocalizations.of(context)),
+                                  localizeFoodType(
+                                      ft, AppLocalizations.of(context)),
                                   style: TextStyle(
                                     fontSize: 10,
                                     color: isDark
@@ -1297,7 +1305,7 @@ class _PlaceholderIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: isDark ? Colors.grey[800] : Colors.grey[100],
+      color: isDark ? const Color(0xFF2D2B3F) : Colors.grey[100],
       alignment: Alignment.center,
       child: const Text('🍽️', style: TextStyle(fontSize: 24)),
     );
@@ -1369,7 +1377,7 @@ class _SearchBar extends StatelessWidget {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         filled: true,
-        fillColor: isDark ? Colors.grey[800] : Colors.grey[100],
+        fillColor: isDark ? const Color(0xFF2D2B3F) : Colors.grey[100],
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
@@ -1419,14 +1427,14 @@ class _SortButton extends StatelessWidget {
           color: _isActive
               ? Colors.orange
               : isDark
-                  ? Colors.grey[800]
+                  ? const Color(0xFF2D2B3F)
                   : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: _isActive
                 ? Colors.orange
                 : isDark
-                    ? Colors.grey[700]!
+                    ? Colors.white.withOpacity(0.1)
                     : Colors.grey[300]!,
           ),
         ),
@@ -1469,15 +1477,15 @@ class _RestaurantCardSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = isDark ? Colors.grey[800]! : Colors.grey[200]!;
+    final bg = isDark ? const Color(0xFF2D2B3F) : Colors.grey[200]!;
 
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isDark ? Colors.grey[900] : Colors.white,
+        color: isDark ? const Color(0xFF211F31) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? Colors.grey[800]! : Colors.grey[100]!,
+          color: isDark ? const Color(0xFF2D2B3F) : Colors.grey[100]!,
         ),
       ),
       child: Row(

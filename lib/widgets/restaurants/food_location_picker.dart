@@ -198,9 +198,11 @@ class _FoodLocationPickerSheetState extends State<_FoodLocationPickerSheet> {
   }
 
   bool get _isNewFormValid =>
-      _addr1Controller.text.isNotEmpty &&
+      _addr1Controller.text.trim().isNotEmpty &&
+      _addr2Controller.text.trim().isNotEmpty &&
       _phoneController.text.replaceAll(RegExp(r'\D'), '').length == 10 &&
-      _newCity != null;
+      _newCity != null &&
+      _newPinnedLocation != null;
 
   Future<void> _confirmSelection() async {
     if (_saving) return;
@@ -218,17 +220,15 @@ class _FoodLocationPickerSheetState extends State<_FoodLocationPickerSheet> {
         final normalizedPhone =
             '0${_phoneController.text.replaceAll(RegExp(r'\D'), '')}';
         final addressData = <String, dynamic>{
-          'addressLine1': _addr1Controller.text,
-          'addressLine2': _addr2Controller.text,
+          'addressLine1': _addr1Controller.text.trim(),
+          'addressLine2': _addr2Controller.text.trim(),
           'phoneNumber': normalizedPhone,
           'city': _newCity,
-        };
-        if (_newPinnedLocation != null) {
-          addressData['location'] = GeoPoint(
+          'location': GeoPoint(
             _newPinnedLocation!.latitude,
             _newPinnedLocation!.longitude,
-          );
-        }
+          ),
+        };
 
         // Check limit
         final existing = await FirebaseFirestore.instance
@@ -268,17 +268,15 @@ class _FoodLocationPickerSheetState extends State<_FoodLocationPickerSheet> {
 
         foodAddress = FoodAddress(
           addressId: newDocRef.id,
-          addressLine1: _addr1Controller.text,
-          addressLine2: _addr2Controller.text,
+          addressLine1: _addr1Controller.text.trim(),
+          addressLine2: _addr2Controller.text.trim(),
           city: _newCity!,
           mainRegion: derivedMainRegion,
           phoneNumber: normalizedPhone,
-          location: _newPinnedLocation != null
-              ? GeoPoint(
-                  _newPinnedLocation!.latitude,
-                  _newPinnedLocation!.longitude,
-                )
-              : null,
+          location: GeoPoint(
+            _newPinnedLocation!.latitude,
+            _newPinnedLocation!.longitude,
+          ),
         );
       } else {
         // Use selected existing address

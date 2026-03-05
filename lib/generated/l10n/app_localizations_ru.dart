@@ -6931,7 +6931,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get favoritesShared => 'Избранное успешно поделено!';
 
   @override
-  String get myOrders => 'Все мои заказы';
+  String get myOrders => 'Заказы на продукцию';
 
   @override
   String get addNewAddress => 'Добавить новый адрес';
@@ -10435,10 +10435,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get enterNewAddress => 'Введите новый адрес';
 
   @override
-  String get addressLine1 => 'Адрес 1';
+  String get addressLine1 => 'Адрес';
 
   @override
-  String get addressLine2 => 'Адрес 2';
+  String get addressLine2 => 'Адрес Описание';
 
   @override
   String get city => 'Город';
@@ -15311,4 +15311,16 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get compressing => 'Сжатие...';
+
+  @override
+  String get navRestaurants => 'Nar24';
+
+  @override
+  String get navFoodCart => 'Корзина';
+
+  @override
+  String get navMyOrders => 'Мои заказы';
+
+  @override
+  String get navProfile => 'Профиль';
 }

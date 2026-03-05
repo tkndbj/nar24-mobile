@@ -45,6 +45,7 @@ class _RestaurantListFoodScreenState extends State<RestaurantListFoodScreen> {
   String _category = '';
   String _foodType = '';
   Map<String, double> _selectedExtras = {}; // extra key → price
+  Map<String, String> _extrasRawText = {}; // extra key → raw input text
   File? _imageFile;
   String? _existingImageUrl;
   bool _isCompressing = false;
@@ -124,10 +125,21 @@ class _RestaurantListFoodScreenState extends State<RestaurantListFoodScreen> {
 
       final existingUrl = d['imageUrl'] as String?;
 
+      // Build raw text map from extras for editing
+      final Map<String, String> rawTextMap = {};
+      for (final entry in extrasMap.entries) {
+        rawTextMap[entry.key] = entry.value == 0
+            ? ''
+            : (entry.value == entry.value.truncateToDouble()
+                ? entry.value.toInt().toString()
+                : entry.value.toString());
+      }
+
       setState(() {
         _category = newCategory;
         _foodType = newType;
         _selectedExtras = extrasMap;
+        _extrasRawText = rawTextMap;
         _existingImageUrl = existingUrl;
         _loadingFood = false;
       });
@@ -794,6 +806,7 @@ class _RestaurantListFoodScreenState extends State<RestaurantListFoodScreen> {
                 _category = v ?? '';
                 _foodType = '';
                 _selectedExtras = {};
+                _extrasRawText = {};
                 _errors.remove('category');
                 _errors.remove('foodType');
               });
@@ -960,8 +973,10 @@ class _RestaurantListFoodScreenState extends State<RestaurantListFoodScreen> {
                         setState(() {
                           if (isSelected) {
                             _selectedExtras.remove(extra);
+                            _extrasRawText.remove(extra);
                           } else {
                             _selectedExtras[extra] = 0;
+                            _extrasRawText[extra] = '';
                           }
                         });
                       },
@@ -1020,21 +1035,26 @@ class _RestaurantListFoodScreenState extends State<RestaurantListFoodScreen> {
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true),
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                              RegExp(r'^\d*\.?\d{0,2}'))
+                          TextInputFormatter.withFunction((oldValue, newValue) {
+                            // Normalize comma to dot
+                            final normalized =
+                                newValue.text.replaceAll(',', '.');
+                            // Allow up to 4 digits, optional dot, up to 2 decimals
+                            if (normalized.isEmpty ||
+                                RegExp(r'^\d{0,4}\.?\d{0,2}$')
+                                    .hasMatch(normalized)) {
+                              return newValue.copyWith(text: normalized);
+                            }
+                            return oldValue;
+                          }),
                         ],
                         controller: TextEditingController(
-                          text: _selectedExtras[extra] == 0
-                              ? ''
-                              : _selectedExtras[extra].toString(),
+                          text: _extrasRawText[extra] ?? '',
                         )..selection = TextSelection.collapsed(
-                            offset: _selectedExtras[extra] == 0
-                                ? 0
-                                : _selectedExtras[extra].toString().length),
+                            offset: (_extrasRawText[extra] ?? '').length),
                         onChanged: (v) {
-                          setState(() {
-                            _selectedExtras[extra] = double.tryParse(v) ?? 0;
-                          });
+                          _extrasRawText[extra] = v;
+                          _selectedExtras[extra] = double.tryParse(v) ?? 0;
                         },
                         style: GoogleFonts.inter(fontSize: 11),
                         decoration: InputDecoration(

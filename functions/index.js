@@ -5143,9 +5143,9 @@ if (payload.orderId) {
     case 'food_order_delivered_review':
       route = payload.orderId ? `/food-order-detail/${payload.orderId}` : '/orders?tab=food';
       break;
-    case 'food_order_status_update':
-      route = payload.orderId ? `/food-order/${payload.orderId}` : '/food-orders';
-      break;
+      case 'food_order_status_update':
+        route = '/my_food_orders';
+        break;
   case 'product_review_user':
     if (notificationData.productId) {
       route = `/product/${notificationData.productId}`; 
