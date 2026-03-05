@@ -3185,6 +3185,7 @@
   "payRent": "Pay Rent",
   "invitationAccepted": "Invitation Accepted",
   "invitationRejected": "Invitation Rejected",
+  "invitationAlreadyResponded": "You've already responded to this invitation.",
   "enterValidRent": "Please Enter Valid Rent",
   "flatName": "Flat Name",
   "flatAdded": "Flat Added Successfully",

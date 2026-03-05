@@ -9170,6 +9170,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get invitationRejected => 'Davet reddedildi.';
 
   @override
+  String get invitationAlreadyResponded => 'Bu davete zaten yanıt verdiniz.';
+
+  @override
   String get clearCategories => 'Kategorileri Temizle';
 
   @override

@@ -3854,6 +3854,7 @@
   "payRent": "Kirayı öde",
   "invitationAccepted": "Davet kabul edildi",
   "invitationRejected": "Davet reddedildi",
+  "invitationAlreadyResponded": "Bu davete zaten yanıt verdiniz.",
   "add": "Ekle",
   "clearCategories": "Kategorileri Temizle",
   "enterValidRent": "Lütfen geçerli bir kira bedeli girin",

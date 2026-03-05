@@ -868,45 +868,74 @@ class _NotificationScreenState extends State<NotificationScreen> {
       case 'shop_invitation':
         showDialog(
           context: context,
-          builder: (context) {
+          builder: (dialogContext) {
             final inviterName = notification.inviterName ?? '';
             final shopName = notification.shopName ?? '';
-            final textColor = Theme.of(context).brightness == Brightness.dark
+            final textColor = Theme.of(dialogContext).brightness == Brightness.dark
                 ? Colors.white
                 : Colors.black;
-            return CupertinoAlertDialog(
-              content: Text(
-                l10n.invitationMessage(inviterName, shopName),
-                style: const TextStyle(
-                    fontFamily: 'Figtree',
-                    fontSize: 16.0,
-                    fontWeight: FontWeight.w600),
-              ),
-              actions: [
-                CupertinoDialogAction(
-                  onPressed: () async {
-                    Navigator.of(context).pop();
-                    await _handleInvitationResponse(notification,
-                        accepted: false);
-                  },
-                  child: Text(
-                    l10n.reject,
-                    style: TextStyle(
-                        color: textColor, fontWeight: FontWeight.bold),
+            return FutureBuilder<bool>(
+              future: notification.invitationId != null
+                  ? FirebaseFirestore.instance
+                      .collection('shopInvitations')
+                      .doc(notification.invitationId)
+                      .get()
+                      .then((snap) {
+                        if (!snap.exists) return true;
+                        final status = snap.data()?['status'] as String?;
+                        return status == 'accepted' || status == 'rejected';
+                      })
+                      .catchError((_) => false)
+                  : Future.value(false),
+              builder: (context, snapshot) {
+                final alreadyResponded = snapshot.data == true;
+                return CupertinoAlertDialog(
+                  content: Text(
+                    alreadyResponded
+                        ? l10n.invitationAlreadyResponded
+                        : l10n.invitationMessage(inviterName, shopName),
+                    style: const TextStyle(
+                        fontFamily: 'Figtree',
+                        fontSize: 16.0,
+                        fontWeight: FontWeight.w600),
                   ),
-                ),
-                CupertinoDialogAction(
-                  onPressed: () async {
-                    Navigator.of(context).pop();
-                    await _handleInvitationResponse(notification,
-                        accepted: true);
-                  },
-                  child: Text(
-                    l10n.accept,
-                    style: TextStyle(color: Color(0xFF00A86B)),
-                  ),
-                ),
-              ],
+                  actions: alreadyResponded
+                      ? [
+                          CupertinoDialogAction(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: Text(
+                              l10n.ok,
+                              style: TextStyle(color: textColor),
+                            ),
+                          ),
+                        ]
+                      : [
+                          CupertinoDialogAction(
+                            onPressed: () async {
+                              Navigator.of(context).pop();
+                              await _handleInvitationResponse(notification,
+                                  accepted: false);
+                            },
+                            child: Text(
+                              l10n.reject,
+                              style: TextStyle(
+                                  color: textColor, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          CupertinoDialogAction(
+                            onPressed: () async {
+                              Navigator.of(context).pop();
+                              await _handleInvitationResponse(notification,
+                                  accepted: true);
+                            },
+                            child: Text(
+                              l10n.accept,
+                              style: TextStyle(color: Color(0xFF00A86B)),
+                            ),
+                          ),
+                        ],
+                );
+              },
             );
           },
         );

@@ -189,6 +189,7 @@ class SellerPanelProvider with ChangeNotifier {
   int _currentTransactionPage = 0;
   bool _hasMoreTransactions = true;
   String _transactionSearchQuery = '';
+  DocumentSnapshot? _lastTransactionDoc;
 
   bool _isLoadingShops = false;
   bool _isLoadingProducts = false;
@@ -1401,6 +1402,11 @@ class SellerPanelProvider with ChangeNotifier {
   }
 
   Future<void> fetchProducts({String? shopId, bool loadMore = false}) async {
+     final effectiveShopId = shopId ?? _selectedShop?.id;
+if (effectiveShopId == null) {
+  debugPrint('❌ fetchProducts called with no shopId');
+  return;
+}
     final myQueryId = ++_activeProductQueryId;
 
     if (loadMore) {
@@ -1419,19 +1425,12 @@ class SellerPanelProvider with ChangeNotifier {
 
     try {
       // Determine Typesense index and owner filter
-      final String indexName;
-      final List<List<String>> filters;
-      if (shopId != null) {
-        indexName = 'shop_products';
-        filters = [
-          ['shopId:$shopId']
-        ];
-      } else {
-        indexName = 'products';
-        filters = [
-          ['ownerId:$userId']
-        ];
-      }
+   
+
+final indexName = 'shop_products';
+final filters = [
+  ['shopId:$effectiveShopId']
+];
 
       // Category filtering via Typesense facets
       if (_selectedCategory != null) {
@@ -1498,115 +1497,68 @@ class SellerPanelProvider with ChangeNotifier {
     await fetchProducts(shopId: shopId, loadMore: true);
   }
 
-  Future<void> fetchTransactions({
-    String? shopId,
-    bool forceRefresh = false,
-    bool loadMore = false,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) async {
-    if (_firebaseAuth.currentUser == null) {
-      _transactions = [];
-      _filteredTransactionsNotifier.value = [];
-      _transactionError = null;
-      _isLoadingTransactionsNotifier.value = false;
-      return;
+ Future<void> fetchTransactions({
+  String? shopId,
+  bool forceRefresh = false,
+  bool loadMore = false,
+  DateTime? startDate,
+  DateTime? endDate,
+}) async {
+  if (_firebaseAuth.currentUser == null) return;
+
+  final effectiveShopId = shopId ?? _selectedShop?.id;
+  if (effectiveShopId == null) return;
+
+  // ✅ ADD: Skip if already loaded and no refresh requested
+  if (!forceRefresh && !loadMore && _transactions.isNotEmpty) return;
+
+  if (loadMore) {
+    _isLoadingMoreTransactionsNotifier.value = true;
+  } else {
+    _isLoadingTransactionsNotifier.value = true;
+    _transactions = [];
+    _filteredTransactionsNotifier.value = [];
+    // ✅ REMOVE: _currentTransactionPage = 0; (dead code, using cursor now)
+    _hasMoreTransactions = true;
+    _lastTransactionDoc = null;
+  }
+
+  try {
+    Query query = _firestore.collectionGroup('items')
+        .where('shopId', isEqualTo: effectiveShopId);
+
+    if (startDate != null) {
+      query = query.where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate));
+    }
+    if (endDate != null) {
+      query = query.where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(endDate));
     }
 
-    // Early return if already loaded and no refresh requested
-    if (!forceRefresh &&
-        !loadMore &&
-        _transactions.isNotEmpty &&
-        _transactionError == null) {
-      return;
+    query = query.orderBy('timestamp', descending: true).limit(20);
+
+    if (loadMore && _lastTransactionDoc != null) {
+      query = query.startAfterDocument(_lastTransactionDoc!);
     }
+
+    final snap = await query.get();
 
     if (loadMore) {
-      _isLoadingMoreTransactionsNotifier.value = true;
+      _transactions.addAll(snap.docs);
     } else {
-      _isLoadingTransactionsNotifier.value = true;
-      _currentTransactionPage = 0;
-      _hasMoreTransactions = true;
-
-      // Cancel existing subscription if migrating from old real-time listener
-      if (_transactionSubscription != null) {
-        await _transactionSubscription!.cancel();
-        _transactionSubscription = null;
-        await Future.delayed(_listenerCancelDelay);
-      }
+      _transactions = snap.docs;
     }
 
-    _transactionError = null;
-
-    try {
-      // Build Typesense filters
-      final filters = <List<String>>[];
-      if (shopId != null) {
-        filters.add(['shopId:$shopId']);
-      } else {
-        filters.add(['sellerId:$userId']);
-      }
-
-      // Date filtering via Typesense numeric filter
-      String? additionalFilter;
-      final dateFilters = <String>[];
-      if (startDate != null) {
-        final startUnix = startDate.millisecondsSinceEpoch ~/ 1000;
-        dateFilters.add('timestampForSorting:>=$startUnix');
-      }
-      if (endDate != null) {
-        final endUnix = endDate.millisecondsSinceEpoch ~/ 1000;
-        dateFilters.add('timestampForSorting:<=$endUnix');
-      }
-      if (dateFilters.isNotEmpty) {
-        additionalFilter = dateFilters.join(' && ');
-      }
-
-      final typesense = TypeSenseServiceManager.instance.ordersService;
-      final page = loadMore ? _currentTransactionPage + 1 : 0;
-      final result = await typesense.searchIdsWithFacets(
-        indexName: 'orders',
-        query: '*',
-        page: page,
-        hitsPerPage: 20,
-        facetFilters: filters,
-        sortOption: 'timestamp',
-        additionalFilterBy: additionalFilter,
-        queryBy: 'searchableText,productName,buyerName,sellerName',
-        includeFields: 'id,orderId,productId,shopId,sellerId,buyerId,timestampForSorting',
-      );
-
-      // Hydrate from Firestore by ID (cheap reads, no composite indexes)
-      final docs = await typesense
-          .fetchDocumentSnapshotsFromTypeSenseResults(result.hits);
-
-      if (loadMore) {
-        // Dedup: skip transactions already in the list
-        final existingIds = _transactions.map((d) => d.id).toSet();
-        _transactions.addAll(docs.where((d) => !existingIds.contains(d.id)));
-        _isLoadingMoreTransactionsNotifier.value = false;
-      } else {
-        _transactions = docs;
-        _isLoadingTransactionsNotifier.value = false;
-      }
-
-      _currentTransactionPage = result.page;
-      _hasMoreTransactions = result.page < result.nbPages - 1;
-      _transactionError = null;
-      _updateFilteredTransactions();
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Error fetching transactions: $e');
-      _transactionError = 'Failed to load transactions.';
-      if (!loadMore) {
-        _transactions = [];
-        _filteredTransactionsNotifier.value = [];
-      }
-      _isLoadingTransactionsNotifier.value = false;
-      _isLoadingMoreTransactionsNotifier.value = false;
-      notifyListeners();
-    }
+    _lastTransactionDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
+    _hasMoreTransactions = snap.docs.length == 20;
+    _updateFilteredTransactions();
+    notifyListeners();
+  } catch (e) {
+    debugPrint('Error fetching transactions: $e');
+  } finally {
+    _isLoadingTransactionsNotifier.value = false;
+    _isLoadingMoreTransactionsNotifier.value = false;
   }
+}
 
   Future<void> fetchMoreTransactions({String? shopId}) async {
     if (!_hasMoreTransactions || _isLoadingMoreTransactionsNotifier.value)
@@ -1934,6 +1886,7 @@ class SellerPanelProvider with ChangeNotifier {
     _currentStockPage = 0;
     _hasMoreStockProducts = true;
     _productMap.clear();
+      _lastTransactionDoc = null;
 
     // Cache state
     _productImageCache.clear();

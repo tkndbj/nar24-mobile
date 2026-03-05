@@ -17502,6 +17502,12 @@ abstract class AppLocalizations {
   /// **'Davet reddedildi.'**
   String get invitationRejected;
 
+  /// No description provided for @invitationAlreadyResponded.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bu davete zaten yanıt verdiniz.'**
+  String get invitationAlreadyResponded;
+
   /// No description provided for @clearCategories.
   ///
   /// In tr, this message translates to:

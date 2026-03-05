@@ -4219,6 +4219,7 @@
   "payRent": "Оплатить аренду",
   "invitationAccepted": "Приглашение принято",
   "invitationRejected": "Приглашение отклонено",
+  "invitationAlreadyResponded": "Вы уже ответили на это приглашение.",
   "add": "Добавить",
   "clearCategories": "Очистить категории",
   "enterValidRent": "Пожалуйста, введите действительную цену аренды",

@@ -9156,6 +9156,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get invitationRejected => 'Invitation Rejected';
 
   @override
+  String get invitationAlreadyResponded =>
+      'You\'ve already responded to this invitation.';
+
+  @override
   String get clearCategories => 'Clear Categories';
 
   @override

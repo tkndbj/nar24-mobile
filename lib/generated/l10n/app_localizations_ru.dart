@@ -9221,6 +9221,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get invitationRejected => 'Приглашение отклонено';
 
   @override
+  String get invitationAlreadyResponded =>
+      'Вы уже ответили на это приглашение.';
+
+  @override
   String get clearCategories => 'Очистить категории';
 
   @override
