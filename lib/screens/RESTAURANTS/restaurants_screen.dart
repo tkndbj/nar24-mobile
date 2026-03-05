@@ -98,7 +98,7 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
       final foodAddress = userProvider.profileData?['foodAddress'];
       if (foodAddress == null) {
         _hasShownPicker = true;
-        showFoodLocationPicker(context, isDismissible: false);
+        showFoodLocationPicker(context, isDismissible: true);
       }
     });
   }

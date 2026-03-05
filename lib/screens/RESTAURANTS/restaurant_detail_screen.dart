@@ -14,6 +14,7 @@ import 'package:provider/provider.dart';
 import '../../auth_service.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../widgets/login_modal.dart';
+import '../../widgets/restaurants/food_location_picker.dart';
 import '../../widgets/restaurants/reviews.dart';
 import '../../constants/foodData.dart';
 import '../../models/food_address.dart';
@@ -1327,12 +1328,10 @@ class _FoodCard extends StatelessWidget {
 
                 const SizedBox(height: 8),
 
-                // Price + prep time + add button row
-                Row(
-                  children: [
-                    // Price (with discount support)
-                    if (food.hasActiveDiscount && food.originalPrice != null) ...[
-                      // Discount badge
+                // Discount row (only when active)
+                if (food.hasActiveDiscount && food.originalPrice != null) ...[
+                  Row(
+                    children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
@@ -1350,7 +1349,6 @@ class _FoodCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 6),
-                      // Original price (strikethrough)
                       Text(
                         '${food.originalPrice!.toStringAsFixed(food.originalPrice! % 1 == 0 ? 0 : 2)} TL',
                         style: TextStyle(
@@ -1363,29 +1361,43 @@ class _FoodCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 6),
-                      // Discounted price
                       Text(
                         '${food.price.toStringAsFixed(food.price % 1 == 0 ? 0 : 2)} TL',
                         style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.orange[400] : Colors.orange[600],
+                          color: isDark
+                              ? const Color(0xFF4ADE80)
+                              : const Color(0xFF059669),
                         ),
                       ),
-                    ] else
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                ],
+
+                // Price (normal) + prep time + add button row
+                Row(
+                  children: [
+                    if (!(food.hasActiveDiscount &&
+                        food.originalPrice != null))
                       Text(
                         '${food.price.toStringAsFixed(food.price % 1 == 0 ? 0 : 2)} TL',
                         style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.orange[400] : Colors.orange[600],
+                          color: isDark
+                              ? Colors.orange[400]
+                              : Colors.orange[600],
                         ),
                       ),
 
                     // Prep time
                     if (food.preparationTime != null &&
                         food.preparationTime! > 0) ...[
-                      const SizedBox(width: 8),
+                      if (!(food.hasActiveDiscount &&
+                          food.originalPrice != null))
+                        const SizedBox(width: 8),
                       Icon(Icons.access_time_rounded,
                           size: 14,
                           color: isDark ? Colors.grey[500] : Colors.grey[400]),
@@ -1420,7 +1432,7 @@ class _FoodCard extends StatelessWidget {
     );
   }
 
-  void _openExtrasSheet(BuildContext context) {
+  Future<void> _openExtrasSheet(BuildContext context) async {
     if (FirebaseAuth.instance.currentUser == null) {
       showCupertinoModalPopup(
         context: context,
@@ -1429,13 +1441,20 @@ class _FoodCard extends StatelessWidget {
       return;
     }
 
-    // Authenticated but no delivery address — send back to restaurants screen
-    // where the food location picker will auto-show and restaurants will be
-    // re-fetched filtered by the chosen delivery region.
+    // Authenticated but no delivery address — show the picker here.
+    // After address is set, redirect to /restaurants so Typesense can
+    // re-fetch the list filtered by the chosen delivery region.
     final rawFoodAddress =
         context.read<UserProvider>().profileData?['foodAddress'];
     if (rawFoodAddress == null) {
-      context.go('/restaurants');
+      final address = await showFoodLocationPicker(
+        context,
+        isDismissible: true,
+      );
+      if (!context.mounted) return;
+      if (address != null) {
+        context.go('/restaurants');
+      }
       return;
     }
 
@@ -1748,8 +1767,8 @@ void initState() {
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                               color: isDark
-                                  ? Colors.orange[400]
-                                  : Colors.orange[600]),
+                                  ? const Color(0xFF4ADE80)
+                                  : const Color(0xFF059669)),
                         ),
                       ] else
                         Text(
