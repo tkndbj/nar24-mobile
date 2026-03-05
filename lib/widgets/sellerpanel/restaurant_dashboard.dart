@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 
 import '../../generated/l10n/app_localizations.dart';
+import '../../utils/food_localization.dart';
 
 // ─── Order status ─────────────────────────────────────────────────────────────
 
@@ -256,59 +257,9 @@ String _timeAgo(Timestamp? ts, String locale) {
   return switch (locale) { 'tr' => '${d}g', 'ru' => '${d}д', _ => '${d}d' };
 }
 
-// ─── Quick-action card definition ─────────────────────────────────────────────
+// ─── Pagination ──────────────────────────────────────────────────────────────
 
-class _ActionCardDef {
-  final String Function(AppLocalizations) label;
-  final String Function(AppLocalizations) description;
-  final IconData icon;
-  final String route;
-  final Color iconBg;
-  final Color iconColor;
-  const _ActionCardDef({
-    required this.label,
-    required this.description,
-    required this.icon,
-    required this.route,
-    required this.iconBg,
-    required this.iconColor,
-  });
-}
-
-final _kActionCards = <_ActionCardDef>[
-  _ActionCardDef(
-    label: (l) => l.restaurantDashboardFoodsLabel,
-    description: (l) => l.restaurantDashboardFoodsDescription,
-    icon: Icons.restaurant_menu_rounded,
-    route: '/restaurant_foods',
-    iconBg: const Color(0xFFFFF7ED),
-    iconColor: const Color(0xFFEA580C),
-  ),
-  _ActionCardDef(
-    label: (l) => l.restaurantDashboardOrdersLabel,
-    description: (l) => l.restaurantDashboardOrdersDescription,
-    icon: Icons.receipt_long_rounded,
-    route: '/orders_food',
-    iconBg: const Color(0xFFF0FDF4),
-    iconColor: const Color(0xFF16A34A),
-  ),
-  _ActionCardDef(
-    label: (l) => l.restaurantDashboardReviewsLabel,
-    description: (l) => l.restaurantDashboardReviewsDescription,
-    icon: Icons.star_outline_rounded,
-    route: '/restaurant_reviews',
-    iconBg: const Color(0xFFFFFBEB),
-    iconColor: const Color(0xFFD97706),
-  ),
-  _ActionCardDef(
-    label: (l) => l.restaurantDashboardSettingsLabel,
-    description: (l) => l.restaurantDashboardSettingsDescription,
-    icon: Icons.settings_outlined,
-    route: '/restaurant_settings',
-    iconBg: const Color(0xFFF9FAFB),
-    iconColor: const Color(0xFF4B5563),
-  ),
-];
+const _kPageSize = 20;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RestaurantDashboardTab
@@ -443,30 +394,20 @@ class _RestaurantDashboardTabState extends State<RestaurantDashboardTab>
             _shimmerBox(14, 130),
             const SizedBox(height: 8),
             _shimmerBox(26, 210),
-            const SizedBox(height: 28),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 1.45,
-              ),
-              itemCount: 4,
-              itemBuilder: (_, __) => Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-            ),
             const SizedBox(height: 24),
-            Container(
-              height: 220,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
+            _shimmerBox(10, 160),
+            const SizedBox(height: 12),
+            ...List.generate(
+              3,
+              (_) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Container(
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
               ),
             ),
           ],
@@ -599,61 +540,24 @@ class _RestaurantDashboardTabState extends State<RestaurantDashboardTab>
   // ── Main dashboard ────────────────────────────────────────────────────────
 
   Widget _buildDashboard(bool isDark, AppLocalizations l10n, String locale) {
-    return RefreshIndicator(
-      color: const Color(0xFFEA580C),
+    return _PendingOrdersSection(
+      restaurantId: _restaurantId!,
+      locale: locale,
+      l10n: l10n,
+      isDark: isDark,
       onRefresh: () => _loadRestaurant(widget.restaurantId),
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildGreetingSection(isDark, l10n, locale),
-            const SizedBox(height: 24),
-            _sectionLabel(l10n.restaurantDashboardQuickActions, isDark),
-            const SizedBox(height: 12),
-            _buildActionGrid(isDark, l10n),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _sectionLabel(
-                    l10n.restaurantDashboardPendingOrdersTitle, isDark),
-                GestureDetector(
-                  onTap: () => context.push('/orders_food'),
-                  child: Text(
-                    l10n.restaurantDashboardViewAll,
-                    style: GoogleFonts.figtree(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFFEA580C),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isDark
-                        ? const Color(0xFF2D2B42)
-                        : const Color(0xFFF3F4F6),
-                  ),
-                ),
-                child: _PendingOrdersSection(
-                  restaurantId: _restaurantId!,
-                  locale: locale,
-                  l10n: l10n,
-                  isDark: isDark,
-                ),
-              ),
-            ),
-          ],
+      headerBuilder: () => _buildGreetingSection(isDark, l10n, locale),
+      sectionLabel: _sectionLabel(
+          l10n.restaurantDashboardPendingOrdersTitle, isDark),
+      viewAllLabel: GestureDetector(
+        onTap: () => context.push('/orders_food'),
+        child: Text(
+          l10n.restaurantDashboardViewAll,
+          style: GoogleFonts.figtree(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFFEA580C),
+          ),
         ),
       ),
     );
@@ -697,31 +601,6 @@ class _RestaurantDashboardTabState extends State<RestaurantDashboardTab>
         if (_restaurantInfo != null)
           _ScheduleBadges(info: _restaurantInfo!, locale: locale),
       ],
-    );
-  }
-
-  // ── Action grid ───────────────────────────────────────────────────────────
-
-  Widget _buildActionGrid(bool isDark, AppLocalizations l10n) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 1.45,
-      ),
-      itemCount: _kActionCards.length,
-      itemBuilder: (context, i) {
-        final card = _kActionCards[i];
-        return _ActionCardWidget(
-          def: card,
-          l10n: l10n,
-          isDark: isDark,
-          onTap: () => context.push(card.route),
-        );
-      },
     );
   }
 
@@ -869,73 +748,7 @@ class _Badge extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Action card widget
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ActionCardWidget extends StatelessWidget {
-  final _ActionCardDef def;
-  final AppLocalizations l10n;
-  final bool isDark;
-  final VoidCallback onTap;
-  const _ActionCardWidget({
-    required this.def,
-    required this.l10n,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isDark ? const Color(0xFF2D2B42) : const Color(0xFFF3F4F6),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: def.iconBg,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(def.icon, color: def.iconColor, size: 18),
-            ),
-            const Spacer(),
-            Text(
-              def.label(l10n),
-              style: GoogleFonts.figtree(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: isDark ? Colors.white : const Color(0xFF111827),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              def.description(l10n),
-              style: GoogleFonts.figtree(
-                fontSize: 10,
-                color: isDark ? Colors.grey[500] : const Color(0xFF9CA3AF),
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _PendingOrdersSection – real-time Firestore listener
+// _PendingOrdersSection – paginated Firestore pending orders
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PendingOrdersSection extends StatefulWidget {
@@ -943,12 +756,20 @@ class _PendingOrdersSection extends StatefulWidget {
   final String locale;
   final AppLocalizations l10n;
   final bool isDark;
+  final Future<void> Function() onRefresh;
+  final Widget Function() headerBuilder;
+  final Widget sectionLabel;
+  final Widget viewAllLabel;
 
   const _PendingOrdersSection({
     required this.restaurantId,
     required this.locale,
     required this.l10n,
     required this.isDark,
+    required this.onRefresh,
+    required this.headerBuilder,
+    required this.sectionLabel,
+    required this.viewAllLabel,
   });
 
   @override
@@ -956,56 +777,74 @@ class _PendingOrdersSection extends StatefulWidget {
 }
 
 class _PendingOrdersSectionState extends State<_PendingOrdersSection> {
-  StreamSubscription<QuerySnapshot>? _sub;
+  final ScrollController _scrollController = ScrollController();
+  StreamSubscription<QuerySnapshot>? _firstPageSub;
   List<_PendingOrder> _orders = [];
   bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
+  DocumentSnapshot? _lastDoc;
 
-  // orderId → 'accepted' | 'rejected' while Cloud Function is in-flight
   final Map<String, String> _updatingTo = {};
 
   @override
   void initState() {
     super.initState();
-    _subscribe(widget.restaurantId);
+    _scrollController.addListener(_onScroll);
+    _subscribeFirstPage(widget.restaurantId);
   }
 
   @override
   void didUpdateWidget(_PendingOrdersSection old) {
     super.didUpdateWidget(old);
     if (old.restaurantId != widget.restaurantId) {
-      _subscribe(widget.restaurantId);
+      _subscribeFirstPage(widget.restaurantId);
     }
   }
 
   @override
   void dispose() {
-    _sub?.cancel();
+    _scrollController.dispose();
+    _firstPageSub?.cancel();
     super.dispose();
   }
 
-  // ── Firestore listener ────────────────────────────────────────────────────
+  void _onScroll() {
+    if (_loadingMore || !_hasMore) return;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.position.pixels;
+    if (currentScroll >= maxScroll - 200) {
+      _loadNextPage();
+    }
+  }
 
-  void _subscribe(String restaurantId) {
-    _sub?.cancel();
+  // ── First page: real-time stream for live updates ─────────────────────────
+
+  void _subscribeFirstPage(String restaurantId) {
+    _firstPageSub?.cancel();
     if (mounted) {
       setState(() {
         _loading = true;
         _orders = [];
+        _lastDoc = null;
+        _hasMore = true;
       });
     }
 
-    _sub = FirebaseFirestore.instance
+    _firstPageSub = FirebaseFirestore.instance
         .collection('orders-food')
         .where('restaurantId', isEqualTo: restaurantId)
         .where('status', isEqualTo: 'pending')
         .orderBy('createdAt', descending: true)
-        .limit(10)
+        .limit(_kPageSize)
         .snapshots()
         .listen(
       (snap) {
         if (!mounted) return;
         setState(() {
           _orders = snap.docs.map(_PendingOrder.fromDoc).toList();
+          _lastDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
+          _hasMore = snap.docs.length >= _kPageSize;
           _loading = false;
         });
       },
@@ -1014,6 +853,48 @@ class _PendingOrdersSectionState extends State<_PendingOrdersSection> {
         if (mounted) setState(() => _loading = false);
       },
     );
+  }
+
+  // ── Next pages: one-shot fetch ────────────────────────────────────────────
+
+  Future<void> _loadNextPage() async {
+    if (_loadingMore || !_hasMore || _lastDoc == null) return;
+    setState(() => _loadingMore = true);
+
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('orders-food')
+          .where('restaurantId', isEqualTo: widget.restaurantId)
+          .where('status', isEqualTo: 'pending')
+          .orderBy('createdAt', descending: true)
+          .startAfterDocument(_lastDoc!)
+          .limit(_kPageSize)
+          .get();
+
+      if (!mounted) return;
+
+      final newOrders = snap.docs.map(_PendingOrder.fromDoc).toList();
+      // Deduplicate (first-page stream may have shifted)
+      final existingIds = _orders.map((o) => o.id).toSet();
+      final unique = newOrders.where((o) => !existingIds.contains(o.id)).toList();
+
+      setState(() {
+        _orders.addAll(unique);
+        _lastDoc = snap.docs.isNotEmpty ? snap.docs.last : _lastDoc;
+        _hasMore = snap.docs.length >= _kPageSize;
+        _loadingMore = false;
+      });
+    } catch (e) {
+      debugPrint('_PendingOrdersSection._loadNextPage: $e');
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  // ── Refresh ───────────────────────────────────────────────────────────────
+
+  Future<void> _handleRefresh() async {
+    _subscribeFirstPage(widget.restaurantId);
+    await widget.onRefresh();
   }
 
   // ── Cloud Function call ───────────────────────────────────────────────────
@@ -1026,7 +907,6 @@ class _PendingOrdersSectionState extends State<_PendingOrdersSection> {
       await FirebaseFunctions.instanceFor(region: 'europe-west3')
           .httpsCallable('updateFoodOrderStatus')
           .call({'orderId': orderId, 'newStatus': newStatus});
-      // Firestore listener removes the order automatically on success
     } catch (e) {
       debugPrint('_PendingOrdersSection._updateStatus: $e');
       if (mounted) {
@@ -1047,9 +927,120 @@ class _PendingOrdersSectionState extends State<_PendingOrdersSection> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return _buildSkeleton();
-    if (_orders.isEmpty) return _buildEmpty();
-    return _buildList();
+    return RefreshIndicator(
+      color: const Color(0xFFEA580C),
+      onRefresh: _handleRefresh,
+      child: CustomScrollView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          // Header (greeting)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            sliver: SliverToBoxAdapter(child: widget.headerBuilder()),
+          ),
+
+          // Section label row
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+            sliver: SliverToBoxAdapter(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  widget.sectionLabel,
+                  widget.viewAllLabel,
+                ],
+              ),
+            ),
+          ),
+
+          // Orders content
+          if (_loading)
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              sliver: SliverToBoxAdapter(child: _buildSkeleton()),
+            )
+          else if (_orders.isEmpty)
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              sliver: SliverToBoxAdapter(child: _buildEmpty()),
+            )
+          else ...[
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              sliver: SliverToBoxAdapter(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: widget.isDark
+                          ? const Color(0xFF1E1E2E)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: widget.isDark
+                            ? const Color(0xFF2D2B42)
+                            : const Color(0xFFF3F4F6),
+                      ),
+                    ),
+                    child: Column(
+                      children: _orders.asMap().entries.map((e) {
+                        final idx = e.key;
+                        final order = e.value;
+                        return Column(
+                          children: [
+                            _OrderCard(
+                              order: order,
+                              locale: widget.locale,
+                              l10n: widget.l10n,
+                              isDark: widget.isDark,
+                              updatingTo: _updatingTo[order.id],
+                              onAccept: () =>
+                                  _updateStatus(order.id, 'accepted'),
+                              onReject: () =>
+                                  _updateStatus(order.id, 'rejected'),
+                            ),
+                            if (idx < _orders.length - 1)
+                              Divider(
+                                height: 1,
+                                color: widget.isDark
+                                    ? const Color(0xFF2D2B42)
+                                    : const Color(0xFFF9FAFB),
+                              ),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Loading more indicator
+            if (_loadingMore)
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                sliver: SliverToBoxAdapter(
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                            Color(0xFFEA580C)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+
+          // Bottom spacing
+          const SliverPadding(padding: EdgeInsets.only(bottom: 32)),
+        ],
+      ),
+    );
   }
 
   // ── Skeleton ──────────────────────────────────────────────────────────────
@@ -1059,106 +1050,100 @@ class _PendingOrdersSectionState extends State<_PendingOrdersSection> {
     final highlight =
         widget.isDark ? const Color(0xFF3C3A55) : Colors.grey.shade100;
 
-    return Shimmer.fromColors(
-      baseColor: base,
-      highlightColor: highlight,
-      child: Column(
-        children: List.generate(
-            3,
-            (_) => Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: widget.isDark ? const Color(0xFF1E1E2E) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: widget.isDark
+                ? const Color(0xFF2D2B42)
+                : const Color(0xFFF3F4F6),
+          ),
+        ),
+        child: Shimmer.fromColors(
+          baseColor: base,
+          highlightColor: highlight,
+          child: Column(
+            children: List.generate(
+                3,
+                (_) => Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(height: 11, color: Colors.white),
+                                const SizedBox(height: 6),
+                                Container(
+                                    height: 9, width: 100, color: Colors.white),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Container(height: 16, width: 48, color: Colors.white),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(height: 11, color: Colors.white),
-                            const SizedBox(height: 6),
-                            Container(
-                                height: 9, width: 100, color: Colors.white),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Container(height: 16, width: 48, color: Colors.white),
-                    ],
-                  ),
-                )),
+                    )),
+          ),
+        ),
       ),
     );
   }
 
   // ── Empty ─────────────────────────────────────────────────────────────────
 
-  Widget _buildEmpty() => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 36),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.receipt_long_outlined,
-                size: 32,
-                color: widget.isDark
-                    ? const Color(0xFF3D3B55)
-                    : const Color(0xFFE5E7EB),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                widget.l10n.restaurantDashboardPendingOrdersEmpty,
-                style: GoogleFonts.figtree(
-                  fontSize: 12,
+  Widget _buildEmpty() => Container(
+        decoration: BoxDecoration(
+          color: widget.isDark ? const Color(0xFF1E1E2E) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: widget.isDark
+                ? const Color(0xFF2D2B42)
+                : const Color(0xFFF3F4F6),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 36),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.receipt_long_outlined,
+                  size: 32,
                   color: widget.isDark
-                      ? Colors.grey[600]
-                      : const Color(0xFF9CA3AF),
+                      ? const Color(0xFF3D3B55)
+                      : const Color(0xFFE5E7EB),
                 ),
-              ),
-            ],
+                const SizedBox(height: 8),
+                Text(
+                  widget.l10n.restaurantDashboardPendingOrdersEmpty,
+                  style: GoogleFonts.figtree(
+                    fontSize: 12,
+                    color: widget.isDark
+                        ? Colors.grey[600]
+                        : const Color(0xFF9CA3AF),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
-
-  // ── Order list ────────────────────────────────────────────────────────────
-
-  Widget _buildList() {
-    return Column(
-      children: _orders.asMap().entries.map((e) {
-        final idx = e.key;
-        final order = e.value;
-        return Column(
-          children: [
-            _OrderCard(
-              order: order,
-              locale: widget.locale,
-              l10n: widget.l10n,
-              isDark: widget.isDark,
-              updatingTo: _updatingTo[order.id],
-              onAccept: () => _updateStatus(order.id, 'accepted'),
-              onReject: () => _updateStatus(order.id, 'rejected'),
-            ),
-            if (idx < _orders.length - 1)
-              Divider(
-                height: 1,
-                color: widget.isDark
-                    ? const Color(0xFF2D2B42)
-                    : const Color(0xFFF9FAFB),
-              ),
-          ],
-        );
-      }).toList(),
-    );
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1339,10 +1324,11 @@ class _ItemChip extends StatelessWidget {
           if (item.extras.isNotEmpty) ...[
             const SizedBox(height: 2),
             Text(
-              item.extras.map((e) => '+${e.name}').join(', '),
+              item.extras.map((e) => '+${localizeExtra(e.name, AppLocalizations.of(context))}').join(', '),
               style: GoogleFonts.figtree(
-                fontSize: 10,
-                color: isDark ? Colors.grey[500] : const Color(0xFF6B7280),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: isDark ? Colors.grey[300] : const Color(0xFF4B5563),
               ),
             ),
           ],

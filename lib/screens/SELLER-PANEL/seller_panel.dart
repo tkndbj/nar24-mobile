@@ -43,9 +43,9 @@ class _SellerPanelState extends State<SellerPanel>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(
-        length: 6, vsync: this, initialIndex: widget.initialTabIndex);
-    // Defer to next event loop tick to avoid notifyListeners during build phase
+    // ✅ Start with 1 — _syncTabController will correct this
+    // before the first real render inside Consumer
+    _tabController = TabController(length: 1, vsync: this);
     _initializationFuture = Future(() => _initializeProvider());
     _setupAuthListener();
   }
@@ -437,6 +437,7 @@ class _SellerPanelState extends State<SellerPanel>
 
   void _showOptionsMenu(SellerPanelProvider provider) {
     final isViewer = _isCurrentUserViewer(provider);
+    final isRestaurant = provider.selectedShopBusinessType == 'restaurant';
 
     showModalBottomSheet(
       context: context,
@@ -469,7 +470,7 @@ class _SellerPanelState extends State<SellerPanel>
                 ),
               ),
             ),
-            if (!isViewer)
+            if (!isViewer && !isRestaurant)
               _buildMenuOption(
                 icon: Icons.settings_rounded,
                 title: AppLocalizations.of(context).shopSettings,
@@ -489,46 +490,50 @@ class _SellerPanelState extends State<SellerPanel>
                       '/seller_panel_user_permission/${provider.selectedShop!.id}');
                 },
               ),
-            _buildMenuOption(
-              icon: Icons.help_outline_rounded,
-              title: AppLocalizations.of(context).productQuestions,
-              hasNotification: provider.hasUnansweredQuestions,
-              notificationColor: Colors.green,
-              onTap: () {
-                Navigator.pop(context);
-                context.push(
-                    '/seller_panel_product_questions/${provider.selectedShop!.id}');
-              },
-            ),
-            _buildMenuOption(
-              icon: Icons.star_outline_rounded,
-              title: AppLocalizations.of(context).reviews,
-              hasNotification: true,
-              notificationColor: Colors.orange,
-              onTap: () {
-                Navigator.pop(context);
-                context
-                    .push('/seller_panel_reviews/${provider.selectedShop!.id}');
-              },
-            ),
-            _buildMenuOption(
-              icon: Icons.analytics_rounded,
-              title: AppLocalizations.of(context).reports,
-              onTap: () {
-                Navigator.pop(context);
-                context
-                    .push('/seller_panel_reports/${provider.selectedShop!.id}');
-              },
-            ),
-            _buildMenuOption(
-              icon: Icons.receipt_long_rounded,
-              title: AppLocalizations.of(context).shopReceipts,
-              onTap: () {
-                Navigator.pop(context);
-                context.push(
-                    '/seller_panel_receipts/${provider.selectedShop!.id}');
-              },
-            ),
+            if (!isRestaurant)
+              _buildMenuOption(
+                icon: Icons.help_outline_rounded,
+                title: AppLocalizations.of(context).productQuestions,
+                hasNotification: provider.hasUnansweredQuestions,
+                notificationColor: Colors.green,
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push(
+                      '/seller_panel_product_questions/${provider.selectedShop!.id}');
+                },
+              ),
+            if (!isRestaurant)
+              _buildMenuOption(
+                icon: Icons.star_outline_rounded,
+                title: AppLocalizations.of(context).reviews,
+                hasNotification: true,
+                notificationColor: Colors.orange,
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push(
+                      '/seller_panel_reviews/${provider.selectedShop!.id}');
+                },
+              ),
+            if (!isRestaurant)
+              _buildMenuOption(
+                icon: Icons.analytics_rounded,
+                title: AppLocalizations.of(context).reports,
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push(
+                      '/seller_panel_reports/${provider.selectedShop!.id}');
+                },
+              ),
+            if (!isRestaurant)
+              _buildMenuOption(
+                icon: Icons.receipt_long_rounded,
+                title: AppLocalizations.of(context).shopReceipts,
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push(
+                      '/seller_panel_receipts/${provider.selectedShop!.id}');
+                },
+              ),
             SafeArea(
               top: false,
               child: const SizedBox(height: 16),
@@ -732,12 +737,28 @@ class _SellerPanelState extends State<SellerPanel>
   }
 
   void _syncTabController(String businessType) {
-    if (_lastSyncedBusinessType == businessType) return;
-    _lastSyncedBusinessType = businessType;
+    // ✅ Don't skip on first call even if types match —
+    // initState hardcodes 6 so we must correct it on first run
     final newLength = businessType == 'restaurant' ? 5 : 6;
-    if (_tabController.length == newLength) return;
+
+    if (_tabController.length == newLength) {
+      _lastSyncedBusinessType = businessType;
+      return;
+    }
+
+    // Preserve index if valid in new length
+    final currentIndex = _tabController.index;
+    final safeIndex = currentIndex < newLength ? currentIndex : 0;
+
     final old = _tabController;
-    _tabController = TabController(length: newLength, vsync: this);
+    _tabController = TabController(
+      length: newLength,
+      vsync: this,
+      initialIndex: safeIndex,
+    );
+    _lastSyncedBusinessType = businessType;
+
+    // Dispose old controller after frame to avoid disposing during build
     WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
   }
 
@@ -841,10 +862,13 @@ class _SellerPanelState extends State<SellerPanel>
             if (FirebaseAuth.instance.currentUser == null) {
               return Scaffold(
                 body: Center(
-                  child: Text(AppLocalizations.of(context).pleaseLogin),
-                ),
+                    child: Text(AppLocalizations.of(context).pleaseLogin)),
               );
             }
+
+            // ✅ Sync controller length HERE — before anything renders
+            // This guarantees TabBar, TabBarView, and controller always agree
+            _syncTabController(provider.selectedShopBusinessType);
 
             // Handle tab switch requests from other tabs
             if (provider.requestedTabIndex != null) {

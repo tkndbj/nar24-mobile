@@ -8,6 +8,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../generated/l10n/app_localizations.dart';
+import '../../utils/food_localization.dart';
+
 // ─── Re-use all models, enums, helpers, and sub-widgets from food_orders.dart
 // They are defined here as private to this file, mirroring the standalone page.
 // The only difference: FoodOrdersTab has no Scaffold/AppBar — it is designed
@@ -863,7 +866,7 @@ class _OrderCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildHeader(cfg),
-            _buildItemsSummary(),
+            _buildItemsSummary(context),
             if (isExpanded) ...[
               _buildOrderNotes(),
               _buildInfoRow(context),
@@ -976,7 +979,8 @@ class _OrderCard extends StatelessWidget {
     );
   }
 
-  Widget _buildItemsSummary() {
+  Widget _buildItemsSummary(BuildContext context) {
+    final _l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       child: Column(
@@ -996,28 +1000,33 @@ class _OrderCard extends StatelessWidget {
                     children: [
                       Row(children: [
                         Expanded(
-                            child: Row(children: [
-                          Text('${item.quantity}x ${item.name}',
-                              style: GoogleFonts.figtree(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark
-                                      ? Colors.white
-                                      : const Color(0xFF1F2937))),
-                          if (item.extras.isNotEmpty) ...[
-                            const SizedBox(width: 4),
-                            Flexible(
-                                child: Text(
-                                    '(${item.extras.map((e) => '+${e.name}${e.price > 0 ? ' ${e.price.toStringAsFixed(2)}' : ''}').join(', ')})',
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                              Text('${item.quantity}x ${item.name}',
+                                  style: GoogleFonts.figtree(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark
+                                          ? Colors.white
+                                          : const Color(0xFF1F2937))),
+                              if (item.extras.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    item.extras
+                                        .map((e) =>
+                                            '+${localizeExtra(e.name, _l10n)}${e.price > 0 ? ' ${e.price.toStringAsFixed(2)}' : ''}')
+                                        .join(', '),
                                     style: GoogleFonts.figtree(
-                                        fontSize: 10,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
                                         color: isDark
-                                            ? Colors.grey[500]
-                                            : const Color(0xFF9CA3AF)),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis)),
-                          ],
-                        ])),
+                                            ? Colors.grey[300]
+                                            : const Color(0xFF4B5563)),
+                                  ),
+                                ),
+                            ])),
                         Text(item.itemTotal.toStringAsFixed(2),
                             style: GoogleFonts.figtree(
                                 fontSize: 12,

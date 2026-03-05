@@ -1708,12 +1708,7 @@ async function generateFoodReceipt(data) {
 }
 
 export const updateFoodOrderStatus = onCall(
-  {
-    region: REGION,
-    memory: '512MiB',
-    concurrency: 80,
-    timeoutSeconds: 30,
-  },
+  { region: REGION, memory: '512MiB', concurrency: 80, timeoutSeconds: 30 },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be signed in.');
@@ -1725,6 +1720,11 @@ export const updateFoodOrderStatus = onCall(
     if (!orderId || !ALLOWED_STATUSES.includes(newStatus)) {
       throw new HttpsError('invalid-argument', 'Invalid orderId or status.');
     }
+
+    // ✅ Read claims ONCE, outside the transaction
+    const userRecord = await admin.auth().getUser(request.auth.uid);
+    const restaurantClaims = userRecord.customClaims?.restaurants || {};
+
 
     const db = admin.firestore();
 
@@ -1738,16 +1738,14 @@ export const updateFoodOrderStatus = onCall(
 
       const order = orderSnap.data();
 
-      const callerToken = await admin.auth().getUser(request.auth.uid)
-  .then((u) => u.customClaims || {});
-const restaurantClaims = callerToken.restaurants || {};
-if (!(order.restaurantId in restaurantClaims)) {
-  throw new HttpsError('permission-denied', 'You are not a member of this restaurant.');
-}
+      // ✅ Check membership, not ownership
+      if (!(order.restaurantId in restaurantClaims)) {
+        throw new HttpsError('permission-denied', 'You are not a member of this restaurant.');
+      }
 
       const VALID_TRANSITIONS = {
         pending: ['accepted', 'rejected'],
-        accepted: ['delivered', 'rejected'], // ← simplified: skip preparing/ready
+        accepted: ['delivered', 'rejected'],
       };
 
       const allowed = VALID_TRANSITIONS[order.status] || [];
@@ -1758,34 +1756,30 @@ if (!(order.restaurantId in restaurantClaims)) {
         );
       }
 
-      // 1. Update order
       tx.update(orderRef, {
         status: newStatus,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         ...(newStatus === 'delivered' ? { needsReview: true } : {}),
       });
 
-      // 2. Write notification to users/{buyerId}/notifications
-      // No hardcoded text — store the event type and payload only.
-      // The app resolves the localized string using its own i18n system.
       const notifRef = db
         .collection('users')
         .doc(order.buyerId)
         .collection('notifications')
         .doc();
 
-        tx.set(notifRef, {
-          type: newStatus === 'delivered' ? 'food_order_delivered_review' : 'food_order_status_update',
-          payload: {
-            orderId,
-            orderStatus: newStatus,
-            previousStatus: order.status,
-            restaurantId: order.restaurantId,
-            restaurantName: order.restaurantName,
-          },
-          isRead: false,
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        });
+      tx.set(notifRef, {
+        type: newStatus === 'delivered' ? 'food_order_delivered_review' : 'food_order_status_update',
+        payload: {
+          orderId,
+          orderStatus: newStatus,
+          previousStatus: order.status,
+          restaurantId: order.restaurantId,
+          restaurantName: order.restaurantName,
+        },
+        isRead: false,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
     });
 
     return { success: true };

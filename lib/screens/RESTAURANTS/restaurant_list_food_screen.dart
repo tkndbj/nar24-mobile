@@ -423,7 +423,7 @@ class _RestaurantListFoodScreenState extends State<RestaurantListFoodScreen> {
                 border: Border.all(
                   color: _errors.containsKey('image')
                       ? Colors.red[300]!
-                      : Colors.grey.withOpacity(0.25),
+                      : isDark ? Colors.grey.withOpacity(0.25) : Colors.grey.withOpacity(0.4),
                   width: 1.5,
                   style: (_imageFile == null && _existingImageUrl == null)
                       ? BorderStyle.solid
@@ -660,7 +660,7 @@ class _RestaurantListFoodScreenState extends State<RestaurantListFoodScreen> {
               fontSize: 13, color: isDark ? Colors.white : Colors.grey[800]),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: GoogleFonts.inter(fontSize: 13, color: Colors.grey[300]),
+            hintStyle: GoogleFonts.inter(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[400]),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             border: OutlineInputBorder(
@@ -668,14 +668,14 @@ class _RestaurantListFoodScreenState extends State<RestaurantListFoodScreen> {
               borderSide: BorderSide(
                   color: hasError
                       ? Colors.red[300]!
-                      : Colors.grey.withOpacity(0.25)),
+                      : isDark ? Colors.grey.withOpacity(0.25) : Colors.grey.withOpacity(0.4)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
                   color: hasError
                       ? Colors.red[300]!
-                      : Colors.grey.withOpacity(0.25)),
+                      : isDark ? Colors.grey.withOpacity(0.25) : Colors.grey.withOpacity(0.4)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -713,14 +713,14 @@ class _RestaurantListFoodScreenState extends State<RestaurantListFoodScreen> {
               fontSize: 13, color: isDark ? Colors.white : Colors.grey[800]),
           decoration: InputDecoration(
             hintText: l10n.pricePlaceholder,
-            hintStyle: GoogleFonts.inter(fontSize: 13, color: Colors.grey[300]),
-            prefixIcon: const Icon(Icons.attach_money_rounded,
-                size: 18, color: Color(0xFFD1D5DB)),
+            hintStyle: GoogleFonts.inter(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[400]),
+            prefixIcon: Icon(Icons.attach_money_rounded,
+                size: 18, color: isDark ? const Color(0xFFD1D5DB) : Colors.grey[500]),
             suffixText: l10n.currency,
             suffixStyle: GoogleFonts.inter(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
-                color: Colors.grey[400]),
+                color: isDark ? Colors.grey[400] : Colors.grey[500]),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             border: OutlineInputBorder(
@@ -728,14 +728,14 @@ class _RestaurantListFoodScreenState extends State<RestaurantListFoodScreen> {
               borderSide: BorderSide(
                   color: hasError
                       ? Colors.red[300]!
-                      : Colors.grey.withOpacity(0.25)),
+                      : isDark ? Colors.grey.withOpacity(0.25) : Colors.grey.withOpacity(0.4)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
                   color: hasError
                       ? Colors.red[300]!
-                      : Colors.grey.withOpacity(0.25)),
+                      : isDark ? Colors.grey.withOpacity(0.25) : Colors.grey.withOpacity(0.4)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -856,14 +856,14 @@ class _RestaurantListFoodScreenState extends State<RestaurantListFoodScreen> {
               borderSide: BorderSide(
                   color: hasError
                       ? Colors.red[300]!
-                      : Colors.grey.withOpacity(0.25)),
+                      : isDark ? Colors.grey.withOpacity(0.25) : Colors.grey.withOpacity(0.4)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
                   color: hasError
                       ? Colors.red[300]!
-                      : Colors.grey.withOpacity(0.25)),
+                      : isDark ? Colors.grey.withOpacity(0.25) : Colors.grey.withOpacity(0.4)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -881,7 +881,7 @@ class _RestaurantListFoodScreenState extends State<RestaurantListFoodScreen> {
                 : (isDark ? Colors.white.withOpacity(0.05) : Colors.white),
           ),
           hint: Text(hint,
-              style: GoogleFonts.inter(fontSize: 13, color: Colors.grey[400])),
+              style: GoogleFonts.inter(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[500])),
           style: GoogleFonts.inter(
               fontSize: 13, color: isDark ? Colors.white : Colors.grey[800]),
           dropdownColor: isDark ? const Color(0xFF1E1B2E) : Colors.white,
@@ -979,7 +979,7 @@ class _RestaurantListFoodScreenState extends State<RestaurantListFoodScreen> {
                           border: Border.all(
                             color: isSelected
                                 ? const Color(0xFFFDBA74)
-                                : Colors.grey.withOpacity(0.25),
+                                : isDark ? Colors.grey.withOpacity(0.25) : Colors.grey.withOpacity(0.4),
                             width: isSelected ? 1.5 : 1,
                           ),
                         ),
@@ -1040,7 +1040,7 @@ class _RestaurantListFoodScreenState extends State<RestaurantListFoodScreen> {
                         decoration: InputDecoration(
                           hintText: '0.00',
                           hintStyle: GoogleFonts.inter(
-                              fontSize: 11, color: Colors.grey[300]),
+                              fontSize: 11, color: isDark ? Colors.grey[500] : Colors.grey[400]),
                           suffixText: l10n.currency,
                           suffixStyle: GoogleFonts.inter(
                               fontSize: 10, color: Colors.grey[400]),
@@ -1106,23 +1106,23 @@ class _RestaurantListFoodScreenState extends State<RestaurantListFoodScreen> {
             decoration: InputDecoration(
               hintText: l10n.preparationTimePlaceholder,
               hintStyle:
-                  GoogleFonts.inter(fontSize: 13, color: Colors.grey[300]),
-              prefixIcon: const Icon(Icons.access_time_rounded,
-                  size: 18, color: Color(0xFFD1D5DB)),
+                  GoogleFonts.inter(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[400]),
+              prefixIcon: Icon(Icons.access_time_rounded,
+                  size: 18, color: isDark ? const Color(0xFFD1D5DB) : Colors.grey[500]),
               suffixText: l10n.minutes,
               suffixStyle: GoogleFonts.inter(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
-                  color: Colors.grey[400]),
+                  color: isDark ? Colors.grey[400] : Colors.grey[500]),
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.withOpacity(0.25)),
+                borderSide: BorderSide(color: isDark ? Colors.grey.withOpacity(0.25) : Colors.grey.withOpacity(0.4)),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.withOpacity(0.25)),
+                borderSide: BorderSide(color: isDark ? Colors.grey.withOpacity(0.25) : Colors.grey.withOpacity(0.4)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
