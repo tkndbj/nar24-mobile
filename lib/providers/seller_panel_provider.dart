@@ -565,31 +565,34 @@ class SellerPanelProvider with ChangeNotifier {
   }
 
   // In SellerPanelProvider.initialize():
-  Future<void> initialize() async {
-    if (_initInFlight) return;
-    _initInFlight = true;
+ Future<void> initialize() async {
+  if (_initInFlight) return;
+  _initInFlight = true;
 
-    try {
-      await fetchShops().timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          debugPrint('⚠️ Shop fetch timed out during initialization');
-          // Set empty state so UI can show error
-          _shops = [];
-          _isLoadingShops = false;
-          notifyListeners();
-        },
-      );
+  try {
+    // Always force-refresh token on seller panel entry to pick up
+    // any claim changes that happened on other platforms (e.g. web)
+    await _firebaseAuth.currentUser?.getIdToken(true);
 
-      if (_selectedShop == null && _shops.isNotEmpty) {
-        _selectedShop = _shops.first;
+    await fetchShops().timeout(
+      const Duration(seconds: 10),
+      onTimeout: () {
+        debugPrint('⚠️ Shop fetch timed out during initialization');
+        _shops = [];
+        _isLoadingShops = false;
         notifyListeners();
-        _warmupForSelectedShop();
-      }
-    } finally {
-      _initInFlight = false;
+      },
+    );
+
+    if (_selectedShop == null && _shops.isNotEmpty) {
+      _selectedShop = _shops.first;
+      notifyListeners();
+      _warmupForSelectedShop();
     }
+  } finally {
+    _initInFlight = false;
   }
+}
 
   Future<void> fetchActiveCampaigns() async {
     try {

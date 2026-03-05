@@ -137,7 +137,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
             .map((d) => d.data())
             .where((n) => n.type != 'message')
             .where((n) => !(n.type == 'shop_invitation' &&
-                (n.status == 'accepted' || n.status == 'rejected')))
+    (n.status == 'accepted' || n.status == 'rejected' || n.status == 'cancelled')))
             .toList();
 
         setState(() {
@@ -234,90 +234,95 @@ class _NotificationScreenState extends State<NotificationScreen> {
   }
 
   Future<void> _handleInvitationResponse(
-    NotificationModel notification, {
-    required bool accepted,
-  }) async {
-    final l10n = AppLocalizations.of(context);
+  NotificationModel notification, {
+  required bool accepted,
+}) async {
+  final l10n = AppLocalizations.of(context);
 
-    if (!accepted) {
-      try {
-        final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-            .httpsCallable('handleShopInvitation');
-
-        await callable.call({
-          'notificationId': notification.id,
-          'accepted': false,
-          'shopId': notification.shopId,
-          'role': notification.role,
-        });
-
-        if (!mounted) return;
-
-        setState(() {
-          _notifications.removeWhere((n) => n.id == notification.id);
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.invitationRejected)),
-        );
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.errorOccurredWithDetails(e.toString()))),
-        );
-      }
-      return;
-    }
-
-    _showInvitationAcceptingModal(notification.shopName ?? 'shop');
-
+  if (!accepted) {
     try {
       final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
           .httpsCallable('handleShopInvitation');
 
       await callable.call({
-        'notificationId': notification.id,
-        'accepted': true,
+        'invitationId': notification.invitationId,
+        'accepted': false,
         'shopId': notification.shopId,
         'role': notification.role,
       });
 
-      if (context.mounted) {
-        setState(() {
-          _notifications.removeWhere((n) => n.id == notification.id);
-        });
+      if (!mounted) return;
 
-        Navigator.of(context).pop();
+      setState(() {
+        _notifications.removeWhere((n) => n.id == notification.id);
+      });
 
-        if (notification.shopId != null) {
-          context.push('/seller-panel?shopId=${notification.shopId}&tab=0');
-        }
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.invitationRejected)),
+      );
     } catch (e) {
-      if (context.mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(l10n.errorOccurredWithDetails(e.toString())),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            duration: const Duration(seconds: 3),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.errorOccurredWithDetails(e.toString()))),
+      );
+    }
+    return;
+  }
+
+  _showInvitationAcceptingModal(notification.shopName ?? 'shop');
+
+  try {
+    final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+        .httpsCallable('handleShopInvitation');
+
+    final result = await callable.call({
+      'invitationId': notification.invitationId,
+      'accepted': true,
+      'shopId': notification.shopId,
+      'role': notification.role,
+    });
+
+    // Force-refresh the local JWT so new claims (shopId) take effect
+    final data = result.data as Map<String, dynamic>;
+    if (data['shouldRefreshToken'] == true) {
+      await FirebaseAuth.instance.currentUser?.getIdToken(true);
+    }
+
+    if (context.mounted) {
+      setState(() {
+        _notifications.removeWhere((n) => n.id == notification.id);
+      });
+
+      Navigator.of(context).pop();
+
+      if (notification.shopId != null) {
+        context.push('/seller-panel?shopId=${notification.shopId}&tab=0');
       }
     }
+  } catch (e) {
+    if (context.mounted) {
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(l10n.errorOccurredWithDetails(e.toString())),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          duration: const Duration(seconds: 3),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    }
   }
+}
 
   void _showInvitationAcceptingModal(String shopName) {
     final l10n = AppLocalizations.of(context);

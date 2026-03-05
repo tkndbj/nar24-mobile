@@ -20,6 +20,7 @@ class NotificationModel {
 
   final String? restaurantName;
   final String? orderStatus;
+  final String? invitationId;
 
   /// Localized messages
   final String? messageEn;
@@ -85,6 +86,7 @@ class NotificationModel {
     this.archiveReason,
     this.boostExpired,
     this.transactionId,
+    this.invitationId,
     this.campaignName,
     this.restaurantName,
     this.orderStatus,
@@ -121,7 +123,7 @@ class NotificationModel {
       id: snapshot.id,
       type: data['type'] as String? ?? 'general',
       timestamp: data['timestamp'] as Timestamp? ?? Timestamp.now(),
-      isRead: data['isRead'] as bool? ?? false,
+      isRead: data['isRead'] is bool ? data['isRead'] as bool : false,
       message: data['message'] as String?,
       messageEn: data['message_en'] as String?,
       messageTr: data['message_tr'] as String?,
@@ -130,6 +132,7 @@ class NotificationModel {
       productId: data['productId'] as String?,
       shopId: data['shopId'] as String?,
       transactionId: data['transactionId'] as String?,
+      invitationId: data['invitationId'] as String?,
       reason: data['reason'] as String?,
       orderId: data['orderId'] as String?,
       senderId: data['senderId'] as String?,
@@ -179,6 +182,7 @@ class NotificationModel {
     if (shopId != null) map['shopId'] = shopId;
     if (orderId != null) map['orderId'] = orderId;
     if (transactionId != null) map['transactionId'] = transactionId;
+    if (invitationId != null) map['invitationId'] = invitationId;
     if (reason != null) map['reason'] = reason;
     if (senderId != null) map['senderId'] = senderId;
     if (sellerId != null) map['sellerId'] = sellerId;

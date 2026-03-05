@@ -2674,6 +2674,7 @@
   "refundFormHeaderSubtitle": "İade talebinizi göndermek için aşağıdaki formu doldurun",
   "refundFormNameLabel": "Ad / Soyad",
   "refundFormNoName": "İsim yok",
+  "youLabel": "Sen",
   "refundFormEmailLabel": "E-posta Adresi",
   "refundFormReceiptNoLabel": "Fatura Numarası",
   "refundFormFindReceipt": "Fatura Bul",

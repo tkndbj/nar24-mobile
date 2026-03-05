@@ -1541,6 +1541,7 @@
   "itemsToGather": "Items to Gather",
   "ordersToDeliver": "Orders to Deliver",
   "yourLocation": "Your Location",
+  "youLabel": "You",
   "currentPosition": "Current position",
   "stop": "Stop",
   "notAvailable": "N/A",

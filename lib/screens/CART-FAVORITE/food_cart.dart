@@ -744,6 +744,19 @@ class _FoodCartItemCard extends StatelessWidget {
                                 ),
                               ),
                             ],
+                            if (ext.price > 0) ...[
+                              const SizedBox(width: 3),
+                              Text(
+                                '${ext.price.toStringAsFixed(0)} TL',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? Colors.orange[300]
+                                      : Colors.orange[700],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       );
@@ -1166,6 +1179,7 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
 
   // Mirrors: initialExtras, initialNotes, initialQuantity props
   late final List<String> _resolvedExtras;
+  late final Map<String, double> _extraPrices;
 
   @override
   void initState() {
@@ -1181,6 +1195,11 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
       category: widget.item.foodCategory,
       allowedExtras: widget.item.extras.map((e) => e.name).toList(),
     );
+
+    // Build price lookup from existing cart extras
+    _extraPrices = {
+      for (final e in widget.item.extras) e.name: e.price,
+    };
   }
 
   @override
@@ -1208,7 +1227,10 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
   @override
   Widget build(BuildContext context) {
     final isDark = widget.isDark;
-    final total = widget.item.price * _quantity;
+    final selectedExtrasTotal = _checked.entries
+        .where((e) => e.value)
+        .fold<double>(0, (sum, e) => sum + (_extraPrices[e.key] ?? 0));
+    final total = (widget.item.price + selectedExtrasTotal) * _quantity;
 
     return GestureDetector(
       onTap: widget.onClose,
@@ -1297,23 +1319,32 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
                                       : Colors.grey[800])),
                           const SizedBox(height: 8),
                           ..._resolvedExtras.map(
-                            (extra) => CheckboxListTile(
-                              value: _checked[extra] ?? false,
-                              onChanged: (v) =>
-                                  setState(() => _checked[extra] = v!),
-                              title: Text(extra,
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      color: isDark
-                                          ? Colors.grey[200]
-                                          : Colors.grey[900])),
-                              subtitle: const Text('Free',
-                                  style: TextStyle(
-                                      fontSize: 12, color: Colors.grey)),
-                              activeColor: Colors.orange,
-                              contentPadding: EdgeInsets.zero,
-                              controlAffinity: ListTileControlAffinity.trailing,
-                            ),
+                            (extra) {
+                              final price = _extraPrices[extra] ?? 0;
+                              return CheckboxListTile(
+                                value: _checked[extra] ?? false,
+                                onChanged: (v) =>
+                                    setState(() => _checked[extra] = v!),
+                                title: Text(extra,
+                                    style: TextStyle(
+                                        fontSize: 14,
+                                        color: isDark
+                                            ? Colors.grey[200]
+                                            : Colors.grey[900])),
+                                subtitle: Text(
+                                    price > 0
+                                        ? '+${price.toStringAsFixed(0)} TL'
+                                        : 'Free',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: price > 0
+                                            ? (isDark ? Colors.orange[300] : Colors.orange[700])
+                                            : Colors.grey)),
+                                activeColor: Colors.orange,
+                                contentPadding: EdgeInsets.zero,
+                                controlAffinity: ListTileControlAffinity.trailing,
+                              );
+                            },
                           ),
                         ],
 

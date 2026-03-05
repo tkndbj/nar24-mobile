@@ -12298,6 +12298,12 @@ abstract class AppLocalizations {
   /// **'İsim yok'**
   String get refundFormNoName;
 
+  /// No description provided for @youLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sen'**
+  String get youLabel;
+
   /// No description provided for @refundFormEmailLabel.
   ///
   /// In tr, this message translates to:

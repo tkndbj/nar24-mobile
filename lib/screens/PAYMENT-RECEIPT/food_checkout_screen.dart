@@ -2,137 +2,26 @@
 //
 // Mirrors: app/food-checkout/page.tsx + FoodCheckoutContent
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../user_provider.dart';
-import '../../constants/region.dart';
+import '../../models/food_address.dart';
 import '../../providers/food_cart_provider.dart';
 
 // =============================================================================
-// TYPES  —  mirrors TypeScript interfaces
+// TYPES
 // =============================================================================
 
 enum PaymentMethod { payAtDoor, card }
 
 enum DeliveryType { delivery, pickup }
 
-class DeliveryAddress {
-  final String addressLine1;
-  final String addressLine2;
-  final String city;
-  final String phoneNumber;
-  final LatLng? location;
-
-  const DeliveryAddress({
-    this.addressLine1 = '',
-    this.addressLine2 = '',
-    this.city = '',
-    this.phoneNumber = '',
-    this.location,
-  });
-
-  DeliveryAddress copyWith({
-    String? addressLine1,
-    String? addressLine2,
-    String? city,
-    String? phoneNumber,
-    LatLng? location,
-    bool clearLocation = false,
-  }) =>
-      DeliveryAddress(
-        addressLine1: addressLine1 ?? this.addressLine1,
-        addressLine2: addressLine2 ?? this.addressLine2,
-        city: city ?? this.city,
-        phoneNumber: phoneNumber ?? this.phoneNumber,
-        location: clearLocation ? null : (location ?? this.location),
-      );
-}
-
-class SavedAddress {
-  final String id;
-  final String addressLine1;
-  final String addressLine2;
-  final String phoneNumber;
-  final String city;
-  final LatLng? location;
-
-  const SavedAddress({
-    required this.id,
-    required this.addressLine1,
-    required this.addressLine2,
-    required this.phoneNumber,
-    required this.city,
-    this.location,
-  });
-
-  factory SavedAddress.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final d = doc.data()!;
-    LatLng? loc;
-    final l = d['location'];
-    if (l is GeoPoint) {
-      loc = LatLng(l.latitude, l.longitude);
-    } else if (l is Map<String, dynamic>) {
-      loc = LatLng(
-        (l['latitude'] as num).toDouble(),
-        (l['longitude'] as num).toDouble(),
-      );
-    }
-    return SavedAddress(
-      id: doc.id,
-      addressLine1: (d['addressLine1'] as String?) ?? '',
-      addressLine2: (d['addressLine2'] as String?) ?? '',
-      phoneNumber: (d['phoneNumber'] as String?) ?? '',
-      city: (d['city'] as String?) ?? '',
-      location: loc,
-    );
-  }
-}
-
 class _OrderSuccess {
   final String orderId;
   final int estimatedPrepTime;
   const _OrderSuccess({required this.orderId, required this.estimatedPrepTime});
-}
-
-// =============================================================================
-// PHONE UTILITIES  —  mirrors formatPhoneNumber / isValidPhoneNumber / normalizePhone
-// =============================================================================
-
-String _formatPhone(String value) {
-  final digits = value.replaceAll(RegExp(r'\D'), '');
-  final limited = digits.length > 10 ? digits.substring(0, 10) : digits;
-  final buf = StringBuffer();
-  for (int i = 0; i < limited.length; i++) {
-    if (i == 0) buf.write('(');
-    buf.write(limited[i]);
-    if (i == 2) buf.write(') ');
-    if (i == 5) buf.write(' ');
-    if (i == 7) buf.write(' ');
-  }
-  return buf.toString();
-}
-
-String _formatPhoneForDisplay(String phone) {
-  if (phone.isEmpty) return '';
-  final digits = phone.replaceAll(RegExp(r'\D'), '');
-  final d = digits.startsWith('0') ? digits.substring(1) : digits;
-  if (d.length != 10) return phone;
-  return '(${d.substring(0, 3)}) ${d.substring(3, 6)} ${d.substring(6, 8)} ${d.substring(8, 10)}';
-}
-
-bool _isValidPhone(String phone) {
-  final digits = phone.replaceAll(RegExp(r'\D'), '');
-  return digits.length == 10 && digits.startsWith('5');
-}
-
-String _normalizePhone(String phone) {
-  final digits = phone.replaceAll(RegExp(r'\D'), '');
-  return digits.startsWith('0') ? digits : '0$digits';
 }
 
 // =============================================================================
@@ -159,38 +48,17 @@ class _FoodCheckoutContent extends StatefulWidget {
 
 class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
   PaymentMethod _paymentMethod = PaymentMethod.payAtDoor;
-  final DeliveryType _deliveryType = DeliveryType.delivery;
-  DeliveryAddress _address = const DeliveryAddress();
+  DeliveryType _deliveryType = DeliveryType.delivery;
   String _orderNotes = '';
-  bool _saveAddress = false;
 
-  List<SavedAddress> _savedAddresses = [];
-  String? _selectedAddressId;
-
-  bool _showMapModal = false;
-  bool _showCityDropdown = false;
-
-  final Map<String, String> _errors = {};
   bool _isSubmitting = false;
   String? _error;
   _OrderSuccess? _orderSuccess;
 
-  final _addr1Controller = TextEditingController();
-  final _addr2Controller = TextEditingController();
-  final _phoneController = TextEditingController();
   final _notesController = TextEditingController();
 
   @override
-  void initState() {
-    super.initState();
-    _loadSavedAddresses();
-  }
-
-  @override
   void dispose() {
-    _addr1Controller.dispose();
-    _addr2Controller.dispose();
-    _phoneController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -198,96 +66,29 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
   int _estimatedPrepTime(List<FoodCartItem> items) => items.fold(
       0, (m, i) => (i.preparationTime ?? 0) > m ? (i.preparationTime ?? 0) : m);
 
+  // Reads foodAddress from UserProvider profileData
+  FoodAddress? _getFoodAddress() {
+    final profileData = context.read<UserProvider>().profileData;
+    final raw = profileData?['foodAddress'];
+    if (raw == null) return null;
+    return FoodAddress.fromMap(Map<String, dynamic>.from(raw as Map));
+  }
+
   bool _isFormValid(List<FoodCartItem> items) {
     if (items.isEmpty) return false;
     if (_deliveryType == DeliveryType.delivery) {
-      return _address.addressLine1.trim().isNotEmpty &&
-          _address.phoneNumber.trim().isNotEmpty &&
-          _isValidPhone(_address.phoneNumber) &&
-          _address.city.trim().isNotEmpty &&
-          _address.location != null;
+      return _getFoodAddress() != null;
     }
     return true;
   }
 
-  Future<void> _loadSavedAddresses() async {
-    try {
-      final uid = context.read<UserProvider>().user?.uid;
-      if (uid == null) return;
-      final snap = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .collection('addresses')
-          .get();
-      if (mounted) {
-        setState(() {
-          _savedAddresses = snap.docs
-              .map((d) => SavedAddress.fromDoc(
-                  d as DocumentSnapshot<Map<String, dynamic>>))
-              .toList();
-        });
-      }
-    } catch (e) {
-      debugPrint('[FoodCheckout] Load addresses error: $e');
-    }
-  }
-
-  void _handleAddressSelect(String? addressId) {
-    setState(() {
-      _selectedAddressId = addressId;
-      _errors.clear();
-      if (addressId != null) {
-        final saved = _savedAddresses.firstWhere((a) => a.id == addressId);
-        _address = DeliveryAddress(
-          addressLine1: saved.addressLine1,
-          addressLine2: saved.addressLine2,
-          city: saved.city,
-          phoneNumber: _formatPhoneForDisplay(saved.phoneNumber),
-          location: saved.location,
-        );
-      } else {
-        _address = const DeliveryAddress();
-      }
-      _addr1Controller.text = _address.addressLine1;
-      _addr2Controller.text = _address.addressLine2;
-      _phoneController.text = _address.phoneNumber;
-    });
-  }
-
-  void _handlePhoneChange(String value) {
-    final formatted = _formatPhone(value);
-    setState(() {
-      _address = _address.copyWith(phoneNumber: formatted);
-      _errors.remove('phoneNumber');
-    });
-  }
-
   bool _validateForm() {
-    final newErrors = <String, String>{};
-    if (_deliveryType == DeliveryType.delivery) {
-      if (_address.addressLine1.trim().isEmpty)
-        newErrors['addressLine1'] = 'This field is required';
-      if (_address.phoneNumber.trim().isEmpty) {
-        newErrors['phoneNumber'] = 'This field is required';
-      } else if (!_isValidPhone(_address.phoneNumber)) {
-        newErrors['phoneNumber'] = 'Invalid phone number';
-      }
-      if (_address.city.trim().isEmpty)
-        newErrors['city'] = 'This field is required';
-      if (_address.location == null)
-        newErrors['location'] = 'Please pin your location';
-    } else {
-      if (_address.phoneNumber.trim().isNotEmpty &&
-          !_isValidPhone(_address.phoneNumber)) {
-        newErrors['phoneNumber'] = 'Invalid phone number';
-      }
+    if (_deliveryType == DeliveryType.delivery && _getFoodAddress() == null) {
+      setState(() => _error = 'No delivery address set. Please add one first.');
+      return false;
     }
-    setState(() {
-      _errors
-        ..clear()
-        ..addAll(newErrors);
-    });
-    return newErrors.isEmpty;
+    setState(() => _error = null);
+    return true;
   }
 
   void _handleSubmit(FoodCartProvider cart) {
@@ -298,18 +99,35 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
     }
   }
 
+  Map<String, dynamic>? _buildDeliveryAddressPayload(FoodAddress? addr) {
+    if (_deliveryType != DeliveryType.delivery || addr == null) return null;
+    return {
+      'addressLine1': addr.addressLine1,
+      'addressLine2': addr.addressLine2 ?? '',
+      'city': addr.city,
+      'mainRegion': addr.mainRegion,
+      'phoneNumber': addr.phoneNumber ?? '',
+      'location': addr.location != null
+          ? {'latitude': addr.location!.latitude, 'longitude': addr.location!.longitude}
+          : null,
+    };
+  }
+
   Future<void> _handlePayAtDoor(FoodCartProvider cart) async {
     if (cart.currentRestaurant == null || _isSubmitting) return;
     if (!_validateForm()) return;
+
+    final foodAddress = _getFoodAddress();
+
     setState(() {
       _isSubmitting = true;
       _error = null;
     });
+
     try {
-      final normalizedPhone = _address.phoneNumber.isNotEmpty
-          ? _normalizePhone(_address.phoneNumber)
-          : '';
-      final fn = FirebaseFunctions.instanceFor(region: 'europe-west3').httpsCallable('processFoodOrder');
+      final fn = FirebaseFunctions.instanceFor(region: 'europe-west3')
+          .httpsCallable('processFoodOrder');
+
       final result = await fn.call({
         'restaurantId': cart.currentRestaurant!.id,
         'items': cart.items
@@ -317,43 +135,21 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                   'foodId': i.originalFoodId,
                   'quantity': i.quantity,
                   'extras': i.extras
-                      .map((e) => {
-                            'name': e.name,
-                            'quantity': e.quantity,
-                            'price': e.price
-                          })
+                      .map((e) => {'name': e.name, 'quantity': e.quantity})
                       .toList(),
                   'specialNotes': i.specialNotes ?? '',
                 })
             .toList(),
         'paymentMethod': 'pay_at_door',
-        'deliveryType':
-            _deliveryType == DeliveryType.delivery ? 'delivery' : 'pickup',
-        'deliveryAddress': _deliveryType == DeliveryType.delivery
-            ? {
-                'addressLine1': _address.addressLine1,
-                'addressLine2': _address.addressLine2,
-                'city': _address.city,
-                'phoneNumber': normalizedPhone,
-                'location': _address.location != null
-                    ? {
-                        'latitude': _address.location!.latitude,
-                        'longitude': _address.location!.longitude
-                      }
-                    : null,
-              }
-            : null,
-        'buyerPhone': normalizedPhone,
+        'deliveryType': _deliveryType == DeliveryType.delivery ? 'delivery' : 'pickup',
+        'deliveryAddress': _buildDeliveryAddressPayload(foodAddress),
+        'buyerPhone': foodAddress?.phoneNumber ?? '',
         'orderNotes': _orderNotes,
         'clientSubtotal': cart.totals.subtotal,
       });
+
       final data = result.data as Map<String, dynamic>;
       if (data['success'] == true) {
-        if (_saveAddress &&
-            _deliveryType == DeliveryType.delivery &&
-            _selectedAddressId == null) {
-          await _saveNewAddress(normalizedPhone);
-        }
         await cart.clearCart();
         if (mounted) {
           setState(() => _orderSuccess = _OrderSuccess(
@@ -376,18 +172,21 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
   Future<void> _handleCardPayment(FoodCartProvider cart) async {
     if (cart.currentRestaurant == null || _isSubmitting) return;
     if (!_validateForm()) return;
+
+    final foodAddress = _getFoodAddress();
+
     setState(() {
       _isSubmitting = true;
       _error = null;
     });
+
     try {
       final orderNumber =
           'FOOD-${DateTime.now().millisecondsSinceEpoch}-${_randomSuffix()}';
-      final normalizedPhone = _address.phoneNumber.isNotEmpty
-          ? _normalizePhone(_address.phoneNumber)
-          : '';
-      final fn =
-          FirebaseFunctions.instanceFor(region: 'europe-west3').httpsCallable('initializeFoodPayment');
+
+      final fn = FirebaseFunctions.instanceFor(region: 'europe-west3')
+          .httpsCallable('initializeFoodPayment');
+
       final result = await fn.call({
         'restaurantId': cart.currentRestaurant!.id,
         'items': cart.items
@@ -395,43 +194,21 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                   'foodId': i.originalFoodId,
                   'quantity': i.quantity,
                   'extras': i.extras
-                      .map((e) => {
-                            'name': e.name,
-                            'quantity': e.quantity,
-                            'price': e.price
-                          })
+                      .map((e) => {'name': e.name, 'quantity': e.quantity})
                       .toList(),
                   'specialNotes': i.specialNotes ?? '',
                 })
             .toList(),
-        'deliveryType':
-            _deliveryType == DeliveryType.delivery ? 'delivery' : 'pickup',
-        'deliveryAddress': _deliveryType == DeliveryType.delivery
-            ? {
-                'addressLine1': _address.addressLine1,
-                'addressLine2': _address.addressLine2,
-                'city': _address.city,
-                'phoneNumber': normalizedPhone,
-                'location': _address.location != null
-                    ? {
-                        'latitude': _address.location!.latitude,
-                        'longitude': _address.location!.longitude
-                      }
-                    : null,
-              }
-            : null,
-        'buyerPhone': normalizedPhone,
+        'deliveryType': _deliveryType == DeliveryType.delivery ? 'delivery' : 'pickup',
+        'deliveryAddress': _buildDeliveryAddressPayload(foodAddress),
+        'buyerPhone': foodAddress?.phoneNumber ?? '',
         'orderNotes': _orderNotes,
         'clientSubtotal': cart.totals.subtotal,
         'orderNumber': orderNumber,
       });
+
       final data = result.data as Map<String, dynamic>;
       if (data['success'] == true && data['gatewayUrl'] != null) {
-        if (_saveAddress &&
-            _deliveryType == DeliveryType.delivery &&
-            _selectedAddressId == null) {
-          await _saveNewAddress(normalizedPhone);
-        }
         if (mounted) {
           context.push('/isbankfoodpayment', extra: {
             'gatewayUrl': data['gatewayUrl'],
@@ -446,33 +223,6 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
       if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
-    }
-  }
-
-  Future<void> _saveNewAddress(String normalizedPhone) async {
-    final uid = context.read<UserProvider>().user?.uid;
-    if (uid == null) return;
-    try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .collection('addresses')
-          .doc()
-          .set({
-        'addressLine1': _address.addressLine1,
-        'addressLine2': _address.addressLine2,
-        'city': _address.city,
-        'phoneNumber': normalizedPhone,
-        'location': _address.location != null
-            ? {
-                'latitude': _address.location!.latitude,
-                'longitude': _address.location!.longitude
-              }
-            : null,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      debugPrint('[FoodCheckout] Save address error: $e');
     }
   }
 
@@ -506,6 +256,9 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
         final prepTime = _estimatedPrepTime(cart.items);
         final formValid = _isFormValid(cart.items);
 
+        // Read foodAddress fresh on each build so it reacts to profile changes
+        final foodAddress = _getFoodAddress();
+
         return Scaffold(
           backgroundColor:
               isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
@@ -523,141 +276,139 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
           body: Stack(
             children: [
               ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
-                  children: [
-                    Text('Checkout',
-                        style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white : Colors.grey[900])),
-                    const SizedBox(height: 20),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
+                children: [
+                  Text('Checkout',
+                      style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.grey[900])),
+                  const SizedBox(height: 20),
 
-                    if (cart.currentRestaurant != null) ...[
-                      _RestaurantInfoRow(
-                          restaurant: cart.currentRestaurant!,
-                          prepTime: prepTime,
-                          isDark: isDark),
-                      const SizedBox(height: 12),
-                    ],
-
-                    // Your Order
-                    _Section(
-                      title: 'YOUR ORDER',
-                      isDark: isDark,
-                      child: Column(
-                          children: cart.items
-                              .map((item) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: _CartItemRow(
-                                        item: item, isDark: isDark, cart: cart),
-                                  ))
-                              .toList()),
-                    ),
+                  // Restaurant Info
+                  if (cart.currentRestaurant != null) ...[
+                    _RestaurantInfoRow(
+                        restaurant: cart.currentRestaurant!,
+                        prepTime: prepTime,
+                        isDark: isDark),
                     const SizedBox(height: 12),
-
-                    // Delivery address
-                    ...[
-                      _Section(
-                        title: 'DELIVERY ADDRESS',
-                        isDark: isDark,
-                        child: _AddressForm(
-                          address: _address,
-                          savedAddresses: _savedAddresses,
-                          selectedAddressId: _selectedAddressId,
-                          errors: _errors,
-                          isDark: isDark,
-                          saveAddress: _saveAddress,
-                          showCityDropdown: _showCityDropdown,
-                          addr1Controller: _addr1Controller,
-                          addr2Controller: _addr2Controller,
-                          phoneController: _phoneController,
-                          onAddressSelect: _handleAddressSelect,
-                          onAddr1Changed: (v) => setState(() {
-                            _address = _address.copyWith(addressLine1: v);
-                            _errors.remove('addressLine1');
-                          }),
-                          onAddr2Changed: (v) => setState(() =>
-                              _address = _address.copyWith(addressLine2: v)),
-                          onPhoneChanged: _handlePhoneChange,
-                          onCitySelected: (city) => setState(() {
-                            _address = _address.copyWith(city: city);
-                            _showCityDropdown = false;
-                            _errors.remove('city');
-                          }),
-                          onCityDropdownToggle: () => setState(
-                              () => _showCityDropdown = !_showCityDropdown),
-                          onOpenMap: () => setState(() => _showMapModal = true),
-                          onSaveAddressToggle: (v) =>
-                              setState(() => _saveAddress = v),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-
-                    // Order notes
-                    _Section(
-                      title: 'ORDER NOTES',
-                      isDark: isDark,
-                      child: TextField(
-                        controller: _notesController,
-                        maxLines: 2,
-                        maxLength: 1000,
-                        onChanged: (v) => setState(() => _orderNotes = v),
-                        decoration: InputDecoration(
-                          hintText: 'E.g. no spicy sauce, extra napkins…',
-                          hintStyle: TextStyle(
-                              color:
-                                  isDark ? Colors.grey[600] : Colors.grey[400],
-                              fontSize: 13),
-                          filled: true,
-                          fillColor: isDark
-                              ? const Color(0xFF1F2937)
-                              : const Color(0xFFE5E7EB),
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                  color: isDark
-                                      ? const Color(0xFF374151)
-                                      : const Color(0xFFD1D5DB))),
-                          enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                  color: isDark
-                                      ? const Color(0xFF374151)
-                                      : const Color(0xFFD1D5DB))),
-                          focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide:
-                                  const BorderSide(color: Colors.orange)),
-                          counterText: '',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Payment method
-                    _Section(
-                      title: 'PAYMENT METHOD',
-                      isDark: isDark,
-                      child: Column(children: [
-                        _PaymentMethodButton(
-                            method: PaymentMethod.payAtDoor,
-                            isSelected:
-                                _paymentMethod == PaymentMethod.payAtDoor,
-                            isDark: isDark,
-                            onTap: () => setState(() =>
-                                _paymentMethod = PaymentMethod.payAtDoor)),
-                        const SizedBox(height: 8),
-                        _PaymentMethodButton(
-                            method: PaymentMethod.card,
-                            isSelected: _paymentMethod == PaymentMethod.card,
-                            isDark: isDark,
-                            onTap: () => setState(
-                                () => _paymentMethod = PaymentMethod.card)),
-                      ]),
-                    ),
                   ],
-                ),
+
+                  // Your Order
+                  _Section(
+                    title: 'YOUR ORDER',
+                    isDark: isDark,
+                    child: Column(
+                        children: cart.items
+                            .map((item) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 10),
+                                  child: _CartItemRow(
+                                      item: item, isDark: isDark, cart: cart),
+                                ))
+                            .toList()),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Delivery Method
+                  _Section(
+                    title: 'DELIVERY METHOD',
+                    isDark: isDark,
+                    child: Row(children: [
+                      Expanded(
+                          child: _DeliveryTypeButton(
+                              type: DeliveryType.delivery,
+                              isSelected: _deliveryType == DeliveryType.delivery,
+                              isDark: isDark,
+                              onTap: () => setState(() {
+                                    _deliveryType = DeliveryType.delivery;
+                                    _error = null;
+                                  }))),
+                      const SizedBox(width: 10),
+                      Expanded(
+                          child: _DeliveryTypeButton(
+                              type: DeliveryType.pickup,
+                              isSelected: _deliveryType == DeliveryType.pickup,
+                              isDark: isDark,
+                              onTap: () => setState(() {
+                                    _deliveryType = DeliveryType.pickup;
+                                    _error = null;
+                                  }))),
+                    ]),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Delivery Address — read-only from profile
+                  if (_deliveryType == DeliveryType.delivery) ...[
+                    _Section(
+                      title: 'DELIVERY ADDRESS',
+                      isDark: isDark,
+                      child: _FoodAddressCard(
+                          foodAddress: foodAddress, isDark: isDark),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // Order Notes
+                  _Section(
+                    title: 'ORDER NOTES',
+                    isDark: isDark,
+                    child: TextField(
+                      controller: _notesController,
+                      maxLines: 2,
+                      maxLength: 1000,
+                      onChanged: (v) => setState(() => _orderNotes = v),
+                      decoration: InputDecoration(
+                        hintText: 'E.g. no spicy sauce, extra napkins…',
+                        hintStyle: TextStyle(
+                            color: isDark ? Colors.grey[600] : Colors.grey[400],
+                            fontSize: 13),
+                        filled: true,
+                        fillColor: isDark
+                            ? const Color(0xFF1F2937)
+                            : const Color(0xFFE5E7EB),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                                color: isDark
+                                    ? const Color(0xFF374151)
+                                    : const Color(0xFFD1D5DB))),
+                        enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                                color: isDark
+                                    ? const Color(0xFF374151)
+                                    : const Color(0xFFD1D5DB))),
+                        focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Colors.orange)),
+                        counterText: '',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Payment Method
+                  _Section(
+                    title: 'PAYMENT METHOD',
+                    isDark: isDark,
+                    child: Column(children: [
+                      _PaymentMethodButton(
+                          method: PaymentMethod.payAtDoor,
+                          isSelected: _paymentMethod == PaymentMethod.payAtDoor,
+                          isDark: isDark,
+                          onTap: () => setState(
+                              () => _paymentMethod = PaymentMethod.payAtDoor)),
+                      const SizedBox(height: 8),
+                      _PaymentMethodButton(
+                          method: PaymentMethod.card,
+                          isSelected: _paymentMethod == PaymentMethod.card,
+                          isDark: isDark,
+                          onTap: () => setState(
+                              () => _paymentMethod = PaymentMethod.card)),
+                    ]),
+                  ),
+                ],
+              ),
 
               // Sticky bottom bar
               Positioned(
@@ -676,23 +427,125 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                   onSubmit: () => _handleSubmit(cart),
                 ),
               ),
-
-              // Map modal
-              if (_showMapModal)
-                _LocationPickerModal(
-                  isDark: isDark,
-                  initialLocation: _address.location,
-                  onClose: () => setState(() => _showMapModal = false),
-                  onLocationSelect: (loc) => setState(() {
-                    _address = _address.copyWith(location: loc);
-                    _showMapModal = false;
-                    _errors.remove('location');
-                  }),
-                ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+// =============================================================================
+// FOOD ADDRESS CARD  —  read-only display of profile foodAddress
+// =============================================================================
+
+class _FoodAddressCard extends StatelessWidget {
+  final FoodAddress? foodAddress;
+  final bool isDark;
+  const _FoodAddressCard({required this.foodAddress, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    if (foodAddress != null) {
+      final addr = foodAddress!;
+      final cityLine = [addr.city, addr.mainRegion]
+          .where((s) => s != null && s.isNotEmpty)
+          .join(', ');
+
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.grey[800]!.withOpacity(0.6) : const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.2),
+                shape: BoxShape.circle),
+            child: const Icon(Icons.location_on_rounded,
+                size: 16, color: Colors.orange),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+              child:
+                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(addr.addressLine1,
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.grey[900])),
+            if (addr.addressLine2 != null && addr.addressLine2!.isNotEmpty)
+              Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(addr.addressLine2!,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: isDark ? Colors.grey[500] : Colors.grey[400]))),
+            if (cityLine.isNotEmpty)
+              Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(cityLine,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: isDark ? Colors.grey[400] : Colors.grey[500]))),
+            if (addr.phoneNumber != null && addr.phoneNumber!.isNotEmpty)
+              Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(addr.phoneNumber!,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: isDark ? Colors.grey[500] : Colors.grey[400]))),
+          ])),
+          GestureDetector(
+            onTap: () => context.push('/food-address'),
+            child: Text('Change',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? Colors.orange[400] : Colors.orange[600])),
+          ),
+        ]),
+      );
+    }
+
+    // No address set
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+            style: BorderStyle.solid,
+            color: isDark ? const Color(0xFF374151) : Colors.grey[300]!,
+            width: 1.5),
+      ),
+      child: Row(children: [
+        Icon(Icons.location_on_outlined,
+            size: 20,
+            color: isDark ? Colors.grey[600] : Colors.grey[400]),
+        const SizedBox(width: 12),
+        Expanded(
+            child: Text('No delivery address set',
+                style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.grey[400] : Colors.grey[500]))),
+        GestureDetector(
+          onTap: () => context.push('/food-address'),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+                color: Colors.orange,
+                borderRadius: BorderRadius.circular(8)),
+            child: const Text('Add Address',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white)),
+          ),
+        ),
+      ]),
     );
   }
 }
@@ -817,15 +670,14 @@ class _CartItemRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isDark ? Colors.grey[800]!.withOpacity(0.6) : const Color(0xFFE5E7EB),
+        color: isDark
+            ? Colors.grey[800]!.withOpacity(0.6)
+            : const Color(0xFFE5E7EB),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-            color: isDark
-                ? Colors.transparent
-                : const Color(0xFFD1D5DB)),
+            color: isDark ? Colors.transparent : const Color(0xFFD1D5DB)),
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Image
         ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: SizedBox(
@@ -897,8 +749,9 @@ class _CartItemRow extends StatelessWidget {
                       child: Text(item.specialNotes!,
                           style: TextStyle(
                               fontSize: 11,
-                              color:
-                                  isDark ? Colors.grey[500] : Colors.grey[700]),
+                              color: isDark
+                                  ? Colors.grey[500]
+                                  : Colors.grey[700]),
                           overflow: TextOverflow.ellipsis)),
                 ])),
           const SizedBox(height: 8),
@@ -933,8 +786,8 @@ class _NoImgBox extends StatelessWidget {
         decoration: BoxDecoration(
             color: isDark ? Colors.grey[700] : Colors.grey[200],
             borderRadius: BorderRadius.circular(8)),
-        child: Icon(Icons.shopping_bag_outlined,
-            size: 24, color: Colors.grey[400]),
+        child:
+            Icon(Icons.shopping_bag_outlined, size: 24, color: Colors.grey[400]),
       );
 }
 
@@ -982,7 +835,8 @@ class _QtyBtn extends StatelessWidget {
                       ? const Color(0xFF374151)
                       : const Color(0xFFD1D5DB))),
           child: Icon(icon,
-              size: 12, color: isDark ? Colors.grey[400] : Colors.grey[500])));
+              size: 12,
+              color: isDark ? Colors.grey[400] : Colors.grey[500])));
 }
 
 // =============================================================================
@@ -1043,513 +897,6 @@ class _DeliveryTypeButton extends StatelessWidget {
 }
 
 // =============================================================================
-// ADDRESS FORM
-// =============================================================================
-
-class _AddressForm extends StatelessWidget {
-  final DeliveryAddress address;
-  final List<SavedAddress> savedAddresses;
-  final String? selectedAddressId;
-  final Map<String, String> errors;
-  final bool isDark, saveAddress, showCityDropdown;
-  final TextEditingController addr1Controller, addr2Controller, phoneController;
-  final ValueChanged<String?> onAddressSelect;
-  final ValueChanged<String> onAddr1Changed,
-      onAddr2Changed,
-      onPhoneChanged,
-      onCitySelected;
-  final VoidCallback onCityDropdownToggle, onOpenMap;
-  final ValueChanged<bool> onSaveAddressToggle;
-
-  const _AddressForm({
-    required this.address,
-    required this.savedAddresses,
-    required this.selectedAddressId,
-    required this.errors,
-    required this.isDark,
-    required this.saveAddress,
-    required this.showCityDropdown,
-    required this.addr1Controller,
-    required this.addr2Controller,
-    required this.phoneController,
-    required this.onAddressSelect,
-    required this.onAddr1Changed,
-    required this.onAddr2Changed,
-    required this.onPhoneChanged,
-    required this.onCitySelected,
-    required this.onCityDropdownToggle,
-    required this.onOpenMap,
-    required this.onSaveAddressToggle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      // Saved address tiles
-      if (savedAddresses.isNotEmpty) ...[
-        Row(children: [
-          Icon(Icons.star_rounded,
-              size: 13, color: isDark ? Colors.grey[400] : Colors.grey[700]),
-          const SizedBox(width: 6),
-          Text('Saved Addresses',
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.grey[400] : Colors.grey[800])),
-        ]),
-        const SizedBox(height: 8),
-        ...savedAddresses.map((s) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _SavedAddressTile(
-                saved: s,
-                isSelected: selectedAddressId == s.id,
-                isDark: isDark,
-                onTap: () => onAddressSelect(s.id)))),
-        Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _SavedAddressTile(
-                saved: null,
-                isSelected: selectedAddressId == null,
-                isDark: isDark,
-                onTap: () => onAddressSelect(null))),
-      ],
-
-      _FormLabel('Address Line 1 *', isDark),
-      _FormField(
-          controller: addr1Controller,
-          isDark: isDark,
-          hint: 'Street, neighbourhood…',
-          icon: Icons.home_rounded,
-          error: errors['addressLine1'],
-          onChanged: onAddr1Changed),
-      const SizedBox(height: 10),
-
-      _FormLabel('Address Line 2', isDark),
-      _FormField(
-          controller: addr2Controller,
-          isDark: isDark,
-          hint: 'Apt, floor, building…',
-          icon: Icons.apartment_rounded,
-          onChanged: onAddr2Changed),
-      const SizedBox(height: 10),
-
-      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _FormLabel('City *', isDark),
-          const SizedBox(height: 4),
-          _CityDropdown(
-              city: address.city,
-              isDark: isDark,
-              showDropdown: showCityDropdown,
-              error: errors['city'],
-              onToggle: onCityDropdownToggle,
-              onSelect: onCitySelected),
-        ])),
-        const SizedBox(width: 10),
-        Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _FormLabel('Phone *', isDark),
-          _PhoneField(
-              controller: phoneController,
-              isDark: isDark,
-              error: errors['phoneNumber'],
-              onChanged: onPhoneChanged),
-        ])),
-      ]),
-      const SizedBox(height: 10),
-
-      // Location picker
-      _FormLabel('Precise Location *', isDark),
-      const SizedBox(height: 4),
-      GestureDetector(
-        onTap: onOpenMap,
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-                color: errors['location'] != null
-                    ? Colors.red
-                    : (isDark ? const Color(0xFF374151) : const Color(0xFFD1D5DB))),
-            color: isDark ? const Color(0xFF1F2937) : const Color(0xFFE5E7EB),
-          ),
-          child: Row(children: [
-            Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                    color: address.location != null
-                        ? Colors.green.withOpacity(0.2)
-                        : Colors.orange.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8)),
-                child: Icon(
-                    address.location != null
-                        ? Icons.check_circle_rounded
-                        : Icons.map_rounded,
-                    size: 20,
-                    color: address.location != null
-                        ? Colors.green
-                        : Colors.orange)),
-            const SizedBox(width: 12),
-            Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text(
-                      address.location != null
-                          ? 'Location pinned'
-                          : 'Pin your exact location',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: isDark ? Colors.white : Colors.grey[900])),
-                  Text(
-                      address.location != null
-                          ? '${address.location!.latitude.toStringAsFixed(4)}, ${address.location!.longitude.toStringAsFixed(4)}'
-                          : 'Helps us find you precisely',
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? Colors.grey[500] : Colors.grey[400])),
-                ])),
-            Icon(Icons.chevron_right_rounded,
-                size: 16, color: isDark ? Colors.grey[500] : Colors.grey[400]),
-          ]),
-        ),
-      ),
-      if (errors['location'] != null) _ErrorText(errors['location']!),
-      const SizedBox(height: 10),
-
-      // Save checkbox
-      if (selectedAddressId == null)
-        Row(children: [
-          Checkbox(
-              value: saveAddress,
-              onChanged: (v) => onSaveAddressToggle(v!),
-              activeColor: Colors.orange,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
-          Text('Save this address for future orders',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: isDark ? Colors.grey[400] : Colors.grey[800])),
-        ]),
-    ]);
-  }
-}
-
-class _SavedAddressTile extends StatelessWidget {
-  final SavedAddress? saved;
-  final bool isSelected, isDark;
-  final VoidCallback onTap;
-  const _SavedAddressTile(
-      {required this.saved,
-      required this.isSelected,
-      required this.isDark,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? (isDark ? Colors.orange.withOpacity(0.10) : Colors.orange[50])
-              : (isDark ? Colors.transparent : const Color(0xFFE5E7EB)),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: isSelected
-                  ? (isDark
-                      ? Colors.orange.withOpacity(0.5)
-                      : Colors.orange[400]!)
-                  : (isDark ? const Color(0xFF374151) : const Color(0xFFD1D5DB))),
-        ),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Radio<bool>(
-              value: true,
-              groupValue: isSelected,
-              onChanged: (_) => onTap(),
-              activeColor: Colors.orange,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
-          const SizedBox(width: 6),
-          if (saved == null)
-            Text('Enter new address',
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : Colors.grey[900]))
-          else
-            Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text(saved!.addressLine1,
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white : Colors.grey[900]),
-                      overflow: TextOverflow.ellipsis),
-                  if (saved!.addressLine2.isNotEmpty || saved!.city.isNotEmpty)
-                    Text(
-                        [saved!.addressLine2, saved!.city]
-                            .where((s) => s.isNotEmpty)
-                            .join(', '),
-                        style: TextStyle(
-                            fontSize: 11,
-                            color:
-                                isDark ? Colors.grey[500] : Colors.grey[700])),
-                  if (saved!.phoneNumber.isNotEmpty)
-                    Text(saved!.phoneNumber,
-                        style: TextStyle(
-                            fontSize: 11,
-                            color:
-                                isDark ? Colors.grey[500] : Colors.grey[700])),
-                  if (saved!.location != null)
-                    Row(children: [
-                      Icon(Icons.location_on_rounded,
-                          size: 10,
-                          color: isDark ? Colors.grey[600] : Colors.grey[600]),
-                      const SizedBox(width: 2),
-                      Text(
-                          '${saved!.location!.latitude.toStringAsFixed(4)}, ${saved!.location!.longitude.toStringAsFixed(4)}',
-                          style: TextStyle(
-                              fontSize: 10,
-                              color: isDark
-                                  ? Colors.grey[600]
-                                  : Colors.grey[600])),
-                    ]),
-                ])),
-        ]),
-      ),
-    );
-  }
-}
-
-class _CityDropdown extends StatelessWidget {
-  final String city;
-  final bool isDark, showDropdown;
-  final String? error;
-  final VoidCallback onToggle;
-  final ValueChanged<String> onSelect;
-  const _CityDropdown(
-      {required this.city,
-      required this.isDark,
-      required this.showDropdown,
-      required this.onToggle,
-      required this.onSelect,
-      this.error});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(children: [
-      GestureDetector(
-        onTap: onToggle,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1F2937) : const Color(0xFFE5E7EB),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-                color: error != null
-                    ? Colors.red
-                    : (isDark ? const Color(0xFF374151) : const Color(0xFFD1D5DB))),
-          ),
-          child: Row(children: [
-            Expanded(
-                child: Text(city.isNotEmpty ? city : 'Select city',
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: city.isNotEmpty
-                            ? (isDark ? Colors.white : Colors.grey[900])
-                            : (isDark ? Colors.grey[600] : Colors.grey[400])))),
-            Icon(Icons.keyboard_arrow_down_rounded,
-                size: 16, color: isDark ? Colors.grey[500] : Colors.grey[400]),
-          ]),
-        ),
-      ),
-      if (showDropdown)
-        Container(
-          margin: const EdgeInsets.only(top: 4),
-          constraints: const BoxConstraints(maxHeight: 200),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1F2937) : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-                color: isDark ? const Color(0xFF374151) : Colors.grey[300]!),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4))
-            ],
-          ),
-          child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: allRegionsList.length,
-              itemBuilder: (_, i) => InkWell(
-                  onTap: () => onSelect(allRegionsList[i]),
-                  child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
-                      child: Text(allRegionsList[i],
-                          style: TextStyle(
-                              fontSize: 13,
-                              color:
-                                  isDark ? Colors.white : Colors.grey[900]))))),
-        ),
-      if (error != null) _ErrorText(error!),
-    ]);
-  }
-}
-
-class _PhoneField extends StatelessWidget {
-  final TextEditingController controller;
-  final bool isDark;
-  final String? error;
-  final ValueChanged<String> onChanged;
-  const _PhoneField(
-      {required this.controller,
-      required this.isDark,
-      required this.onChanged,
-      this.error});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Container(
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1F2937) : const Color(0xFFE5E7EB),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: error != null
-                  ? Colors.red
-                  : (isDark ? const Color(0xFF374151) : const Color(0xFFD1D5DB))),
-        ),
-        child: Row(children: [
-          Padding(
-              padding: const EdgeInsets.only(left: 12),
-              child: Icon(Icons.phone_rounded,
-                  size: 16,
-                  color: isDark ? Colors.grey[500] : Colors.grey[400])),
-          Expanded(
-              child: TextField(
-                  controller: controller,
-                  keyboardType: TextInputType.phone,
-                  onChanged: onChanged,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[\d\s()\-]'))
-                  ],
-                  decoration: InputDecoration(
-                      hintText: '(5__) ___ __ __',
-                      hintStyle: TextStyle(
-                          color: isDark ? Colors.grey[600] : Colors.grey[400],
-                          fontSize: 13),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 10)),
-                  style: TextStyle(
-                      fontSize: 13,
-                      color: isDark ? Colors.white : Colors.grey[900]))),
-        ]),
-      ),
-      Padding(
-          padding: const EdgeInsets.only(top: 2),
-          child: Text('Turkish format: 5XX XXX XX XX',
-              style: TextStyle(
-                  fontSize: 10,
-                  color: isDark ? Colors.grey[600] : Colors.grey[600]))),
-      if (error != null) _ErrorText(error!),
-    ]);
-  }
-}
-
-class _FormLabel extends StatelessWidget {
-  final String text;
-  final bool isDark;
-  const _FormLabel(this.text, this.isDark);
-  @override
-  Widget build(BuildContext context) => Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Text(text,
-          style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: isDark ? Colors.grey[500] : Colors.grey[700])));
-}
-
-class _FormField extends StatelessWidget {
-  final TextEditingController controller;
-  final bool isDark;
-  final String hint;
-  final IconData icon;
-  final String? error;
-  final ValueChanged<String> onChanged;
-  const _FormField(
-      {required this.controller,
-      required this.isDark,
-      required this.hint,
-      required this.icon,
-      required this.onChanged,
-      this.error});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Container(
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1F2937) : const Color(0xFFE5E7EB),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: error != null
-                  ? Colors.red
-                  : (isDark ? const Color(0xFF374151) : const Color(0xFFD1D5DB))),
-        ),
-        child: Row(children: [
-          Padding(
-              padding: const EdgeInsets.only(left: 12),
-              child: Icon(icon,
-                  size: 16,
-                  color: isDark ? Colors.grey[500] : Colors.grey[400])),
-          Expanded(
-              child: TextField(
-                  controller: controller,
-                  onChanged: onChanged,
-                  decoration: InputDecoration(
-                      hintText: hint,
-                      hintStyle: TextStyle(
-                          color: isDark ? Colors.grey[600] : Colors.grey[400],
-                          fontSize: 13),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 10)),
-                  style: TextStyle(
-                      fontSize: 13,
-                      color: isDark ? Colors.white : Colors.grey[900]))),
-        ]),
-      ),
-      if (error != null) _ErrorText(error!),
-    ]);
-  }
-}
-
-class _ErrorText extends StatelessWidget {
-  final String text;
-  const _ErrorText(this.text);
-  @override
-  Widget build(BuildContext context) => Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Row(children: [
-        const Icon(Icons.close_rounded, size: 11, color: Colors.red),
-        const SizedBox(width: 4),
-        Text(text, style: const TextStyle(fontSize: 11, color: Colors.red)),
-      ]));
-}
-
-// =============================================================================
 // PAYMENT METHOD BUTTON
 // =============================================================================
 
@@ -1581,7 +928,9 @@ class _PaymentMethodButton extends StatelessWidget {
                   ? (isDark
                       ? Colors.orange.withOpacity(0.5)
                       : Colors.orange[400]!)
-                  : (isDark ? const Color(0xFF374151) : const Color(0xFFD1D5DB))),
+                  : (isDark
+                      ? const Color(0xFF374151)
+                      : const Color(0xFFD1D5DB))),
         ),
         child: Row(children: [
           Container(
@@ -1608,7 +957,9 @@ class _PaymentMethodButton extends StatelessWidget {
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: isSelected
-                            ? (isDark ? Colors.orange[400] : Colors.orange[700])
+                            ? (isDark
+                                ? Colors.orange[400]
+                                : Colors.orange[700])
                             : (isDark ? Colors.grey[200] : Colors.grey[800]))),
                 Text(
                     isPay
@@ -1616,7 +967,8 @@ class _PaymentMethodButton extends StatelessWidget {
                         : 'Secure online payment via İşbank 3D',
                     style: TextStyle(
                         fontSize: 11,
-                        color: isDark ? Colors.grey[500] : Colors.grey[700])),
+                        color:
+                            isDark ? Colors.grey[500] : Colors.grey[700])),
               ])),
         ]),
       ),
@@ -1680,8 +1032,9 @@ class _StickyBottomBar extends StatelessWidget {
                       child: Text(error!,
                           style: TextStyle(
                               fontSize: 12,
-                              color:
-                                  isDark ? Colors.red[400] : Colors.red[600]))),
+                              color: isDark
+                                  ? Colors.red[400]
+                                  : Colors.red[600]))),
                 ]),
               )),
         Row(children: [
@@ -1704,7 +1057,8 @@ class _StickyBottomBar extends StatelessWidget {
               foregroundColor: Colors.white,
               disabledBackgroundColor:
                   isDark ? Colors.grey[700] : Colors.grey[300],
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
               elevation: 0,
@@ -1729,193 +1083,6 @@ class _StickyBottomBar extends StatelessWidget {
           ),
         ]),
       ]),
-    );
-  }
-}
-
-// =============================================================================
-// LOCATION PICKER MODAL  —  mirrors LocationPickerModal using google_maps_flutter
-// =============================================================================
-
-class _LocationPickerModal extends StatefulWidget {
-  final bool isDark;
-  final LatLng? initialLocation;
-  final VoidCallback onClose;
-  final ValueChanged<LatLng> onLocationSelect;
-  const _LocationPickerModal(
-      {required this.isDark,
-      required this.onClose,
-      required this.onLocationSelect,
-      this.initialLocation});
-
-  @override
-  State<_LocationPickerModal> createState() => _LocationPickerModalState();
-}
-
-class _LocationPickerModalState extends State<_LocationPickerModal> {
-  LatLng? _selected;
-  GoogleMapController? _mapController;
-  static const _defaultCenter = LatLng(35.1855, 33.3823);
-
-  @override
-  void initState() {
-    super.initState();
-    _selected = widget.initialLocation;
-  }
-
-  @override
-  void dispose() {
-    _mapController?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = widget.isDark;
-    return GestureDetector(
-      onTap: widget.onClose,
-      child: Container(
-        color: Colors.black.withOpacity(0.6),
-        alignment: Alignment.center,
-        child: GestureDetector(
-            onTap: () {},
-            child: Container(
-              margin: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF111827) : Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                      color: isDark
-                          ? Colors.grey[700]!.withOpacity(0.5)
-                          : Colors.grey[200]!)),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                // Header
-                Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
-                    child: Row(children: [
-                      Expanded(
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                            Text('Select Location',
-                                style: TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.bold,
-                                    color: isDark
-                                        ? Colors.white
-                                        : Colors.grey[900])),
-                            Text('Tap anywhere on the map',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color: isDark
-                                        ? Colors.grey[400]
-                                        : Colors.grey[600])),
-                          ])),
-                      IconButton(
-                          onPressed: widget.onClose,
-                          icon: Icon(Icons.close_rounded,
-                              color: isDark
-                                  ? Colors.grey[400]
-                                  : Colors.grey[600])),
-                    ])),
-                // Map
-                ClipRRect(
-                    child: SizedBox(
-                        height: MediaQuery.of(context).size.height * 0.45,
-                        child: GoogleMap(
-                          initialCameraPosition: CameraPosition(
-                              target: _selected ?? _defaultCenter,
-                              zoom: _selected != null ? 15 : 10),
-                          onMapCreated: (c) => _mapController = c,
-                          onTap: (ll) => setState(() => _selected = ll),
-                          markers: _selected != null
-                              ? {
-                                  Marker(
-                                      markerId: const MarkerId('sel'),
-                                      position: _selected!)
-                                }
-                              : {},
-                          myLocationButtonEnabled: false,
-                          zoomControlsEnabled: false,
-                        ))),
-                // Selected coords
-                if (_selected != null)
-                  Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                      color: isDark
-                          ? Colors.grey[800]!.withOpacity(0.8)
-                          : Colors.grey[50],
-                      child: Row(children: [
-                        Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                                color: Colors.green.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(8)),
-                            child: const Icon(Icons.check_circle_rounded,
-                                size: 16, color: Colors.green)),
-                        const SizedBox(width: 10),
-                        Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Location selected',
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: isDark
-                                          ? Colors.white
-                                          : Colors.grey[900])),
-                              Text(
-                                  '${_selected!.latitude.toStringAsFixed(6)}, ${_selected!.longitude.toStringAsFixed(6)}',
-                                  style: TextStyle(
-                                      fontSize: 11,
-                                      color: isDark
-                                          ? Colors.grey[400]
-                                          : Colors.grey[600])),
-                            ]),
-                      ])),
-                // Footer
-                Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                    child: Row(children: [
-                      Expanded(
-                          child: OutlinedButton(
-                              onPressed: widget.onClose,
-                              style: OutlinedButton.styleFrom(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
-                                  side: BorderSide(
-                                      color: isDark
-                                          ? Colors.grey[600]!
-                                          : Colors.grey[300]!),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12))),
-                              child: Text('Cancel',
-                                  style: TextStyle(
-                                      color: isDark
-                                          ? Colors.grey[300]
-                                          : Colors.grey[700])))),
-                      const SizedBox(width: 12),
-                      Expanded(
-                          child: ElevatedButton(
-                              onPressed: _selected != null
-                                  ? () => widget.onLocationSelect(_selected!)
-                                  : null,
-                              style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.orange,
-                                  foregroundColor: Colors.white,
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12))),
-                              child: const Text('Confirm Location',
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold)))),
-                    ])),
-              ]),
-            )),
-      ),
     );
   }
 }
@@ -1984,8 +1151,7 @@ class _OrderSuccessScreen extends StatelessWidget {
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     Icon(Icons.access_time_rounded,
                         size: 14,
-                        color:
-                            isDark ? Colors.orange[400] : Colors.orange[600]),
+                        color: isDark ? Colors.orange[400] : Colors.orange[600]),
                     const SizedBox(width: 6),
                     Text('~$estimatedPrepTime min',
                         style: TextStyle(
@@ -2006,7 +1172,7 @@ class _OrderSuccessScreen extends StatelessWidget {
             SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                    onPressed: () => context.go('/food-orders'),
+                    onPressed: () => context.go('/my_food_orders'),
                     style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.orange,
                         foregroundColor: Colors.white,
@@ -2024,8 +1190,9 @@ class _OrderSuccessScreen extends StatelessWidget {
                     style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         side: BorderSide(
-                            color:
-                                isDark ? Colors.grey[600]! : Colors.grey[300]!),
+                            color: isDark
+                                ? Colors.grey[600]!
+                                : Colors.grey[300]!),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12))),
                     child: Text('Back to Restaurants',
@@ -2101,8 +1268,8 @@ class _FoodCheckoutSkeleton extends StatelessWidget {
     Widget box(double h, double? w) => Container(
         height: h,
         width: w,
-        decoration:
-            BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)));
+        decoration: BoxDecoration(
+            color: bg, borderRadius: BorderRadius.circular(8)));
     Widget card(Widget child) => Container(
         padding: const EdgeInsets.all(16),
         margin: const EdgeInsets.only(bottom: 12),
@@ -2116,13 +1283,17 @@ class _FoodCheckoutSkeleton extends StatelessWidget {
       const SizedBox(height: 16),
       box(28, 120),
       const SizedBox(height: 20),
+      // Restaurant row
       card(Row(children: [
         box(40, 40),
         const SizedBox(width: 12),
-        Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [box(14, 140), const SizedBox(height: 6), box(11, 100)])
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          box(14, 140),
+          const SizedBox(height: 6),
+          box(11, 100)
+        ])
       ])),
+      // Order items
       card(Column(children: [
         box(11, 80),
         const SizedBox(height: 12),
@@ -2151,10 +1322,11 @@ class _FoodCheckoutSkeleton extends StatelessWidget {
                             Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
-                                children: [box(28, 96), box(14, 56)]),
+                                children: [box(28, 96), box(14, 56)])
                           ]))
                     ]))))
       ])),
+      // Delivery method
       card(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         box(11, 120),
         const SizedBox(height: 12),
@@ -2164,19 +1336,19 @@ class _FoodCheckoutSkeleton extends StatelessWidget {
           Expanded(child: box(48, null))
         ])
       ])),
+      // Address card
       card(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         box(11, 140),
         const SizedBox(height: 12),
-        box(44, null),
-        const SizedBox(height: 10),
-        box(44, null),
-        const SizedBox(height: 10),
-        Row(children: [
-          Expanded(child: box(44, null)),
-          const SizedBox(width: 10),
-          Expanded(child: box(44, null))
-        ])
+        box(64, null),
       ])),
+      // Notes
+      card(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        box(11, 100),
+        const SizedBox(height: 12),
+        box(56, null),
+      ])),
+      // Payment
       card(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         box(11, 120),
         const SizedBox(height: 12),

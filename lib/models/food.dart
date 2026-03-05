@@ -2,6 +2,39 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// An extra/add-on option defined on a food document.
+class FoodExtra {
+  final String name;
+  final double price;
+
+  const FoodExtra({required this.name, required this.price});
+
+  factory FoodExtra.fromMap(dynamic map) {
+    if (map is String) {
+      // Legacy: extras stored as plain strings (no price)
+      return FoodExtra(name: map, price: 0);
+    }
+    final m = Map<String, dynamic>.from(map as Map);
+    return FoodExtra(
+      name: (m['name'] as String?) ?? '',
+      price: (m['price'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {'name': name, 'price': price};
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FoodExtra && other.name == name && other.price == price;
+
+  @override
+  int get hashCode => Object.hash(name, price);
+
+  @override
+  String toString() => 'FoodExtra(name: $name, price: $price)';
+}
+
 class Food {
   final String id;
   final String name;
@@ -14,10 +47,8 @@ class Food {
   final double price;
   final String restaurantId;
 
-  /// List of available extra option keys for this food item,
-  /// e.g. ["Extra Cheese", "Jalapeños"].
-  /// The full extra definitions (price etc.) live in the restaurant document.
-  final List<String>? extras;
+  /// Available extras for this food item (each with name + price).
+  final List<FoodExtra>? extras;
 
   // Discount fields
   final int? discountPercentage;
@@ -69,7 +100,7 @@ class Food {
       price: (map['price'] as num?)?.toDouble() ?? 0.0,
       restaurantId: (map['restaurantId'] as String?) ?? '',
       extras:
-          (map['extras'] as List<dynamic>?)?.map((e) => e.toString()).toList(),
+          (map['extras'] as List<dynamic>?)?.map((e) => FoodExtra.fromMap(e)).toList(),
       discountPercentage: (discount?['percentage'] as num?)?.toInt(),
       originalPrice: (discount?['originalPrice'] as num?)?.toDouble(),
       discountStartDate:
@@ -90,7 +121,7 @@ class Food {
         if (preparationTime != null) 'preparationTime': preparationTime,
         'price': price,
         'restaurantId': restaurantId,
-        if (extras != null) 'extras': extras,
+        if (extras != null) 'extras': extras!.map((e) => e.toMap()).toList(),
         if (discountPercentage != null)
           'discount': {
             'percentage': discountPercentage,
@@ -111,7 +142,7 @@ class Food {
     int? preparationTime,
     double? price,
     String? restaurantId,
-    List<String>? extras,
+    List<FoodExtra>? extras,
     int? discountPercentage,
     double? originalPrice,
     DateTime? discountStartDate,

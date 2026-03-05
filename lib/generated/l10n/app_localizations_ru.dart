@@ -6413,6 +6413,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get refundFormNoName => 'Имя не указано';
 
   @override
+  String get youLabel => 'вы';
+
+  @override
   String get refundFormEmailLabel => 'Адрес электронной почты';
 
   @override

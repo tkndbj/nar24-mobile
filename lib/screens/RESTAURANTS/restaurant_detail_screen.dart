@@ -1655,7 +1655,7 @@ class _FoodExtrasSheetState extends State<_FoodExtrasSheet> {
   final _notesController = TextEditingController();
   bool _submitting = false;
 
-  late final List<String> _resolvedExtras;
+  late final List<FoodExtra> _resolvedExtras;
 
  @override
 void initState() {
@@ -1675,7 +1675,10 @@ void initState() {
 
     final extras = _checked.entries
         .where((e) => e.value)
-        .map((e) => SelectedExtra(name: e.key, quantity: 1, price: 0))
+        .map((e) {
+          final foodExtra = _resolvedExtras.where((x) => x.name == e.key).firstOrNull;
+          return SelectedExtra(name: e.key, quantity: 1, price: foodExtra?.price ?? 0);
+        })
         .toList();
 
     try {
@@ -1690,7 +1693,10 @@ void initState() {
   Widget build(BuildContext context) {
     final isDark = widget.isDark;
     final food = widget.food;
-    final total = food.price * _quantity;
+    final selectedExtrasTotal = _resolvedExtras
+        .where((e) => _checked[e.name] == true)
+        .fold<double>(0, (sum, e) => sum + e.price);
+    final total = (food.price + selectedExtrasTotal) * _quantity;
 
     return DraggableScrollableSheet(
       initialChildSize: _resolvedExtras.isNotEmpty ? 0.65 : 0.45,
@@ -1812,16 +1818,23 @@ void initState() {
                     const SizedBox(height: 8),
                     ..._resolvedExtras.map(
                       (extra) => CheckboxListTile(
-                        value: _checked[extra] ?? false,
-                        onChanged: (v) => setState(() => _checked[extra] = v!),
-                        title: Text(extra,
+                        value: _checked[extra.name] ?? false,
+                        onChanged: (v) => setState(() => _checked[extra.name] = v!),
+                        title: Text(extra.name,
                             style: TextStyle(
                                 fontSize: 14,
                                 color: isDark
                                     ? Colors.grey[200]
                                     : Colors.grey[900])),
-                        subtitle: const Text('Free',
-                            style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        subtitle: Text(
+                            extra.price > 0
+                                ? '+${extra.price.toStringAsFixed(0)} TL'
+                                : 'Free',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: extra.price > 0
+                                    ? (isDark ? Colors.orange[300] : Colors.orange[700])
+                                    : Colors.grey)),
                         activeColor: Colors.orange,
                         contentPadding: EdgeInsets.zero,
                         controlAffinity: ListTileControlAffinity.trailing,

@@ -127,6 +127,45 @@ function assertRestaurantOpen(restaurantData) {
 }
 
 // ============================================================================
+// HELPER: Validate restaurant delivers to the user's address
+// ============================================================================
+
+function assertRestaurantDelivers(restaurantData, deliveryAddress) {
+  // Parse minOrderPrices — Firestore may store it as an array or a JSON string
+  let minOrderPrices = restaurantData.minOrderPrices;
+
+  if (!Array.isArray(minOrderPrices) && typeof restaurantData.minOrderPricesJson === 'string') {
+    try {
+      minOrderPrices = JSON.parse(restaurantData.minOrderPricesJson);
+    } catch {
+      minOrderPrices = [];
+    }
+  }
+
+  // No delivery zones configured → delivers everywhere
+  if (!Array.isArray(minOrderPrices) || minOrderPrices.length === 0) return;
+
+  const userCity = deliveryAddress?.city?.trim() || '';
+  const userMainRegion = deliveryAddress?.mainRegion?.trim() || '';
+
+  // No address info to check against → can't validate, let it through
+  if (!userCity && !userMainRegion) return;
+
+  const delivers = minOrderPrices.some(
+    (p) =>
+      (userCity && p.subregion === userCity) &&
+      (userMainRegion && p.mainRegion === userMainRegion)
+  );
+
+  if (!delivers) {
+    throw new HttpsError(
+      'failed-precondition',
+      `This restaurant does not deliver to "${userCity || userMainRegion}".`
+    );
+  }
+}
+
+// ============================================================================
 // HELPER: Validate & fetch food items from Firestore, compute server totals
 // ============================================================================
 
@@ -179,22 +218,32 @@ async function validateAndPriceFoodItems(tx, db, items, restaurantId) {
       );
     }
 
-    // Validate extras — only allow extras defined on the food document
-    const allowedExtras = new Set(Array.isArray(foodData.extras) ? foodData.extras : []);
-    const validatedExtras = [];
+    const allowedExtrasMap = new Map();
+    if (Array.isArray(foodData.extras)) {
+      for (const e of foodData.extras) {
+        if (e && typeof e.name === 'string') {
+          allowedExtrasMap.set(e.name, typeof e.price === 'number' ? e.price : 0);
+        }
+      }
+    }
 
+    const validatedExtras = [];
     for (const ext of extras) {
       if (!ext.name || typeof ext.name !== 'string') continue;
-      if (!allowedExtras.has(ext.name)) {
+
+      if (!allowedExtrasMap.has(ext.name)) {
         throw new HttpsError(
           'invalid-argument',
           `Extra "${ext.name}" is not available for "${foodData.name}".`
         );
       }
+
+      const serverPrice = allowedExtrasMap.get(ext.name); // authoritative — ignore client price
+
       validatedExtras.push({
         name: ext.name,
-        quantity: Math.max(1, ext.quantity || 1),
-        price: typeof ext.price === 'number' ? ext.price : 0,
+        quantity: Math.max(1, Math.floor(ext.quantity) || 1),
+        price: serverPrice,
       });
     }
 
@@ -290,6 +339,15 @@ async function createFoodOrderCore(buyerId, requestData, paymentOrderId = null) 
     const buyerData = buyerSnap.data() || {};
     const buyerName = buyerData.displayName || buyerData.name || 'Customer';
 
+    // Always use server-side address — ignore whatever the client sent
+    const serverFoodAddress = buyerData.foodAddress || null;
+    if (deliveryType === 'delivery') {
+      if (!serverFoodAddress?.addressLine1) {
+        throw new HttpsError('failed-precondition', 'No delivery address found on your profile.');
+      }
+      assertRestaurantDelivers(restaurantData, serverFoodAddress);
+    }
+
     // ── 3. Idempotency: prevent duplicate orders for same payment ────
     if (paymentOrderId) {
       const dupQuery = db
@@ -358,23 +416,21 @@ async function createFoodOrderCore(buyerId, requestData, paymentOrderId = null) 
       // Delivery
       deliveryType,
       deliveryAddress:
-        deliveryType === 'delivery' && deliveryAddress ?
-          {
-              addressLine1: deliveryAddress.addressLine1,
-              addressLine2: deliveryAddress.addressLine2 || '',
-              city: deliveryAddress.city || '',
-              phoneNumber: deliveryAddress.phoneNumber || '',
-              location:
-                deliveryAddress.location &&
-                deliveryAddress.location.latitude &&
-                deliveryAddress.location.longitude ?
-                  new admin.firestore.GeoPoint(
-                      deliveryAddress.location.latitude,
-                      deliveryAddress.location.longitude
-                    ) :
-                  null,
-            } :
-          null,
+      deliveryType === 'delivery' && serverFoodAddress ?
+        {
+            addressLine1: serverFoodAddress.addressLine1,
+            addressLine2: serverFoodAddress.addressLine2 || '',
+            city: serverFoodAddress.city || '',
+            mainRegion: serverFoodAddress.mainRegion || '',
+            phoneNumber: serverFoodAddress.phoneNumber || '',
+            location: serverFoodAddress.location ?
+                new admin.firestore.GeoPoint(
+                    serverFoodAddress.location.latitude,
+                    serverFoodAddress.location.longitude
+                  ) :
+                null,
+          } :
+        null,
 
       // Meta
       orderNotes: typeof orderNotes === 'string' ? orderNotes.substring(0, 1000) : '',
@@ -516,8 +572,7 @@ export const initializeFoodPayment = onCall(
     const {
       restaurantId,
       items,
-      deliveryType,
-      deliveryAddress,
+      deliveryType,      
       buyerPhone,
       orderNotes,
       clientSubtotal,
@@ -541,6 +596,17 @@ export const initializeFoodPayment = onCall(
       throw new HttpsError('not-found', 'Restaurant not found.');
     }
     assertRestaurantOpen(restaurantSnap.data());
+
+    // Fetch server-side address — never trust client
+    const userSnap = await db.collection('users').doc(userId).get();
+    const serverFoodAddress = userSnap.data()?.foodAddress || null;
+
+    if ((deliveryType || 'delivery') === 'delivery') {
+      if (!serverFoodAddress?.addressLine1) {
+        throw new HttpsError('failed-precondition', 'No delivery address found on your profile.');
+      }
+      assertRestaurantDelivers(restaurantSnap.data(), serverFoodAddress);
+    }
 
     // Validate items and compute server total
     // Use a transaction for consistent reads
@@ -644,8 +710,8 @@ export const initializeFoodPayment = onCall(
           specialNotes: i.specialNotes,
         })),
         deliveryType: deliveryType || 'delivery',
-        deliveryAddress: deliveryAddress || null,
-        buyerPhone: buyerPhone || customerPhone || '',
+        deliveryAddress: serverFoodAddress || null,
+        buyerPhone: serverFoodAddress?.phoneNumber || buyerPhone || customerPhone || '',
         orderNotes: orderNotes || '',
         paymentMethod: 'card',
         clientSubtotal: clientSubtotal || 0,

@@ -6376,6 +6376,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get refundFormNoName => 'No name';
 
   @override
+  String get youLabel => 'You';
+
+  @override
   String get refundFormEmailLabel => 'Email Address';
 
   @override

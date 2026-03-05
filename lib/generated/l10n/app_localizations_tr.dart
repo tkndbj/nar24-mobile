@@ -6385,6 +6385,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get refundFormNoName => 'İsim yok';
 
   @override
+  String get youLabel => 'Sen';
+
+  @override
   String get refundFormEmailLabel => 'E-posta Adresi';
 
   @override

@@ -134,7 +134,7 @@ export const sendShopInvitation = onCall(FUNCTION_CONFIG, async (request) => {
     email: inviteeEmail.trim().toLowerCase(),
     notificationId: notificationRef.id, // O(1) link for cancel/cleanup
     status: 'pending',
-    createdAt: now,
+    timestamp: now,
   });
 
   batch.set(notificationRef, {
@@ -146,8 +146,8 @@ export const sendShopInvitation = onCall(FUNCTION_CONFIG, async (request) => {
     senderId: request.auth.uid,
     invitationId: invitationRef.id, // O(1) link for accept/reject
     status: 'pending',
-    isRead: {},
-    createdAt: now,
+    isRead: false,
+    timestamp: now,
     message_en: `You have been invited to join ${shopData.name ?? 'a shop'} as ${role}.`,
     message_tr: `${shopData.name ?? 'Bir mağazaya'} katılmaya davet edildiniz (${role}).`,
     message_ru: `Вас пригласили присоединиться к ${shopData.name ?? 'магазину'} как ${role}.`,
