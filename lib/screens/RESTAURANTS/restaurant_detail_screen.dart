@@ -23,6 +23,7 @@ import '../../models/food.dart';
 import '../../providers/food_cart_provider.dart';
 import '../../user_provider.dart';
 import '../../utils/restaurant_utils.dart';
+import '../../utils/food_localization.dart';
 import '../../services/typesense_service_manager.dart';
 import '../../services/restaurant_typesense_service.dart';
 
@@ -364,6 +365,8 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final restaurant = widget.restaurant;
 
+    final loc = AppLocalizations.of(context);
+
     // Not found state — mirrors the !restaurant early return
     if (restaurant == null) {
       return Scaffold(
@@ -383,7 +386,7 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
             children: [
               const Text('🍽️', style: TextStyle(fontSize: 56)),
               const SizedBox(height: 16),
-              Text('Restaurant not found',
+              Text(loc.restaurantNotFound,
                   style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
               ElevatedButton(
@@ -391,7 +394,7 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
                 style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange,
                     foregroundColor: Colors.white),
-                child: const Text('Back to Restaurants'),
+                child: Text(loc.backToRestaurants),
               ),
             ],
           ),
@@ -551,6 +554,7 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
   }
 
   SliverToBoxAdapter _buildClosedBanner(bool isDark) {
+    final loc = AppLocalizations.of(context);
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -573,14 +577,14 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Currently closed',
+                      loc.currentlyClosed,
                       style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: isDark ? Colors.red[400] : Colors.red[600]),
                     ),
                     Text(
-                      'Browse the menu and order when we reopen.',
+                      loc.browseMenuWhenReopen,
                       style: TextStyle(
                           fontSize: 12,
                           color: (isDark ? Colors.red[400]! : Colors.red[500]!)
@@ -685,6 +689,7 @@ class _RestaurantHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final loc = AppLocalizations.of(context);
 
     return SliverToBoxAdapter(
       child: Padding(
@@ -793,7 +798,7 @@ class _RestaurantHeader extends StatelessWidget {
                             // Cuisine types
                             if (restaurant.cuisineTypes?.isNotEmpty ?? false)
                               Text(
-                                restaurant.cuisineTypes!.join(', '),
+                                localizeCuisines(restaurant.cuisineTypes!, loc),
                                 style: TextStyle(
                                     fontSize: 13,
                                     color: isDark
@@ -876,12 +881,13 @@ class _TabAndSearchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     return Column(
       children: [
         Row(
           children: [
             _TabBtn(
-              label: 'Menu',
+              label: loc.menuTab,
               badge: '($foodCount)',
               isActive: activeTab == 'menu',
               isDark: isDark,
@@ -889,7 +895,7 @@ class _TabAndSearchRow extends StatelessWidget {
             ),
             const SizedBox(width: 4),
             _TabBtn(
-              label: 'Reviews',
+              label: loc.reviewsTab,
               isActive: activeTab == 'reviews',
               isDark: isDark,
               onTap: () => onTabChange('reviews'),
@@ -901,7 +907,7 @@ class _TabAndSearchRow extends StatelessWidget {
           _SearchBar(
               controller: searchController,
               isDark: isDark,
-              hint: 'Search food…'),
+              hint: loc.searchFoodHint),
         ],
       ],
     );
@@ -1058,7 +1064,7 @@ class _FoodTypeIconRow extends StatelessWidget {
                   SizedBox(
                     width: 56,
                     child: Text(
-                      category,
+                      localizeCategory(category, AppLocalizations.of(context)),
                       textAlign: TextAlign.center,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1138,7 +1144,7 @@ class _GroupedFoodList extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Text(
-                    category,
+                    localizeCategory(category, AppLocalizations.of(context)),
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
@@ -1254,6 +1260,7 @@ class _FoodCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final loc = AppLocalizations.of(context);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1306,7 +1313,7 @@ class _FoodCard extends StatelessWidget {
 
                 // Type (translated)
                 Text(
-                  _displayType,
+                  localizeFoodType(food.foodType, loc),
                   style: TextStyle(
                       fontSize: 11,
                       color: isDark ? Colors.grey[500] : Colors.grey[400]),
@@ -1340,7 +1347,7 @@ class _FoodCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          '%${food.discountPercentage}',
+                          loc.foodDiscountPercent(food.discountPercentage ?? 0),
                           style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
@@ -1350,7 +1357,7 @@ class _FoodCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        '${food.originalPrice!.toStringAsFixed(food.originalPrice! % 1 == 0 ? 0 : 2)} TL',
+                        loc.foodPriceTL(food.originalPrice!.toStringAsFixed(food.originalPrice! % 1 == 0 ? 0 : 2)),
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
@@ -1362,7 +1369,7 @@ class _FoodCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        '${food.price.toStringAsFixed(food.price % 1 == 0 ? 0 : 2)} TL',
+                        loc.foodPriceTL(food.price.toStringAsFixed(food.price % 1 == 0 ? 0 : 2)),
                         style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
@@ -1382,7 +1389,7 @@ class _FoodCard extends StatelessWidget {
                     if (!(food.hasActiveDiscount &&
                         food.originalPrice != null))
                       Text(
-                        '${food.price.toStringAsFixed(food.price % 1 == 0 ? 0 : 2)} TL',
+                        loc.foodPriceTL(food.price.toStringAsFixed(food.price % 1 == 0 ? 0 : 2)),
                         style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
@@ -1403,7 +1410,7 @@ class _FoodCard extends StatelessWidget {
                           color: isDark ? Colors.grey[500] : Colors.grey[400]),
                       const SizedBox(width: 2),
                       Text(
-                        '${food.preparationTime} min',
+                        loc.foodPrepTime(food.preparationTime!),
                         style: TextStyle(
                             fontSize: 12,
                             color:
@@ -1537,6 +1544,7 @@ class _CartButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     // Disabled state (closed)
     if (!isOpen) {
       return Container(
@@ -1545,7 +1553,7 @@ class _CartButton extends StatelessWidget {
           color: isDark ? Colors.grey[700] : Colors.grey[200],
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Text('Closed',
+        child: Text(loc.foodClosedButton,
             style: TextStyle(
                 fontSize: 12,
                 color: isDark ? Colors.grey[500] : Colors.grey[400])),
@@ -1613,7 +1621,7 @@ class _CartButton extends StatelessWidget {
                 color: isDark ? Colors.orange[400] : Colors.orange[600]),
             const SizedBox(width: 6),
             Text(
-              'Add',
+              loc.foodAddLabel,
               style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -1691,6 +1699,7 @@ void initState() {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final isDark = widget.isDark;
     final food = widget.food;
     final selectedExtrasTotal = _resolvedExtras
@@ -1745,7 +1754,7 @@ void initState() {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            '%${food.discountPercentage}',
+                            loc.foodDiscountPercent(food.discountPercentage ?? 0),
                             style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
@@ -1755,7 +1764,7 @@ void initState() {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          '${food.originalPrice!.toStringAsFixed(0)} TL',
+                          loc.foodPriceTL(food.originalPrice!.toStringAsFixed(0)),
                           style: TextStyle(
                               fontSize: 13,
                               color: isDark
@@ -1768,7 +1777,7 @@ void initState() {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          '${food.price.toStringAsFixed(0)} TL',
+                          loc.foodPriceTL(food.price.toStringAsFixed(0)),
                           style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -1778,7 +1787,7 @@ void initState() {
                         ),
                       ] else
                         Text(
-                          '${food.price.toStringAsFixed(0)} TL',
+                          loc.foodPriceTL(food.price.toStringAsFixed(0)),
                           style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -1793,7 +1802,7 @@ void initState() {
                   // Quantity
                   Row(
                     children: [
-                      Text('Quantity',
+                      Text(loc.foodQuantityLabel,
                           style: TextStyle(
                               fontWeight: FontWeight.w600,
                               color: isDark
@@ -1810,7 +1819,7 @@ void initState() {
                   // Extras
                   if (_resolvedExtras.isNotEmpty) ...[
                     const SizedBox(height: 16),
-                    Text('Extras',
+                    Text(loc.foodExtrasLabel,
                         style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color:
@@ -1820,7 +1829,7 @@ void initState() {
                       (extra) => CheckboxListTile(
                         value: _checked[extra.name] ?? false,
                         onChanged: (v) => setState(() => _checked[extra.name] = v!),
-                        title: Text(extra.name,
+                        title: Text(localizeExtra(extra.name, loc),
                             style: TextStyle(
                                 fontSize: 14,
                                 color: isDark
@@ -1828,8 +1837,8 @@ void initState() {
                                     : Colors.grey[900])),
                         subtitle: Text(
                             extra.price > 0
-                                ? '+${extra.price.toStringAsFixed(0)} TL'
-                                : 'Free',
+                                ? loc.foodExtraPriceTL(extra.price.toStringAsFixed(0))
+                                : loc.foodFreeExtra,
                             style: TextStyle(
                                 fontSize: 12,
                                 color: extra.price > 0
@@ -1844,7 +1853,7 @@ void initState() {
 
                   // Special notes
                   const SizedBox(height: 16),
-                  Text('Special notes (optional)',
+                  Text(loc.foodSpecialNotes,
                       style: TextStyle(
                           fontWeight: FontWeight.w600,
                           color: isDark ? Colors.grey[300] : Colors.grey[800])),
@@ -1853,7 +1862,7 @@ void initState() {
                     controller: _notesController,
                     maxLines: 2,
                     decoration: InputDecoration(
-                      hintText: 'E.g. no onions…',
+                      hintText: loc.foodNotesHint,
                       filled: true,
                       fillColor: isDark ? const Color(0xFF111827) : Colors.white,
                       border: OutlineInputBorder(
@@ -1904,7 +1913,7 @@ void initState() {
                             height: 20,
                             child: CircularProgressIndicator(
                                 color: Colors.white, strokeWidth: 2))
-                        : Text('Add to cart — ${total.toStringAsFixed(0)} TL',
+                        : Text(loc.foodAddToCart(total.toStringAsFixed(0)),
                             style: const TextStyle(
                                 fontSize: 15, fontWeight: FontWeight.bold)),
                   ),
@@ -2003,12 +2012,13 @@ class _CartFab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     return FloatingActionButton.extended(
       onPressed: onTap,
       backgroundColor: Colors.orange,
       icon: const Icon(Icons.shopping_bag_rounded, color: Colors.white),
       label: Text(
-        '$itemCount item${itemCount == 1 ? '' : 's'} · ${subtotal.toStringAsFixed(0)} TL',
+        loc.foodItemsFab(itemCount, subtotal.toStringAsFixed(0)),
         style:
             const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
       ),
@@ -2028,6 +2038,7 @@ class _CartBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     return DraggableScrollableSheet(
       initialChildSize: 0.55,
       minChildSize: 0.35,
@@ -2054,7 +2065,7 @@ class _CartBottomSheet extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: [
-                  Text('Your order',
+                  Text(loc.foodYourOrder,
                       style: Theme.of(context)
                           .textTheme
                           .titleMedium
@@ -2098,14 +2109,14 @@ class _CartBottomSheet extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Subtotal',
+                        Text(loc.foodSubtotal,
                             style: TextStyle(
                                 fontSize: 14,
                                 color: isDark
                                     ? Colors.grey[400]
                                     : Colors.grey[600])),
                         Text(
-                          '${cart.totals.subtotal.toStringAsFixed(2)} TL',
+                          loc.foodPriceTL(cart.totals.subtotal.toStringAsFixed(2)),
                           style: const TextStyle(
                               fontSize: 15, fontWeight: FontWeight.bold),
                         ),
@@ -2126,8 +2137,8 @@ class _CartBottomSheet extends StatelessWidget {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14)),
                         ),
-                        child: const Text('Proceed to Checkout',
-                            style: TextStyle(
+                        child: Text(loc.foodProceedToCheckout,
+                            style: const TextStyle(
                                 fontSize: 15, fontWeight: FontWeight.bold)),
                       ),
                     ),
@@ -2157,6 +2168,7 @@ class _CartItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final extrasTotal =
         item.extras.fold<double>(0, (s, e) => s + e.price * e.quantity);
     final total = (item.price + extrasTotal) * item.quantity;
@@ -2180,7 +2192,7 @@ class _CartItemRow extends StatelessWidget {
                         fontSize: 13, fontWeight: FontWeight.w600)),
                 if (item.extras.isNotEmpty)
                   Text(
-                    item.extras.map((e) => e.name).join(', '),
+                    item.extras.map((e) => localizeExtra(e.name, loc)).join(', '),
                     style: TextStyle(
                         fontSize: 11,
                         color: isDark ? Colors.grey[500] : Colors.grey[500]),
@@ -2188,7 +2200,7 @@ class _CartItemRow extends StatelessWidget {
               ],
             ),
           ),
-          Text('${total.toStringAsFixed(0)} TL',
+          Text(loc.foodPriceTL(total.toStringAsFixed(0)),
               style:
                   const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
         ],
@@ -2273,6 +2285,7 @@ class _EmptyMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -2280,13 +2293,13 @@ class _EmptyMenu extends StatelessWidget {
           Icon(Icons.no_food_rounded,
               size: 64, color: isDark ? Colors.grey[600] : Colors.grey[300]),
           const SizedBox(height: 16),
-          Text('No menu items',
+          Text(loc.foodNoMenuItems,
               style: Theme.of(context)
                   .textTheme
                   .titleMedium
                   ?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
-          Text('Check back later for new items.',
+          Text(loc.foodCheckBackLater,
               style: TextStyle(
                   fontSize: 13,
                   color: isDark ? Colors.grey[400] : Colors.grey[500])),
@@ -2310,20 +2323,21 @@ class _NoResults extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Text('🔍', style: TextStyle(fontSize: 48)),
           const SizedBox(height: 12),
-          Text('No results',
+          Text(loc.foodNoResults,
               style: Theme.of(context)
                   .textTheme
                   .titleMedium
                   ?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
           Text(
-            'Try a different search or category.',
+            loc.foodTryDifferentSearch,
             textAlign: TextAlign.center,
             style: TextStyle(
                 fontSize: 13,
@@ -2339,7 +2353,7 @@ class _NoResults extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('Clear all'),
+              child: Text(loc.foodClearAll),
             ),
           ],
         ],

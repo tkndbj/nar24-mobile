@@ -10,7 +10,9 @@ import 'package:provider/provider.dart';
 import '../../constants/foodData.dart';
 import '../../constants/foodExtras.dart';
 import '../../models/food.dart';
+import '../../generated/l10n/app_localizations.dart';
 import '../../providers/food_cart_provider.dart';
+import '../../utils/food_localization.dart';
 
 // ─── Route ────────────────────────────────────────────────────────────────────
 // GoRoute(
@@ -267,11 +269,12 @@ class _TitleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     return Row(
       children: [
         // Title
         Text(
-          'Food Cart',
+          loc.foodCartTitle,
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
@@ -288,7 +291,7 @@ class _TitleRow extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
-            '$itemCount ${itemCount == 1 ? 'item' : 'items'}',
+            loc.foodCartItemCount(itemCount),
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w500,
@@ -308,7 +311,7 @@ class _TitleRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              'Clear All',
+              loc.foodCartClearAll,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
@@ -341,6 +344,7 @@ class _RestaurantHeaderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF111827) : Colors.white,
@@ -399,7 +403,7 @@ class _RestaurantHeaderCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Ordering from this restaurant',
+                        loc.foodCartOrderingFrom,
                         style: TextStyle(
                           fontSize: 11,
                           color: isDark ? Colors.grey[500] : Colors.grey[600],
@@ -453,7 +457,7 @@ class _RestaurantHeaderCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   Text.rich(
                     TextSpan(
-                      text: 'Estimated preparation: ',
+                      text: '${loc.foodCartEstimatedPrep} ',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
@@ -461,7 +465,7 @@ class _RestaurantHeaderCard extends StatelessWidget {
                       ),
                       children: [
                         TextSpan(
-                          text: '~$prepTime min',
+                          text: loc.foodCartPrepTimeApprox(prepTime),
                           style: TextStyle(
                             color: isDark ? Colors.grey[300] : Colors.grey[600],
                           ),
@@ -514,17 +518,10 @@ class _FoodCartItemCard extends StatelessWidget {
 
   double get _lineTotal => (item.price + _extrasTotal) * item.quantity;
 
-  /// Mirrors getExtraName — looks up translation key then falls back to name
-  /// TODO: wire up AppLocalizations
-  String _extraName(String name) {
-    // final key = FoodExtrasData.kExtrasTranslationKeys[name];
-    // if (key == null) return name;
-    // return AppLocalizations.of(context)!.translate(key);
-    return name;
-  }
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     return AnimatedOpacity(
       opacity: (item.isOptimistic) ? 0.7 : 1.0,
       duration: const Duration(milliseconds: 200),
@@ -609,7 +606,7 @@ class _FoodCartItemCard extends StatelessWidget {
                           child: Row(
                             children: [
                               Text(
-                                '${_lineTotal.toStringAsFixed(2)} TL',
+                                loc.foodPriceTL(_lineTotal.toStringAsFixed(2)),
                                 style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,
@@ -671,7 +668,7 @@ class _FoodCartItemCard extends StatelessWidget {
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        'Edit',
+                                        loc.foodCartEdit,
                                         style: TextStyle(
                                           fontSize: 11,
                                           fontWeight: FontWeight.w500,
@@ -723,7 +720,7 @@ class _FoodCartItemCard extends StatelessWidget {
                                     fontSize: 10, color: Colors.orange)),
                             const SizedBox(width: 2),
                             Text(
-                              _extraName(ext.name),
+                              localizeExtra(ext.name, loc),
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w500,
@@ -747,7 +744,7 @@ class _FoodCartItemCard extends StatelessWidget {
                             if (ext.price > 0) ...[
                               const SizedBox(width: 3),
                               Text(
-                                '${ext.price.toStringAsFixed(0)} TL',
+                                loc.foodPriceTL(ext.price.toStringAsFixed(0)),
                                 style: TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.w600,
@@ -993,6 +990,7 @@ class _OrderSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF111827) : Colors.white,
@@ -1008,7 +1006,7 @@ class _OrderSummary extends StatelessWidget {
           children: [
             // Heading
             Text(
-              'Order Summary',
+              loc.foodCartOrderSummary,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
@@ -1073,7 +1071,7 @@ class _OrderSummary extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'TOTAL',
+                      loc.foodCartTotal,
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
@@ -1103,7 +1101,7 @@ class _OrderSummary extends StatelessWidget {
                 ),
                 const Spacer(),
                 Text(
-                  'Delivery fee at checkout',
+                  loc.foodCartDeliveryFeeNote,
                   style: TextStyle(
                     fontSize: 11,
                     color: isDark ? Colors.grey[600] : Colors.grey[600],
@@ -1130,9 +1128,9 @@ class _OrderSummary extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
-                      'Proceed to Checkout',
-                      style:
+                    Text(
+                      loc.foodProceedToCheckout,
+                      style: const
                           TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(width: 6),
@@ -1226,6 +1224,7 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     final isDark = widget.isDark;
     final selectedExtrasTotal = _checked.entries
         .where((e) => e.value)
@@ -1278,7 +1277,7 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
                                       fontWeight: FontWeight.bold)),
                             ),
                             Text(
-                              '${widget.item.price.toStringAsFixed(0)} TL',
+                              loc.foodPriceTL(widget.item.price.toStringAsFixed(0)),
                               style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -1293,7 +1292,7 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
                         // Quantity
                         Row(
                           children: [
-                            Text('Quantity',
+                            Text(loc.foodQuantityLabel,
                                 style: TextStyle(
                                     fontWeight: FontWeight.w600,
                                     color: isDark
@@ -1311,7 +1310,7 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
                         // Extras
                         if (_resolvedExtras.isNotEmpty) ...[
                           const SizedBox(height: 16),
-                          Text('Extras',
+                          Text(loc.foodExtrasLabel,
                               style: TextStyle(
                                   fontWeight: FontWeight.w600,
                                   color: isDark
@@ -1333,8 +1332,8 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
                                             : Colors.grey[900])),
                                 subtitle: Text(
                                     price > 0
-                                        ? '+${price.toStringAsFixed(0)} TL'
-                                        : 'Free',
+                                        ? loc.foodExtraPriceTL(price.toStringAsFixed(0))
+                                        : loc.foodFreeExtra,
                                     style: TextStyle(
                                         fontSize: 12,
                                         color: price > 0
@@ -1350,7 +1349,7 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
 
                         // Notes
                         const SizedBox(height: 16),
-                        Text('Special notes (optional)',
+                        Text(loc.foodSpecialNotes,
                             style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 color: isDark
@@ -1361,7 +1360,7 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
                           controller: _notesController,
                           maxLines: 2,
                           decoration: InputDecoration(
-                            hintText: 'E.g. no onions…',
+                            hintText: loc.foodNotesHint,
                             filled: true,
                             fillColor:
                                 isDark ? Colors.grey[800] : Colors.grey[50],
@@ -1412,7 +1411,7 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
                                 height: 20,
                                 child: CircularProgressIndicator(
                                     color: Colors.white, strokeWidth: 2))
-                            : Text('Update — ${total.toStringAsFixed(0)} TL',
+                            : Text('Update — ${loc.foodPriceTL(total.toStringAsFixed(0))}',
                                 style: const TextStyle(
                                     fontSize: 15, fontWeight: FontWeight.bold)),
                       ),
@@ -1476,6 +1475,7 @@ class _ClearCartDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     return GestureDetector(
       onTap: onCancel,
       child: Container(
@@ -1515,7 +1515,7 @@ class _ClearCartDialog extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Clear Food Cart?',
+                        loc.foodCartClearTitle,
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
@@ -1524,7 +1524,7 @@ class _ClearCartDialog extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'This will remove all items from your food cart.',
+                        loc.foodCartClearMessage,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 13,
@@ -1571,7 +1571,7 @@ class _ClearCartDialog extends StatelessWidget {
                             ),
                             alignment: Alignment.center,
                             child: Text(
-                              'Cancel',
+                              loc.cancel,
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -1596,9 +1596,9 @@ class _ClearCartDialog extends StatelessWidget {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             alignment: Alignment.center,
-                            child: const Text(
-                              'Clear Cart',
-                              style: TextStyle(
+                            child: Text(
+                              loc.foodCartClearButton,
+                              style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
@@ -1630,6 +1630,7 @@ class _EmptyCart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -1651,7 +1652,7 @@ class _EmptyCart extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             Text(
-              'Your food cart is empty',
+              loc.foodCartEmpty,
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.bold,
@@ -1660,7 +1661,7 @@ class _EmptyCart extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Browse restaurants and add delicious meals to your cart',
+              loc.foodCartBrowseMessage,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,

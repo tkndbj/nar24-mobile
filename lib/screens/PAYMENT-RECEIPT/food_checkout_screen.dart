@@ -6,9 +6,11 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../generated/l10n/app_localizations.dart';
 import '../../user_provider.dart';
 import '../../models/food_address.dart';
 import '../../providers/food_cart_provider.dart';
+import '../../utils/food_localization.dart';
 
 // =============================================================================
 // TYPES
@@ -84,7 +86,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
 
   bool _validateForm() {
     if (_deliveryType == DeliveryType.delivery && _getFoodAddress() == null) {
-      setState(() => _error = 'No delivery address set. Please add one first.');
+      setState(() => _error = AppLocalizations.of(context)!.foodCheckoutNoAddress);
       return false;
     }
     setState(() => _error = null);
@@ -161,7 +163,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
         }
       }
     } on FirebaseFunctionsException catch (e) {
-      if (mounted) setState(() => _error = e.message ?? 'An error occurred.');
+      if (mounted) setState(() => _error = e.message ?? AppLocalizations.of(context)!.foodCheckoutError);
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -235,6 +237,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final loc = AppLocalizations.of(context)!;
 
     return Consumer<FoodCartProvider>(
       builder: (context, cart, _) {
@@ -278,7 +281,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
               ListView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
                 children: [
-                  Text('Checkout',
+                  Text(loc.foodCheckoutTitle,
                       style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -296,7 +299,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
 
                   // Your Order
                   _Section(
-                    title: 'YOUR ORDER',
+                    title: loc.foodCheckoutYourOrder,
                     isDark: isDark,
                     child: Column(
                         children: cart.items
@@ -311,7 +314,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
 
                   // Delivery Method
                   _Section(
-                    title: 'DELIVERY METHOD',
+                    title: loc.foodCheckoutDeliveryMethod,
                     isDark: isDark,
                     child: Row(children: [
                       Expanded(
@@ -340,7 +343,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                   // Delivery Address — read-only from profile
                   if (_deliveryType == DeliveryType.delivery) ...[
                     _Section(
-                      title: 'DELIVERY ADDRESS',
+                      title: loc.foodCheckoutDeliveryAddress,
                       isDark: isDark,
                       child: _FoodAddressCard(
                           foodAddress: foodAddress, isDark: isDark),
@@ -350,7 +353,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
 
                   // Order Notes
                   _Section(
-                    title: 'ORDER NOTES',
+                    title: loc.foodCheckoutOrderNotes,
                     isDark: isDark,
                     child: TextField(
                       controller: _notesController,
@@ -358,7 +361,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                       maxLength: 1000,
                       onChanged: (v) => setState(() => _orderNotes = v),
                       decoration: InputDecoration(
-                        hintText: 'E.g. no spicy sauce, extra napkins…',
+                        hintText: loc.foodCheckoutOrderNotesHint,
                         hintStyle: TextStyle(
                             color: isDark ? Colors.grey[600] : Colors.grey[400],
                             fontSize: 13),
@@ -389,7 +392,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
 
                   // Payment Method
                   _Section(
-                    title: 'PAYMENT METHOD',
+                    title: loc.foodCheckoutPaymentMethod,
                     isDark: isDark,
                     child: Column(children: [
                       _PaymentMethodButton(
@@ -446,6 +449,7 @@ class _FoodAddressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     if (foodAddress != null) {
       final addr = foodAddress!;
       final cityLine = [addr.city, addr.mainRegion]
@@ -501,7 +505,7 @@ class _FoodAddressCard extends StatelessWidget {
           ])),
           GestureDetector(
             onTap: () => context.push('/food-address'),
-            child: Text('Change',
+            child: Text(loc.foodCheckoutChange,
                 style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
@@ -527,7 +531,7 @@ class _FoodAddressCard extends StatelessWidget {
             color: isDark ? Colors.grey[600] : Colors.grey[400]),
         const SizedBox(width: 12),
         Expanded(
-            child: Text('No delivery address set',
+            child: Text(loc.foodCheckoutNoAddressShort,
                 style: TextStyle(
                     fontSize: 13,
                     color: isDark ? Colors.grey[400] : Colors.grey[500]))),
@@ -538,8 +542,8 @@ class _FoodAddressCard extends StatelessWidget {
             decoration: BoxDecoration(
                 color: Colors.orange,
                 borderRadius: BorderRadius.circular(8)),
-            child: const Text('Add Address',
-                style: TextStyle(
+            child: Text(loc.foodCheckoutAddAddress,
+                style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                     color: Colors.white)),
@@ -563,6 +567,7 @@ class _RestaurantInfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -602,7 +607,7 @@ class _RestaurantInfoRow extends StatelessWidget {
                   size: 12,
                   color: isDark ? Colors.grey[500] : Colors.grey[600]),
               const SizedBox(width: 4),
-              Text('~$prepTime min prep time',
+              Text(loc.foodCheckoutPrepTime(prepTime),
                   style: TextStyle(
                       fontSize: 11,
                       color: isDark ? Colors.grey[500] : Colors.grey[700])),
@@ -663,6 +668,7 @@ class _CartItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     final extrasTotal =
         item.extras.fold<double>(0, (s, e) => s + e.price * e.quantity);
     final lineTotal = (item.price + extrasTotal) * item.quantity;
@@ -710,7 +716,7 @@ class _CartItemRow extends StatelessWidget {
                         size: 14,
                         color: isDark ? Colors.grey[500] : Colors.grey[400]))),
           ]),
-          Text(item.foodType,
+          Text(localizeFoodType(item.foodType, loc),
               style: TextStyle(
                   fontSize: 11,
                   color: isDark ? Colors.grey[500] : Colors.grey[700])),
@@ -729,7 +735,7 @@ class _CartItemRow extends StatelessWidget {
                                       ? Colors.orange.withOpacity(0.15)
                                       : Colors.orange[50],
                                   borderRadius: BorderRadius.circular(20)),
-                              child: Text(e.name,
+                              child: Text(localizeExtra(e.name, loc),
                                   style: TextStyle(
                                       fontSize: 10,
                                       color: isDark
@@ -764,7 +770,7 @@ class _CartItemRow extends StatelessWidget {
                 onIncrease: () =>
                     cart.updateQuantity(item.foodId, item.quantity + 1)),
             const Spacer(),
-            Text('${lineTotal.toStringAsFixed(0)} TL',
+            Text(loc.foodPriceTL(lineTotal.toStringAsFixed(0)),
                 style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
@@ -855,6 +861,7 @@ class _DeliveryTypeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     final isDelivery = type == DeliveryType.delivery;
     return GestureDetector(
       onTap: onTap,
@@ -883,7 +890,7 @@ class _DeliveryTypeButton extends StatelessWidget {
                   ? Colors.orange
                   : (isDark ? Colors.grey[500] : Colors.grey[400])),
           const SizedBox(width: 8),
-          Text(isDelivery ? 'Delivery' : 'Pickup',
+          Text(isDelivery ? loc.foodCheckoutDelivery : loc.foodCheckoutPickup,
               style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
@@ -912,6 +919,7 @@ class _PaymentMethodButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     final isPay = method == PaymentMethod.payAtDoor;
     return GestureDetector(
       onTap: onTap,
@@ -952,7 +960,7 @@ class _PaymentMethodButton extends StatelessWidget {
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                Text(isPay ? 'Pay at Door' : 'Credit / Debit Card',
+                Text(isPay ? loc.foodCheckoutPayAtDoor : loc.foodCheckoutCreditCard,
                     style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -963,8 +971,8 @@ class _PaymentMethodButton extends StatelessWidget {
                             : (isDark ? Colors.grey[200] : Colors.grey[800]))),
                 Text(
                     isPay
-                        ? 'Pay with cash when your order arrives'
-                        : 'Secure online payment via İşbank 3D',
+                        ? loc.foodCheckoutPayCash
+                        : loc.foodCheckoutSecurePayment,
                     style: TextStyle(
                         fontSize: 11,
                         color:
@@ -1001,6 +1009,7 @@ class _StickyBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     final canSubmit = isFormValid && !isSubmitting;
     final isCard = paymentMethod == PaymentMethod.card;
     return Container(
@@ -1039,11 +1048,11 @@ class _StickyBottomBar extends StatelessWidget {
               )),
         Row(children: [
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Total ($itemCount item${itemCount == 1 ? '' : 's'})',
+            Text(loc.foodCheckoutTotalItems(itemCount),
                 style: TextStyle(
                     fontSize: 11,
                     color: isDark ? Colors.grey[500] : Colors.grey[700])),
-            Text('${subtotal.toStringAsFixed(0)} $currency',
+            Text(loc.foodPriceTL(subtotal.toStringAsFixed(0)),
                 style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -1076,7 +1085,7 @@ class _StickyBottomBar extends StatelessWidget {
                             : Icons.shopping_bag_rounded,
                         size: 16),
                     const SizedBox(width: 8),
-                    Text(isCard ? 'Pay Now' : 'Place Order',
+                    Text(isCard ? loc.foodCheckoutPayNow : loc.foodCheckoutPlaceOrder,
                         style: const TextStyle(
                             fontSize: 13, fontWeight: FontWeight.bold)),
                   ]),
@@ -1102,6 +1111,7 @@ class _OrderSuccessScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor:
           isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
@@ -1127,13 +1137,13 @@ class _OrderSuccessScreen extends StatelessWidget {
                 child: const Icon(Icons.check_circle_rounded,
                     size: 32, color: Colors.green)),
             const SizedBox(height: 16),
-            Text('Order Placed!',
+            Text(loc.foodCheckoutOrderPlaced,
                 style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                     color: isDark ? Colors.white : Colors.grey[900])),
             const SizedBox(height: 6),
-            Text('Your order has been confirmed.',
+            Text(loc.foodCheckoutOrderConfirmed,
                 style: TextStyle(
                     fontSize: 13,
                     color: isDark ? Colors.grey[400] : Colors.grey[500]),
@@ -1153,7 +1163,7 @@ class _OrderSuccessScreen extends StatelessWidget {
                         size: 14,
                         color: isDark ? Colors.orange[400] : Colors.orange[600]),
                     const SizedBox(width: 6),
-                    Text('~$estimatedPrepTime min',
+                    Text(loc.foodCartPrepTimeApprox(estimatedPrepTime),
                         style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
@@ -1164,7 +1174,7 @@ class _OrderSuccessScreen extends StatelessWidget {
             ],
             const SizedBox(height: 8),
             Text(
-                'Order: ${orderId.substring(0, orderId.length.clamp(0, 8)).toUpperCase()}',
+                loc.foodCheckoutOrderId(orderId.substring(0, orderId.length.clamp(0, 8)).toUpperCase()),
                 style: TextStyle(
                     fontSize: 11,
                     color: isDark ? Colors.grey[600] : Colors.grey[400])),
@@ -1180,8 +1190,8 @@ class _OrderSuccessScreen extends StatelessWidget {
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12))),
-                    child: const Text('View My Orders',
-                        style: TextStyle(fontWeight: FontWeight.bold)))),
+                    child: Text(loc.foodCheckoutViewOrders,
+                        style: const TextStyle(fontWeight: FontWeight.bold)))),
             const SizedBox(height: 8),
             SizedBox(
                 width: double.infinity,
@@ -1195,7 +1205,7 @@ class _OrderSuccessScreen extends StatelessWidget {
                                 : Colors.grey[300]!),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12))),
-                    child: Text('Back to Restaurants',
+                    child: Text(loc.backToRestaurants,
                         style: TextStyle(
                             color: isDark ? Colors.grey[300] : Colors.grey[700],
                             fontWeight: FontWeight.w500)))),
@@ -1215,6 +1225,7 @@ class _EmptyCartScreen extends StatelessWidget {
   const _EmptyCartScreen({required this.isDark});
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor:
           isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
@@ -1224,13 +1235,13 @@ class _EmptyCartScreen extends StatelessWidget {
         Icon(Icons.shopping_bag_outlined,
             size: 64, color: isDark ? Colors.grey[600] : Colors.grey[300]),
         const SizedBox(height: 16),
-        Text('Your cart is empty',
+        Text(loc.foodCheckoutCartEmpty,
             style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
                 color: isDark ? Colors.white : Colors.grey[900])),
         const SizedBox(height: 6),
-        Text('Add items from a restaurant to checkout',
+        Text(loc.foodCheckoutAddItems,
             style: TextStyle(
                 fontSize: 13,
                 color: isDark ? Colors.grey[400] : Colors.grey[500])),
@@ -1245,8 +1256,8 @@ class _EmptyCartScreen extends StatelessWidget {
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12))),
-            child: const Text('Browse Restaurants',
-                style: TextStyle(fontWeight: FontWeight.w600))),
+            child: Text(loc.foodCheckoutBrowse,
+                style: const TextStyle(fontWeight: FontWeight.w600))),
       ]))),
     );
   }

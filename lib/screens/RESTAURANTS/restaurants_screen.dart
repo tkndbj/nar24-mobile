@@ -20,6 +20,7 @@ import '../../services/restaurant_typesense_service.dart';
 import '../../auth_service.dart';
 import '../../widgets/login_modal.dart';
 import '../../widgets/restaurants/food_location_picker.dart';
+import '../../utils/food_localization.dart';
 
 // ─── Banner images ───────────────────────────────────────────────────────────
 // Add these to pubspec.yaml under flutter: assets:
@@ -318,6 +319,7 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final rawFoodAddress =
@@ -351,7 +353,7 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                   slivers: [
                     // ── App bar ──────────────────────────────────────────
                     SliverAppBar(
-                      title: const Text('Restaurants'),
+                      title: Text(loc.restaurantsTitle),
                       floating: true,
                       snap: true,
                       backgroundColor: isDark ? const Color(0xFF030712) : const Color(0xFFE5E7EB),
@@ -381,13 +383,13 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Restaurants', // TODO: localize
+                                        loc.restaurantsTitle,
                                         style: theme.textTheme.headlineSmall
                                             ?.copyWith(
                                                 fontWeight: FontWeight.bold),
                                       ),
                                       Text(
-                                        'Discover nearby restaurants',
+                                        loc.discoverNearbyRestaurants,
                                         style: theme.textTheme.bodySmall
                                             ?.copyWith(
                                                 color: isDark
@@ -500,7 +502,7 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                             _SearchBar(
                               controller: _searchController,
                               isDark: isDark,
-                              hint: 'Search restaurants…',
+                              hint: loc.searchRestaurantsHint,
                             ),
                             const SizedBox(height: 12),
                           ],
@@ -643,9 +645,9 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                       SliverFillRemaining(
                         child: _EmptyState(
                           emoji: '🍽️',
-                          title: 'No restaurants yet',
+                          title: loc.noRestaurantsYet,
                           subtitle:
-                              'Check back soon for new restaurant listings.',
+                              loc.checkBackSoonRestaurants,
                         ),
                       )
                     else
@@ -653,10 +655,10 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                       SliverFillRemaining(
                         child: _EmptyState(
                           emoji: '🔍',
-                          title: 'No results',
+                          title: loc.foodNoResults,
                           subtitle:
-                              'Try a different cuisine type or search term.',
-                          actionLabel: 'Clear filters',
+                              loc.tryDifferentCuisine,
+                          actionLabel: loc.clearFilters,
                           onAction: _clearFilters,
                         ),
                       ),
@@ -846,6 +848,7 @@ class _CuisinePillRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     return SizedBox(
       height: 44,
       child: ListView(
@@ -854,7 +857,7 @@ class _CuisinePillRow extends StatelessWidget {
         children: [
           // "All" pill
           _CuisinePill(
-            label: 'All',
+            label: loc.allCuisines,
             isActive: selected == null,
             isDark: isDark,
             onTap: () => onSelect(null),
@@ -1048,7 +1051,7 @@ class _FoodTypeIconRow extends StatelessWidget {
                     SizedBox(
                       width: 56,
                       child: Text(
-                        category,
+                        localizeCategory(category, AppLocalizations.of(context)),
                         textAlign: TextAlign.center,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1094,6 +1097,7 @@ class _RestaurantCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final isOpen = isRestaurantOpen(restaurant);
     final theme = Theme.of(context);
 
@@ -1151,7 +1155,7 @@ class _RestaurantCard extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(
-                        restaurant.cuisineTypes!.join(', '),
+                        localizeCuisines(restaurant.cuisineTypes!, AppLocalizations.of(context)),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: isDark ? Colors.grey[400] : Colors.grey[600],
                         ),
@@ -1179,7 +1183,7 @@ class _RestaurantCard extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
-                                  ft,
+                                  localizeFoodType(ft, AppLocalizations.of(context)),
                                   style: TextStyle(
                                     fontSize: 10,
                                     color: isDark
@@ -1239,8 +1243,8 @@ class _RestaurantCard extends StatelessWidget {
                       color: Colors.red.withOpacity(0.9),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Text(
-                      'Closed',
+                    child: Text(
+                      loc.closedLabel,
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
@@ -1390,14 +1394,15 @@ class _SortButton extends StatelessWidget {
     required this.onTap,
   });
 
-  String get _label {
+  String _label(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     switch (sortOption) {
       case RestaurantSortOption.ratingDesc:
-        return '★ High';
+        return loc.sortHighRating;
       case RestaurantSortOption.ratingAsc:
-        return '★ Low';
+        return loc.sortLowRating;
       default:
-        return 'Sort';
+        return loc.sortLabel;
     }
   }
 
@@ -1439,7 +1444,7 @@ class _SortButton extends StatelessWidget {
             ),
             const SizedBox(width: 4),
             Text(
-              _label,
+              _label(context),
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,

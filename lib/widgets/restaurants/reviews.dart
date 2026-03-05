@@ -5,6 +5,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../generated/l10n/app_localizations.dart';
+
 const _kPageSize = 20;
 
 // =============================================================================
@@ -208,10 +210,10 @@ class _ReviewCard extends StatelessWidget {
   }
 
   /// Mirrors timeAgo — relative time string
-  String _timeAgo(Timestamp ts) {
+  String _timeAgo(Timestamp ts, String justNowText) {
     final diff = DateTime.now().difference(ts.toDate());
     final mins = diff.inMinutes;
-    if (mins < 1) return 'Just now';
+    if (mins < 1) return justNowText;
     if (mins < 60) return '${mins}m';
     final hours = diff.inHours;
     if (hours < 24) return '${hours}h';
@@ -225,12 +227,13 @@ class _ReviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final displayName = review.buyerName != null && review.buyerName!.isNotEmpty
         ? _maskName(review.buyerName!)
-        : 'Anonymous';
+        : loc.anonymous;
 
     final timeText =
-        review.timestamp != null ? _timeAgo(review.timestamp!) : '';
+        review.timestamp != null ? _timeAgo(review.timestamp!, loc.foodReviewJustNow) : '';
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -345,6 +348,7 @@ class _LoadMoreButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     return GestureDetector(
       onTap: isLoadingMore ? null : onTap,
       child: AnimatedOpacity(
@@ -380,7 +384,7 @@ class _LoadMoreButton extends StatelessWidget {
                 ),
               const SizedBox(width: 8),
               Text(
-                isLoadingMore ? 'Loading…' : 'Load more',
+                isLoadingMore ? loc.foodReviewLoading : loc.foodReviewLoadMore,
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
@@ -483,6 +487,7 @@ class _EmptyReviews extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -502,7 +507,7 @@ class _EmptyReviews extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'No reviews yet',
+            loc.foodReviewNoReviews,
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -511,7 +516,7 @@ class _EmptyReviews extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Be the first to leave a review after ordering.',
+            loc.foodReviewBeFirst,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13,

@@ -8,7 +8,6 @@ import 'dart:async';
 import 'dart:collection';
 import '../services/analytics_service.dart';
 
-
 class SellerPanelProvider with ChangeNotifier {
   final FirebaseAuth _firebaseAuth;
   final FirebaseFirestore _firestore;
@@ -48,6 +47,15 @@ class SellerPanelProvider with ChangeNotifier {
   final ValueNotifier<bool> _isLoadingMoreSearchResultsNotifier =
       ValueNotifier(false);
 
+  final Map<String, String> _shopBusinessTypes = {};
+
+// Getter
+  String getShopBusinessType(String shopId) =>
+      _shopBusinessTypes[shopId] ?? 'shop';
+
+  String get selectedShopBusinessType =>
+      _shopBusinessTypes[_selectedShop?.id ?? ''] ?? 'shop';
+
   Timer? _searchDebounceTimer;
   int _currentSearchPage = 0;
   bool _hasMoreSearchResults = true;
@@ -74,7 +82,8 @@ class SellerPanelProvider with ChangeNotifier {
 
   // Typesense page-based pagination for stock
   int _currentStockPage = 0;
-  bool _hasMoreStockProducts = true;  Map<String, dynamic>? _activeCampaign;
+  bool _hasMoreStockProducts = true;
+  Map<String, dynamic>? _activeCampaign;
   bool _campaignDismissed = false;
 
   // Flag to request showing seller info modal on dashboard tab
@@ -351,6 +360,7 @@ class SellerPanelProvider with ChangeNotifier {
     _shopNotificationsSub = null;
     _currentNotificationShopId = null;
     _unreadNotificationCountNotifier.value = 0;
+    _shopBusinessTypes.clear();
     _shops = [];
     _selectedShop = null;
     _products = [];
@@ -566,34 +576,34 @@ class SellerPanelProvider with ChangeNotifier {
   }
 
   // In SellerPanelProvider.initialize():
- Future<void> initialize() async {
-  if (_initInFlight) return;
-  _initInFlight = true;
+  Future<void> initialize() async {
+    if (_initInFlight) return;
+    _initInFlight = true;
 
-  try {
-    // Always force-refresh token on seller panel entry to pick up
-    // any claim changes that happened on other platforms (e.g. web)
-    await _firebaseAuth.currentUser?.getIdToken(true);
+    try {
+      // Always force-refresh token on seller panel entry to pick up
+      // any claim changes that happened on other platforms (e.g. web)
+      await _firebaseAuth.currentUser?.getIdToken(true);
 
-    await fetchShops().timeout(
-      const Duration(seconds: 10),
-      onTimeout: () {
-        debugPrint('⚠️ Shop fetch timed out during initialization');
-        _shops = [];
-        _isLoadingShops = false;
+      await fetchShops().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          debugPrint('⚠️ Shop fetch timed out during initialization');
+          _shops = [];
+          _isLoadingShops = false;
+          notifyListeners();
+        },
+      );
+
+      if (_selectedShop == null && _shops.isNotEmpty) {
+        _selectedShop = _shops.first;
         notifyListeners();
-      },
-    );
-
-    if (_selectedShop == null && _shops.isNotEmpty) {
-      _selectedShop = _shops.first;
-      notifyListeners();
-      _warmupForSelectedShop();
+        _warmupForSelectedShop();
+      }
+    } finally {
+      _initInFlight = false;
     }
-  } finally {
-    _initInFlight = false;
   }
-}
 
   Future<void> fetchActiveCampaigns() async {
     try {
@@ -1145,42 +1155,50 @@ class SellerPanelProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      // ✅ OPTIMIZATION: Apply retry logic with exponential backoff for all shop queries
-      final queries = await AnalyticsService.trackRead(
-        operation: 'seller_fetch_all_shops',
-        execute: () => _retryWithBackoff(
-          () => Future.wait([
-            _firestore
-                .collection('shops')
-                .where('ownerId', isEqualTo: userId)
-                .get(),
-            _firestore
-                .collection('shops')
-                .where('editors', arrayContains: userId)
-                .get(),
-            _firestore
-                .collection('shops')
-                .where('coOwners', arrayContains: userId)
-                .get(),
-            _firestore
-                .collection('shops')
-                .where('viewers', arrayContains: userId)
-                .get(),
-          ]),
-          operationKey: 'fetchShops',
-        ),
-        metadata: {'query_count': 4, 'has_retry': true},
-      );
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final data = userDoc.data() ?? {};
 
-      final shops = queries.fold<List<DocumentSnapshot>>([], (acc, snapshot) {
-        acc.addAll(snapshot.docs);
-        return acc;
-      });
+      final memberOfShops =
+          (data['memberOfShops'] as Map<String, dynamic>?) ?? {};
+      final memberOfRestaurants =
+          (data['memberOfRestaurants'] as Map<String, dynamic>?) ?? {};
 
-      // De-dupe and assign
-      _shops = {for (final doc in shops) doc.id: doc}.values.toList();
+      if (memberOfShops.isEmpty && memberOfRestaurants.isEmpty) {
+        _shops = [];
+        return;
+      }
 
-      // If we don't have a selected shop yet, pick the first now that we surely have the list
+      Future<List<DocumentSnapshot>> batchFetch(
+          String collection, List<String> ids) async {
+        if (ids.isEmpty) return [];
+        final chunks = [
+          for (int i = 0; i < ids.length; i += 10) ids.skip(i).take(10).toList()
+        ];
+        final results = await Future.wait(
+          chunks.map((chunk) => _firestore
+              .collection(collection)
+              .where(FieldPath.documentId, whereIn: chunk)
+              .get()),
+        );
+        return results.expand((snap) => snap.docs).toList();
+      }
+
+      final (shopDocs, restaurantDocs) = await (
+        batchFetch('shops', memberOfShops.keys.toList()),
+        batchFetch('restaurants', memberOfRestaurants.keys.toList()),
+      ).wait;
+
+      // ✅ Tag each doc with its business type
+      _shopBusinessTypes.clear();
+      for (final doc in shopDocs) {
+        _shopBusinessTypes[doc.id] = 'shop';
+      }
+      for (final doc in restaurantDocs) {
+        _shopBusinessTypes[doc.id] = 'restaurant';
+      }
+
+      _shops = [...shopDocs, ...restaurantDocs];
+
       if (_selectedShop == null && _shops.isNotEmpty) {
         _selectedShop = _shops.first;
       }
@@ -1402,11 +1420,11 @@ class SellerPanelProvider with ChangeNotifier {
   }
 
   Future<void> fetchProducts({String? shopId, bool loadMore = false}) async {
-     final effectiveShopId = shopId ?? _selectedShop?.id;
-if (effectiveShopId == null) {
-  debugPrint('❌ fetchProducts called with no shopId');
-  return;
-}
+    final effectiveShopId = shopId ?? _selectedShop?.id;
+    if (effectiveShopId == null) {
+      debugPrint('❌ fetchProducts called with no shopId');
+      return;
+    }
     final myQueryId = ++_activeProductQueryId;
 
     if (loadMore) {
@@ -1425,12 +1443,11 @@ if (effectiveShopId == null) {
 
     try {
       // Determine Typesense index and owner filter
-   
 
-final indexName = 'shop_products';
-final filters = [
-  ['shopId:$effectiveShopId']
-];
+      final indexName = 'shop_products';
+      final filters = [
+        ['shopId:$effectiveShopId']
+      ];
 
       // Category filtering via Typesense facets
       if (_selectedCategory != null) {
@@ -1497,68 +1514,71 @@ final filters = [
     await fetchProducts(shopId: shopId, loadMore: true);
   }
 
- Future<void> fetchTransactions({
-  String? shopId,
-  bool forceRefresh = false,
-  bool loadMore = false,
-  DateTime? startDate,
-  DateTime? endDate,
-}) async {
-  if (_firebaseAuth.currentUser == null) return;
+  Future<void> fetchTransactions({
+    String? shopId,
+    bool forceRefresh = false,
+    bool loadMore = false,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    if (_firebaseAuth.currentUser == null) return;
 
-  final effectiveShopId = shopId ?? _selectedShop?.id;
-  if (effectiveShopId == null) return;
+    final effectiveShopId = shopId ?? _selectedShop?.id;
+    if (effectiveShopId == null) return;
 
-  // ✅ ADD: Skip if already loaded and no refresh requested
-  if (!forceRefresh && !loadMore && _transactions.isNotEmpty) return;
-
-  if (loadMore) {
-    _isLoadingMoreTransactionsNotifier.value = true;
-  } else {
-    _isLoadingTransactionsNotifier.value = true;
-    _transactions = [];
-    _filteredTransactionsNotifier.value = [];
-    // ✅ REMOVE: _currentTransactionPage = 0; (dead code, using cursor now)
-    _hasMoreTransactions = true;
-    _lastTransactionDoc = null;
-  }
-
-  try {
-    Query query = _firestore.collectionGroup('items')
-        .where('shopId', isEqualTo: effectiveShopId);
-
-    if (startDate != null) {
-      query = query.where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate));
-    }
-    if (endDate != null) {
-      query = query.where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(endDate));
-    }
-
-    query = query.orderBy('timestamp', descending: true).limit(20);
-
-    if (loadMore && _lastTransactionDoc != null) {
-      query = query.startAfterDocument(_lastTransactionDoc!);
-    }
-
-    final snap = await query.get();
+    // ✅ ADD: Skip if already loaded and no refresh requested
+    if (!forceRefresh && !loadMore && _transactions.isNotEmpty) return;
 
     if (loadMore) {
-      _transactions.addAll(snap.docs);
+      _isLoadingMoreTransactionsNotifier.value = true;
     } else {
-      _transactions = snap.docs;
+      _isLoadingTransactionsNotifier.value = true;
+      _transactions = [];
+      _filteredTransactionsNotifier.value = [];
+      // ✅ REMOVE: _currentTransactionPage = 0; (dead code, using cursor now)
+      _hasMoreTransactions = true;
+      _lastTransactionDoc = null;
     }
 
-    _lastTransactionDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
-    _hasMoreTransactions = snap.docs.length == 20;
-    _updateFilteredTransactions();
-    notifyListeners();
-  } catch (e) {
-    debugPrint('Error fetching transactions: $e');
-  } finally {
-    _isLoadingTransactionsNotifier.value = false;
-    _isLoadingMoreTransactionsNotifier.value = false;
+    try {
+      Query query = _firestore
+          .collectionGroup('items')
+          .where('shopId', isEqualTo: effectiveShopId);
+
+      if (startDate != null) {
+        query = query.where('timestamp',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(startDate));
+      }
+      if (endDate != null) {
+        query = query.where('timestamp',
+            isLessThanOrEqualTo: Timestamp.fromDate(endDate));
+      }
+
+      query = query.orderBy('timestamp', descending: true).limit(20);
+
+      if (loadMore && _lastTransactionDoc != null) {
+        query = query.startAfterDocument(_lastTransactionDoc!);
+      }
+
+      final snap = await query.get();
+
+      if (loadMore) {
+        _transactions.addAll(snap.docs);
+      } else {
+        _transactions = snap.docs;
+      }
+
+      _lastTransactionDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
+      _hasMoreTransactions = snap.docs.length == 20;
+      _updateFilteredTransactions();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error fetching transactions: $e');
+    } finally {
+      _isLoadingTransactionsNotifier.value = false;
+      _isLoadingMoreTransactionsNotifier.value = false;
+    }
   }
-}
 
   Future<void> fetchMoreTransactions({String? shopId}) async {
     if (!_hasMoreTransactions || _isLoadingMoreTransactionsNotifier.value)
@@ -1803,9 +1823,13 @@ final filters = [
 
       _currentNotificationShopId = shopId;
 
+      final isRestaurant = getShopBusinessType(shopId) == 'restaurant';
+      final collection = isRestaurant ? 'restaurant_notifications' : 'shop_notifications';
+      final idField = isRestaurant ? 'restaurantId' : 'shopId';
+
       _shopNotificationsSub = _firestore
-          .collection('shop_notifications')
-          .where('shopId', isEqualTo: shopId)
+          .collection(collection)
+          .where(idField, isEqualTo: shopId)
           .orderBy('timestamp', descending: true)
           .limit(100) // Limit to recent notifications for efficiency
           .snapshots()
@@ -1886,7 +1910,7 @@ final filters = [
     _currentStockPage = 0;
     _hasMoreStockProducts = true;
     _productMap.clear();
-      _lastTransactionDoc = null;
+    _lastTransactionDoc = null;
 
     // Cache state
     _productImageCache.clear();
@@ -2022,8 +2046,8 @@ final filters = [
       _products[idx] = resolved;
 
       // Update products/ads tab
-      final filteredIndex = _filteredProductsNotifier.value
-          .indexWhere((p) => p.id == productId);
+      final filteredIndex =
+          _filteredProductsNotifier.value.indexWhere((p) => p.id == productId);
       if (filteredIndex != -1) {
         final updatedFiltered =
             List<Product>.from(_filteredProductsNotifier.value);

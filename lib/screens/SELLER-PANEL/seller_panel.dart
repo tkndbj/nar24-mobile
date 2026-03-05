@@ -15,6 +15,10 @@ import '../../widgets/sellerpanel/ads_tab.dart';
 import '../../providers/seller_panel_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
+import '../../widgets/sellerpanel/restaurant_dashboard.dart';
+import '../../widgets/sellerpanel/food_orders.dart';
+import '../../widgets/sellerpanel/restaurant_reviews_tab.dart';
+import '../../widgets/sellerpanel/restaurant_settings_tab.dart';
 
 class SellerPanel extends StatefulWidget {
   final int initialTabIndex;
@@ -52,6 +56,7 @@ class _SellerPanelState extends State<SellerPanel>
         final provider =
             Provider.of<SellerPanelProvider>(context, listen: false);
         provider.resetState();
+        _lastSyncedBusinessType = null; // ← ADD THIS
         setState(() {
           _initializationFuture = _initializeProvider();
         });
@@ -116,10 +121,12 @@ class _SellerPanelState extends State<SellerPanel>
                     color: const Color(0xFFFF6200).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(
-                    Icons.store_rounded,
+                  child: Icon(
+                    provider.selectedShopBusinessType == 'restaurant'
+                        ? Icons.restaurant_rounded
+                        : Icons.store_rounded,
                     size: 16,
-                    color: Color(0xFFFF6200),
+                    color: const Color(0xFFFF6200),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -198,6 +205,8 @@ class _SellerPanelState extends State<SellerPanel>
             ...provider.shops.map((shop) {
               final shopData = shop.data() as Map<String, dynamic>;
               final isSelected = provider.selectedShop?.id == shop.id;
+              final businessType = provider.getShopBusinessType(shop.id);
+              final isRestaurant = businessType == 'restaurant';
               return Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 decoration: BoxDecoration(
@@ -215,9 +224,10 @@ class _SellerPanelState extends State<SellerPanel>
                   color: Colors.transparent,
                   child: InkWell(
                     borderRadius: BorderRadius.circular(12),
-                    onTap: () {
-                      provider.switchShop(shop.id);
+                    onTap: () async {
                       Navigator.pop(context);
+                      await provider
+                          .switchShop(shop.id); // pop first, then switch
                     },
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -232,7 +242,9 @@ class _SellerPanelState extends State<SellerPanel>
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Icon(
-                              Icons.store_rounded,
+                              isRestaurant
+                                  ? Icons.restaurant_rounded
+                                  : Icons.store_rounded,
                               size: 20,
                               color:
                                   isSelected ? Colors.white : Colors.grey[600],
@@ -240,15 +252,40 @@ class _SellerPanelState extends State<SellerPanel>
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: Text(
-                              shopData['name'] ?? 'Unnamed Shop',
-                              style: GoogleFonts.inter(
-                                fontWeight: isSelected
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
-                                color:
-                                    isSelected ? const Color(0xFFFF6200) : null,
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  shopData['name'] ?? 'Unnamed',
+                                  style: GoogleFonts.inter(
+                                    fontWeight: isSelected
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
+                                    color: isSelected
+                                        ? const Color(0xFFFF6200)
+                                        : null,
+                                  ),
+                                ),
+                                if (isRestaurant) ...[
+                                  const SizedBox(height: 2),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      'Restaurant',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.orange[700],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
                           if (isSelected)
@@ -263,7 +300,7 @@ class _SellerPanelState extends State<SellerPanel>
                   ),
                 ),
               );
-            }).toList(),
+            }),
             SafeArea(
               top: false,
               child: const SizedBox(height: 16),
@@ -364,6 +401,7 @@ class _SellerPanelState extends State<SellerPanel>
       builder: (context) => _ShopNotificationsBottomSheet(
         shopId: provider.selectedShop!.id,
         tabController: _tabController,
+        businessType: provider.selectedShopBusinessType,
       ),
     );
   }
@@ -430,7 +468,6 @@ class _SellerPanelState extends State<SellerPanel>
                 ),
               ),
             ),
-            // Hide Shop Settings for viewers
             if (!isViewer)
               _buildMenuOption(
                 icon: Icons.settings_rounded,
@@ -441,7 +478,6 @@ class _SellerPanelState extends State<SellerPanel>
                       '/seller_panel_shop_settings/${provider.selectedShop!.id}');
                 },
               ),
-            // Hide User Permissions for viewers
             if (!isViewer)
               _buildMenuOption(
                 icon: Icons.people_rounded,
@@ -466,8 +502,7 @@ class _SellerPanelState extends State<SellerPanel>
             _buildMenuOption(
               icon: Icons.star_outline_rounded,
               title: AppLocalizations.of(context).reviews,
-              hasNotification:
-                  true, // You mentioned this always shows notification
+              hasNotification: true,
               notificationColor: Colors.orange,
               onTap: () {
                 Navigator.pop(context);
@@ -564,9 +599,9 @@ class _SellerPanelState extends State<SellerPanel>
   }
 
   Widget _buildModernTabBar(SellerPanelProvider provider) {
-    // Detect tablet for centering tabs
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth >= 600;
+    final isRestaurant = provider.selectedShopBusinessType == 'restaurant';
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -584,15 +619,14 @@ class _SellerPanelState extends State<SellerPanel>
         dividerColor: Colors.transparent,
         indicator: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFF667EEA), Color(0xFF764BA2)], // NEW COLORS
+            colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(8),
           boxShadow: [
             BoxShadow(
-              color:
-                  const Color(0xFF667EEA).withOpacity(0.3), // NEW SHADOW COLOR
+              color: const Color(0xFF667EEA).withOpacity(0.3),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -612,24 +646,31 @@ class _SellerPanelState extends State<SellerPanel>
         ),
         overlayColor: WidgetStateProperty.all(Colors.transparent),
         indicatorSize: TabBarIndicatorSize.tab,
-        tabs: [
-          _buildModernTab(
-              AppLocalizations.of(context).dashboard, Icons.dashboard_rounded),
-          _buildModernTab(
-              AppLocalizations.of(context).products, Icons.inventory_2_rounded),
-          _buildModernTab(
-            AppLocalizations.of(context).stock,
-            Icons.warehouse_rounded,
-          ),
-          _buildModernTab(
-            AppLocalizations.of(context).transactions,
-            Icons.receipt_long_rounded,
-          ),
-          _buildModernTab(AppLocalizations.of(context).shipments,
-              Icons.local_shipping_rounded),
-          _buildModernTab(
-              AppLocalizations.of(context).ads, Icons.campaign_rounded),
-        ],
+        tabs: isRestaurant
+            ? [
+                _buildModernTab(AppLocalizations.of(context).dashboard,
+                    Icons.dashboard_rounded),
+                _buildModernTab(AppLocalizations.of(context).orders,
+                    Icons.receipt_long_rounded),
+                _buildModernTab(AppLocalizations.of(context).reviews,
+                    Icons.star_outline_rounded),
+                _buildModernTab(AppLocalizations.of(context).settings,
+                    Icons.settings_rounded),
+              ]
+            : [
+                _buildModernTab(AppLocalizations.of(context).dashboard,
+                    Icons.dashboard_rounded),
+                _buildModernTab(AppLocalizations.of(context).products,
+                    Icons.inventory_2_rounded),
+                _buildModernTab(AppLocalizations.of(context).stock,
+                    Icons.warehouse_rounded),
+                _buildModernTab(AppLocalizations.of(context).transactions,
+                    Icons.receipt_long_rounded),
+                _buildModernTab(AppLocalizations.of(context).shipments,
+                    Icons.local_shipping_rounded),
+                _buildModernTab(
+                    AppLocalizations.of(context).ads, Icons.campaign_rounded),
+              ],
       ),
     );
   }
@@ -673,6 +714,28 @@ class _SellerPanelState extends State<SellerPanel>
         ),
       ),
     );
+  }
+
+  String? _lastSyncedBusinessType;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reading provider here is safe — didChangeDependencies is not build()
+    final provider = Provider.of<SellerPanelProvider>(context, listen: false);
+    if (provider.selectedShop != null) {
+      _syncTabController(provider.selectedShopBusinessType);
+    }
+  }
+
+  void _syncTabController(String businessType) {
+    if (_lastSyncedBusinessType == businessType) return;
+    _lastSyncedBusinessType = businessType;
+    final newLength = businessType == 'restaurant' ? 4 : 6;
+    if (_tabController.length == newLength) return;
+    final old = _tabController;
+    _tabController = TabController(length: newLength, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
   }
 
   @override
@@ -794,49 +857,42 @@ class _SellerPanelState extends State<SellerPanel>
               });
             }
 
+            final isRestaurant =
+                provider.selectedShopBusinessType == 'restaurant';
+
             return Scaffold(
               backgroundColor: Theme.of(context).brightness == Brightness.light
                   ? const Color(0xFFFAFAFA)
                   : null,
               appBar: AppBar(
-                // don't show GoRouter's implicit back‐arrow
                 automaticallyImplyLeading: false,
-
                 elevation: 0,
                 backgroundColor:
                     Theme.of(context).brightness == Brightness.light
                         ? Colors.white
                         : null,
-                centerTitle: true, // Make sure this is true
-
-                // Leading widget (back button)
+                centerTitle: true,
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back),
                   onPressed: () {
                     if (context.canPop()) {
                       context.pop();
                     } else {
-                      // fallback if somehow there is nothing to pop
                       context.go('/');
                     }
                   },
                 ),
-
-                // Centered title
                 title:
                     (provider.isLoadingShops || provider.selectedShop == null)
                         ? const _AppBarTitleShimmer()
                         : _buildModernShopDropdown(provider),
-
-                // Actions to balance the leading widget
                 actions: [
                   if (provider.selectedShop != null) ...[
                     _buildNotificationButton(provider),
                     _buildModernPopupMenu(provider),
                   ] else
-                    const _ActionShimmer(), // keeps visual symmetry with leading icon
+                    const _ActionShimmer(),
                 ],
-
                 bottom: PreferredSize(
                   preferredSize: const Size.fromHeight(64),
                   child:
@@ -847,20 +903,47 @@ class _SellerPanelState extends State<SellerPanel>
               ),
               body: SafeArea(
                 top: false,
-                child:
-                    (provider.selectedShop == null || provider.isLoadingShops)
-                        ? _ShimmerBodySkeleton()
-                        : TabBarView(
-                            controller: _tabController,
-                            children: [
-                              DashboardTab(),
-                              ProductsTab(),
-                              StockTab(),
-                              TransactionsTab(),
-                              ShipmentsTab(),
-                              AdsTab(),
-                            ],
-                          ),
+                child: (provider.selectedShop == null ||
+                        provider.isLoadingShops)
+                    ? _ShimmerBodySkeleton()
+                    : TabBarView(
+                        controller: _tabController,
+                        // ValueKey forces a full rebuild of TabBarView when
+                        // the business type changes, preventing index overflow
+                        // when switching between 6-tab shops and 2-tab restaurants.
+                        key: ValueKey(provider.selectedShopBusinessType),
+                        children: isRestaurant
+                            ? [
+                                RestaurantDashboardTab(
+                                    restaurantId: provider.selectedShop!.id),
+                                FoodOrdersTab(
+                                    restaurantId: provider.selectedShop!.id),
+                                RestaurantReviewsTab(
+                                  restaurantId: provider.selectedShop!.id,
+                                  averageRating: (provider.selectedShop!.data()
+                                                  as Map<String, dynamic>)[
+                                              'averageRating']
+                                          ?.toDouble() ??
+                                      0,
+                                  totalReviewCount:
+                                      (provider.selectedShop!.data() as Map<
+                                                  String,
+                                                  dynamic>)['reviewCount']
+                                              ?.toInt() ??
+                                          0,
+                                ),
+                                RestaurantSettingsTab(
+                                    restaurantId: provider.selectedShop!.id),
+                              ]
+                            : [
+                                const DashboardTab(),
+                                ProductsTab(),
+                                StockTab(),
+                                TransactionsTab(),
+                                ShipmentsTab(),
+                                AdsTab(),
+                              ],
+                      ),
               ),
             );
           },
@@ -869,6 +952,8 @@ class _SellerPanelState extends State<SellerPanel>
     );
   }
 }
+
+// ── Rest of file unchanged ────────────────────────────────────────────────────
 
 class _ShimmerBodySkeleton extends StatelessWidget {
   const _ShimmerBodySkeleton();
@@ -886,7 +971,6 @@ class _ShimmerBodySkeleton extends StatelessWidget {
       highlightColor: highlightColor,
       child: Column(
         children: [
-          // AppBar altındaki shop dropdown yerine bar iskeleti
           Container(
             height: 48,
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -895,7 +979,6 @@ class _ShimmerBodySkeleton extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
             ),
           ),
-          // Tab bar iskeleti
           Container(
             height: 48,
             margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -905,7 +988,6 @@ class _ShimmerBodySkeleton extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          // İçerik ızgarası iskeleti
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.all(16),
@@ -1009,13 +1091,14 @@ class _TabBarShimmer extends StatelessWidget {
   }
 }
 
-/// Bottom sheet widget for displaying shop notifications with pagination
 class _ShopNotificationsBottomSheet extends StatefulWidget {
   final String shopId;
   final TabController? tabController;
+  final String businessType;
 
   const _ShopNotificationsBottomSheet({
     required this.shopId,
+    required this.businessType,
     this.tabController,
   });
 
@@ -1070,9 +1153,14 @@ class _ShopNotificationsBottomSheetState
     });
 
     try {
+      final isRestaurant = widget.businessType == 'restaurant';
+      final collection =
+          isRestaurant ? 'restaurant_notifications' : 'shop_notifications';
+      final idField = isRestaurant ? 'restaurantId' : 'shopId';
+
       final snapshot = await _firestore
-          .collection('shop_notifications')
-          .where('shopId', isEqualTo: widget.shopId)
+          .collection(collection)
+          .where(idField, isEqualTo: widget.shopId)
           .orderBy('timestamp', descending: true)
           .limit(_pageSize)
           .get();
@@ -1086,7 +1174,6 @@ class _ShopNotificationsBottomSheetState
         _isLoading = false;
       });
 
-      // ✅ ADD HERE - Mark all as read after successful load
       if (_notifications.isNotEmpty && !_hasMarkedAsRead) {
         _markAllVisibleAsRead();
       }
@@ -1103,38 +1190,28 @@ class _ShopNotificationsBottomSheetState
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
     if (currentUserId == null) return;
 
-    _hasMarkedAsRead = true;
-
-    // Find unread notifications
     final unreadDocs = _notifications.where((doc) {
-      final data = doc.data() as Map<String, dynamic>;
-      final isReadMap = data['isRead'] as Map<String, dynamic>? ?? {};
+      final isReadMap = (doc.data() as Map<String, dynamic>)['isRead']
+              as Map<String, dynamic>? ??
+          {};
       return isReadMap[currentUserId] != true;
     }).toList();
 
-    if (unreadDocs.isEmpty) {
-      debugPrint('📖 No unread notifications to mark');
-      return;
-    }
+    if (unreadDocs.isEmpty) return;
 
-    debugPrint('📖 Marking ${unreadDocs.length} notifications as read');
+    _hasMarkedAsRead = true;
 
     try {
-      final batch = _firestore.batch();
-      for (final doc in unreadDocs) {
-        batch.update(doc.reference, {
-          'isRead.$currentUserId': true,
-        });
-      }
-      await batch.commit();
-      debugPrint('✅ All visible notifications marked as read');
-
-      // Provider's real-time listener will update the badge count automatically
-      // No need to refetch - just trigger rebuild to update UI
-      if (mounted) {
-        setState(() {});
+      for (int i = 0; i < unreadDocs.length; i += 500) {
+        final chunk = unreadDocs.skip(i).take(500);
+        final batch = _firestore.batch();
+        for (final doc in chunk) {
+          batch.update(doc.reference, {'isRead.$currentUserId': true});
+        }
+        await batch.commit();
       }
     } catch (e) {
+      _hasMarkedAsRead = false;
       debugPrint('❌ Error marking notifications as read: $e');
     }
   }
@@ -1149,9 +1226,14 @@ class _ShopNotificationsBottomSheetState
     });
 
     try {
+      final isRestaurant = widget.businessType == 'restaurant';
+      final collection =
+          isRestaurant ? 'restaurant_notifications' : 'shop_notifications';
+      final idField = isRestaurant ? 'restaurantId' : 'shopId';
+
       final snapshot = await _firestore
-          .collection('shop_notifications') // ✅ Root collection
-          .where('shopId', isEqualTo: widget.shopId) // ✅ Filter by shopId
+          .collection(collection)
+          .where(idField, isEqualTo: widget.shopId)
           .orderBy('timestamp', descending: true)
           .startAfterDocument(_lastDocument!)
           .limit(_pageSize)
@@ -1177,7 +1259,6 @@ class _ShopNotificationsBottomSheetState
     final l10n = AppLocalizations.of(context);
     final type = data['type'] as String?;
 
-    // Handle notifications that use reason-based localization
     if (type == 'boost_expired') {
       final productName = data['productName'] as String? ?? '';
       final reason = data['reason'] as String? ?? '';
@@ -1188,6 +1269,20 @@ class _ShopNotificationsBottomSheetState
       } else {
         return l10n.boostExpiredGeneric(productName);
       }
+    }
+
+    if (type == 'new_food_order') {
+      return data['message_${Localizations.localeOf(context).languageCode}']
+              as String? ??
+          data['message_en'] as String? ??
+          AppLocalizations.of(context).newFoodOrder;
+    }
+
+    if (type == 'restaurant_new_review') {
+      return data['message_${Localizations.localeOf(context).languageCode}']
+              as String? ??
+          data['message_en'] as String? ??
+          AppLocalizations.of(context).restaurantNewReview;
     }
 
     if (type == 'ad_expired') {
@@ -1222,7 +1317,6 @@ class _ShopNotificationsBottomSheetState
       return msg;
     }
 
-    // Default: use message_* fields
     final locale = Localizations.localeOf(context).languageCode;
     switch (locale) {
       case 'tr':
@@ -1278,6 +1372,10 @@ class _ShopNotificationsBottomSheetState
         return Icons.archive_rounded;
       case 'payment':
         return Icons.payments_rounded;
+      case 'new_food_order':
+        return Icons.shopping_bag_rounded;
+      case 'restaurant_new_review':
+        return Icons.star_rounded;
       case 'ad_approved':
         return Icons.check_circle_rounded;
       case 'ad_rejected':
@@ -1312,6 +1410,10 @@ class _ShopNotificationsBottomSheetState
         return const Color(0xFFFF5722);
       case 'payment':
         return const Color(0xFF9C27B0);
+      case 'new_food_order':
+        return const Color(0xFF4CAF50); // emerald, matches web
+      case 'restaurant_new_review':
+        return const Color(0xFFFFC107);
       case 'ad_approved':
         return const Color(0xFF4CAF50);
       case 'ad_rejected':
@@ -1353,7 +1455,6 @@ class _ShopNotificationsBottomSheetState
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Drag handle
           Container(
             margin: const EdgeInsets.only(top: 12),
             width: 40,
@@ -1363,8 +1464,6 @@ class _ShopNotificationsBottomSheetState
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-
-          // Header
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -1405,10 +1504,7 @@ class _ShopNotificationsBottomSheetState
               ],
             ),
           ),
-
           const Divider(height: 1),
-
-          // Content
           Flexible(
             child: _buildContent(isDark),
           ),
@@ -1421,15 +1517,12 @@ class _ShopNotificationsBottomSheetState
     if (_isLoading) {
       return _buildLoadingState(isDark);
     }
-
     if (_error != null) {
       return _buildErrorState();
     }
-
     if (_notifications.isEmpty) {
       return _buildEmptyState(isDark);
     }
-
     return _buildNotificationsList(isDark);
   }
 
@@ -1496,18 +1589,11 @@ class _ShopNotificationsBottomSheetState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.error_outline_rounded,
-              size: 48,
-              color: Colors.red[400],
-            ),
+            Icon(Icons.error_outline_rounded, size: 48, color: Colors.red[400]),
             const SizedBox(height: 16),
             Text(
               AppLocalizations.of(context).errorLoadingNotifications,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
+              style: GoogleFonts.inter(fontSize: 14, color: Colors.grey[600]),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -1583,11 +1669,8 @@ class _ShopNotificationsBottomSheetState
         final data = doc.data() as Map<String, dynamic>;
         final type = data['type'] as String?;
         final timestamp = data['timestamp'] as Timestamp?;
-
-        // ✅ Fix isRead check
         final isReadMap = data['isRead'] as Map<String, dynamic>? ?? {};
         final isRead = isReadMap[currentUserId] == true;
-
         final message = _getLocalizedMessage(data, context);
 
         return _buildNotificationTile(
@@ -1605,22 +1688,14 @@ class _ShopNotificationsBottomSheetState
 
   void _handleNotificationTap(String? type, Map<String, dynamic> data) {
     final shopId = data['shopId'] as String?;
-
-    // Capture references before popping
     final NavigatorState? navigator = Navigator.maybeOf(context);
     final GoRouter? router = GoRouter.maybeOf(context);
     final TabController? tabController = widget.tabController;
 
-    // Guard: ensure navigator exists
-    if (navigator == null) {
-      debugPrint('⚠️ Navigator not found');
-      return;
-    }
+    if (navigator == null) return;
 
-    // Close bottom sheet
     navigator.pop();
 
-    // Navigate after frame completes
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
         switch (type) {
@@ -1640,16 +1715,22 @@ class _ShopNotificationsBottomSheetState
           case 'ad_rejected':
           case 'ad_expired':
             if (router != null) {
-              final shopName = data['shopName'] as String? ?? '';
               router.push('/seller-panel/ads_screen', extra: {
                 'shopId': shopId,
-                'shopName': shopName,
+                'shopName': data['shopName'] as String? ?? '',
                 'initialTabIndex': 1,
               });
             }
             break;
           case 'boost_expired':
-            _safeAnimateToTab(tabController, 5); // Ads tab
+            _safeAnimateToTab(tabController, 5);
+            break;
+          case 'new_food_order':
+            // Restaurant tab index 1 = FoodOrdersTab (mirrors web → /orders-food)
+            _safeAnimateToTab(tabController, 1);
+            break;
+          case 'restaurant_new_review':
+            _safeAnimateToTab(tabController, 2);
             break;
           case 'product_archived_by_admin':
             if (router != null) {
@@ -1670,30 +1751,10 @@ class _ShopNotificationsBottomSheetState
     });
   }
 
-  /// Safely animate to a tab index with guards
   void _safeAnimateToTab(TabController? controller, int index) {
-    if (controller == null) {
-      debugPrint('⚠️ TabController is null');
-      return;
-    }
-
-    // Check if controller is still usable
-    if (controller.length == 0) {
-      debugPrint('⚠️ TabController has no tabs');
-      return;
-    }
-
-    // Validate index
-    if (index < 0 || index >= controller.length) {
-      debugPrint('⚠️ Invalid tab index: $index');
-      return;
-    }
-
-    // Skip if already on target tab or currently animating
-    if (controller.index == index || controller.indexIsChanging) {
-      return;
-    }
-
+    if (controller == null || controller.length == 0) return;
+    if (index < 0 || index >= controller.length) return;
+    if (controller.index == index || controller.indexIsChanging) return;
     controller.animateTo(index);
   }
 
@@ -1739,11 +1800,8 @@ class _ShopNotificationsBottomSheetState
                     color: iconColor.withOpacity(isDark ? 0.2 : 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(
-                    _getNotificationIcon(type),
-                    size: 20,
-                    color: iconColor,
-                  ),
+                  child: Icon(_getNotificationIcon(type),
+                      size: 20, color: iconColor),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1765,37 +1823,32 @@ class _ShopNotificationsBottomSheetState
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          Icon(
-                            Icons.access_time_rounded,
-                            size: 12,
-                            color: isDark ? Colors.white38 : Colors.grey[400],
-                          ),
+                          Icon(Icons.access_time_rounded,
+                              size: 12,
+                              color:
+                                  isDark ? Colors.white38 : Colors.grey[400]),
                           const SizedBox(width: 4),
                           Text(
                             _formatTimestamp(timestamp),
                             style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: isDark ? Colors.white38 : Colors.grey[500],
-                            ),
+                                fontSize: 11,
+                                color:
+                                    isDark ? Colors.white38 : Colors.grey[500]),
                           ),
                           if (!isRead) ...[
                             const SizedBox(width: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
+                                  horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: iconColor,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
+                                  color: iconColor,
+                                  borderRadius: BorderRadius.circular(4)),
                               child: Text(
                                 AppLocalizations.of(context).newLabel,
                                 style: GoogleFonts.inter(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
-                                ),
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white),
                               ),
                             ),
                           ],

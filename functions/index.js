@@ -5349,8 +5349,19 @@ export const sendRestaurantNotificationOnCreation = onDocumentCreated({
     }
   });
 
-  // Deep-link route
-  const route = notificationData.orderId ? `/restaurant-order/${notificationData.orderId}` : '/restaurant-orders';
+  let route;
+  const restaurantId = notificationData.restaurantId ?? '';
+  
+  if (type === 'new_food_order') {
+    // Opens SellerPanel → restaurant mode → tab 1 (FoodOrdersTab)
+    route = `/seller-panel?shopId=${restaurantId}&tab=1`;
+  } else if (type === 'restaurant_new_review') {
+    // Opens SellerPanel → restaurant mode → tab 2 (RestaurantReviewsTab)
+    route = `/seller-panel?shopId=${restaurantId}&tab=2`;
+  } else {
+    // Fallback for any future restaurant notification types
+    route = restaurantId ? `/seller-panel?shopId=${restaurantId}&tab=0` : '/seller-panel';
+  }
 
   // Data payload
   const dataPayload = {
@@ -5359,7 +5370,7 @@ export const sendRestaurantNotificationOnCreation = onDocumentCreated({
     type,
   };
   Object.entries(notificationData).forEach(([key, value]) => {
-    if (key === 'isRead' || key === 'timestamp') return;
+    if (key === 'isRead' || key === 'timestamp' || key === 'route') return;
     dataPayload[key] = typeof value === 'string' ? value : JSON.stringify(value);
   });
 

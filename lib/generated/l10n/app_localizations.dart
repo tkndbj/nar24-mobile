@@ -9673,7 +9673,7 @@ abstract class AppLocalizations {
   /// No description provided for @anonymous.
   ///
   /// In tr, this message translates to:
-  /// **'Belirsiz'**
+  /// **'Anonim'**
   String get anonymous;
 
   /// View all questions link with count
@@ -15188,7 +15188,7 @@ abstract class AppLocalizations {
   /// No description provided for @clearFilters.
   ///
   /// In tr, this message translates to:
-  /// **'Filtreleri Temizle'**
+  /// **'Filtreleri temizle'**
   String get clearFilters;
 
   /// No description provided for @selectCategory.
@@ -22263,7 +22263,7 @@ abstract class AppLocalizations {
   /// No description provided for @errorLoadingReviews.
   ///
   /// In tr, this message translates to:
-  /// **'Değerlendirmeler yüklenirken hata gerçekleşti'**
+  /// **'Değerlendirmeler yüklenemedi. Lütfen tekrar deneyin.'**
   String get errorLoadingReviews;
 
   /// No description provided for @pleaseSelectCategoryFirst.
@@ -24851,6 +24851,3918 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Size teslimat yapan restoranları görmek için giriş yapın ve adresinizi belirleyin'**
   String get setAddressLoginBanner;
+
+  /// No description provided for @restaurantDashboardGreetingMorning.
+  ///
+  /// In tr, this message translates to:
+  /// **'Günaydın,'**
+  String get restaurantDashboardGreetingMorning;
+
+  /// No description provided for @restaurantDashboardGreetingAfternoon.
+  ///
+  /// In tr, this message translates to:
+  /// **'İyi günler,'**
+  String get restaurantDashboardGreetingAfternoon;
+
+  /// No description provided for @restaurantDashboardGreetingEvening.
+  ///
+  /// In tr, this message translates to:
+  /// **'İyi akşamlar,'**
+  String get restaurantDashboardGreetingEvening;
+
+  /// No description provided for @restaurantDashboardNoRestaurantTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoran Bulunamadı'**
+  String get restaurantDashboardNoRestaurantTitle;
+
+  /// No description provided for @restaurantDashboardNoRestaurantDescription.
+  ///
+  /// In tr, this message translates to:
+  /// **'Herhangi bir restoranla ilişkilendirilmediniz.'**
+  String get restaurantDashboardNoRestaurantDescription;
+
+  /// No description provided for @restaurantDashboardFetchFailedTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bağlantı Hatası'**
+  String get restaurantDashboardFetchFailedTitle;
+
+  /// No description provided for @restaurantDashboardFetchFailedMessage.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoran verileri yüklenemedi. Bağlantınızı kontrol edin.'**
+  String get restaurantDashboardFetchFailedMessage;
+
+  /// No description provided for @restaurantDashboardRetry.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tekrar Dene'**
+  String get restaurantDashboardRetry;
+
+  /// No description provided for @restaurantDashboardQuickActions.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hızlı İşlemler'**
+  String get restaurantDashboardQuickActions;
+
+  /// No description provided for @restaurantDashboardFoodsLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemekler'**
+  String get restaurantDashboardFoodsLabel;
+
+  /// No description provided for @restaurantDashboardFoodsDescription.
+  ///
+  /// In tr, this message translates to:
+  /// **'Menünüzü yönetin'**
+  String get restaurantDashboardFoodsDescription;
+
+  /// No description provided for @restaurantDashboardOrdersLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişler'**
+  String get restaurantDashboardOrdersLabel;
+
+  /// No description provided for @restaurantDashboardOrdersDescription.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tüm siparişleri görün'**
+  String get restaurantDashboardOrdersDescription;
+
+  /// No description provided for @restaurantDashboardReviewsLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yorumlar'**
+  String get restaurantDashboardReviewsLabel;
+
+  /// No description provided for @restaurantDashboardReviewsDescription.
+  ///
+  /// In tr, this message translates to:
+  /// **'Müşteri geri bildirimleri'**
+  String get restaurantDashboardReviewsDescription;
+
+  /// No description provided for @restaurantDashboardSettingsLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ayarlar'**
+  String get restaurantDashboardSettingsLabel;
+
+  /// No description provided for @restaurantDashboardSettingsDescription.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoran ayarları'**
+  String get restaurantDashboardSettingsDescription;
+
+  /// No description provided for @restaurantDashboardPendingOrdersTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bekleyen Siparişler'**
+  String get restaurantDashboardPendingOrdersTitle;
+
+  /// No description provided for @restaurantDashboardViewAll.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tümünü Gör'**
+  String get restaurantDashboardViewAll;
+
+  /// No description provided for @restaurantDashboardPendingOrdersEmpty.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bekleyen sipariş yok'**
+  String get restaurantDashboardPendingOrdersEmpty;
+
+  /// No description provided for @restaurantDashboardAccept.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kabul Et'**
+  String get restaurantDashboardAccept;
+
+  /// No description provided for @restaurantDashboardReject.
+  ///
+  /// In tr, this message translates to:
+  /// **'Reddet'**
+  String get restaurantDashboardReject;
+
+  /// No description provided for @restaurantDashboardUpdateFailed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş güncellenemedi'**
+  String get restaurantDashboardUpdateFailed;
+
+  /// No description provided for @restaurantDashboardStatusOpen.
+  ///
+  /// In tr, this message translates to:
+  /// **'Açık'**
+  String get restaurantDashboardStatusOpen;
+
+  /// No description provided for @restaurantDashboardStatusClosedInactive.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kapalı'**
+  String get restaurantDashboardStatusClosedInactive;
+
+  /// No description provided for @restaurantDashboardStatusClosedOffDay.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bugün Kapalı'**
+  String get restaurantDashboardStatusClosedOffDay;
+
+  /// No description provided for @restaurantDashboardStatusClosedOffHours.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mesai Dışı'**
+  String get restaurantDashboardStatusClosedOffHours;
+
+  /// No description provided for @restaurantsTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoranlar'**
+  String get restaurantsTitle;
+
+  /// No description provided for @discoverNearbyRestaurants.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yakındaki restoranları keşfedin'**
+  String get discoverNearbyRestaurants;
+
+  /// No description provided for @searchRestaurantsHint.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoran ara…'**
+  String get searchRestaurantsHint;
+
+  /// No description provided for @noRestaurantsYet.
+  ///
+  /// In tr, this message translates to:
+  /// **'Henüz restoran yok'**
+  String get noRestaurantsYet;
+
+  /// No description provided for @checkBackSoonRestaurants.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yeni restoran listeleri için yakında tekrar kontrol edin.'**
+  String get checkBackSoonRestaurants;
+
+  /// No description provided for @foodNoResults.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sonuç bulunamadı'**
+  String get foodNoResults;
+
+  /// No description provided for @tryDifferentCuisine.
+  ///
+  /// In tr, this message translates to:
+  /// **'Farklı bir mutfak türü veya arama terimi deneyin.'**
+  String get tryDifferentCuisine;
+
+  /// No description provided for @allCuisines.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tümü'**
+  String get allCuisines;
+
+  /// No description provided for @closedLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kapalı'**
+  String get closedLabel;
+
+  /// No description provided for @sortHighRating.
+  ///
+  /// In tr, this message translates to:
+  /// **'★ Yüksek'**
+  String get sortHighRating;
+
+  /// No description provided for @sortLowRating.
+  ///
+  /// In tr, this message translates to:
+  /// **'★ Düşük'**
+  String get sortLowRating;
+
+  /// No description provided for @sortLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sırala'**
+  String get sortLabel;
+
+  /// No description provided for @restaurantNotFound.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoran bulunamadı'**
+  String get restaurantNotFound;
+
+  /// No description provided for @backToRestaurants.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoranlara Dön'**
+  String get backToRestaurants;
+
+  /// No description provided for @currentlyClosed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Şu anda kapalı'**
+  String get currentlyClosed;
+
+  /// No description provided for @browseMenuWhenReopen.
+  ///
+  /// In tr, this message translates to:
+  /// **'Menüye göz atın ve tekrar açıldığımızda sipariş verin.'**
+  String get browseMenuWhenReopen;
+
+  /// No description provided for @menuTab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Menü'**
+  String get menuTab;
+
+  /// No description provided for @reviewsTab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yorumlar'**
+  String get reviewsTab;
+
+  /// No description provided for @searchFoodHint.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek ara…'**
+  String get searchFoodHint;
+
+  /// No description provided for @foodQuantityLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Miktar'**
+  String get foodQuantityLabel;
+
+  /// No description provided for @foodExtrasLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ekstralar'**
+  String get foodExtrasLabel;
+
+  /// No description provided for @foodSpecialNotes.
+  ///
+  /// In tr, this message translates to:
+  /// **'Özel notlar (isteğe bağlı)'**
+  String get foodSpecialNotes;
+
+  /// No description provided for @foodNotesHint.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ör. soğansız…'**
+  String get foodNotesHint;
+
+  /// No description provided for @foodFreeExtra.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ücretsiz'**
+  String get foodFreeExtra;
+
+  /// No description provided for @foodAddToCart.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sepete ekle — {price} TL'**
+  String foodAddToCart(String price);
+
+  /// No description provided for @foodYourOrder.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişiniz'**
+  String get foodYourOrder;
+
+  /// No description provided for @foodSubtotal.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ara Toplam'**
+  String get foodSubtotal;
+
+  /// No description provided for @foodProceedToCheckout.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödemeye Geç'**
+  String get foodProceedToCheckout;
+
+  /// No description provided for @foodNoMenuItems.
+  ///
+  /// In tr, this message translates to:
+  /// **'Menü öğesi yok'**
+  String get foodNoMenuItems;
+
+  /// No description provided for @foodCheckBackLater.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yeni öğeler için daha sonra tekrar kontrol edin.'**
+  String get foodCheckBackLater;
+
+  /// No description provided for @foodTryDifferentSearch.
+  ///
+  /// In tr, this message translates to:
+  /// **'Farklı bir arama veya kategori deneyin.'**
+  String get foodTryDifferentSearch;
+
+  /// No description provided for @foodClearAll.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tümünü temizle'**
+  String get foodClearAll;
+
+  /// No description provided for @foodAddLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ekle'**
+  String get foodAddLabel;
+
+  /// No description provided for @foodMinLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'dk'**
+  String get foodMinLabel;
+
+  /// No description provided for @foodClosedButton.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kapalı'**
+  String get foodClosedButton;
+
+  /// No description provided for @foodItemsFab.
+  ///
+  /// In tr, this message translates to:
+  /// **'{count} {count, plural, =1{ürün} other{ürün}} · {price} TL'**
+  String foodItemsFab(int count, String price);
+
+  /// No description provided for @foodPriceTL.
+  ///
+  /// In tr, this message translates to:
+  /// **'{price} TL'**
+  String foodPriceTL(String price);
+
+  /// No description provided for @foodExtraPriceTL.
+  ///
+  /// In tr, this message translates to:
+  /// **'+{price} TL'**
+  String foodExtraPriceTL(String price);
+
+  /// No description provided for @foodDiscountPercent.
+  ///
+  /// In tr, this message translates to:
+  /// **'%{percent}'**
+  String foodDiscountPercent(int percent);
+
+  /// No description provided for @foodPrepTime.
+  ///
+  /// In tr, this message translates to:
+  /// **'{time} dk'**
+  String foodPrepTime(int time);
+
+  /// No description provided for @foodCartTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek Sepeti'**
+  String get foodCartTitle;
+
+  /// No description provided for @foodCartClearAll.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tümünü Temizle'**
+  String get foodCartClearAll;
+
+  /// No description provided for @foodCartOrderingFrom.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bu restorandan sipariş veriyorsunuz'**
+  String get foodCartOrderingFrom;
+
+  /// No description provided for @foodCartEstimatedPrep.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tahmini hazırlık:'**
+  String get foodCartEstimatedPrep;
+
+  /// No description provided for @foodCartEdit.
+  ///
+  /// In tr, this message translates to:
+  /// **'Düzenle'**
+  String get foodCartEdit;
+
+  /// No description provided for @foodCartOrderSummary.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş Özeti'**
+  String get foodCartOrderSummary;
+
+  /// No description provided for @foodCartTotal.
+  ///
+  /// In tr, this message translates to:
+  /// **'TOPLAM'**
+  String get foodCartTotal;
+
+  /// No description provided for @foodCartDeliveryFeeNote.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimat ücreti ödeme sırasında'**
+  String get foodCartDeliveryFeeNote;
+
+  /// No description provided for @foodCartClearTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek Sepetini Temizle?'**
+  String get foodCartClearTitle;
+
+  /// No description provided for @foodCartClearMessage.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bu işlem yemek sepetinizdeki tüm ürünleri kaldıracak.'**
+  String get foodCartClearMessage;
+
+  /// No description provided for @foodCartClearButton.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sepeti Temizle'**
+  String get foodCartClearButton;
+
+  /// No description provided for @foodCartEmpty.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek sepetiniz boş'**
+  String get foodCartEmpty;
+
+  /// No description provided for @foodCartBrowseMessage.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoranlara göz atın ve lezzetli yemekler ekleyin'**
+  String get foodCartBrowseMessage;
+
+  /// No description provided for @foodCartPrepTimeApprox.
+  ///
+  /// In tr, this message translates to:
+  /// **'~{time} dk'**
+  String foodCartPrepTimeApprox(int time);
+
+  /// No description provided for @foodCartItemCount.
+  ///
+  /// In tr, this message translates to:
+  /// **'{count} {count, plural, =1{ürün} other{ürün}}'**
+  String foodCartItemCount(int count);
+
+  /// No description provided for @foodCheckoutNoAddress.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimat adresi belirlenmedi. Lütfen önce bir adres ekleyin.'**
+  String get foodCheckoutNoAddress;
+
+  /// No description provided for @foodCheckoutTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme'**
+  String get foodCheckoutTitle;
+
+  /// No description provided for @foodCheckoutYourOrder.
+  ///
+  /// In tr, this message translates to:
+  /// **'SİPARİŞİNİZ'**
+  String get foodCheckoutYourOrder;
+
+  /// No description provided for @foodCheckoutDeliveryMethod.
+  ///
+  /// In tr, this message translates to:
+  /// **'TESLİMAT YÖNTEMİ'**
+  String get foodCheckoutDeliveryMethod;
+
+  /// No description provided for @foodCheckoutDeliveryAddress.
+  ///
+  /// In tr, this message translates to:
+  /// **'TESLİMAT ADRESİ'**
+  String get foodCheckoutDeliveryAddress;
+
+  /// No description provided for @foodCheckoutOrderNotes.
+  ///
+  /// In tr, this message translates to:
+  /// **'SİPARİŞ NOTLARI'**
+  String get foodCheckoutOrderNotes;
+
+  /// No description provided for @foodCheckoutOrderNotesHint.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ör. acısız sos, ekstra peçete…'**
+  String get foodCheckoutOrderNotesHint;
+
+  /// No description provided for @foodCheckoutPaymentMethod.
+  ///
+  /// In tr, this message translates to:
+  /// **'ÖDEME YÖNTEMİ'**
+  String get foodCheckoutPaymentMethod;
+
+  /// No description provided for @foodCheckoutChange.
+  ///
+  /// In tr, this message translates to:
+  /// **'Değiştir'**
+  String get foodCheckoutChange;
+
+  /// No description provided for @foodCheckoutNoAddressShort.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimat adresi belirlenmedi'**
+  String get foodCheckoutNoAddressShort;
+
+  /// No description provided for @foodCheckoutAddAddress.
+  ///
+  /// In tr, this message translates to:
+  /// **'Adres Ekle'**
+  String get foodCheckoutAddAddress;
+
+  /// No description provided for @foodCheckoutPrepTime.
+  ///
+  /// In tr, this message translates to:
+  /// **'~{time} dk hazırlık süresi'**
+  String foodCheckoutPrepTime(int time);
+
+  /// No description provided for @foodCheckoutDelivery.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimat'**
+  String get foodCheckoutDelivery;
+
+  /// No description provided for @foodCheckoutPickup.
+  ///
+  /// In tr, this message translates to:
+  /// **'Gel Al'**
+  String get foodCheckoutPickup;
+
+  /// No description provided for @foodCheckoutPayAtDoor.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kapıda Ödeme'**
+  String get foodCheckoutPayAtDoor;
+
+  /// No description provided for @foodCheckoutCreditCard.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kredi / Banka Kartı'**
+  String get foodCheckoutCreditCard;
+
+  /// No description provided for @foodCheckoutPayCash.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişiniz geldiğinde nakit ödeyin'**
+  String get foodCheckoutPayCash;
+
+  /// No description provided for @foodCheckoutSecurePayment.
+  ///
+  /// In tr, this message translates to:
+  /// **'İşbank 3D ile güvenli çevrimiçi ödeme'**
+  String get foodCheckoutSecurePayment;
+
+  /// No description provided for @foodCheckoutTotalItems.
+  ///
+  /// In tr, this message translates to:
+  /// **'Toplam ({count} {count, plural, =1{ürün} other{ürün}})'**
+  String foodCheckoutTotalItems(int count);
+
+  /// No description provided for @foodCheckoutPayNow.
+  ///
+  /// In tr, this message translates to:
+  /// **'Şimdi Öde'**
+  String get foodCheckoutPayNow;
+
+  /// No description provided for @foodCheckoutPlaceOrder.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş Ver'**
+  String get foodCheckoutPlaceOrder;
+
+  /// No description provided for @foodCheckoutOrderPlaced.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş Verildi!'**
+  String get foodCheckoutOrderPlaced;
+
+  /// No description provided for @foodCheckoutOrderConfirmed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişiniz onaylandı.'**
+  String get foodCheckoutOrderConfirmed;
+
+  /// No description provided for @foodCheckoutOrderId.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş: {id}'**
+  String foodCheckoutOrderId(String id);
+
+  /// No description provided for @foodCheckoutViewOrders.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişlerimi Gör'**
+  String get foodCheckoutViewOrders;
+
+  /// No description provided for @foodCheckoutCartEmpty.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sepetiniz boş'**
+  String get foodCheckoutCartEmpty;
+
+  /// No description provided for @foodCheckoutAddItems.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme yapmak için bir restorandan ürün ekleyin'**
+  String get foodCheckoutAddItems;
+
+  /// No description provided for @foodCheckoutBrowse.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoranlara Göz At'**
+  String get foodCheckoutBrowse;
+
+  /// No description provided for @foodCheckoutError.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bir hata oluştu.'**
+  String get foodCheckoutError;
+
+  /// No description provided for @foodReviewJustNow.
+  ///
+  /// In tr, this message translates to:
+  /// **'Az önce'**
+  String get foodReviewJustNow;
+
+  /// No description provided for @foodReviewLoading.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yükleniyor…'**
+  String get foodReviewLoading;
+
+  /// No description provided for @foodReviewLoadMore.
+  ///
+  /// In tr, this message translates to:
+  /// **'Daha fazla yükle'**
+  String get foodReviewLoadMore;
+
+  /// No description provided for @foodReviewNoReviews.
+  ///
+  /// In tr, this message translates to:
+  /// **'Henüz yorum yok'**
+  String get foodReviewNoReviews;
+
+  /// No description provided for @foodReviewBeFirst.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş verdikten sonra ilk yorumu siz yazın.'**
+  String get foodReviewBeFirst;
+
+  /// No description provided for @foodCategoryKebabsGrills.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kebap & Izgara'**
+  String get foodCategoryKebabsGrills;
+
+  /// No description provided for @foodCategoryPideLahmacun.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pide & Lahmacun'**
+  String get foodCategoryPideLahmacun;
+
+  /// No description provided for @foodCategorySoups.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çorbalar'**
+  String get foodCategorySoups;
+
+  /// No description provided for @foodCategorySalads.
+  ///
+  /// In tr, this message translates to:
+  /// **'Salatalar'**
+  String get foodCategorySalads;
+
+  /// No description provided for @foodCategoryAppetizers.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mezeler & Başlangıçlar'**
+  String get foodCategoryAppetizers;
+
+  /// No description provided for @foodCategoryStews.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemekler & Güveçler'**
+  String get foodCategoryStews;
+
+  /// No description provided for @foodCategoryDolma.
+  ///
+  /// In tr, this message translates to:
+  /// **'Dolma & Sarma'**
+  String get foodCategoryDolma;
+
+  /// No description provided for @foodCategorySteakRoast.
+  ///
+  /// In tr, this message translates to:
+  /// **'Biftek & Kavurma'**
+  String get foodCategorySteakRoast;
+
+  /// No description provided for @foodCategoryStirFry.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tava & Wok'**
+  String get foodCategoryStirFry;
+
+  /// No description provided for @foodCategoryFriedChicken.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kızarmış Tavuk'**
+  String get foodCategoryFriedChicken;
+
+  /// No description provided for @foodCategoryRicePilaf.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pilav & Bulgur'**
+  String get foodCategoryRicePilaf;
+
+  /// No description provided for @foodCategoryNoodles.
+  ///
+  /// In tr, this message translates to:
+  /// **'Noodle & Erişte'**
+  String get foodCategoryNoodles;
+
+  /// No description provided for @foodCategorySushi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Suşi & Saşimi'**
+  String get foodCategorySushi;
+
+  /// No description provided for @foodCategoryCurry.
+  ///
+  /// In tr, this message translates to:
+  /// **'Köri'**
+  String get foodCategoryCurry;
+
+  /// No description provided for @foodCategoryPasta.
+  ///
+  /// In tr, this message translates to:
+  /// **'Makarna'**
+  String get foodCategoryPasta;
+
+  /// No description provided for @foodCategoryWraps.
+  ///
+  /// In tr, this message translates to:
+  /// **'Dürüm'**
+  String get foodCategoryWraps;
+
+  /// No description provided for @foodCategoryDoner.
+  ///
+  /// In tr, this message translates to:
+  /// **'Döner'**
+  String get foodCategoryDoner;
+
+  /// No description provided for @foodCategorySandwich.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sandviç & Tost'**
+  String get foodCategorySandwich;
+
+  /// No description provided for @foodCategorySeafood.
+  ///
+  /// In tr, this message translates to:
+  /// **'Deniz Ürünleri'**
+  String get foodCategorySeafood;
+
+  /// No description provided for @foodCategoryBreakfast.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kahvaltı'**
+  String get foodCategoryBreakfast;
+
+  /// No description provided for @foodCategoryDesserts.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tatlılar & Pastane'**
+  String get foodCategoryDesserts;
+
+  /// No description provided for @foodCategoryBeverages.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçecekler'**
+  String get foodCategoryBeverages;
+
+  /// No description provided for @foodCategoryHamburger.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hamburger'**
+  String get foodCategoryHamburger;
+
+  /// No description provided for @foodCategoryPizza.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pizza'**
+  String get foodCategoryPizza;
+
+  /// No description provided for @foodTypeAdanaKebab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Adana Kebap'**
+  String get foodTypeAdanaKebab;
+
+  /// No description provided for @foodTypeUrfaKebab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Urfa Kebap'**
+  String get foodTypeUrfaKebab;
+
+  /// No description provided for @foodTypeIskenderKebab.
+  ///
+  /// In tr, this message translates to:
+  /// **'İskender Kebap'**
+  String get foodTypeIskenderKebab;
+
+  /// No description provided for @foodTypeShishKebab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Şiş Kebap'**
+  String get foodTypeShishKebab;
+
+  /// No description provided for @foodTypeChickenKebab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tavuk Kebap'**
+  String get foodTypeChickenKebab;
+
+  /// No description provided for @foodTypeKofte.
+  ///
+  /// In tr, this message translates to:
+  /// **'Köfte'**
+  String get foodTypeKofte;
+
+  /// No description provided for @foodTypeMixedGrill.
+  ///
+  /// In tr, this message translates to:
+  /// **'Karışık Izgara'**
+  String get foodTypeMixedGrill;
+
+  /// No description provided for @foodTypeLambChops.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kuzu Pirzola'**
+  String get foodTypeLambChops;
+
+  /// No description provided for @foodTypeBeytiKebab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Beyti Kebap'**
+  String get foodTypeBeytiKebab;
+
+  /// No description provided for @foodTypeAliNazik.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ali Nazik'**
+  String get foodTypeAliNazik;
+
+  /// No description provided for @foodTypeCopSis.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çöp Şiş'**
+  String get foodTypeCopSis;
+
+  /// No description provided for @foodTypeCigerKebab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ciğer Kebap'**
+  String get foodTypeCigerKebab;
+
+  /// No description provided for @foodTypeTantuni.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tantuni'**
+  String get foodTypeTantuni;
+
+  /// No description provided for @foodTypePatlicanKebab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Patlıcan Kebap'**
+  String get foodTypePatlicanKebab;
+
+  /// No description provided for @foodTypeTestiKebab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Testi Kebap'**
+  String get foodTypeTestiKebab;
+
+  /// No description provided for @foodTypeCagKebab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Cağ Kebap'**
+  String get foodTypeCagKebab;
+
+  /// No description provided for @foodTypePideliKofte.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pideli Köfte'**
+  String get foodTypePideliKofte;
+
+  /// No description provided for @foodTypeKuzuSis.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kuzu Şiş'**
+  String get foodTypeKuzuSis;
+
+  /// No description provided for @foodTypeOrmanKebab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Orman Kebap'**
+  String get foodTypeOrmanKebab;
+
+  /// No description provided for @foodTypeYogurtluKebab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yoğurtlu Kebap'**
+  String get foodTypeYogurtluKebab;
+
+  /// No description provided for @foodTypeCheloKebab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Chelo Kebap'**
+  String get foodTypeCheloKebab;
+
+  /// No description provided for @foodTypeJoojehKebab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Joojeh Kebap'**
+  String get foodTypeJoojehKebab;
+
+  /// No description provided for @foodTypeKoobideh.
+  ///
+  /// In tr, this message translates to:
+  /// **'Koobideh'**
+  String get foodTypeKoobideh;
+
+  /// No description provided for @foodTypeBulgogi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bulgogi'**
+  String get foodTypeBulgogi;
+
+  /// No description provided for @foodTypeGalbi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Galbi'**
+  String get foodTypeGalbi;
+
+  /// No description provided for @foodTypeSamgyeopsal.
+  ///
+  /// In tr, this message translates to:
+  /// **'Samgyeopsal'**
+  String get foodTypeSamgyeopsal;
+
+  /// No description provided for @foodTypeYakitori.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yakitori'**
+  String get foodTypeYakitori;
+
+  /// No description provided for @foodTypeTandooriChicken.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tandoori Chicken'**
+  String get foodTypeTandooriChicken;
+
+  /// No description provided for @foodTypeSouvlaki.
+  ///
+  /// In tr, this message translates to:
+  /// **'Souvlaki'**
+  String get foodTypeSouvlaki;
+
+  /// No description provided for @foodTypeGyros.
+  ///
+  /// In tr, this message translates to:
+  /// **'Gyros'**
+  String get foodTypeGyros;
+
+  /// No description provided for @foodTypeSatay.
+  ///
+  /// In tr, this message translates to:
+  /// **'Satay'**
+  String get foodTypeSatay;
+
+  /// No description provided for @foodTypeKokorec.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kokoreç'**
+  String get foodTypeKokorec;
+
+  /// No description provided for @foodTypeOtherKebab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Kebap'**
+  String get foodTypeOtherKebab;
+
+  /// No description provided for @foodTypeCheesePide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Peynirli Pide'**
+  String get foodTypeCheesePide;
+
+  /// No description provided for @foodTypeMincedMeatPide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kıymalı Pide'**
+  String get foodTypeMincedMeatPide;
+
+  /// No description provided for @foodTypeSucukluPide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sucuklu Pide'**
+  String get foodTypeSucukluPide;
+
+  /// No description provided for @foodTypeKasarliPide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kaşarlı Pide'**
+  String get foodTypeKasarliPide;
+
+  /// No description provided for @foodTypeKusbasiPide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kuşbaşılı Pide'**
+  String get foodTypeKusbasiPide;
+
+  /// No description provided for @foodTypeLahmacun.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lahmacun'**
+  String get foodTypeLahmacun;
+
+  /// No description provided for @foodTypeEtliEkmek.
+  ///
+  /// In tr, this message translates to:
+  /// **'Etli Ekmek'**
+  String get foodTypeEtliEkmek;
+
+  /// No description provided for @foodTypeYumurtaliPide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yumurtalı Pide'**
+  String get foodTypeYumurtaliPide;
+
+  /// No description provided for @foodTypeIspanakliPide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ispanaklı Pide'**
+  String get foodTypeIspanakliPide;
+
+  /// No description provided for @foodTypeKarisikPide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Karışık Pide'**
+  String get foodTypeKarisikPide;
+
+  /// No description provided for @foodTypePastirmaliPide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pastırmalı Pide'**
+  String get foodTypePastirmaliPide;
+
+  /// No description provided for @foodTypeOtherPide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Pide'**
+  String get foodTypeOtherPide;
+
+  /// No description provided for @foodTypeLentilSoup.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mercimek Çorbası'**
+  String get foodTypeLentilSoup;
+
+  /// No description provided for @foodTypeTomatoSoup.
+  ///
+  /// In tr, this message translates to:
+  /// **'Domates Çorbası'**
+  String get foodTypeTomatoSoup;
+
+  /// No description provided for @foodTypeChickenSoup.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tavuk Çorbası'**
+  String get foodTypeChickenSoup;
+
+  /// No description provided for @foodTypeTarhanaSoup.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tarhana Çorbası'**
+  String get foodTypeTarhanaSoup;
+
+  /// No description provided for @foodTypeEzogelinSoup.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ezogelin Çorbası'**
+  String get foodTypeEzogelinSoup;
+
+  /// No description provided for @foodTypeIskembeSoup.
+  ///
+  /// In tr, this message translates to:
+  /// **'İşkembe Çorbası'**
+  String get foodTypeIskembeSoup;
+
+  /// No description provided for @foodTypeYaylaSoup.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yayla Çorbası'**
+  String get foodTypeYaylaSoup;
+
+  /// No description provided for @foodTypeMushroomSoup.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mantar Çorbası'**
+  String get foodTypeMushroomSoup;
+
+  /// No description provided for @foodTypeMercimekSoup.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mercimek Çorbası'**
+  String get foodTypeMercimekSoup;
+
+  /// No description provided for @foodTypeBeyran.
+  ///
+  /// In tr, this message translates to:
+  /// **'Beyran'**
+  String get foodTypeBeyran;
+
+  /// No description provided for @foodTypeDugunCorbasi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Düğün Çorbası'**
+  String get foodTypeDugunCorbasi;
+
+  /// No description provided for @foodTypeKellepacaCorbasi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kelle Paça Çorbası'**
+  String get foodTypeKellepacaCorbasi;
+
+  /// No description provided for @foodTypeSehriyeCorbasi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Şehriye Çorbası'**
+  String get foodTypeSehriyeCorbasi;
+
+  /// No description provided for @foodTypeLebeniyeCorbasi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lebeniye Çorbası'**
+  String get foodTypeLebeniyeCorbasi;
+
+  /// No description provided for @foodTypeMisoSoup.
+  ///
+  /// In tr, this message translates to:
+  /// **'Miso Çorbası'**
+  String get foodTypeMisoSoup;
+
+  /// No description provided for @foodTypeWontonSoup.
+  ///
+  /// In tr, this message translates to:
+  /// **'Wonton Çorbası'**
+  String get foodTypeWontonSoup;
+
+  /// No description provided for @foodTypeKimchiJjigae.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kimchi Jjigae'**
+  String get foodTypeKimchiJjigae;
+
+  /// No description provided for @foodTypeSundubuJjigae.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sundubu Jjigae'**
+  String get foodTypeSundubuJjigae;
+
+  /// No description provided for @foodTypeAshReshteh.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ash Reshteh'**
+  String get foodTypeAshReshteh;
+
+  /// No description provided for @foodTypeMinestrone.
+  ///
+  /// In tr, this message translates to:
+  /// **'Minestrone'**
+  String get foodTypeMinestrone;
+
+  /// No description provided for @foodTypeTomYum.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tom Yum'**
+  String get foodTypeTomYum;
+
+  /// No description provided for @foodTypeOtherSoup.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Çorba'**
+  String get foodTypeOtherSoup;
+
+  /// No description provided for @foodTypeShepherdSalad.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çoban Salatası'**
+  String get foodTypeShepherdSalad;
+
+  /// No description provided for @foodTypeCaesarSalad.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sezar Salatası'**
+  String get foodTypeCaesarSalad;
+
+  /// No description provided for @foodTypeGreekSalad.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yunan Salatası'**
+  String get foodTypeGreekSalad;
+
+  /// No description provided for @foodTypeSeasonalSalad.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mevsim Salatası'**
+  String get foodTypeSeasonalSalad;
+
+  /// No description provided for @foodTypeRocketSalad.
+  ///
+  /// In tr, this message translates to:
+  /// **'Roka Salatası'**
+  String get foodTypeRocketSalad;
+
+  /// No description provided for @foodTypeGavurdagiSalad.
+  ///
+  /// In tr, this message translates to:
+  /// **'Gavurdağı Salatası'**
+  String get foodTypeGavurdagiSalad;
+
+  /// No description provided for @foodTypePiyaz.
+  ///
+  /// In tr, this message translates to:
+  /// **'Piyaz'**
+  String get foodTypePiyaz;
+
+  /// No description provided for @foodTypeCobanSalad.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çoban Salatası'**
+  String get foodTypeCobanSalad;
+
+  /// No description provided for @foodTypeKisir.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kısır'**
+  String get foodTypeKisir;
+
+  /// No description provided for @foodTypeSemizotuSalatasi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Semizotu Salatası'**
+  String get foodTypeSemizotuSalatasi;
+
+  /// No description provided for @foodTypeMorLahanaSalatasi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mor Lahana Salatası'**
+  String get foodTypeMorLahanaSalatasi;
+
+  /// No description provided for @foodTypeFattoush.
+  ///
+  /// In tr, this message translates to:
+  /// **'Fattoush'**
+  String get foodTypeFattoush;
+
+  /// No description provided for @foodTypeTabbouleh.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tabbouleh'**
+  String get foodTypeTabbouleh;
+
+  /// No description provided for @foodTypeCaprese.
+  ///
+  /// In tr, this message translates to:
+  /// **'Caprese'**
+  String get foodTypeCaprese;
+
+  /// No description provided for @foodTypeOtherSalad.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Salata'**
+  String get foodTypeOtherSalad;
+
+  /// No description provided for @foodTypeHummus.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hummus'**
+  String get foodTypeHummus;
+
+  /// No description provided for @foodTypeBabaganoush.
+  ///
+  /// In tr, this message translates to:
+  /// **'Babaganoush'**
+  String get foodTypeBabaganoush;
+
+  /// No description provided for @foodTypeHaydari.
+  ///
+  /// In tr, this message translates to:
+  /// **'Haydari'**
+  String get foodTypeHaydari;
+
+  /// No description provided for @foodTypeAtom.
+  ///
+  /// In tr, this message translates to:
+  /// **'Atom'**
+  String get foodTypeAtom;
+
+  /// No description provided for @foodTypeAciliEzme.
+  ///
+  /// In tr, this message translates to:
+  /// **'Acılı Ezme'**
+  String get foodTypeAciliEzme;
+
+  /// No description provided for @foodTypeCacik.
+  ///
+  /// In tr, this message translates to:
+  /// **'Cacık'**
+  String get foodTypeCacik;
+
+  /// No description provided for @foodTypeSigaraBoregi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sigara Böreği'**
+  String get foodTypeSigaraBoregi;
+
+  /// No description provided for @foodTypeIcliKofte.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçli Köfte'**
+  String get foodTypeIcliKofte;
+
+  /// No description provided for @foodTypeMercimekKofte.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mercimek Köfte'**
+  String get foodTypeMercimekKofte;
+
+  /// No description provided for @foodTypeYaprakSarma.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yaprak Sarma'**
+  String get foodTypeYaprakSarma;
+
+  /// No description provided for @foodTypeFalafel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Falafel'**
+  String get foodTypeFalafel;
+
+  /// No description provided for @foodTypeMucver.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mücver'**
+  String get foodTypeMucver;
+
+  /// No description provided for @foodTypePatlicanSoslu.
+  ///
+  /// In tr, this message translates to:
+  /// **'Patlıcan Soslu'**
+  String get foodTypePatlicanSoslu;
+
+  /// No description provided for @foodTypeCigKofte.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çiğ Köfte'**
+  String get foodTypeCigKofte;
+
+  /// No description provided for @foodTypeArnavutCigeri.
+  ///
+  /// In tr, this message translates to:
+  /// **'Arnavut Ciğeri'**
+  String get foodTypeArnavutCigeri;
+
+  /// No description provided for @foodTypeCerkezTavugu.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çerkez Tavuğu'**
+  String get foodTypeCerkezTavugu;
+
+  /// No description provided for @foodTypeTarator.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tarator'**
+  String get foodTypeTarator;
+
+  /// No description provided for @foodTypeBorek.
+  ///
+  /// In tr, this message translates to:
+  /// **'Börek'**
+  String get foodTypeBorek;
+
+  /// No description provided for @foodTypeSuBoregi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Su Böreği'**
+  String get foodTypeSuBoregi;
+
+  /// No description provided for @foodTypeDimSum.
+  ///
+  /// In tr, this message translates to:
+  /// **'Dim Sum'**
+  String get foodTypeDimSum;
+
+  /// No description provided for @foodTypeSpringRolls.
+  ///
+  /// In tr, this message translates to:
+  /// **'Spring Rolls'**
+  String get foodTypeSpringRolls;
+
+  /// No description provided for @foodTypeDumplings.
+  ///
+  /// In tr, this message translates to:
+  /// **'Dumplings'**
+  String get foodTypeDumplings;
+
+  /// No description provided for @foodTypeGyoza.
+  ///
+  /// In tr, this message translates to:
+  /// **'Gyoza'**
+  String get foodTypeGyoza;
+
+  /// No description provided for @foodTypeEdamame.
+  ///
+  /// In tr, this message translates to:
+  /// **'Edamame'**
+  String get foodTypeEdamame;
+
+  /// No description provided for @foodTypeTempura.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tempura'**
+  String get foodTypeTempura;
+
+  /// No description provided for @foodTypeTakoyaki.
+  ///
+  /// In tr, this message translates to:
+  /// **'Takoyaki'**
+  String get foodTypeTakoyaki;
+
+  /// No description provided for @foodTypeBruschetta.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bruschetta'**
+  String get foodTypeBruschetta;
+
+  /// No description provided for @foodTypeArancini.
+  ///
+  /// In tr, this message translates to:
+  /// **'Arancini'**
+  String get foodTypeArancini;
+
+  /// No description provided for @foodTypeCarpaccio.
+  ///
+  /// In tr, this message translates to:
+  /// **'Carpaccio'**
+  String get foodTypeCarpaccio;
+
+  /// No description provided for @foodTypeFocaccia.
+  ///
+  /// In tr, this message translates to:
+  /// **'Focaccia'**
+  String get foodTypeFocaccia;
+
+  /// No description provided for @foodTypeKibbeh.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kibbeh'**
+  String get foodTypeKibbeh;
+
+  /// No description provided for @foodTypeMoutabal.
+  ///
+  /// In tr, this message translates to:
+  /// **'Moutabal'**
+  String get foodTypeMoutabal;
+
+  /// No description provided for @foodTypeMirzaGhasemi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mirza Ghasemi'**
+  String get foodTypeMirzaGhasemi;
+
+  /// No description provided for @foodTypeKashkBademjan.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kashk-e Bademjan'**
+  String get foodTypeKashkBademjan;
+
+  /// No description provided for @foodTypePajeon.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pajeon'**
+  String get foodTypePajeon;
+
+  /// No description provided for @foodTypeSamosa.
+  ///
+  /// In tr, this message translates to:
+  /// **'Samosa'**
+  String get foodTypeSamosa;
+
+  /// No description provided for @foodTypeNachos.
+  ///
+  /// In tr, this message translates to:
+  /// **'Nachos'**
+  String get foodTypeNachos;
+
+  /// No description provided for @foodTypeOtherMeze.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Meze'**
+  String get foodTypeOtherMeze;
+
+  /// No description provided for @foodTypeGuvec.
+  ///
+  /// In tr, this message translates to:
+  /// **'Güveç'**
+  String get foodTypeGuvec;
+
+  /// No description provided for @foodTypeMoussaka.
+  ///
+  /// In tr, this message translates to:
+  /// **'Musakka'**
+  String get foodTypeMoussaka;
+
+  /// No description provided for @foodTypeHunkarBegendi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hünkar Beğendi'**
+  String get foodTypeHunkarBegendi;
+
+  /// No description provided for @foodTypeEtliNohut.
+  ///
+  /// In tr, this message translates to:
+  /// **'Etli Nohut'**
+  String get foodTypeEtliNohut;
+
+  /// No description provided for @foodTypeTurlu.
+  ///
+  /// In tr, this message translates to:
+  /// **'Türlü'**
+  String get foodTypeTurlu;
+
+  /// No description provided for @foodTypeTazeFasulye.
+  ///
+  /// In tr, this message translates to:
+  /// **'Taze Fasulye'**
+  String get foodTypeTazeFasulye;
+
+  /// No description provided for @foodTypeEtliBamya.
+  ///
+  /// In tr, this message translates to:
+  /// **'Etli Bamya'**
+  String get foodTypeEtliBamya;
+
+  /// No description provided for @foodTypeEtliBezelye.
+  ///
+  /// In tr, this message translates to:
+  /// **'Etli Bezelye'**
+  String get foodTypeEtliBezelye;
+
+  /// No description provided for @foodTypeEtliKapuska.
+  ///
+  /// In tr, this message translates to:
+  /// **'Etli Kapuska'**
+  String get foodTypeEtliKapuska;
+
+  /// No description provided for @foodTypeIspanakYemegi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ispanak Yemeği'**
+  String get foodTypeIspanakYemegi;
+
+  /// No description provided for @foodTypeEtliPirasa.
+  ///
+  /// In tr, this message translates to:
+  /// **'Etli Pırasa'**
+  String get foodTypeEtliPirasa;
+
+  /// No description provided for @foodTypeKuruFasulye.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kuru Fasulye'**
+  String get foodTypeKuruFasulye;
+
+  /// No description provided for @foodTypeBarbunya.
+  ///
+  /// In tr, this message translates to:
+  /// **'Barbunya'**
+  String get foodTypeBarbunya;
+
+  /// No description provided for @foodTypeNohutYemegi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Nohut Yemeği'**
+  String get foodTypeNohutYemegi;
+
+  /// No description provided for @foodTypeZeytinyagliEnginar.
+  ///
+  /// In tr, this message translates to:
+  /// **'Zeytinyağlı Enginar'**
+  String get foodTypeZeytinyagliEnginar;
+
+  /// No description provided for @foodTypeGhormehSabzi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ghormeh Sabzi'**
+  String get foodTypeGhormehSabzi;
+
+  /// No description provided for @foodTypeFesenjan.
+  ///
+  /// In tr, this message translates to:
+  /// **'Fesenjan'**
+  String get foodTypeFesenjan;
+
+  /// No description provided for @foodTypeDiziAbgoosht.
+  ///
+  /// In tr, this message translates to:
+  /// **'Dizi Abgoosht'**
+  String get foodTypeDiziAbgoosht;
+
+  /// No description provided for @foodTypeHotPot.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hot Pot'**
+  String get foodTypeHotPot;
+
+  /// No description provided for @foodTypeMansaf.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mansaf'**
+  String get foodTypeMansaf;
+
+  /// No description provided for @foodTypeFatteh.
+  ///
+  /// In tr, this message translates to:
+  /// **'Fatteh'**
+  String get foodTypeFatteh;
+
+  /// No description provided for @foodTypeMaqluba.
+  ///
+  /// In tr, this message translates to:
+  /// **'Maqluba'**
+  String get foodTypeMaqluba;
+
+  /// No description provided for @foodTypeShakshuka.
+  ///
+  /// In tr, this message translates to:
+  /// **'Shakshuka'**
+  String get foodTypeShakshuka;
+
+  /// No description provided for @foodTypeTteokbokki.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tteokbokki'**
+  String get foodTypeTteokbokki;
+
+  /// No description provided for @foodTypeOssoBuco.
+  ///
+  /// In tr, this message translates to:
+  /// **'Osso Buco'**
+  String get foodTypeOssoBuco;
+
+  /// No description provided for @foodTypeKuzuIncik.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kuzu İncik'**
+  String get foodTypeKuzuIncik;
+
+  /// No description provided for @foodTypeOtherStew.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Yemek'**
+  String get foodTypeOtherStew;
+
+  /// No description provided for @foodTypeImamBayildi.
+  ///
+  /// In tr, this message translates to:
+  /// **'İmam Bayıldı'**
+  String get foodTypeImamBayildi;
+
+  /// No description provided for @foodTypeKarniyarik.
+  ///
+  /// In tr, this message translates to:
+  /// **'Karnıyarık'**
+  String get foodTypeKarniyarik;
+
+  /// No description provided for @foodTypeLahanaSarma.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lahana Sarma'**
+  String get foodTypeLahanaSarma;
+
+  /// No description provided for @foodTypeKabakDolma.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kabak Dolma'**
+  String get foodTypeKabakDolma;
+
+  /// No description provided for @foodTypePatlicanDolma.
+  ///
+  /// In tr, this message translates to:
+  /// **'Patlıcan Dolma'**
+  String get foodTypePatlicanDolma;
+
+  /// No description provided for @foodTypeBiberDolma.
+  ///
+  /// In tr, this message translates to:
+  /// **'Biber Dolma'**
+  String get foodTypeBiberDolma;
+
+  /// No description provided for @foodTypeEtliYaprakSarma.
+  ///
+  /// In tr, this message translates to:
+  /// **'Etli Yaprak Sarma'**
+  String get foodTypeEtliYaprakSarma;
+
+  /// No description provided for @foodTypeZeytinyagliDolma.
+  ///
+  /// In tr, this message translates to:
+  /// **'Zeytinyağlı Dolma'**
+  String get foodTypeZeytinyagliDolma;
+
+  /// No description provided for @foodTypeStuffedPeppers.
+  ///
+  /// In tr, this message translates to:
+  /// **'Dolma Biber'**
+  String get foodTypeStuffedPeppers;
+
+  /// No description provided for @foodTypeMahshi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mahshi'**
+  String get foodTypeMahshi;
+
+  /// No description provided for @foodTypeOtherDolma.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Dolma'**
+  String get foodTypeOtherDolma;
+
+  /// No description provided for @foodTypeSteak.
+  ///
+  /// In tr, this message translates to:
+  /// **'Biftek'**
+  String get foodTypeSteak;
+
+  /// No description provided for @foodTypeKuzuTandir.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kuzu Tandır'**
+  String get foodTypeKuzuTandir;
+
+  /// No description provided for @foodTypeSacKavurma.
+  ///
+  /// In tr, this message translates to:
+  /// **'Saç Kavurma'**
+  String get foodTypeSacKavurma;
+
+  /// No description provided for @foodTypeTasKebab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tas Kebap'**
+  String get foodTypeTasKebab;
+
+  /// No description provided for @foodTypePekingDuck.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pekin Ördeği'**
+  String get foodTypePekingDuck;
+
+  /// No description provided for @foodTypeSaltimbocca.
+  ///
+  /// In tr, this message translates to:
+  /// **'Saltimbocca'**
+  String get foodTypeSaltimbocca;
+
+  /// No description provided for @foodTypeOtherSteak.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Biftek'**
+  String get foodTypeOtherSteak;
+
+  /// No description provided for @foodTypeKungPaoChicken.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kung Pao Tavuk'**
+  String get foodTypeKungPaoChicken;
+
+  /// No description provided for @foodTypeSweetSourChicken.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ekşi Tatlı Tavuk'**
+  String get foodTypeSweetSourChicken;
+
+  /// No description provided for @foodTypeMapoTofu.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mapo Tofu'**
+  String get foodTypeMapoTofu;
+
+  /// No description provided for @foodTypeTeriyaki.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teriyaki'**
+  String get foodTypeTeriyaki;
+
+  /// No description provided for @foodTypeDakgalbi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Dakgalbi'**
+  String get foodTypeDakgalbi;
+
+  /// No description provided for @foodTypeOtherStirFry.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Tava'**
+  String get foodTypeOtherStirFry;
+
+  /// No description provided for @foodTypeFriedChickenClassic.
+  ///
+  /// In tr, this message translates to:
+  /// **'Klasik Kızarmış Tavuk'**
+  String get foodTypeFriedChickenClassic;
+
+  /// No description provided for @foodTypeKoreanFriedChicken.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kore Usulü Tavuk'**
+  String get foodTypeKoreanFriedChicken;
+
+  /// No description provided for @foodTypeChickenSchnitzel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tavuk Şnitzel'**
+  String get foodTypeChickenSchnitzel;
+
+  /// No description provided for @foodTypeTonkatsu.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tonkatsu'**
+  String get foodTypeTonkatsu;
+
+  /// No description provided for @foodTypeChickenWings.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tavuk Kanat'**
+  String get foodTypeChickenWings;
+
+  /// No description provided for @foodTypeChickenTenders.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tavuk Tender'**
+  String get foodTypeChickenTenders;
+
+  /// No description provided for @foodTypeNuggets.
+  ///
+  /// In tr, this message translates to:
+  /// **'Nuggets'**
+  String get foodTypeNuggets;
+
+  /// No description provided for @foodTypeOtherFriedChicken.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Kızarmış Tavuk'**
+  String get foodTypeOtherFriedChicken;
+
+  /// No description provided for @foodTypeBulgurPilaf.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bulgur Pilavı'**
+  String get foodTypeBulgurPilaf;
+
+  /// No description provided for @foodTypeRicePilaf.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pirinç Pilavı'**
+  String get foodTypeRicePilaf;
+
+  /// No description provided for @foodTypeNohutluPilav.
+  ///
+  /// In tr, this message translates to:
+  /// **'Nohutlu Pilav'**
+  String get foodTypeNohutluPilav;
+
+  /// No description provided for @foodTypeIcPilav.
+  ///
+  /// In tr, this message translates to:
+  /// **'İç Pilav'**
+  String get foodTypeIcPilav;
+
+  /// No description provided for @foodTypeDomatesliB.
+  ///
+  /// In tr, this message translates to:
+  /// **'Domatesli Bulgur'**
+  String get foodTypeDomatesliB;
+
+  /// No description provided for @foodTypeFirikPilavi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Firik Pilavı'**
+  String get foodTypeFirikPilavi;
+
+  /// No description provided for @foodTypeSebzeliPilav.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sebzeli Pilav'**
+  String get foodTypeSebzeliPilav;
+
+  /// No description provided for @foodTypeMeyhanePilavi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Meyhane Pilavı'**
+  String get foodTypeMeyhanePilavi;
+
+  /// No description provided for @foodTypeFriedRice.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çin Pilavı'**
+  String get foodTypeFriedRice;
+
+  /// No description provided for @foodTypeBibimbap.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bibimbap'**
+  String get foodTypeBibimbap;
+
+  /// No description provided for @foodTypeDonburi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Donburi'**
+  String get foodTypeDonburi;
+
+  /// No description provided for @foodTypeTahdig.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tahdig'**
+  String get foodTypeTahdig;
+
+  /// No description provided for @foodTypeTahchin.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tahchin'**
+  String get foodTypeTahchin;
+
+  /// No description provided for @foodTypeZereshkPolo.
+  ///
+  /// In tr, this message translates to:
+  /// **'Zereshk Polo'**
+  String get foodTypeZereshkPolo;
+
+  /// No description provided for @foodTypeBaghaliPolo.
+  ///
+  /// In tr, this message translates to:
+  /// **'Baghali Polo'**
+  String get foodTypeBaghaliPolo;
+
+  /// No description provided for @foodTypeSabziPolo.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sabzi Polo'**
+  String get foodTypeSabziPolo;
+
+  /// No description provided for @foodTypeKabsa.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kabsa'**
+  String get foodTypeKabsa;
+
+  /// No description provided for @foodTypeMachboos.
+  ///
+  /// In tr, this message translates to:
+  /// **'Machboos'**
+  String get foodTypeMachboos;
+
+  /// No description provided for @foodTypeBiryani.
+  ///
+  /// In tr, this message translates to:
+  /// **'Biryani'**
+  String get foodTypeBiryani;
+
+  /// No description provided for @foodTypeHamsiliPilav.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hamsili Pilav'**
+  String get foodTypeHamsiliPilav;
+
+  /// No description provided for @foodTypeAliPasaPilavi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ali Paşa Pilavı'**
+  String get foodTypeAliPasaPilavi;
+
+  /// No description provided for @foodTypeOtherPilaf.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Pilav'**
+  String get foodTypeOtherPilaf;
+
+  /// No description provided for @foodTypeRamen.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ramen'**
+  String get foodTypeRamen;
+
+  /// No description provided for @foodTypeUdon.
+  ///
+  /// In tr, this message translates to:
+  /// **'Udon'**
+  String get foodTypeUdon;
+
+  /// No description provided for @foodTypeSoba.
+  ///
+  /// In tr, this message translates to:
+  /// **'Soba'**
+  String get foodTypeSoba;
+
+  /// No description provided for @foodTypePho.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pho'**
+  String get foodTypePho;
+
+  /// No description provided for @foodTypePadThai.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pad Thai'**
+  String get foodTypePadThai;
+
+  /// No description provided for @foodTypeChowMein.
+  ///
+  /// In tr, this message translates to:
+  /// **'Chow Mein'**
+  String get foodTypeChowMein;
+
+  /// No description provided for @foodTypeDanDanNoodles.
+  ///
+  /// In tr, this message translates to:
+  /// **'Dan Dan Noodles'**
+  String get foodTypeDanDanNoodles;
+
+  /// No description provided for @foodTypeJapchae.
+  ///
+  /// In tr, this message translates to:
+  /// **'Japchae'**
+  String get foodTypeJapchae;
+
+  /// No description provided for @foodTypeJajangmyeon.
+  ///
+  /// In tr, this message translates to:
+  /// **'Jajangmyeon'**
+  String get foodTypeJajangmyeon;
+
+  /// No description provided for @foodTypeNaengmyeon.
+  ///
+  /// In tr, this message translates to:
+  /// **'Naengmyeon'**
+  String get foodTypeNaengmyeon;
+
+  /// No description provided for @foodTypeOtherNoodle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Noodle'**
+  String get foodTypeOtherNoodle;
+
+  /// No description provided for @foodTypeSushi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Suşi'**
+  String get foodTypeSushi;
+
+  /// No description provided for @foodTypeSashimi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Saşimi'**
+  String get foodTypeSashimi;
+
+  /// No description provided for @foodTypeMakiRoll.
+  ///
+  /// In tr, this message translates to:
+  /// **'Maki Roll'**
+  String get foodTypeMakiRoll;
+
+  /// No description provided for @foodTypeNigiri.
+  ///
+  /// In tr, this message translates to:
+  /// **'Nigiri'**
+  String get foodTypeNigiri;
+
+  /// No description provided for @foodTypeTemaki.
+  ///
+  /// In tr, this message translates to:
+  /// **'Temaki'**
+  String get foodTypeTemaki;
+
+  /// No description provided for @foodTypeOnigiri.
+  ///
+  /// In tr, this message translates to:
+  /// **'Onigiri'**
+  String get foodTypeOnigiri;
+
+  /// No description provided for @foodTypeKimbap.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kimbap'**
+  String get foodTypeKimbap;
+
+  /// No description provided for @foodTypeOtherSushi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Suşi'**
+  String get foodTypeOtherSushi;
+
+  /// No description provided for @foodTypeKatsuCurry.
+  ///
+  /// In tr, this message translates to:
+  /// **'Katsu Köri'**
+  String get foodTypeKatsuCurry;
+
+  /// No description provided for @foodTypeButterChicken.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tereyağlı Tavuk'**
+  String get foodTypeButterChicken;
+
+  /// No description provided for @foodTypeTikkaMasala.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tikka Masala'**
+  String get foodTypeTikkaMasala;
+
+  /// No description provided for @foodTypeGreenCurry.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yeşil Köri'**
+  String get foodTypeGreenCurry;
+
+  /// No description provided for @foodTypeRedCurry.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kırmızı Köri'**
+  String get foodTypeRedCurry;
+
+  /// No description provided for @foodTypeMassamanCurry.
+  ///
+  /// In tr, this message translates to:
+  /// **'Massaman Köri'**
+  String get foodTypeMassamanCurry;
+
+  /// No description provided for @foodTypeDal.
+  ///
+  /// In tr, this message translates to:
+  /// **'Dal'**
+  String get foodTypeDal;
+
+  /// No description provided for @foodTypeVindaloo.
+  ///
+  /// In tr, this message translates to:
+  /// **'Vindaloo'**
+  String get foodTypeVindaloo;
+
+  /// No description provided for @foodTypeOtherCurry.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Köri'**
+  String get foodTypeOtherCurry;
+
+  /// No description provided for @foodTypeSpagBolognese.
+  ///
+  /// In tr, this message translates to:
+  /// **'Spagetti Bolonez'**
+  String get foodTypeSpagBolognese;
+
+  /// No description provided for @foodTypePenneArrabiata.
+  ///
+  /// In tr, this message translates to:
+  /// **'Penne Arrabiata'**
+  String get foodTypePenneArrabiata;
+
+  /// No description provided for @foodTypeFettuccineAlfredo.
+  ///
+  /// In tr, this message translates to:
+  /// **'Fettuccine Alfredo'**
+  String get foodTypeFettuccineAlfredo;
+
+  /// No description provided for @foodTypeLasagna.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lazanya'**
+  String get foodTypeLasagna;
+
+  /// No description provided for @foodTypeMakarna.
+  ///
+  /// In tr, this message translates to:
+  /// **'Makarna'**
+  String get foodTypeMakarna;
+
+  /// No description provided for @foodTypeCarbonara.
+  ///
+  /// In tr, this message translates to:
+  /// **'Carbonara'**
+  String get foodTypeCarbonara;
+
+  /// No description provided for @foodTypeRavioli.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ravioli'**
+  String get foodTypeRavioli;
+
+  /// No description provided for @foodTypeRisotto.
+  ///
+  /// In tr, this message translates to:
+  /// **'Risotto'**
+  String get foodTypeRisotto;
+
+  /// No description provided for @foodTypeGnocchi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Gnocchi'**
+  String get foodTypeGnocchi;
+
+  /// No description provided for @foodTypeManti.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mantı'**
+  String get foodTypeManti;
+
+  /// No description provided for @foodTypeOtherPasta.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Makarna'**
+  String get foodTypeOtherPasta;
+
+  /// No description provided for @foodTypeDonerWrap.
+  ///
+  /// In tr, this message translates to:
+  /// **'Döner Dürüm'**
+  String get foodTypeDonerWrap;
+
+  /// No description provided for @foodTypeTavukDurum.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tavuk Dürüm'**
+  String get foodTypeTavukDurum;
+
+  /// No description provided for @foodTypeEtDurum.
+  ///
+  /// In tr, this message translates to:
+  /// **'Et Dürüm'**
+  String get foodTypeEtDurum;
+
+  /// No description provided for @foodTypeCigKofteDurum.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çiğ Köfte Dürüm'**
+  String get foodTypeCigKofteDurum;
+
+  /// No description provided for @foodTypeAdanaDurum.
+  ///
+  /// In tr, this message translates to:
+  /// **'Adana Dürüm'**
+  String get foodTypeAdanaDurum;
+
+  /// No description provided for @foodTypeMidyeDurum.
+  ///
+  /// In tr, this message translates to:
+  /// **'Midye Dürüm'**
+  String get foodTypeMidyeDurum;
+
+  /// No description provided for @foodTypeTacos.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tacos'**
+  String get foodTypeTacos;
+
+  /// No description provided for @foodTypeBurrito.
+  ///
+  /// In tr, this message translates to:
+  /// **'Burrito'**
+  String get foodTypeBurrito;
+
+  /// No description provided for @foodTypeQuesadilla.
+  ///
+  /// In tr, this message translates to:
+  /// **'Quesadilla'**
+  String get foodTypeQuesadilla;
+
+  /// No description provided for @foodTypeOtherWrap.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Dürüm'**
+  String get foodTypeOtherWrap;
+
+  /// No description provided for @foodTypeChickenDoner.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tavuk Döner'**
+  String get foodTypeChickenDoner;
+
+  /// No description provided for @foodTypeMeatDoner.
+  ///
+  /// In tr, this message translates to:
+  /// **'Et Döner'**
+  String get foodTypeMeatDoner;
+
+  /// No description provided for @foodTypeIskenderDoner.
+  ///
+  /// In tr, this message translates to:
+  /// **'İskender Döner'**
+  String get foodTypeIskenderDoner;
+
+  /// No description provided for @foodTypeTombikDoner.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tombik Döner'**
+  String get foodTypeTombikDoner;
+
+  /// No description provided for @foodTypePorsiyonDoner.
+  ///
+  /// In tr, this message translates to:
+  /// **'Porsiyon Döner'**
+  String get foodTypePorsiyonDoner;
+
+  /// No description provided for @foodTypeShawarma.
+  ///
+  /// In tr, this message translates to:
+  /// **'Shawarma'**
+  String get foodTypeShawarma;
+
+  /// No description provided for @foodTypeOtherDoner.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Döner'**
+  String get foodTypeOtherDoner;
+
+  /// No description provided for @foodTypeTost.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tost'**
+  String get foodTypeTost;
+
+  /// No description provided for @foodTypeKasarliTost.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kaşarlı Tost'**
+  String get foodTypeKasarliTost;
+
+  /// No description provided for @foodTypeKumru.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kumru'**
+  String get foodTypeKumru;
+
+  /// No description provided for @foodTypeClubSandwich.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kulüp Sandviç'**
+  String get foodTypeClubSandwich;
+
+  /// No description provided for @foodTypePanini.
+  ///
+  /// In tr, this message translates to:
+  /// **'Panini'**
+  String get foodTypePanini;
+
+  /// No description provided for @foodTypeHotDog.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hot Dog'**
+  String get foodTypeHotDog;
+
+  /// No description provided for @foodTypeFrenchFries.
+  ///
+  /// In tr, this message translates to:
+  /// **'Patates Kızartması'**
+  String get foodTypeFrenchFries;
+
+  /// No description provided for @foodTypeOtherSandwich.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Sandviç'**
+  String get foodTypeOtherSandwich;
+
+  /// No description provided for @foodTypeGrilledFish.
+  ///
+  /// In tr, this message translates to:
+  /// **'Izgara Balık'**
+  String get foodTypeGrilledFish;
+
+  /// No description provided for @foodTypeFriedCalamari.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kalamar Tava'**
+  String get foodTypeFriedCalamari;
+
+  /// No description provided for @foodTypeShrimpCasserole.
+  ///
+  /// In tr, this message translates to:
+  /// **'Karides Güveç'**
+  String get foodTypeShrimpCasserole;
+
+  /// No description provided for @foodTypeFishSandwich.
+  ///
+  /// In tr, this message translates to:
+  /// **'Balık Ekmek'**
+  String get foodTypeFishSandwich;
+
+  /// No description provided for @foodTypeLevrek.
+  ///
+  /// In tr, this message translates to:
+  /// **'Levrek'**
+  String get foodTypeLevrek;
+
+  /// No description provided for @foodTypeSomon.
+  ///
+  /// In tr, this message translates to:
+  /// **'Somon'**
+  String get foodTypeSomon;
+
+  /// No description provided for @foodTypeHamsi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hamsi'**
+  String get foodTypeHamsi;
+
+  /// No description provided for @foodTypeMidyeTava.
+  ///
+  /// In tr, this message translates to:
+  /// **'Midye Tava'**
+  String get foodTypeMidyeTava;
+
+  /// No description provided for @foodTypeMidyeDolma.
+  ///
+  /// In tr, this message translates to:
+  /// **'Midye Dolma'**
+  String get foodTypeMidyeDolma;
+
+  /// No description provided for @foodTypeKaridesGuvec.
+  ///
+  /// In tr, this message translates to:
+  /// **'Karides Güveç'**
+  String get foodTypeKaridesGuvec;
+
+  /// No description provided for @foodTypePalamut.
+  ///
+  /// In tr, this message translates to:
+  /// **'Palamut'**
+  String get foodTypePalamut;
+
+  /// No description provided for @foodTypeCipura.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çipura'**
+  String get foodTypeCipura;
+
+  /// No description provided for @foodTypeBarbunTava.
+  ///
+  /// In tr, this message translates to:
+  /// **'Barbun Tava'**
+  String get foodTypeBarbunTava;
+
+  /// No description provided for @foodTypeLufer.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lüfer'**
+  String get foodTypeLufer;
+
+  /// No description provided for @foodTypeFishAndChips.
+  ///
+  /// In tr, this message translates to:
+  /// **'Fish and Chips'**
+  String get foodTypeFishAndChips;
+
+  /// No description provided for @foodTypeOtherSeafood.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Deniz Ürünü'**
+  String get foodTypeOtherSeafood;
+
+  /// No description provided for @foodTypeTurkishBreakfast.
+  ///
+  /// In tr, this message translates to:
+  /// **'Türk Kahvaltı Tabağı'**
+  String get foodTypeTurkishBreakfast;
+
+  /// No description provided for @foodTypeSerpmeKahvalti.
+  ///
+  /// In tr, this message translates to:
+  /// **'Serpme Kahvaltı'**
+  String get foodTypeSerpmeKahvalti;
+
+  /// No description provided for @foodTypeMenemen.
+  ///
+  /// In tr, this message translates to:
+  /// **'Menemen'**
+  String get foodTypeMenemen;
+
+  /// No description provided for @foodTypeSahandaYumurta.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sahanda Yumurta'**
+  String get foodTypeSahandaYumurta;
+
+  /// No description provided for @foodTypeSucukluYumurta.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sucuklu Yumurta'**
+  String get foodTypeSucukluYumurta;
+
+  /// No description provided for @foodTypeGozleme.
+  ///
+  /// In tr, this message translates to:
+  /// **'Gözleme'**
+  String get foodTypeGozleme;
+
+  /// No description provided for @foodTypeSimit.
+  ///
+  /// In tr, this message translates to:
+  /// **'Simit'**
+  String get foodTypeSimit;
+
+  /// No description provided for @foodTypeAcma.
+  ///
+  /// In tr, this message translates to:
+  /// **'Açma'**
+  String get foodTypeAcma;
+
+  /// No description provided for @foodTypePogaca.
+  ///
+  /// In tr, this message translates to:
+  /// **'Poğaça'**
+  String get foodTypePogaca;
+
+  /// No description provided for @foodTypeCilbir.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çılbır'**
+  String get foodTypeCilbir;
+
+  /// No description provided for @foodTypePastirmaliYumurta.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pastırmalı Yumurta'**
+  String get foodTypePastirmaliYumurta;
+
+  /// No description provided for @foodTypeKaymakBal.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kaymak Bal'**
+  String get foodTypeKaymakBal;
+
+  /// No description provided for @foodTypePisi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pişi'**
+  String get foodTypePisi;
+
+  /// No description provided for @foodTypeKatmerKahvalti.
+  ///
+  /// In tr, this message translates to:
+  /// **'Katmer Kahvaltı'**
+  String get foodTypeKatmerKahvalti;
+
+  /// No description provided for @foodTypeOtherBreakfast.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Kahvaltı'**
+  String get foodTypeOtherBreakfast;
+
+  /// No description provided for @foodTypeBaklava.
+  ///
+  /// In tr, this message translates to:
+  /// **'Baklava'**
+  String get foodTypeBaklava;
+
+  /// No description provided for @foodTypeKunefe.
+  ///
+  /// In tr, this message translates to:
+  /// **'Künefe'**
+  String get foodTypeKunefe;
+
+  /// No description provided for @foodTypeSutlac.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sütlaç'**
+  String get foodTypeSutlac;
+
+  /// No description provided for @foodTypeKazandibi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kazandibi'**
+  String get foodTypeKazandibi;
+
+  /// No description provided for @foodTypeTavukGogsu.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tavuk Göğsü'**
+  String get foodTypeTavukGogsu;
+
+  /// No description provided for @foodTypeAsure.
+  ///
+  /// In tr, this message translates to:
+  /// **'Aşure'**
+  String get foodTypeAsure;
+
+  /// No description provided for @foodTypeRevani.
+  ///
+  /// In tr, this message translates to:
+  /// **'Revani'**
+  String get foodTypeRevani;
+
+  /// No description provided for @foodTypeLokma.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lokma'**
+  String get foodTypeLokma;
+
+  /// No description provided for @foodTypeTrilece.
+  ///
+  /// In tr, this message translates to:
+  /// **'Trileçe'**
+  String get foodTypeTrilece;
+
+  /// No description provided for @foodTypeProfiterol.
+  ///
+  /// In tr, this message translates to:
+  /// **'Profiterol'**
+  String get foodTypeProfiterol;
+
+  /// No description provided for @foodTypeCheesecake.
+  ///
+  /// In tr, this message translates to:
+  /// **'Cheesecake'**
+  String get foodTypeCheesecake;
+
+  /// No description provided for @foodTypeTiramisu.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tiramisu'**
+  String get foodTypeTiramisu;
+
+  /// No description provided for @foodTypeBrownie.
+  ///
+  /// In tr, this message translates to:
+  /// **'Brownie'**
+  String get foodTypeBrownie;
+
+  /// No description provided for @foodTypeWaffle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Waffle'**
+  String get foodTypeWaffle;
+
+  /// No description provided for @foodTypeDondurma.
+  ///
+  /// In tr, this message translates to:
+  /// **'Dondurma'**
+  String get foodTypeDondurma;
+
+  /// No description provided for @foodTypeGullac.
+  ///
+  /// In tr, this message translates to:
+  /// **'Güllaç'**
+  String get foodTypeGullac;
+
+  /// No description provided for @foodTypeKeskul.
+  ///
+  /// In tr, this message translates to:
+  /// **'Keşkül'**
+  String get foodTypeKeskul;
+
+  /// No description provided for @foodTypeTelKadayif.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tel Kadayıf'**
+  String get foodTypeTelKadayif;
+
+  /// No description provided for @foodTypeSekerpare.
+  ///
+  /// In tr, this message translates to:
+  /// **'Şekerpare'**
+  String get foodTypeSekerpare;
+
+  /// No description provided for @foodTypeTulumba.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tulumba'**
+  String get foodTypeTulumba;
+
+  /// No description provided for @foodTypeHelva.
+  ///
+  /// In tr, this message translates to:
+  /// **'Helva'**
+  String get foodTypeHelva;
+
+  /// No description provided for @foodTypeKatmer.
+  ///
+  /// In tr, this message translates to:
+  /// **'Katmer'**
+  String get foodTypeKatmer;
+
+  /// No description provided for @foodTypeKabakTatlisi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kabak Tatlısı'**
+  String get foodTypeKabakTatlisi;
+
+  /// No description provided for @foodTypeAyvaTatlisi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ayva Tatlısı'**
+  String get foodTypeAyvaTatlisi;
+
+  /// No description provided for @foodTypeSutluNuriye.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sütlü Nuriye'**
+  String get foodTypeSutluNuriye;
+
+  /// No description provided for @foodTypeBurmaKadayif.
+  ///
+  /// In tr, this message translates to:
+  /// **'Burma Kadayıf'**
+  String get foodTypeBurmaKadayif;
+
+  /// No description provided for @foodTypePannaCotta.
+  ///
+  /// In tr, this message translates to:
+  /// **'Panna Cotta'**
+  String get foodTypePannaCotta;
+
+  /// No description provided for @foodTypeGelato.
+  ///
+  /// In tr, this message translates to:
+  /// **'Gelato'**
+  String get foodTypeGelato;
+
+  /// No description provided for @foodTypeCannoli.
+  ///
+  /// In tr, this message translates to:
+  /// **'Cannoli'**
+  String get foodTypeCannoli;
+
+  /// No description provided for @foodTypeKnafeh.
+  ///
+  /// In tr, this message translates to:
+  /// **'Knafeh'**
+  String get foodTypeKnafeh;
+
+  /// No description provided for @foodTypeMuhallabia.
+  ///
+  /// In tr, this message translates to:
+  /// **'Muhallabia'**
+  String get foodTypeMuhallabia;
+
+  /// No description provided for @foodTypeChurros.
+  ///
+  /// In tr, this message translates to:
+  /// **'Churros'**
+  String get foodTypeChurros;
+
+  /// No description provided for @foodTypeMochi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mochi'**
+  String get foodTypeMochi;
+
+  /// No description provided for @foodTypeOtherDessert.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Tatlı'**
+  String get foodTypeOtherDessert;
+
+  /// No description provided for @foodTypeTurkishTea.
+  ///
+  /// In tr, this message translates to:
+  /// **'Türk Çayı'**
+  String get foodTypeTurkishTea;
+
+  /// No description provided for @foodTypeTurkishCoffee.
+  ///
+  /// In tr, this message translates to:
+  /// **'Türk Kahvesi'**
+  String get foodTypeTurkishCoffee;
+
+  /// No description provided for @foodTypeAyran.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ayran'**
+  String get foodTypeAyran;
+
+  /// No description provided for @foodTypeFreshOrangeJuice.
+  ///
+  /// In tr, this message translates to:
+  /// **'Taze Portakal Suyu'**
+  String get foodTypeFreshOrangeJuice;
+
+  /// No description provided for @foodTypeLemonade.
+  ///
+  /// In tr, this message translates to:
+  /// **'Limonata'**
+  String get foodTypeLemonade;
+
+  /// No description provided for @foodTypeSmoothie.
+  ///
+  /// In tr, this message translates to:
+  /// **'Smoothie'**
+  String get foodTypeSmoothie;
+
+  /// No description provided for @foodTypeSalgam.
+  ///
+  /// In tr, this message translates to:
+  /// **'Şalgam'**
+  String get foodTypeSalgam;
+
+  /// No description provided for @foodTypeBoza.
+  ///
+  /// In tr, this message translates to:
+  /// **'Boza'**
+  String get foodTypeBoza;
+
+  /// No description provided for @foodTypeSahlep.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sahlep'**
+  String get foodTypeSahlep;
+
+  /// No description provided for @foodTypeSoftDrink.
+  ///
+  /// In tr, this message translates to:
+  /// **'Meşrubat'**
+  String get foodTypeSoftDrink;
+
+  /// No description provided for @foodTypeWater.
+  ///
+  /// In tr, this message translates to:
+  /// **'Su'**
+  String get foodTypeWater;
+
+  /// No description provided for @foodTypeNarSuyu.
+  ///
+  /// In tr, this message translates to:
+  /// **'Nar Suyu'**
+  String get foodTypeNarSuyu;
+
+  /// No description provided for @foodTypeSerbet.
+  ///
+  /// In tr, this message translates to:
+  /// **'Şerbet'**
+  String get foodTypeSerbet;
+
+  /// No description provided for @foodTypeTurkKahvesiSoguk.
+  ///
+  /// In tr, this message translates to:
+  /// **'Soğuk Türk Kahvesi'**
+  String get foodTypeTurkKahvesiSoguk;
+
+  /// No description provided for @foodTypeOtherBeverage.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer İçecek'**
+  String get foodTypeOtherBeverage;
+
+  /// No description provided for @foodTypeHamburger.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hamburger'**
+  String get foodTypeHamburger;
+
+  /// No description provided for @foodTypeCheeseburger.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çizburger'**
+  String get foodTypeCheeseburger;
+
+  /// No description provided for @foodTypeChickenBurger.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tavuk Burger'**
+  String get foodTypeChickenBurger;
+
+  /// No description provided for @foodTypeIslakHamburger.
+  ///
+  /// In tr, this message translates to:
+  /// **'Islak Hamburger'**
+  String get foodTypeIslakHamburger;
+
+  /// No description provided for @foodTypeVeggieBurger.
+  ///
+  /// In tr, this message translates to:
+  /// **'Vejetaryen Burger'**
+  String get foodTypeVeggieBurger;
+
+  /// No description provided for @foodTypeOtherHamburger.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Hamburger'**
+  String get foodTypeOtherHamburger;
+
+  /// No description provided for @foodTypeMargaritaPizza.
+  ///
+  /// In tr, this message translates to:
+  /// **'Margarita Pizza'**
+  String get foodTypeMargaritaPizza;
+
+  /// No description provided for @foodTypeMixedPizza.
+  ///
+  /// In tr, this message translates to:
+  /// **'Karışık Pizza'**
+  String get foodTypeMixedPizza;
+
+  /// No description provided for @foodTypePepperoniPizza.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pepperoni Pizza'**
+  String get foodTypePepperoniPizza;
+
+  /// No description provided for @foodTypeSucukluPizza.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sucuklu Pizza'**
+  String get foodTypeSucukluPizza;
+
+  /// No description provided for @foodTypeFourCheesePizza.
+  ///
+  /// In tr, this message translates to:
+  /// **'Dört Peynirli Pizza'**
+  String get foodTypeFourCheesePizza;
+
+  /// No description provided for @foodTypeOtherPizza.
+  ///
+  /// In tr, this message translates to:
+  /// **'Diğer Pizza'**
+  String get foodTypeOtherPizza;
+
+  /// No description provided for @foodExtraBread.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ekstra Ekmek'**
+  String get foodExtraBread;
+
+  /// No description provided for @foodExtraRicePortion.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pilav Porsiyon'**
+  String get foodExtraRicePortion;
+
+  /// No description provided for @foodExtraBulgurPortion.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bulgur Porsiyon'**
+  String get foodExtraBulgurPortion;
+
+  /// No description provided for @foodExtraRice.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ekstra Pilav'**
+  String get foodExtraRice;
+
+  /// No description provided for @foodExtraGarlicBread.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sarımsaklı Ekmek'**
+  String get foodExtraGarlicBread;
+
+  /// No description provided for @foodExtraLavash.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lavaş'**
+  String get foodExtraLavash;
+
+  /// No description provided for @foodExtraSimiSide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Simit'**
+  String get foodExtraSimiSide;
+
+  /// No description provided for @foodExtraPitaChips.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pide Cipsi'**
+  String get foodExtraPitaChips;
+
+  /// No description provided for @foodExtraCroutons.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kruton'**
+  String get foodExtraCroutons;
+
+  /// No description provided for @foodExtraCheese.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ekstra Peynir'**
+  String get foodExtraCheese;
+
+  /// No description provided for @foodExtraParmesan.
+  ///
+  /// In tr, this message translates to:
+  /// **'Parmesan'**
+  String get foodExtraParmesan;
+
+  /// No description provided for @foodExtraYogurt.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yoğurt'**
+  String get foodExtraYogurt;
+
+  /// No description provided for @foodExtraButter.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tereyağı'**
+  String get foodExtraButter;
+
+  /// No description provided for @foodExtraFetaCheese.
+  ///
+  /// In tr, this message translates to:
+  /// **'Beyaz Peynir'**
+  String get foodExtraFetaCheese;
+
+  /// No description provided for @foodExtraEgg.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ekstra Yumurta'**
+  String get foodExtraEgg;
+
+  /// No description provided for @foodExtraKaymakPortion.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kaymak Porsiyon'**
+  String get foodExtraKaymakPortion;
+
+  /// No description provided for @foodExtraMilk.
+  ///
+  /// In tr, this message translates to:
+  /// **'Süt'**
+  String get foodExtraMilk;
+
+  /// No description provided for @foodExtraSaffronButter.
+  ///
+  /// In tr, this message translates to:
+  /// **'Safranlı Tereyağı'**
+  String get foodExtraSaffronButter;
+
+  /// No description provided for @foodExtraCreamSauce.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ekstra Krema Sos'**
+  String get foodExtraCreamSauce;
+
+  /// No description provided for @foodExtraGarlicSauce.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sarımsak Sos'**
+  String get foodExtraGarlicSauce;
+
+  /// No description provided for @foodExtraKetchup.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ketçap'**
+  String get foodExtraKetchup;
+
+  /// No description provided for @foodExtraMayonnaise.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mayonez'**
+  String get foodExtraMayonnaise;
+
+  /// No description provided for @foodExtraMustard.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hardal'**
+  String get foodExtraMustard;
+
+  /// No description provided for @foodExtraSoySauce.
+  ///
+  /// In tr, this message translates to:
+  /// **'Soya Sosu'**
+  String get foodExtraSoySauce;
+
+  /// No description provided for @foodExtraTartarSauce.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tartar Sos'**
+  String get foodExtraTartarSauce;
+
+  /// No description provided for @foodExtraSweetChiliSauce.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tatlı Biber Sosu'**
+  String get foodExtraSweetChiliSauce;
+
+  /// No description provided for @foodExtraTeriyakiSauce.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teriyaki Sos'**
+  String get foodExtraTeriyakiSauce;
+
+  /// No description provided for @foodExtraGochujangSauce.
+  ///
+  /// In tr, this message translates to:
+  /// **'Gochujang Sos'**
+  String get foodExtraGochujangSauce;
+
+  /// No description provided for @foodExtraBalsamicGlaze.
+  ///
+  /// In tr, this message translates to:
+  /// **'Balzamik Sos'**
+  String get foodExtraBalsamicGlaze;
+
+  /// No description provided for @foodExtraTruffleOil.
+  ///
+  /// In tr, this message translates to:
+  /// **'Trüf Yağı'**
+  String get foodExtraTruffleOil;
+
+  /// No description provided for @foodExtraChiliOil.
+  ///
+  /// In tr, this message translates to:
+  /// **'Acı Biber Yağı'**
+  String get foodExtraChiliOil;
+
+  /// No description provided for @foodExtraHotMustard.
+  ///
+  /// In tr, this message translates to:
+  /// **'Acı Hardal'**
+  String get foodExtraHotMustard;
+
+  /// No description provided for @foodExtraSesameOil.
+  ///
+  /// In tr, this message translates to:
+  /// **'Susam Yağı'**
+  String get foodExtraSesameOil;
+
+  /// No description provided for @foodExtraChocolateSauce.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çikolata Sosu'**
+  String get foodExtraChocolateSauce;
+
+  /// No description provided for @foodExtraExtraSyrup.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ekstra Şerbet'**
+  String get foodExtraExtraSyrup;
+
+  /// No description provided for @foodExtraPomegranateSyrup.
+  ///
+  /// In tr, this message translates to:
+  /// **'Nar Ekşisi'**
+  String get foodExtraPomegranateSyrup;
+
+  /// No description provided for @foodExtraTahini.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tahin'**
+  String get foodExtraTahini;
+
+  /// No description provided for @foodExtraExtraDressing.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ekstra Sos'**
+  String get foodExtraExtraDressing;
+
+  /// No description provided for @foodExtraExtraSugar.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ekstra Şeker'**
+  String get foodExtraExtraSugar;
+
+  /// No description provided for @foodExtraGrilledVegetables.
+  ///
+  /// In tr, this message translates to:
+  /// **'Izgara Sebze'**
+  String get foodExtraGrilledVegetables;
+
+  /// No description provided for @foodExtraGrilledChicken.
+  ///
+  /// In tr, this message translates to:
+  /// **'Izgara Tavuk'**
+  String get foodExtraGrilledChicken;
+
+  /// No description provided for @foodExtraHotPepper.
+  ///
+  /// In tr, this message translates to:
+  /// **'Acı Biber'**
+  String get foodExtraHotPepper;
+
+  /// No description provided for @foodExtraOnionSalad.
+  ///
+  /// In tr, this message translates to:
+  /// **'Soğan Salatası'**
+  String get foodExtraOnionSalad;
+
+  /// No description provided for @foodExtraSumacOnion.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sumaklı Soğan'**
+  String get foodExtraSumacOnion;
+
+  /// No description provided for @foodExtraParsley.
+  ///
+  /// In tr, this message translates to:
+  /// **'Maydanoz'**
+  String get foodExtraParsley;
+
+  /// No description provided for @foodExtraLemon.
+  ///
+  /// In tr, this message translates to:
+  /// **'Limon'**
+  String get foodExtraLemon;
+
+  /// No description provided for @foodExtraCorn.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mısır'**
+  String get foodExtraCorn;
+
+  /// No description provided for @foodExtraJalapeno.
+  ///
+  /// In tr, this message translates to:
+  /// **'Jalapeno'**
+  String get foodExtraJalapeno;
+
+  /// No description provided for @foodExtraAvocado.
+  ///
+  /// In tr, this message translates to:
+  /// **'Avokado'**
+  String get foodExtraAvocado;
+
+  /// No description provided for @foodExtraPickles.
+  ///
+  /// In tr, this message translates to:
+  /// **'Turşu'**
+  String get foodExtraPickles;
+
+  /// No description provided for @foodExtraMushroomTopping.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mantar'**
+  String get foodExtraMushroomTopping;
+
+  /// No description provided for @foodExtraOliveTopping.
+  ///
+  /// In tr, this message translates to:
+  /// **'Zeytin'**
+  String get foodExtraOliveTopping;
+
+  /// No description provided for @foodExtraOnionTopping.
+  ///
+  /// In tr, this message translates to:
+  /// **'Soğan'**
+  String get foodExtraOnionTopping;
+
+  /// No description provided for @foodExtraPepperoniTopping.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pepperoni'**
+  String get foodExtraPepperoniTopping;
+
+  /// No description provided for @foodExtraSucukTopping.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sucuk'**
+  String get foodExtraSucukTopping;
+
+  /// No description provided for @foodExtraGreenPepperTopping.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yeşil Biber'**
+  String get foodExtraGreenPepperTopping;
+
+  /// No description provided for @foodExtraTomatoSlices.
+  ///
+  /// In tr, this message translates to:
+  /// **'Domates Dilimi'**
+  String get foodExtraTomatoSlices;
+
+  /// No description provided for @foodExtraGrilledTomato.
+  ///
+  /// In tr, this message translates to:
+  /// **'Izgara Domates'**
+  String get foodExtraGrilledTomato;
+
+  /// No description provided for @foodExtraFreshHerbs.
+  ///
+  /// In tr, this message translates to:
+  /// **'Taze Otlar'**
+  String get foodExtraFreshHerbs;
+
+  /// No description provided for @foodExtraSteamedVegetables.
+  ///
+  /// In tr, this message translates to:
+  /// **'Buharda Sebze'**
+  String get foodExtraSteamedVegetables;
+
+  /// No description provided for @foodExtraMintLeaves.
+  ///
+  /// In tr, this message translates to:
+  /// **'Nane Yaprağı'**
+  String get foodExtraMintLeaves;
+
+  /// No description provided for @foodExtraFreshFruits.
+  ///
+  /// In tr, this message translates to:
+  /// **'Taze Meyve'**
+  String get foodExtraFreshFruits;
+
+  /// No description provided for @foodExtraArugulaSide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Roka'**
+  String get foodExtraArugulaSide;
+
+  /// No description provided for @foodExtraFrenchFriesSide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Patates Kızartması'**
+  String get foodExtraFrenchFriesSide;
+
+  /// No description provided for @foodExtraOnionRings.
+  ///
+  /// In tr, this message translates to:
+  /// **'Soğan Halkası'**
+  String get foodExtraOnionRings;
+
+  /// No description provided for @foodExtraSaladSide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Salata'**
+  String get foodExtraSaladSide;
+
+  /// No description provided for @foodExtraChickenSide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tavuk Porsiyon'**
+  String get foodExtraChickenSide;
+
+  /// No description provided for @foodExtraEdamameSide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Edamame'**
+  String get foodExtraEdamameSide;
+
+  /// No description provided for @foodExtraMisoSoupSide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Miso Çorbası'**
+  String get foodExtraMisoSoupSide;
+
+  /// No description provided for @foodExtraSpringRollSide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sigara Böreği'**
+  String get foodExtraSpringRollSide;
+
+  /// No description provided for @foodExtraHummusSide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Humus'**
+  String get foodExtraHummusSide;
+
+  /// No description provided for @foodExtraBruschettaSide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bruschetta'**
+  String get foodExtraBruschettaSide;
+
+  /// No description provided for @foodExtraFattoushSide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Fattuş'**
+  String get foodExtraFattoushSide;
+
+  /// No description provided for @foodExtraSeaweedSalad.
+  ///
+  /// In tr, this message translates to:
+  /// **'Deniz Yosunu Salatası'**
+  String get foodExtraSeaweedSalad;
+
+  /// No description provided for @foodExtraGlassNoodlesSide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Cam Eriştesi'**
+  String get foodExtraGlassNoodlesSide;
+
+  /// No description provided for @foodExtraDooghSide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ayran'**
+  String get foodExtraDooghSide;
+
+  /// No description provided for @foodExtraEggFriedRiceSide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yumurtalı Pilav'**
+  String get foodExtraEggFriedRiceSide;
+
+  /// No description provided for @foodExtraKimchiSide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kimchi'**
+  String get foodExtraKimchiSide;
+
+  /// No description provided for @foodExtraPickledRadish.
+  ///
+  /// In tr, this message translates to:
+  /// **'Turp Turşusu'**
+  String get foodExtraPickledRadish;
+
+  /// No description provided for @foodExtraPickledGinger.
+  ///
+  /// In tr, this message translates to:
+  /// **'Turşu Zencefil'**
+  String get foodExtraPickledGinger;
+
+  /// No description provided for @foodExtraPickledGarlic.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sarımsak Turşusu'**
+  String get foodExtraPickledGarlic;
+
+  /// No description provided for @foodExtraPrawnCrackers.
+  ///
+  /// In tr, this message translates to:
+  /// **'Karides Kraker'**
+  String get foodExtraPrawnCrackers;
+
+  /// No description provided for @foodExtraExtraMeat.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ekstra Et'**
+  String get foodExtraExtraMeat;
+
+  /// No description provided for @foodExtraEggTopping.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yumurta'**
+  String get foodExtraEggTopping;
+
+  /// No description provided for @foodExtraCheeseTopping.
+  ///
+  /// In tr, this message translates to:
+  /// **'Peynir'**
+  String get foodExtraCheeseTopping;
+
+  /// No description provided for @foodExtraProsciuttoTopping.
+  ///
+  /// In tr, this message translates to:
+  /// **'Prosciutto'**
+  String get foodExtraProsciuttoTopping;
+
+  /// No description provided for @foodExtraPistachioTopping.
+  ///
+  /// In tr, this message translates to:
+  /// **'Antep Fıstığı'**
+  String get foodExtraPistachioTopping;
+
+  /// No description provided for @foodExtraTempuraBits.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tempura Parçası'**
+  String get foodExtraTempuraBits;
+
+  /// No description provided for @foodExtraWasabi.
+  ///
+  /// In tr, this message translates to:
+  /// **'Wasabi'**
+  String get foodExtraWasabi;
+
+  /// No description provided for @foodExtraTofuExtra.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ekstra Tofu'**
+  String get foodExtraTofuExtra;
+
+  /// No description provided for @foodExtraNutritionalYeast.
+  ///
+  /// In tr, this message translates to:
+  /// **'Besin Mayası'**
+  String get foodExtraNutritionalYeast;
+
+  /// No description provided for @foodExtraChickpeaTopping.
+  ///
+  /// In tr, this message translates to:
+  /// **'Nohut'**
+  String get foodExtraChickpeaTopping;
+
+  /// No description provided for @foodExtraHoneyPortion.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bal Porsiyon'**
+  String get foodExtraHoneyPortion;
+
+  /// No description provided for @foodExtraOlivePortion.
+  ///
+  /// In tr, this message translates to:
+  /// **'Zeytin Porsiyon'**
+  String get foodExtraOlivePortion;
+
+  /// No description provided for @foodExtraJamPortion.
+  ///
+  /// In tr, this message translates to:
+  /// **'Reçel Porsiyon'**
+  String get foodExtraJamPortion;
+
+  /// No description provided for @foodExtraOliveOil.
+  ///
+  /// In tr, this message translates to:
+  /// **'Zeytinyağı'**
+  String get foodExtraOliveOil;
+
+  /// No description provided for @foodExtraAyranSide.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ayran'**
+  String get foodExtraAyranSide;
+
+  /// No description provided for @foodExtraTeaGlass.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çay Bardağı'**
+  String get foodExtraTeaGlass;
+
+  /// No description provided for @foodExtraWalnut.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ceviz'**
+  String get foodExtraWalnut;
+
+  /// No description provided for @foodExtraDriedFruits.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kuru Meyve'**
+  String get foodExtraDriedFruits;
+
+  /// No description provided for @foodExtraSumac.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sumak'**
+  String get foodExtraSumac;
+
+  /// No description provided for @foodExtraChiliFlakes.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pul Biber'**
+  String get foodExtraChiliFlakes;
+
+  /// No description provided for @foodExtraDriedMint.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kuru Nane'**
+  String get foodExtraDriedMint;
+
+  /// No description provided for @foodExtraVinegar.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sirke'**
+  String get foodExtraVinegar;
+
+  /// No description provided for @foodExtraIceCreamScoop.
+  ///
+  /// In tr, this message translates to:
+  /// **'Dondurma Topı'**
+  String get foodExtraIceCreamScoop;
+
+  /// No description provided for @foodExtraWhippedCream.
+  ///
+  /// In tr, this message translates to:
+  /// **'Krem Şanti'**
+  String get foodExtraWhippedCream;
+
+  /// No description provided for @foodExtraIce.
+  ///
+  /// In tr, this message translates to:
+  /// **'Buz'**
+  String get foodExtraIce;
+
+  /// No description provided for @newFoodOrder.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yeni bir yemek siparişiniz var!'**
+  String get newFoodOrder;
+
+  /// No description provided for @restaurantNewReview.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yeni bir restoran değerlendirmesi aldınız.'**
+  String get restaurantNewReview;
+
+  /// No description provided for @noReviews.
+  ///
+  /// In tr, this message translates to:
+  /// **'Henüz değerlendirme yok'**
+  String get noReviews;
+
+  /// No description provided for @noReviewsDescription.
+  ///
+  /// In tr, this message translates to:
+  /// **'Müşteriler yorum bırakmaya başladığında restoranınızın değerlendirmeleri burada görünecek.'**
+  String get noReviewsDescription;
+
+  /// No description provided for @basedOn.
+  ///
+  /// In tr, this message translates to:
+  /// **'{count} değerlendirmeye göre'**
+  String basedOn(Object count);
+
+  /// No description provided for @endOfReviews.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tüm değerlendirmeleri gördünüz'**
+  String get endOfReviews;
+
+  /// No description provided for @restaurantStatus.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoran Durumu'**
+  String get restaurantStatus;
+
+  /// No description provided for @restaurantStatusDescription.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoranınızın sipariş kabul edip etmeyeceğini kontrol edin'**
+  String get restaurantStatusDescription;
+
+  /// No description provided for @inactive.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pasif'**
+  String get inactive;
+
+  /// No description provided for @cuisineType.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mutfak Türü'**
+  String get cuisineType;
+
+  /// No description provided for @selectCuisineType.
+  ///
+  /// In tr, this message translates to:
+  /// **'Uygun olanları seçin'**
+  String get selectCuisineType;
+
+  /// No description provided for @workingSchedule.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çalışma Takvimi'**
+  String get workingSchedule;
+
+  /// No description provided for @workingDays.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çalışma Günleri'**
+  String get workingDays;
+
+  /// No description provided for @workingHours.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çalışma Saatleri'**
+  String get workingHours;
+
+  /// No description provided for @openTime.
+  ///
+  /// In tr, this message translates to:
+  /// **'Açılış'**
+  String get openTime;
+
+  /// No description provided for @closeTime.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kapanış'**
+  String get closeTime;
+
+  /// No description provided for @deselectAll.
+  ///
+  /// In tr, this message translates to:
+  /// **'Seçimi Kaldır'**
+  String get deselectAll;
+
+  /// No description provided for @addedRegions.
+  ///
+  /// In tr, this message translates to:
+  /// **'Eklenen Bölgeler'**
+  String get addedRegions;
+
+  /// No description provided for @saving.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kaydediliyor...'**
+  String get saving;
+
+  /// No description provided for @noChanges.
+  ///
+  /// In tr, this message translates to:
+  /// **'Değişiklik Yok'**
+  String get noChanges;
+
+  /// No description provided for @saveSuccess.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ayarlar başarıyla kaydedildi'**
+  String get saveSuccess;
+
+  /// No description provided for @saveError.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kaydedilemedi. Lütfen tekrar deneyin.'**
+  String get saveError;
+
+  /// No description provided for @fetchError.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ayarlar yüklenemedi. Lütfen tekrar deneyin.'**
+  String get fetchError;
+
+  /// No description provided for @selectFoodType.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek Türü Seçin'**
+  String get selectFoodType;
+
+  /// No description provided for @foodType.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek Türü'**
+  String get foodType;
+
+  /// No description provided for @categoriesSelected.
+  ///
+  /// In tr, this message translates to:
+  /// **'{count} kategori seçildi'**
+  String categoriesSelected(int count);
+
+  /// No description provided for @okCategoriesSelected.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tamam ({count} seçili)'**
+  String okCategoriesSelected(int count);
+
+  /// No description provided for @cuisineTypeTurkish.
+  ///
+  /// In tr, this message translates to:
+  /// **'Türk Mutfağı'**
+  String get cuisineTypeTurkish;
+
+  /// No description provided for @cuisineTypeJapanese.
+  ///
+  /// In tr, this message translates to:
+  /// **'Japon Mutfağı'**
+  String get cuisineTypeJapanese;
+
+  /// No description provided for @cuisineTypeChinese.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çin Mutfağı'**
+  String get cuisineTypeChinese;
+
+  /// No description provided for @cuisineTypePersian.
+  ///
+  /// In tr, this message translates to:
+  /// **'İran Mutfağı'**
+  String get cuisineTypePersian;
+
+  /// No description provided for @cuisineTypeArabic.
+  ///
+  /// In tr, this message translates to:
+  /// **'Arap Mutfağı'**
+  String get cuisineTypeArabic;
+
+  /// No description provided for @cuisineTypeItalian.
+  ///
+  /// In tr, this message translates to:
+  /// **'İtalyan Mutfağı'**
+  String get cuisineTypeItalian;
+
+  /// No description provided for @cuisineTypeKorean.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kore Mutfağı'**
+  String get cuisineTypeKorean;
+
+  /// No description provided for @cuisineTypeVietnamese.
+  ///
+  /// In tr, this message translates to:
+  /// **'Vietnam Mutfağı'**
+  String get cuisineTypeVietnamese;
+
+  /// No description provided for @cuisineTypeVeganVegetarian.
+  ///
+  /// In tr, this message translates to:
+  /// **'Vegan / Vejetaryen'**
+  String get cuisineTypeVeganVegetarian;
+
+  /// No description provided for @dayMonday.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pazartesi'**
+  String get dayMonday;
+
+  /// No description provided for @dayTuesday.
+  ///
+  /// In tr, this message translates to:
+  /// **'Salı'**
+  String get dayTuesday;
+
+  /// No description provided for @dayWednesday.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çarşamba'**
+  String get dayWednesday;
+
+  /// No description provided for @dayThursday.
+  ///
+  /// In tr, this message translates to:
+  /// **'Perşembe'**
+  String get dayThursday;
+
+  /// No description provided for @dayFriday.
+  ///
+  /// In tr, this message translates to:
+  /// **'Cuma'**
+  String get dayFriday;
+
+  /// No description provided for @daySaturday.
+  ///
+  /// In tr, this message translates to:
+  /// **'Cumartesi'**
+  String get daySaturday;
+
+  /// No description provided for @daySunday.
+  ///
+  /// In tr, this message translates to:
+  /// **'Pazar'**
+  String get daySunday;
+
+  /// No description provided for @minOrderPriceByRegion.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bölgeye Göre Min. Sipariş Tutarı'**
+  String get minOrderPriceByRegion;
+
+  /// No description provided for @minOrderPriceDescription.
+  ///
+  /// In tr, this message translates to:
+  /// **'Her teslimat bölgesi için minimum sipariş tutarını belirleyin'**
+  String get minOrderPriceDescription;
+
+  /// No description provided for @minOrderPriceWarning.
+  ///
+  /// In tr, this message translates to:
+  /// **'Minimum sipariş tutarı belirlenmemiş bölgelerde sipariş alt limiti uygulanmaz.'**
+  String get minOrderPriceWarning;
+
+  /// No description provided for @subRegion.
+  ///
+  /// In tr, this message translates to:
+  /// **'Alt Bölge'**
+  String get subRegion;
+
+  /// No description provided for @selectSubRegion.
+  ///
+  /// In tr, this message translates to:
+  /// **'Alt bölge seçin'**
+  String get selectSubRegion;
 }
 
 class _AppLocalizationsDelegate

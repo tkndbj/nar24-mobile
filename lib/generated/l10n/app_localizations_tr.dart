@@ -4931,7 +4931,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get productQuestionsHeader => 'Ürün Soru & Cevapları';
 
   @override
-  String get anonymous => 'Belirsiz';
+  String get anonymous => 'Anonim';
 
   @override
   String viewAllQuestions(Object count) {
@@ -7958,7 +7958,7 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
-  String get clearFilters => 'Filtreleri Temizle';
+  String get clearFilters => 'Filtreleri temizle';
 
   @override
   String get selectCategory => 'Kategori seçin';
@@ -11637,7 +11637,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get errorLoadingReviews =>
-      'Değerlendirmeler yüklenirken hata gerçekleşti';
+      'Değerlendirmeler yüklenemedi. Lütfen tekrar deneyin.';
 
   @override
   String get pleaseSelectCategoryFirst => 'Lütfen ilk önce kategori seçin';
@@ -13049,4 +13049,2025 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get setAddressLoginBanner =>
       'Size teslimat yapan restoranları görmek için giriş yapın ve adresinizi belirleyin';
+
+  @override
+  String get restaurantDashboardGreetingMorning => 'Günaydın,';
+
+  @override
+  String get restaurantDashboardGreetingAfternoon => 'İyi günler,';
+
+  @override
+  String get restaurantDashboardGreetingEvening => 'İyi akşamlar,';
+
+  @override
+  String get restaurantDashboardNoRestaurantTitle => 'Restoran Bulunamadı';
+
+  @override
+  String get restaurantDashboardNoRestaurantDescription =>
+      'Herhangi bir restoranla ilişkilendirilmediniz.';
+
+  @override
+  String get restaurantDashboardFetchFailedTitle => 'Bağlantı Hatası';
+
+  @override
+  String get restaurantDashboardFetchFailedMessage =>
+      'Restoran verileri yüklenemedi. Bağlantınızı kontrol edin.';
+
+  @override
+  String get restaurantDashboardRetry => 'Tekrar Dene';
+
+  @override
+  String get restaurantDashboardQuickActions => 'Hızlı İşlemler';
+
+  @override
+  String get restaurantDashboardFoodsLabel => 'Yemekler';
+
+  @override
+  String get restaurantDashboardFoodsDescription => 'Menünüzü yönetin';
+
+  @override
+  String get restaurantDashboardOrdersLabel => 'Siparişler';
+
+  @override
+  String get restaurantDashboardOrdersDescription => 'Tüm siparişleri görün';
+
+  @override
+  String get restaurantDashboardReviewsLabel => 'Yorumlar';
+
+  @override
+  String get restaurantDashboardReviewsDescription =>
+      'Müşteri geri bildirimleri';
+
+  @override
+  String get restaurantDashboardSettingsLabel => 'Ayarlar';
+
+  @override
+  String get restaurantDashboardSettingsDescription => 'Restoran ayarları';
+
+  @override
+  String get restaurantDashboardPendingOrdersTitle => 'Bekleyen Siparişler';
+
+  @override
+  String get restaurantDashboardViewAll => 'Tümünü Gör';
+
+  @override
+  String get restaurantDashboardPendingOrdersEmpty => 'Bekleyen sipariş yok';
+
+  @override
+  String get restaurantDashboardAccept => 'Kabul Et';
+
+  @override
+  String get restaurantDashboardReject => 'Reddet';
+
+  @override
+  String get restaurantDashboardUpdateFailed => 'Sipariş güncellenemedi';
+
+  @override
+  String get restaurantDashboardStatusOpen => 'Açık';
+
+  @override
+  String get restaurantDashboardStatusClosedInactive => 'Kapalı';
+
+  @override
+  String get restaurantDashboardStatusClosedOffDay => 'Bugün Kapalı';
+
+  @override
+  String get restaurantDashboardStatusClosedOffHours => 'Mesai Dışı';
+
+  @override
+  String get restaurantsTitle => 'Restoranlar';
+
+  @override
+  String get discoverNearbyRestaurants => 'Yakındaki restoranları keşfedin';
+
+  @override
+  String get searchRestaurantsHint => 'Restoran ara…';
+
+  @override
+  String get noRestaurantsYet => 'Henüz restoran yok';
+
+  @override
+  String get checkBackSoonRestaurants =>
+      'Yeni restoran listeleri için yakında tekrar kontrol edin.';
+
+  @override
+  String get foodNoResults => 'Sonuç bulunamadı';
+
+  @override
+  String get tryDifferentCuisine =>
+      'Farklı bir mutfak türü veya arama terimi deneyin.';
+
+  @override
+  String get allCuisines => 'Tümü';
+
+  @override
+  String get closedLabel => 'Kapalı';
+
+  @override
+  String get sortHighRating => '★ Yüksek';
+
+  @override
+  String get sortLowRating => '★ Düşük';
+
+  @override
+  String get sortLabel => 'Sırala';
+
+  @override
+  String get restaurantNotFound => 'Restoran bulunamadı';
+
+  @override
+  String get backToRestaurants => 'Restoranlara Dön';
+
+  @override
+  String get currentlyClosed => 'Şu anda kapalı';
+
+  @override
+  String get browseMenuWhenReopen =>
+      'Menüye göz atın ve tekrar açıldığımızda sipariş verin.';
+
+  @override
+  String get menuTab => 'Menü';
+
+  @override
+  String get reviewsTab => 'Yorumlar';
+
+  @override
+  String get searchFoodHint => 'Yemek ara…';
+
+  @override
+  String get foodQuantityLabel => 'Miktar';
+
+  @override
+  String get foodExtrasLabel => 'Ekstralar';
+
+  @override
+  String get foodSpecialNotes => 'Özel notlar (isteğe bağlı)';
+
+  @override
+  String get foodNotesHint => 'Ör. soğansız…';
+
+  @override
+  String get foodFreeExtra => 'Ücretsiz';
+
+  @override
+  String foodAddToCart(String price) {
+    return 'Sepete ekle — $price TL';
+  }
+
+  @override
+  String get foodYourOrder => 'Siparişiniz';
+
+  @override
+  String get foodSubtotal => 'Ara Toplam';
+
+  @override
+  String get foodProceedToCheckout => 'Ödemeye Geç';
+
+  @override
+  String get foodNoMenuItems => 'Menü öğesi yok';
+
+  @override
+  String get foodCheckBackLater =>
+      'Yeni öğeler için daha sonra tekrar kontrol edin.';
+
+  @override
+  String get foodTryDifferentSearch =>
+      'Farklı bir arama veya kategori deneyin.';
+
+  @override
+  String get foodClearAll => 'Tümünü temizle';
+
+  @override
+  String get foodAddLabel => 'Ekle';
+
+  @override
+  String get foodMinLabel => 'dk';
+
+  @override
+  String get foodClosedButton => 'Kapalı';
+
+  @override
+  String foodItemsFab(int count, String price) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'ürün',
+      one: 'ürün',
+    );
+    return '$count $_temp0 · $price TL';
+  }
+
+  @override
+  String foodPriceTL(String price) {
+    return '$price TL';
+  }
+
+  @override
+  String foodExtraPriceTL(String price) {
+    return '+$price TL';
+  }
+
+  @override
+  String foodDiscountPercent(int percent) {
+    return '%$percent';
+  }
+
+  @override
+  String foodPrepTime(int time) {
+    return '$time dk';
+  }
+
+  @override
+  String get foodCartTitle => 'Yemek Sepeti';
+
+  @override
+  String get foodCartClearAll => 'Tümünü Temizle';
+
+  @override
+  String get foodCartOrderingFrom => 'Bu restorandan sipariş veriyorsunuz';
+
+  @override
+  String get foodCartEstimatedPrep => 'Tahmini hazırlık:';
+
+  @override
+  String get foodCartEdit => 'Düzenle';
+
+  @override
+  String get foodCartOrderSummary => 'Sipariş Özeti';
+
+  @override
+  String get foodCartTotal => 'TOPLAM';
+
+  @override
+  String get foodCartDeliveryFeeNote => 'Teslimat ücreti ödeme sırasında';
+
+  @override
+  String get foodCartClearTitle => 'Yemek Sepetini Temizle?';
+
+  @override
+  String get foodCartClearMessage =>
+      'Bu işlem yemek sepetinizdeki tüm ürünleri kaldıracak.';
+
+  @override
+  String get foodCartClearButton => 'Sepeti Temizle';
+
+  @override
+  String get foodCartEmpty => 'Yemek sepetiniz boş';
+
+  @override
+  String get foodCartBrowseMessage =>
+      'Restoranlara göz atın ve lezzetli yemekler ekleyin';
+
+  @override
+  String foodCartPrepTimeApprox(int time) {
+    return '~$time dk';
+  }
+
+  @override
+  String foodCartItemCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'ürün',
+      one: 'ürün',
+    );
+    return '$count $_temp0';
+  }
+
+  @override
+  String get foodCheckoutNoAddress =>
+      'Teslimat adresi belirlenmedi. Lütfen önce bir adres ekleyin.';
+
+  @override
+  String get foodCheckoutTitle => 'Ödeme';
+
+  @override
+  String get foodCheckoutYourOrder => 'SİPARİŞİNİZ';
+
+  @override
+  String get foodCheckoutDeliveryMethod => 'TESLİMAT YÖNTEMİ';
+
+  @override
+  String get foodCheckoutDeliveryAddress => 'TESLİMAT ADRESİ';
+
+  @override
+  String get foodCheckoutOrderNotes => 'SİPARİŞ NOTLARI';
+
+  @override
+  String get foodCheckoutOrderNotesHint => 'Ör. acısız sos, ekstra peçete…';
+
+  @override
+  String get foodCheckoutPaymentMethod => 'ÖDEME YÖNTEMİ';
+
+  @override
+  String get foodCheckoutChange => 'Değiştir';
+
+  @override
+  String get foodCheckoutNoAddressShort => 'Teslimat adresi belirlenmedi';
+
+  @override
+  String get foodCheckoutAddAddress => 'Adres Ekle';
+
+  @override
+  String foodCheckoutPrepTime(int time) {
+    return '~$time dk hazırlık süresi';
+  }
+
+  @override
+  String get foodCheckoutDelivery => 'Teslimat';
+
+  @override
+  String get foodCheckoutPickup => 'Gel Al';
+
+  @override
+  String get foodCheckoutPayAtDoor => 'Kapıda Ödeme';
+
+  @override
+  String get foodCheckoutCreditCard => 'Kredi / Banka Kartı';
+
+  @override
+  String get foodCheckoutPayCash => 'Siparişiniz geldiğinde nakit ödeyin';
+
+  @override
+  String get foodCheckoutSecurePayment =>
+      'İşbank 3D ile güvenli çevrimiçi ödeme';
+
+  @override
+  String foodCheckoutTotalItems(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'ürün',
+      one: 'ürün',
+    );
+    return 'Toplam ($count $_temp0)';
+  }
+
+  @override
+  String get foodCheckoutPayNow => 'Şimdi Öde';
+
+  @override
+  String get foodCheckoutPlaceOrder => 'Sipariş Ver';
+
+  @override
+  String get foodCheckoutOrderPlaced => 'Sipariş Verildi!';
+
+  @override
+  String get foodCheckoutOrderConfirmed => 'Siparişiniz onaylandı.';
+
+  @override
+  String foodCheckoutOrderId(String id) {
+    return 'Sipariş: $id';
+  }
+
+  @override
+  String get foodCheckoutViewOrders => 'Siparişlerimi Gör';
+
+  @override
+  String get foodCheckoutCartEmpty => 'Sepetiniz boş';
+
+  @override
+  String get foodCheckoutAddItems =>
+      'Ödeme yapmak için bir restorandan ürün ekleyin';
+
+  @override
+  String get foodCheckoutBrowse => 'Restoranlara Göz At';
+
+  @override
+  String get foodCheckoutError => 'Bir hata oluştu.';
+
+  @override
+  String get foodReviewJustNow => 'Az önce';
+
+  @override
+  String get foodReviewLoading => 'Yükleniyor…';
+
+  @override
+  String get foodReviewLoadMore => 'Daha fazla yükle';
+
+  @override
+  String get foodReviewNoReviews => 'Henüz yorum yok';
+
+  @override
+  String get foodReviewBeFirst =>
+      'Sipariş verdikten sonra ilk yorumu siz yazın.';
+
+  @override
+  String get foodCategoryKebabsGrills => 'Kebap & Izgara';
+
+  @override
+  String get foodCategoryPideLahmacun => 'Pide & Lahmacun';
+
+  @override
+  String get foodCategorySoups => 'Çorbalar';
+
+  @override
+  String get foodCategorySalads => 'Salatalar';
+
+  @override
+  String get foodCategoryAppetizers => 'Mezeler & Başlangıçlar';
+
+  @override
+  String get foodCategoryStews => 'Yemekler & Güveçler';
+
+  @override
+  String get foodCategoryDolma => 'Dolma & Sarma';
+
+  @override
+  String get foodCategorySteakRoast => 'Biftek & Kavurma';
+
+  @override
+  String get foodCategoryStirFry => 'Tava & Wok';
+
+  @override
+  String get foodCategoryFriedChicken => 'Kızarmış Tavuk';
+
+  @override
+  String get foodCategoryRicePilaf => 'Pilav & Bulgur';
+
+  @override
+  String get foodCategoryNoodles => 'Noodle & Erişte';
+
+  @override
+  String get foodCategorySushi => 'Suşi & Saşimi';
+
+  @override
+  String get foodCategoryCurry => 'Köri';
+
+  @override
+  String get foodCategoryPasta => 'Makarna';
+
+  @override
+  String get foodCategoryWraps => 'Dürüm';
+
+  @override
+  String get foodCategoryDoner => 'Döner';
+
+  @override
+  String get foodCategorySandwich => 'Sandviç & Tost';
+
+  @override
+  String get foodCategorySeafood => 'Deniz Ürünleri';
+
+  @override
+  String get foodCategoryBreakfast => 'Kahvaltı';
+
+  @override
+  String get foodCategoryDesserts => 'Tatlılar & Pastane';
+
+  @override
+  String get foodCategoryBeverages => 'İçecekler';
+
+  @override
+  String get foodCategoryHamburger => 'Hamburger';
+
+  @override
+  String get foodCategoryPizza => 'Pizza';
+
+  @override
+  String get foodTypeAdanaKebab => 'Adana Kebap';
+
+  @override
+  String get foodTypeUrfaKebab => 'Urfa Kebap';
+
+  @override
+  String get foodTypeIskenderKebab => 'İskender Kebap';
+
+  @override
+  String get foodTypeShishKebab => 'Şiş Kebap';
+
+  @override
+  String get foodTypeChickenKebab => 'Tavuk Kebap';
+
+  @override
+  String get foodTypeKofte => 'Köfte';
+
+  @override
+  String get foodTypeMixedGrill => 'Karışık Izgara';
+
+  @override
+  String get foodTypeLambChops => 'Kuzu Pirzola';
+
+  @override
+  String get foodTypeBeytiKebab => 'Beyti Kebap';
+
+  @override
+  String get foodTypeAliNazik => 'Ali Nazik';
+
+  @override
+  String get foodTypeCopSis => 'Çöp Şiş';
+
+  @override
+  String get foodTypeCigerKebab => 'Ciğer Kebap';
+
+  @override
+  String get foodTypeTantuni => 'Tantuni';
+
+  @override
+  String get foodTypePatlicanKebab => 'Patlıcan Kebap';
+
+  @override
+  String get foodTypeTestiKebab => 'Testi Kebap';
+
+  @override
+  String get foodTypeCagKebab => 'Cağ Kebap';
+
+  @override
+  String get foodTypePideliKofte => 'Pideli Köfte';
+
+  @override
+  String get foodTypeKuzuSis => 'Kuzu Şiş';
+
+  @override
+  String get foodTypeOrmanKebab => 'Orman Kebap';
+
+  @override
+  String get foodTypeYogurtluKebab => 'Yoğurtlu Kebap';
+
+  @override
+  String get foodTypeCheloKebab => 'Chelo Kebap';
+
+  @override
+  String get foodTypeJoojehKebab => 'Joojeh Kebap';
+
+  @override
+  String get foodTypeKoobideh => 'Koobideh';
+
+  @override
+  String get foodTypeBulgogi => 'Bulgogi';
+
+  @override
+  String get foodTypeGalbi => 'Galbi';
+
+  @override
+  String get foodTypeSamgyeopsal => 'Samgyeopsal';
+
+  @override
+  String get foodTypeYakitori => 'Yakitori';
+
+  @override
+  String get foodTypeTandooriChicken => 'Tandoori Chicken';
+
+  @override
+  String get foodTypeSouvlaki => 'Souvlaki';
+
+  @override
+  String get foodTypeGyros => 'Gyros';
+
+  @override
+  String get foodTypeSatay => 'Satay';
+
+  @override
+  String get foodTypeKokorec => 'Kokoreç';
+
+  @override
+  String get foodTypeOtherKebab => 'Diğer Kebap';
+
+  @override
+  String get foodTypeCheesePide => 'Peynirli Pide';
+
+  @override
+  String get foodTypeMincedMeatPide => 'Kıymalı Pide';
+
+  @override
+  String get foodTypeSucukluPide => 'Sucuklu Pide';
+
+  @override
+  String get foodTypeKasarliPide => 'Kaşarlı Pide';
+
+  @override
+  String get foodTypeKusbasiPide => 'Kuşbaşılı Pide';
+
+  @override
+  String get foodTypeLahmacun => 'Lahmacun';
+
+  @override
+  String get foodTypeEtliEkmek => 'Etli Ekmek';
+
+  @override
+  String get foodTypeYumurtaliPide => 'Yumurtalı Pide';
+
+  @override
+  String get foodTypeIspanakliPide => 'Ispanaklı Pide';
+
+  @override
+  String get foodTypeKarisikPide => 'Karışık Pide';
+
+  @override
+  String get foodTypePastirmaliPide => 'Pastırmalı Pide';
+
+  @override
+  String get foodTypeOtherPide => 'Diğer Pide';
+
+  @override
+  String get foodTypeLentilSoup => 'Mercimek Çorbası';
+
+  @override
+  String get foodTypeTomatoSoup => 'Domates Çorbası';
+
+  @override
+  String get foodTypeChickenSoup => 'Tavuk Çorbası';
+
+  @override
+  String get foodTypeTarhanaSoup => 'Tarhana Çorbası';
+
+  @override
+  String get foodTypeEzogelinSoup => 'Ezogelin Çorbası';
+
+  @override
+  String get foodTypeIskembeSoup => 'İşkembe Çorbası';
+
+  @override
+  String get foodTypeYaylaSoup => 'Yayla Çorbası';
+
+  @override
+  String get foodTypeMushroomSoup => 'Mantar Çorbası';
+
+  @override
+  String get foodTypeMercimekSoup => 'Mercimek Çorbası';
+
+  @override
+  String get foodTypeBeyran => 'Beyran';
+
+  @override
+  String get foodTypeDugunCorbasi => 'Düğün Çorbası';
+
+  @override
+  String get foodTypeKellepacaCorbasi => 'Kelle Paça Çorbası';
+
+  @override
+  String get foodTypeSehriyeCorbasi => 'Şehriye Çorbası';
+
+  @override
+  String get foodTypeLebeniyeCorbasi => 'Lebeniye Çorbası';
+
+  @override
+  String get foodTypeMisoSoup => 'Miso Çorbası';
+
+  @override
+  String get foodTypeWontonSoup => 'Wonton Çorbası';
+
+  @override
+  String get foodTypeKimchiJjigae => 'Kimchi Jjigae';
+
+  @override
+  String get foodTypeSundubuJjigae => 'Sundubu Jjigae';
+
+  @override
+  String get foodTypeAshReshteh => 'Ash Reshteh';
+
+  @override
+  String get foodTypeMinestrone => 'Minestrone';
+
+  @override
+  String get foodTypeTomYum => 'Tom Yum';
+
+  @override
+  String get foodTypeOtherSoup => 'Diğer Çorba';
+
+  @override
+  String get foodTypeShepherdSalad => 'Çoban Salatası';
+
+  @override
+  String get foodTypeCaesarSalad => 'Sezar Salatası';
+
+  @override
+  String get foodTypeGreekSalad => 'Yunan Salatası';
+
+  @override
+  String get foodTypeSeasonalSalad => 'Mevsim Salatası';
+
+  @override
+  String get foodTypeRocketSalad => 'Roka Salatası';
+
+  @override
+  String get foodTypeGavurdagiSalad => 'Gavurdağı Salatası';
+
+  @override
+  String get foodTypePiyaz => 'Piyaz';
+
+  @override
+  String get foodTypeCobanSalad => 'Çoban Salatası';
+
+  @override
+  String get foodTypeKisir => 'Kısır';
+
+  @override
+  String get foodTypeSemizotuSalatasi => 'Semizotu Salatası';
+
+  @override
+  String get foodTypeMorLahanaSalatasi => 'Mor Lahana Salatası';
+
+  @override
+  String get foodTypeFattoush => 'Fattoush';
+
+  @override
+  String get foodTypeTabbouleh => 'Tabbouleh';
+
+  @override
+  String get foodTypeCaprese => 'Caprese';
+
+  @override
+  String get foodTypeOtherSalad => 'Diğer Salata';
+
+  @override
+  String get foodTypeHummus => 'Hummus';
+
+  @override
+  String get foodTypeBabaganoush => 'Babaganoush';
+
+  @override
+  String get foodTypeHaydari => 'Haydari';
+
+  @override
+  String get foodTypeAtom => 'Atom';
+
+  @override
+  String get foodTypeAciliEzme => 'Acılı Ezme';
+
+  @override
+  String get foodTypeCacik => 'Cacık';
+
+  @override
+  String get foodTypeSigaraBoregi => 'Sigara Böreği';
+
+  @override
+  String get foodTypeIcliKofte => 'İçli Köfte';
+
+  @override
+  String get foodTypeMercimekKofte => 'Mercimek Köfte';
+
+  @override
+  String get foodTypeYaprakSarma => 'Yaprak Sarma';
+
+  @override
+  String get foodTypeFalafel => 'Falafel';
+
+  @override
+  String get foodTypeMucver => 'Mücver';
+
+  @override
+  String get foodTypePatlicanSoslu => 'Patlıcan Soslu';
+
+  @override
+  String get foodTypeCigKofte => 'Çiğ Köfte';
+
+  @override
+  String get foodTypeArnavutCigeri => 'Arnavut Ciğeri';
+
+  @override
+  String get foodTypeCerkezTavugu => 'Çerkez Tavuğu';
+
+  @override
+  String get foodTypeTarator => 'Tarator';
+
+  @override
+  String get foodTypeBorek => 'Börek';
+
+  @override
+  String get foodTypeSuBoregi => 'Su Böreği';
+
+  @override
+  String get foodTypeDimSum => 'Dim Sum';
+
+  @override
+  String get foodTypeSpringRolls => 'Spring Rolls';
+
+  @override
+  String get foodTypeDumplings => 'Dumplings';
+
+  @override
+  String get foodTypeGyoza => 'Gyoza';
+
+  @override
+  String get foodTypeEdamame => 'Edamame';
+
+  @override
+  String get foodTypeTempura => 'Tempura';
+
+  @override
+  String get foodTypeTakoyaki => 'Takoyaki';
+
+  @override
+  String get foodTypeBruschetta => 'Bruschetta';
+
+  @override
+  String get foodTypeArancini => 'Arancini';
+
+  @override
+  String get foodTypeCarpaccio => 'Carpaccio';
+
+  @override
+  String get foodTypeFocaccia => 'Focaccia';
+
+  @override
+  String get foodTypeKibbeh => 'Kibbeh';
+
+  @override
+  String get foodTypeMoutabal => 'Moutabal';
+
+  @override
+  String get foodTypeMirzaGhasemi => 'Mirza Ghasemi';
+
+  @override
+  String get foodTypeKashkBademjan => 'Kashk-e Bademjan';
+
+  @override
+  String get foodTypePajeon => 'Pajeon';
+
+  @override
+  String get foodTypeSamosa => 'Samosa';
+
+  @override
+  String get foodTypeNachos => 'Nachos';
+
+  @override
+  String get foodTypeOtherMeze => 'Diğer Meze';
+
+  @override
+  String get foodTypeGuvec => 'Güveç';
+
+  @override
+  String get foodTypeMoussaka => 'Musakka';
+
+  @override
+  String get foodTypeHunkarBegendi => 'Hünkar Beğendi';
+
+  @override
+  String get foodTypeEtliNohut => 'Etli Nohut';
+
+  @override
+  String get foodTypeTurlu => 'Türlü';
+
+  @override
+  String get foodTypeTazeFasulye => 'Taze Fasulye';
+
+  @override
+  String get foodTypeEtliBamya => 'Etli Bamya';
+
+  @override
+  String get foodTypeEtliBezelye => 'Etli Bezelye';
+
+  @override
+  String get foodTypeEtliKapuska => 'Etli Kapuska';
+
+  @override
+  String get foodTypeIspanakYemegi => 'Ispanak Yemeği';
+
+  @override
+  String get foodTypeEtliPirasa => 'Etli Pırasa';
+
+  @override
+  String get foodTypeKuruFasulye => 'Kuru Fasulye';
+
+  @override
+  String get foodTypeBarbunya => 'Barbunya';
+
+  @override
+  String get foodTypeNohutYemegi => 'Nohut Yemeği';
+
+  @override
+  String get foodTypeZeytinyagliEnginar => 'Zeytinyağlı Enginar';
+
+  @override
+  String get foodTypeGhormehSabzi => 'Ghormeh Sabzi';
+
+  @override
+  String get foodTypeFesenjan => 'Fesenjan';
+
+  @override
+  String get foodTypeDiziAbgoosht => 'Dizi Abgoosht';
+
+  @override
+  String get foodTypeHotPot => 'Hot Pot';
+
+  @override
+  String get foodTypeMansaf => 'Mansaf';
+
+  @override
+  String get foodTypeFatteh => 'Fatteh';
+
+  @override
+  String get foodTypeMaqluba => 'Maqluba';
+
+  @override
+  String get foodTypeShakshuka => 'Shakshuka';
+
+  @override
+  String get foodTypeTteokbokki => 'Tteokbokki';
+
+  @override
+  String get foodTypeOssoBuco => 'Osso Buco';
+
+  @override
+  String get foodTypeKuzuIncik => 'Kuzu İncik';
+
+  @override
+  String get foodTypeOtherStew => 'Diğer Yemek';
+
+  @override
+  String get foodTypeImamBayildi => 'İmam Bayıldı';
+
+  @override
+  String get foodTypeKarniyarik => 'Karnıyarık';
+
+  @override
+  String get foodTypeLahanaSarma => 'Lahana Sarma';
+
+  @override
+  String get foodTypeKabakDolma => 'Kabak Dolma';
+
+  @override
+  String get foodTypePatlicanDolma => 'Patlıcan Dolma';
+
+  @override
+  String get foodTypeBiberDolma => 'Biber Dolma';
+
+  @override
+  String get foodTypeEtliYaprakSarma => 'Etli Yaprak Sarma';
+
+  @override
+  String get foodTypeZeytinyagliDolma => 'Zeytinyağlı Dolma';
+
+  @override
+  String get foodTypeStuffedPeppers => 'Dolma Biber';
+
+  @override
+  String get foodTypeMahshi => 'Mahshi';
+
+  @override
+  String get foodTypeOtherDolma => 'Diğer Dolma';
+
+  @override
+  String get foodTypeSteak => 'Biftek';
+
+  @override
+  String get foodTypeKuzuTandir => 'Kuzu Tandır';
+
+  @override
+  String get foodTypeSacKavurma => 'Saç Kavurma';
+
+  @override
+  String get foodTypeTasKebab => 'Tas Kebap';
+
+  @override
+  String get foodTypePekingDuck => 'Pekin Ördeği';
+
+  @override
+  String get foodTypeSaltimbocca => 'Saltimbocca';
+
+  @override
+  String get foodTypeOtherSteak => 'Diğer Biftek';
+
+  @override
+  String get foodTypeKungPaoChicken => 'Kung Pao Tavuk';
+
+  @override
+  String get foodTypeSweetSourChicken => 'Ekşi Tatlı Tavuk';
+
+  @override
+  String get foodTypeMapoTofu => 'Mapo Tofu';
+
+  @override
+  String get foodTypeTeriyaki => 'Teriyaki';
+
+  @override
+  String get foodTypeDakgalbi => 'Dakgalbi';
+
+  @override
+  String get foodTypeOtherStirFry => 'Diğer Tava';
+
+  @override
+  String get foodTypeFriedChickenClassic => 'Klasik Kızarmış Tavuk';
+
+  @override
+  String get foodTypeKoreanFriedChicken => 'Kore Usulü Tavuk';
+
+  @override
+  String get foodTypeChickenSchnitzel => 'Tavuk Şnitzel';
+
+  @override
+  String get foodTypeTonkatsu => 'Tonkatsu';
+
+  @override
+  String get foodTypeChickenWings => 'Tavuk Kanat';
+
+  @override
+  String get foodTypeChickenTenders => 'Tavuk Tender';
+
+  @override
+  String get foodTypeNuggets => 'Nuggets';
+
+  @override
+  String get foodTypeOtherFriedChicken => 'Diğer Kızarmış Tavuk';
+
+  @override
+  String get foodTypeBulgurPilaf => 'Bulgur Pilavı';
+
+  @override
+  String get foodTypeRicePilaf => 'Pirinç Pilavı';
+
+  @override
+  String get foodTypeNohutluPilav => 'Nohutlu Pilav';
+
+  @override
+  String get foodTypeIcPilav => 'İç Pilav';
+
+  @override
+  String get foodTypeDomatesliB => 'Domatesli Bulgur';
+
+  @override
+  String get foodTypeFirikPilavi => 'Firik Pilavı';
+
+  @override
+  String get foodTypeSebzeliPilav => 'Sebzeli Pilav';
+
+  @override
+  String get foodTypeMeyhanePilavi => 'Meyhane Pilavı';
+
+  @override
+  String get foodTypeFriedRice => 'Çin Pilavı';
+
+  @override
+  String get foodTypeBibimbap => 'Bibimbap';
+
+  @override
+  String get foodTypeDonburi => 'Donburi';
+
+  @override
+  String get foodTypeTahdig => 'Tahdig';
+
+  @override
+  String get foodTypeTahchin => 'Tahchin';
+
+  @override
+  String get foodTypeZereshkPolo => 'Zereshk Polo';
+
+  @override
+  String get foodTypeBaghaliPolo => 'Baghali Polo';
+
+  @override
+  String get foodTypeSabziPolo => 'Sabzi Polo';
+
+  @override
+  String get foodTypeKabsa => 'Kabsa';
+
+  @override
+  String get foodTypeMachboos => 'Machboos';
+
+  @override
+  String get foodTypeBiryani => 'Biryani';
+
+  @override
+  String get foodTypeHamsiliPilav => 'Hamsili Pilav';
+
+  @override
+  String get foodTypeAliPasaPilavi => 'Ali Paşa Pilavı';
+
+  @override
+  String get foodTypeOtherPilaf => 'Diğer Pilav';
+
+  @override
+  String get foodTypeRamen => 'Ramen';
+
+  @override
+  String get foodTypeUdon => 'Udon';
+
+  @override
+  String get foodTypeSoba => 'Soba';
+
+  @override
+  String get foodTypePho => 'Pho';
+
+  @override
+  String get foodTypePadThai => 'Pad Thai';
+
+  @override
+  String get foodTypeChowMein => 'Chow Mein';
+
+  @override
+  String get foodTypeDanDanNoodles => 'Dan Dan Noodles';
+
+  @override
+  String get foodTypeJapchae => 'Japchae';
+
+  @override
+  String get foodTypeJajangmyeon => 'Jajangmyeon';
+
+  @override
+  String get foodTypeNaengmyeon => 'Naengmyeon';
+
+  @override
+  String get foodTypeOtherNoodle => 'Diğer Noodle';
+
+  @override
+  String get foodTypeSushi => 'Suşi';
+
+  @override
+  String get foodTypeSashimi => 'Saşimi';
+
+  @override
+  String get foodTypeMakiRoll => 'Maki Roll';
+
+  @override
+  String get foodTypeNigiri => 'Nigiri';
+
+  @override
+  String get foodTypeTemaki => 'Temaki';
+
+  @override
+  String get foodTypeOnigiri => 'Onigiri';
+
+  @override
+  String get foodTypeKimbap => 'Kimbap';
+
+  @override
+  String get foodTypeOtherSushi => 'Diğer Suşi';
+
+  @override
+  String get foodTypeKatsuCurry => 'Katsu Köri';
+
+  @override
+  String get foodTypeButterChicken => 'Tereyağlı Tavuk';
+
+  @override
+  String get foodTypeTikkaMasala => 'Tikka Masala';
+
+  @override
+  String get foodTypeGreenCurry => 'Yeşil Köri';
+
+  @override
+  String get foodTypeRedCurry => 'Kırmızı Köri';
+
+  @override
+  String get foodTypeMassamanCurry => 'Massaman Köri';
+
+  @override
+  String get foodTypeDal => 'Dal';
+
+  @override
+  String get foodTypeVindaloo => 'Vindaloo';
+
+  @override
+  String get foodTypeOtherCurry => 'Diğer Köri';
+
+  @override
+  String get foodTypeSpagBolognese => 'Spagetti Bolonez';
+
+  @override
+  String get foodTypePenneArrabiata => 'Penne Arrabiata';
+
+  @override
+  String get foodTypeFettuccineAlfredo => 'Fettuccine Alfredo';
+
+  @override
+  String get foodTypeLasagna => 'Lazanya';
+
+  @override
+  String get foodTypeMakarna => 'Makarna';
+
+  @override
+  String get foodTypeCarbonara => 'Carbonara';
+
+  @override
+  String get foodTypeRavioli => 'Ravioli';
+
+  @override
+  String get foodTypeRisotto => 'Risotto';
+
+  @override
+  String get foodTypeGnocchi => 'Gnocchi';
+
+  @override
+  String get foodTypeManti => 'Mantı';
+
+  @override
+  String get foodTypeOtherPasta => 'Diğer Makarna';
+
+  @override
+  String get foodTypeDonerWrap => 'Döner Dürüm';
+
+  @override
+  String get foodTypeTavukDurum => 'Tavuk Dürüm';
+
+  @override
+  String get foodTypeEtDurum => 'Et Dürüm';
+
+  @override
+  String get foodTypeCigKofteDurum => 'Çiğ Köfte Dürüm';
+
+  @override
+  String get foodTypeAdanaDurum => 'Adana Dürüm';
+
+  @override
+  String get foodTypeMidyeDurum => 'Midye Dürüm';
+
+  @override
+  String get foodTypeTacos => 'Tacos';
+
+  @override
+  String get foodTypeBurrito => 'Burrito';
+
+  @override
+  String get foodTypeQuesadilla => 'Quesadilla';
+
+  @override
+  String get foodTypeOtherWrap => 'Diğer Dürüm';
+
+  @override
+  String get foodTypeChickenDoner => 'Tavuk Döner';
+
+  @override
+  String get foodTypeMeatDoner => 'Et Döner';
+
+  @override
+  String get foodTypeIskenderDoner => 'İskender Döner';
+
+  @override
+  String get foodTypeTombikDoner => 'Tombik Döner';
+
+  @override
+  String get foodTypePorsiyonDoner => 'Porsiyon Döner';
+
+  @override
+  String get foodTypeShawarma => 'Shawarma';
+
+  @override
+  String get foodTypeOtherDoner => 'Diğer Döner';
+
+  @override
+  String get foodTypeTost => 'Tost';
+
+  @override
+  String get foodTypeKasarliTost => 'Kaşarlı Tost';
+
+  @override
+  String get foodTypeKumru => 'Kumru';
+
+  @override
+  String get foodTypeClubSandwich => 'Kulüp Sandviç';
+
+  @override
+  String get foodTypePanini => 'Panini';
+
+  @override
+  String get foodTypeHotDog => 'Hot Dog';
+
+  @override
+  String get foodTypeFrenchFries => 'Patates Kızartması';
+
+  @override
+  String get foodTypeOtherSandwich => 'Diğer Sandviç';
+
+  @override
+  String get foodTypeGrilledFish => 'Izgara Balık';
+
+  @override
+  String get foodTypeFriedCalamari => 'Kalamar Tava';
+
+  @override
+  String get foodTypeShrimpCasserole => 'Karides Güveç';
+
+  @override
+  String get foodTypeFishSandwich => 'Balık Ekmek';
+
+  @override
+  String get foodTypeLevrek => 'Levrek';
+
+  @override
+  String get foodTypeSomon => 'Somon';
+
+  @override
+  String get foodTypeHamsi => 'Hamsi';
+
+  @override
+  String get foodTypeMidyeTava => 'Midye Tava';
+
+  @override
+  String get foodTypeMidyeDolma => 'Midye Dolma';
+
+  @override
+  String get foodTypeKaridesGuvec => 'Karides Güveç';
+
+  @override
+  String get foodTypePalamut => 'Palamut';
+
+  @override
+  String get foodTypeCipura => 'Çipura';
+
+  @override
+  String get foodTypeBarbunTava => 'Barbun Tava';
+
+  @override
+  String get foodTypeLufer => 'Lüfer';
+
+  @override
+  String get foodTypeFishAndChips => 'Fish and Chips';
+
+  @override
+  String get foodTypeOtherSeafood => 'Diğer Deniz Ürünü';
+
+  @override
+  String get foodTypeTurkishBreakfast => 'Türk Kahvaltı Tabağı';
+
+  @override
+  String get foodTypeSerpmeKahvalti => 'Serpme Kahvaltı';
+
+  @override
+  String get foodTypeMenemen => 'Menemen';
+
+  @override
+  String get foodTypeSahandaYumurta => 'Sahanda Yumurta';
+
+  @override
+  String get foodTypeSucukluYumurta => 'Sucuklu Yumurta';
+
+  @override
+  String get foodTypeGozleme => 'Gözleme';
+
+  @override
+  String get foodTypeSimit => 'Simit';
+
+  @override
+  String get foodTypeAcma => 'Açma';
+
+  @override
+  String get foodTypePogaca => 'Poğaça';
+
+  @override
+  String get foodTypeCilbir => 'Çılbır';
+
+  @override
+  String get foodTypePastirmaliYumurta => 'Pastırmalı Yumurta';
+
+  @override
+  String get foodTypeKaymakBal => 'Kaymak Bal';
+
+  @override
+  String get foodTypePisi => 'Pişi';
+
+  @override
+  String get foodTypeKatmerKahvalti => 'Katmer Kahvaltı';
+
+  @override
+  String get foodTypeOtherBreakfast => 'Diğer Kahvaltı';
+
+  @override
+  String get foodTypeBaklava => 'Baklava';
+
+  @override
+  String get foodTypeKunefe => 'Künefe';
+
+  @override
+  String get foodTypeSutlac => 'Sütlaç';
+
+  @override
+  String get foodTypeKazandibi => 'Kazandibi';
+
+  @override
+  String get foodTypeTavukGogsu => 'Tavuk Göğsü';
+
+  @override
+  String get foodTypeAsure => 'Aşure';
+
+  @override
+  String get foodTypeRevani => 'Revani';
+
+  @override
+  String get foodTypeLokma => 'Lokma';
+
+  @override
+  String get foodTypeTrilece => 'Trileçe';
+
+  @override
+  String get foodTypeProfiterol => 'Profiterol';
+
+  @override
+  String get foodTypeCheesecake => 'Cheesecake';
+
+  @override
+  String get foodTypeTiramisu => 'Tiramisu';
+
+  @override
+  String get foodTypeBrownie => 'Brownie';
+
+  @override
+  String get foodTypeWaffle => 'Waffle';
+
+  @override
+  String get foodTypeDondurma => 'Dondurma';
+
+  @override
+  String get foodTypeGullac => 'Güllaç';
+
+  @override
+  String get foodTypeKeskul => 'Keşkül';
+
+  @override
+  String get foodTypeTelKadayif => 'Tel Kadayıf';
+
+  @override
+  String get foodTypeSekerpare => 'Şekerpare';
+
+  @override
+  String get foodTypeTulumba => 'Tulumba';
+
+  @override
+  String get foodTypeHelva => 'Helva';
+
+  @override
+  String get foodTypeKatmer => 'Katmer';
+
+  @override
+  String get foodTypeKabakTatlisi => 'Kabak Tatlısı';
+
+  @override
+  String get foodTypeAyvaTatlisi => 'Ayva Tatlısı';
+
+  @override
+  String get foodTypeSutluNuriye => 'Sütlü Nuriye';
+
+  @override
+  String get foodTypeBurmaKadayif => 'Burma Kadayıf';
+
+  @override
+  String get foodTypePannaCotta => 'Panna Cotta';
+
+  @override
+  String get foodTypeGelato => 'Gelato';
+
+  @override
+  String get foodTypeCannoli => 'Cannoli';
+
+  @override
+  String get foodTypeKnafeh => 'Knafeh';
+
+  @override
+  String get foodTypeMuhallabia => 'Muhallabia';
+
+  @override
+  String get foodTypeChurros => 'Churros';
+
+  @override
+  String get foodTypeMochi => 'Mochi';
+
+  @override
+  String get foodTypeOtherDessert => 'Diğer Tatlı';
+
+  @override
+  String get foodTypeTurkishTea => 'Türk Çayı';
+
+  @override
+  String get foodTypeTurkishCoffee => 'Türk Kahvesi';
+
+  @override
+  String get foodTypeAyran => 'Ayran';
+
+  @override
+  String get foodTypeFreshOrangeJuice => 'Taze Portakal Suyu';
+
+  @override
+  String get foodTypeLemonade => 'Limonata';
+
+  @override
+  String get foodTypeSmoothie => 'Smoothie';
+
+  @override
+  String get foodTypeSalgam => 'Şalgam';
+
+  @override
+  String get foodTypeBoza => 'Boza';
+
+  @override
+  String get foodTypeSahlep => 'Sahlep';
+
+  @override
+  String get foodTypeSoftDrink => 'Meşrubat';
+
+  @override
+  String get foodTypeWater => 'Su';
+
+  @override
+  String get foodTypeNarSuyu => 'Nar Suyu';
+
+  @override
+  String get foodTypeSerbet => 'Şerbet';
+
+  @override
+  String get foodTypeTurkKahvesiSoguk => 'Soğuk Türk Kahvesi';
+
+  @override
+  String get foodTypeOtherBeverage => 'Diğer İçecek';
+
+  @override
+  String get foodTypeHamburger => 'Hamburger';
+
+  @override
+  String get foodTypeCheeseburger => 'Çizburger';
+
+  @override
+  String get foodTypeChickenBurger => 'Tavuk Burger';
+
+  @override
+  String get foodTypeIslakHamburger => 'Islak Hamburger';
+
+  @override
+  String get foodTypeVeggieBurger => 'Vejetaryen Burger';
+
+  @override
+  String get foodTypeOtherHamburger => 'Diğer Hamburger';
+
+  @override
+  String get foodTypeMargaritaPizza => 'Margarita Pizza';
+
+  @override
+  String get foodTypeMixedPizza => 'Karışık Pizza';
+
+  @override
+  String get foodTypePepperoniPizza => 'Pepperoni Pizza';
+
+  @override
+  String get foodTypeSucukluPizza => 'Sucuklu Pizza';
+
+  @override
+  String get foodTypeFourCheesePizza => 'Dört Peynirli Pizza';
+
+  @override
+  String get foodTypeOtherPizza => 'Diğer Pizza';
+
+  @override
+  String get foodExtraBread => 'Ekstra Ekmek';
+
+  @override
+  String get foodExtraRicePortion => 'Pilav Porsiyon';
+
+  @override
+  String get foodExtraBulgurPortion => 'Bulgur Porsiyon';
+
+  @override
+  String get foodExtraRice => 'Ekstra Pilav';
+
+  @override
+  String get foodExtraGarlicBread => 'Sarımsaklı Ekmek';
+
+  @override
+  String get foodExtraLavash => 'Lavaş';
+
+  @override
+  String get foodExtraSimiSide => 'Simit';
+
+  @override
+  String get foodExtraPitaChips => 'Pide Cipsi';
+
+  @override
+  String get foodExtraCroutons => 'Kruton';
+
+  @override
+  String get foodExtraCheese => 'Ekstra Peynir';
+
+  @override
+  String get foodExtraParmesan => 'Parmesan';
+
+  @override
+  String get foodExtraYogurt => 'Yoğurt';
+
+  @override
+  String get foodExtraButter => 'Tereyağı';
+
+  @override
+  String get foodExtraFetaCheese => 'Beyaz Peynir';
+
+  @override
+  String get foodExtraEgg => 'Ekstra Yumurta';
+
+  @override
+  String get foodExtraKaymakPortion => 'Kaymak Porsiyon';
+
+  @override
+  String get foodExtraMilk => 'Süt';
+
+  @override
+  String get foodExtraSaffronButter => 'Safranlı Tereyağı';
+
+  @override
+  String get foodExtraCreamSauce => 'Ekstra Krema Sos';
+
+  @override
+  String get foodExtraGarlicSauce => 'Sarımsak Sos';
+
+  @override
+  String get foodExtraKetchup => 'Ketçap';
+
+  @override
+  String get foodExtraMayonnaise => 'Mayonez';
+
+  @override
+  String get foodExtraMustard => 'Hardal';
+
+  @override
+  String get foodExtraSoySauce => 'Soya Sosu';
+
+  @override
+  String get foodExtraTartarSauce => 'Tartar Sos';
+
+  @override
+  String get foodExtraSweetChiliSauce => 'Tatlı Biber Sosu';
+
+  @override
+  String get foodExtraTeriyakiSauce => 'Teriyaki Sos';
+
+  @override
+  String get foodExtraGochujangSauce => 'Gochujang Sos';
+
+  @override
+  String get foodExtraBalsamicGlaze => 'Balzamik Sos';
+
+  @override
+  String get foodExtraTruffleOil => 'Trüf Yağı';
+
+  @override
+  String get foodExtraChiliOil => 'Acı Biber Yağı';
+
+  @override
+  String get foodExtraHotMustard => 'Acı Hardal';
+
+  @override
+  String get foodExtraSesameOil => 'Susam Yağı';
+
+  @override
+  String get foodExtraChocolateSauce => 'Çikolata Sosu';
+
+  @override
+  String get foodExtraExtraSyrup => 'Ekstra Şerbet';
+
+  @override
+  String get foodExtraPomegranateSyrup => 'Nar Ekşisi';
+
+  @override
+  String get foodExtraTahini => 'Tahin';
+
+  @override
+  String get foodExtraExtraDressing => 'Ekstra Sos';
+
+  @override
+  String get foodExtraExtraSugar => 'Ekstra Şeker';
+
+  @override
+  String get foodExtraGrilledVegetables => 'Izgara Sebze';
+
+  @override
+  String get foodExtraGrilledChicken => 'Izgara Tavuk';
+
+  @override
+  String get foodExtraHotPepper => 'Acı Biber';
+
+  @override
+  String get foodExtraOnionSalad => 'Soğan Salatası';
+
+  @override
+  String get foodExtraSumacOnion => 'Sumaklı Soğan';
+
+  @override
+  String get foodExtraParsley => 'Maydanoz';
+
+  @override
+  String get foodExtraLemon => 'Limon';
+
+  @override
+  String get foodExtraCorn => 'Mısır';
+
+  @override
+  String get foodExtraJalapeno => 'Jalapeno';
+
+  @override
+  String get foodExtraAvocado => 'Avokado';
+
+  @override
+  String get foodExtraPickles => 'Turşu';
+
+  @override
+  String get foodExtraMushroomTopping => 'Mantar';
+
+  @override
+  String get foodExtraOliveTopping => 'Zeytin';
+
+  @override
+  String get foodExtraOnionTopping => 'Soğan';
+
+  @override
+  String get foodExtraPepperoniTopping => 'Pepperoni';
+
+  @override
+  String get foodExtraSucukTopping => 'Sucuk';
+
+  @override
+  String get foodExtraGreenPepperTopping => 'Yeşil Biber';
+
+  @override
+  String get foodExtraTomatoSlices => 'Domates Dilimi';
+
+  @override
+  String get foodExtraGrilledTomato => 'Izgara Domates';
+
+  @override
+  String get foodExtraFreshHerbs => 'Taze Otlar';
+
+  @override
+  String get foodExtraSteamedVegetables => 'Buharda Sebze';
+
+  @override
+  String get foodExtraMintLeaves => 'Nane Yaprağı';
+
+  @override
+  String get foodExtraFreshFruits => 'Taze Meyve';
+
+  @override
+  String get foodExtraArugulaSide => 'Roka';
+
+  @override
+  String get foodExtraFrenchFriesSide => 'Patates Kızartması';
+
+  @override
+  String get foodExtraOnionRings => 'Soğan Halkası';
+
+  @override
+  String get foodExtraSaladSide => 'Salata';
+
+  @override
+  String get foodExtraChickenSide => 'Tavuk Porsiyon';
+
+  @override
+  String get foodExtraEdamameSide => 'Edamame';
+
+  @override
+  String get foodExtraMisoSoupSide => 'Miso Çorbası';
+
+  @override
+  String get foodExtraSpringRollSide => 'Sigara Böreği';
+
+  @override
+  String get foodExtraHummusSide => 'Humus';
+
+  @override
+  String get foodExtraBruschettaSide => 'Bruschetta';
+
+  @override
+  String get foodExtraFattoushSide => 'Fattuş';
+
+  @override
+  String get foodExtraSeaweedSalad => 'Deniz Yosunu Salatası';
+
+  @override
+  String get foodExtraGlassNoodlesSide => 'Cam Eriştesi';
+
+  @override
+  String get foodExtraDooghSide => 'Ayran';
+
+  @override
+  String get foodExtraEggFriedRiceSide => 'Yumurtalı Pilav';
+
+  @override
+  String get foodExtraKimchiSide => 'Kimchi';
+
+  @override
+  String get foodExtraPickledRadish => 'Turp Turşusu';
+
+  @override
+  String get foodExtraPickledGinger => 'Turşu Zencefil';
+
+  @override
+  String get foodExtraPickledGarlic => 'Sarımsak Turşusu';
+
+  @override
+  String get foodExtraPrawnCrackers => 'Karides Kraker';
+
+  @override
+  String get foodExtraExtraMeat => 'Ekstra Et';
+
+  @override
+  String get foodExtraEggTopping => 'Yumurta';
+
+  @override
+  String get foodExtraCheeseTopping => 'Peynir';
+
+  @override
+  String get foodExtraProsciuttoTopping => 'Prosciutto';
+
+  @override
+  String get foodExtraPistachioTopping => 'Antep Fıstığı';
+
+  @override
+  String get foodExtraTempuraBits => 'Tempura Parçası';
+
+  @override
+  String get foodExtraWasabi => 'Wasabi';
+
+  @override
+  String get foodExtraTofuExtra => 'Ekstra Tofu';
+
+  @override
+  String get foodExtraNutritionalYeast => 'Besin Mayası';
+
+  @override
+  String get foodExtraChickpeaTopping => 'Nohut';
+
+  @override
+  String get foodExtraHoneyPortion => 'Bal Porsiyon';
+
+  @override
+  String get foodExtraOlivePortion => 'Zeytin Porsiyon';
+
+  @override
+  String get foodExtraJamPortion => 'Reçel Porsiyon';
+
+  @override
+  String get foodExtraOliveOil => 'Zeytinyağı';
+
+  @override
+  String get foodExtraAyranSide => 'Ayran';
+
+  @override
+  String get foodExtraTeaGlass => 'Çay Bardağı';
+
+  @override
+  String get foodExtraWalnut => 'Ceviz';
+
+  @override
+  String get foodExtraDriedFruits => 'Kuru Meyve';
+
+  @override
+  String get foodExtraSumac => 'Sumak';
+
+  @override
+  String get foodExtraChiliFlakes => 'Pul Biber';
+
+  @override
+  String get foodExtraDriedMint => 'Kuru Nane';
+
+  @override
+  String get foodExtraVinegar => 'Sirke';
+
+  @override
+  String get foodExtraIceCreamScoop => 'Dondurma Topı';
+
+  @override
+  String get foodExtraWhippedCream => 'Krem Şanti';
+
+  @override
+  String get foodExtraIce => 'Buz';
+
+  @override
+  String get newFoodOrder => 'Yeni bir yemek siparişiniz var!';
+
+  @override
+  String get restaurantNewReview =>
+      'Yeni bir restoran değerlendirmesi aldınız.';
+
+  @override
+  String get noReviews => 'Henüz değerlendirme yok';
+
+  @override
+  String get noReviewsDescription =>
+      'Müşteriler yorum bırakmaya başladığında restoranınızın değerlendirmeleri burada görünecek.';
+
+  @override
+  String basedOn(Object count) {
+    return '$count değerlendirmeye göre';
+  }
+
+  @override
+  String get endOfReviews => 'Tüm değerlendirmeleri gördünüz';
+
+  @override
+  String get restaurantStatus => 'Restoran Durumu';
+
+  @override
+  String get restaurantStatusDescription =>
+      'Restoranınızın sipariş kabul edip etmeyeceğini kontrol edin';
+
+  @override
+  String get inactive => 'Pasif';
+
+  @override
+  String get cuisineType => 'Mutfak Türü';
+
+  @override
+  String get selectCuisineType => 'Uygun olanları seçin';
+
+  @override
+  String get workingSchedule => 'Çalışma Takvimi';
+
+  @override
+  String get workingDays => 'Çalışma Günleri';
+
+  @override
+  String get workingHours => 'Çalışma Saatleri';
+
+  @override
+  String get openTime => 'Açılış';
+
+  @override
+  String get closeTime => 'Kapanış';
+
+  @override
+  String get deselectAll => 'Seçimi Kaldır';
+
+  @override
+  String get addedRegions => 'Eklenen Bölgeler';
+
+  @override
+  String get saving => 'Kaydediliyor...';
+
+  @override
+  String get noChanges => 'Değişiklik Yok';
+
+  @override
+  String get saveSuccess => 'Ayarlar başarıyla kaydedildi';
+
+  @override
+  String get saveError => 'Kaydedilemedi. Lütfen tekrar deneyin.';
+
+  @override
+  String get fetchError => 'Ayarlar yüklenemedi. Lütfen tekrar deneyin.';
+
+  @override
+  String get selectFoodType => 'Yemek Türü Seçin';
+
+  @override
+  String get foodType => 'Yemek Türü';
+
+  @override
+  String categoriesSelected(int count) {
+    return '$count kategori seçildi';
+  }
+
+  @override
+  String okCategoriesSelected(int count) {
+    return 'Tamam ($count seçili)';
+  }
+
+  @override
+  String get cuisineTypeTurkish => 'Türk Mutfağı';
+
+  @override
+  String get cuisineTypeJapanese => 'Japon Mutfağı';
+
+  @override
+  String get cuisineTypeChinese => 'Çin Mutfağı';
+
+  @override
+  String get cuisineTypePersian => 'İran Mutfağı';
+
+  @override
+  String get cuisineTypeArabic => 'Arap Mutfağı';
+
+  @override
+  String get cuisineTypeItalian => 'İtalyan Mutfağı';
+
+  @override
+  String get cuisineTypeKorean => 'Kore Mutfağı';
+
+  @override
+  String get cuisineTypeVietnamese => 'Vietnam Mutfağı';
+
+  @override
+  String get cuisineTypeVeganVegetarian => 'Vegan / Vejetaryen';
+
+  @override
+  String get dayMonday => 'Pazartesi';
+
+  @override
+  String get dayTuesday => 'Salı';
+
+  @override
+  String get dayWednesday => 'Çarşamba';
+
+  @override
+  String get dayThursday => 'Perşembe';
+
+  @override
+  String get dayFriday => 'Cuma';
+
+  @override
+  String get daySaturday => 'Cumartesi';
+
+  @override
+  String get daySunday => 'Pazar';
+
+  @override
+  String get minOrderPriceByRegion => 'Bölgeye Göre Min. Sipariş Tutarı';
+
+  @override
+  String get minOrderPriceDescription =>
+      'Her teslimat bölgesi için minimum sipariş tutarını belirleyin';
+
+  @override
+  String get minOrderPriceWarning =>
+      'Minimum sipariş tutarı belirlenmemiş bölgelerde sipariş alt limiti uygulanmaz.';
+
+  @override
+  String get subRegion => 'Alt Bölge';
+
+  @override
+  String get selectSubRegion => 'Alt bölge seçin';
 }

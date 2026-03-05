@@ -4094,7 +4094,7 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get selectAll => 'Выбрать всё';
+  String get selectAll => 'Выбрать все';
 
   @override
   String get outOfStock => 'Нет в наличии';
@@ -4951,7 +4951,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get productQuestionsHeader => 'Вопросы и ответы о товарах';
 
   @override
-  String get anonymous => 'Анонимный';
+  String get anonymous => 'Аноним';
 
   @override
   String viewAllQuestions(Object count) {
@@ -5324,7 +5324,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get paid => 'Оплачено';
 
   @override
-  String get active => 'Активный';
+  String get active => 'Активен';
 
   @override
   String get proceedToPayment => 'Оформить платеж';
@@ -7990,7 +7990,7 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get clearFilters => 'Очистить фильтры';
+  String get clearFilters => 'Сбросить фильтры';
 
   @override
   String get selectCategory => 'Выберите категорию';
@@ -11709,7 +11709,8 @@ class AppLocalizationsRu extends AppLocalizations {
   String get colorSilver => 'Серебристый';
 
   @override
-  String get errorLoadingReviews => 'Ошибка при загрузке отзывов';
+  String get errorLoadingReviews =>
+      'Не удалось загрузить отзывы. Пожалуйста, попробуйте снова.';
 
   @override
   String get pleaseSelectCategoryFirst =>
@@ -13122,4 +13123,2026 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get setAddressLoginBanner =>
       'Войдите и укажите адрес, чтобы увидеть рестораны, которые доставляют к вам';
+
+  @override
+  String get restaurantDashboardGreetingMorning => 'Доброе утро,';
+
+  @override
+  String get restaurantDashboardGreetingAfternoon => 'Добрый день,';
+
+  @override
+  String get restaurantDashboardGreetingEvening => 'Добрый вечер,';
+
+  @override
+  String get restaurantDashboardNoRestaurantTitle => 'Ресторан не найден';
+
+  @override
+  String get restaurantDashboardNoRestaurantDescription =>
+      'Вы не привязаны ни к одному ресторану.';
+
+  @override
+  String get restaurantDashboardFetchFailedTitle => 'Ошибка подключения';
+
+  @override
+  String get restaurantDashboardFetchFailedMessage =>
+      'Не удалось загрузить данные ресторана. Проверьте подключение.';
+
+  @override
+  String get restaurantDashboardRetry => 'Повторить';
+
+  @override
+  String get restaurantDashboardQuickActions => 'Быстрые действия';
+
+  @override
+  String get restaurantDashboardFoodsLabel => 'Блюда';
+
+  @override
+  String get restaurantDashboardFoodsDescription => 'Управление меню';
+
+  @override
+  String get restaurantDashboardOrdersLabel => 'Заказы';
+
+  @override
+  String get restaurantDashboardOrdersDescription => 'Просмотр всех заказов';
+
+  @override
+  String get restaurantDashboardReviewsLabel => 'Отзывы';
+
+  @override
+  String get restaurantDashboardReviewsDescription => 'Обратная связь клиентов';
+
+  @override
+  String get restaurantDashboardSettingsLabel => 'Настройки';
+
+  @override
+  String get restaurantDashboardSettingsDescription => 'Настройки ресторана';
+
+  @override
+  String get restaurantDashboardPendingOrdersTitle => 'Ожидающие заказы';
+
+  @override
+  String get restaurantDashboardViewAll => 'Смотреть все';
+
+  @override
+  String get restaurantDashboardPendingOrdersEmpty => 'Нет ожидающих заказов';
+
+  @override
+  String get restaurantDashboardAccept => 'Принять';
+
+  @override
+  String get restaurantDashboardReject => 'Отклонить';
+
+  @override
+  String get restaurantDashboardUpdateFailed => 'Не удалось обновить заказ';
+
+  @override
+  String get restaurantDashboardStatusOpen => 'Открыто';
+
+  @override
+  String get restaurantDashboardStatusClosedInactive => 'Закрыто';
+
+  @override
+  String get restaurantDashboardStatusClosedOffDay => 'Сегодня закрыто';
+
+  @override
+  String get restaurantDashboardStatusClosedOffHours => 'Нерабочее время';
+
+  @override
+  String get restaurantsTitle => 'Рестораны';
+
+  @override
+  String get discoverNearbyRestaurants =>
+      'Откройте для себя ближайшие рестораны';
+
+  @override
+  String get searchRestaurantsHint => 'Поиск ресторанов…';
+
+  @override
+  String get noRestaurantsYet => 'Ресторанов пока нет';
+
+  @override
+  String get checkBackSoonRestaurants =>
+      'Скоро здесь появятся новые рестораны.';
+
+  @override
+  String get foodNoResults => 'Нет результатов';
+
+  @override
+  String get tryDifferentCuisine =>
+      'Попробуйте другой тип кухни или поисковый запрос.';
+
+  @override
+  String get allCuisines => 'Все';
+
+  @override
+  String get closedLabel => 'Закрыто';
+
+  @override
+  String get sortHighRating => '★ Высокий';
+
+  @override
+  String get sortLowRating => '★ Низкий';
+
+  @override
+  String get sortLabel => 'Сортировка';
+
+  @override
+  String get restaurantNotFound => 'Ресторан не найден';
+
+  @override
+  String get backToRestaurants => 'Назад к ресторанам';
+
+  @override
+  String get currentlyClosed => 'Сейчас закрыто';
+
+  @override
+  String get browseMenuWhenReopen =>
+      'Просмотрите меню и закажите, когда мы откроемся.';
+
+  @override
+  String get menuTab => 'Меню';
+
+  @override
+  String get reviewsTab => 'Отзывы';
+
+  @override
+  String get searchFoodHint => 'Поиск блюд…';
+
+  @override
+  String get foodQuantityLabel => 'Количество';
+
+  @override
+  String get foodExtrasLabel => 'Дополнения';
+
+  @override
+  String get foodSpecialNotes => 'Особые пожелания (необязательно)';
+
+  @override
+  String get foodNotesHint => 'Напр. без лука…';
+
+  @override
+  String get foodFreeExtra => 'Бесплатно';
+
+  @override
+  String foodAddToCart(String price) {
+    return 'В корзину — $price TL';
+  }
+
+  @override
+  String get foodYourOrder => 'Ваш заказ';
+
+  @override
+  String get foodSubtotal => 'Промежуточный итог';
+
+  @override
+  String get foodProceedToCheckout => 'Перейти к оплате';
+
+  @override
+  String get foodNoMenuItems => 'Нет пунктов меню';
+
+  @override
+  String get foodCheckBackLater => 'Загляните позже — появятся новые блюда.';
+
+  @override
+  String get foodTryDifferentSearch => 'Попробуйте другой поиск или категорию.';
+
+  @override
+  String get foodClearAll => 'Очистить все';
+
+  @override
+  String get foodAddLabel => 'Добавить';
+
+  @override
+  String get foodMinLabel => 'мин';
+
+  @override
+  String get foodClosedButton => 'Закрыто';
+
+  @override
+  String foodItemsFab(int count, String price) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'позиций',
+      few: 'позиции',
+      one: 'позиция',
+    );
+    return '$count $_temp0 · $price TL';
+  }
+
+  @override
+  String foodPriceTL(String price) {
+    return '$price TL';
+  }
+
+  @override
+  String foodExtraPriceTL(String price) {
+    return '+$price TL';
+  }
+
+  @override
+  String foodDiscountPercent(int percent) {
+    return '%$percent';
+  }
+
+  @override
+  String foodPrepTime(int time) {
+    return '$time мин';
+  }
+
+  @override
+  String get foodCartTitle => 'Корзина еды';
+
+  @override
+  String get foodCartClearAll => 'Очистить всё';
+
+  @override
+  String get foodCartOrderingFrom => 'Заказ из этого ресторана';
+
+  @override
+  String get foodCartEstimatedPrep => 'Приблизительное время:';
+
+  @override
+  String get foodCartEdit => 'Изменить';
+
+  @override
+  String get foodCartOrderSummary => 'Итог заказа';
+
+  @override
+  String get foodCartTotal => 'ИТОГО';
+
+  @override
+  String get foodCartDeliveryFeeNote => 'Стоимость доставки при оформлении';
+
+  @override
+  String get foodCartClearTitle => 'Очистить корзину?';
+
+  @override
+  String get foodCartClearMessage =>
+      'Все позиции будут удалены из вашей корзины.';
+
+  @override
+  String get foodCartClearButton => 'Очистить';
+
+  @override
+  String get foodCartEmpty => 'Ваша корзина еды пуста';
+
+  @override
+  String get foodCartBrowseMessage =>
+      'Откройте рестораны и добавьте вкусные блюда в корзину';
+
+  @override
+  String foodCartPrepTimeApprox(int time) {
+    return '~$time мин';
+  }
+
+  @override
+  String foodCartItemCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'позиций',
+      few: 'позиции',
+      one: 'позиция',
+    );
+    return '$count $_temp0';
+  }
+
+  @override
+  String get foodCheckoutNoAddress =>
+      'Адрес доставки не указан. Сначала добавьте адрес.';
+
+  @override
+  String get foodCheckoutTitle => 'Оформление';
+
+  @override
+  String get foodCheckoutYourOrder => 'ВАШ ЗАКАЗ';
+
+  @override
+  String get foodCheckoutDeliveryMethod => 'СПОСОБ ДОСТАВКИ';
+
+  @override
+  String get foodCheckoutDeliveryAddress => 'АДРЕС ДОСТАВКИ';
+
+  @override
+  String get foodCheckoutOrderNotes => 'ПРИМЕЧАНИЯ К ЗАКАЗУ';
+
+  @override
+  String get foodCheckoutOrderNotesHint =>
+      'Напр. без острого соуса, дополнительные салфетки…';
+
+  @override
+  String get foodCheckoutPaymentMethod => 'СПОСОБ ОПЛАТЫ';
+
+  @override
+  String get foodCheckoutChange => 'Изменить';
+
+  @override
+  String get foodCheckoutNoAddressShort => 'Адрес доставки не указан';
+
+  @override
+  String get foodCheckoutAddAddress => 'Добавить адрес';
+
+  @override
+  String foodCheckoutPrepTime(int time) {
+    return '~$time мин время приготовления';
+  }
+
+  @override
+  String get foodCheckoutDelivery => 'Доставка';
+
+  @override
+  String get foodCheckoutPickup => 'Самовывоз';
+
+  @override
+  String get foodCheckoutPayAtDoor => 'Оплата при получении';
+
+  @override
+  String get foodCheckoutCreditCard => 'Кредитная / Дебетовая карта';
+
+  @override
+  String get foodCheckoutPayCash => 'Оплата наличными при получении заказа';
+
+  @override
+  String get foodCheckoutSecurePayment =>
+      'Безопасная онлайн-оплата через İşbank 3D';
+
+  @override
+  String foodCheckoutTotalItems(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'позиций',
+      few: 'позиции',
+      one: 'позиция',
+    );
+    return 'Итого ($count $_temp0)';
+  }
+
+  @override
+  String get foodCheckoutPayNow => 'Оплатить';
+
+  @override
+  String get foodCheckoutPlaceOrder => 'Оформить заказ';
+
+  @override
+  String get foodCheckoutOrderPlaced => 'Заказ оформлен!';
+
+  @override
+  String get foodCheckoutOrderConfirmed => 'Ваш заказ подтверждён.';
+
+  @override
+  String foodCheckoutOrderId(String id) {
+    return 'Заказ: $id';
+  }
+
+  @override
+  String get foodCheckoutViewOrders => 'Мои заказы';
+
+  @override
+  String get foodCheckoutCartEmpty => 'Ваша корзина пуста';
+
+  @override
+  String get foodCheckoutAddItems =>
+      'Добавьте блюда из ресторана для оформления';
+
+  @override
+  String get foodCheckoutBrowse => 'Обзор ресторанов';
+
+  @override
+  String get foodCheckoutError => 'Произошла ошибка.';
+
+  @override
+  String get foodReviewJustNow => 'Только что';
+
+  @override
+  String get foodReviewLoading => 'Загрузка…';
+
+  @override
+  String get foodReviewLoadMore => 'Загрузить ещё';
+
+  @override
+  String get foodReviewNoReviews => 'Отзывов пока нет';
+
+  @override
+  String get foodReviewBeFirst =>
+      'Будьте первым, кто оставит отзыв после заказа.';
+
+  @override
+  String get foodCategoryKebabsGrills => 'Кебабы и гриль';
+
+  @override
+  String get foodCategoryPideLahmacun => 'Пиде и лахмаджун';
+
+  @override
+  String get foodCategorySoups => 'Супы';
+
+  @override
+  String get foodCategorySalads => 'Салаты';
+
+  @override
+  String get foodCategoryAppetizers => 'Закуски и мезе';
+
+  @override
+  String get foodCategoryStews => 'Рагу и запеканки';
+
+  @override
+  String get foodCategoryDolma => 'Долма и сарма';
+
+  @override
+  String get foodCategorySteakRoast => 'Стейк и жаркое';
+
+  @override
+  String get foodCategoryStirFry => 'Жарка и вок';
+
+  @override
+  String get foodCategoryFriedChicken => 'Жареная курица';
+
+  @override
+  String get foodCategoryRicePilaf => 'Рис и плов';
+
+  @override
+  String get foodCategoryNoodles => 'Лапша';
+
+  @override
+  String get foodCategorySushi => 'Суши и сашими';
+
+  @override
+  String get foodCategoryCurry => 'Карри';
+
+  @override
+  String get foodCategoryPasta => 'Паста';
+
+  @override
+  String get foodCategoryWraps => 'Роллы и дюрюм';
+
+  @override
+  String get foodCategoryDoner => 'Донер';
+
+  @override
+  String get foodCategorySandwich => 'Сэндвич и тост';
+
+  @override
+  String get foodCategorySeafood => 'Морепродукты';
+
+  @override
+  String get foodCategoryBreakfast => 'Завтрак';
+
+  @override
+  String get foodCategoryDesserts => 'Десерты и выпечка';
+
+  @override
+  String get foodCategoryBeverages => 'Напитки';
+
+  @override
+  String get foodCategoryHamburger => 'Гамбургер';
+
+  @override
+  String get foodCategoryPizza => 'Пицца';
+
+  @override
+  String get foodTypeAdanaKebab => 'Адана кебаб';
+
+  @override
+  String get foodTypeUrfaKebab => 'Урфа кебаб';
+
+  @override
+  String get foodTypeIskenderKebab => 'Искендер кебаб';
+
+  @override
+  String get foodTypeShishKebab => 'Шиш кебаб';
+
+  @override
+  String get foodTypeChickenKebab => 'Куриный кебаб';
+
+  @override
+  String get foodTypeKofte => 'Кёфте';
+
+  @override
+  String get foodTypeMixedGrill => 'Микс гриль';
+
+  @override
+  String get foodTypeLambChops => 'Бараньи котлеты';
+
+  @override
+  String get foodTypeBeytiKebab => 'Бейти кебаб';
+
+  @override
+  String get foodTypeAliNazik => 'Али Назик';
+
+  @override
+  String get foodTypeCopSis => 'Чоп шиш';
+
+  @override
+  String get foodTypeCigerKebab => 'Джигер кебаб';
+
+  @override
+  String get foodTypeTantuni => 'Тантуни';
+
+  @override
+  String get foodTypePatlicanKebab => 'Баклажанный кебаб';
+
+  @override
+  String get foodTypeTestiKebab => 'Тести кебаб';
+
+  @override
+  String get foodTypeCagKebab => 'Чаг кебаб';
+
+  @override
+  String get foodTypePideliKofte => 'Пидели кёфте';
+
+  @override
+  String get foodTypeKuzuSis => 'Кузу шиш';
+
+  @override
+  String get foodTypeOrmanKebab => 'Орман кебаб';
+
+  @override
+  String get foodTypeYogurtluKebab => 'Йогуртлу кебаб';
+
+  @override
+  String get foodTypeCheloKebab => 'Чело кебаб';
+
+  @override
+  String get foodTypeJoojehKebab => 'Джудже кебаб';
+
+  @override
+  String get foodTypeKoobideh => 'Кубиде';
+
+  @override
+  String get foodTypeBulgogi => 'Бульгоги';
+
+  @override
+  String get foodTypeGalbi => 'Кальби';
+
+  @override
+  String get foodTypeSamgyeopsal => 'Самгёпсаль';
+
+  @override
+  String get foodTypeYakitori => 'Якитори';
+
+  @override
+  String get foodTypeTandooriChicken => 'Тандури курица';
+
+  @override
+  String get foodTypeSouvlaki => 'Сувлаки';
+
+  @override
+  String get foodTypeGyros => 'Гирос';
+
+  @override
+  String get foodTypeSatay => 'Сатай';
+
+  @override
+  String get foodTypeKokorec => 'Кокореч';
+
+  @override
+  String get foodTypeOtherKebab => 'Другой кебаб';
+
+  @override
+  String get foodTypeCheesePide => 'Пиде с сыром';
+
+  @override
+  String get foodTypeMincedMeatPide => 'Пиде с фаршем';
+
+  @override
+  String get foodTypeSucukluPide => 'Пиде с суджуком';
+
+  @override
+  String get foodTypeKasarliPide => 'Пиде с кашаром';
+
+  @override
+  String get foodTypeKusbasiPide => 'Пиде с мясом';
+
+  @override
+  String get foodTypeLahmacun => 'Лахмаджун';
+
+  @override
+  String get foodTypeEtliEkmek => 'Этли экмек';
+
+  @override
+  String get foodTypeYumurtaliPide => 'Пиде с яйцом';
+
+  @override
+  String get foodTypeIspanakliPide => 'Пиде со шпинатом';
+
+  @override
+  String get foodTypeKarisikPide => 'Смешанная пиде';
+
+  @override
+  String get foodTypePastirmaliPide => 'Пиде с бастурмой';
+
+  @override
+  String get foodTypeOtherPide => 'Другая пиде';
+
+  @override
+  String get foodTypeLentilSoup => 'Чечевичный суп';
+
+  @override
+  String get foodTypeTomatoSoup => 'Томатный суп';
+
+  @override
+  String get foodTypeChickenSoup => 'Куриный суп';
+
+  @override
+  String get foodTypeTarhanaSoup => 'Суп тархана';
+
+  @override
+  String get foodTypeEzogelinSoup => 'Суп эзогелин';
+
+  @override
+  String get foodTypeIskembeSoup => 'Суп ишкембе';
+
+  @override
+  String get foodTypeYaylaSoup => 'Суп яйла';
+
+  @override
+  String get foodTypeMushroomSoup => 'Грибной суп';
+
+  @override
+  String get foodTypeMercimekSoup => 'Суп из чечевицы';
+
+  @override
+  String get foodTypeBeyran => 'Бейран';
+
+  @override
+  String get foodTypeDugunCorbasi => 'Свадебный суп';
+
+  @override
+  String get foodTypeKellepacaCorbasi => 'Суп келле пача';
+
+  @override
+  String get foodTypeSehriyeCorbasi => 'Суп с вермишелью';
+
+  @override
+  String get foodTypeLebeniyeCorbasi => 'Суп лебение';
+
+  @override
+  String get foodTypeMisoSoup => 'Мисо суп';
+
+  @override
+  String get foodTypeWontonSoup => 'Суп вонтон';
+
+  @override
+  String get foodTypeKimchiJjigae => 'Кимчи тиге';
+
+  @override
+  String get foodTypeSundubuJjigae => 'Сундубу тиге';
+
+  @override
+  String get foodTypeAshReshteh => 'Аш реште';
+
+  @override
+  String get foodTypeMinestrone => 'Минестроне';
+
+  @override
+  String get foodTypeTomYum => 'Том ям';
+
+  @override
+  String get foodTypeOtherSoup => 'Другой суп';
+
+  @override
+  String get foodTypeShepherdSalad => 'Салат пастуха';
+
+  @override
+  String get foodTypeCaesarSalad => 'Салат Цезарь';
+
+  @override
+  String get foodTypeGreekSalad => 'Греческий салат';
+
+  @override
+  String get foodTypeSeasonalSalad => 'Сезонный салат';
+
+  @override
+  String get foodTypeRocketSalad => 'Салат с рукколой';
+
+  @override
+  String get foodTypeGavurdagiSalad => 'Салат Гавурдагы';
+
+  @override
+  String get foodTypePiyaz => 'Пияз';
+
+  @override
+  String get foodTypeCobanSalad => 'Салат чобан';
+
+  @override
+  String get foodTypeKisir => 'Кысыр';
+
+  @override
+  String get foodTypeSemizotuSalatasi => 'Салат из портулака';
+
+  @override
+  String get foodTypeMorLahanaSalatasi => 'Салат из краснокочанной капусты';
+
+  @override
+  String get foodTypeFattoush => 'Фаттуш';
+
+  @override
+  String get foodTypeTabbouleh => 'Табуле';
+
+  @override
+  String get foodTypeCaprese => 'Капрезе';
+
+  @override
+  String get foodTypeOtherSalad => 'Другой салат';
+
+  @override
+  String get foodTypeHummus => 'Хумус';
+
+  @override
+  String get foodTypeBabaganoush => 'Бабагануш';
+
+  @override
+  String get foodTypeHaydari => 'Хайдари';
+
+  @override
+  String get foodTypeAtom => 'Атом';
+
+  @override
+  String get foodTypeAciliEzme => 'Аджили эзме';
+
+  @override
+  String get foodTypeCacik => 'Джаджик';
+
+  @override
+  String get foodTypeSigaraBoregi => 'Сигара бёрек';
+
+  @override
+  String get foodTypeIcliKofte => 'Ичли кёфте';
+
+  @override
+  String get foodTypeMercimekKofte => 'Чечевичные кёфте';
+
+  @override
+  String get foodTypeYaprakSarma => 'Япрак сарма';
+
+  @override
+  String get foodTypeFalafel => 'Фалафель';
+
+  @override
+  String get foodTypeMucver => 'Мюджвер';
+
+  @override
+  String get foodTypePatlicanSoslu => 'Баклажан в соусе';
+
+  @override
+  String get foodTypeCigKofte => 'Чиг кёфте';
+
+  @override
+  String get foodTypeArnavutCigeri => 'Арнавут джигери';
+
+  @override
+  String get foodTypeCerkezTavugu => 'Черкесская курица';
+
+  @override
+  String get foodTypeTarator => 'Таратор';
+
+  @override
+  String get foodTypeBorek => 'Бёрек';
+
+  @override
+  String get foodTypeSuBoregi => 'Су бёрек';
+
+  @override
+  String get foodTypeDimSum => 'Дим сам';
+
+  @override
+  String get foodTypeSpringRolls => 'Спринг роллы';
+
+  @override
+  String get foodTypeDumplings => 'Пельмени';
+
+  @override
+  String get foodTypeGyoza => 'Гёдза';
+
+  @override
+  String get foodTypeEdamame => 'Эдамаме';
+
+  @override
+  String get foodTypeTempura => 'Темпура';
+
+  @override
+  String get foodTypeTakoyaki => 'Такояки';
+
+  @override
+  String get foodTypeBruschetta => 'Брускетта';
+
+  @override
+  String get foodTypeArancini => 'Аранчини';
+
+  @override
+  String get foodTypeCarpaccio => 'Карпаччо';
+
+  @override
+  String get foodTypeFocaccia => 'Фокачча';
+
+  @override
+  String get foodTypeKibbeh => 'Киббе';
+
+  @override
+  String get foodTypeMoutabal => 'Мутабаль';
+
+  @override
+  String get foodTypeMirzaGhasemi => 'Мирза Гасеми';
+
+  @override
+  String get foodTypeKashkBademjan => 'Кашке бадемджан';
+
+  @override
+  String get foodTypePajeon => 'Паджон';
+
+  @override
+  String get foodTypeSamosa => 'Самоса';
+
+  @override
+  String get foodTypeNachos => 'Начос';
+
+  @override
+  String get foodTypeOtherMeze => 'Другие мезе';
+
+  @override
+  String get foodTypeGuvec => 'Гювеч';
+
+  @override
+  String get foodTypeMoussaka => 'Мусака';
+
+  @override
+  String get foodTypeHunkarBegendi => 'Хюнкар бегенди';
+
+  @override
+  String get foodTypeEtliNohut => 'Нут с мясом';
+
+  @override
+  String get foodTypeTurlu => 'Тюрлю';
+
+  @override
+  String get foodTypeTazeFasulye => 'Зелёная фасоль';
+
+  @override
+  String get foodTypeEtliBamya => 'Бамия с мясом';
+
+  @override
+  String get foodTypeEtliBezelye => 'Горох с мясом';
+
+  @override
+  String get foodTypeEtliKapuska => 'Капуста с мясом';
+
+  @override
+  String get foodTypeIspanakYemegi => 'Шпинатное блюдо';
+
+  @override
+  String get foodTypeEtliPirasa => 'Лук-порей с мясом';
+
+  @override
+  String get foodTypeKuruFasulye => 'Сухая фасоль';
+
+  @override
+  String get foodTypeBarbunya => 'Барбунья';
+
+  @override
+  String get foodTypeNohutYemegi => 'Нутовое блюдо';
+
+  @override
+  String get foodTypeZeytinyagliEnginar => 'Артишок с маслом';
+
+  @override
+  String get foodTypeGhormehSabzi => 'Горме сабзи';
+
+  @override
+  String get foodTypeFesenjan => 'Фесенджан';
+
+  @override
+  String get foodTypeDiziAbgoosht => 'Дизи абгушт';
+
+  @override
+  String get foodTypeHotPot => 'Хот пот';
+
+  @override
+  String get foodTypeMansaf => 'Мансаф';
+
+  @override
+  String get foodTypeFatteh => 'Фатте';
+
+  @override
+  String get foodTypeMaqluba => 'Маклюба';
+
+  @override
+  String get foodTypeShakshuka => 'Шакшука';
+
+  @override
+  String get foodTypeTteokbokki => 'Ттокпокки';
+
+  @override
+  String get foodTypeOssoBuco => 'Оссобуко';
+
+  @override
+  String get foodTypeKuzuIncik => 'Баранья голяшка';
+
+  @override
+  String get foodTypeOtherStew => 'Другое рагу';
+
+  @override
+  String get foodTypeImamBayildi => 'Имам баялды';
+
+  @override
+  String get foodTypeKarniyarik => 'Карныярык';
+
+  @override
+  String get foodTypeLahanaSarma => 'Голубцы';
+
+  @override
+  String get foodTypeKabakDolma => 'Фаршированный кабачок';
+
+  @override
+  String get foodTypePatlicanDolma => 'Фаршированный баклажан';
+
+  @override
+  String get foodTypeBiberDolma => 'Фаршированный перец';
+
+  @override
+  String get foodTypeEtliYaprakSarma => 'Долма с мясом';
+
+  @override
+  String get foodTypeZeytinyagliDolma => 'Долма с маслом';
+
+  @override
+  String get foodTypeStuffedPeppers => 'Фаршированный перец';
+
+  @override
+  String get foodTypeMahshi => 'Махши';
+
+  @override
+  String get foodTypeOtherDolma => 'Другая долма';
+
+  @override
+  String get foodTypeSteak => 'Стейк';
+
+  @override
+  String get foodTypeKuzuTandir => 'Тандыр из баранины';
+
+  @override
+  String get foodTypeSacKavurma => 'Садж кавурма';
+
+  @override
+  String get foodTypeTasKebab => 'Тас кебаб';
+
+  @override
+  String get foodTypePekingDuck => 'Утка по-пекински';
+
+  @override
+  String get foodTypeSaltimbocca => 'Сальтимбокка';
+
+  @override
+  String get foodTypeOtherSteak => 'Другой стейк';
+
+  @override
+  String get foodTypeKungPaoChicken => 'Курица кунг пао';
+
+  @override
+  String get foodTypeSweetSourChicken => 'Курица в кисло-сладком';
+
+  @override
+  String get foodTypeMapoTofu => 'Мапо тофу';
+
+  @override
+  String get foodTypeTeriyaki => 'Терияки';
+
+  @override
+  String get foodTypeDakgalbi => 'Такгальби';
+
+  @override
+  String get foodTypeOtherStirFry => 'Другое жаркое';
+
+  @override
+  String get foodTypeFriedChickenClassic => 'Классическая жареная курица';
+
+  @override
+  String get foodTypeKoreanFriedChicken => 'Корейская жареная курица';
+
+  @override
+  String get foodTypeChickenSchnitzel => 'Куриный шницель';
+
+  @override
+  String get foodTypeTonkatsu => 'Тонкацу';
+
+  @override
+  String get foodTypeChickenWings => 'Куриные крылышки';
+
+  @override
+  String get foodTypeChickenTenders => 'Куриные стрипсы';
+
+  @override
+  String get foodTypeNuggets => 'Наггетсы';
+
+  @override
+  String get foodTypeOtherFriedChicken => 'Другая жареная курица';
+
+  @override
+  String get foodTypeBulgurPilaf => 'Булгур плов';
+
+  @override
+  String get foodTypeRicePilaf => 'Рисовый плов';
+
+  @override
+  String get foodTypeNohutluPilav => 'Плов с нутом';
+
+  @override
+  String get foodTypeIcPilav => 'Ич плов';
+
+  @override
+  String get foodTypeDomatesliB => 'Булгур с томатами';
+
+  @override
+  String get foodTypeFirikPilavi => 'Фрик плов';
+
+  @override
+  String get foodTypeSebzeliPilav => 'Овощной плов';
+
+  @override
+  String get foodTypeMeyhanePilavi => 'Мейхане плов';
+
+  @override
+  String get foodTypeFriedRice => 'Жареный рис';
+
+  @override
+  String get foodTypeBibimbap => 'Бибимбап';
+
+  @override
+  String get foodTypeDonburi => 'Донбури';
+
+  @override
+  String get foodTypeTahdig => 'Тахдиг';
+
+  @override
+  String get foodTypeTahchin => 'Тахчин';
+
+  @override
+  String get foodTypeZereshkPolo => 'Зерешк поло';
+
+  @override
+  String get foodTypeBaghaliPolo => 'Багали поло';
+
+  @override
+  String get foodTypeSabziPolo => 'Сабзи поло';
+
+  @override
+  String get foodTypeKabsa => 'Кабса';
+
+  @override
+  String get foodTypeMachboos => 'Мачбус';
+
+  @override
+  String get foodTypeBiryani => 'Бирьяни';
+
+  @override
+  String get foodTypeHamsiliPilav => 'Плов с хамсой';
+
+  @override
+  String get foodTypeAliPasaPilavi => 'Али Паша плов';
+
+  @override
+  String get foodTypeOtherPilaf => 'Другой плов';
+
+  @override
+  String get foodTypeRamen => 'Рамен';
+
+  @override
+  String get foodTypeUdon => 'Удон';
+
+  @override
+  String get foodTypeSoba => 'Соба';
+
+  @override
+  String get foodTypePho => 'Фо';
+
+  @override
+  String get foodTypePadThai => 'Пад тай';
+
+  @override
+  String get foodTypeChowMein => 'Чау мейн';
+
+  @override
+  String get foodTypeDanDanNoodles => 'Дан дан лапша';
+
+  @override
+  String get foodTypeJapchae => 'Чапче';
+
+  @override
+  String get foodTypeJajangmyeon => 'Чаджанмён';
+
+  @override
+  String get foodTypeNaengmyeon => 'Нэнмён';
+
+  @override
+  String get foodTypeOtherNoodle => 'Другая лапша';
+
+  @override
+  String get foodTypeSushi => 'Суши';
+
+  @override
+  String get foodTypeSashimi => 'Сашими';
+
+  @override
+  String get foodTypeMakiRoll => 'Маки ролл';
+
+  @override
+  String get foodTypeNigiri => 'Нигири';
+
+  @override
+  String get foodTypeTemaki => 'Тэмаки';
+
+  @override
+  String get foodTypeOnigiri => 'Онигири';
+
+  @override
+  String get foodTypeKimbap => 'Кимбап';
+
+  @override
+  String get foodTypeOtherSushi => 'Другие суши';
+
+  @override
+  String get foodTypeKatsuCurry => 'Кацу карри';
+
+  @override
+  String get foodTypeButterChicken => 'Баттер чикен';
+
+  @override
+  String get foodTypeTikkaMasala => 'Тикка масала';
+
+  @override
+  String get foodTypeGreenCurry => 'Зелёное карри';
+
+  @override
+  String get foodTypeRedCurry => 'Красное карри';
+
+  @override
+  String get foodTypeMassamanCurry => 'Массаман карри';
+
+  @override
+  String get foodTypeDal => 'Дал';
+
+  @override
+  String get foodTypeVindaloo => 'Виндалу';
+
+  @override
+  String get foodTypeOtherCurry => 'Другое карри';
+
+  @override
+  String get foodTypeSpagBolognese => 'Спагетти болоньезе';
+
+  @override
+  String get foodTypePenneArrabiata => 'Пенне арабьята';
+
+  @override
+  String get foodTypeFettuccineAlfredo => 'Феттучини альфредо';
+
+  @override
+  String get foodTypeLasagna => 'Лазанья';
+
+  @override
+  String get foodTypeMakarna => 'Макарна';
+
+  @override
+  String get foodTypeCarbonara => 'Карбонара';
+
+  @override
+  String get foodTypeRavioli => 'Равиоли';
+
+  @override
+  String get foodTypeRisotto => 'Ризотто';
+
+  @override
+  String get foodTypeGnocchi => 'Ньокки';
+
+  @override
+  String get foodTypeManti => 'Манты';
+
+  @override
+  String get foodTypeOtherPasta => 'Другая паста';
+
+  @override
+  String get foodTypeDonerWrap => 'Донер дюрюм';
+
+  @override
+  String get foodTypeTavukDurum => 'Куриный дюрюм';
+
+  @override
+  String get foodTypeEtDurum => 'Мясной дюрюм';
+
+  @override
+  String get foodTypeCigKofteDurum => 'Чиг кёфте дюрюм';
+
+  @override
+  String get foodTypeAdanaDurum => 'Адана дюрюм';
+
+  @override
+  String get foodTypeMidyeDurum => 'Мидие дюрюм';
+
+  @override
+  String get foodTypeTacos => 'Тако';
+
+  @override
+  String get foodTypeBurrito => 'Буррито';
+
+  @override
+  String get foodTypeQuesadilla => 'Кесадилья';
+
+  @override
+  String get foodTypeOtherWrap => 'Другой дюрюм';
+
+  @override
+  String get foodTypeChickenDoner => 'Куриный донер';
+
+  @override
+  String get foodTypeMeatDoner => 'Мясной донер';
+
+  @override
+  String get foodTypeIskenderDoner => 'Искендер донер';
+
+  @override
+  String get foodTypeTombikDoner => 'Томбик донер';
+
+  @override
+  String get foodTypePorsiyonDoner => 'Порция донера';
+
+  @override
+  String get foodTypeShawarma => 'Шаурма';
+
+  @override
+  String get foodTypeOtherDoner => 'Другой донер';
+
+  @override
+  String get foodTypeTost => 'Тост';
+
+  @override
+  String get foodTypeKasarliTost => 'Тост с кашаром';
+
+  @override
+  String get foodTypeKumru => 'Кумру';
+
+  @override
+  String get foodTypeClubSandwich => 'Клаб сэндвич';
+
+  @override
+  String get foodTypePanini => 'Панини';
+
+  @override
+  String get foodTypeHotDog => 'Хот-дог';
+
+  @override
+  String get foodTypeFrenchFries => 'Картофель фри';
+
+  @override
+  String get foodTypeOtherSandwich => 'Другой сэндвич';
+
+  @override
+  String get foodTypeGrilledFish => 'Рыба гриль';
+
+  @override
+  String get foodTypeFriedCalamari => 'Жареные кальмары';
+
+  @override
+  String get foodTypeShrimpCasserole => 'Запечённые креветки';
+
+  @override
+  String get foodTypeFishSandwich => 'Рыбный сэндвич';
+
+  @override
+  String get foodTypeLevrek => 'Лаврак';
+
+  @override
+  String get foodTypeSomon => 'Лосось';
+
+  @override
+  String get foodTypeHamsi => 'Хамса';
+
+  @override
+  String get foodTypeMidyeTava => 'Жареные мидии';
+
+  @override
+  String get foodTypeMidyeDolma => 'Фаршированные мидии';
+
+  @override
+  String get foodTypeKaridesGuvec => 'Гювеч с креветками';
+
+  @override
+  String get foodTypePalamut => 'Пеламида';
+
+  @override
+  String get foodTypeCipura => 'Дорадо';
+
+  @override
+  String get foodTypeBarbunTava => 'Жареная барабулька';
+
+  @override
+  String get foodTypeLufer => 'Луфарь';
+
+  @override
+  String get foodTypeFishAndChips => 'Фиш энд чипс';
+
+  @override
+  String get foodTypeOtherSeafood => 'Другие морепродукты';
+
+  @override
+  String get foodTypeTurkishBreakfast => 'Турецкий завтрак';
+
+  @override
+  String get foodTypeSerpmeKahvalti => 'Серпме кахвалты';
+
+  @override
+  String get foodTypeMenemen => 'Менемен';
+
+  @override
+  String get foodTypeSahandaYumurta => 'Яичница';
+
+  @override
+  String get foodTypeSucukluYumurta => 'Яичница с суджуком';
+
+  @override
+  String get foodTypeGozleme => 'Гёзлеме';
+
+  @override
+  String get foodTypeSimit => 'Симит';
+
+  @override
+  String get foodTypeAcma => 'Ачма';
+
+  @override
+  String get foodTypePogaca => 'Погача';
+
+  @override
+  String get foodTypeCilbir => 'Чылбыр';
+
+  @override
+  String get foodTypePastirmaliYumurta => 'Яичница с бастурмой';
+
+  @override
+  String get foodTypeKaymakBal => 'Каймак и мёд';
+
+  @override
+  String get foodTypePisi => 'Писи';
+
+  @override
+  String get foodTypeKatmerKahvalti => 'Катмер завтрак';
+
+  @override
+  String get foodTypeOtherBreakfast => 'Другой завтрак';
+
+  @override
+  String get foodTypeBaklava => 'Баклава';
+
+  @override
+  String get foodTypeKunefe => 'Кюнефе';
+
+  @override
+  String get foodTypeSutlac => 'Сютлач';
+
+  @override
+  String get foodTypeKazandibi => 'Казандиби';
+
+  @override
+  String get foodTypeTavukGogsu => 'Тавук гёгсю';
+
+  @override
+  String get foodTypeAsure => 'Ашуре';
+
+  @override
+  String get foodTypeRevani => 'Ревани';
+
+  @override
+  String get foodTypeLokma => 'Локма';
+
+  @override
+  String get foodTypeTrilece => 'Трилече';
+
+  @override
+  String get foodTypeProfiterol => 'Профитроли';
+
+  @override
+  String get foodTypeCheesecake => 'Чизкейк';
+
+  @override
+  String get foodTypeTiramisu => 'Тирамису';
+
+  @override
+  String get foodTypeBrownie => 'Брауни';
+
+  @override
+  String get foodTypeWaffle => 'Вафли';
+
+  @override
+  String get foodTypeDondurma => 'Дондурма';
+
+  @override
+  String get foodTypeGullac => 'Гюллач';
+
+  @override
+  String get foodTypeKeskul => 'Кешкюль';
+
+  @override
+  String get foodTypeTelKadayif => 'Тел кадаиф';
+
+  @override
+  String get foodTypeSekerpare => 'Шекерпаре';
+
+  @override
+  String get foodTypeTulumba => 'Тулумба';
+
+  @override
+  String get foodTypeHelva => 'Халва';
+
+  @override
+  String get foodTypeKatmer => 'Катмер';
+
+  @override
+  String get foodTypeKabakTatlisi => 'Тыквенный десерт';
+
+  @override
+  String get foodTypeAyvaTatlisi => 'Десерт из айвы';
+
+  @override
+  String get foodTypeSutluNuriye => 'Сютлю нурие';
+
+  @override
+  String get foodTypeBurmaKadayif => 'Бурма кадаиф';
+
+  @override
+  String get foodTypePannaCotta => 'Панна котта';
+
+  @override
+  String get foodTypeGelato => 'Джелато';
+
+  @override
+  String get foodTypeCannoli => 'Канноли';
+
+  @override
+  String get foodTypeKnafeh => 'Кнафе';
+
+  @override
+  String get foodTypeMuhallabia => 'Мухаллеби';
+
+  @override
+  String get foodTypeChurros => 'Чуррос';
+
+  @override
+  String get foodTypeMochi => 'Моти';
+
+  @override
+  String get foodTypeOtherDessert => 'Другой десерт';
+
+  @override
+  String get foodTypeTurkishTea => 'Турецкий чай';
+
+  @override
+  String get foodTypeTurkishCoffee => 'Турецкий кофе';
+
+  @override
+  String get foodTypeAyran => 'Айран';
+
+  @override
+  String get foodTypeFreshOrangeJuice => 'Свежий апельсиновый сок';
+
+  @override
+  String get foodTypeLemonade => 'Лимонад';
+
+  @override
+  String get foodTypeSmoothie => 'Смузи';
+
+  @override
+  String get foodTypeSalgam => 'Шалгам';
+
+  @override
+  String get foodTypeBoza => 'Боза';
+
+  @override
+  String get foodTypeSahlep => 'Салеп';
+
+  @override
+  String get foodTypeSoftDrink => 'Газированный напиток';
+
+  @override
+  String get foodTypeWater => 'Вода';
+
+  @override
+  String get foodTypeNarSuyu => 'Гранатовый сок';
+
+  @override
+  String get foodTypeSerbet => 'Шербет';
+
+  @override
+  String get foodTypeTurkKahvesiSoguk => 'Холодный турецкий кофе';
+
+  @override
+  String get foodTypeOtherBeverage => 'Другой напиток';
+
+  @override
+  String get foodTypeHamburger => 'Гамбургер';
+
+  @override
+  String get foodTypeCheeseburger => 'Чизбургер';
+
+  @override
+  String get foodTypeChickenBurger => 'Куриный бургер';
+
+  @override
+  String get foodTypeIslakHamburger => 'Ислак гамбургер';
+
+  @override
+  String get foodTypeVeggieBurger => 'Вегетарианский бургер';
+
+  @override
+  String get foodTypeOtherHamburger => 'Другой гамбургер';
+
+  @override
+  String get foodTypeMargaritaPizza => 'Пицца Маргарита';
+
+  @override
+  String get foodTypeMixedPizza => 'Микс пицца';
+
+  @override
+  String get foodTypePepperoniPizza => 'Пицца пепперони';
+
+  @override
+  String get foodTypeSucukluPizza => 'Пицца с суджуком';
+
+  @override
+  String get foodTypeFourCheesePizza => 'Четыре сыра';
+
+  @override
+  String get foodTypeOtherPizza => 'Другая пицца';
+
+  @override
+  String get foodExtraBread => 'Дополнительный хлеб';
+
+  @override
+  String get foodExtraRicePortion => 'Порция риса';
+
+  @override
+  String get foodExtraBulgurPortion => 'Порция булгура';
+
+  @override
+  String get foodExtraRice => 'Дополнительный рис';
+
+  @override
+  String get foodExtraGarlicBread => 'Чесночный хлеб';
+
+  @override
+  String get foodExtraLavash => 'Лаваш';
+
+  @override
+  String get foodExtraSimiSide => 'Симит';
+
+  @override
+  String get foodExtraPitaChips => 'Чипсы из питы';
+
+  @override
+  String get foodExtraCroutons => 'Гренки';
+
+  @override
+  String get foodExtraCheese => 'Дополнительный сыр';
+
+  @override
+  String get foodExtraParmesan => 'Пармезан';
+
+  @override
+  String get foodExtraYogurt => 'Йогурт';
+
+  @override
+  String get foodExtraButter => 'Масло';
+
+  @override
+  String get foodExtraFetaCheese => 'Фета';
+
+  @override
+  String get foodExtraEgg => 'Дополнительное яйцо';
+
+  @override
+  String get foodExtraKaymakPortion => 'Порция каймака';
+
+  @override
+  String get foodExtraMilk => 'Молоко';
+
+  @override
+  String get foodExtraSaffronButter => 'Шафрановое масло';
+
+  @override
+  String get foodExtraCreamSauce => 'Сливочный соус';
+
+  @override
+  String get foodExtraGarlicSauce => 'Чесночный соус';
+
+  @override
+  String get foodExtraKetchup => 'Кетчуп';
+
+  @override
+  String get foodExtraMayonnaise => 'Майонез';
+
+  @override
+  String get foodExtraMustard => 'Горчица';
+
+  @override
+  String get foodExtraSoySauce => 'Соевый соус';
+
+  @override
+  String get foodExtraTartarSauce => 'Соус тартар';
+
+  @override
+  String get foodExtraSweetChiliSauce => 'Сладкий чили соус';
+
+  @override
+  String get foodExtraTeriyakiSauce => 'Соус терияки';
+
+  @override
+  String get foodExtraGochujangSauce => 'Соус кочхуджан';
+
+  @override
+  String get foodExtraBalsamicGlaze => 'Бальзамический соус';
+
+  @override
+  String get foodExtraTruffleOil => 'Трюфельное масло';
+
+  @override
+  String get foodExtraChiliOil => 'Масло чили';
+
+  @override
+  String get foodExtraHotMustard => 'Острая горчица';
+
+  @override
+  String get foodExtraSesameOil => 'Кунжутное масло';
+
+  @override
+  String get foodExtraChocolateSauce => 'Шоколадный соус';
+
+  @override
+  String get foodExtraExtraSyrup => 'Дополнительный сироп';
+
+  @override
+  String get foodExtraPomegranateSyrup => 'Гранатовый сироп';
+
+  @override
+  String get foodExtraTahini => 'Тахини';
+
+  @override
+  String get foodExtraExtraDressing => 'Дополнительная заправка';
+
+  @override
+  String get foodExtraExtraSugar => 'Дополнительный сахар';
+
+  @override
+  String get foodExtraGrilledVegetables => 'Овощи гриль';
+
+  @override
+  String get foodExtraGrilledChicken => 'Курица гриль';
+
+  @override
+  String get foodExtraHotPepper => 'Острый перец';
+
+  @override
+  String get foodExtraOnionSalad => 'Луковый салат';
+
+  @override
+  String get foodExtraSumacOnion => 'Лук с сумахом';
+
+  @override
+  String get foodExtraParsley => 'Петрушка';
+
+  @override
+  String get foodExtraLemon => 'Лимон';
+
+  @override
+  String get foodExtraCorn => 'Кукуруза';
+
+  @override
+  String get foodExtraJalapeno => 'Халапеньо';
+
+  @override
+  String get foodExtraAvocado => 'Авокадо';
+
+  @override
+  String get foodExtraPickles => 'Соленья';
+
+  @override
+  String get foodExtraMushroomTopping => 'Грибы';
+
+  @override
+  String get foodExtraOliveTopping => 'Оливки';
+
+  @override
+  String get foodExtraOnionTopping => 'Лук';
+
+  @override
+  String get foodExtraPepperoniTopping => 'Пепперони';
+
+  @override
+  String get foodExtraSucukTopping => 'Суджук';
+
+  @override
+  String get foodExtraGreenPepperTopping => 'Зелёный перец';
+
+  @override
+  String get foodExtraTomatoSlices => 'Ломтики помидора';
+
+  @override
+  String get foodExtraGrilledTomato => 'Помидор гриль';
+
+  @override
+  String get foodExtraFreshHerbs => 'Свежие травы';
+
+  @override
+  String get foodExtraSteamedVegetables => 'Овощи на пару';
+
+  @override
+  String get foodExtraMintLeaves => 'Листья мяты';
+
+  @override
+  String get foodExtraFreshFruits => 'Свежие фрукты';
+
+  @override
+  String get foodExtraArugulaSide => 'Руккола';
+
+  @override
+  String get foodExtraFrenchFriesSide => 'Картофель фри';
+
+  @override
+  String get foodExtraOnionRings => 'Луковые кольца';
+
+  @override
+  String get foodExtraSaladSide => 'Салат';
+
+  @override
+  String get foodExtraChickenSide => 'Порция курицы';
+
+  @override
+  String get foodExtraEdamameSide => 'Эдамаме';
+
+  @override
+  String get foodExtraMisoSoupSide => 'Мисо суп';
+
+  @override
+  String get foodExtraSpringRollSide => 'Спринг ролл';
+
+  @override
+  String get foodExtraHummusSide => 'Хумус';
+
+  @override
+  String get foodExtraBruschettaSide => 'Брускетта';
+
+  @override
+  String get foodExtraFattoushSide => 'Фаттуш';
+
+  @override
+  String get foodExtraSeaweedSalad => 'Салат из водорослей';
+
+  @override
+  String get foodExtraGlassNoodlesSide => 'Стеклянная лапша';
+
+  @override
+  String get foodExtraDooghSide => 'Дуг';
+
+  @override
+  String get foodExtraEggFriedRiceSide => 'Рис с яйцом';
+
+  @override
+  String get foodExtraKimchiSide => 'Кимчи';
+
+  @override
+  String get foodExtraPickledRadish => 'Маринованная редька';
+
+  @override
+  String get foodExtraPickledGinger => 'Маринованный имбирь';
+
+  @override
+  String get foodExtraPickledGarlic => 'Маринованный чеснок';
+
+  @override
+  String get foodExtraPrawnCrackers => 'Креветочные чипсы';
+
+  @override
+  String get foodExtraExtraMeat => 'Дополнительное мясо';
+
+  @override
+  String get foodExtraEggTopping => 'Яйцо';
+
+  @override
+  String get foodExtraCheeseTopping => 'Сыр';
+
+  @override
+  String get foodExtraProsciuttoTopping => 'Прошутто';
+
+  @override
+  String get foodExtraPistachioTopping => 'Фисташки';
+
+  @override
+  String get foodExtraTempuraBits => 'Кусочки темпуры';
+
+  @override
+  String get foodExtraWasabi => 'Васаби';
+
+  @override
+  String get foodExtraTofuExtra => 'Тофу';
+
+  @override
+  String get foodExtraNutritionalYeast => 'Пищевые дрожжи';
+
+  @override
+  String get foodExtraChickpeaTopping => 'Нут';
+
+  @override
+  String get foodExtraHoneyPortion => 'Порция мёда';
+
+  @override
+  String get foodExtraOlivePortion => 'Порция оливок';
+
+  @override
+  String get foodExtraJamPortion => 'Порция варенья';
+
+  @override
+  String get foodExtraOliveOil => 'Оливковое масло';
+
+  @override
+  String get foodExtraAyranSide => 'Айран';
+
+  @override
+  String get foodExtraTeaGlass => 'Стакан чая';
+
+  @override
+  String get foodExtraWalnut => 'Грецкий орех';
+
+  @override
+  String get foodExtraDriedFruits => 'Сухофрукты';
+
+  @override
+  String get foodExtraSumac => 'Сумах';
+
+  @override
+  String get foodExtraChiliFlakes => 'Хлопья чили';
+
+  @override
+  String get foodExtraDriedMint => 'Сушёная мята';
+
+  @override
+  String get foodExtraVinegar => 'Уксус';
+
+  @override
+  String get foodExtraIceCreamScoop => 'Шарик мороженого';
+
+  @override
+  String get foodExtraWhippedCream => 'Взбитые сливки';
+
+  @override
+  String get foodExtraIce => 'Лёд';
+
+  @override
+  String get newFoodOrder => 'У вас новый заказ еды!';
+
+  @override
+  String get restaurantNewReview => 'Вы получили новый отзыв о ресторане.';
+
+  @override
+  String get noReviews => 'Пока нет отзывов';
+
+  @override
+  String get noReviewsDescription =>
+      'Отзывы о вашем ресторане появятся здесь, как только покупатели начнут их оставлять.';
+
+  @override
+  String basedOn(Object count) {
+    return 'На основе $count отзывов';
+  }
+
+  @override
+  String get endOfReviews => 'Вы просмотрели все отзывы';
+
+  @override
+  String get restaurantStatus => 'Статус ресторана';
+
+  @override
+  String get restaurantStatusDescription =>
+      'Управляйте приёмом заказов вашим рестораном';
+
+  @override
+  String get inactive => 'Неактивен';
+
+  @override
+  String get cuisineType => 'Тип кухни';
+
+  @override
+  String get selectCuisineType => 'Выберите подходящие варианты';
+
+  @override
+  String get workingSchedule => 'График работы';
+
+  @override
+  String get workingDays => 'Рабочие дни';
+
+  @override
+  String get workingHours => 'Рабочие часы';
+
+  @override
+  String get openTime => 'Открытие';
+
+  @override
+  String get closeTime => 'Закрытие';
+
+  @override
+  String get deselectAll => 'Снять выбор';
+
+  @override
+  String get addedRegions => 'Добавленные регионы';
+
+  @override
+  String get saving => 'Сохранение...';
+
+  @override
+  String get noChanges => 'Изменений нет';
+
+  @override
+  String get saveSuccess => 'Настройки успешно сохранены';
+
+  @override
+  String get saveError => 'Не удалось сохранить. Попробуйте снова.';
+
+  @override
+  String get fetchError => 'Не удалось загрузить настройки. Попробуйте снова.';
+
+  @override
+  String get selectFoodType => 'Выберите тип еды';
+
+  @override
+  String get foodType => 'Тип еды';
+
+  @override
+  String categoriesSelected(int count) {
+    return 'Выбрано категорий: $count';
+  }
+
+  @override
+  String okCategoriesSelected(int count) {
+    return 'ОК ($count выбрано)';
+  }
+
+  @override
+  String get cuisineTypeTurkish => 'Турецкая кухня';
+
+  @override
+  String get cuisineTypeJapanese => 'Японская кухня';
+
+  @override
+  String get cuisineTypeChinese => 'Китайская кухня';
+
+  @override
+  String get cuisineTypePersian => 'Персидская кухня';
+
+  @override
+  String get cuisineTypeArabic => 'Арабская кухня';
+
+  @override
+  String get cuisineTypeItalian => 'Итальянская кухня';
+
+  @override
+  String get cuisineTypeKorean => 'Корейская кухня';
+
+  @override
+  String get cuisineTypeVietnamese => 'Вьетнамская кухня';
+
+  @override
+  String get cuisineTypeVeganVegetarian => 'Веганская / Вегетарианская';
+
+  @override
+  String get dayMonday => 'Понедельник';
+
+  @override
+  String get dayTuesday => 'Вторник';
+
+  @override
+  String get dayWednesday => 'Среда';
+
+  @override
+  String get dayThursday => 'Четверг';
+
+  @override
+  String get dayFriday => 'Пятница';
+
+  @override
+  String get daySaturday => 'Суббота';
+
+  @override
+  String get daySunday => 'Воскресенье';
+
+  @override
+  String get minOrderPriceByRegion => 'Мин. сумма заказа по регионам';
+
+  @override
+  String get minOrderPriceDescription =>
+      'Установите минимальную сумму заказа для каждого региона доставки';
+
+  @override
+  String get minOrderPriceWarning =>
+      'Для регионов без установленной минимальной суммы заказа ограничение не применяется.';
+
+  @override
+  String get subRegion => 'Подрегион';
+
+  @override
+  String get selectSubRegion => 'Выберите подрегион';
 }
