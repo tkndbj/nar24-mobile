@@ -1672,9 +1672,12 @@ export const updateFoodOrderStatus = onCall(
 
       const order = orderSnap.data();
 
-      if (order.restaurantOwnerId !== request.auth.uid) {
-        throw new HttpsError('permission-denied', 'You do not own this restaurant.');
-      }
+      const callerToken = await admin.auth().getUser(request.auth.uid)
+  .then((u) => u.customClaims || {});
+const restaurantClaims = callerToken.restaurants || {};
+if (!(order.restaurantId in restaurantClaims)) {
+  throw new HttpsError('permission-denied', 'You are not a member of this restaurant.');
+}
 
       const VALID_TRANSITIONS = {
         pending: ['accepted', 'rejected'],
@@ -1810,13 +1813,11 @@ tx.set(reviewRef, {
       });
 
       // 8. Notify restaurant owner
-      const restaurantOwnerId = restaurantData.ownerId;
-      if (restaurantOwnerId) {
-        const notifRef = db.collection('restaurant_notifications').doc();
-        tx.set(notifRef, {
-          type: 'restaurant_new_review',
-          restaurantId,
-          restaurantOwnerId,
+      const notifRef = db.collection('restaurant_notifications').doc();
+tx.set(notifRef, {
+  type: 'restaurant_new_review',
+  restaurantId,              // ← rules now query by this
+  restaurantOwnerId: restaurantData.ownerId || '',
           orderId,
           buyerName,
           rating,
@@ -1824,7 +1825,6 @@ tx.set(reviewRef, {
           isRead: {},
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
         });
-      }
     });
 
     return { success: true };

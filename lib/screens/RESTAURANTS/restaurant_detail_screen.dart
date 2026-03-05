@@ -56,9 +56,18 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
     // delivery-region filtering and the food address picker is shown.
     if (_wasUnauthenticated) {
       _authSubscription =
-          FirebaseAuth.instance.authStateChanges().listen((user) {
+          FirebaseAuth.instance.authStateChanges().listen((user) async {
         if (user != null && mounted) {
-          context.go('/restaurants');
+          final nav = Navigator.of(context, rootNavigator: true);
+
+          // Dismiss any open modals (e.g. login prompt) and wait for
+          // the dismiss animation to complete before navigating.
+          if (nav.canPop()) {
+            nav.pop();
+            await Future.delayed(const Duration(milliseconds: 350));
+          }
+
+          if (mounted) context.go('/restaurants');
         }
       });
     }
@@ -1321,15 +1330,57 @@ class _FoodCard extends StatelessWidget {
                 // Price + prep time + add button row
                 Row(
                   children: [
-                    // Price
-                    Text(
-                      '${food.price.toStringAsFixed(food.price % 1 == 0 ? 0 : 2)} TL',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.orange[400] : Colors.orange[600],
+                    // Price (with discount support)
+                    if (food.hasActiveDiscount && food.originalPrice != null) ...[
+                      // Discount badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '%${food.discountPercentage}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 6),
+                      // Original price (strikethrough)
+                      Text(
+                        '${food.originalPrice!.toStringAsFixed(food.originalPrice! % 1 == 0 ? 0 : 2)} TL',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: isDark ? Colors.grey[500] : Colors.grey[400],
+                          decoration: TextDecoration.lineThrough,
+                          decorationColor:
+                              isDark ? Colors.grey[500] : Colors.grey[400],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      // Discounted price
+                      Text(
+                        '${food.price.toStringAsFixed(food.price % 1 == 0 ? 0 : 2)} TL',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.orange[400] : Colors.orange[600],
+                        ),
+                      ),
+                    ] else
+                      Text(
+                        '${food.price.toStringAsFixed(food.price % 1 == 0 ? 0 : 2)} TL',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.orange[400] : Colors.orange[600],
+                        ),
+                      ),
 
                     // Prep time
                     if (food.preparationTime != null &&
@@ -1659,15 +1710,57 @@ void initState() {
                             style: const TextStyle(
                                 fontSize: 18, fontWeight: FontWeight.bold)),
                       ),
-                      Text(
-                        '${food.price.toStringAsFixed(0)} TL',
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: isDark
-                                ? Colors.orange[400]
-                                : Colors.orange[600]),
-                      ),
+                      if (food.hasActiveDiscount &&
+                          food.originalPrice != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '%${food.discountPercentage}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${food.originalPrice!.toStringAsFixed(0)} TL',
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: isDark
+                                  ? Colors.grey[500]
+                                  : Colors.grey[400],
+                              decoration: TextDecoration.lineThrough,
+                              decorationColor: isDark
+                                  ? Colors.grey[500]
+                                  : Colors.grey[400]),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${food.price.toStringAsFixed(0)} TL',
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: isDark
+                                  ? Colors.orange[400]
+                                  : Colors.orange[600]),
+                        ),
+                      ] else
+                        Text(
+                          '${food.price.toStringAsFixed(0)} TL',
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: isDark
+                                  ? Colors.orange[400]
+                                  : Colors.orange[600]),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 16),

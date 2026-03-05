@@ -1,5 +1,7 @@
 // models/food.dart
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Food {
   final String id;
   final String name;
@@ -17,6 +19,23 @@ class Food {
   /// The full extra definitions (price etc.) live in the restaurant document.
   final List<String>? extras;
 
+  // Discount fields
+  final int? discountPercentage;
+  final double? originalPrice;
+  final DateTime? discountStartDate;
+  final DateTime? discountEndDate;
+
+  /// Whether the food currently has an active discount.
+  bool get hasActiveDiscount {
+    if (discountPercentage == null || discountPercentage! <= 0) return false;
+    final now = DateTime.now();
+    if (discountStartDate != null && now.isBefore(discountStartDate!)) {
+      return false;
+    }
+    if (discountEndDate != null && now.isAfter(discountEndDate!)) return false;
+    return true;
+  }
+
   const Food({
     required this.id,
     required this.name,
@@ -29,9 +48,15 @@ class Food {
     required this.price,
     required this.restaurantId,
     this.extras,
+    this.discountPercentage,
+    this.originalPrice,
+    this.discountStartDate,
+    this.discountEndDate,
   });
 
   factory Food.fromMap(Map<String, dynamic> map, {String? id}) {
+    final discount = map['discount'] as Map<String, dynamic>?;
+
     return Food(
       id: id ?? (map['id'] as String? ?? ''),
       name: (map['name'] as String?) ?? '',
@@ -45,6 +70,12 @@ class Food {
       restaurantId: (map['restaurantId'] as String?) ?? '',
       extras:
           (map['extras'] as List<dynamic>?)?.map((e) => e.toString()).toList(),
+      discountPercentage: (discount?['percentage'] as num?)?.toInt(),
+      originalPrice: (discount?['originalPrice'] as num?)?.toDouble(),
+      discountStartDate:
+          (discount?['startDate'] as Timestamp?)?.toDate(),
+      discountEndDate:
+          (discount?['endDate'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -60,6 +91,13 @@ class Food {
         'price': price,
         'restaurantId': restaurantId,
         if (extras != null) 'extras': extras,
+        if (discountPercentage != null)
+          'discount': {
+            'percentage': discountPercentage,
+            if (originalPrice != null) 'originalPrice': originalPrice,
+            if (discountStartDate != null) 'startDate': discountStartDate,
+            if (discountEndDate != null) 'endDate': discountEndDate,
+          },
       };
 
   Food copyWith({
@@ -74,6 +112,10 @@ class Food {
     double? price,
     String? restaurantId,
     List<String>? extras,
+    int? discountPercentage,
+    double? originalPrice,
+    DateTime? discountStartDate,
+    DateTime? discountEndDate,
   }) {
     return Food(
       id: id ?? this.id,
@@ -87,6 +129,10 @@ class Food {
       price: price ?? this.price,
       restaurantId: restaurantId ?? this.restaurantId,
       extras: extras ?? this.extras,
+      discountPercentage: discountPercentage ?? this.discountPercentage,
+      originalPrice: originalPrice ?? this.originalPrice,
+      discountStartDate: discountStartDate ?? this.discountStartDate,
+      discountEndDate: discountEndDate ?? this.discountEndDate,
     );
   }
 

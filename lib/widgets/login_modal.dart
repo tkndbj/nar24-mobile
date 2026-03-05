@@ -56,14 +56,17 @@ class LoginPromptModal extends StatelessWidget {
           onPressed: () async {
             // Capture the root navigator BEFORE any async operations
             final rootNavigator = Navigator.of(context, rootNavigator: true);
+            final scaffoldMessenger = ScaffoldMessenger.of(context);
 
             try {
               final result = await authService.signInWithGoogle();
               final User? user = result['user'];
 
               if (user != null) {
-                // Pop the login modal first
-                Navigator.of(context).pop();
+                // Pop the login modal (guard: auth listener may have already dismissed it)
+                if (rootNavigator.mounted && Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                }
 
                 // Check if this Google user needs to accept agreements
                 final hasAccepted = await AgreementModal.hasAcceptedAgreements(user.uid);
@@ -77,10 +80,10 @@ class LoginPromptModal extends StatelessWidget {
                   }
                 }
               } else {
-                Navigator.of(context).pop();
+                if (rootNavigator.mounted) Navigator.of(context).pop();
               }
             } catch (e) {
-              ScaffoldMessenger.of(context).showSnackBar(
+              scaffoldMessenger.showSnackBar(
                 SnackBar(content: Text('Login failed: $e')),
               );
             }
@@ -110,14 +113,17 @@ class LoginPromptModal extends StatelessWidget {
             onPressed: () async {
               // Capture the root navigator BEFORE any async operations
               final rootNavigator = Navigator.of(context, rootNavigator: true);
+              final scaffoldMessenger = ScaffoldMessenger.of(context);
 
               try {
                 final result = await authService.signInWithApple();
                 final User? user = result['user'];
 
                 if (user != null) {
-                  // Pop the login modal first
-                  Navigator.of(context).pop();
+                  // Pop the login modal (guard: auth listener may have already dismissed it)
+                  if (rootNavigator.mounted && Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                  }
 
                   // Check if this Apple user needs to accept agreements
                   final hasAccepted = await AgreementModal.hasAcceptedAgreements(user.uid);
@@ -131,10 +137,10 @@ class LoginPromptModal extends StatelessWidget {
                     }
                   }
                 } else {
-                  Navigator.of(context).pop();
+                  if (rootNavigator.mounted) Navigator.of(context).pop();
                 }
               } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
+                scaffoldMessenger.showSnackBar(
                   SnackBar(content: Text('Login failed: $e')),
                 );
               }

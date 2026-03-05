@@ -259,24 +259,24 @@ async function backfillOrders(client) {
 async function main() {
   const client = await getTypesenseClient();
 
-  // await backfillCollection(client, 'products', 'products',
-  //   (id, data) => buildProductDoc(id, 'products', data));
+  await backfillCollection(client, 'products', 'products',
+    (id, data) => buildProductDoc(id, 'products', data));
 
-  // await backfillCollection(client, 'shop_products', 'shop_products',
-  //   (id, data) => buildProductDoc(id, 'shop_products', data));
+  await backfillCollection(client, 'shop_products', 'shop_products',
+    (id, data) => buildProductDoc(id, 'shop_products', data));
 
-  // await backfillCollection(client, 'shops', 'shops', (id, data) => {
-  //   const doc = {
-  //     id: `shops_${id}`,
-  //     name: data.name || null,
-  //     profileImageUrl: data.profileImageUrl || null,
-  //     isActive: data.isActive ?? true,
-  //     categories: Array.isArray(data.categories) && data.categories.length > 0 ? data.categories : undefined,
-  //     searchableText: [data.name, ...(data.categories || [])].filter(Boolean).join(' '),
-  //   };
-  //   Object.keys(doc).forEach((k) => doc[k] == null && delete doc[k]);
-  //   return doc;
-  // });
+  await backfillCollection(client, 'shops', 'shops', (id, data) => {
+    const doc = {
+      id: `shops_${id}`,
+      name: data.name || null,
+      profileImageUrl: data.profileImageUrl || null,
+      isActive: data.isActive ?? true,
+      categories: Array.isArray(data.categories) && data.categories.length > 0 ? data.categories : undefined,
+      searchableText: [data.name, ...(data.categories || [])].filter(Boolean).join(' '),
+    };
+    Object.keys(doc).forEach((k) => doc[k] == null && delete doc[k]);
+    return doc;
+  });
 
   await backfillCollection(client, 'restaurants', 'restaurants', (id, data) => {
     const d = {id: `restaurants_${id}`};
@@ -314,7 +314,7 @@ async function main() {
     return d;
   });
 
-  // await backfillOrders(client);
+  await backfillOrders(client);
 
   console.log('\n✅ Backfill complete!');
   process.exit(0);
