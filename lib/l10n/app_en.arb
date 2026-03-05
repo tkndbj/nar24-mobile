@@ -6393,6 +6393,7 @@
 "saveSuccess": "Settings saved successfully",
 "saveError": "Failed to save. Please try again.",
 "fetchError": "Failed to load settings. Please try again.",
+"foods": "Foods",
 "selectFoodType": "Select Food Type",
 "foodType": "Food Type",
 "categoriesSelected": "{count} categories selected",
@@ -6427,5 +6428,79 @@
 "minOrderPriceDescription": "Set minimum order amounts for each delivery region",
 "minOrderPriceWarning": "Regions without a minimum order price will not have an order minimum enforced.",
 "subRegion": "Sub-Region",
-"selectSubRegion": "Select sub-region"
+"selectSubRegion": "Select sub-region",
+
+"foodCount": "{count} foods",
+"@foodCount": {
+  "placeholders": {
+    "count": { "type": "Object" }
+  }
+},
+"noFoodsFound": "No Foods Found",
+"startByAddingFood": "Start by adding your first food item to the menu.",
+"discountExpired": "Expired",
+"tapToChange": "Tap to change",
+"discountExpires": "Expires {date}",
+"@discountExpires": {
+  "placeholders": {
+    "date": { "type": "Object" }
+  }
+},
+"editDiscount": "Edit Discount",
+"addFood": "Add Food",
+"percentRange": "{min}% – {max}%",
+"@percentRange": {
+  "placeholders": {
+    "min": { "type": "Object" },
+    "max": { "type": "Object" }
+  }
+},
+"endBeforeStart": "End date must be after the start date.",
+"endInPast": "End date must be in the future.",
+"addDiscount": "Add Discount",
+"discountedPrice": "Discounted Price",
+"discountError": "Failed to update discount. Please try again.",
+"toggleError": "Failed to update availability. Please try again.",
+"startDate": "Start Date",
+"endDate": "End Date",
+
+"nameRequired": "Food name is required.",
+"nameMinLength": "Name must be at least 2 characters.",
+"descriptionMinLength": "Description must be at least 10 characters.",
+"pricePositive": "Price must be greater than zero.",
+"categoryRequired": "Please select a category.",
+"typeRequired": "Please select a food type.",
+"fileSizeError": "Image must be smaller than 10 MB.",
+"updateError": "Failed to update. Please try again.",
+"updateSuccess": "Updated successfully.",
+"foodImage": "Food Image",
+"imageHint": "Tap to add a photo",
+"foodDetails": "Food Details",
+"foodName": "Food Name",
+"foodNamePlaceholder": "e.g. Adana Kebab",
+"foodDescriptionPlaceholder": "Briefly describe this dish...",
+"pricePlaceholder": "0.00",
+"foodCategory": "Food Category",
+"selectType": "Select Food Type",
+"selectCategoryFirst": "Select a category first",
+"extrasSelected": "{count} selected",
+"@extrasSelected": {
+  "placeholders": {
+    "count": { "type": "Object" }
+  }
+},
+"extrasHint": "Select optional extras and set their prices.",
+"preparationTime": "Preparation Time",
+"preparationTimePlaceholder": "e.g. 25",
+"editFoodTitle": "Edit Food",
+"addFoodTitle": "Add Food",
+"editFoodSubtitle": "Update your food item details",
+"addFoodSubtitle": "Add a new item to your menu",
+"updatingFood": "Updating...",
+"savingFood": "Saving...",
+"updateFood": "Update Food",
+"saveFood": "Save Food",
+"foodAddedSuccess": "Food added successfully!",
+"foodAddError": "Failed to add food. Please try again.",
+"compressing": "Compressing..."
 }

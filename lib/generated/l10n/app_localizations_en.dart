@@ -14963,6 +14963,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fetchError => 'Failed to load settings. Please try again.';
 
   @override
+  String get foods => 'Foods';
+
+  @override
   String get selectFoodType => 'Select Food Type';
 
   @override
@@ -15042,4 +15045,167 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get selectSubRegion => 'Select sub-region';
+
+  @override
+  String foodCount(Object count) {
+    return '$count foods';
+  }
+
+  @override
+  String get noFoodsFound => 'No Foods Found';
+
+  @override
+  String get startByAddingFood =>
+      'Start by adding your first food item to the menu.';
+
+  @override
+  String get discountExpired => 'Expired';
+
+  @override
+  String get tapToChange => 'Tap to change';
+
+  @override
+  String discountExpires(Object date) {
+    return 'Expires $date';
+  }
+
+  @override
+  String get editDiscount => 'Edit Discount';
+
+  @override
+  String get addFood => 'Add Food';
+
+  @override
+  String percentRange(Object max, Object min) {
+    return '$min% – $max%';
+  }
+
+  @override
+  String get endBeforeStart => 'End date must be after the start date.';
+
+  @override
+  String get endInPast => 'End date must be in the future.';
+
+  @override
+  String get addDiscount => 'Add Discount';
+
+  @override
+  String get discountedPrice => 'Discounted Price';
+
+  @override
+  String get discountError => 'Failed to update discount. Please try again.';
+
+  @override
+  String get toggleError => 'Failed to update availability. Please try again.';
+
+  @override
+  String get startDate => 'Start Date';
+
+  @override
+  String get endDate => 'End Date';
+
+  @override
+  String get nameRequired => 'Food name is required.';
+
+  @override
+  String get nameMinLength => 'Name must be at least 2 characters.';
+
+  @override
+  String get descriptionMinLength =>
+      'Description must be at least 10 characters.';
+
+  @override
+  String get pricePositive => 'Price must be greater than zero.';
+
+  @override
+  String get categoryRequired => 'Please select a category.';
+
+  @override
+  String get typeRequired => 'Please select a food type.';
+
+  @override
+  String get fileSizeError => 'Image must be smaller than 10 MB.';
+
+  @override
+  String get updateError => 'Failed to update. Please try again.';
+
+  @override
+  String get updateSuccess => 'Updated successfully.';
+
+  @override
+  String get foodImage => 'Food Image';
+
+  @override
+  String get imageHint => 'Tap to add a photo';
+
+  @override
+  String get foodDetails => 'Food Details';
+
+  @override
+  String get foodName => 'Food Name';
+
+  @override
+  String get foodNamePlaceholder => 'e.g. Adana Kebab';
+
+  @override
+  String get foodDescriptionPlaceholder => 'Briefly describe this dish...';
+
+  @override
+  String get pricePlaceholder => '0.00';
+
+  @override
+  String get foodCategory => 'Food Category';
+
+  @override
+  String get selectType => 'Select Food Type';
+
+  @override
+  String get selectCategoryFirst => 'Select a category first';
+
+  @override
+  String extrasSelected(Object count) {
+    return '$count selected';
+  }
+
+  @override
+  String get extrasHint => 'Select optional extras and set their prices.';
+
+  @override
+  String get preparationTime => 'Preparation Time';
+
+  @override
+  String get preparationTimePlaceholder => 'e.g. 25';
+
+  @override
+  String get editFoodTitle => 'Edit Food';
+
+  @override
+  String get addFoodTitle => 'Add Food';
+
+  @override
+  String get editFoodSubtitle => 'Update your food item details';
+
+  @override
+  String get addFoodSubtitle => 'Add a new item to your menu';
+
+  @override
+  String get updatingFood => 'Updating...';
+
+  @override
+  String get savingFood => 'Saving...';
+
+  @override
+  String get updateFood => 'Update Food';
+
+  @override
+  String get saveFood => 'Save Food';
+
+  @override
+  String get foodAddedSuccess => 'Food added successfully!';
+
+  @override
+  String get foodAddError => 'Failed to add food. Please try again.';
+
+  @override
+  String get compressing => 'Compressing...';
 }

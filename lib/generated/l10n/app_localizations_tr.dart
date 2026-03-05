@@ -14991,6 +14991,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get fetchError => 'Ayarlar yüklenemedi. Lütfen tekrar deneyin.';
 
   @override
+  String get foods => 'Yemekler';
+
+  @override
   String get selectFoodType => 'Yemek Türü Seçin';
 
   @override
@@ -15070,4 +15073,167 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get selectSubRegion => 'Alt bölge seçin';
+
+  @override
+  String foodCount(Object count) {
+    return '$count yemek';
+  }
+
+  @override
+  String get noFoodsFound => 'Yemek Bulunamadı';
+
+  @override
+  String get startByAddingFood => 'Menüye ilk yemeğinizi ekleyerek başlayın.';
+
+  @override
+  String get discountExpired => 'Süresi doldu';
+
+  @override
+  String get tapToChange => 'Değiştirmek için dokunun';
+
+  @override
+  String discountExpires(Object date) {
+    return '$date tarihinde sona erer';
+  }
+
+  @override
+  String get editDiscount => 'İndirimi Düzenle';
+
+  @override
+  String get addFood => 'Yemek Ekle';
+
+  @override
+  String percentRange(Object max, Object min) {
+    return '%$min – %$max';
+  }
+
+  @override
+  String get endBeforeStart =>
+      'Bitiş tarihi başlangıç tarihinden sonra olmalıdır.';
+
+  @override
+  String get endInPast => 'Bitiş tarihi gelecekte olmalıdır.';
+
+  @override
+  String get addDiscount => 'İndirim Ekle';
+
+  @override
+  String get discountedPrice => 'İndirimli Fiyat';
+
+  @override
+  String get discountError => 'İndirim güncellenemedi. Lütfen tekrar deneyin.';
+
+  @override
+  String get toggleError => 'Durum güncellenemedi. Lütfen tekrar deneyin.';
+
+  @override
+  String get startDate => 'Başlangıç Tarihi';
+
+  @override
+  String get endDate => 'Bitiş Tarihi';
+
+  @override
+  String get nameRequired => 'Yemek adı zorunludur.';
+
+  @override
+  String get nameMinLength => 'Ad en az 2 karakter olmalıdır.';
+
+  @override
+  String get descriptionMinLength => 'Açıklama en az 10 karakter olmalıdır.';
+
+  @override
+  String get pricePositive => 'Fiyat sıfırdan büyük olmalıdır.';
+
+  @override
+  String get categoryRequired => 'Lütfen bir kategori seçin.';
+
+  @override
+  String get typeRequired => 'Lütfen bir yemek türü seçin.';
+
+  @override
+  String get fileSizeError => 'Görsel 10 MB\'den küçük olmalıdır.';
+
+  @override
+  String get updateError => 'Güncelleme başarısız. Lütfen tekrar deneyin.';
+
+  @override
+  String get updateSuccess => 'Başarıyla güncellendi.';
+
+  @override
+  String get foodImage => 'Yemek Görseli';
+
+  @override
+  String get imageHint => 'Fotoğraf eklemek için dokunun';
+
+  @override
+  String get foodDetails => 'Yemek Detayları';
+
+  @override
+  String get foodName => 'Yemek Adı';
+
+  @override
+  String get foodNamePlaceholder => 'örn. Adana Kebap';
+
+  @override
+  String get foodDescriptionPlaceholder => 'Bu yemeği kısaca tanımlayın...';
+
+  @override
+  String get pricePlaceholder => '0.00';
+
+  @override
+  String get foodCategory => 'Yemek Kategorisi';
+
+  @override
+  String get selectType => 'Yemek Türü Seçin';
+
+  @override
+  String get selectCategoryFirst => 'Önce bir kategori seçin';
+
+  @override
+  String extrasSelected(Object count) {
+    return '$count seçildi';
+  }
+
+  @override
+  String get extrasHint =>
+      'İsteğe bağlı ekstraları seçin ve fiyatlarını belirleyin.';
+
+  @override
+  String get preparationTime => 'Hazırlık Süresi';
+
+  @override
+  String get preparationTimePlaceholder => 'örn. 25';
+
+  @override
+  String get editFoodTitle => 'Yemeği Düzenle';
+
+  @override
+  String get addFoodTitle => 'Yemek Ekle';
+
+  @override
+  String get editFoodSubtitle => 'Yemek bilgilerini güncelleyin';
+
+  @override
+  String get addFoodSubtitle => 'Menünüze yeni bir ürün ekleyin';
+
+  @override
+  String get updatingFood => 'Güncelleniyor...';
+
+  @override
+  String get savingFood => 'Kaydediliyor...';
+
+  @override
+  String get updateFood => 'Yemeği Güncelle';
+
+  @override
+  String get saveFood => 'Yemeği Kaydet';
+
+  @override
+  String get foodAddedSuccess => 'Yemek başarıyla eklendi!';
+
+  @override
+  String get foodAddError => 'Yemek eklenemedi. Lütfen tekrar deneyin.';
+
+  @override
+  String get compressing => 'Sıkıştırılıyor...';
 }

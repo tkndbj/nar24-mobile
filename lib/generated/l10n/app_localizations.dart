@@ -28614,6 +28614,12 @@ abstract class AppLocalizations {
   /// **'Ayarlar yüklenemedi. Lütfen tekrar deneyin.'**
   String get fetchError;
 
+  /// No description provided for @foods.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemekler'**
+  String get foods;
+
   /// No description provided for @selectFoodType.
   ///
   /// In tr, this message translates to:
@@ -28763,6 +28769,312 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Alt bölge seçin'**
   String get selectSubRegion;
+
+  /// No description provided for @foodCount.
+  ///
+  /// In tr, this message translates to:
+  /// **'{count} yemek'**
+  String foodCount(Object count);
+
+  /// No description provided for @noFoodsFound.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek Bulunamadı'**
+  String get noFoodsFound;
+
+  /// No description provided for @startByAddingFood.
+  ///
+  /// In tr, this message translates to:
+  /// **'Menüye ilk yemeğinizi ekleyerek başlayın.'**
+  String get startByAddingFood;
+
+  /// No description provided for @discountExpired.
+  ///
+  /// In tr, this message translates to:
+  /// **'Süresi doldu'**
+  String get discountExpired;
+
+  /// No description provided for @tapToChange.
+  ///
+  /// In tr, this message translates to:
+  /// **'Değiştirmek için dokunun'**
+  String get tapToChange;
+
+  /// No description provided for @discountExpires.
+  ///
+  /// In tr, this message translates to:
+  /// **'{date} tarihinde sona erer'**
+  String discountExpires(Object date);
+
+  /// No description provided for @editDiscount.
+  ///
+  /// In tr, this message translates to:
+  /// **'İndirimi Düzenle'**
+  String get editDiscount;
+
+  /// No description provided for @addFood.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek Ekle'**
+  String get addFood;
+
+  /// No description provided for @percentRange.
+  ///
+  /// In tr, this message translates to:
+  /// **'%{min} – %{max}'**
+  String percentRange(Object max, Object min);
+
+  /// No description provided for @endBeforeStart.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bitiş tarihi başlangıç tarihinden sonra olmalıdır.'**
+  String get endBeforeStart;
+
+  /// No description provided for @endInPast.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bitiş tarihi gelecekte olmalıdır.'**
+  String get endInPast;
+
+  /// No description provided for @addDiscount.
+  ///
+  /// In tr, this message translates to:
+  /// **'İndirim Ekle'**
+  String get addDiscount;
+
+  /// No description provided for @discountedPrice.
+  ///
+  /// In tr, this message translates to:
+  /// **'İndirimli Fiyat'**
+  String get discountedPrice;
+
+  /// No description provided for @discountError.
+  ///
+  /// In tr, this message translates to:
+  /// **'İndirim güncellenemedi. Lütfen tekrar deneyin.'**
+  String get discountError;
+
+  /// No description provided for @toggleError.
+  ///
+  /// In tr, this message translates to:
+  /// **'Durum güncellenemedi. Lütfen tekrar deneyin.'**
+  String get toggleError;
+
+  /// No description provided for @startDate.
+  ///
+  /// In tr, this message translates to:
+  /// **'Başlangıç Tarihi'**
+  String get startDate;
+
+  /// No description provided for @endDate.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bitiş Tarihi'**
+  String get endDate;
+
+  /// No description provided for @nameRequired.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek adı zorunludur.'**
+  String get nameRequired;
+
+  /// No description provided for @nameMinLength.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ad en az 2 karakter olmalıdır.'**
+  String get nameMinLength;
+
+  /// No description provided for @descriptionMinLength.
+  ///
+  /// In tr, this message translates to:
+  /// **'Açıklama en az 10 karakter olmalıdır.'**
+  String get descriptionMinLength;
+
+  /// No description provided for @pricePositive.
+  ///
+  /// In tr, this message translates to:
+  /// **'Fiyat sıfırdan büyük olmalıdır.'**
+  String get pricePositive;
+
+  /// No description provided for @categoryRequired.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lütfen bir kategori seçin.'**
+  String get categoryRequired;
+
+  /// No description provided for @typeRequired.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lütfen bir yemek türü seçin.'**
+  String get typeRequired;
+
+  /// No description provided for @fileSizeError.
+  ///
+  /// In tr, this message translates to:
+  /// **'Görsel 10 MB\'den küçük olmalıdır.'**
+  String get fileSizeError;
+
+  /// No description provided for @updateError.
+  ///
+  /// In tr, this message translates to:
+  /// **'Güncelleme başarısız. Lütfen tekrar deneyin.'**
+  String get updateError;
+
+  /// No description provided for @updateSuccess.
+  ///
+  /// In tr, this message translates to:
+  /// **'Başarıyla güncellendi.'**
+  String get updateSuccess;
+
+  /// No description provided for @foodImage.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek Görseli'**
+  String get foodImage;
+
+  /// No description provided for @imageHint.
+  ///
+  /// In tr, this message translates to:
+  /// **'Fotoğraf eklemek için dokunun'**
+  String get imageHint;
+
+  /// No description provided for @foodDetails.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek Detayları'**
+  String get foodDetails;
+
+  /// No description provided for @foodName.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek Adı'**
+  String get foodName;
+
+  /// No description provided for @foodNamePlaceholder.
+  ///
+  /// In tr, this message translates to:
+  /// **'örn. Adana Kebap'**
+  String get foodNamePlaceholder;
+
+  /// No description provided for @foodDescriptionPlaceholder.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bu yemeği kısaca tanımlayın...'**
+  String get foodDescriptionPlaceholder;
+
+  /// No description provided for @pricePlaceholder.
+  ///
+  /// In tr, this message translates to:
+  /// **'0.00'**
+  String get pricePlaceholder;
+
+  /// No description provided for @foodCategory.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek Kategorisi'**
+  String get foodCategory;
+
+  /// No description provided for @selectType.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek Türü Seçin'**
+  String get selectType;
+
+  /// No description provided for @selectCategoryFirst.
+  ///
+  /// In tr, this message translates to:
+  /// **'Önce bir kategori seçin'**
+  String get selectCategoryFirst;
+
+  /// No description provided for @extrasSelected.
+  ///
+  /// In tr, this message translates to:
+  /// **'{count} seçildi'**
+  String extrasSelected(Object count);
+
+  /// No description provided for @extrasHint.
+  ///
+  /// In tr, this message translates to:
+  /// **'İsteğe bağlı ekstraları seçin ve fiyatlarını belirleyin.'**
+  String get extrasHint;
+
+  /// No description provided for @preparationTime.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hazırlık Süresi'**
+  String get preparationTime;
+
+  /// No description provided for @preparationTimePlaceholder.
+  ///
+  /// In tr, this message translates to:
+  /// **'örn. 25'**
+  String get preparationTimePlaceholder;
+
+  /// No description provided for @editFoodTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemeği Düzenle'**
+  String get editFoodTitle;
+
+  /// No description provided for @addFoodTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek Ekle'**
+  String get addFoodTitle;
+
+  /// No description provided for @editFoodSubtitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek bilgilerini güncelleyin'**
+  String get editFoodSubtitle;
+
+  /// No description provided for @addFoodSubtitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Menünüze yeni bir ürün ekleyin'**
+  String get addFoodSubtitle;
+
+  /// No description provided for @updatingFood.
+  ///
+  /// In tr, this message translates to:
+  /// **'Güncelleniyor...'**
+  String get updatingFood;
+
+  /// No description provided for @savingFood.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kaydediliyor...'**
+  String get savingFood;
+
+  /// No description provided for @updateFood.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemeği Güncelle'**
+  String get updateFood;
+
+  /// No description provided for @saveFood.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemeği Kaydet'**
+  String get saveFood;
+
+  /// No description provided for @foodAddedSuccess.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek başarıyla eklendi!'**
+  String get foodAddedSuccess;
+
+  /// No description provided for @foodAddError.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek eklenemedi. Lütfen tekrar deneyin.'**
+  String get foodAddError;
+
+  /// No description provided for @compressing.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sıkıştırılıyor...'**
+  String get compressing;
 }
 
 class _AppLocalizationsDelegate

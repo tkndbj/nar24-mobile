@@ -524,12 +524,14 @@ class SellerPanelProvider with ChangeNotifier {
 
   Future<void> _fetchTotalSalesFromShop() async {
     if (_selectedShop == null) return;
-
     try {
-      final shopDoc =
-          await _firestore.collection('shops').doc(_selectedShop!.id).get();
-      final shopData = shopDoc.data() ?? {};
-      _totalSoldPrice = (shopData['totalSoldPrice'] as num?)?.toDouble() ?? 0.0;
+      final isRestaurant =
+          getShopBusinessType(_selectedShop!.id) == 'restaurant';
+      final collection = isRestaurant ? 'restaurants' : 'shops';
+      final doc =
+          await _firestore.collection(collection).doc(_selectedShop!.id).get();
+      final data = doc.data() ?? {};
+      _totalSoldPrice = (data['totalSoldPrice'] as num?)?.toDouble() ?? 0.0;
       notifyListeners();
     } catch (e) {
       debugPrint('Error fetching total sales: $e');
@@ -575,15 +577,32 @@ class SellerPanelProvider with ChangeNotifier {
     }
   }
 
-  // In SellerPanelProvider.initialize():
   Future<void> initialize() async {
     if (_initInFlight) return;
     _initInFlight = true;
 
     try {
-      // Always force-refresh token on seller panel entry to pick up
-      // any claim changes that happened on other platforms (e.g. web)
-      await _firebaseAuth.currentUser?.getIdToken(true);
+      // Only force-refresh if token is close to expiry (< 5 min remaining).
+      // Avoids an unnecessary network round-trip on every seller panel entry,
+      // which was causing "connection reset by peer" on flaky mobile connections.
+      final user = _firebaseAuth.currentUser;
+      if (user != null) {
+        try {
+          final idTokenResult = await user.getIdTokenResult(false); // no force
+          final expiry = idTokenResult.expirationTime;
+          final isNearExpiry = expiry != null &&
+              expiry.difference(DateTime.now()) < const Duration(minutes: 5);
+          if (isNearExpiry) {
+            await user
+                .getIdToken(true); // only force-refresh when actually needed
+          }
+        } catch (e) {
+          // Token refresh failure is non-fatal — continue with existing token.
+          // The Firestore/Functions calls will fail with permission errors if
+          // the token is truly invalid, which is a better UX than crashing init.
+          debugPrint('⚠️ Token refresh skipped: $e');
+        }
+      }
 
       await fetchShops().timeout(
         const Duration(seconds: 10),
@@ -1744,7 +1763,11 @@ class SellerPanelProvider with ChangeNotifier {
 
   Future<void> _setupQuestionListener(String shopId) async {
     try {
-      // Cancel existing listener first
+      // Restaurants don't have product questions
+      if (getShopBusinessType(shopId) == 'restaurant') {
+        _hasUnansweredQuestions = false;
+        return;
+      }
       if (_questionsSub != null) {
         await _questionsSub!.cancel();
         _questionsSub = null;
@@ -1824,7 +1847,8 @@ class SellerPanelProvider with ChangeNotifier {
       _currentNotificationShopId = shopId;
 
       final isRestaurant = getShopBusinessType(shopId) == 'restaurant';
-      final collection = isRestaurant ? 'restaurant_notifications' : 'shop_notifications';
+      final collection =
+          isRestaurant ? 'restaurant_notifications' : 'shop_notifications';
       final idField = isRestaurant ? 'restaurantId' : 'shopId';
 
       _shopNotificationsSub = _firestore

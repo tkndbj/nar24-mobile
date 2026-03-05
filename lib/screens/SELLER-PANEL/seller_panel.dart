@@ -19,6 +19,7 @@ import '../../widgets/sellerpanel/restaurant_dashboard.dart';
 import '../../widgets/sellerpanel/food_orders.dart';
 import '../../widgets/sellerpanel/restaurant_reviews_tab.dart';
 import '../../widgets/sellerpanel/restaurant_settings_tab.dart';
+import '../../widgets/sellerpanel/restaurant_foods_tab.dart';
 
 class SellerPanel extends StatefulWidget {
   final int initialTabIndex;
@@ -652,6 +653,8 @@ class _SellerPanelState extends State<SellerPanel>
                     Icons.dashboard_rounded),
                 _buildModernTab(AppLocalizations.of(context).orders,
                     Icons.receipt_long_rounded),
+                _buildModernTab(AppLocalizations.of(context).foods,
+                    Icons.restaurant_menu_rounded),
                 _buildModernTab(AppLocalizations.of(context).reviews,
                     Icons.star_outline_rounded),
                 _buildModernTab(AppLocalizations.of(context).settings,
@@ -731,7 +734,7 @@ class _SellerPanelState extends State<SellerPanel>
   void _syncTabController(String businessType) {
     if (_lastSyncedBusinessType == businessType) return;
     _lastSyncedBusinessType = businessType;
-    final newLength = businessType == 'restaurant' ? 4 : 6;
+    final newLength = businessType == 'restaurant' ? 5 : 6;
     if (_tabController.length == newLength) return;
     final old = _tabController;
     _tabController = TabController(length: newLength, vsync: this);
@@ -917,6 +920,8 @@ class _SellerPanelState extends State<SellerPanel>
                                 RestaurantDashboardTab(
                                     restaurantId: provider.selectedShop!.id),
                                 FoodOrdersTab(
+                                    restaurantId: provider.selectedShop!.id),
+                                RestaurantFoodsTab(
                                     restaurantId: provider.selectedShop!.id),
                                 RestaurantReviewsTab(
                                   restaurantId: provider.selectedShop!.id,

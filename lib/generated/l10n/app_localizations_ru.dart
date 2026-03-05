@@ -15066,6 +15066,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get fetchError => 'Не удалось загрузить настройки. Попробуйте снова.';
 
   @override
+  String get foods => 'Еда';
+
+  @override
   String get selectFoodType => 'Выберите тип еды';
 
   @override
@@ -15145,4 +15148,167 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get selectSubRegion => 'Выберите подрегион';
+
+  @override
+  String foodCount(Object count) {
+    return '$count блюд';
+  }
+
+  @override
+  String get noFoodsFound => 'Блюда не найдены';
+
+  @override
+  String get startByAddingFood => 'Начните с добавления первого блюда в меню.';
+
+  @override
+  String get discountExpired => 'Истекла';
+
+  @override
+  String get tapToChange => 'Нажмите для изменения';
+
+  @override
+  String discountExpires(Object date) {
+    return 'Истекает $date';
+  }
+
+  @override
+  String get editDiscount => 'Редактировать скидку';
+
+  @override
+  String get addFood => 'Добавить блюдо';
+
+  @override
+  String percentRange(Object max, Object min) {
+    return '$min% – $max%';
+  }
+
+  @override
+  String get endBeforeStart => 'Дата окончания должна быть позже даты начала.';
+
+  @override
+  String get endInPast => 'Дата окончания должна быть в будущем.';
+
+  @override
+  String get addDiscount => 'Добавить скидку';
+
+  @override
+  String get discountedPrice => 'Цена со скидкой';
+
+  @override
+  String get discountError => 'Не удалось обновить скидку. Попробуйте ещё раз.';
+
+  @override
+  String get toggleError =>
+      'Не удалось обновить доступность. Попробуйте ещё раз.';
+
+  @override
+  String get startDate => 'Дата начала';
+
+  @override
+  String get endDate => 'Дата окончания';
+
+  @override
+  String get nameRequired => 'Название блюда обязательно.';
+
+  @override
+  String get nameMinLength => 'Название должно содержать не менее 2 символов.';
+
+  @override
+  String get descriptionMinLength =>
+      'Описание должно содержать не менее 10 символов.';
+
+  @override
+  String get pricePositive => 'Цена должна быть больше нуля.';
+
+  @override
+  String get categoryRequired => 'Пожалуйста, выберите категорию.';
+
+  @override
+  String get typeRequired => 'Пожалуйста, выберите тип блюда.';
+
+  @override
+  String get fileSizeError => 'Изображение должно быть меньше 10 МБ.';
+
+  @override
+  String get updateError => 'Не удалось обновить. Попробуйте ещё раз.';
+
+  @override
+  String get updateSuccess => 'Успешно обновлено.';
+
+  @override
+  String get foodImage => 'Фото блюда';
+
+  @override
+  String get imageHint => 'Нажмите, чтобы добавить фото';
+
+  @override
+  String get foodDetails => 'Данные о блюде';
+
+  @override
+  String get foodName => 'Название блюда';
+
+  @override
+  String get foodNamePlaceholder => 'напр. Адана кебаб';
+
+  @override
+  String get foodDescriptionPlaceholder => 'Кратко опишите это блюдо...';
+
+  @override
+  String get pricePlaceholder => '0.00';
+
+  @override
+  String get foodCategory => 'Категория блюда';
+
+  @override
+  String get selectType => 'Выберите тип блюда';
+
+  @override
+  String get selectCategoryFirst => 'Сначала выберите категорию';
+
+  @override
+  String extrasSelected(Object count) {
+    return '$count выбрано';
+  }
+
+  @override
+  String get extrasHint => 'Выберите дополнения и установите их цены.';
+
+  @override
+  String get preparationTime => 'Время приготовления';
+
+  @override
+  String get preparationTimePlaceholder => 'напр. 25';
+
+  @override
+  String get editFoodTitle => 'Редактировать блюдо';
+
+  @override
+  String get addFoodTitle => 'Добавить блюдо';
+
+  @override
+  String get editFoodSubtitle => 'Обновите данные о блюде';
+
+  @override
+  String get addFoodSubtitle => 'Добавьте новый пункт в меню';
+
+  @override
+  String get updatingFood => 'Обновление...';
+
+  @override
+  String get savingFood => 'Сохранение...';
+
+  @override
+  String get updateFood => 'Обновить блюдо';
+
+  @override
+  String get saveFood => 'Сохранить блюдо';
+
+  @override
+  String get foodAddedSuccess => 'Блюдо успешно добавлено!';
+
+  @override
+  String get foodAddError => 'Не удалось добавить блюдо. Попробуйте ещё раз.';
+
+  @override
+  String get compressing => 'Сжатие...';
 }

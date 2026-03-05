@@ -192,6 +192,14 @@ class ImageCompressionUtils {
     );
   }
 
+  static Future<File> compressIfNeeded(File file, {int maxKb = 500}) async {
+    final fileSize = await file.length();
+    if (fileSize <= maxKb * 1024) return file;
+
+    final result = await compressImage(file, quality: 90);
+    return result ?? file;
+  }
+
   // Check if file needs compression (matches TypeScript shouldCompress)
   static bool shouldCompress(File file, {int maxSizeKB = 500}) {
     final fileSize = file.lengthSync();
