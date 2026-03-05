@@ -13011,4 +13011,12 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get noDeliveryBanner =>
       'This restaurant does not deliver to your selected address.';
+
+  @override
+  String get setAddressBanner =>
+      'Set your delivery address to see restaurants that deliver to you';
+
+  @override
+  String get setAddressLoginBanner =>
+      'Log in and set your address to see restaurants that deliver to you';
 }

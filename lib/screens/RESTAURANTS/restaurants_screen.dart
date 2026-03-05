@@ -4,6 +4,7 @@
 //        +  components/restaurants/RestaurantsPage.tsx  (UI)
 
 import 'dart:async';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -16,6 +17,8 @@ import '../../user_provider.dart';
 import '../../utils/restaurant_utils.dart';
 import '../../services/typesense_service_manager.dart';
 import '../../services/restaurant_typesense_service.dart';
+import '../../auth_service.dart';
+import '../../widgets/login_modal.dart';
 import '../../widgets/restaurants/food_location_picker.dart';
 
 // ─── Banner images ───────────────────────────────────────────────────────────
@@ -403,6 +406,95 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                               ],
                             ),
                             const SizedBox(height: 12),
+
+                            // Address prompt banner
+                            Builder(builder: (context) {
+                              final userProvider =
+                                  context.watch<UserProvider>();
+                              final isLoggedIn =
+                                  userProvider.user != null;
+                              final hasFoodAddress =
+                                  userProvider.profileData?['foodAddress'] !=
+                                      null;
+                              if (isLoggedIn && hasFoodAddress) {
+                                return const SizedBox.shrink();
+                              }
+                              final l10n =
+                                  AppLocalizations.of(context);
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.only(bottom: 12),
+                                child: GestureDetector(
+                                  onTap: () {
+                                    if (!isLoggedIn) {
+                                      showCupertinoModalPopup(
+                                        context: context,
+                                        builder: (_) => LoginPromptModal(
+                                          authService: AuthService(),
+                                        ),
+                                      );
+                                    } else {
+                                      showFoodLocationPicker(context);
+                                    }
+                                  },
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? Colors.orange
+                                              .withValues(alpha: 0.12)
+                                          : Colors.orange
+                                              .withValues(alpha: 0.08),
+                                      borderRadius:
+                                          BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: isDark
+                                            ? Colors.orange
+                                                .withValues(alpha: 0.3)
+                                            : Colors.orange
+                                                .withValues(alpha: 0.25),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.location_on_outlined,
+                                          size: 18,
+                                          color: isDark
+                                              ? Colors.orange[300]
+                                              : Colors.orange[700],
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            isLoggedIn
+                                                ? l10n
+                                                    .setAddressBanner
+                                                : l10n
+                                                    .setAddressLoginBanner,
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: isDark
+                                                  ? Colors.orange[300]
+                                                  : Colors.orange[800],
+                                            ),
+                                          ),
+                                        ),
+                                        Icon(
+                                          Icons.chevron_right,
+                                          size: 18,
+                                          color: isDark
+                                              ? Colors.orange[300]
+                                              : Colors.orange[700],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
 
                             // Search bar
                             _SearchBar(

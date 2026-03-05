@@ -24827,6 +24827,18 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Bu restoran seçtiğiniz adrese teslimat yapmıyor.'**
   String get noDeliveryBanner;
+
+  /// No description provided for @setAddressBanner.
+  ///
+  /// In tr, this message translates to:
+  /// **'Size teslimat yapan restoranları görmek için teslimat adresinizi belirleyin'**
+  String get setAddressBanner;
+
+  /// No description provided for @setAddressLoginBanner.
+  ///
+  /// In tr, this message translates to:
+  /// **'Size teslimat yapan restoranları görmek için giriş yapın ve adresinizi belirleyin'**
+  String get setAddressLoginBanner;
 }
 
 class _AppLocalizationsDelegate

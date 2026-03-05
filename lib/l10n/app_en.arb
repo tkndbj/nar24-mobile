@@ -5739,5 +5739,7 @@
 "minOrderBadge": "Min. {amount} TL",
 "@minOrderBadge": { "placeholders": { "amount": { "type": "String" } } },
 "noDeliveryLabel": "Does not deliver to your area",
-"noDeliveryBanner": "This restaurant does not deliver to your selected address."
+"noDeliveryBanner": "This restaurant does not deliver to your selected address.",
+"setAddressBanner": "Set your delivery address to see restaurants that deliver to you",
+"setAddressLoginBanner": "Log in and set your address to see restaurants that deliver to you"
 }

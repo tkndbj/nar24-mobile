@@ -13107,4 +13107,12 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get noDeliveryBanner =>
       'Этот ресторан не доставляет по выбранному адресу.';
+
+  @override
+  String get setAddressBanner =>
+      'Укажите адрес доставки, чтобы увидеть рестораны, которые доставляют к вам';
+
+  @override
+  String get setAddressLoginBanner =>
+      'Войдите и укажите адрес, чтобы увидеть рестораны, которые доставляют к вам';
 }

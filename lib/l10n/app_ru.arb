@@ -5408,5 +5408,7 @@
 "minOrderBadge": "Мин. {amount} TL",
 "@minOrderBadge": { "placeholders": { "amount": { "type": "String" } } },
 "noDeliveryLabel": "Не доставляет в ваш район",
-"noDeliveryBanner": "Этот ресторан не доставляет по выбранному адресу."
+"noDeliveryBanner": "Этот ресторан не доставляет по выбранному адресу.",
+"setAddressBanner": "Укажите адрес доставки, чтобы увидеть рестораны, которые доставляют к вам",
+"setAddressLoginBanner": "Войдите и укажите адрес, чтобы увидеть рестораны, которые доставляют к вам"
 }

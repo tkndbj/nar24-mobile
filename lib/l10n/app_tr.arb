@@ -5690,5 +5690,7 @@
 "minOrderBadge": "Min. {amount} TL",
 "@minOrderBadge": { "placeholders": { "amount": { "type": "String" } } },
 "noDeliveryLabel": "Bölgenize teslimat yapılmıyor",
-"noDeliveryBanner": "Bu restoran seçtiğiniz adrese teslimat yapmıyor."
+"noDeliveryBanner": "Bu restoran seçtiğiniz adrese teslimat yapmıyor.",
+"setAddressBanner": "Size teslimat yapan restoranları görmek için teslimat adresinizi belirleyin",
+"setAddressLoginBanner": "Size teslimat yapan restoranları görmek için giriş yapın ve adresinizi belirleyin"
 }

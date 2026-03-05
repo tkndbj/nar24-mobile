@@ -13035,4 +13035,12 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get noDeliveryBanner =>
       'Bu restoran seçtiğiniz adrese teslimat yapmıyor.';
+
+  @override
+  String get setAddressBanner =>
+      'Size teslimat yapan restoranları görmek için teslimat adresinizi belirleyin';
+
+  @override
+  String get setAddressLoginBanner =>
+      'Size teslimat yapan restoranları görmek için giriş yapın ve adresinizi belirleyin';
 }
