@@ -21,6 +21,7 @@ class NotificationModel {
   final String? restaurantName;
   final String? orderStatus;
   final String? invitationId;
+  final String? businessType;
 
   /// Localized messages
   final String? messageEn;
@@ -86,6 +87,7 @@ class NotificationModel {
     this.archiveReason,
     this.boostExpired,
     this.transactionId,
+    this.businessType,
     this.invitationId,
     this.campaignName,
     this.restaurantName,
@@ -142,6 +144,7 @@ class NotificationModel {
       boostExpired: data['boostExpired'] as bool?,
       campaignName: data['campaignName'] as String?,
       campaignDescription: data['campaignDescription'] as String?,
+      businessType: data['businessType'] as String?,
       restaurantName: (data['payload']?['restaurantName'] ??
           data['restaurantName']) as String?,
       orderStatus:
@@ -200,6 +203,7 @@ class NotificationModel {
     if (adType != null) map['adType'] = adType;
     if (duration != null) map['duration'] = duration;
     if (price != null) map['price'] = price;
+    if (businessType != null) map['businessType'] = businessType;
     if (restaurantName != null) map['restaurantName'] = restaurantName;
     if (orderStatus != null) map['orderStatus'] = orderStatus;
     if (imageUrl != null) map['imageUrl'] = imageUrl;

@@ -5724,6 +5724,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get joiningShop => 'Dükkan paneli yükleniyor...';
 
   @override
+  String get joiningRestaurant => 'Restoran restaurant panel...';
+
+  @override
   String get revokeAccess => 'Erişimi İptal Et';
 
   @override
@@ -15248,4 +15251,85 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get navProfile => 'Profil';
+
+  @override
+  String get paymentFailedDefault => 'Ödeme başarısız oldu.';
+
+  @override
+  String get paymentReceivedOrderFailed =>
+      'Ödeme alındı ancak siparişiniz oluşturulamadı. Tam iade yapılmıştır ve 1–3 iş günü içinde kartınıza yansıyacaktır.';
+
+  @override
+  String get paymentReceivedAdFailed =>
+      'Ödeme alındı ancak reklamınız etkinleştirilemedi. Tam iade yapılmıştır ve 1–3 iş günü içinde kartınıza yansıyacaktır.';
+
+  @override
+  String get missingPaymentInfo => 'Ödeme bilgileri eksik.';
+
+  @override
+  String get paymentSuccessfulTitle => 'Ödeme Başarılı';
+
+  @override
+  String get orderSentToRestaurant => 'Siparişiniz restorana gönderildi.';
+
+  @override
+  String orderLabel(Object orderId) {
+    return 'Sipariş: $orderId';
+  }
+
+  @override
+  String get redirecting => 'Yönlendiriliyor…';
+
+  @override
+  String get secureSSLConnection => 'Güvenli SSL Bağlantısı';
+
+  @override
+  String get paymentProcessedByIsbank =>
+      'Ödeme İşbank tarafından işlenmektedir';
+
+  @override
+  String get foodPaymentCancelMessage =>
+      'Ödemeniz devam ediyor. İptal etmek istediğinize emin misiniz?';
+
+  @override
+  String get continuePayment => 'Devam Et';
+
+  @override
+  String get cancelPaymentButton => 'Ödemeyi İptal Et';
+
+  @override
+  String get paymentTimedOutTitle => 'Ödeme Zaman Aşımına Uğradı';
+
+  @override
+  String get paymentFailedTitle => 'Ödeme Başarısız';
+
+  @override
+  String get paymentProcessingError => 'Ödemeniz işlenirken bir hata oluştu.';
+
+  @override
+  String get paymentTimedOutRetry =>
+      'Ödeme zaman aşımına uğradı. Lütfen tekrar deneyin.';
+
+  @override
+  String get loadingSecurePaymentPage => 'Güvenli ödeme sayfası yükleniyor...';
+
+  @override
+  String get secureConnectionBadge => 'Güvenli Bağlantı';
+
+  @override
+  String get paymentReceivedBoostFailed =>
+      'Ödemeniz alındı ancak Boost paketi etkinleştirilemedi. Tam iade yapılmış olup 1–3 iş günü içinde kartınıza yansıyacaktır.';
+
+  @override
+  String get boostPaymentLoading => 'Boost ödeme sayfası yükleniyor...';
+
+  @override
+  String get boostPackage => 'Boost Paketi';
+
+  @override
+  String get boostPaymentCancelMessage =>
+      'Boost ödemesi iptal edilecek. Emin misiniz?';
+
+  @override
+  String get secureBoostPayment => 'Güvenli Boost Ödemesi';
 }

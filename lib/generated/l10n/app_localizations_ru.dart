@@ -5750,6 +5750,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get joiningShop => 'Загрузка панели магазина...';
 
   @override
+  String get joiningRestaurant => 'Загрузка панели ресторана...';
+
+  @override
   String get revokeAccess => 'Отозвать доступ';
 
   @override
@@ -13250,7 +13253,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get restaurantNotFound => 'Ресторан не найден';
 
   @override
-  String get backToRestaurants => 'Назад к ресторанам';
+  String get backToRestaurants => 'Вернуться к ресторанам';
 
   @override
   String get currentlyClosed => 'Сейчас закрыто';
@@ -15323,4 +15326,86 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get navProfile => 'Профиль';
+
+  @override
+  String get paymentFailedDefault => 'Оплата не прошла.';
+
+  @override
+  String get paymentReceivedOrderFailed =>
+      'Оплата получена, но ваш заказ не удалось создать. Полный возврат средств был оформлен и поступит на вашу карту в течение 1–3 рабочих дней.';
+
+  @override
+  String get paymentReceivedAdFailed =>
+      'Оплата получена, но ваше объявление не удалось активировать. Полный возврат средств был оформлен и поступит на вашу карту в течение 1–3 рабочих дней.';
+
+  @override
+  String get missingPaymentInfo => 'Отсутствует платёжная информация.';
+
+  @override
+  String get paymentSuccessfulTitle => 'Оплата Успешна';
+
+  @override
+  String get orderSentToRestaurant => 'Ваш заказ отправлен в ресторан.';
+
+  @override
+  String orderLabel(Object orderId) {
+    return 'Заказ: $orderId';
+  }
+
+  @override
+  String get redirecting => 'Перенаправление…';
+
+  @override
+  String get secureSSLConnection => 'Безопасное SSL-соединение';
+
+  @override
+  String get paymentProcessedByIsbank => 'Платёж обрабатывается İşbank';
+
+  @override
+  String get foodPaymentCancelMessage =>
+      'Ваш платёж в процессе. Вы уверены, что хотите отменить?';
+
+  @override
+  String get continuePayment => 'Продолжить';
+
+  @override
+  String get cancelPaymentButton => 'Отменить платёж';
+
+  @override
+  String get paymentTimedOutTitle => 'Время ожидания оплаты истекло';
+
+  @override
+  String get paymentFailedTitle => 'Оплата не прошла';
+
+  @override
+  String get paymentProcessingError =>
+      'Произошла ошибка при обработке вашего платежа.';
+
+  @override
+  String get paymentTimedOutRetry =>
+      'Время ожидания оплаты истекло. Пожалуйста, попробуйте снова.';
+
+  @override
+  String get loadingSecurePaymentPage =>
+      'Загрузка безопасной страницы оплаты...';
+
+  @override
+  String get secureConnectionBadge => 'Безопасное соединение';
+
+  @override
+  String get paymentReceivedBoostFailed =>
+      'Оплата получена, но пакет Boost не удалось активировать. Полный возврат средств был оформлен и поступит на вашу карту в течение 1–3 рабочих дней.';
+
+  @override
+  String get boostPaymentLoading => 'Загрузка страницы оплаты Boost...';
+
+  @override
+  String get boostPackage => 'Пакет Boost';
+
+  @override
+  String get boostPaymentCancelMessage =>
+      'Оплата Boost будет отменена. Вы уверены?';
+
+  @override
+  String get secureBoostPayment => 'Безопасная оплата Boost';
 }

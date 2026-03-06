@@ -257,10 +257,27 @@ class FoodCartProvider extends ChangeNotifier {
 
   // ── Internals ──────────────────────────────────────────────────────────
   StreamSubscription<QuerySnapshot>? _cartSubscription;
+  StreamSubscription<User?>? _authSubscription;
   final _rateLimiter = _RateLimiter(const Duration(milliseconds: 200));
+  Completer<void>? _cartMutationLock;
 
   FoodCartProvider(this._auth, this._db) {
-    _auth.authStateChanges().listen(_onAuthChanged);
+    _authSubscription = _auth.authStateChanges().listen(_onAuthChanged);
+  }
+
+  /// Acquire a simple async lock for cart mutations.
+  /// Returns a release function to call when done.
+  Future<void> _acquireLock() async {
+    while (_cartMutationLock != null) {
+      await _cartMutationLock!.future;
+    }
+    _cartMutationLock = Completer<void>();
+  }
+
+  void _releaseLock() {
+    final lock = _cartMutationLock;
+    _cartMutationLock = null;
+    lock?.complete();
   }
 
   // ── Public getters ─────────────────────────────────────────────────────
@@ -442,12 +459,20 @@ class FoodCartProvider extends ChangeNotifier {
       return AddItemResult.error;
     }
 
-    // Single-restaurant enforcement
+    // Single-restaurant enforcement (check before acquiring lock)
     if (_currentRestaurant != null && _currentRestaurant!.id != restaurant.id) {
       return AddItemResult.restaurantConflict;
     }
 
+    await _acquireLock();
+    String? optimisticKey; // track for rollback on error
     try {
+      // Re-check after acquiring lock — state may have changed
+      if (_currentRestaurant != null &&
+          _currentRestaurant!.id != restaurant.id) {
+        return AddItemResult.restaurantConflict;
+      }
+
       final cartKey = _buildCartItemKey(foodId, extras);
       final existing = _items.firstWhereOrNull((i) => i.foodId == cartKey);
 
@@ -463,7 +488,7 @@ class FoodCartProvider extends ChangeNotifier {
         return AddItemResult.quantityUpdated;
       }
 
-      // New item
+      // New item — insert optimistically before Firestore write
       final item = FoodCartItem(
         foodId: cartKey,
         originalFoodId: foodId,
@@ -480,7 +505,13 @@ class FoodCartProvider extends ChangeNotifier {
         restaurantId: restaurant.id,
         restaurantName: restaurant.name,
         addedAt: Timestamp.now(),
+        isOptimistic: true,
       );
+
+      // Show in UI immediately (dimmed, controls disabled)
+      optimisticKey = cartKey;
+      _items = [item, ..._items];
+      notifyListeners();
 
       await _cartDoc(cartKey).set(item.toFirestore());
 
@@ -488,16 +519,26 @@ class FoodCartProvider extends ChangeNotifier {
         await _writeRestaurantMeta(restaurant);
       }
 
-      // Optimistic — only add if snapshot listener hasn't already
-      if (!_items.any((i) => i.foodId == cartKey)) {
-        _items = [item, ..._items];
+      // Clear optimistic flag if snapshot listener hasn't replaced it yet
+      final idx = _items.indexWhere(
+          (i) => i.foodId == cartKey && i.isOptimistic);
+      if (idx != -1) {
+        _items = List.of(_items)
+          ..[idx] = _items[idx].copyWith(isOptimistic: false);
         notifyListeners();
       }
 
       return AddItemResult.added;
     } catch (e) {
       debugPrint('[FoodCart] addItem error: $e');
+      // Roll back optimistic item on failure
+      if (optimisticKey != null) {
+        _items = _items.where((i) => i.foodId != optimisticKey).toList();
+        notifyListeners();
+      }
       return AddItemResult.error;
+    } finally {
+      _releaseLock();
     }
   }
 
@@ -519,6 +560,7 @@ class FoodCartProvider extends ChangeNotifier {
   }) async {
     if (_uid.isEmpty) return ClearAndAddResult.error;
 
+    await _acquireLock();
     try {
       // 1. Delete all existing items
       final snapshot = await _cartCollection.get();
@@ -535,7 +577,7 @@ class FoodCartProvider extends ChangeNotifier {
       _items = [];
       _currentRestaurant = null;
 
-      // 3. Add new item
+      // 3. Add new item — insert optimistically before Firestore write
       final cartKey = _buildCartItemKey(foodId, extras);
 
       final item = FoodCartItem(
@@ -554,13 +596,21 @@ class FoodCartProvider extends ChangeNotifier {
         restaurantId: restaurant.id,
         restaurantName: restaurant.name,
         addedAt: Timestamp.now(),
+        isOptimistic: true,
       );
+
+      _items = [item];
+      notifyListeners();
 
       await _cartDoc(cartKey).set(item.toFirestore());
       await _writeRestaurantMeta(restaurant);
 
-      if (!_items.any((i) => i.foodId == cartKey)) {
-        _items = [item];
+      // Clear optimistic flag if snapshot listener hasn't replaced it yet
+      final idx = _items.indexWhere(
+          (i) => i.foodId == cartKey && i.isOptimistic);
+      if (idx != -1) {
+        _items = List.of(_items)
+          ..[idx] = _items[idx].copyWith(isOptimistic: false);
         notifyListeners();
       }
 
@@ -568,6 +618,8 @@ class FoodCartProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('[FoodCart] clearAndAdd error: $e');
       return ClearAndAddResult.error;
+    } finally {
+      _releaseLock();
     }
   }
 
@@ -788,6 +840,8 @@ class FoodCartProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
+    _authSubscription = null;
     _stopListener();
     super.dispose();
   }

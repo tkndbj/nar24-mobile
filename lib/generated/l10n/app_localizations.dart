@@ -11092,6 +11092,12 @@ abstract class AppLocalizations {
   /// **'Dükkan paneli yükleniyor...'**
   String get joiningShop;
 
+  /// No description provided for @joiningRestaurant.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoran restaurant panel...'**
+  String get joiningRestaurant;
+
   /// No description provided for @revokeAccess.
   ///
   /// In tr, this message translates to:
@@ -29099,6 +29105,150 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Profil'**
   String get navProfile;
+
+  /// No description provided for @paymentFailedDefault.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme başarısız oldu.'**
+  String get paymentFailedDefault;
+
+  /// No description provided for @paymentReceivedOrderFailed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme alındı ancak siparişiniz oluşturulamadı. Tam iade yapılmıştır ve 1–3 iş günü içinde kartınıza yansıyacaktır.'**
+  String get paymentReceivedOrderFailed;
+
+  /// No description provided for @paymentReceivedAdFailed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme alındı ancak reklamınız etkinleştirilemedi. Tam iade yapılmıştır ve 1–3 iş günü içinde kartınıza yansıyacaktır.'**
+  String get paymentReceivedAdFailed;
+
+  /// No description provided for @missingPaymentInfo.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme bilgileri eksik.'**
+  String get missingPaymentInfo;
+
+  /// No description provided for @paymentSuccessfulTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme Başarılı'**
+  String get paymentSuccessfulTitle;
+
+  /// No description provided for @orderSentToRestaurant.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişiniz restorana gönderildi.'**
+  String get orderSentToRestaurant;
+
+  /// No description provided for @orderLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş: {orderId}'**
+  String orderLabel(Object orderId);
+
+  /// No description provided for @redirecting.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yönlendiriliyor…'**
+  String get redirecting;
+
+  /// No description provided for @secureSSLConnection.
+  ///
+  /// In tr, this message translates to:
+  /// **'Güvenli SSL Bağlantısı'**
+  String get secureSSLConnection;
+
+  /// No description provided for @paymentProcessedByIsbank.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme İşbank tarafından işlenmektedir'**
+  String get paymentProcessedByIsbank;
+
+  /// No description provided for @foodPaymentCancelMessage.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödemeniz devam ediyor. İptal etmek istediğinize emin misiniz?'**
+  String get foodPaymentCancelMessage;
+
+  /// No description provided for @continuePayment.
+  ///
+  /// In tr, this message translates to:
+  /// **'Devam Et'**
+  String get continuePayment;
+
+  /// No description provided for @cancelPaymentButton.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödemeyi İptal Et'**
+  String get cancelPaymentButton;
+
+  /// No description provided for @paymentTimedOutTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme Zaman Aşımına Uğradı'**
+  String get paymentTimedOutTitle;
+
+  /// No description provided for @paymentFailedTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme Başarısız'**
+  String get paymentFailedTitle;
+
+  /// No description provided for @paymentProcessingError.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödemeniz işlenirken bir hata oluştu.'**
+  String get paymentProcessingError;
+
+  /// No description provided for @paymentTimedOutRetry.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme zaman aşımına uğradı. Lütfen tekrar deneyin.'**
+  String get paymentTimedOutRetry;
+
+  /// No description provided for @loadingSecurePaymentPage.
+  ///
+  /// In tr, this message translates to:
+  /// **'Güvenli ödeme sayfası yükleniyor...'**
+  String get loadingSecurePaymentPage;
+
+  /// No description provided for @secureConnectionBadge.
+  ///
+  /// In tr, this message translates to:
+  /// **'Güvenli Bağlantı'**
+  String get secureConnectionBadge;
+
+  /// No description provided for @paymentReceivedBoostFailed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödemeniz alındı ancak Boost paketi etkinleştirilemedi. Tam iade yapılmış olup 1–3 iş günü içinde kartınıza yansıyacaktır.'**
+  String get paymentReceivedBoostFailed;
+
+  /// No description provided for @boostPaymentLoading.
+  ///
+  /// In tr, this message translates to:
+  /// **'Boost ödeme sayfası yükleniyor...'**
+  String get boostPaymentLoading;
+
+  /// No description provided for @boostPackage.
+  ///
+  /// In tr, this message translates to:
+  /// **'Boost Paketi'**
+  String get boostPackage;
+
+  /// No description provided for @boostPaymentCancelMessage.
+  ///
+  /// In tr, this message translates to:
+  /// **'Boost ödemesi iptal edilecek. Emin misiniz?'**
+  String get boostPaymentCancelMessage;
+
+  /// No description provided for @secureBoostPayment.
+  ///
+  /// In tr, this message translates to:
+  /// **'Güvenli Boost Ödemesi'**
+  String get secureBoostPayment;
 }
 
 class _AppLocalizationsDelegate

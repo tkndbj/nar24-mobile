@@ -487,7 +487,9 @@ class _SellerPanelState extends State<SellerPanel>
                 onTap: () {
                   Navigator.pop(context);
                   context.push(
-                      '/seller_panel_user_permission/${provider.selectedShop!.id}');
+  '/seller_panel_user_permission/${provider.selectedShop!.id}'
+  '?businessType=${provider.selectedShopBusinessType}',
+);
                 },
               ),
             if (!isRestaurant)

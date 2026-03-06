@@ -758,6 +758,15 @@ export const foodPaymentCallback = onRequest(
     const startTime = Date.now();
     const db = admin.firestore();
 
+    let body = request.body;
+if ((!body || Object.keys(body).length === 0) && request.rawBody) {
+  const qs = (await import('querystring')).default;
+  body = qs.parse(request.rawBody.toString('utf8'));
+  console.log('[FoodPayment] Used rawBody fallback parsing');
+}
+console.log('[FoodPayment] Content-Type:', request.headers['content-type']);
+console.log('[FoodPayment] HASH present:', !!body?.HASH, '| HASHPARAMSVAL present:', !!body?.HASHPARAMSVAL);
+
     try {
       const {
         Response: bankResponse,
@@ -767,7 +776,7 @@ export const foodPaymentCallback = onRequest(
         ErrMsg,
         HASH,
         HASHPARAMSVAL,
-      } = request.body;
+      } = body;
 
       if (!oid) {
         response.status(400).send('Missing order number');
@@ -779,7 +788,7 @@ export const foodPaymentCallback = onRequest(
       await logRef.set({
         oid,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        requestBody: request.body,
+        requestBody: body,
         ip: request.ip || request.headers['x-forwarded-for'] || null,
       });
 
@@ -806,19 +815,25 @@ export const foodPaymentCallback = onRequest(
           return { alreadyProcessed: true, status: pending.status };
         }
 
-        // Verify hash
-        if (HASHPARAMSVAL && HASH) {
-          const config = await getIsbankConfig();          
-          const hashInput = HASHPARAMSVAL + config.storeKey;
-          const calculated = crypto.createHash('sha512').update(hashInput, 'utf8').digest('base64');
+        // Verify hash — reject if missing or wrong
+        if (!HASHPARAMSVAL || !HASH) {
+          console.error('[FoodPayment] Callback missing hash fields — rejecting.');
+          tx.update(pendingRef, {
+            status: 'hash_verification_failed',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          return { error: 'hash_failed' };
+        }
 
-          if (calculated !== HASH) {
-            tx.update(pendingRef, {
-              status: 'hash_verification_failed',
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            });
-            return { error: 'hash_failed' };
-          }
+        const config = await getIsbankConfig();
+        const hashInput = HASHPARAMSVAL + config.storeKey;
+        const calculated = crypto.createHash('sha512').update(hashInput, 'utf8').digest('base64');
+        if (calculated !== HASH) {
+          tx.update(pendingRef, {
+            status: 'hash_verification_failed',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          return { error: 'hash_failed' };
         }
 
         // Check payment result
@@ -829,7 +844,7 @@ export const foodPaymentCallback = onRequest(
           tx.update(pendingRef, {
             status: 'payment_failed',
             errorMessage: ErrMsg || 'Payment failed',
-            rawResponse: request.body,
+            rawResponse: body,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
           return { error: 'payment_failed', message: ErrMsg || 'Payment failed' };
@@ -838,7 +853,7 @@ export const foodPaymentCallback = onRequest(
         // Mark as processing
         tx.update(pendingRef, {
           status: 'processing',
-          rawResponse: request.body,
+          rawResponse: body,
           processingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 
@@ -853,6 +868,11 @@ export const foodPaymentCallback = onRequest(
       }
 
       if (txResult.error === 'hash_failed') {
+        console.error(`[FoodPayment] Hash failed for oid=${oid} — attempting auto-refund`);
+        const pendingSnap = await db.collection('pendingFoodPayments').doc(oid).get();
+        if (pendingSnap.exists) {
+          await attemptAutoRefund(db, oid, pendingSnap.data());
+        }
         response.send(buildRedirectHtml('payment-failed://hash-error', 'Ödeme Doğrulama Hatası'));
         return;
       }
@@ -881,57 +901,63 @@ export const foodPaymentCallback = onRequest(
         return;
       }
 
-      // ── Create the food order ──────────────────────────────────────
-      try {
-        const pending = txResult.pending;
-        const orderResult = await createFoodOrderCore(
-          pending.userId,
-          {
-            ...pending.orderData,
-            paymentMethod: 'card',
-          },
-          oid // paymentOrderId
-        );
+     // ── Create the food order (3 attempts with back-off) ───────────
+     const MAX_ORDER_RETRIES = 3;
+     let orderResult = null;
+     let lastOrderError = null;
 
-        await pendingRef.update({
-          status: 'completed',
-          orderId: orderResult.orderId,
-          completedAt: admin.firestore.FieldValue.serverTimestamp(),
-          processingDuration: Date.now() - startTime,
-        });
+     for (let attempt = 1; attempt <= MAX_ORDER_RETRIES; attempt++) {
+       try {
+         const pending = txResult.pending;
+         orderResult = await createFoodOrderCore(
+           pending.userId,
+           { ...pending.orderData, paymentMethod: 'card' },
+           oid
+         );
+         lastOrderError = null;
+         break; // success — stop retrying
+       } catch (err) {
+         lastOrderError = err;
+         console.warn(`[FoodPayment] Order creation attempt ${attempt} failed:`, err.message);
+         if (attempt < MAX_ORDER_RETRIES) {
+           await new Promise((r) => setTimeout(r, 500 * attempt));
+         }
+       }
+     }
 
-        response.send(
-          buildRedirectHtml(`payment-success://${orderResult.orderId}`, '✓ Ödeme Başarılı')
-        );
-      } catch (orderError) {
-        console.error('[FoodPayment] Order creation failed:', orderError);
+     if (orderResult) {
+       // ── Happy path ───────────────────────────────────────────────
+       await pendingRef.update({
+         status: 'completed',
+         orderId: orderResult.orderId,
+         completedAt: admin.firestore.FieldValue.serverTimestamp(),
+         processingDuration: Date.now() - startTime,
+       });
 
-        await pendingRef.update({
-          status: 'payment_succeeded_order_failed',
-          orderError: orderError.message,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+       response.send(
+         buildRedirectHtml(`payment-success://${orderResult.orderId}`, '✓ Ödeme Başarılı')
+       );
+     } else {
+       // ── All retries exhausted — attempt auto-refund ──────────────
+       console.error('[FoodPayment] All order creation attempts failed:', lastOrderError?.message);
 
-        // Alert for manual resolution
-        await db.collection('_payment_alerts').doc(`food_${oid}`).set({
-          type: 'food_order_creation_failed',
-          severity: 'high',
-          paymentOrderId: oid,
-          userId: txResult.pending?.userId,
-          errorMessage: orderError.message,
-          isRead: false,
-          isResolved: false,
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        });
+       await pendingRef.update({
+         status: 'payment_succeeded_order_failed',
+         orderError: lastOrderError?.message,
+         retryExhausted: true,
+         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+       });
 
-        response.send(
-          buildRedirectHtml(
-            'payment-failed://order-creation-error',
-            'Sipariş Hatası',
-            'Ödeme alındı ancak sipariş oluşturulamadı. Lütfen destek ile iletişime geçin.'
-          )
-        );
-      }
+       await attemptAutoRefund(db, oid, txResult.pending);
+
+       response.send(
+         buildRedirectHtml(
+           'payment-failed://order-creation-error',
+           'Sipariş Hatası',
+           'Ödeme alındı ancak sipariş oluşturulamadı. Lütfen destek ile iletişime geçin.'
+         )
+       );
+     }
     } catch (error) {
       console.error('[FoodPayment] Critical callback error:', error);
 
@@ -993,17 +1019,27 @@ export const checkFoodPaymentStatus = onCall(
 // HELPER: Build redirect HTML for İşbank callback
 // ============================================================================
 
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
 function buildRedirectHtml(deepLink, title, subtitle = '') {
+  const safeDeepLink = escapeHtml(deepLink);
   return `
     <!DOCTYPE html>
     <html>
-    <head><title>${title}</title></head>
+    <head><title>${escapeHtml(title)}</title></head>
     <body>
       <div style="text-align:center; padding:50px;">
-        <h2>${title}</h2>
-        ${subtitle ? `<p>${subtitle}</p>` : ''}
+        <h2>${escapeHtml(title)}</h2>
+        ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ''}
       </div>
-      <script>window.location.href = '${deepLink}';</script>
+      <script>window.location.href = '${safeDeepLink}';</script>
     </body>
     </html>
   `;
@@ -1745,7 +1781,9 @@ export const updateFoodOrderStatus = onCall(
 
       const VALID_TRANSITIONS = {
         pending: ['accepted', 'rejected'],
-        accepted: ['delivered', 'rejected'],
+        accepted: ['preparing', 'rejected'],
+        preparing: ['ready'],
+        ready: ['delivered'],
       };
 
       const allowed = VALID_TRANSITIONS[order.status] || [];
@@ -1821,6 +1859,9 @@ export const submitRestaurantReview = onCall(
       if (order.buyerId !== buyerId) {
         throw new HttpsError('permission-denied', 'This is not your order.');
       }
+      if (order.restaurantId !== restaurantId) {
+        throw new HttpsError('invalid-argument', 'This order does not belong to the specified restaurant.');
+      }
       if (order.status !== 'delivered') {
         throw new HttpsError('failed-precondition', 'Order has not been delivered yet.');
       }
@@ -1890,3 +1931,131 @@ tx.set(notifRef, {
     return { success: true };
   }
 );
+
+async function issueIsbankRefund(paymentOrderId, amount, currency = '949') {
+  const config = await getIsbankConfig();
+  const API_URL = 'https://sanalpos.isbank.com.tr/fim/api';
+  const attemptTypes = ['Void', 'Credit'];
+
+  for (const type of attemptTypes) {
+    const xmlBody = `<?xml version="1.0" encoding="UTF-8"?>
+<CC5Request>
+  <Name>${config.apiUser}</Name>
+  <Password>${config.apiPassword}</Password>
+  <ClientId>${config.clientId}</ClientId>
+  <Type>${type}</Type>
+  <OrderId>${paymentOrderId}</OrderId>
+</CC5Request>`;
+
+    let rawText = '';
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/xml; charset=UTF-8' },
+        body: xmlBody,
+        signal: AbortSignal.timeout(15000),
+      });
+      rawText = await res.text();
+    } catch (fetchErr) {
+      console.error(`[Refund] Network error on ${type}:`, fetchErr.message);
+      continue;
+    }
+    
+
+    const get = (tag) => {
+      const m = rawText.match(new RegExp(`<${tag}>([^<]*)</${tag}>`));
+      return m ? m[1].trim() : '';
+    };
+
+    const procCode = get('ProcReturnCode');
+    const bankResp = get('Response');
+    const errMsg   = get('ErrMsg');
+
+    console.log(`[Refund] ${type} → ProcReturnCode=${procCode} Response=${bankResp}`);
+
+    if (procCode === '00' && bankResp === 'Approved') {
+      return { success: true, type, procCode, raw: rawText };
+    }
+
+    const alreadySettled =
+      errMsg.toLowerCase().includes('settled') ||
+      errMsg.toLowerCase().includes('not found') ||
+      procCode === '99';
+
+    if (type === 'Void' && alreadySettled) {
+      console.log('[Refund] Void failed (already settled), trying Credit...');
+      continue;
+    }
+
+    throw new Error(`İşbank ${type} rejected: ${errMsg || procCode}`);
+  }
+
+  throw new Error('[Refund] Both Void and Credit failed.');
+}
+
+
+async function attemptAutoRefund(db, oid, pending) {
+  const alertRef = db.collection('_payment_alerts').doc(`food_${oid}`);
+
+  // ── Safety check: never refund if an order already exists ───────
+  const existingOrder = await db.collection('orders-food')
+    .where('paymentOrderId', '==', oid)
+    .limit(1)
+    .get();
+
+  if (!existingOrder.empty) {
+    console.warn(`[Refund] BLOCKED — order ${existingOrder.docs[0].id} already exists for ${oid}. Not refunding.`);
+    await db.collection('pendingFoodPayments').doc(oid).update({
+      status: 'completed',
+      orderId: existingOrder.docs[0].id,
+      note: 'Order found during refund safety check',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return false;
+  }
+
+  try {
+    const result = await issueIsbankRefund(oid, pending.amount, pending.paymentParams?.currency);
+
+    await alertRef.set({
+      type: 'food_order_creation_failed',
+      severity: 'low',
+      paymentOrderId: oid,
+      userId: pending.userId,
+      amount: pending.amount,
+      refundType: result.type,
+      requiresRefund: false,
+      isResolved: true,
+      isRead: false,
+      resolvedNote: `Auto-refunded via ${result.type}`,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    await db.collection('pendingFoodPayments').doc(oid).update({
+      status: 'refunded',
+      refundType: result.type,
+      refundedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log(`[Refund] Auto-refund (${result.type}) succeeded for order ${oid}`);
+    return true;
+  } catch (refundErr) {
+    console.error('[Refund] Auto-refund failed:', refundErr.message);
+
+    await alertRef.set({
+      type: 'food_order_creation_failed',
+      severity: 'critical',
+      paymentOrderId: oid,
+      userId: pending.userId,
+      amount: pending.amount,
+      requiresRefund: true,
+      autoRefundError: refundErr.message,
+      isResolved: false,
+      isRead: false,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    return false;
+  }
+}
+

@@ -1484,6 +1484,7 @@
   "preferred": "Preferred",
   "expires": "Expires",
   "joiningShop": "Loading shop panel...",
+  "joiningRestaurant": "Loading restaurant panel...",
   "revokeAccess": "Revoke Access",
 "revokeAccessConfirmation": "This will remove their access to the shop.",
 "deleteAccountWarning": "This action cannot be undone. All your data will be permanently deleted.",
@@ -6506,5 +6507,40 @@
 "navRestaurants": "Nar24",
 "navFoodCart": "Food Cart",
 "navMyOrders": "My Orders",
-"navProfile": "Profile"
+"navProfile": "Profile",
+
+"paymentFailedDefault": "Payment failed.",
+"paymentReceivedOrderFailed": "Payment was received but your order could not be created. A full refund has been issued and will appear on your card within 1–3 business days.",
+"paymentReceivedAdFailed": "Payment was received but your ad could not be activated. A full refund has been issued and will appear on your card within 1–3 business days.",
+"missingPaymentInfo": "Missing payment information.",
+"goBack": "Go Back",
+"paymentSuccessfulTitle": "Payment Successful",
+"orderSentToRestaurant": "Your order has been sent to the restaurant.",
+"orderLabel": "Order: {orderId}",
+"@orderLabel": {
+  "placeholders": {
+    "orderId": { "type": "Object" }
+  }
+},
+"redirecting": "Redirecting…",
+"pleaseWait": "Please wait",
+"secureSSLConnection": "Secure SSL Connection",
+"paymentProcessedByIsbank": "Payment processed by İşbank",
+"foodOrder": "Food Order",
+"foodPaymentCancelMessage": "Your payment is in progress. Are you sure you want to cancel?",
+"continuePayment": "Continue",
+"cancelPaymentButton": "Cancel Payment",
+"paymentTimedOutTitle": "Payment Timed Out",
+"paymentFailedTitle": "Payment Failed",
+"paymentProcessingError": "An error occurred while processing your payment.",
+"tryAgain": "Try Again",
+"backToRestaurants": "Back to Restaurants",
+"paymentTimedOutRetry": "Payment timed out. Please try again.",
+"loadingSecurePaymentPage": "Loading secure payment page...",
+"secureConnectionBadge": "Secure Connection",
+"paymentReceivedBoostFailed": "Payment was received but the Boost package could not be activated. A full refund has been issued and will appear on your card within 1–3 business days.",
+"boostPaymentLoading": "Loading Boost payment page...",
+"boostPackage": "Boost Package",
+"boostPaymentCancelMessage": "The Boost payment will be cancelled. Are you sure?",
+"secureBoostPayment": "Secure Boost Payment"
 }

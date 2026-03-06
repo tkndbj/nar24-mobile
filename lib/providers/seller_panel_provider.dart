@@ -12,7 +12,6 @@ class SellerPanelProvider with ChangeNotifier {
   final FirebaseAuth _firebaseAuth;
   final FirebaseFirestore _firestore;
 
-  static const int _maxCacheSize = 100;
   static const int _maxProductMapSize = 500;
   static const Duration _listenerCancelDelay = Duration(milliseconds: 50);
 
@@ -65,6 +64,8 @@ class SellerPanelProvider with ChangeNotifier {
   int _activeQueryId = 0; // race guard for search
   int _activeProductQueryId = 0; // race guard for product filtering
   int _activeStockQueryId = 0; // race guard for stock filtering
+  int _activeTransactionQueryId = 0; // race guard for transaction fetching
+  int _activeShipmentQueryId = 0; // race guard for shipment fetching
   bool _initInFlight = false;
   bool _warmupInFlight = false;
 
@@ -167,7 +168,8 @@ class SellerPanelProvider with ChangeNotifier {
   bool get isLoadingMoreShipments => _isLoadingMoreShipmentsNotifier.value;
   bool get hasMoreShipments => _hasMoreShipments;
 
-  // Product image cache for ShipmentsTab
+  // Product image cache for ShipmentsTab (LRU eviction via access-ordered LinkedHashMap)
+  static const int _maxImageCacheSize = 200;
   final LinkedHashMap<String, Map<String, dynamic>> _productImageCache =
       LinkedHashMap<String, Map<String, dynamic>>();
   Map<String, Map<String, dynamic>> get productImageCache => _productImageCache;
@@ -524,12 +526,14 @@ class SellerPanelProvider with ChangeNotifier {
 
   Future<void> _fetchTotalSalesFromShop() async {
     if (_selectedShop == null) return;
+    final targetShopId = _selectedShop!.id;
     try {
-      final isRestaurant =
-          getShopBusinessType(_selectedShop!.id) == 'restaurant';
+      final isRestaurant = getShopBusinessType(targetShopId) == 'restaurant';
       final collection = isRestaurant ? 'restaurants' : 'shops';
       final doc =
-          await _firestore.collection(collection).doc(_selectedShop!.id).get();
+          await _firestore.collection(collection).doc(targetShopId).get();
+      // Drop stale response if shop switched during fetch
+      if (_selectedShop?.id != targetShopId) return;
       final data = doc.data() ?? {};
       _totalSoldPrice = (data['totalSoldPrice'] as num?)?.toDouble() ?? 0.0;
       notifyListeners();
@@ -964,6 +968,8 @@ class SellerPanelProvider with ChangeNotifier {
       return;
     }
 
+    final myQueryId = ++_activeShipmentQueryId;
+
     if (loadMore) {
       if (!_hasMoreShipments || _isLoadingMoreShipmentsNotifier.value) return;
       _isLoadingMoreShipmentsNotifier.value = true;
@@ -976,7 +982,6 @@ class SellerPanelProvider with ChangeNotifier {
     try {
       Query query = _firestore.collectionGroup('items');
 
-      // FIX: Query by shopId (which matches sellerId in items)
       query = query.where('shopId', isEqualTo: effectiveShopId);
 
       // Apply status filter if specified
@@ -1004,6 +1009,9 @@ class SellerPanelProvider with ChangeNotifier {
         operationKey: 'fetchShipments',
       );
 
+      // Drop stale responses (shop switched while query was in-flight)
+      if (myQueryId != _activeShipmentQueryId) return;
+
       List<DocumentSnapshot> docs = snapshot.docs;
 
       debugPrint(
@@ -1021,7 +1029,6 @@ class SellerPanelProvider with ChangeNotifier {
       _hasMoreShipments = snapshot.docs.length == limit;
       _shipmentsStreamController.add(_shipmentsNotifier.value);
 
-// ADD THIS LINE - Notify listeners to rebuild UI
       notifyListeners();
     } catch (e) {
       debugPrint('❌ Error fetching shipments: $e');
@@ -1030,7 +1037,9 @@ class SellerPanelProvider with ChangeNotifier {
         _shipmentsStreamController.add(_shipmentsNotifier.value);
       }
     } finally {
-      _isLoadingMoreShipmentsNotifier.value = false;
+      if (myQueryId == _activeShipmentQueryId) {
+        _isLoadingMoreShipmentsNotifier.value = false;
+      }
     }
   }
 
@@ -1545,8 +1554,10 @@ class SellerPanelProvider with ChangeNotifier {
     final effectiveShopId = shopId ?? _selectedShop?.id;
     if (effectiveShopId == null) return;
 
-    // ✅ ADD: Skip if already loaded and no refresh requested
+    // Skip if already loaded and no refresh requested
     if (!forceRefresh && !loadMore && _transactions.isNotEmpty) return;
+
+    final myQueryId = ++_activeTransactionQueryId;
 
     if (loadMore) {
       _isLoadingMoreTransactionsNotifier.value = true;
@@ -1554,7 +1565,6 @@ class SellerPanelProvider with ChangeNotifier {
       _isLoadingTransactionsNotifier.value = true;
       _transactions = [];
       _filteredTransactionsNotifier.value = [];
-      // ✅ REMOVE: _currentTransactionPage = 0; (dead code, using cursor now)
       _hasMoreTransactions = true;
       _lastTransactionDoc = null;
     }
@@ -1581,6 +1591,9 @@ class SellerPanelProvider with ChangeNotifier {
 
       final snap = await query.get();
 
+      // Drop stale responses (shop switched while query was in-flight)
+      if (myQueryId != _activeTransactionQueryId) return;
+
       if (loadMore) {
         _transactions.addAll(snap.docs);
       } else {
@@ -1594,8 +1607,10 @@ class SellerPanelProvider with ChangeNotifier {
     } catch (e) {
       debugPrint('Error fetching transactions: $e');
     } finally {
-      _isLoadingTransactionsNotifier.value = false;
-      _isLoadingMoreTransactionsNotifier.value = false;
+      if (myQueryId == _activeTransactionQueryId) {
+        _isLoadingTransactionsNotifier.value = false;
+        _isLoadingMoreTransactionsNotifier.value = false;
+      }
     }
   }
 
@@ -1727,7 +1742,10 @@ class SellerPanelProvider with ChangeNotifier {
       completer.completeError(e);
       rethrow;
     } finally {
-      _switchingToShopId = null;
+      // Only clear if we're still the active switch (another switch may have taken over)
+      if (_switchingToShopId == shopId) {
+        _switchingToShopId = null;
+      }
       _switchCompleters.remove(shopId);
     }
   }
@@ -1917,8 +1935,9 @@ class SellerPanelProvider with ChangeNotifier {
   }
 
   void _cacheProductData(String productId, Map<String, dynamic> data) {
-    // Implement LRU cache with size limit
-    if (_productImageCache.length >= _maxCacheSize) {
+    // LRU eviction: remove oldest entries when cache exceeds limit
+    if (_productImageCache.length >= _maxImageCacheSize &&
+        !_productImageCache.containsKey(productId)) {
       _productImageCache.remove(_productImageCache.keys.first);
     }
     _productImageCache[productId] = data;
@@ -2276,65 +2295,27 @@ class SellerPanelProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String> sendShopInvitation(String email, String role) async {
+  Future<String> sendShopInvitation(
+    String email,
+    String role, {
+    String businessType = 'shop', // NEW — defaults to 'shop' for backward compat
+  }) async {
     if (selectedShop == null) return 'No shop selected.';
     try {
-      return await AnalyticsService.trackTransaction(
-        operation: 'seller_team_send_invitation',
-        execute: () async {
-          final userQuery = await _firestore
-              .collection('users')
-              .where('email', isEqualTo: email.trim())
-              .limit(1)
-              .get();
-          if (userQuery.docs.isEmpty) return 'User with this email not found.';
+      final fn = FirebaseFunctions.instanceFor(region: 'europe-west3')
+          .httpsCallable('sendShopInvitation');
 
-          final inviteeId = userQuery.docs.first.id;
-          final shopId = selectedShop!.id;
-          final shopData = selectedShop!.data() as Map<String, dynamic>;
-          final shopName = shopData['name'] as String? ?? 'Unnamed Shop';
+      await fn.call({
+        'shopId': selectedShop!.id,
+        'inviteeEmail': email.trim().toLowerCase(),
+        'role': role,
+        'businessType': businessType,
+      });
 
-          // Send notification (your existing logic)
-          await _firestore
-              .collection('users')
-              .doc(inviteeId)
-              .collection('notifications')
-              .add({
-            'userId': inviteeId,
-            'type': 'shop_invitation',
-            'shopId': shopId,
-            'shopName': shopName,
-            'role': role == 'co-owner' ? 'co-owner' : role,
-            'senderId': userId,
-            'status': 'pending',
-            'timestamp': FieldValue.serverTimestamp(),
-            'message_en': 'You have been invited to join a shop.',
-            'message_tr': 'Bir mağazaya katılmanız için davet edildiniz.',
-            'message_ru': 'Вас пригласили присоединиться к магазину.',
-            'isRead': false,
-          });
-
-          // Create invitation record (your existing logic)
-          await _firestore.collection('shopInvitations').add({
-            'userId': inviteeId,
-            'shopId': shopId,
-            'shopName': shopName,
-            'role': role == 'co-owner' ? 'co-owner' : role,
-            'senderId': userId,
-            'email': email,
-            'status': 'pending',
-            'timestamp': FieldValue.serverTimestamp(),
-          });
-
-          return 'Invitation sent to $email.';
-        },
-        readCount: 1, // user lookup
-        writeCount: 2, // notification + invitation
-        metadata: {
-          'role': role,
-          'target_email': email.substring(0, email.indexOf('@') + 2)
-        }, // Partial email for privacy
-      );
+      return 'Invitation sent to $email.';
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('Failed to send invitation (CF): ${e.code} — ${e.message}');
+      return e.message ?? 'Failed to send invitation.';
     } catch (e) {
       debugPrint('Failed to send invitation: $e');
       return 'Failed to send invitation: $e';
@@ -2400,33 +2381,28 @@ class SellerPanelProvider with ChangeNotifier {
     return acceptedUsers;
   }
 
-  Future<String> cancelInvitation(String invitationId) async {
-    // First get the invitation to find the invitee
-    final invDoc =
-        await _firestore.collection('shopInvitations').doc(invitationId).get();
-    final invData = invDoc.data();
+   Future<String> cancelInvitation(String invitationId) async {
+    try {
+      final fn = FirebaseFunctions.instanceFor(region: 'europe-west3')
+          .httpsCallable('cancelShopInvitation');
 
-    if (invData != null) {
-      final inviteeId = invData['userId'];
-      // Now directly delete the notification
-      final notifQuery = await _firestore
-          .collection('users')
-          .doc(inviteeId)
-          .collection('notifications')
-          .where('shopId', isEqualTo: _selectedShop!.id)
-          .where('type', isEqualTo: 'shop_invitation')
-          .get();
+      await fn.call({'invitationId': invitationId});
 
-      for (var doc in notifQuery.docs) {
-        await doc.reference.delete();
-      }
+      return 'Invitation cancelled successfully.';
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('Failed to cancel invitation (CF): ${e.code} — ${e.message}');
+      return e.message ?? 'Failed to cancel invitation.';
+    } catch (e) {
+      debugPrint('Failed to cancel invitation: $e');
+      return 'Failed to cancel invitation: $e';
     }
-
-    await _firestore.collection('shopInvitations').doc(invitationId).delete();
-    return 'Invitation cancelled successfully.';
   }
 
-  Future<String> revokeUserAccess(String userId, String role) async {
+  Future<String> revokeUserAccess(
+    String userId,
+    String role, {
+    String businessType = 'shop', // NEW — defaults to 'shop' for backward compat
+  }) async {
     if (_selectedShop == null) return 'No shop selected.';
 
     try {
@@ -2437,15 +2413,21 @@ class SellerPanelProvider with ChangeNotifier {
         'targetUserId': userId,
         'shopId': _selectedShop!.id,
         'role': role,
+        'businessType': businessType,
       });
 
-      // Refresh the shop data
-      final updatedShop =
-          await _firestore.collection('shops').doc(_selectedShop!.id).get();
-      _selectedShop = updatedShop;
+      // Refresh the entity document so the UI reflects the change immediately
+      final collection =
+          businessType == 'restaurant' ? 'restaurants' : 'shops';
+      final updatedSnap =
+          await _firestore.collection(collection).doc(_selectedShop!.id).get();
+      _selectedShop = updatedSnap;
       notifyListeners();
 
       return 'User access revoked successfully.';
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('Error revoking access (CF): ${e.code} — ${e.message}');
+      return e.message ?? 'Failed to revoke access.';
     } catch (e) {
       debugPrint('Error revoking access: $e');
       return 'Failed to revoke access: ${e.toString()}';

@@ -28,11 +28,14 @@ class IsbankPaymentScreen extends StatefulWidget {
 class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
   late final WebViewController _controller;
   bool _isLoading = true;
-  String? _errorMessage;
+
+  // Only set for genuine fatal errors (connection lost, etc.)
+  // NOT set for cross-origin redirect errors which are non-fatal mid-payment
+  String? _fatalError;
+
   bool _isNavigating = false;
   String? _completedOrderId;
 
-  // ✅ Real-time listener instead of polling
   StreamSubscription<DocumentSnapshot>? _paymentListener;
   Timer? _timeoutTimer;
 
@@ -44,9 +47,9 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
     _startTimeoutTimer();
   }
 
-  /// ✅ Real-time Firestore listener - instant response
+  // ── Firestore real-time listener ─────────────────────────────────────────────
   void _startPaymentListener() {
-    print('🔴 Starting payment status listener for ${widget.orderNumber}');
+    debugPrint('[IsbankPayment] Starting listener for ${widget.orderNumber}');
 
     _paymentListener = FirebaseFirestore.instance
         .collection('pendingPayments')
@@ -62,7 +65,7 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
         final orderId = data['orderId'] as String?;
         final errorMessage = data['errorMessage'] as String?;
 
-        print('🔔 Payment status changed: $status');
+        debugPrint('[IsbankPayment] Status changed: $status');
 
         switch (status) {
           case 'completed':
@@ -74,112 +77,95 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
 
           case 'payment_failed':
           case 'hash_verification_failed':
-            _handlePaymentFailure(errorMessage ?? 'Payment failed');
+            _handlePaymentFailure(errorMessage ?? AppLocalizations.of(context).paymentFailedDefault);
             break;
 
           case 'payment_succeeded_order_failed':
-            _handlePaymentFailure(
-                'Payment was successful but order creation failed. '
-                'Please contact support with reference: ${widget.orderNumber}');
+          case 'refunded':
+            // Auto-refund has been (or is being) issued by the backend
+            _handlePaymentFailure(AppLocalizations.of(context).paymentReceivedOrderFailed);
             break;
 
           case 'processing':
           case 'payment_verified_processing_order':
-            // Payment is being processed - just wait
-            print('⏳ Payment processing...');
+            // Actively being processed — just wait
+            debugPrint('[IsbankPayment] Processing...');
             break;
 
-          // 'awaiting_3d' is the initial state - do nothing
+          // 'awaiting_3d' is the initial state — do nothing
         }
       },
       onError: (error) {
-        _logPaymentError('Listener error: $error');
+        _logError('Listener error: $error');
       },
     );
   }
 
-  void _logPaymentError(String error) {
-    try {
-      FirebaseFirestore.instance.collection('_client_errors').add({
-        'userId': FirebaseAuth.instance.currentUser?.uid,
-        'context': 'isbank_payment_screen',
-        'error': error,
-        'orderNumber': widget.orderNumber,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-    } catch (_) {
-      // Silent
-    }
-  }
-
   void _startTimeoutTimer() {
     _timeoutTimer = Timer(const Duration(minutes: 10), () {
-      if (mounted && !_isNavigating) {
-        _handleTimeout();
-      }
+      if (mounted && !_isNavigating) _handleTimeout();
     });
   }
 
   void _handleTimeout() {
-    if (mounted && !_isNavigating) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Payment Timeout'),
-          content:
-              const Text('The payment session has expired. Please try again.'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                Navigator.of(context).pop(false);
-              },
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-    }
+    if (!mounted || _isNavigating) return;
+    final l10n = AppLocalizations.of(context);
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.paymentTimeout),
+        content: Text(l10n.paymentTimeoutMessage),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              if (mounted) context.pop();
+            },
+            child: Text(l10n.ok),
+          ),
+        ],
+      ),
+    );
   }
 
+  // ── Success ──────────────────────────────────────────────────────────────────
   void _handlePaymentSuccess() {
     if (_isNavigating || !mounted) return;
-
     setState(() => _isNavigating = true);
     _cleanup();
 
-    print('✅ Payment completed! Order ID: $_completedOrderId');
+    debugPrint('[IsbankPayment] Success. Order: $_completedOrderId');
 
-    // Clear cart cache
+    // Clear cart (non-critical)
     try {
       final cartProvider = Provider.of<CartProvider>(context, listen: false);
       cartProvider.clearLocalCache();
       cartProvider.refresh();
     } catch (e) {
-      debugPrint('Could not clear cart cache: $e');
+      debugPrint('[IsbankPayment] Cart clear failed (non-critical): $e');
     }
 
-    Navigator.of(context).pop(true);
+    if (!mounted) return;
 
-    if (_completedOrderId != null && mounted) {
-      context.pushReplacement('/product-payment-success',
-          extra: {'orderId': _completedOrderId});
-    }
+    // Single navigation call — no pop+push which can land on wrong stack
+    context.pushReplacement(
+      '/product-payment-success',
+      extra: {'orderId': _completedOrderId},
+    );
   }
 
-  void _handlePaymentFailure(String errorMessage) {
+  // ── Failure ──────────────────────────────────────────────────────────────────
+  void _handlePaymentFailure(String message) {
     if (_isNavigating || !mounted) return;
-
     setState(() => _isNavigating = true);
     _cleanup();
 
-    // Log to Firestore (fire-and-forget)
-    _logPaymentError(errorMessage);
-
-    _showErrorDialog(errorMessage);
+    _logError(message);
+    _showErrorDialog(message);
   }
 
+  // ── Cleanup ──────────────────────────────────────────────────────────────────
   void _cleanup() {
     _paymentListener?.cancel();
     _paymentListener = null;
@@ -193,8 +179,28 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
     super.dispose();
   }
 
+  // ── Logging ──────────────────────────────────────────────────────────────────
+  void _logError(String error) {
+    try {
+      FirebaseFirestore.instance.collection('_client_errors').add({
+        'userId': FirebaseAuth.instance.currentUser?.uid,
+        'context': 'isbank_payment_screen',
+        'error': error,
+        'orderNumber': widget.orderNumber,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {
+      // Silent
+    }
+  }
+
+  // ── WebView ──────────────────────────────────────────────────────────────────
   void _initializeWebView() {
-    final html = _generatePaymentForm();
+    final l10n = AppLocalizations.of(context);
+    final html = _generatePaymentForm(
+      loadingText: l10n.loadingSecurePaymentPage,
+      secureBadgeText: l10n.secureConnectionBadge,
+    );
 
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -202,40 +208,37 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (url) {
-            if (mounted) {
-              setState(() {
-                _isLoading = true;
-                _errorMessage = null;
-              });
-            }
+            if (mounted) setState(() => _isLoading = true);
           },
           onPageFinished: (url) {
-            print('📄 Page finished loading: $url');
-            if (mounted) {
-              setState(() => _isLoading = false);
-            }
+            debugPrint('[IsbankPayment] Page finished: $url');
+            if (mounted) setState(() => _isLoading = false);
           },
           onWebResourceError: (error) {
-            if (mounted) {
-              setState(() {
-                _isLoading = false;
-                _errorMessage = error.description;
-              });
+            // Cross-origin redirects during 3D Secure flow produce resource
+            // errors that are completely non-fatal. Only surface errors that
+            // occur on the initial page load (before the user has interacted).
+            if (mounted && _isLoading) {
+              setState(() => _isLoading = false);
+              // Only show fatal error if not a redirect-related error
+              if (error.errorCode != -1 && error.errorCode != 102) {
+                setState(() => _fatalError = error.description);
+              }
             }
           },
           onNavigationRequest: (NavigationRequest request) {
             if (_isNavigating) return NavigationDecision.prevent;
 
-            // ✅ Backup: Custom URL scheme (in case Firestore listener misses)
+            // Backup: custom URL scheme in case Firestore listener is slow
             if (request.url.startsWith('payment-success://')) {
               final orderId =
                   request.url.replaceFirst('payment-success://', '');
-              if (orderId.isNotEmpty) {
-                _completedOrderId = orderId;
-              }
+              if (orderId.isNotEmpty) _completedOrderId = orderId;
               _handlePaymentSuccess();
               return NavigationDecision.prevent;
-            } else if (request.url.startsWith('payment-failed://')) {
+            }
+
+            if (request.url.startsWith('payment-failed://')) {
               final error = Uri.decodeComponent(
                   request.url.replaceFirst('payment-failed://', ''));
               _handlePaymentFailure(error);
@@ -255,10 +258,27 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
       );
   }
 
-  String _generatePaymentForm() {
+  // HTML-escape helper — prevents XSS from param values containing " or <
+  String _escapeHtml(String value) {
+    return value
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#x27;');
+  }
+
+  String _generatePaymentForm({
+    required String loadingText,
+    required String secureBadgeText,
+  }) {
     final formFields = widget.paymentParams.entries
-        .map((e) => '<input type="hidden" name="${e.key}" value="${e.value}">')
+        .map((e) =>
+            '<input type="hidden" name="${_escapeHtml(e.key)}" value="${_escapeHtml(e.value.toString())}">')
         .join('\n');
+
+    // gatewayUrl is also escaped in the action attribute
+    final safeGatewayUrl = _escapeHtml(widget.gatewayUrl);
 
     return '''
       <!DOCTYPE html>
@@ -315,12 +335,12 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
       <body>
         <div class="loading-container">
           <div class="spinner"></div>
-          <p class="loading-text">Güvenli Ödeme sayfası yükleniyor...</p>
+          <p class="loading-text">${_escapeHtml(loadingText)}</p>
           <div class="secure-badge">
-            🔒 Güvenli Bağlantı
+            🔒 ${_escapeHtml(secureBadgeText)}
           </div>
         </div>
-        <form id="paymentForm" method="post" action="${widget.gatewayUrl}">
+        <form id="paymentForm" method="post" action="$safeGatewayUrl">
           $formFields
         </form>
         <script>
@@ -331,6 +351,7 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
     ''';
   }
 
+  // ── Dialogs ──────────────────────────────────────────────────────────────────
   void _showErrorDialog(String message) {
     if (!mounted) return;
 
@@ -339,17 +360,16 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
             Icon(Icons.error_outline, color: Colors.red.shade400, size: 28),
             const SizedBox(width: 12),
             Text(
               l10n.paymentError,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+              style:
+                  const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
             ),
           ],
         ),
@@ -360,18 +380,19 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context, false);
+              Navigator.pop(ctx);
+              if (mounted) context.pop();
             },
             style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+                  borderRadius: BorderRadius.circular(8)),
             ),
             child: Text(
               l10n.ok,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              style:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -380,14 +401,15 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
   }
 
   void _showCancelDialog() {
+    // Payment already resolved — X button should do nothing
+    if (_isNavigating) return;
+
     final l10n = AppLocalizations.of(context);
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           l10n.cancelPaymentTitle,
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
@@ -407,20 +429,23 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              Navigator.pop(context, false);
+              if (mounted) context.pop();
             },
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.red,
-            ),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: Text(
               l10n.yes,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              style:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
           ),
         ],
       ),
     );
   }
+
+  // =============================================================================
+  // BUILD
+  // =============================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -440,11 +465,7 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
         ),
         title: Row(
           children: [
-            Icon(
-              Icons.lock_outline,
-              size: 20,
-              color: Colors.green.shade600,
-            ),
+            Icon(Icons.lock_outline, size: 20, color: Colors.green.shade600),
             const SizedBox(width: 8),
             Text(
               l10n.securePayment,
@@ -460,6 +481,8 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
       body: Stack(
         children: [
           WebViewWidget(controller: _controller),
+
+          // Loading overlay
           if (_isLoading)
             Container(
               color: isDark ? const Color(0xFF1C1A29) : Colors.white,
@@ -477,7 +500,8 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
                       l10n.loadingPaymentPage,
                       style: TextStyle(
                         fontSize: 16,
-                        color: isDark ? Colors.white70 : Colors.grey.shade600,
+                        color:
+                            isDark ? Colors.white70 : Colors.grey.shade600,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -485,7 +509,9 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
                 ),
               ),
             ),
-          if (_errorMessage != null && !_isLoading)
+
+          // Fatal error overlay (genuine connection failures only)
+          if (_fatalError != null && !_isLoading)
             Container(
               color: isDark ? const Color(0xFF1C1A29) : Colors.white,
               padding: const EdgeInsets.all(32),
@@ -493,11 +519,8 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.error_outline,
-                      size: 64,
-                      color: Colors.red.shade400,
-                    ),
+                    Icon(Icons.error_outline,
+                        size: 64, color: Colors.red.shade400),
                     const SizedBox(height: 24),
                     Text(
                       l10n.connectionError,
@@ -510,10 +533,11 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      _errorMessage!,
+                      _fatalError!,
                       style: TextStyle(
                         fontSize: 14,
-                        color: isDark ? Colors.white70 : Colors.grey.shade600,
+                        color:
+                            isDark ? Colors.white70 : Colors.grey.shade600,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -521,7 +545,7 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
                     ElevatedButton.icon(
                       onPressed: () {
                         setState(() {
-                          _errorMessage = null;
+                          _fatalError = null;
                           _initializeWebView();
                         });
                       },
@@ -531,12 +555,9 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
                         backgroundColor: const Color(0xFF00A86B),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 32,
-                          vertical: 16,
-                        ),
+                            horizontal: 32, vertical: 16),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                            borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
                   ],

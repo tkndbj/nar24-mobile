@@ -11,15 +11,35 @@ const FUNCTION_CONFIG = { region: REGION, maxInstances: 10 };
 
 const VALID_INVITE_ROLES = ['co-owner', 'editor', 'viewer'];
 
-/**
- * Maps a role string to the Firestore array field name on the shop document.
- * Centralised here so it's impossible for callers to get it wrong.
- */
 const ROLE_TO_FIELD = {
   'co-owner': 'coOwners',
   'editor': 'editors',
   'viewer': 'viewers',
 };
+
+// ─── Business-type config ─────────────────────────────────────────────────────
+
+const ENTITY_CONFIG = {
+  shop: {
+    entityCollection: 'shops',
+    invitationsCollection: 'shopInvitations',
+    memberField: 'memberOfShops',
+    notificationType: 'shop_invitation',
+    entityLabel: 'Shop',
+  },
+  restaurant: {
+    entityCollection: 'restaurants',
+    invitationsCollection: 'restaurantInvitations',
+    memberField: 'memberOfRestaurants',
+    notificationType: 'restaurant_invitation',
+    entityLabel: 'Restaurant',
+  },
+};
+
+function getEntityConfig(businessType) {
+  if (businessType === 'restaurant') return ENTITY_CONFIG.restaurant;
+  return ENTITY_CONFIG.shop;
+}
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
@@ -33,21 +53,21 @@ async function syncUserClaims(uid) {
   });
 }
 
-async function assertOwnerOrCoOwner(requesterId, shopId) {
-  const shopSnap = await db().collection('shops').doc(shopId).get();
+async function assertOwnerOrCoOwner(requesterId, entityId, entityCollection, entityLabel) {
+  const snap = await db().collection(entityCollection).doc(entityId).get();
 
-  if (!shopSnap.exists) {
-    throw new HttpsError('not-found', 'Shop not found');
+  if (!snap.exists) {
+    throw new HttpsError('not-found', `${entityLabel} not found`);
   }
 
-  const shop = shopSnap.data();
+  const entity = snap.data();
 
-  if (shop.ownerId === requesterId) return 'owner';
-  if ((shop.coOwners ?? []).includes(requesterId)) return 'co-owner';
+  if (entity.ownerId === requesterId) return 'owner';
+  if ((entity.coOwners ?? []).includes(requesterId)) return 'co-owner';
 
   throw new HttpsError(
     'permission-denied',
-    'Only owners and co-owners can manage shop access',
+    `Only owners and co-owners can manage ${entityLabel.toLowerCase()} access`,
   );
 }
 
@@ -58,7 +78,7 @@ export const sendShopInvitation = onCall(FUNCTION_CONFIG, async (request) => {
     throw new HttpsError('unauthenticated', 'User must be authenticated');
   }
 
-  const { shopId, inviteeEmail, role } = request.data;
+  const { shopId, inviteeEmail, role, businessType } = request.data;
 
   if (!shopId || !inviteeEmail || !role) {
     throw new HttpsError('invalid-argument', 'shopId, inviteeEmail and role are required');
@@ -68,10 +88,10 @@ export const sendShopInvitation = onCall(FUNCTION_CONFIG, async (request) => {
     throw new HttpsError('invalid-argument', `Role must be one of: ${VALID_INVITE_ROLES.join(', ')}`);
   }
 
-  // Verify sender has permission
-  await assertOwnerOrCoOwner(request.auth.uid, shopId);
+  const config = getEntityConfig(businessType);
 
-  // Look up invitee by email server-side (avoids exposing UIDs to clients)
+  await assertOwnerOrCoOwner(request.auth.uid, shopId, config.entityCollection, config.entityLabel);
+
   const inviteeQuery = await db()
     .collection('users')
     .where('email', '==', inviteeEmail.trim().toLowerCase())
@@ -88,9 +108,8 @@ export const sendShopInvitation = onCall(FUNCTION_CONFIG, async (request) => {
     throw new HttpsError('invalid-argument', 'You cannot invite yourself');
   }
 
-  // Check for existing pending invitation
   const existing = await db()
-    .collection('shopInvitations')
+    .collection(config.invitationsCollection)
     .where('shopId', '==', shopId)
     .where('userId', '==', inviteeId)
     .where('status', '==', 'pending')
@@ -101,23 +120,22 @@ export const sendShopInvitation = onCall(FUNCTION_CONFIG, async (request) => {
     throw new HttpsError('already-exists', 'A pending invitation already exists for this user');
   }
 
-  // Check if user is already a member
-  const shopSnap = await db().collection('shops').doc(shopId).get();
-  const shopData = shopSnap.data();
+  const entitySnap = await db().collection(config.entityCollection).doc(shopId).get();
+  const entityData = entitySnap.data();
+
   const alreadyMember =
-    shopData.ownerId === inviteeId ||
-    (shopData.coOwners ?? []).includes(inviteeId) ||
-    (shopData.editors ?? []).includes(inviteeId) ||
-    (shopData.viewers ?? []).includes(inviteeId);
+    entityData.ownerId === inviteeId ||
+    (entityData.coOwners ?? []).includes(inviteeId) ||
+    (entityData.editors ?? []).includes(inviteeId) ||
+    (entityData.viewers ?? []).includes(inviteeId);
 
   if (alreadyMember) {
-    throw new HttpsError('already-exists', 'User is already a member of this shop');
+    throw new HttpsError('already-exists', `User is already a member of this ${config.entityLabel.toLowerCase()}`);
   }
 
-  // Pre-allocate both doc refs so we can cross-link them atomically
-  const invitationRef = db().collection('shopInvitations').doc();
-  const notificationRef = db()  
-        .collection('users')
+  const invitationRef = db().collection(config.invitationsCollection).doc();
+  const notificationRef = db()
+    .collection('users')
     .doc(inviteeId)
     .collection('notifications')
     .doc();
@@ -128,29 +146,31 @@ export const sendShopInvitation = onCall(FUNCTION_CONFIG, async (request) => {
   batch.set(invitationRef, {
     userId: inviteeId,
     shopId,
-    shopName: shopData.name ?? '',
+    shopName: entityData.name ?? '',
     role,
     senderId: request.auth.uid,
     email: inviteeEmail.trim().toLowerCase(),
-    notificationId: notificationRef.id, // O(1) link for cancel/cleanup
+    notificationId: notificationRef.id,
     status: 'pending',
+    businessType: businessType ?? 'shop',
     timestamp: now,
   });
 
   batch.set(notificationRef, {
     userId: inviteeId,
-    type: 'shop_invitation',
+    type: config.notificationType,
     shopId,
-    shopName: shopData.name ?? '',
+    shopName: entityData.name ?? '',
     role,
     senderId: request.auth.uid,
-    invitationId: invitationRef.id, // O(1) link for accept/reject
+    invitationId: invitationRef.id,
     status: 'pending',
     isRead: false,
+    businessType: businessType ?? 'shop',
     timestamp: now,
-    message_en: `You have been invited to join ${shopData.name ?? 'a shop'} as ${role}.`,
-    message_tr: `${shopData.name ?? 'Bir mağazaya'} katılmaya davet edildiniz (${role}).`,
-    message_ru: `Вас пригласили присоединиться к ${shopData.name ?? 'магазину'} как ${role}.`,
+    message_en: `You have been invited to join ${entityData.name ?? `a ${config.entityLabel.toLowerCase()}`} as ${role}.`,
+    message_tr: `${entityData.name ?? `Bir ${config.entityLabel.toLowerCase()}`} katılmaya davet edildiniz (${role}).`,
+    message_ru: `Вас пригласили присоединиться к ${entityData.name ?? config.entityLabel.toLowerCase()} как ${role}.`,
   });
 
   await batch.commit();
@@ -173,9 +193,13 @@ export const handleShopInvitation = onCall(FUNCTION_CONFIG, async (request) => {
 
   const userId = request.auth.uid;
 
-  // O(1) direct doc fetch — no collection query needed
-  const invitationRef = db().collection('shopInvitations').doc(invitationId);
-  const invitationSnap = await invitationRef.get();
+  let invitationRef = db().collection('shopInvitations').doc(invitationId);
+  let invitationSnap = await invitationRef.get();
+
+  if (!invitationSnap.exists) {
+    invitationRef = db().collection('restaurantInvitations').doc(invitationId);
+    invitationSnap = await invitationRef.get();
+  }
 
   if (!invitationSnap.exists) {
     throw new HttpsError('not-found', 'Invitation not found');
@@ -192,8 +216,9 @@ export const handleShopInvitation = onCall(FUNCTION_CONFIG, async (request) => {
   }
 
   const { shopId, role, notificationId } = invitation;
-  const roleField = ROLE_TO_FIELD[role];
+  const config = getEntityConfig(invitation.businessType);
 
+  const roleField = ROLE_TO_FIELD[role];
   if (!roleField) {
     throw new HttpsError('internal', 'Invalid role stored in invitation');
   }
@@ -202,27 +227,24 @@ export const handleShopInvitation = onCall(FUNCTION_CONFIG, async (request) => {
   const batch = db().batch();
 
   if (accepted) {
-    const shopSnap = await db().collection('shops').doc(shopId).get();
-    if (!shopSnap.exists) {
-      throw new HttpsError('not-found', 'Shop no longer exists');
+    const entitySnap = await db().collection(config.entityCollection).doc(shopId).get();
+
+    if (!entitySnap.exists) {
+      throw new HttpsError('not-found', `${config.entityLabel} no longer exists`);
     }
 
-    // 1. Add user to shop role array
-    batch.update(db().collection('shops').doc(shopId), {
+    batch.update(db().collection(config.entityCollection).doc(shopId), {
       [roleField]: admin.firestore.FieldValue.arrayUnion(userId),
     });
 
-    // 2. Add shop to user's memberOfShops (merge so other shops are untouched)
     batch.set(
       db().collection('users').doc(userId),
-      { memberOfShops: { [shopId]: role } },
+      { [config.memberField]: { [shopId]: role } },
       { merge: true },
     );
 
-    // 3. Mark invitation accepted
     batch.update(invitationRef, { status: 'accepted', acceptedAt: now });
 
-    // 4. Update linked notification — O(1) via stored notificationId
     if (notificationId) {
       batch.update(
         db().collection('users').doc(userId).collection('notifications').doc(notificationId),
@@ -231,8 +253,6 @@ export const handleShopInvitation = onCall(FUNCTION_CONFIG, async (request) => {
     }
 
     await batch.commit();
-
-    // Sync custom claims AFTER the write so user doc is already updated
     await syncUserClaims(userId);
   } else {
     batch.update(invitationRef, { status: 'rejected', rejectedAt: now });
@@ -251,7 +271,8 @@ export const handleShopInvitation = onCall(FUNCTION_CONFIG, async (request) => {
     success: true,
     accepted,
     shopId,
-    shouldRefreshToken: accepted, // tells client to call user.getIdToken(true)
+    businessType: config === ENTITY_CONFIG.restaurant ? 'restaurant' : 'shop',
+    shouldRefreshToken: accepted,
   };
 });
 
@@ -262,14 +283,14 @@ export const revokeShopAccess = onCall(FUNCTION_CONFIG, async (request) => {
     throw new HttpsError('unauthenticated', 'User must be authenticated');
   }
 
-  const { targetUserId, shopId, role } = request.data;
+  const { targetUserId, shopId, role, businessType } = request.data;
 
   if (!targetUserId || !shopId || !role) {
     throw new HttpsError('invalid-argument', 'targetUserId, shopId and role are required');
   }
 
   if (role === 'owner') {
-    throw new HttpsError('invalid-argument', 'Cannot revoke the shop owner');
+    throw new HttpsError('invalid-argument', 'Cannot revoke the owner');
   }
 
   const roleField = ROLE_TO_FIELD[role];
@@ -277,9 +298,15 @@ export const revokeShopAccess = onCall(FUNCTION_CONFIG, async (request) => {
     throw new HttpsError('invalid-argument', 'Invalid role');
   }
 
-  const requesterRole = await assertOwnerOrCoOwner(request.auth.uid, shopId);
+  const config = getEntityConfig(businessType);
 
-  // Co-owners can only manage editors and viewers — not other co-owners
+  const requesterRole = await assertOwnerOrCoOwner(
+    request.auth.uid,
+    shopId,
+    config.entityCollection,
+    config.entityLabel,
+  );
+
   if (requesterRole === 'co-owner' && role === 'co-owner') {
     throw new HttpsError('permission-denied', 'Co-owners cannot revoke other co-owners');
   }
@@ -290,19 +317,15 @@ export const revokeShopAccess = onCall(FUNCTION_CONFIG, async (request) => {
 
   const batch = db().batch();
 
-  // 1. Remove from shop role array
-  batch.update(db().collection('shops').doc(shopId), {
+  batch.update(db().collection(config.entityCollection).doc(shopId), {
     [roleField]: admin.firestore.FieldValue.arrayRemove(targetUserId),
   });
 
-  // 2. Remove shop from user's memberOfShops — deleteField avoids a read
   batch.update(db().collection('users').doc(targetUserId), {
-    [`memberOfShops.${shopId}`]: admin.firestore.FieldValue.delete(),
+    [`${config.memberField}.${shopId}`]: admin.firestore.FieldValue.delete(),
   });
 
   await batch.commit();
-
-  // Sync claims for the affected user
   await syncUserClaims(targetUserId);
 
   return { success: true, message: 'Access revoked successfully' };
@@ -315,44 +338,47 @@ export const leaveShop = onCall(FUNCTION_CONFIG, async (request) => {
     throw new HttpsError('unauthenticated', 'User must be authenticated');
   }
 
-  const { shopId } = request.data;
+  const { shopId, businessType } = request.data;
+
   if (!shopId) {
     throw new HttpsError('invalid-argument', 'shopId is required');
   }
 
+  const config = getEntityConfig(businessType);
   const userId = request.auth.uid;
-  const shopSnap = await db().collection('shops').doc(shopId).get();
 
-  if (!shopSnap.exists) {
-    throw new HttpsError('not-found', 'Shop not found');
+  const entitySnap = await db().collection(config.entityCollection).doc(shopId).get();
+
+  if (!entitySnap.exists) {
+    throw new HttpsError('not-found', `${config.entityLabel} not found`);
   }
 
-  const shopData = shopSnap.data();
+  const entityData = entitySnap.data();
 
-  if (shopData.ownerId === userId) {
+  if (entityData.ownerId === userId) {
     throw new HttpsError(
       'failed-precondition',
-      'Owners cannot leave their own shop. Transfer ownership first.',
+      `Owners cannot leave their own ${config.entityLabel.toLowerCase()}. Transfer ownership first.`,
     );
   }
 
   let roleField = null;
-  if ((shopData.coOwners ?? []).includes(userId)) roleField = 'coOwners';
-  else if ((shopData.editors ?? []).includes(userId)) roleField = 'editors';
-  else if ((shopData.viewers ?? []).includes(userId)) roleField = 'viewers';
+  if ((entityData.coOwners ?? []).includes(userId)) roleField = 'coOwners';
+  else if ((entityData.editors ?? []).includes(userId)) roleField = 'editors';
+  else if ((entityData.viewers ?? []).includes(userId)) roleField = 'viewers';
 
   if (!roleField) {
-    throw new HttpsError('not-found', 'You are not a member of this shop');
+    throw new HttpsError('not-found', `You are not a member of this ${config.entityLabel.toLowerCase()}`);
   }
 
   const batch = db().batch();
 
-  batch.update(db().collection('shops').doc(shopId), {
+  batch.update(db().collection(config.entityCollection).doc(shopId), {
     [roleField]: admin.firestore.FieldValue.arrayRemove(userId),
   });
 
   batch.update(db().collection('users').doc(userId), {
-    [`memberOfShops.${shopId}`]: admin.firestore.FieldValue.delete(),
+    [`${config.memberField}.${shopId}`]: admin.firestore.FieldValue.delete(),
   });
 
   await batch.commit();
@@ -369,11 +395,18 @@ export const cancelShopInvitation = onCall(FUNCTION_CONFIG, async (request) => {
   }
 
   const { invitationId } = request.data;
+
   if (!invitationId) {
     throw new HttpsError('invalid-argument', 'invitationId is required');
   }
 
-  const invitationSnap = await db().collection('shopInvitations').doc(invitationId).get();
+  let invitationDocRef = db().collection('shopInvitations').doc(invitationId);
+  let invitationSnap = await invitationDocRef.get();
+
+  if (!invitationSnap.exists) {
+    invitationDocRef = db().collection('restaurantInvitations').doc(invitationId);
+    invitationSnap = await invitationDocRef.get();
+  }
 
   if (!invitationSnap.exists) {
     throw new HttpsError('not-found', 'Invitation not found');
@@ -385,17 +418,23 @@ export const cancelShopInvitation = onCall(FUNCTION_CONFIG, async (request) => {
     throw new HttpsError('failed-precondition', 'Only pending invitations can be cancelled');
   }
 
-  await assertOwnerOrCoOwner(request.auth.uid, invitation.shopId);
+  const config = getEntityConfig(invitation.businessType);
+
+  await assertOwnerOrCoOwner(
+    request.auth.uid,
+    invitation.shopId,
+    config.entityCollection,
+    config.entityLabel,
+  );
 
   const now = admin.firestore.FieldValue.serverTimestamp();
   const batch = db().batch();
 
-  batch.update(db().collection('shopInvitations').doc(invitationId), {
+  batch.update(invitationDocRef, {
     status: 'cancelled',
     cancelledAt: now,
   });
 
-  // Update the linked in-app notification if cross-linked
   if (invitation.notificationId && invitation.userId) {
     batch.update(
       db().collection('users').doc(invitation.userId).collection('notifications').doc(invitation.notificationId),
@@ -408,35 +447,36 @@ export const cancelShopInvitation = onCall(FUNCTION_CONFIG, async (request) => {
   return { success: true };
 });
 
+// ─── backfillShopClaims ───────────────────────────────────────────────────────
+
 export const backfillShopClaims = onRequest(FUNCTION_CONFIG, async (req, res) => {
-    const usersSnap = await db().collection('users').get();
-    
-    let synced = 0;
-    let skipped = 0;
-    let errors = 0;
-  
-    for (const doc of usersSnap.docs) {
-      const data = doc.data();
-      if (data.memberOfShops || data.memberOfRestaurants) {
-        try {
-          await syncUserClaims(doc.id);
-          synced++;
-        } catch (err) {
-          console.warn(`Skipping ${doc.id}: ${err.message}`);
-          errors++;
-        }
-      } else {
-        skipped++;
+  const usersSnap = await db().collection('users').get();
+
+  let synced = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  for (const doc of usersSnap.docs) {
+    const data = doc.data();
+    if (data.memberOfShops || data.memberOfRestaurants) {
+      try {
+        await syncUserClaims(doc.id);
+        synced++;
+      } catch (err) {
+        console.warn(`Skipping ${doc.id}: ${err.message}`);
+        errors++;
       }
+    } else {
+      skipped++;
     }
-  
-    res.json({ success: true, synced, skipped, errors });
-  });
+  }
 
-  export const setAdminClaim = onRequest(async (req, res) => {
-    await admin.auth().setCustomUserClaims('AUt9QlHVEFXy8PCGQ1wPxsd7dFW2', {
-      isAdmin: true,
-    });
-    res.json({ success: true });
-  });
+  res.json({ success: true, synced, skipped, errors });
+});
 
+export const setAdminClaim = onRequest(async (req, res) => {
+  await admin.auth().setCustomUserClaims('AUt9QlHVEFXy8PCGQ1wPxsd7dFW2', {
+    isAdmin: true,
+  });
+  res.json({ success: true });
+});

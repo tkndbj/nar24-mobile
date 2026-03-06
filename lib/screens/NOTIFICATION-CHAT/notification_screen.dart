@@ -136,7 +136,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         final fetched = snap.docs
             .map((d) => d.data())
             .where((n) => n.type != 'message')
-            .where((n) => !(n.type == 'shop_invitation' &&
+            .where((n) => !((n.type == 'shop_invitation' || n.type == 'restaurant_invitation') &&
     (n.status == 'accepted' || n.status == 'rejected' || n.status == 'cancelled')))
             .toList();
 
@@ -279,7 +279,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
     return;
   }
 
-  _showInvitationAcceptingModal(notification.shopName ?? 'shop');
+  _showInvitationAcceptingModal(
+  notification.shopName ?? '',
+  isRestaurant: notification.businessType == 'restaurant',
+);
 
   try {
     final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
@@ -344,96 +347,97 @@ class _NotificationScreenState extends State<NotificationScreen> {
   }
 }
 
-  void _showInvitationAcceptingModal(String shopName) {
-    final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false}) {
+  final l10n = AppLocalizations.of(context);
+  final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color:
-                isDark ? const Color.fromARGB(255, 33, 31, 49) : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0.0, end: 1.0),
-                duration: const Duration(milliseconds: 1500),
-                builder: (context, value, child) {
-                  return Transform.rotate(
-                    angle: value * 2 * 3.14159,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF00A86B), Color(0xFF00D68F)],
-                        ),
-                        borderRadius: BorderRadius.circular(50),
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: isDark ? const Color.fromARGB(255, 33, 31, 49) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 1500),
+              builder: (context, value, child) {
+                return Transform.rotate(
+                  angle: value * 2 * 3.14159,
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF00A86B), Color(0xFF00D68F)],
                       ),
-                      child: const Icon(
-                        Icons.store_rounded,
-                        color: Colors.white,
-                        size: 32,
-                      ),
+                      borderRadius: BorderRadius.circular(50),
                     ),
-                  );
-                },
-              ),
-              const SizedBox(height: 20),
-              Text(
-                l10n.joiningShop ?? 'Joining shop...',
-                style: GoogleFonts.inter(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                shopName,
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  color: isDark ? Colors.white70 : Colors.grey.shade600,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 20),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  height: 8,
-                  width: double.infinity,
-                  color: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    duration: const Duration(seconds: 2),
-                    builder: (context, value, child) {
-                      return LinearProgressIndicator(
-                        value: value,
-                        backgroundColor: Colors.transparent,
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                            Color(0xFF00A86B)),
-                      );
-                    },
+                    child: Icon(
+                      isRestaurant ? Icons.restaurant_rounded : Icons.store_rounded,
+                      color: Colors.white,
+                      size: 32,
+                    ),
                   ),
+                );
+              },
+            ),
+            const SizedBox(height: 20),
+            Text(
+              isRestaurant
+                  ? (l10n.joiningRestaurant ?? 'Joining restaurant...')
+                  : (l10n.joiningShop ?? 'Joining shop...'),
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              entityName,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: isDark ? Colors.white70 : Colors.grey.shade600,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 20),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                height: 8,
+                width: double.infinity,
+                color: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(seconds: 2),
+                  builder: (context, value, child) {
+                    return LinearProgressIndicator(
+                      value: value,
+                      backgroundColor: Colors.transparent,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                          Color(0xFF00A86B)),
+                    );
+                  },
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   void _handleNotificationTap(NotificationModel notification) async {
     final l10n = AppLocalizations.of(context);
@@ -886,6 +890,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         break;
 
       case 'shop_invitation':
+      case 'restaurant_invitation':
         showDialog(
           context: context,
           builder: (context) {
@@ -1426,6 +1431,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                       Color iconColor;
                       switch (type) {
                         case 'shop_invitation':
+                        case 'restaurant_invitation':
                           notificationIcon = Icons.person_add;
                           iconColor = const Color.fromARGB(255, 182, 91, 0);
                           break;
@@ -1735,6 +1741,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
       case 'product_sold_user':
         return l10n.productSold;
       case 'shop_invitation':
+      case 'restaurant_invitation':
         return l10n.invitation;
       case 'boosted':
         return l10n.boosted;

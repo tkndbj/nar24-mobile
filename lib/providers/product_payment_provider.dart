@@ -187,25 +187,31 @@ class ProductPaymentProvider with ChangeNotifier {
   Future<void> fetchSavedAddresses() async {
     User? user = _auth.currentUser;
     if (user != null) {
-      QuerySnapshot snapshot = await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('addresses')
-          .get();
+      try {
+        QuerySnapshot snapshot = await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('addresses')
+            .get();
 
-      savedAddresses = snapshot.docs.map((doc) {
-        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        return {
-          'id': doc.id,
-          'addressLine1': data['addressLine1'] ?? '',
-          'addressLine2': data['addressLine2'] ?? '',
-          'city': data['city'] ?? '',
-          'phoneNumber': data['phoneNumber'] ?? '',
-          'location': data['location'],
-        };
-      }).toList();
+        savedAddresses = snapshot.docs.map((doc) {
+          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+          return {
+            'id': doc.id,
+            'addressLine1': data['addressLine1'] ?? '',
+            'addressLine2': data['addressLine2'] ?? '',
+            'city': data['city'] ?? '',
+            'phoneNumber': data['phoneNumber'] ?? '',
+            'location': data['location'],
+          };
+        }).toList();
 
-      notifyListeners();
+        notifyListeners();
+      } catch (e) {
+        debugPrint('[Payment] fetchSavedAddresses error: $e');
+        savedAddresses = [];
+        notifyListeners();
+      }
     }
   }
 

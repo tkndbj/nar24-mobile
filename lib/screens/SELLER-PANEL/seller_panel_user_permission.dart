@@ -12,12 +12,12 @@ import '../../providers/seller_panel_provider.dart';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-class _ShopMember {
+class _EntityMember {
   final String userId;
   final String role;
   final String displayName;
 
-  const _ShopMember({
+  const _EntityMember({
     required this.userId,
     required this.role,
     required this.displayName,
@@ -27,13 +27,11 @@ class _ShopMember {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /// Fetches display names for a list of user IDs in batches of 10.
-/// Mirrors the web app's `batchFetchUserNames` helper exactly.
 Future<Map<String, String>> _batchFetchUserNames(List<String> uids) async {
   if (uids.isEmpty) return {};
 
   final Map<String, String> result = {};
 
-  // Chunk into groups of 10 – Firestore `whereIn` limit
   for (int i = 0; i < uids.length; i += 10) {
     final chunk = uids.sublist(i, (i + 10).clamp(0, uids.length));
     final snap = await FirebaseFirestore.instance
@@ -51,12 +49,21 @@ Future<Map<String, String>> _batchFetchUserNames(List<String> uids) async {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+/// Widget that manages user permissions for a shop OR restaurant.
+///
+/// Pass [businessType] as either `'shop'` (default) or `'restaurant'`.
+/// All Cloud Function calls and Firestore queries automatically use the
+/// correct collection based on this value.
 class SellerPanelUserPermission extends StatefulWidget {
   final String shopId;
+
+  /// 'shop' or 'restaurant'. Defaults to 'shop' for backward compatibility.
+  final String businessType;
 
   const SellerPanelUserPermission({
     Key? key,
     required this.shopId,
+    this.businessType = 'shop',
   }) : super(key: key);
 
   @override
@@ -71,19 +78,27 @@ class _SellerPanelUserPermissionState
   final List<String> _roles = ['co-owner', 'editor', 'viewer'];
   bool _isSending = false;
 
-  // Per-invitation cancelling state (mirrors web's `cancellingInvitationId`)
   String? _cancellingInvitationId;
-
-  // Revoke state (mirrors web's `revokeTarget` / `isRevoking`)
-  _ShopMember? _revokeTarget;
+  _EntityMember? _revokeTarget;
   bool _isRevoking = false;
 
   late final Future<void> _shopLoadFuture;
 
-  // Safety timer to prevent stuck loading state
   Timer? _initSafetyTimer;
   bool _initTimedOut = false;
   static const Duration _maxInitDuration = Duration(seconds: 12);
+
+  // ── Derived helpers ──────────────────────────────────────────────────────────
+
+  bool get _isRestaurant => widget.businessType == 'restaurant';
+
+  /// Firestore collection that holds invitations for this entity type.
+  String get _invitationsCollection =>
+      _isRestaurant ? 'restaurantInvitations' : 'shopInvitations';
+
+  /// Firestore collection that holds the entity document.
+  String get _entityCollection =>
+      _isRestaurant ? 'restaurants' : 'shops';
 
   bool _isValidEmail(String email) {
     final emailRegExp = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
@@ -94,7 +109,7 @@ class _SellerPanelUserPermissionState
   void initState() {
     super.initState();
     _startInitSafetyTimer();
-    _shopLoadFuture = _ensureShopSelected();
+    _shopLoadFuture = _ensureEntitySelected();
   }
 
   @override
@@ -117,7 +132,7 @@ class _SellerPanelUserPermissionState
     _initSafetyTimer?.cancel();
   }
 
-  Future<void> _ensureShopSelected() async {
+  Future<void> _ensureEntitySelected() async {
     final provider = Provider.of<SellerPanelProvider>(context, listen: false);
     final current = provider.selectedShop;
     if (current == null || current.id != widget.shopId) {
@@ -146,9 +161,8 @@ class _SellerPanelUserPermissionState
 
   // ── Send invitation ──────────────────────────────────────────────────────────
   //
-  // Delegates entirely to the Cloud Function, mirroring the web app.
-  // The CF handles email lookup, duplicate/existing-member checks, and
-  // the atomic write of invitation + notification.
+  // Passes `businessType` to the Cloud Function so it writes the invitation
+  // into the correct Firestore collection and notifies the user appropriately.
 
   Future<void> _sendInvitation() async {
     final l10n = AppLocalizations.of(context);
@@ -164,12 +178,13 @@ class _SellerPanelUserPermissionState
 
     setState(() => _isSending = true);
     try {
-      final fn = FirebaseFunctions.instance
-          .httpsCallable('sendShopInvitation');
+      final fn = FirebaseFunctions.instanceFor(region: 'europe-west3')
+    .httpsCallable('sendShopInvitation');
       await fn.call({
         'shopId': widget.shopId,
         'inviteeEmail': email.toLowerCase(),
         'role': _selectedRole,
+        'businessType': widget.businessType, // ← NEW
       });
 
       if (!mounted) return;
@@ -192,15 +207,15 @@ class _SellerPanelUserPermissionState
 
   // ── Cancel pending invitation ────────────────────────────────────────────────
   //
-  // Calls the `cancelShopInvitation` Cloud Function, mirroring the web app.
-  // Previously the Flutter app deleted the Firestore doc directly.
+  // The Cloud Function resolves `businessType` from the stored invitation doc,
+  // so the client only needs to pass `invitationId`.
 
   Future<void> _cancelInvitation(String invitationId) async {
     final l10n = AppLocalizations.of(context);
     setState(() => _cancellingInvitationId = invitationId);
     try {
-      final fn = FirebaseFunctions.instance
-          .httpsCallable('cancelShopInvitation');
+      final fn = FirebaseFunctions.instanceFor(region: 'europe-west3')
+    .httpsCallable('cancelShopInvitation');
       await fn.call({'invitationId': invitationId});
 
       if (!mounted) return;
@@ -226,9 +241,8 @@ class _SellerPanelUserPermissionState
 
   // ── Revoke access ────────────────────────────────────────────────────────────
   //
-  // Calls the `revokeShopAccess` Cloud Function, mirroring the web app.
-  // Previously the Flutter app called provider.revokeUserAccess() and
-  // used fragile string-matching on the returned message.
+  // Passes `businessType` to the Cloud Function so it updates the correct
+  // entity document and user member map.
 
   Future<void> _confirmRevoke() async {
     if (_revokeTarget == null) return;
@@ -237,12 +251,13 @@ class _SellerPanelUserPermissionState
 
     setState(() => _isRevoking = true);
     try {
-      final fn =
-          FirebaseFunctions.instance.httpsCallable('revokeShopAccess');
+      final fn = FirebaseFunctions.instanceFor(region: 'europe-west3')
+    .httpsCallable('revokeShopAccess');
       await fn.call({
         'targetUserId': target.userId,
         'shopId': widget.shopId,
         'role': target.role,
+        'businessType': widget.businessType, // ← NEW
       });
 
       if (!mounted) return;
@@ -268,8 +283,8 @@ class _SellerPanelUserPermissionState
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
           duration: const Duration(seconds: 3),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
     } catch (e) {
@@ -288,8 +303,8 @@ class _SellerPanelUserPermissionState
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
           duration: const Duration(seconds: 3),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
     }
@@ -406,15 +421,15 @@ class _SellerPanelUserPermissionState
 
         return Consumer<SellerPanelProvider>(
           builder: (context, provider, child) {
-            final shopData =
+            final entityData =
                 provider.selectedShop?.data() as Map<String, dynamic>?;
-            final selectedShopName = shopData != null
-                ? (shopData['name'] as String? ?? l10n.noShopSelected)
+            final entityName = entityData != null
+                ? (entityData['name'] as String? ?? l10n.noShopSelected)
                 : l10n.noShopSelected;
             final currentUserId = FirebaseAuth.instance.currentUser?.uid;
             final bool canManage = currentUserId != null &&
-                (shopData?['ownerId'] == currentUserId ||
-                    (shopData?['coOwners'] as List<dynamic>?)
+                (entityData?['ownerId'] == currentUserId ||
+                    (entityData?['coOwners'] as List<dynamic>?)
                             ?.contains(currentUserId) ==
                         true);
 
@@ -434,8 +449,7 @@ class _SellerPanelUserPermissionState
                         ? const Color.fromARGB(255, 33, 31, 49)
                         : Colors.white,
                     elevation: 0,
-                    shadowColor:
-                        Colors.black.withOpacity(0.05),
+                    shadowColor: Colors.black.withOpacity(0.05),
                     surfaceTintColor: Colors.transparent,
                   ),
                   body: SafeArea(
@@ -445,22 +459,18 @@ class _SellerPanelUserPermissionState
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // ─── Shop Info Header ─────────────────────
-                          _buildShopHeader(selectedShopName, l10n),
+                          _buildEntityHeader(entityName, l10n),
                           const SizedBox(height: 16),
 
-                          // ─── Invite Form ──────────────────────────
                           if (canManage) ...[
                             _buildInviteForm(isDarkMode, l10n),
                             const SizedBox(height: 16),
                           ],
 
-                          // ─── Accepted Users ───────────────────────
                           _buildAcceptedUsersSection(
                               isDarkMode, l10n, canManage, currentUserId),
                           const SizedBox(height: 16),
 
-                          // ─── Pending Invitations ──────────────────
                           _buildPendingInvitationsSection(
                               isDarkMode, l10n, canManage),
                         ],
@@ -469,10 +479,7 @@ class _SellerPanelUserPermissionState
                   ),
                 ),
 
-                // ─── Revoke Confirmation Modal ─────────────────────────────
-                // Mirrors the web app's inline modal pattern.
                 if (_revokeTarget != null) ...[
-                  // Backdrop
                   GestureDetector(
                     onTap: _isRevoking
                         ? null
@@ -481,7 +488,6 @@ class _SellerPanelUserPermissionState
                       color: Colors.black.withOpacity(0.3),
                     ),
                   ),
-                  // Modal
                   Center(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -497,9 +503,11 @@ class _SellerPanelUserPermissionState
     );
   }
 
-  // ── Shop Header ──────────────────────────────────────────────────────────────
+  // ── Entity Header ─────────────────────────────────────────────────────────────
+  //
+  // Shows a restaurant icon for restaurants, store icon for shops.
 
-  Widget _buildShopHeader(String shopName, AppLocalizations l10n) {
+  Widget _buildEntityHeader(String entityName, AppLocalizations l10n) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -519,10 +527,14 @@ class _SellerPanelUserPermissionState
         children: [
           Row(
             children: [
-              const Icon(Icons.store, color: Colors.white, size: 20),
+              Icon(
+                _isRestaurant ? Icons.restaurant : Icons.store,
+                color: Colors.white,
+                size: 20,
+              ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(shopName,
+                child: Text(entityName,
                     style: GoogleFonts.figtree(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -531,10 +543,9 @@ class _SellerPanelUserPermissionState
             ],
           ),
           const SizedBox(height: 4),
-          Text(l10n.managingPermissionsFor(shopName),
+          Text(l10n.managingPermissionsFor(entityName),
               style: GoogleFonts.figtree(
-                  fontSize: 12,
-                  color: Colors.white.withOpacity(0.9))),
+                  fontSize: 12, color: Colors.white.withOpacity(0.9))),
         ],
       ),
     );
@@ -582,8 +593,6 @@ class _SellerPanelUserPermissionState
             ],
           ),
           const SizedBox(height: 20),
-
-          // Email field
           TextField(
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
@@ -607,13 +616,11 @@ class _SellerPanelUserPermissionState
               fillColor: isDarkMode
                   ? Colors.grey.withOpacity(0.1)
                   : Colors.grey.withOpacity(0.05),
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 12),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             ),
           ),
           const SizedBox(height: 14),
-
-          // Role dropdown
           DropdownButtonFormField<String>(
             value: _selectedRole,
             decoration: InputDecoration(
@@ -635,8 +642,8 @@ class _SellerPanelUserPermissionState
               fillColor: isDarkMode
                   ? Colors.grey.withOpacity(0.1)
                   : Colors.grey.withOpacity(0.05),
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 12),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             ),
             items: _roles.map((role) {
               return DropdownMenuItem<String>(
@@ -657,8 +664,6 @@ class _SellerPanelUserPermissionState
             },
           ),
           const SizedBox(height: 20),
-
-          // Send button
           SizedBox(
             width: double.infinity,
             height: 44,
@@ -684,8 +689,7 @@ class _SellerPanelUserPermissionState
                         const SizedBox(width: 6),
                         Text(l10n.sendInvitation,
                             style: GoogleFonts.figtree(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14)),
+                                fontWeight: FontWeight.w600, fontSize: 14)),
                       ],
                     ),
             ),
@@ -697,10 +701,8 @@ class _SellerPanelUserPermissionState
 
   // ── Accepted Users ───────────────────────────────────────────────────────────
   //
-  // Uses a single batched Firestore query (via `_batchFetchUserNames`) to fetch
-  // all display names at once, mirroring the web app's `batchFetchUserNames`.
-  // Previously the Flutter app used individual `FutureBuilder` calls per user
-  // (N+1 Firestore reads).
+  // Streams the entity document (shops OR restaurants) — determined by
+  // `_entityCollection`. Everything else is identical.
 
   Widget _buildAcceptedUsersSection(bool isDarkMode, AppLocalizations l10n,
       bool canManage, String? currentUserId) {
@@ -744,29 +746,26 @@ class _SellerPanelUserPermissionState
           ),
           const SizedBox(height: 14),
           StreamBuilder<DocumentSnapshot>(
+            // ← Uses _entityCollection so restaurants stream the restaurants doc
             stream: FirebaseFirestore.instance
-                .collection('shops')
+                .collection(_entityCollection)
                 .doc(widget.shopId)
                 .snapshots(),
-            builder: (context, shopSnap) {
-              if (!shopSnap.hasData || !shopSnap.data!.exists) {
+            builder: (context, entitySnap) {
+              if (!entitySnap.hasData || !entitySnap.data!.exists) {
                 return _buildAcceptedShimmer(isDarkMode);
               }
 
               final data =
-                  shopSnap.data!.data() as Map<String, dynamic>;
+                  entitySnap.data!.data() as Map<String, dynamic>;
               final String ownerId = data['ownerId'] as String;
               final List<String> coOwners =
-                  (data['coOwners'] as List<dynamic>?)?.cast<String>() ??
-                      [];
+                  (data['coOwners'] as List<dynamic>?)?.cast<String>() ?? [];
               final List<String> editors =
-                  (data['editors'] as List<dynamic>?)?.cast<String>() ??
-                      [];
+                  (data['editors'] as List<dynamic>?)?.cast<String>() ?? [];
               final List<String> viewers =
-                  (data['viewers'] as List<dynamic>?)?.cast<String>() ??
-                      [];
+                  (data['viewers'] as List<dynamic>?)?.cast<String>() ?? [];
 
-              // Build ordered entry list (same order as the web app)
               final entries = <Map<String, String>>[];
               entries.add({'userId': ownerId, 'role': 'owner'});
               for (final id in coOwners) {
@@ -784,9 +783,7 @@ class _SellerPanelUserPermissionState
                     Icons.group_outlined, l10n.noAcceptedUsers);
               }
 
-              // Single batched fetch for all display names
-              final allUids =
-                  entries.map((e) => e['userId']!).toList();
+              final allUids = entries.map((e) => e['userId']!).toList();
 
               return FutureBuilder<Map<String, String>>(
                 future: _batchFetchUserNames(allUids),
@@ -797,7 +794,7 @@ class _SellerPanelUserPermissionState
 
                   final nameMap = namesSnap.data!;
                   final members = entries
-                      .map((e) => _ShopMember(
+                      .map((e) => _EntityMember(
                             userId: e['userId']!,
                             role: e['role']!,
                             displayName:
@@ -807,15 +804,12 @@ class _SellerPanelUserPermissionState
 
                   return ListView.separated(
                     shrinkWrap: true,
-                    physics:
-                        const NeverScrollableScrollPhysics(),
+                    physics: const NeverScrollableScrollPhysics(),
                     itemCount: members.length,
-                    separatorBuilder: (_, __) =>
-                        const Divider(height: 1),
+                    separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, index) {
                       final member = members[index];
-                      final isCurrentUser =
-                          member.userId == currentUserId;
+                      final isCurrentUser = member.userId == currentUserId;
 
                       return Container(
                         padding:
@@ -828,19 +822,16 @@ class _SellerPanelUserPermissionState
                             decoration: BoxDecoration(
                               color: _getRoleColor(member.role)
                                   .withOpacity(0.1),
-                              borderRadius:
-                                  BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: Center(
                               child: Text(
                                 member.displayName.isNotEmpty
-                                    ? member.displayName[0]
-                                        .toUpperCase()
+                                    ? member.displayName[0].toUpperCase()
                                     : '?',
                                 style: GoogleFonts.figtree(
                                     fontWeight: FontWeight.bold,
-                                    color:
-                                        _getRoleColor(member.role),
+                                    color: _getRoleColor(member.role),
                                     fontSize: 16),
                               ),
                             ),
@@ -849,11 +840,9 @@ class _SellerPanelUserPermissionState
                             children: [
                               Flexible(
                                 child: Text(member.displayName,
-                                    overflow:
-                                        TextOverflow.ellipsis,
+                                    overflow: TextOverflow.ellipsis,
                                     style: GoogleFonts.figtree(
-                                        fontWeight:
-                                            FontWeight.w600,
+                                        fontWeight: FontWeight.w600,
                                         color: isDarkMode
                                             ? Colors.white
                                             : Colors.black,
@@ -865,8 +854,7 @@ class _SellerPanelUserPermissionState
                                     style: GoogleFonts.figtree(
                                         fontSize: 11,
                                         color: Colors.grey[400],
-                                        fontWeight:
-                                            FontWeight.normal)),
+                                        fontWeight: FontWeight.normal)),
                               ],
                             ],
                           ),
@@ -874,28 +862,20 @@ class _SellerPanelUserPermissionState
                             children: [
                               Icon(_getRoleIcon(member.role),
                                   size: 12,
-                                  color:
-                                      _getRoleColor(member.role)),
+                                  color: _getRoleColor(member.role)),
                               const SizedBox(width: 3),
-                              Text(
-                                  getLocalizedRole(
-                                      member.role, l10n),
+                              Text(getLocalizedRole(member.role, l10n),
                                   style: GoogleFonts.figtree(
-                                      color: _getRoleColor(
-                                          member.role),
-                                      fontWeight:
-                                          FontWeight.w500,
+                                      color: _getRoleColor(member.role),
+                                      fontWeight: FontWeight.w500,
                                       fontSize: 12)),
                               if (member.role == 'owner') ...[
                                 const SizedBox(width: 6),
                                 Container(
-                                  padding:
-                                      const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 1),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 1),
                                   decoration: BoxDecoration(
-                                    color:
-                                        const Color(0xFFFF6200),
+                                    color: const Color(0xFFFF6200),
                                     borderRadius:
                                         BorderRadius.circular(10),
                                   ),
@@ -903,33 +883,24 @@ class _SellerPanelUserPermissionState
                                       style: GoogleFonts.figtree(
                                           fontSize: 9,
                                           color: Colors.white,
-                                          fontWeight:
-                                              FontWeight.bold)),
+                                          fontWeight: FontWeight.bold)),
                                 ),
                               ],
                             ],
                           ),
-                          // Show revoke button only for non-owners
-                          // and not for the current user — mirrors
-                          // the web app's canManage check exactly.
                           trailing: canManage &&
                                   member.role != 'owner' &&
                                   !isCurrentUser
                               ? Container(
                                   decoration: BoxDecoration(
-                                    color: Colors.red
-                                        .withOpacity(0.1),
-                                    borderRadius:
-                                        BorderRadius.circular(6),
+                                    color: Colors.red.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: IconButton(
-                                    icon: const Icon(
-                                        Icons.person_remove,
-                                        color: Colors.red,
-                                        size: 18),
+                                    icon: const Icon(Icons.person_remove,
+                                        color: Colors.red, size: 18),
                                     onPressed: () => setState(
-                                        () =>
-                                            _revokeTarget = member),
+                                        () => _revokeTarget = member),
                                   ),
                                 )
                               : null,
@@ -947,6 +918,9 @@ class _SellerPanelUserPermissionState
   }
 
   // ── Pending Invitations ──────────────────────────────────────────────────────
+  //
+  // Queries `_invitationsCollection` — 'shopInvitations' or
+  // 'restaurantInvitations' depending on `widget.businessType`.
 
   Widget _buildPendingInvitationsSection(
       bool isDarkMode, AppLocalizations l10n, bool canManage) {
@@ -985,14 +959,14 @@ class _SellerPanelUserPermissionState
                   style: GoogleFonts.figtree(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color:
-                          isDarkMode ? Colors.white : Colors.black)),
+                      color: isDarkMode ? Colors.white : Colors.black)),
             ],
           ),
           const SizedBox(height: 14),
           StreamBuilder<QuerySnapshot>(
+            // ← Queries the correct invitations collection
             stream: FirebaseFirestore.instance
-                .collection('shopInvitations')
+                .collection(_invitationsCollection)
                 .where('shopId', isEqualTo: widget.shopId)
                 .where('status', isEqualTo: 'pending')
                 .snapshots(),
@@ -1011,32 +985,25 @@ class _SellerPanelUserPermissionState
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: docs.length,
-                separatorBuilder: (_, __) =>
-                    const Divider(height: 1),
+                separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (context, index) {
                   final doc = docs[index];
-                  final docData =
-                      doc.data() as Map<String, dynamic>;
+                  final docData = doc.data() as Map<String, dynamic>;
                   final inviteEmail =
                       docData['email'] as String? ?? 'Unknown';
-                  final role =
-                      docData['role'] as String? ?? 'unknown';
-                  final isCancelling =
-                      _cancellingInvitationId == doc.id;
+                  final role = docData['role'] as String? ?? 'unknown';
+                  final isCancelling = _cancellingInvitationId == doc.id;
 
                   return Container(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 6),
+                    padding: const EdgeInsets.symmetric(vertical: 6),
                     child: ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: Container(
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: _getRoleColor(role)
-                              .withOpacity(0.1),
-                          borderRadius:
-                              BorderRadius.circular(10),
+                          color: _getRoleColor(role).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
                         ),
                         child: Center(
                           child: Text(
@@ -1070,17 +1037,13 @@ class _SellerPanelUserPermissionState
                                   fontSize: 12)),
                         ],
                       ),
-                      // Per-invitation spinner, mirrors web's
-                      // `cancellingInvitationId` pattern exactly.
                       trailing: canManage
                           ? Container(
                               width: 36,
                               height: 36,
                               decoration: BoxDecoration(
-                                color:
-                                    Colors.red.withOpacity(0.1),
-                                borderRadius:
-                                    BorderRadius.circular(6),
+                                color: Colors.red.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(6),
                               ),
                               child: isCancelling
                                   ? const Padding(
@@ -1091,13 +1054,10 @@ class _SellerPanelUserPermissionState
                                     )
                                   : IconButton(
                                       padding: EdgeInsets.zero,
-                                      icon: const Icon(
-                                          Icons.close,
-                                          color: Colors.red,
-                                          size: 18),
+                                      icon: const Icon(Icons.close,
+                                          color: Colors.red, size: 18),
                                       onPressed: () =>
-                                          _cancelInvitation(
-                                              doc.id),
+                                          _cancelInvitation(doc.id),
                                     ),
                             )
                           : null,
@@ -1113,10 +1073,6 @@ class _SellerPanelUserPermissionState
   }
 
   // ── Revoke Confirmation Modal ─────────────────────────────────────────────────
-  //
-  // Mirrors the web app's inline modal with a confirm / spinner button pattern.
-  // Replaces the previous approach of: confirmation dialog → separate loading
-  // modal → fragile string-matching on the provider result.
 
   Widget _buildRevokeModal(bool isDarkMode, AppLocalizations l10n) {
     final target = _revokeTarget!;
@@ -1131,14 +1087,12 @@ class _SellerPanelUserPermissionState
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 24)
+                color: Colors.black.withOpacity(0.3), blurRadius: 24)
           ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header
             Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -1166,7 +1120,7 @@ class _SellerPanelUserPermissionState
                   const SizedBox(height: 4),
                   Text(
                     l10n.revokeAccessConfirmation ??
-                        'This will remove their access to the shop.',
+                        'This will remove their access to the ${_isRestaurant ? 'restaurant' : 'shop'}.',
                     style: GoogleFonts.figtree(
                         fontSize: 13,
                         color: isDarkMode
@@ -1184,65 +1138,54 @@ class _SellerPanelUserPermissionState
                 ],
               ),
             ),
-
-            // Buttons
             Padding(
-              padding:
-                  const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
               child: Row(
                 children: [
                   Expanded(
                     child: OutlinedButton(
                       onPressed: _isRevoking
                           ? null
-                          : () =>
-                              setState(() => _revokeTarget = null),
+                          : () => setState(() => _revokeTarget = null),
                       style: OutlinedButton.styleFrom(
                         padding:
                             const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(10)),
+                            borderRadius: BorderRadius.circular(10)),
                       ),
                       child: Text(l10n.cancel,
                           style: GoogleFonts.figtree(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13)),
+                              fontWeight: FontWeight.w600, fontSize: 13)),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed:
-                          _isRevoking ? null : _confirmRevoke,
+                      onPressed: _isRevoking ? null : _confirmRevoke,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red,
                         foregroundColor: Colors.white,
                         padding:
                             const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(10)),
+                            borderRadius: BorderRadius.circular(10)),
                       ),
                       child: _isRevoking
                           ? const SizedBox(
                               width: 16,
                               height: 16,
                               child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2))
+                                  color: Colors.white, strokeWidth: 2))
                           : Row(
                               mainAxisAlignment:
                                   MainAxisAlignment.center,
                               children: [
-                                const Icon(
-                                    Icons.person_remove_rounded,
+                                const Icon(Icons.person_remove_rounded,
                                     size: 16),
                                 const SizedBox(width: 6),
                                 Text(l10n.revoke ?? 'Revoke',
                                     style: GoogleFonts.figtree(
-                                        fontWeight:
-                                            FontWeight.w600,
+                                        fontWeight: FontWeight.w600,
                                         fontSize: 13)),
                               ],
                             ),
@@ -1268,8 +1211,8 @@ class _SellerPanelUserPermissionState
             Icon(icon, size: 40, color: Colors.grey.withOpacity(0.5)),
             const SizedBox(height: 8),
             Text(text,
-                style:
-                    GoogleFonts.figtree(fontSize: 12, color: Colors.grey)),
+                style: GoogleFonts.figtree(
+                    fontSize: 12, color: Colors.grey)),
           ],
         ),
       ),
@@ -1303,25 +1246,26 @@ class _SellerPanelUserPermissionState
               _shimmerBox(height: 44),
             ]),
             const SizedBox(height: 16),
-            _shimmerCard(children: List.generate(
-                3,
-                (_) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: _shimmerBox(height: 56)))),
+            _shimmerCard(
+                children: List.generate(
+                    3,
+                    (_) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: _shimmerBox(height: 56)))),
             const SizedBox(height: 16),
-            _shimmerCard(children: List.generate(
-                2,
-                (_) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: _shimmerBox(height: 56)))),
+            _shimmerCard(
+                children: List.generate(
+                    2,
+                    (_) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: _shimmerBox(height: 56)))),
           ],
         ),
       ),
     );
   }
 
-  Widget _shimmerBox({double height = 56, double radius = 10}) =>
-      Container(
+  Widget _shimmerBox({double height = 56, double radius = 10}) => Container(
         width: double.infinity,
         height: height,
         decoration: BoxDecoration(
@@ -1333,11 +1277,9 @@ class _SellerPanelUserPermissionState
         width: double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12)),
+            color: Colors.white, borderRadius: BorderRadius.circular(12)),
         child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: children),
+            crossAxisAlignment: CrossAxisAlignment.start, children: children),
       );
 
   Widget _buildPendingShimmer(bool isDarkMode) =>

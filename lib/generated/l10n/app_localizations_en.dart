@@ -5714,6 +5714,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get joiningShop => 'Loading shop panel...';
 
   @override
+  String get joiningRestaurant => 'Loading restaurant panel...';
+
+  @override
   String get revokeAccess => 'Revoke Access';
 
   @override
@@ -15220,4 +15223,85 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get navProfile => 'Profile';
+
+  @override
+  String get paymentFailedDefault => 'Payment failed.';
+
+  @override
+  String get paymentReceivedOrderFailed =>
+      'Payment was received but your order could not be created. A full refund has been issued and will appear on your card within 1–3 business days.';
+
+  @override
+  String get paymentReceivedAdFailed =>
+      'Payment was received but your ad could not be activated. A full refund has been issued and will appear on your card within 1–3 business days.';
+
+  @override
+  String get missingPaymentInfo => 'Missing payment information.';
+
+  @override
+  String get paymentSuccessfulTitle => 'Payment Successful';
+
+  @override
+  String get orderSentToRestaurant =>
+      'Your order has been sent to the restaurant.';
+
+  @override
+  String orderLabel(Object orderId) {
+    return 'Order: $orderId';
+  }
+
+  @override
+  String get redirecting => 'Redirecting…';
+
+  @override
+  String get secureSSLConnection => 'Secure SSL Connection';
+
+  @override
+  String get paymentProcessedByIsbank => 'Payment processed by İşbank';
+
+  @override
+  String get foodPaymentCancelMessage =>
+      'Your payment is in progress. Are you sure you want to cancel?';
+
+  @override
+  String get continuePayment => 'Continue';
+
+  @override
+  String get cancelPaymentButton => 'Cancel Payment';
+
+  @override
+  String get paymentTimedOutTitle => 'Payment Timed Out';
+
+  @override
+  String get paymentFailedTitle => 'Payment Failed';
+
+  @override
+  String get paymentProcessingError =>
+      'An error occurred while processing your payment.';
+
+  @override
+  String get paymentTimedOutRetry => 'Payment timed out. Please try again.';
+
+  @override
+  String get loadingSecurePaymentPage => 'Loading secure payment page...';
+
+  @override
+  String get secureConnectionBadge => 'Secure Connection';
+
+  @override
+  String get paymentReceivedBoostFailed =>
+      'Payment was received but the Boost package could not be activated. A full refund has been issued and will appear on your card within 1–3 business days.';
+
+  @override
+  String get boostPaymentLoading => 'Loading Boost payment page...';
+
+  @override
+  String get boostPackage => 'Boost Package';
+
+  @override
+  String get boostPaymentCancelMessage =>
+      'The Boost payment will be cancelled. Are you sure?';
+
+  @override
+  String get secureBoostPayment => 'Secure Boost Payment';
 }

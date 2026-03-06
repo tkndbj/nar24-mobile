@@ -266,19 +266,23 @@ class SellerPanelRoutes {
           ),
 
           // User Permission Screen
-          GoRoute(
-            path: '/seller_panel_user_permission/:shopId',
-            name: 'seller-user-permission',
-            pageBuilder: (context, state) {
-              final shopId = state.pathParameters['shopId']!;
-              return CustomTransitionPage(
-                key: state.pageKey,
-                child: SellerPanelUserPermission(shopId: shopId),
-                transitionsBuilder: _slideTransition,
-                transitionDuration: const Duration(milliseconds: 200),
-              );
-            },
-          ),
+       GoRoute(
+  path: '/seller_panel_user_permission/:shopId',
+  name: 'seller-user-permission',
+  pageBuilder: (context, state) {
+    final shopId = state.pathParameters['shopId']!;
+    final businessType = state.uri.queryParameters['businessType'] ?? 'shop';
+    return CustomTransitionPage(
+      key: state.pageKey,
+      child: SellerPanelUserPermission(
+        shopId: shopId,
+        businessType: businessType,
+      ),
+      transitionsBuilder: _slideTransition,
+      transitionDuration: const Duration(milliseconds: 200),
+    );
+  },
+),
 
           // Archived Screen
           GoRoute(
