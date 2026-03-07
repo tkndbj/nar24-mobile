@@ -86,7 +86,8 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
 
   bool _validateForm() {
     if (_deliveryType == DeliveryType.delivery && _getFoodAddress() == null) {
-      setState(() => _error = AppLocalizations.of(context)!.foodCheckoutNoAddress);
+      setState(
+          () => _error = AppLocalizations.of(context)!.foodCheckoutNoAddress);
       return false;
     }
     setState(() => _error = null);
@@ -110,7 +111,10 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
       'mainRegion': addr.mainRegion,
       'phoneNumber': addr.phoneNumber ?? '',
       'location': addr.location != null
-          ? {'latitude': addr.location!.latitude, 'longitude': addr.location!.longitude}
+          ? {
+              'latitude': addr.location!.latitude,
+              'longitude': addr.location!.longitude
+            }
           : null,
     };
   }
@@ -143,7 +147,8 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                 })
             .toList(),
         'paymentMethod': 'pay_at_door',
-        'deliveryType': _deliveryType == DeliveryType.delivery ? 'delivery' : 'pickup',
+        'deliveryType':
+            _deliveryType == DeliveryType.delivery ? 'delivery' : 'pickup',
         'deliveryAddress': _buildDeliveryAddressPayload(foodAddress),
         'buyerPhone': foodAddress?.phoneNumber ?? '',
         'orderNotes': _orderNotes,
@@ -163,7 +168,9 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
         }
       }
     } on FirebaseFunctionsException catch (e) {
-      if (mounted) setState(() => _error = e.message ?? AppLocalizations.of(context)!.foodCheckoutError);
+      if (mounted)
+        setState(() => _error =
+            e.message ?? AppLocalizations.of(context)!.foodCheckoutError);
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -201,7 +208,8 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                   'specialNotes': i.specialNotes ?? '',
                 })
             .toList(),
-        'deliveryType': _deliveryType == DeliveryType.delivery ? 'delivery' : 'pickup',
+        'deliveryType':
+            _deliveryType == DeliveryType.delivery ? 'delivery' : 'pickup',
         'deliveryAddress': _buildDeliveryAddressPayload(foodAddress),
         'buyerPhone': foodAddress?.phoneNumber ?? '',
         'orderNotes': _orderNotes,
@@ -439,42 +447,48 @@ class _FoodAddressCard extends StatelessWidget {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.2),
-                shape: BoxShape.circle),
+                color: Colors.orange.withOpacity(0.2), shape: BoxShape.circle),
             child: const Icon(Icons.location_on_rounded,
                 size: 16, color: Colors.orange),
           ),
           const SizedBox(width: 12),
           Expanded(
-              child:
-                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(addr.addressLine1,
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : Colors.grey[900])),
-            if (addr.addressLine2 != null && addr.addressLine2!.isNotEmpty)
-              Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(addr.addressLine2!,
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? Colors.grey[500] : Colors.grey[400]))),
-            if (cityLine.isNotEmpty)
-              Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(cityLine,
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? Colors.grey[400] : Colors.grey[500]))),
-            if (addr.phoneNumber != null && addr.phoneNumber!.isNotEmpty)
-              Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(addr.phoneNumber!,
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? Colors.grey[500] : Colors.grey[400]))),
-          ])),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(addr.addressLine1,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : Colors.grey[900])),
+                if (addr.addressLine2 != null && addr.addressLine2!.isNotEmpty)
+                  Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(addr.addressLine2!,
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: isDark
+                                  ? Colors.grey[500]
+                                  : Colors.grey[400]))),
+                if (cityLine.isNotEmpty)
+                  Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(cityLine,
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: isDark
+                                  ? Colors.grey[400]
+                                  : Colors.grey[500]))),
+                if (addr.phoneNumber != null && addr.phoneNumber!.isNotEmpty)
+                  Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(addr.phoneNumber!,
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: isDark
+                                  ? Colors.grey[500]
+                                  : Colors.grey[400]))),
+              ])),
         ]),
       );
     }
@@ -491,8 +505,7 @@ class _FoodAddressCard extends StatelessWidget {
       ),
       child: Row(children: [
         Icon(Icons.location_on_outlined,
-            size: 20,
-            color: isDark ? Colors.grey[600] : Colors.grey[400]),
+            size: 20, color: isDark ? Colors.grey[600] : Colors.grey[400]),
         const SizedBox(width: 12),
         Expanded(
             child: Text(loc.foodCheckoutNoAddressShort,
@@ -504,8 +517,7 @@ class _FoodAddressCard extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-                color: Colors.orange,
-                borderRadius: BorderRadius.circular(8)),
+                color: Colors.orange, borderRadius: BorderRadius.circular(8)),
             child: Text(loc.foodCheckoutAddAddress,
                 style: const TextStyle(
                     fontSize: 11,
@@ -540,9 +552,8 @@ class _RestaurantInfoRow extends StatelessWidget {
             : Colors.orange[50]!.withOpacity(0.6),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: isDark
-                ? Colors.white.withOpacity(0.08)
-                : Colors.orange[100]!),
+            color:
+                isDark ? Colors.white.withOpacity(0.08) : Colors.orange[100]!),
       ),
       child: Row(children: [
         if (restaurant.profileImageUrl != null)
@@ -640,9 +651,7 @@ class _CartItemRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isDark
-            ? const Color(0xFF1A1D2E)
-            : const Color(0xFFF3F4F6),
+        color: isDark ? const Color(0xFF1A1D2E) : const Color(0xFFF3F4F6),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
             color: isDark ? const Color(0xFF2A2D3E) : const Color(0xFFD1D5DB)),
@@ -719,9 +728,8 @@ class _CartItemRow extends StatelessWidget {
                       child: Text(item.specialNotes!,
                           style: TextStyle(
                               fontSize: 11,
-                              color: isDark
-                                  ? Colors.grey[500]
-                                  : Colors.grey[700]),
+                              color:
+                                  isDark ? Colors.grey[500] : Colors.grey[700]),
                           overflow: TextOverflow.ellipsis)),
                 ])),
           const SizedBox(height: 8),
@@ -756,8 +764,8 @@ class _NoImgBox extends StatelessWidget {
         decoration: BoxDecoration(
             color: isDark ? const Color(0xFF2D2B3F) : Colors.grey[200],
             borderRadius: BorderRadius.circular(8)),
-        child:
-            Icon(Icons.shopping_bag_outlined, size: 24, color: Colors.grey[400]),
+        child: Icon(Icons.shopping_bag_outlined,
+            size: 24, color: Colors.grey[400]),
       );
 }
 
@@ -805,8 +813,7 @@ class _QtyBtn extends StatelessWidget {
                       ? const Color(0xFF2D2B3F)
                       : const Color(0xFFD1D5DB))),
           child: Icon(icon,
-              size: 12,
-              color: isDark ? Colors.grey[400] : Colors.grey[500])));
+              size: 12, color: isDark ? Colors.grey[400] : Colors.grey[500])));
 }
 
 // =============================================================================
@@ -866,14 +873,15 @@ class _PaymentMethodButton extends StatelessWidget {
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                Text(isPay ? loc.foodCheckoutPayAtDoor : loc.foodCheckoutCreditCard,
+                Text(
+                    isPay
+                        ? loc.foodCheckoutPayAtDoor
+                        : loc.foodCheckoutCreditCard,
                     style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: isSelected
-                            ? (isDark
-                                ? Colors.orange[400]
-                                : Colors.orange[700])
+                            ? (isDark ? Colors.orange[400] : Colors.orange[700])
                             : (isDark ? Colors.grey[200] : Colors.grey[800]))),
                 Text(
                     isPay
@@ -881,8 +889,7 @@ class _PaymentMethodButton extends StatelessWidget {
                         : loc.foodCheckoutSecurePayment,
                     style: TextStyle(
                         fontSize: 11,
-                        color:
-                            isDark ? Colors.grey[500] : Colors.grey[700])),
+                        color: isDark ? Colors.grey[500] : Colors.grey[700])),
               ])),
         ]),
       ),
@@ -920,9 +927,8 @@ class _StickyBottomBar extends StatelessWidget {
     final isCard = paymentMethod == PaymentMethod.card;
     return Container(
       decoration: BoxDecoration(
-        color: isDark
-            ? const Color(0xFF1C1A29)
-            : Colors.white.withOpacity(0.95),
+        color:
+            isDark ? const Color(0xFF1C1A29) : Colors.white.withOpacity(0.95),
         border: Border(
             top: BorderSide(
                 color: isDark ? const Color(0xFF2D2B3F) : Colors.grey[200]!)),
@@ -947,9 +953,8 @@ class _StickyBottomBar extends StatelessWidget {
                       child: Text(error!,
                           style: TextStyle(
                               fontSize: 12,
-                              color: isDark
-                                  ? Colors.red[400]
-                                  : Colors.red[600]))),
+                              color:
+                                  isDark ? Colors.red[400] : Colors.red[600]))),
                 ]),
               )),
         Row(children: [
@@ -972,8 +977,7 @@ class _StickyBottomBar extends StatelessWidget {
               foregroundColor: Colors.white,
               disabledBackgroundColor:
                   isDark ? const Color(0xFF2D2B3F) : Colors.grey[300],
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
               elevation: 0,
@@ -991,7 +995,10 @@ class _StickyBottomBar extends StatelessWidget {
                             : Icons.shopping_bag_rounded,
                         size: 16),
                     const SizedBox(width: 8),
-                    Text(isCard ? loc.foodCheckoutPayNow : loc.foodCheckoutPlaceOrder,
+                    Text(
+                        isCard
+                            ? loc.foodCheckoutPayNow
+                            : loc.foodCheckoutPlaceOrder,
                         style: const TextStyle(
                             fontSize: 13, fontWeight: FontWeight.bold)),
                   ]),
@@ -1037,8 +1044,7 @@ class _OrderSuccessScreen extends StatelessWidget {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                child: Image.asset(
-                    'assets/images/foods/foodsuccess.png',
+                child: Image.asset('assets/images/foods/foodsuccess.png',
                     width: 80,
                     height: 80,
                     fit: BoxFit.cover,
@@ -1075,7 +1081,8 @@ class _OrderSuccessScreen extends StatelessWidget {
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     Icon(Icons.access_time_rounded,
                         size: 14,
-                        color: isDark ? Colors.orange[400] : Colors.orange[600]),
+                        color:
+                            isDark ? Colors.orange[400] : Colors.orange[600]),
                     const SizedBox(width: 6),
                     Text(loc.foodCartPrepTimeApprox(estimatedPrepTime),
                         style: TextStyle(
@@ -1088,7 +1095,9 @@ class _OrderSuccessScreen extends StatelessWidget {
             ],
             const SizedBox(height: 8),
             Text(
-                loc.foodCheckoutOrderId(orderId.substring(0, orderId.length.clamp(0, 8)).toUpperCase()),
+                loc.foodCheckoutOrderId(orderId
+                    .substring(0, orderId.length.clamp(0, 8))
+                    .toUpperCase()),
                 style: TextStyle(
                     fontSize: 11,
                     color: isDark ? Colors.grey[600] : Colors.grey[400])),
@@ -1171,13 +1180,12 @@ class _FoodCheckoutSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bg = isDark ? const Color(0xFF2D2B3F) : const Color(0xFFE5E7EB);
-    final border =
-        isDark ? Colors.white.withOpacity(0.08) : Colors.grey[200]!;
+    final border = isDark ? Colors.white.withOpacity(0.08) : Colors.grey[200]!;
     Widget box(double h, double? w) => Container(
         height: h,
         width: w,
-        decoration: BoxDecoration(
-            color: bg, borderRadius: BorderRadius.circular(8)));
+        decoration:
+            BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)));
     Widget card(Widget child) => Container(
         padding: const EdgeInsets.all(16),
         margin: const EdgeInsets.only(bottom: 12),
@@ -1195,11 +1203,9 @@ class _FoodCheckoutSkeleton extends StatelessWidget {
       card(Row(children: [
         box(40, 40),
         const SizedBox(width: 12),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          box(14, 140),
-          const SizedBox(height: 6),
-          box(11, 100)
-        ])
+        Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [box(14, 140), const SizedBox(height: 6), box(11, 100)])
       ])),
       // Order items
       card(Column(children: [
@@ -1212,9 +1218,8 @@ class _FoodCheckoutSkeleton extends StatelessWidget {
                 child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                        color: isDark
-                            ? const Color(0xFF211F31)
-                            : Colors.grey[50],
+                        color:
+                            isDark ? const Color(0xFF211F31) : Colors.grey[50],
                         borderRadius: BorderRadius.circular(12)),
                     child: Row(children: [
                       box(64, 64),

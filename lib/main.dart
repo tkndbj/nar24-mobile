@@ -135,10 +135,11 @@ Future<void> main() async {
       FirebaseFunctions.instanceFor(region: 'europe-west3');
 
       await FirebaseAppCheck.instance.activate(
-        androidProvider:
-            kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+        androidProvider: kReleaseMode
+            ? AndroidProvider.playIntegrity
+            : AndroidProvider.debug,
         appleProvider:
-            kDebugMode ? AppleProvider.debug : AppleProvider.deviceCheck,
+            kReleaseMode ? AppleProvider.deviceCheck : AppleProvider.debug,
       );
 
       // ✅ ADD CRASHLYTICS HERE

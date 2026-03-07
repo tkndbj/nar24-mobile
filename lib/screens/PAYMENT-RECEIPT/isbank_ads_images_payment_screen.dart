@@ -26,24 +26,16 @@ class IsbankAdsImagesPaymentScreen extends StatefulWidget {
 
 class _IsbankAdsImagesPaymentScreenState
     extends State<IsbankAdsImagesPaymentScreen> {
-  late WebViewController _controller;
+  late final WebViewController _controller;
   bool _isLoading = true;
   bool _isInitializing = true;
-
-  // Only set for genuine fatal errors — NOT for cross-origin redirect errors
-  // which are non-fatal during 3D Secure flow
-  String? _fatalError;
-
+  String? _errorMessage;
+  Timer? _statusCheckTimer;
   bool _isNavigating = false;
 
   String? _gatewayUrl;
   Map<String, dynamic>? _paymentParams;
   String? _orderNumber;
-
-  Timer? _pollTimer;
-  int _pollCount = 0;
-
-  // ── Init ─────────────────────────────────────────────────────────────────────
 
   @override
   void initState() {
@@ -51,21 +43,13 @@ class _IsbankAdsImagesPaymentScreenState
     _initializePayment();
   }
 
-  @override
-  void dispose() {
-    _pollTimer?.cancel();
-    super.dispose();
-  }
-
-  // ── Payment initialization ────────────────────────────────────────────────────
-
   Future<void> _initializePayment() async {
-    setState(() {
-      _isInitializing = true;
-      _fatalError = null;
-    });
-
     try {
+      setState(() {
+        _isInitializing = true;
+        _errorMessage = null;
+      });
+
       final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
           .httpsCallable('initializeIsbankAdPayment');
 
@@ -78,77 +62,59 @@ class _IsbankAdsImagesPaymentScreenState
 
       if (responseData['success'] == true) {
         setState(() {
-          _gatewayUrl = responseData['gatewayUrl'] as String?;
+          _gatewayUrl = responseData['gatewayUrl'];
           _paymentParams =
-              Map<String, dynamic>.from(responseData['paymentParams'] as Map);
-          _orderNumber = responseData['orderNumber'] as String?;
+              Map<String, dynamic>.from(responseData['paymentParams']);
+          _orderNumber = responseData['orderNumber'];
           _isInitializing = false;
         });
 
         _initializeWebView();
-        _startPolling();
+        _startStatusPolling();
       } else {
         throw Exception('Payment initialization failed');
       }
     } catch (e) {
-      debugPrint('[AdsPayment] Init error: $e');
+      print('Error initializing payment: $e');
       setState(() {
-        _fatalError = e.toString();
+        _errorMessage = e.toString();
         _isInitializing = false;
       });
     }
   }
 
-  // ── Adaptive polling ──────────────────────────────────────────────────────────
-  // First 15 polls: every 2s (30s) — bank callback fires here
-  // Next 30 polls: every 5s (150s) — ~3 min total, ~45 calls max
+  void _startStatusPolling() {
+    _checkPaymentStatus();
 
-  void _startPolling() {
-    _pollTimer?.cancel();
-    _pollCount = 0;
-    _scheduleNextPoll();
-  }
+    _statusCheckTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      _checkPaymentStatus();
 
-  void _scheduleNextPoll() {
-    if (!mounted) return;
-    final delay = _pollCount < 15
-        ? const Duration(seconds: 2)
-        : const Duration(seconds: 5);
-
-    _pollTimer = Timer(delay, () async {
-      if (!mounted) return;
-      _pollCount++;
-
-      if (_pollCount > 45) {
-        if (mounted && !_isNavigating) _handleTimeout();
-        return;
+      if (timer.tick > 200) {
+        timer.cancel();
+        _handleTimeout();
       }
-
-      await _checkPaymentStatus();
-
-      if (mounted && !_isNavigating) _scheduleNextPoll();
     });
   }
 
   void _handleTimeout() {
-    if (!mounted || _isNavigating) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: Text(AppLocalizations.of(context).paymentTimeout),
-        content: Text(AppLocalizations.of(context).paymentTimeoutMessage),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              if (mounted) context.pop();
-            },
-            child: Text(AppLocalizations.of(context).ok),
-          ),
-        ],
-      ),
-    );
+    if (mounted && !_isNavigating) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(AppLocalizations.of(context).paymentTimeout),
+          content: Text(AppLocalizations.of(context).paymentTimeoutMessage),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                Navigator.of(context).pop(false);
+              },
+              child: Text(AppLocalizations.of(context).ok),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Future<void> _checkPaymentStatus() async {
@@ -158,48 +124,38 @@ class _IsbankAdsImagesPaymentScreenState
       final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
           .httpsCallable('checkIsbankAdPaymentStatus');
 
-      final result = await callable.call({'orderNumber': _orderNumber});
+      final result = await callable.call({
+        'orderNumber': _orderNumber,
+      });
+
       final responseData = Map<String, dynamic>.from(result.data as Map);
-      final status = responseData['status'] as String?;
+      final status = responseData['status'];
 
-      debugPrint('[AdsPayment] Status: $status');
+      print('🔍 Ad payment status check: $status');
 
-      switch (status) {
-        case 'completed':
-          _handlePaymentSuccess();
-          break;
-
-        case 'payment_failed':
-        case 'hash_verification_failed':
-          _handlePaymentFailure(
-              responseData['errorMessage'] as String? ?? AppLocalizations.of(context).paymentFailedDefault);
-          break;
-
-        case 'payment_succeeded_activation_failed':
-        case 'refunded':
-          // Auto-refund has been issued by the backend
-          _handlePaymentFailure(AppLocalizations.of(context).paymentReceivedAdFailed);
-          break;
-
-        // 'processing', 'awaiting_3d' — keep waiting
+      if (status == 'completed' && !_isNavigating) {
+        _handlePaymentSuccess();
+      } else if ((status == 'payment_failed' ||
+              status == 'hash_verification_failed' ||
+              status == 'payment_succeeded_activation_failed') &&
+          !_isNavigating) {
+        _handlePaymentFailure(responseData['errorMessage'] ?? 'Payment failed');
       }
     } catch (e) {
-      // Transient error — keep polling
-      debugPrint('[AdsPayment] Status check error: $e');
+      print('Error checking ad payment status: $e');
     }
   }
 
-  // ── Success ───────────────────────────────────────────────────────────────────
-
   void _handlePaymentSuccess() {
     if (_isNavigating || !mounted) return;
+
     setState(() => _isNavigating = true);
-    _pollTimer?.cancel();
+    _statusCheckTimer?.cancel();
 
-    debugPrint('[AdsPayment] Success. Submission: ${widget.submissionId}');
+    print('✅ Ad payment completed! Submission ID: ${widget.submissionId}');
 
-    // Navigate to success screen directly — do NOT pop then show dialog
-    // (popping first leaves context in invalid state for the dialog)
+    Navigator.of(context).pop(true);
+
     if (mounted) {
       _showSuccessDialog();
     }
@@ -211,8 +167,10 @@ class _IsbankAdsImagesPaymentScreenState
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -226,23 +184,29 @@ class _IsbankAdsImagesPaymentScreenState
                 ),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.check_rounded,
-                  size: 48, color: Colors.white),
+              child: const Icon(
+                Icons.check_rounded,
+                size: 48,
+                color: Colors.white,
+              ),
             ),
             const SizedBox(height: 24),
             Text(
               l10n.paymentSuccessful,
               style: GoogleFonts.figtree(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1A202C)),
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF1A202C),
+              ),
             ),
             const SizedBox(height: 12),
             Text(
               l10n.adPaymentSuccessMessage,
               textAlign: TextAlign.center,
               style: GoogleFonts.figtree(
-                  fontSize: 14, color: const Color(0xFF64748B)),
+                fontSize: 14,
+                color: const Color(0xFF64748B),
+              ),
             ),
           ],
         ),
@@ -251,8 +215,7 @@ class _IsbankAdsImagesPaymentScreenState
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
-                Navigator.of(ctx).pop();
-                // Single authoritative navigation — no prior pop needed
+                Navigator.of(context).pop();
                 context.go('/seller-panel');
               },
               style: ElevatedButton.styleFrom(
@@ -260,11 +223,16 @@ class _IsbankAdsImagesPaymentScreenState
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
-              child: Text(l10n.gotIt,
-                  style: GoogleFonts.figtree(
-                      fontSize: 16, fontWeight: FontWeight.w600)),
+              child: Text(
+                l10n.gotIt,
+                style: GoogleFonts.figtree(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ),
         ],
@@ -272,44 +240,53 @@ class _IsbankAdsImagesPaymentScreenState
     );
   }
 
-  // ── Failure ───────────────────────────────────────────────────────────────────
-
-  void _handlePaymentFailure(String message) {
+  void _handlePaymentFailure(String errorMessage) {
     if (_isNavigating || !mounted) return;
-    setState(() => _isNavigating = true);
-    _pollTimer?.cancel();
 
-    debugPrint('[AdsPayment] Failure: $message');
-    _showErrorDialog(message);
+    setState(() => _isNavigating = true);
+    _statusCheckTimer?.cancel();
+
+    print('❌ Ad payment failed: $errorMessage');
+
+    _showErrorDialog(errorMessage);
   }
 
-  // ── WebView ───────────────────────────────────────────────────────────────────
+  @override
+  void dispose() {
+    _statusCheckTimer?.cancel();
+    super.dispose();
+  }
 
   void _initializeWebView() {
     if (_gatewayUrl == null || _paymentParams == null) return;
 
-    final l10n = AppLocalizations.of(context);
+    final html = _generatePaymentForm();
+
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.white)
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageStarted: (_) {
-            if (mounted) setState(() => _isLoading = true);
+          onPageStarted: (url) {
+            if (mounted) {
+              setState(() {
+                _isLoading = true;
+                _errorMessage = null;
+              });
+            }
           },
           onPageFinished: (url) {
-            debugPrint('[AdsPayment] Page finished: $url');
-            if (mounted) setState(() => _isLoading = false);
+            print('📄 Page finished loading: $url');
+            if (mounted) {
+              setState(() => _isLoading = false);
+            }
           },
           onWebResourceError: (error) {
-            // Cross-origin redirects during 3D Secure produce resource errors
-            // that are completely non-fatal. Only surface genuine load failures
-            // on the initial page (errorCode -1 and 102 are redirect-related).
-            if (mounted && _isLoading) {
-              setState(() => _isLoading = false);
-              if (error.errorCode != -1 && error.errorCode != 102) {
-                setState(() => _fatalError = error.description);
-              }
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+                _errorMessage = error.description;
+              });
             }
           },
           onNavigationRequest: (NavigationRequest request) {
@@ -318,50 +295,29 @@ class _IsbankAdsImagesPaymentScreenState
             if (request.url.startsWith('ad-payment-success://')) {
               _handlePaymentSuccess();
               return NavigationDecision.prevent;
-            }
-            if (request.url.startsWith('ad-payment-failed://')) {
+            } else if (request.url.startsWith('ad-payment-failed://')) {
               final error = Uri.decodeComponent(
                   request.url.replaceFirst('ad-payment-failed://', ''));
               _handlePaymentFailure(error);
               return NavigationDecision.prevent;
             }
-
             return NavigationDecision.navigate;
           },
         ),
       )
       ..loadRequest(
         Uri.dataFromString(
-          _generatePaymentForm(
-            loadingText: l10n.loadingSecurePaymentPage,
-            secureBadgeText: l10n.secureConnectionBadge,
-          ),
+          html,
           mimeType: 'text/html',
           encoding: Encoding.getByName('utf-8'),
         ),
       );
   }
 
-  // HTML-escape helper — prevents XSS from param values containing " or <
-  String _escapeHtml(String value) {
-    return value
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#x27;');
-  }
-
-  String _generatePaymentForm({
-    required String loadingText,
-    required String secureBadgeText,
-  }) {
+  String _generatePaymentForm() {
     final formFields = _paymentParams!.entries
-        .map((e) =>
-            '<input type="hidden" name="${_escapeHtml(e.key)}" value="${_escapeHtml(e.value.toString())}">')
+        .map((e) => '<input type="hidden" name="${e.key}" value="${e.value}">')
         .join('\n');
-
-    final safeGatewayUrl = _escapeHtml(_gatewayUrl!);
 
     return '''
       <!DOCTYPE html>
@@ -381,29 +337,49 @@ class _IsbankAdsImagesPaymentScreenState
             align-items: center;
             justify-content: center;
           }
-          .loading-container { text-align: center; color: white; padding: 40px; }
+          .loading-container {
+            text-align: center;
+            color: white;
+            padding: 40px;
+          }
           .spinner {
-            width: 50px; height: 50px; margin: 0 auto 20px;
-            border: 4px solid rgba(255,255,255,0.3);
-            border-top-color: white; border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            margin: 0 auto 20px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
             animation: spin 1s linear infinite;
           }
-          @keyframes spin { to { transform: rotate(360deg); } }
-          .loading-text { font-size: 18px; font-weight: 500; margin: 0; }
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+          .loading-text {
+            font-size: 18px;
+            font-weight: 500;
+            margin: 0;
+          }
           .secure-badge {
-            display: inline-flex; align-items: center; gap: 8px;
-            background: rgba(255,255,255,0.2); padding: 8px 16px;
-            border-radius: 20px; margin-top: 20px; font-size: 14px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            margin-top: 20px;
+            font-size: 14px;
           }
         </style>
       </head>
       <body>
         <div class="loading-container">
           <div class="spinner"></div>
-          <p class="loading-text">${_escapeHtml(loadingText)}</p>
-          <div class="secure-badge">🔒 ${_escapeHtml(secureBadgeText)}</div>
+          <p class="loading-text">Güvenli Ödeme sayfası yükleniyor...</p>
+          <div class="secure-badge">
+            🔒 Güvenli Bağlantı
+          </div>
         </div>
-        <form id="paymentForm" method="post" action="$safeGatewayUrl">
+        <form id="paymentForm" method="post" action="$_gatewayUrl">
           $formFields
         </form>
         <script>
@@ -414,44 +390,57 @@ class _IsbankAdsImagesPaymentScreenState
     ''';
   }
 
-  // ── Dialogs ───────────────────────────────────────────────────────────────────
-
   void _showErrorDialog(String message) {
     if (!mounted) return;
+
     final l10n = AppLocalizations.of(context);
 
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
         title: Row(
           children: [
             Icon(Icons.error_outline, color: Colors.red.shade400, size: 28),
             const SizedBox(width: 12),
-            Text(l10n.paymentError,
-                style: GoogleFonts.figtree(
-                    fontSize: 20, fontWeight: FontWeight.w600)),
+            Text(
+              l10n.paymentError,
+              style: GoogleFonts.figtree(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
         ),
-        content: Text(message,
-            style: GoogleFonts.figtree(
-                fontSize: 16, color: const Color(0xFF64748B))),
+        content: Text(
+          message,
+          style: GoogleFonts.figtree(
+            fontSize: 16,
+            color: const Color(0xFF64748B),
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(ctx);
-              if (mounted) context.pop();
+              Navigator.pop(context);
+              Navigator.pop(context, false);
             },
             style: TextButton.styleFrom(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
-            child: Text(l10n.ok,
-                style: GoogleFonts.figtree(
-                    fontSize: 16, fontWeight: FontWeight.w600)),
+            child: Text(
+              l10n.ok,
+              style: GoogleFonts.figtree(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
@@ -459,68 +448,84 @@ class _IsbankAdsImagesPaymentScreenState
   }
 
   void _showCancelDialog() {
-    // Payment already resolved — X button should do nothing
-    if (_isNavigating) return;
-
     final l10n = AppLocalizations.of(context);
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(l10n.cancelPaymentTitle,
-            style: GoogleFonts.figtree(
-                fontSize: 20, fontWeight: FontWeight.w600)),
-        content: Text(l10n.cancelPaymentMessage,
-            style: GoogleFonts.figtree(
-                fontSize: 16, color: const Color(0xFF64748B))),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Text(
+          l10n.cancelPaymentTitle,
+          style: GoogleFonts.figtree(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        content: Text(
+          l10n.cancelPaymentMessage,
+          style: GoogleFonts.figtree(
+            fontSize: 16,
+            color: const Color(0xFF64748B),
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(l10n.no,
-                style: GoogleFonts.figtree(
-                    fontSize: 16, color: const Color(0xFF64748B))),
+            child: Text(
+              l10n.no,
+              style: GoogleFonts.figtree(
+                fontSize: 16,
+                color: const Color(0xFF64748B),
+              ),
+            ),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              if (mounted) context.pop();
+              Navigator.pop(context, false);
             },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: Text(l10n.yes,
-                style: GoogleFonts.figtree(
-                    fontSize: 16, fontWeight: FontWeight.w600)),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: Text(
+              l10n.yes,
+              style: GoogleFonts.figtree(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  // =============================================================================
-  // BUILD
-  // =============================================================================
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor:
           isDark ? const Color(0xFF0F0F23) : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor:
-            isDark ? const Color(0xFF1A1B23) : Colors.white,
+        backgroundColor: isDark ? const Color(0xFF1A1B23) : Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
           icon: const Icon(Icons.close, size: 24),
-          // Disable X while payment is initialising
           onPressed: _isInitializing ? null : _showCancelDialog,
         ),
         title: Row(
           children: [
-            Icon(Icons.lock_outline, size: 20, color: Colors.green.shade600),
+            Icon(
+              Icons.lock_outline,
+              size: 20,
+              color: Colors.green.shade600,
+            ),
             const SizedBox(width: 8),
             Text(
               l10n.securePayment,
@@ -533,21 +538,16 @@ class _IsbankAdsImagesPaymentScreenState
           ],
         ),
       ),
-      body: _buildBody(isDark, l10n),
-    );
-  }
-
-  Widget _buildBody(bool isDark, AppLocalizations l10n) {
-    if (_isInitializing) return _buildInitializingView(isDark, l10n);
-
-    // Fatal error during init or WebView load
-    if (_fatalError != null) return _buildErrorView(isDark, l10n);
-
-    return Stack(
-      children: [
-        WebViewWidget(controller: _controller),
-        if (_isLoading) _buildLoadingOverlay(isDark, l10n),
-      ],
+      body: _isInitializing
+          ? _buildInitializingView(isDark, l10n)
+          : _errorMessage != null
+              ? _buildErrorView(isDark, l10n)
+              : Stack(
+                  children: [
+                    WebViewWidget(controller: _controller),
+                    if (_isLoading) _buildLoadingOverlay(isDark, l10n),
+                  ],
+                ),
     );
   }
 
@@ -560,8 +560,7 @@ class _IsbankAdsImagesPaymentScreenState
           children: [
             const CircularProgressIndicator(
               strokeWidth: 3,
-              valueColor:
-                  AlwaysStoppedAnimation<Color>(Color(0xFF667EEA)),
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF667EEA)),
             ),
             const SizedBox(height: 24),
             Text(
@@ -587,8 +586,7 @@ class _IsbankAdsImagesPaymentScreenState
           children: [
             const CircularProgressIndicator(
               strokeWidth: 3,
-              valueColor:
-                  AlwaysStoppedAnimation<Color>(Color(0xFF667EEA)),
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF667EEA)),
             ),
             const SizedBox(height: 24),
             Text(
@@ -613,7 +611,11 @@ class _IsbankAdsImagesPaymentScreenState
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red.shade400),
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Colors.red.shade400,
+            ),
             const SizedBox(height: 24),
             Text(
               l10n.connectionError,
@@ -626,7 +628,7 @@ class _IsbankAdsImagesPaymentScreenState
             ),
             const SizedBox(height: 12),
             Text(
-              _fatalError!,
+              _errorMessage!,
               style: GoogleFonts.figtree(
                 fontSize: 14,
                 color: isDark ? Colors.white70 : const Color(0xFF64748B),
@@ -642,9 +644,12 @@ class _IsbankAdsImagesPaymentScreenState
                 backgroundColor: const Color(0xFF667EEA),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 32, vertical: 16),
+                  horizontal: 32,
+                  vertical: 16,
+                ),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ],

@@ -139,8 +139,8 @@ class _FoodPaymentScreenState extends State<FoodPaymentScreen> {
 
   Future<void> _checkPaymentStatus() async {
     try {
-      final fn =
-          FirebaseFunctions.instance.httpsCallable('checkFoodPaymentStatus');
+      final fn = FirebaseFunctions.instanceFor(region: 'europe-west3')
+          .httpsCallable('checkFoodPaymentStatus');
       final result = await fn.call({'orderNumber': widget.orderNumber});
       final data = result.data as Map<String, dynamic>;
       final status = data['status'] as String?;
@@ -153,7 +153,8 @@ class _FoodPaymentScreenState extends State<FoodPaymentScreen> {
         if (mounted) {
           setState(() {
             _paymentStatus = _PaymentStatus.failed;
-            _error = (data['errorMessage'] as String?) ?? AppLocalizations.of(context).paymentFailedDefault;
+            _error = (data['errorMessage'] as String?) ??
+                AppLocalizations.of(context).paymentFailedDefault;
           });
         }
       } else if (status == 'payment_succeeded_order_failed' ||
@@ -256,7 +257,9 @@ class _FoodPaymentScreenState extends State<FoodPaymentScreen> {
         subtitle: l10n.orderSentToRestaurant,
         trailing: _successOrderId.isNotEmpty
             ? Text(
-                l10n.orderLabel(_successOrderId.substring(0, _successOrderId.length.clamp(0, 8)).toUpperCase()),
+                l10n.orderLabel(_successOrderId
+                    .substring(0, _successOrderId.length.clamp(0, 8))
+                    .toUpperCase()),
                 style: TextStyle(
                     fontSize: 11,
                     color: isDark ? Colors.grey[600] : Colors.grey[400]),
@@ -312,7 +315,6 @@ class _FoodPaymentScreenState extends State<FoodPaymentScreen> {
               isDark: isDark,
               onCancel: _handleCancel,
             ),
-
             Expanded(
               child: Stack(
                 children: [
@@ -337,7 +339,6 @@ class _FoodPaymentScreenState extends State<FoodPaymentScreen> {
                       child: WebViewWidget(controller: _webController),
                     ),
                   ),
-
                   if (_isLoading)
                     Container(
                       color: Colors.black.withOpacity(0.6),
@@ -369,8 +370,8 @@ class _FoodPaymentScreenState extends State<FoodPaymentScreen> {
                                     color: Colors.white)),
                             const SizedBox(height: 6),
                             Text(l10n.pleaseWait,
-                                style:
-                                    TextStyle(fontSize: 13, color: Colors.grey[300])),
+                                style: TextStyle(
+                                    fontSize: 13, color: Colors.grey[300])),
                           ],
                         ),
                       ),
@@ -378,7 +379,6 @@ class _FoodPaymentScreenState extends State<FoodPaymentScreen> {
                 ],
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: Column(children: [
@@ -473,8 +473,7 @@ class _PaymentHeader extends StatelessWidget {
                   style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
-                      color:
-                          isDark ? Colors.orange[400] : Colors.orange[600])),
+                      color: isDark ? Colors.orange[400] : Colors.orange[600])),
             ]),
           ),
         ],
@@ -630,8 +629,8 @@ class _CancelDialog extends StatelessWidget {
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.red,
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             elevation: 0,
           ),
           child: Text(l10n.cancelPaymentButton,

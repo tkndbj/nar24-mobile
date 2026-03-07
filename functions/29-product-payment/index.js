@@ -57,7 +57,8 @@ function getAdCollectionName(adType) {
     }
   }
 
-async function validateDiscounts(tx, db, userId, couponId, benefitId, cartTotal) {
+   
+  async function validateDiscounts(tx, db, userId, couponId, benefitId, cartTotal) {
     let couponDiscount = 0;
     let freeShippingApplied = false;
     let couponCode = null;
@@ -1420,15 +1421,6 @@ async function validateDiscounts(tx, db, userId, couponId, benefitId, cartTotal)
     },
   );
   
-  function escapeHtml(str) {
-    return String(str ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#x27;');
-  }
-  
   // ═══════════════════════════════════════════════════════════════════════
   // NEW HELPER: Calculate delivery price (mirrors Flutter logic exactly)
   // ═══════════════════════════════════════════════════════════════════════
@@ -1477,131 +1469,6 @@ async function validateDiscounts(tx, db, userId, couponId, benefitId, cartTotal)
     console.log('Hash plain text:', plainText);
   
     return crypto.createHash('sha512').update(plainText, 'utf8').digest('base64');
-  }
-  
-  async function issueIsbankRefund(paymentOrderId, currency = '949') {
-    const config = await getIsbankConfig();
-    const API_URL = 'https://sanalpos.isbank.com.tr/fim/api';
-    const attemptTypes = ['Void', 'Credit'];
-  
-    for (const type of attemptTypes) {
-      const xmlBody = `<?xml version="1.0" encoding="UTF-8"?>
-  <CC5Request>
-    <Name>${config.apiUser}</Name>
-    <Password>${config.apiPassword}</Password>
-    <ClientId>${config.clientId}</ClientId>
-    <Type>${type}</Type>
-    <OrderId>${paymentOrderId}</OrderId>
-  </CC5Request>`;
-  
-      let rawText = '';
-      try {
-        const res = await fetch(API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/xml; charset=UTF-8' },
-          body: xmlBody,
-          signal: AbortSignal.timeout(15000),
-        });
-        rawText = await res.text();
-      } catch (fetchErr) {
-        console.error(`[Refund] Network error on ${type}:`, fetchErr.message);
-        continue;
-      }
-  
-      const get = (tag) => {
-        const m = rawText.match(new RegExp(`<${tag}>([^<]*)</${tag}>`));
-        return m ? m[1].trim() : '';
-      };
-  
-      const procCode = get('ProcReturnCode');
-      const bankResp = get('Response');
-      const errMsg = get('ErrMsg');
-  
-      console.log(`[Refund] ${type} → ProcReturnCode=${procCode} Response=${bankResp}`);
-  
-      if (procCode === '00' && bankResp === 'Approved') {
-        return { success: true, type, procCode };
-      }
-  
-      const alreadySettled =
-        errMsg.toLowerCase().includes('settled') ||
-        errMsg.toLowerCase().includes('not found') ||
-        procCode === '99';
-  
-      if (type === 'Void' && alreadySettled) {
-        console.log('[Refund] Void failed (already settled), trying Credit...');
-        continue;
-      }
-  
-      throw new Error(`İşbank ${type} rejected: ${errMsg || procCode}`);
-    }
-  
-    throw new Error('[Refund] Both Void and Credit failed.');
-  }
-  
-  async function attemptAutoRefundProduct(db, oid, pendingPayment) {
-    const alertRef = db.collection('_payment_alerts').doc(`product_${oid}`);
-  
-    // Safety check: never refund if an order already exists
-    const existingOrder = await db.collection('orders')
-      .where('paymentOrderId', '==', oid)
-      .limit(1)
-      .get();
-  
-    if (!existingOrder.empty) {
-      console.warn(`[Refund] BLOCKED — order ${existingOrder.docs[0].id} already exists for ${oid}. Not refunding.`);
-      await db.collection('pendingPayments').doc(oid).update({
-        status: 'completed',
-        orderId: existingOrder.docs[0].id,
-        note: 'Order found during refund safety check',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      return false;
-    }
-  
-    try {
-      const result = await issueIsbankRefund(oid);
-  
-      await alertRef.set({
-        type: 'product_order_creation_failed',
-        severity: 'low',
-        paymentOrderId: oid,
-        userId: pendingPayment.userId,
-        amount: pendingPayment.amount,
-        refundType: result.type,
-        requiresRefund: false,
-        isResolved: true,
-        isRead: false,
-        resolvedNote: `Auto-refunded via ${result.type}`,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true });
-  
-      await db.collection('pendingPayments').doc(oid).update({
-        status: 'refunded',
-        refundType: result.type,
-        refundedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-  
-      console.log(`[Refund] Product auto-refund (${result.type}) succeeded for ${oid}`);
-      return true;
-    } catch (refundErr) {
-      console.error('[Refund] Product auto-refund failed:', refundErr.message);
-  
-      await alertRef.set({
-        type: 'product_order_creation_failed',
-        severity: 'critical',
-        paymentOrderId: oid,
-        userId: pendingPayment.userId,
-        amount: pendingPayment.amount,
-        requiresRefund: true,
-        autoRefundError: refundErr.message,
-        isResolved: false,
-        isRead: false,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true });
-  
-      return false;
-    }
   }
   
   export const isbankPaymentCallback = onRequest(
@@ -1714,30 +1581,33 @@ async function validateDiscounts(tx, db, userId, couponId, benefitId, cartTotal)
             };
           }
   
-           // Verify hash — reject if missing or wrong
-           if (!HASHPARAMSVAL || !HASH) {
-            console.error('[Payment] Callback missing hash fields — rejecting.');
-            transaction.update(pendingPaymentRef, {
-              status: 'hash_verification_failed',
-              errorMessage: 'Missing hash fields',
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-              callbackLogId: callbackLogRef.id,
-            });
-            return { error: 'hash_failed', message: 'Missing hash fields' };
-          }
+          // Verify hash if provided
+          if (HASHPARAMSVAL && HASH) {
+            const hashParams = HASHPARAMSVAL + isbankConfig.storeKey;
+            const calculatedHash = crypto.createHash('sha512').update(hashParams, 'utf8').digest('base64');
   
-          const hashParams = HASHPARAMSVAL + isbankConfig.storeKey;
-          const calculatedHash = crypto.createHash('sha512').update(hashParams, 'utf8').digest('base64');
+            console.log('Received HASH:', HASH);
+            console.log('Calculated HASH:', calculatedHash);
   
-          if (calculatedHash !== HASH) {
-            console.error('Hash verification failed!');
-            transaction.update(pendingPaymentRef, {
-              status: 'hash_verification_failed',
-              errorMessage: 'Hash verification failed',
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-              callbackLogId: callbackLogRef.id,
-            });
-            return { error: 'hash_failed', message: 'Hash verification failed' };
+            if (calculatedHash !== HASH) {
+              console.error('Hash verification failed!');
+              transaction.update(pendingPaymentRef, {
+                status: 'hash_verification_failed',
+                errorMessage: 'Hash verification failed',
+                receivedHash: HASH,
+                calculatedHash: calculatedHash,
+                hashParamsVal: HASHPARAMSVAL,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                callbackLogId: callbackLogRef.id,
+              });
+  
+              return {
+                error: 'hash_failed',
+                message: 'Hash verification failed',
+              };
+            }
+          } else {
+            console.warn('HASHPARAMSVAL not provided - skipping hash verification');
           }
   
           // Check payment status
@@ -1813,7 +1683,7 @@ async function validateDiscounts(tx, db, userId, couponId, benefitId, cartTotal)
                   <h2>Ödeme Başarısız</h2>
                   <p>${transactionResult.message}</p>
                 </div>
-                <script>window.location.href = 'payment-failed://${escapeHtml(encodeURIComponent(transactionResult.message))}';</script>
+                <script>window.location.href = 'payment-failed://${encodeURIComponent(transactionResult.message)}';</script>
               </body>
               </html>
             `);
@@ -1835,7 +1705,7 @@ async function validateDiscounts(tx, db, userId, couponId, benefitId, cartTotal)
                   <h2>✓ Ödeme Başarılı</h2>
                   <p>Siparişiniz oluşturuldu.</p>
                 </div>
-                <script>window.location.href = 'payment-success://${escapeHtml(transactionResult.orderId)}';</script>
+                <script>window.location.href = 'payment-success://${transactionResult.orderId}';</script>
               </body>
               </html>
             `);
@@ -1850,7 +1720,7 @@ async function validateDiscounts(tx, db, userId, couponId, benefitId, cartTotal)
                   <h2>İşlem Zaten İşlendi</h2>
                   <p>${transactionResult.message}</p>
                 </div>
-                <script>window.location.href = 'payment-status://${escapeHtml(transactionResult.status)}';</script>
+                <script>window.location.href = 'payment-status://${transactionResult.status}';</script>
               </body>
               </html>
             `);
@@ -1883,7 +1753,7 @@ async function validateDiscounts(tx, db, userId, couponId, benefitId, cartTotal)
                     <h2>✓ Ödeme Başarılı</h2>
                     <p>Siparişiniz oluşturuldu.</p>
                   </div>
-                  <script>window.location.href = 'payment-success://${escapeHtml(checkData.orderId)}';</script>
+                  <script>window.location.href = 'payment-success://${checkData.orderId}';</script>
                 </body>
                 </html>
               `);
@@ -1917,100 +1787,93 @@ async function validateDiscounts(tx, db, userId, couponId, benefitId, cartTotal)
           return;
         }
   
-       // ── Create order (3 attempts with backoff) ─────────────────────
-       const MAX_RETRIES = 3;
-       let orderResult = null;
-       let lastOrderError = null;
+        // Create order with payment reference for idempotency
+        try {
+          console.log(`Creating order for payment ${oid}`);
   
-       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-         try {
-           console.log(`[Payment] Order creation attempt ${attempt} for ${oid}`);
-           orderResult = await createOrderTransaction(
-             transactionResult.pendingPayment.userId,
-             {
-               ...transactionResult.pendingPayment.cartData,
-               paymentOrderId: oid,
-               paymentMethod: 'isbank_3d',
-               serverCalculation: transactionResult.pendingPayment.serverCalculation || null,
-             },
-           );
-           lastOrderError = null;
-           break;
-         } catch (err) {
-           lastOrderError = err;
-           console.warn(`[Payment] Order creation attempt ${attempt} failed:`, err.message);
-           if (attempt < MAX_RETRIES) {
-             await new Promise((r) => setTimeout(r, 500 * attempt));
-           }
-         }
-       }
+          const orderResult = await createOrderTransaction(
+            transactionResult.pendingPayment.userId,
+            {
+              ...transactionResult.pendingPayment.cartData,
+              paymentOrderId: oid,
+              paymentMethod: 'isbank_3d',
+              serverCalculation: transactionResult.pendingPayment.serverCalculation || null,
+            },
+          );
   
-       if (orderResult) {
-         // ── Happy path ────────────────────────────────────────────────
-         await pendingPaymentRef.update({
-           status: 'completed',
-           orderId: orderResult.orderId,
-           completedAt: admin.firestore.FieldValue.serverTimestamp(),
-           processingDuration: Date.now() - startTime,
-         });
+          // Check if order was duplicate
+          if (orderResult.duplicate) {
+            console.log(`Order already existed for payment ${oid}: ${orderResult.orderId}`);
+          }
   
-         await callbackLogRef.update({
-           processingCompleted: admin.firestore.FieldValue.serverTimestamp(),
-           orderId: orderResult.orderId,
-           success: true,
-           processingDuration: Date.now() - startTime,
-         });
+          // Update payment status to completed
+          await pendingPaymentRef.update({
+            status: 'completed',
+            orderId: orderResult.orderId,
+            completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            processingDuration: Date.now() - startTime,
+          });
   
-         response.send(`
-           <!DOCTYPE html>
-           <html>
-           <head><title>Ödeme Başarılı</title></head>
-           <body>
-             <div style="text-align:center; padding:50px;">
-               <h2>✓ Ödeme Başarılı</h2>
-               <p>Siparişiniz oluşturuldu.</p>
-             </div>
-             <script>window.location.href = 'payment-success://${escapeHtml(orderResult.orderId)}';</script>
-           </body>
-           </html>
-         `);
-         console.log(`[Payment] ${oid} successfully processed → order ${orderResult.orderId}`);
-       } else {
-         // ── All retries exhausted — attempt auto-refund ───────────────
-         console.error('[Payment] All order creation attempts failed:', lastOrderError?.message);
+          // Update callback log
+          await callbackLogRef.update({
+            processingCompleted: admin.firestore.FieldValue.serverTimestamp(),
+            orderId: orderResult.orderId,
+            success: true,
+            processingDuration: Date.now() - startTime,
+          });
   
-         await pendingPaymentRef.update({
-           status: 'payment_succeeded_order_failed',
-           orderError: lastOrderError?.message,
-           retryExhausted: true,
-           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-         });
+          response.send(`
+            <!DOCTYPE html>
+            <html>
+            <head><title>Ödeme Başarılı</title></head>
+            <body>
+              <div style="text-align:center; padding:50px;">
+                <h2>✓ Ödeme Başarılı</h2>
+                <p>Siparişiniz oluşturuldu.</p>
+              </div>
+              <script>window.location.href = 'payment-success://${orderResult.orderId}';</script>
+            </body>
+            </html>
+          `);
   
-         await callbackLogRef.update({
-           processingFailed: admin.firestore.FieldValue.serverTimestamp(),
-           error: lastOrderError?.message,
-           success: false,
-         });
+          // Log successful response
+          console.log(`Payment ${oid} successfully processed with order ${orderResult.orderId}`);
+          return;
+        } catch (orderError) {
+          console.error('Order creation failed after payment:', orderError);
   
-         await attemptAutoRefundProduct(db, oid, transactionResult.pendingPayment);
+          await pendingPaymentRef.update({
+            status: 'payment_succeeded_order_failed',
+            orderError: orderError.message,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
   
-         response.send(`
-           <!DOCTYPE html>
-           <html>
-           <head><title>Sipariş Hatası</title></head>
-           <body>
-             <div style="text-align:center; padding:50px;">
-               <h2>Ödeme alındı ancak sipariş oluşturulamadı</h2>
-               <p>Lütfen destek ile iletişime geçin.</p>
-               <p>Referans: ${escapeHtml(oid)}</p>
-             </div>
-             <script>window.location.href = 'payment-failed://order-creation-error';</script>
-           </body>
-           </html>
-         `);
-       }
+          await callbackLogRef.update({
+            processingFailed: admin.firestore.FieldValue.serverTimestamp(),
+            error: orderError.message,
+            success: false,
+          });
+  
+          response.send(`
+            <!DOCTYPE html>
+            <html>
+            <head><title>Sipariş Hatası</title></head>
+            <body>
+              <div style="text-align:center; padding:50px;">
+                <h2>Ödeme alındı ancak sipariş oluşturulamadı</h2>
+                <p>Lütfen destek ile iletişime geçin.</p>
+                <p>Referans: ${oid}</p>
+              </div>
+              <script>window.location.href = 'payment-failed://order-creation-error';</script>
+            </body>
+            </html>
+          `);
+          return;
+        }
       } catch (error) {
         console.error('Payment callback critical error:', error);
+  
+        // Try to log the error
         try {
           await db.collection('payment_callback_errors').add({
             oid: request.body?.oid || 'unknown',
@@ -2022,9 +1885,11 @@ async function validateDiscounts(tx, db, userId, couponId, benefitId, cartTotal)
         } catch (logError) {
           console.error('Failed to log error:', logError);
         }
+  
         response.status(500).send('Internal server error');
       }
-  });
+    },
+  );
   
   export const checkIsbankPaymentStatus = onCall(
     {
