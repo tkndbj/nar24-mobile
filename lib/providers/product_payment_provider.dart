@@ -225,7 +225,10 @@ class ProductPaymentProvider with ChangeNotifier {
         addressLine1Controller.text = selectedAddress['addressLine1'];
         addressLine2Controller.text = selectedAddress['addressLine2'];
         selectedRegion = selectedAddress['city'];
-        phoneNumberController.text = selectedAddress['phoneNumber'];
+        final raw = (selectedAddress['phoneNumber'] as String)
+            .replaceAll(RegExp(r'\D'), '');
+        phoneNumberController.text =
+            raw.startsWith('0') ? raw.substring(1) : raw;
         selectedLocation = selectedAddress['location'] != null
             ? LatLng(
                 selectedAddress['location'].latitude,
@@ -378,7 +381,7 @@ class ProductPaymentProvider with ChangeNotifier {
         'orderNumber': orderNumber,
         'customerName': customerName,
         'customerEmail': customerEmail,
-        'customerPhone': phoneNumberController.text,
+        'customerPhone': normalizedPhone,
         'cartData': cartData,
       });
 
@@ -398,7 +401,7 @@ class ProductPaymentProvider with ChangeNotifier {
         MaterialPageRoute(
           builder: (context) => IsbankPaymentScreen(
             gatewayUrl: initData['gatewayUrl'],
-            paymentParams: Map<String, dynamic>.from(initData['paymentParams']),
+            paymentParams: Map<String, String>.from(initData['paymentParams']),
             orderNumber: orderNumber ?? '',
           ),
         ),

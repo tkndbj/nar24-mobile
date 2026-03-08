@@ -26,7 +26,6 @@ import '../../screens/USER-PROFILE/my_coupons_and_benefits_screen.dart';
 
 // Import order-related screens
 import '../../screens/USER-PROFILE/my_orders_screen.dart';
-import '../../screens/USER-PROFILE/my_food_orders.dart';
 import '../../screens/USER-PROFILE/refund_order_selection_screen.dart';
 import '../../screens/USER-PROFILE/refund_form_screen.dart';
 import '../../screens/LOCATION-SCREENS/view_pickup_point_screen.dart';
@@ -255,20 +254,6 @@ class ProfileRoutes {
           return CustomTransitionPage(
             key: state.pageKey,
             child: const MyOrdersScreen(),
-            transitionsBuilder: _slideTransition,
-            transitionDuration: const Duration(milliseconds: 200),
-          );
-        },
-      ),
-
-      // My Food Orders
-      GoRoute(
-        path: '/my_food_orders',
-        name: 'my-food-orders',
-        pageBuilder: (context, state) {
-          return CustomTransitionPage(
-            key: state.pageKey,
-            child: const MyFoodOrdersScreen(),
             transitionsBuilder: _slideTransition,
             transitionDuration: const Duration(milliseconds: 200),
           );

@@ -6906,6 +6906,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get myOrders => 'Ürün Siparişleri';
 
   @override
+  String get orderCreatedSuccessfully => 'Siparişiniz başarıyla oluşturuldu.';
+
+  @override
+  String get backToMarket => 'Markete Dön';
+
+  @override
+  String get marketOrder => 'Market Siparişi';
+
+  @override
   String get addNewAddress => 'Yeni adres ekle';
 
   @override

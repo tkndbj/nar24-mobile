@@ -6897,6 +6897,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get myOrders => 'Product Orders';
 
   @override
+  String get orderCreatedSuccessfully =>
+      'Your order has been created successfully.';
+
+  @override
+  String get backToMarket => 'Back to Market';
+
+  @override
+  String get marketOrder => 'Market Order';
+
+  @override
   String get addNewAddress => 'Add a new address';
 
   @override

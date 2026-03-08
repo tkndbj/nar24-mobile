@@ -13258,6 +13258,24 @@ abstract class AppLocalizations {
   /// **'Ürün Siparişleri'**
   String get myOrders;
 
+  /// No description provided for @orderCreatedSuccessfully.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişiniz başarıyla oluşturuldu.'**
+  String get orderCreatedSuccessfully;
+
+  /// No description provided for @backToMarket.
+  ///
+  /// In tr, this message translates to:
+  /// **'Markete Dön'**
+  String get backToMarket;
+
+  /// No description provided for @marketOrder.
+  ///
+  /// In tr, this message translates to:
+  /// **'Market Siparişi'**
+  String get marketOrder;
+
   /// No description provided for @addNewAddress.
   ///
   /// In tr, this message translates to:

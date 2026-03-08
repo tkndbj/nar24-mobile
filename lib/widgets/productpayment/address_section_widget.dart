@@ -346,10 +346,6 @@ class _AddressSectionWidgetState extends State<AddressSectionWidget> {
                                   if (address['region'] != null) {
                                     provider.setRegion(address['region']);
                                   }
-                                  if (address['phoneNumber'] != null) {
-                                    provider.phoneNumberController.text =
-                                        address['phoneNumber'];
-                                  }
                                 },
                                 leading: Radio<String?>(
                                   value: address['id'],
@@ -377,10 +373,6 @@ class _AddressSectionWidgetState extends State<AddressSectionWidget> {
                                       }
                                       if (address['region'] != null) {
                                         provider.setRegion(address['region']);
-                                      }
-                                      if (address['phoneNumber'] != null) {
-                                        provider.phoneNumberController.text =
-                                            address['phoneNumber'];
                                       }
                                     }
                                   },
@@ -694,7 +686,8 @@ class _PhoneNumberFormatter extends TextInputFormatter {
     final digitsOnly = newValue.text.replaceAll(RegExp(r'\D'), '');
 
     // Limit to 10 digits
-    final limited = digitsOnly.length > 10 ? digitsOnly.substring(0, 10) : digitsOnly;
+    final limited =
+        digitsOnly.length > 10 ? digitsOnly.substring(0, 10) : digitsOnly;
 
     // Format as (XXX) XXX XX XX
     final buffer = StringBuffer();

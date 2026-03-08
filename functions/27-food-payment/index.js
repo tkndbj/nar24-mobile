@@ -737,6 +737,10 @@ export const initializeFoodPayment = onCall(
 // HTTP: foodPaymentCallback (İşbank 3D callback)
 // ============================================================================
 
+// ============================================================================
+// HTTP: foodPaymentCallback (İşbank 3D callback) — FIXED
+// ============================================================================
+
 export const foodPaymentCallback = onRequest(
   {
     region: REGION,
@@ -756,9 +760,10 @@ export const foodPaymentCallback = onRequest(
         oid,
         ProcReturnCode,
         ErrMsg,
-        HASH,       
+        HASH,
       } = request.body;
 
+      // İşbank probe request — no oid
       if (!request.body.oid && request.body.HASH && request.body.rnd) {
         console.log('[FoodPayment] İşbank probe request — responding OK');
         response.status(200).send('<html><body></body></html>');
@@ -770,19 +775,52 @@ export const foodPaymentCallback = onRequest(
         return;
       }
 
-      // Log callback
-      const logRef = db.collection('food_payment_callback_logs').doc();
-      await logRef.set({
-        oid,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        requestBody: request.body,
-        ip: request.ip || request.headers['x-forwarded-for'] || null,
-      });
+      // ── Fetch storeKey BEFORE the transaction (async not allowed inside tx) ──
+      const storeKey = (await getSecret(
+        'projects/emlak-mobile-app/secrets/ISBANK_STORE_KEY/versions/latest'
+      )).trim();
 
-      const pendingRef = db.collection('pendingFoodPayments').doc(oid); 
+      // ── Compute expected hash from RESPONSE params ───────────────
+      // Per İşbank Hash v3 docs: sort all response params alphabetically
+      // (case-insensitive, en-US), exclude 'encoding', 'hash', 'countdown',
+      // escape \ and |, join with |, append |storeKey, then SHA-512 + base64.
+      const computedHash = (() => {
+        const bodyParams = request.body;
+        const keys = Object.keys(bodyParams)
+  .filter((key) => {
+    const lower = key.toLowerCase();
+    return lower !== 'encoding' && lower !== 'hash' && lower !== 'countdown' && lower !== 'nationalidno';
+  })
+  .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), 'en-US'));
 
+const plainText =
+  keys
+    .map((key) => {
+      const val = String(bodyParams[key] ?? '');
+      return val.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
+    })
+    .join('|') +
+  '|' +
+  storeKey.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
 
-      // Atomic status check + update
+        return crypto.createHash('sha512').update(plainText, 'utf8').digest('base64');
+      })();
+
+      const hashValid = HASH && computedHash === HASH;
+
+      if (hashValid) {
+        const logRef = db.collection('food_payment_callback_logs').doc();
+        await logRef.set({
+          oid,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          requestBody: request.body,
+          ip: request.ip || request.headers['x-forwarded-for'] || null,
+        });
+      }
+
+      const pendingRef = db.collection('pendingFoodPayments').doc(oid);
+
+      // ── Atomic status check + update ─────────────────────────────
       const txResult = await db.runTransaction(async (tx) => {
         const pendingSnap = await tx.get(pendingRef);
 
@@ -803,21 +841,19 @@ export const foodPaymentCallback = onRequest(
           return { alreadyProcessed: true, status: pending.status };
         }
 
-        // Verify hash
-        if (HASH) {
-          const girogateParamReqHash = request.body.girogateParamReqHash;
-          const originalHash = pending.paymentParams?.hash;
-        
-          if (!girogateParamReqHash || !originalHash || girogateParamReqHash !== originalHash) {
-            tx.update(pendingRef, { 
-              status: 'hash_verification_failed', 
-              updatedAt: admin.firestore.FieldValue.serverTimestamp() 
-            });
-            return { error: 'hash_failed' };
-          }
+        // ── Hash verification (fixed) ────────────────────────────
+        if (!hashValid) {
+          console.error('[FoodPayment] Hash mismatch for oid:', oid);
+          tx.update(pendingRef, {
+            status: 'hash_verification_failed',
+            receivedHash: HASH || null,
+            computedHash,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          return { error: 'hash_failed' };
         }
 
-        // Check payment result
+        // ── Check payment result ─────────────────────────────────
         const isAuthOk = ['1', '2', '3', '4'].includes(mdStatus);
         const isTxnOk = bankResponse === 'Approved' && ProcReturnCode === '00';
 
@@ -841,7 +877,7 @@ export const foodPaymentCallback = onRequest(
         return { success: true, pending };
       });
 
-      // ── Handle transaction results ─────────────────────────────────
+      // ── Handle transaction results ─────────────────────────────
 
       if (txResult.error === 'not_found') {
         response.status(404).send('Payment session not found');
@@ -877,7 +913,7 @@ export const foodPaymentCallback = onRequest(
         return;
       }
 
-      // ── Create the food order ──────────────────────────────────────
+      // ── Create the food order ─────────────────────────────────
       try {
         const pending = txResult.pending;
         const orderResult = await createFoodOrderCore(
@@ -886,7 +922,7 @@ export const foodPaymentCallback = onRequest(
             ...pending.orderData,
             paymentMethod: 'card',
           },
-          oid // paymentOrderId
+          oid
         );
 
         await pendingRef.update({
@@ -908,7 +944,6 @@ export const foodPaymentCallback = onRequest(
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 
-        // Alert for manual resolution
         await db.collection('_payment_alerts').doc(`food_${oid}`).set({
           type: 'food_order_creation_failed',
           severity: 'high',
@@ -989,17 +1024,25 @@ export const checkFoodPaymentStatus = onCall(
 // HELPER: Build redirect HTML for İşbank callback
 // ============================================================================
 
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function buildRedirectHtml(deepLink, title, subtitle = '') {
   return `
     <!DOCTYPE html>
     <html>
-    <head><title>${title}</title></head>
+    <head><title>${escapeHtml(title)}</title></head>
     <body>
       <div style="text-align:center; padding:50px;">
-        <h2>${title}</h2>
-        ${subtitle ? `<p>${subtitle}</p>` : ''}
+        <h2>${escapeHtml(title)}</h2>
+        ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ''}
       </div>
-      <script>window.location.href = '${deepLink}';</script>
+      <script>window.location.href = '${escapeHtml(deepLink)}';</script>
     </body>
     </html>
   `;
@@ -1741,7 +1784,9 @@ export const updateFoodOrderStatus = onCall(
 
       const VALID_TRANSITIONS = {
         pending: ['accepted', 'rejected'],
-        accepted: ['delivered', 'rejected'],
+        accepted: ['preparing', 'rejected'],
+        preparing: ['ready'],
+        ready: ['delivered'],
       };
 
       const allowed = VALID_TRANSITIONS[order.status] || [];
@@ -1814,8 +1859,8 @@ export const submitRestaurantReview = onCall(
 
       const order = orderSnap.data();
 
-      if (order.buyerId !== buyerId) {
-        throw new HttpsError('permission-denied', 'This is not your order.');
+      if (order.restaurantId !== restaurantId) {
+        throw new HttpsError('invalid-argument', 'Order does not belong to this restaurant.');
       }
       if (order.status !== 'delivered') {
         throw new HttpsError('failed-precondition', 'Order has not been delivered yet.');

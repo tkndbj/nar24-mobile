@@ -6,6 +6,7 @@ import '../../generated/l10n/app_localizations.dart';
 import '../../widgets/myproducts/sold_bought_products_tab.dart';
 import 'package:provider/provider.dart';
 import '../../providers/my_products_provider.dart';
+import 'package:go_router/go_router.dart';
 
 class MyOrdersScreen extends StatefulWidget {
   const MyOrdersScreen({Key? key}) : super(key: key);
@@ -387,6 +388,19 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
             backgroundColor: isDark ? const Color(0xFF1C1A29) : Colors.white,
             iconTheme: IconThemeData(
               color: Theme.of(context).colorScheme.onSurface,
+            ),
+            leading: IconButton(
+              icon: Icon(
+                Icons.arrow_back_ios,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go('/');
+                }
+              },
             ),
             title: Text(
               l10n.myOrders,

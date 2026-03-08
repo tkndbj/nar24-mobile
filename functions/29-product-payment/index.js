@@ -1451,8 +1451,7 @@ function getAdCollectionName(adType) {
     const keys = Object.keys(params)
       .filter((key) => key !== 'hash' && key !== 'encoding')
       .sort((a, b) => {
-        // Case-insensitive sort - convert both to lowercase for comparison
-        return a.toLowerCase().localeCompare(b.toLowerCase());
+        return a.toLowerCase().localeCompare(b.toLowerCase(), 'en-US'); // ✅
       });
       const isbankConfig = await getIsbankConfig();
     // Build the plain text with pipe separators
@@ -1463,7 +1462,7 @@ function getAdCollectionName(adType) {
       return value;
     });
   
-    const plainText = values.join('|') + '|' + isbankConfig.storeKey;
+    const plainText = values.join('|') + '|' + isbankConfig.storeKey.trim();
   
     console.log('Hash keys order:', keys.join('|'));
     console.log('Hash plain text:', plainText);
@@ -1471,425 +1470,344 @@ function getAdCollectionName(adType) {
     return crypto.createHash('sha512').update(plainText, 'utf8').digest('base64');
   }
   
-  export const isbankPaymentCallback = onRequest(
-    {
-      region: 'europe-west3',
-      memory: '512MB',
-      timeoutSeconds: 90,
-      cors: true,
-      invoker: 'public',
-    },
-    async (request, response) => {
-      const startTime = Date.now();
-      const db = admin.firestore();
-      const isbankConfig = await getIsbankConfig();
-      try {
-        console.log('Callback invoked - method:', request.method);
-        console.log('All callback parameters:', JSON.stringify(request.body, null, 2));
-  
-        const {
-          Response,
-          mdStatus,
-          oid,
-          ProcReturnCode,
-          ErrMsg,
-          HASH,
-          HASHPARAMSVAL,
-        } = request.body;
-  
-        // Validate required fields
-        if (!oid) {
-          console.error('Missing oid in callback. Full body:', request.body);
-          response.status(400).send('Order number missing');
-          return;
+ // ── Helper ────────────────────────────────────────────────────────────────────
+function buildRedirectHtml(deepLink, title, subtitle = '') {
+  const esc = (s) => String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return `<!DOCTYPE html>
+<html>
+<head><title>${esc(title)}</title></head>
+<body>
+  <div style="text-align:center;padding:50px;">
+    <h2>${esc(title)}</h2>
+    ${subtitle ? `<p>${esc(subtitle)}</p>` : ''}
+  </div>
+  <script>window.location.href = '${esc(deepLink)}';</script>
+</body>
+</html>`;
+}
+
+// ── Cloud Function ─────────────────────────────────────────────────────────────
+export const isbankPaymentCallback = onRequest(
+  {
+    region: 'europe-west3',
+    memory: '512MB',
+    timeoutSeconds: 90,
+    cors: true,
+    invoker: 'public',
+  },
+  async (request, response) => {
+    const startTime = Date.now();
+    const db = admin.firestore();
+
+    try {
+      console.log('[Payment] Callback invoked:', request.method);
+      console.log('[Payment] Body:', JSON.stringify(request.body, null, 2));
+
+      const {
+        Response: bankResponse,
+        mdStatus,
+        oid,
+        ProcReturnCode,
+        ErrMsg,
+        HASH,
+      } = request.body;
+
+      // ── 1. İşbank probe request guard ──────────────────────────────────────
+      if (!request.body.oid && request.body.HASH && request.body.rnd) {
+        console.log('[Payment] İşbank probe request — responding OK');
+        response.status(200).send('<html><body></body></html>');
+        return;
+      }
+
+      // ── 2. Require oid ──────────────────────────────────────────────────────
+      if (!oid) {
+        console.error('[Payment] Missing oid. Body:', request.body);
+        response.status(400).send('Order number missing');
+        return;
+      }
+
+      // ── 3. Fetch storeKey before transaction (no async allowed inside tx) ───
+      const storeKey = (await getSecret(
+        'projects/emlak-mobile-app/secrets/ISBANK_STORE_KEY/versions/latest',
+      )).trim();
+
+      // ── 4. Compute Hash v3 before transaction ───────────────────────────────
+      const computedHash = (() => {
+        const keys = Object.keys(request.body)
+          .filter((key) => {
+            const lower = key.toLowerCase();
+            return lower !== 'encoding' && lower !== 'hash' &&
+                   lower !== 'countdown' && lower !== 'nationalidno';
+          })
+          .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), 'en-US'));
+
+        const plainText =
+          keys
+            .map((key) => String(request.body[key] ?? '')
+              .replace(/\\/g, '\\\\').replace(/\|/g, '\\|'))
+            .join('|') +
+          '|' +
+          storeKey.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
+
+        return crypto.createHash('sha512').update(plainText, 'utf8').digest('base64');
+      })();
+
+      const hashValid = HASH && computedHash === HASH;
+
+      // ── 5. Log every callback attempt (forensics) ───────────────────────────
+      const callbackLogRef = db.collection('payment_callback_logs').doc();
+      await callbackLogRef.set({
+        oid,
+        hashValid,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        requestBody: request.body,
+        ip: request.ip || request.headers['x-forwarded-for'] || null,
+        userAgent: request.headers['user-agent'] || null,
+        processingStarted: new Date(startTime).toISOString(),
+      });
+
+      // ── 6. Define ref before transaction ────────────────────────────────────
+      const pendingPaymentRef = db.collection('pendingPayments').doc(oid);
+
+      // ── 7. Atomic transaction ────────────────────────────────────────────────
+      const transactionResult = await db.runTransaction(async (tx) => {
+        const pendingSnap = await tx.get(pendingPaymentRef);
+
+        if (!pendingSnap.exists) {
+          return { error: 'not_found' };
         }
-  
-        // Log every callback attempt for forensics
-        const callbackLogRef = db.collection('payment_callback_logs').doc();
-        await callbackLogRef.set({
-          oid: oid,
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-          requestBody: request.body,
-          userAgent: request.headers['user-agent'] || null,
-          ip: request.ip || request.headers['x-forwarded-for'] || null,
-          processingStarted: new Date(startTime).toISOString(),
-        });
-  
-        const pendingPaymentRef = db.collection('pendingPayments').doc(oid);
-  
-        // CRITICAL: Use transaction for atomic operations
-        const transactionResult = await db.runTransaction(async (transaction) => {
-          const pendingPaymentSnap = await transaction.get(pendingPaymentRef);
-  
-          if (!pendingPaymentSnap.exists) {
-            return {
-              error: 'not_found',
-              message: 'Payment session not found',
-            };
-          }
-  
-          const pendingPayment = pendingPaymentSnap.data();
-  
-          // Check if already processed (idempotency check)
-          if (pendingPayment.status === 'completed') {
-            console.log(`Payment ${oid} already completed with order ${pendingPayment.orderId}`);
-            return {
-              alreadyProcessed: true,
-              orderId: pendingPayment.orderId,
-              status: 'completed',
-              message: 'Payment already successfully processed',
-            };
-          }
-  
-          if (pendingPayment.status === 'payment_succeeded_order_failed') {
-            console.log(`Payment ${oid} succeeded but order creation failed previously`);
-            return {
-              alreadyProcessed: true,
-              status: 'payment_succeeded_order_failed',
-              message: 'Payment succeeded but order creation failed',
-            };
-          }
-  
-          if (pendingPayment.status === 'payment_failed') {
-            console.log(`Payment ${oid} already marked as failed`);
-            return {
-              alreadyProcessed: true,
-              status: 'payment_failed',
-              message: 'Payment already marked as failed',
-            };
-          }
-  
-          // Only proceed if status is awaiting_3d
-          if (pendingPayment.status !== 'awaiting_3d') {
-            console.warn(`Unexpected status for ${oid}: ${pendingPayment.status}`);
-  
-            // If it's processing, another callback is handling it
-            if (pendingPayment.status === 'processing' ||
-                pendingPayment.status === 'payment_verified_processing_order') {
-              // Wait a bit and check if it completes
-              return {
-                retry: true,
-                currentStatus: pendingPayment.status,
-                pendingPayment: pendingPayment,
-              };
-            }
-  
-            return {
-              alreadyProcessed: true,
-              status: pendingPayment.status,
-              message: 'Payment in unexpected state',
-            };
-          }
-  
-          // Verify hash if provided
-          if (HASHPARAMSVAL && HASH) {
-            const hashParams = HASHPARAMSVAL + isbankConfig.storeKey;
-            const calculatedHash = crypto.createHash('sha512').update(hashParams, 'utf8').digest('base64');
-  
-            console.log('Received HASH:', HASH);
-            console.log('Calculated HASH:', calculatedHash);
-  
-            if (calculatedHash !== HASH) {
-              console.error('Hash verification failed!');
-              transaction.update(pendingPaymentRef, {
-                status: 'hash_verification_failed',
-                errorMessage: 'Hash verification failed',
-                receivedHash: HASH,
-                calculatedHash: calculatedHash,
-                hashParamsVal: HASHPARAMSVAL,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                callbackLogId: callbackLogRef.id,
-              });
-  
-              return {
-                error: 'hash_failed',
-                message: 'Hash verification failed',
-              };
-            }
-          } else {
-            console.warn('HASHPARAMSVAL not provided - skipping hash verification');
-          }
-  
-          // Check payment status
-          const isAuthSuccess = ['1', '2', '3', '4'].includes(mdStatus);
-          const isTransactionSuccess = Response === 'Approved' && ProcReturnCode === '00';
-  
-          if (!isAuthSuccess || !isTransactionSuccess) {
-            transaction.update(pendingPaymentRef, {
-              status: 'payment_failed',
-              response: Response,
-              mdStatus: mdStatus,
-              procReturnCode: ProcReturnCode,
-              errorMessage: ErrMsg || 'Payment failed',
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-              rawResponse: request.body,
-              callbackLogId: callbackLogRef.id,
-            });
-  
-            return {
-              error: 'payment_failed',
-              message: ErrMsg || 'Payment failed',
-            };
-          }
-  
-          // Payment successful - mark as processing to prevent race condition
-          transaction.update(pendingPaymentRef, {
-            status: 'processing',
-            response: Response,
-            mdStatus: mdStatus,
-            procReturnCode: ProcReturnCode,
-            processingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
-            rawResponse: request.body,
+
+        const pendingPayment = pendingSnap.data();
+
+        // Idempotency guards
+        if (pendingPayment.status === 'completed') {
+          return { alreadyProcessed: true, status: 'completed', orderId: pendingPayment.orderId };
+        }
+        if (pendingPayment.status === 'payment_succeeded_order_failed') {
+          return { alreadyProcessed: true, status: 'payment_succeeded_order_failed' };
+        }
+        if (pendingPayment.status === 'payment_failed') {
+          return { alreadyProcessed: true, status: 'payment_failed' };
+        }
+        if (pendingPayment.status === 'processing' ||
+            pendingPayment.status === 'payment_verified_processing_order') {
+          return { retry: true, pendingPayment };
+        }
+        if (pendingPayment.status !== 'awaiting_3d') {
+          return { alreadyProcessed: true, status: pendingPayment.status };
+        }
+
+        // Hash check (computed outside, acted on inside)
+        if (!hashValid) {
+          console.error('[Payment] Hash mismatch for oid:', oid);
+          tx.update(pendingPaymentRef, {
+            status: 'hash_verification_failed',
+            receivedHash: HASH || null,
+            computedHash,
             callbackLogId: callbackLogRef.id,
-          });
-  
-          return {
-            success: true,
-            pendingPayment: pendingPayment,
-          };
-        });
-  
-        // Handle transaction results
-        if (transactionResult.error) {
-          if (transactionResult.error === 'not_found') {
-            response.status(404).send('Payment session not found');
-            return;
-          }
-  
-          if (transactionResult.error === 'hash_failed') {
-            response.send(`
-              <!DOCTYPE html>
-              <html>
-              <head><title>Ödeme Hatası</title></head>
-              <body>
-                <div style="text-align:center; padding:50px;">
-                  <h2>Ödeme Doğrulama Hatası</h2>
-                  <p>Lütfen tekrar deneyin.</p>
-                </div>
-                <script>window.location.href = 'payment-failed://hash-error';</script>
-              </body>
-              </html>
-            `);
-            return;
-          }
-  
-          if (transactionResult.error === 'payment_failed') {
-            response.send(`
-              <!DOCTYPE html>
-              <html>
-              <head><title>Ödeme Başarısız</title></head>
-              <body>
-                <div style="text-align:center; padding:50px;">
-                  <h2>Ödeme Başarısız</h2>
-                  <p>${transactionResult.message}</p>
-                </div>
-                <script>window.location.href = 'payment-failed://${encodeURIComponent(transactionResult.message)}';</script>
-              </body>
-              </html>
-            `);
-            return;
-          }
-        }
-  
-        // Handle already processed payments
-        if (transactionResult.alreadyProcessed) {
-          console.log(`Payment ${oid} already processed: ${transactionResult.status}`);
-  
-          if (transactionResult.status === 'completed') {
-            response.send(`
-              <!DOCTYPE html>
-              <html>
-              <head><title>Ödeme Başarılı</title></head>
-              <body>
-                <div style="text-align:center; padding:50px;">
-                  <h2>✓ Ödeme Başarılı</h2>
-                  <p>Siparişiniz oluşturuldu.</p>
-                </div>
-                <script>window.location.href = 'payment-success://${transactionResult.orderId}';</script>
-              </body>
-              </html>
-            `);
-            return;
-          } else {
-            response.send(`
-              <!DOCTYPE html>
-              <html>
-              <head><title>İşlem Tamamlandı</title></head>
-              <body>
-                <div style="text-align:center; padding:50px;">
-                  <h2>İşlem Zaten İşlendi</h2>
-                  <p>${transactionResult.message}</p>
-                </div>
-                <script>window.location.href = 'payment-status://${transactionResult.status}';</script>
-              </body>
-              </html>
-            `);
-            return;
-          }
-        }
-  
-        // Handle retry case (concurrent processing)
-        if (transactionResult.retry) {
-          console.log(`Payment ${oid} is being processed by another callback, waiting...`);
-  
-          // Wait up to 10 seconds for the other process to complete
-          let retryCount = 0;
-          const maxRetries = 20;
-          const retryDelay = 500; // 500ms between checks
-  
-          while (retryCount < maxRetries) {
-            await new Promise((resolve) => setTimeout(resolve, retryDelay));
-  
-            const checkSnap = await pendingPaymentRef.get();
-            const checkData = checkSnap.data();
-  
-            if (checkData.status === 'completed') {
-              response.send(`
-                <!DOCTYPE html>
-                <html>
-                <head><title>Ödeme Başarılı</title></head>
-                <body>
-                  <div style="text-align:center; padding:50px;">
-                    <h2>✓ Ödeme Başarılı</h2>
-                    <p>Siparişiniz oluşturuldu.</p>
-                  </div>
-                  <script>window.location.href = 'payment-success://${checkData.orderId}';</script>
-                </body>
-                </html>
-              `);
-              return;
-            }
-  
-            if (checkData.status === 'payment_succeeded_order_failed' ||
-                checkData.status === 'payment_failed') {
-              response.send(`
-                <!DOCTYPE html>
-                <html>
-                <head><title>İşlem Hatası</title></head>
-                <body>
-                  <div style="text-align:center; padding:50px;">
-                    <h2>İşlem Hatası</h2>
-                    <p>Lütfen destek ile iletişime geçin.</p>
-                  </div>
-                  <script>window.location.href = 'payment-failed://processing-error';</script>
-                </body>
-                </html>
-              `);
-              return;
-            }
-  
-            retryCount++;
-          }
-  
-          // Timeout waiting for other process
-          console.error(`Timeout waiting for payment ${oid} processing`);
-          response.status(500).send('Processing timeout');
-          return;
-        }
-  
-        // Create order with payment reference for idempotency
-        try {
-          console.log(`Creating order for payment ${oid}`);
-  
-          const orderResult = await createOrderTransaction(
-            transactionResult.pendingPayment.userId,
-            {
-              ...transactionResult.pendingPayment.cartData,
-              paymentOrderId: oid,
-              paymentMethod: 'isbank_3d',
-              serverCalculation: transactionResult.pendingPayment.serverCalculation || null,
-            },
-          );
-  
-          // Check if order was duplicate
-          if (orderResult.duplicate) {
-            console.log(`Order already existed for payment ${oid}: ${orderResult.orderId}`);
-          }
-  
-          // Update payment status to completed
-          await pendingPaymentRef.update({
-            status: 'completed',
-            orderId: orderResult.orderId,
-            completedAt: admin.firestore.FieldValue.serverTimestamp(),
-            processingDuration: Date.now() - startTime,
-          });
-  
-          // Update callback log
-          await callbackLogRef.update({
-            processingCompleted: admin.firestore.FieldValue.serverTimestamp(),
-            orderId: orderResult.orderId,
-            success: true,
-            processingDuration: Date.now() - startTime,
-          });
-  
-          response.send(`
-            <!DOCTYPE html>
-            <html>
-            <head><title>Ödeme Başarılı</title></head>
-            <body>
-              <div style="text-align:center; padding:50px;">
-                <h2>✓ Ödeme Başarılı</h2>
-                <p>Siparişiniz oluşturuldu.</p>
-              </div>
-              <script>window.location.href = 'payment-success://${orderResult.orderId}';</script>
-            </body>
-            </html>
-          `);
-  
-          // Log successful response
-          console.log(`Payment ${oid} successfully processed with order ${orderResult.orderId}`);
-          return;
-        } catch (orderError) {
-          console.error('Order creation failed after payment:', orderError);
-  
-          await pendingPaymentRef.update({
-            status: 'payment_succeeded_order_failed',
-            orderError: orderError.message,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
-  
-          await callbackLogRef.update({
-            processingFailed: admin.firestore.FieldValue.serverTimestamp(),
-            error: orderError.message,
-            success: false,
-          });
-  
-          response.send(`
-            <!DOCTYPE html>
-            <html>
-            <head><title>Sipariş Hatası</title></head>
-            <body>
-              <div style="text-align:center; padding:50px;">
-                <h2>Ödeme alındı ancak sipariş oluşturulamadı</h2>
-                <p>Lütfen destek ile iletişime geçin.</p>
-                <p>Referans: ${oid}</p>
-              </div>
-              <script>window.location.href = 'payment-failed://order-creation-error';</script>
-            </body>
-            </html>
-          `);
-          return;
+          return { error: 'hash_failed' };
         }
-      } catch (error) {
-        console.error('Payment callback critical error:', error);
-  
-        // Try to log the error
-        try {
-          await db.collection('payment_callback_errors').add({
-            oid: request.body?.oid || 'unknown',
-            error: error.message,
-            stack: error.stack,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            requestBody: request.body,
+
+        // Payment result check
+        const isAuthSuccess = ['1', '2', '3', '4'].includes(mdStatus);
+        const isTxnSuccess = bankResponse === 'Approved' && ProcReturnCode === '00';
+
+        if (!isAuthSuccess || !isTxnSuccess) {
+          tx.update(pendingPaymentRef, {
+            status: 'payment_failed',
+            mdStatus,
+            procReturnCode: ProcReturnCode,
+            errorMessage: ErrMsg || 'Payment failed',
+            rawResponse: request.body,
+            callbackLogId: callbackLogRef.id,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
-        } catch (logError) {
-          console.error('Failed to log error:', logError);
+          return { error: 'payment_failed', message: ErrMsg || 'Payment failed' };
         }
-  
-        response.status(500).send('Internal server error');
+
+        // Mark as processing — prevents race conditions on duplicate callbacks
+        tx.update(pendingPaymentRef, {
+          status: 'processing',
+          mdStatus,
+          procReturnCode: ProcReturnCode,
+          rawResponse: request.body,
+          callbackLogId: callbackLogRef.id,
+          processingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        return { success: true, pendingPayment };
+      });
+
+      // ── 8. Handle transaction outcomes ──────────────────────────────────────
+
+      if (transactionResult.error === 'not_found') {
+        response.status(404).send('Payment session not found');
+        return;
       }
-    },
-  );
+
+      if (transactionResult.error === 'hash_failed') {
+        response.send(buildRedirectHtml(
+          'payment-failed://hash-error',
+          'Ödeme Doğrulama Hatası',
+          'Lütfen tekrar deneyin.',
+        ));
+        return;
+      }
+
+      if (transactionResult.error === 'payment_failed') {
+        response.send(buildRedirectHtml(
+          `payment-failed://${encodeURIComponent(transactionResult.message)}`,
+          'Ödeme Başarısız',
+          transactionResult.message,
+        ));
+        return;
+      }
+
+      if (transactionResult.alreadyProcessed) {
+        if (transactionResult.status === 'completed') {
+          response.send(buildRedirectHtml(
+            `payment-success://${transactionResult.orderId}`,
+            '✓ Ödeme Başarılı',
+            'Siparişiniz oluşturuldu.',
+          ));
+        } else {
+          response.send(buildRedirectHtml(
+            `payment-status://${transactionResult.status}`,
+            'İşlem Zaten İşlendi',
+          ));
+        }
+        return;
+      }
+
+      if (transactionResult.retry) {
+        // Another callback invocation is already processing — poll until resolved
+        console.log(`[Payment] ${oid} already processing, polling for completion...`);
+        let retryCount = 0;
+        const maxRetries = 20;
+        const retryDelay = 500;
+
+        while (retryCount < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, retryDelay));
+          const checkSnap = await pendingPaymentRef.get();
+          const checkData = checkSnap.data();
+
+          if (checkData.status === 'completed') {
+            response.send(buildRedirectHtml(
+              `payment-success://${checkData.orderId}`,
+              '✓ Ödeme Başarılı',
+              'Siparişiniz oluşturuldu.',
+            ));
+            return;
+          }
+          if (checkData.status === 'payment_succeeded_order_failed' ||
+              checkData.status === 'payment_failed') {
+            response.send(buildRedirectHtml(
+              'payment-failed://processing-error',
+              'İşlem Hatası',
+              'Lütfen destek ile iletişime geçin.',
+            ));
+            return;
+          }
+          retryCount++;
+        }
+
+        console.error(`[Payment] Timeout polling for ${oid}`);
+        response.status(500).send('Processing timeout');
+        return;
+      }
+
+      // ── 9. Create the order ─────────────────────────────────────────────────
+      try {
+        const orderResult = await createOrderTransaction(
+          transactionResult.pendingPayment.userId,
+          {
+            ...transactionResult.pendingPayment.cartData,
+            paymentOrderId: oid,
+            paymentMethod: 'isbank_3d',
+            serverCalculation: transactionResult.pendingPayment.serverCalculation || null,
+          },
+        );
+
+        if (orderResult.duplicate) {
+          console.log(`[Payment] Duplicate order detected for payment ${oid}: ${orderResult.orderId}`);
+        }
+
+        await pendingPaymentRef.update({
+          status: 'completed',
+          orderId: orderResult.orderId,
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+          processingDuration: Date.now() - startTime,
+        });
+
+        await callbackLogRef.update({
+          processingCompleted: admin.firestore.FieldValue.serverTimestamp(),
+          orderId: orderResult.orderId,
+          success: true,
+          processingDuration: Date.now() - startTime,
+        });
+
+        console.log(`[Payment] ${oid} → order ${orderResult.orderId} created successfully`);
+        response.send(buildRedirectHtml(
+          `payment-success://${orderResult.orderId}`,
+          '✓ Ödeme Başarılı',
+          'Siparişiniz oluşturuldu.',
+        ));
+      } catch (orderError) {
+        console.error('[Payment] Order creation failed after successful payment:', orderError);
+
+        await pendingPaymentRef.update({
+          status: 'payment_succeeded_order_failed',
+          orderError: orderError.message,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        await callbackLogRef.update({
+          processingFailed: admin.firestore.FieldValue.serverTimestamp(),
+          error: orderError.message,
+          success: false,
+        });
+
+        // Alert for manual resolution — payment taken but no order
+        await db.collection('_payment_alerts').doc(`product_${oid}`).set({
+          type: 'order_creation_failed_after_payment',
+          severity: 'high',
+          paymentOrderId: oid,
+          userId: transactionResult.pendingPayment?.userId,
+          errorMessage: orderError.message,
+          isRead: false,
+          isResolved: false,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        response.send(buildRedirectHtml(
+          'payment-failed://order-creation-error',
+          'Sipariş Hatası',
+          'Ödeme alındı ancak sipariş oluşturulamadı. Lütfen destek ile iletişime geçin.',
+        ));
+      }
+    } catch (error) {
+      console.error('[Payment] Critical callback error:', error);
+
+      try {
+        await db.collection('payment_callback_errors').add({
+          oid: request.body?.oid || 'unknown',
+          error: error.message,
+          stack: error.stack,
+          requestBody: request.body,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (_) {
+        // silent — logging must never throw
+      }
+
+      response.status(500).send('Internal server error');
+    }
+  },
+);
   
   export const checkIsbankPaymentStatus = onCall(
     {

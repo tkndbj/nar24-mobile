@@ -10,6 +10,7 @@ import '../../screens/PAYMENT-RECEIPT/food_checkout_screen.dart';
 import '../../screens/PAYMENT-RECEIPT/isbank_food_payment_screen.dart';
 import '../../screens/PAYMENT-RECEIPT/food_order_detail_screen.dart';
 import '../../screens/RESTAURANTS/restaurant_list_food_screen.dart';
+import '../../screens/USER-PROFILE/my_food_orders.dart';
 
 class RestaurantRoutes {
   // Reusable slide transition
@@ -88,6 +89,19 @@ class RestaurantRoutes {
               paymentParams:
                   Map<String, String>.from(extra['paymentParams'] as Map),
             ),
+            transitionsBuilder: _slideTransition,
+            transitionDuration: const Duration(milliseconds: 200),
+          );
+        },
+      ),
+      // My Food Orders
+      GoRoute(
+        path: '/my_food_orders',
+        name: 'my-food-orders',
+        pageBuilder: (context, state) {
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: const MyFoodOrdersScreen(),
             transitionsBuilder: _slideTransition,
             transitionDuration: const Duration(milliseconds: 200),
           );

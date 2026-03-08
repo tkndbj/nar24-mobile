@@ -6937,6 +6937,15 @@ class AppLocalizationsRu extends AppLocalizations {
   String get myOrders => 'Заказы на продукцию';
 
   @override
+  String get orderCreatedSuccessfully => 'Ваш заказ успешно создан.';
+
+  @override
+  String get backToMarket => 'Вернуться в магазин';
+
+  @override
+  String get marketOrder => 'Заказ в магазине';
+
+  @override
   String get addNewAddress => 'Добавить новый адрес';
 
   @override
