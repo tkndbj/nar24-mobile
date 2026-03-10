@@ -1754,7 +1754,7 @@ export const updateFoodOrderStatus = onCall(
     }
 
     const { orderId, newStatus } = request.data;
-    const ALLOWED_STATUSES = ['accepted', 'rejected', 'preparing', 'ready', 'delivered'];
+    const ALLOWED_STATUSES = ['accepted', 'rejected', 'preparing', 'ready', 'out_for_delivery', 'delivered'];
 
     if (!orderId || !ALLOWED_STATUSES.includes(newStatus)) {
       throw new HttpsError('invalid-argument', 'Invalid orderId or status.');
@@ -1784,9 +1784,9 @@ export const updateFoodOrderStatus = onCall(
 
       const VALID_TRANSITIONS = {
         pending: ['accepted', 'rejected'],
-        accepted: ['preparing', 'rejected'],
-        preparing: ['ready'],
-        ready: ['delivered'],
+        accepted: ['ready', 'rejected'],
+        ready: ['out_for_delivery'],        // cargo claims it
+        out_for_delivery: ['delivered'],    // cargo marks delivered
       };
 
       const allowed = VALID_TRANSITIONS[order.status] || [];

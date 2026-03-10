@@ -155,7 +155,6 @@ class _PoolTabState extends State<_PoolTab> {
     _stream = FirebaseFirestore.instance
         .collection('orders-food')
         .where('status', isEqualTo: 'ready')
-        .where('deliveryType', isEqualTo: 'delivery')
         .orderBy('updatedAt', descending: false)
         .snapshots();
   }

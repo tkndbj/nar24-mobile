@@ -69,7 +69,7 @@ class AppRouter {
 
         // ✅ Food cargo guy routing (must be checked before cargoGuy)
         final isFoodCargoGuy =
-            userProvider.profileData?['foodCargoGuy'] == true;
+            userProvider.profileData?['foodcargoguy'] == true;
         if (isFoodCargoGuy) {
           return isFoodCargoPanel ? null : '/food-cargo';
         }
