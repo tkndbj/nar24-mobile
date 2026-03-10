@@ -29267,6 +29267,198 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Güvenli Boost Ödemesi'**
   String get secureBoostPayment;
+
+  /// No description provided for @foodCargoTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kurye Paneli'**
+  String get foodCargoTitle;
+
+  /// No description provided for @foodCargoPoolTab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş Havuzu'**
+  String get foodCargoPoolTab;
+
+  /// No description provided for @foodCargoMyDeliveriesTab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimatlarım'**
+  String get foodCargoMyDeliveriesTab;
+
+  /// No description provided for @foodCargoPoolEmpty.
+  ///
+  /// In tr, this message translates to:
+  /// **'Şu an bekleyen sipariş yok'**
+  String get foodCargoPoolEmpty;
+
+  /// No description provided for @foodCargoPoolEmptySub.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hazır siparişler burada anlık olarak görünecek'**
+  String get foodCargoPoolEmptySub;
+
+  /// No description provided for @foodCargoMyEmpty.
+  ///
+  /// In tr, this message translates to:
+  /// **'Aktif teslimat yok'**
+  String get foodCargoMyEmpty;
+
+  /// No description provided for @foodCargoMyEmptySub.
+  ///
+  /// In tr, this message translates to:
+  /// **'Havuzdan aldığınız siparişler burada görünecek'**
+  String get foodCargoMyEmptySub;
+
+  /// No description provided for @foodCargoTakeOrder.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişi Al'**
+  String get foodCargoTakeOrder;
+
+  /// No description provided for @foodCargoTakeConfirmTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bu siparişi almak istiyor musun?'**
+  String get foodCargoTakeConfirmTitle;
+
+  /// No description provided for @foodCargoTakeConfirmBody.
+  ///
+  /// In tr, this message translates to:
+  /// **'{restaurant} restoranından {city} adresine teslimat yapacaksınız.'**
+  String foodCargoTakeConfirmBody(String restaurant, String city);
+
+  /// No description provided for @foodCargoTakeConfirmOk.
+  ///
+  /// In tr, this message translates to:
+  /// **'Al'**
+  String get foodCargoTakeConfirmOk;
+
+  /// No description provided for @foodCargoCancel.
+  ///
+  /// In tr, this message translates to:
+  /// **'İptal'**
+  String get foodCargoCancel;
+
+  /// No description provided for @foodCargoAlreadyTaken.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bu sipariş başka bir kurye tarafından alındı'**
+  String get foodCargoAlreadyTaken;
+
+  /// No description provided for @foodCargoAssignError.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bir hata oluştu. Lütfen tekrar deneyin.'**
+  String get foodCargoAssignError;
+
+  /// No description provided for @foodCargoDeliveredSuccess.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslim edildi olarak işaretlendi ✓'**
+  String get foodCargoDeliveredSuccess;
+
+  /// No description provided for @foodCargoCallCustomer.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ara'**
+  String get foodCargoCallCustomer;
+
+  /// No description provided for @foodCargoOpenMap.
+  ///
+  /// In tr, this message translates to:
+  /// **'Harita'**
+  String get foodCargoOpenMap;
+
+  /// No description provided for @foodCargoMarkDelivered.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslim Edildi'**
+  String get foodCargoMarkDelivered;
+
+  /// No description provided for @foodCargoOrderId.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş'**
+  String get foodCargoOrderId;
+
+  /// No description provided for @foodCargoCustomer.
+  ///
+  /// In tr, this message translates to:
+  /// **'Müşteri'**
+  String get foodCargoCustomer;
+
+  /// No description provided for @foodCargoItems.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ürünler'**
+  String get foodCargoItems;
+
+  /// No description provided for @foodCargoItemCount.
+  ///
+  /// In tr, this message translates to:
+  /// **'{count} ürün'**
+  String foodCargoItemCount(int count);
+
+  /// No description provided for @foodCargoAddressLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimat adresi'**
+  String get foodCargoAddressLabel;
+
+  /// No description provided for @foodCargoTotalLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Toplam'**
+  String get foodCargoTotalLabel;
+
+  /// No description provided for @foodCargoPaid.
+  ///
+  /// In tr, this message translates to:
+  /// **'Online ödendi'**
+  String get foodCargoPaid;
+
+  /// No description provided for @foodCargoPaymentAtDoor.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kapıda ödeme'**
+  String get foodCargoPaymentAtDoor;
+
+  /// No description provided for @foodCargoSignInRequired.
+  ///
+  /// In tr, this message translates to:
+  /// **'Devam etmek için giriş yapın'**
+  String get foodCargoSignInRequired;
+
+  /// No description provided for @foodCargoLogout.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çıkış yap'**
+  String get foodCargoLogout;
+
+  /// No description provided for @foodCargoLogoutConfirm.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çıkış yapmak istediğinize emin misiniz?'**
+  String get foodCargoLogoutConfirm;
+
+  /// No description provided for @foodCargoJustNow.
+  ///
+  /// In tr, this message translates to:
+  /// **'Az önce'**
+  String get foodCargoJustNow;
+
+  /// No description provided for @foodCargoMinAgo.
+  ///
+  /// In tr, this message translates to:
+  /// **'{minutes} dk önce'**
+  String foodCargoMinAgo(int minutes);
+
+  /// No description provided for @foodCargoHrAgo.
+  ///
+  /// In tr, this message translates to:
+  /// **'{hours} sa {minutes} dk önce'**
+  String foodCargoHrAgo(int hours, int minutes);
 }
 
 class _AppLocalizationsDelegate

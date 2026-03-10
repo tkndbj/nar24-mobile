@@ -1,5 +1,6 @@
 import {onCall, HttpsError} from 'firebase-functions/v2/https';
 import {getFirestore, FieldValue} from 'firebase-admin/firestore';
+import {getAuth} from 'firebase-admin/auth';
 import {CloudTasksClient} from '@google-cloud/tasks';
 
 // Constants
@@ -1064,4 +1065,34 @@ export const rejectProductApplication = onCall({
     if (error instanceof HttpsError) throw error;
     throw new HttpsError('internal', 'Failed to reject application. Please try again.');
   }
+});
+
+export const setCargoGuyClaim = onCall({
+  region: 'europe-west3',
+}, async (request) => {
+  if (!request.auth?.token?.isAdmin) {
+    throw new HttpsError('permission-denied', 'Admins only');
+  }
+
+  const { userId, value } = request.data;
+  if (typeof userId !== 'string' || typeof value !== 'boolean') {
+    throw new HttpsError('invalid-argument', 'userId and value required');
+  }
+
+  const auth = getAuth();
+  const db = getFirestore();
+
+  const user = await auth.getUser(userId);
+  const existingClaims = user.customClaims ?? {};
+
+  await auth.setCustomUserClaims(userId, {
+    ...existingClaims,
+    foodcargoguy: value,
+  });
+
+  await db.collection('users').doc(userId).update({
+    foodcargoguy: value,
+  });
+
+  return { success: true };
 });

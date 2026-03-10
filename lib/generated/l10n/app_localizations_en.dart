@@ -15314,4 +15314,111 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get secureBoostPayment => 'Secure Boost Payment';
+
+  @override
+  String get foodCargoTitle => 'Delivery Panel';
+
+  @override
+  String get foodCargoPoolTab => 'Order Pool';
+
+  @override
+  String get foodCargoMyDeliveriesTab => 'My Deliveries';
+
+  @override
+  String get foodCargoPoolEmpty => 'No orders available right now';
+
+  @override
+  String get foodCargoPoolEmptySub =>
+      'Ready orders will appear here in real time';
+
+  @override
+  String get foodCargoMyEmpty => 'No active deliveries';
+
+  @override
+  String get foodCargoMyEmptySub =>
+      'Orders you take from the pool will appear here';
+
+  @override
+  String get foodCargoTakeOrder => 'Take Order';
+
+  @override
+  String get foodCargoTakeConfirmTitle => 'Take this order?';
+
+  @override
+  String foodCargoTakeConfirmBody(String restaurant, String city) {
+    return 'You will be assigned to deliver from $restaurant to $city.';
+  }
+
+  @override
+  String get foodCargoTakeConfirmOk => 'Take It';
+
+  @override
+  String get foodCargoCancel => 'Cancel';
+
+  @override
+  String get foodCargoAlreadyTaken =>
+      'This order was already taken by another rider';
+
+  @override
+  String get foodCargoAssignError => 'Something went wrong. Please try again.';
+
+  @override
+  String get foodCargoDeliveredSuccess => 'Marked as delivered ✓';
+
+  @override
+  String get foodCargoCallCustomer => 'Call';
+
+  @override
+  String get foodCargoOpenMap => 'Map';
+
+  @override
+  String get foodCargoMarkDelivered => 'Mark as Delivered';
+
+  @override
+  String get foodCargoOrderId => 'Order';
+
+  @override
+  String get foodCargoCustomer => 'Customer';
+
+  @override
+  String get foodCargoItems => 'Items';
+
+  @override
+  String foodCargoItemCount(int count) {
+    return '$count item(s)';
+  }
+
+  @override
+  String get foodCargoAddressLabel => 'Deliver to';
+
+  @override
+  String get foodCargoTotalLabel => 'Total';
+
+  @override
+  String get foodCargoPaid => 'Paid online';
+
+  @override
+  String get foodCargoPaymentAtDoor => 'Cash on delivery';
+
+  @override
+  String get foodCargoSignInRequired => 'Please sign in to continue';
+
+  @override
+  String get foodCargoLogout => 'Log out';
+
+  @override
+  String get foodCargoLogoutConfirm => 'Are you sure you want to log out?';
+
+  @override
+  String get foodCargoJustNow => 'Just now';
+
+  @override
+  String foodCargoMinAgo(int minutes) {
+    return '${minutes}m ago';
+  }
+
+  @override
+  String foodCargoHrAgo(int hours, int minutes) {
+    return '${hours}h ${minutes}m ago';
+  }
 }

@@ -6180,5 +6180,66 @@
 "boostPaymentLoading": "Загрузка страницы оплаты Boost...",
 "boostPackage": "Пакет Boost",
 "boostPaymentCancelMessage": "Оплата Boost будет отменена. Вы уверены?",
-"secureBoostPayment": "Безопасная оплата Boost"
+"secureBoostPayment": "Безопасная оплата Boost",
+"foodCargoTitle": "Панель курьера",
+  "foodCargoPoolTab": "Очередь заказов",
+  "foodCargoMyDeliveriesTab": "Мои доставки",
+
+  "foodCargoPoolEmpty": "Сейчас нет доступных заказов",
+  "foodCargoPoolEmptySub": "Готовые заказы появятся здесь в реальном времени",
+  "foodCargoMyEmpty": "Нет активных доставок",
+  "foodCargoMyEmptySub": "Принятые заказы будут отображаться здесь",
+
+  "foodCargoTakeOrder": "Взять заказ",
+  "foodCargoTakeConfirmTitle": "Взять этот заказ?",
+  "foodCargoTakeConfirmBody": "Вам будет назначена доставка из {restaurant} в {city}.",
+  "@foodCargoTakeConfirmBody": {
+    "placeholders": {
+      "restaurant": { "type": "String" },
+      "city": { "type": "String" }
+    }
+  },
+  "foodCargoTakeConfirmOk": "Взять",
+  "foodCargoCancel": "Отмена",
+
+  "foodCargoAlreadyTaken": "Этот заказ уже взял другой курьер",
+  "foodCargoAssignError": "Что-то пошло не так. Попробуйте снова.",
+  "foodCargoDeliveredSuccess": "Отмечено как доставлено ✓",
+
+  "foodCargoCallCustomer": "Звонок",
+  "foodCargoOpenMap": "Карта",
+  "foodCargoMarkDelivered": "Доставлено",
+
+  "foodCargoOrderId": "Заказ",
+  "foodCargoCustomer": "Клиент",
+  "foodCargoItems": "Товары",
+  "foodCargoItemCount": "{count} поз.",
+  "@foodCargoItemCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "foodCargoAddressLabel": "Адрес доставки",
+  "foodCargoTotalLabel": "Итого",
+  "foodCargoPaid": "Оплачено онлайн",
+  "foodCargoPaymentAtDoor": "Оплата при получении",
+
+  "foodCargoSignInRequired": "Войдите, чтобы продолжить",
+  "foodCargoLogout": "Выйти",
+  "foodCargoLogoutConfirm": "Вы уверены, что хотите выйти?",
+
+  "foodCargoJustNow": "Только что",
+  "foodCargoMinAgo": "{minutes} мин назад",
+  "@foodCargoMinAgo": {
+    "placeholders": {
+      "minutes": { "type": "int" }
+    }
+  },
+  "foodCargoHrAgo": "{hours} ч {minutes} мин назад",
+  "@foodCargoHrAgo": {
+    "placeholders": {
+      "hours": { "type": "int" },
+      "minutes": { "type": "int" }
+    }
+  }
 }

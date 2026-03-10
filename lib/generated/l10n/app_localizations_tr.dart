@@ -15341,4 +15341,112 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get secureBoostPayment => 'Güvenli Boost Ödemesi';
+
+  @override
+  String get foodCargoTitle => 'Kurye Paneli';
+
+  @override
+  String get foodCargoPoolTab => 'Sipariş Havuzu';
+
+  @override
+  String get foodCargoMyDeliveriesTab => 'Teslimatlarım';
+
+  @override
+  String get foodCargoPoolEmpty => 'Şu an bekleyen sipariş yok';
+
+  @override
+  String get foodCargoPoolEmptySub =>
+      'Hazır siparişler burada anlık olarak görünecek';
+
+  @override
+  String get foodCargoMyEmpty => 'Aktif teslimat yok';
+
+  @override
+  String get foodCargoMyEmptySub =>
+      'Havuzdan aldığınız siparişler burada görünecek';
+
+  @override
+  String get foodCargoTakeOrder => 'Siparişi Al';
+
+  @override
+  String get foodCargoTakeConfirmTitle => 'Bu siparişi almak istiyor musun?';
+
+  @override
+  String foodCargoTakeConfirmBody(String restaurant, String city) {
+    return '$restaurant restoranından $city adresine teslimat yapacaksınız.';
+  }
+
+  @override
+  String get foodCargoTakeConfirmOk => 'Al';
+
+  @override
+  String get foodCargoCancel => 'İptal';
+
+  @override
+  String get foodCargoAlreadyTaken =>
+      'Bu sipariş başka bir kurye tarafından alındı';
+
+  @override
+  String get foodCargoAssignError => 'Bir hata oluştu. Lütfen tekrar deneyin.';
+
+  @override
+  String get foodCargoDeliveredSuccess => 'Teslim edildi olarak işaretlendi ✓';
+
+  @override
+  String get foodCargoCallCustomer => 'Ara';
+
+  @override
+  String get foodCargoOpenMap => 'Harita';
+
+  @override
+  String get foodCargoMarkDelivered => 'Teslim Edildi';
+
+  @override
+  String get foodCargoOrderId => 'Sipariş';
+
+  @override
+  String get foodCargoCustomer => 'Müşteri';
+
+  @override
+  String get foodCargoItems => 'Ürünler';
+
+  @override
+  String foodCargoItemCount(int count) {
+    return '$count ürün';
+  }
+
+  @override
+  String get foodCargoAddressLabel => 'Teslimat adresi';
+
+  @override
+  String get foodCargoTotalLabel => 'Toplam';
+
+  @override
+  String get foodCargoPaid => 'Online ödendi';
+
+  @override
+  String get foodCargoPaymentAtDoor => 'Kapıda ödeme';
+
+  @override
+  String get foodCargoSignInRequired => 'Devam etmek için giriş yapın';
+
+  @override
+  String get foodCargoLogout => 'Çıkış yap';
+
+  @override
+  String get foodCargoLogoutConfirm =>
+      'Çıkış yapmak istediğinize emin misiniz?';
+
+  @override
+  String get foodCargoJustNow => 'Az önce';
+
+  @override
+  String foodCargoMinAgo(int minutes) {
+    return '$minutes dk önce';
+  }
+
+  @override
+  String foodCargoHrAgo(int hours, int minutes) {
+    return '$hours sa $minutes dk önce';
+  }
 }

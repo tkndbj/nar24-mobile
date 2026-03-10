@@ -6541,5 +6541,66 @@
 "boostPaymentLoading": "Boost ödeme sayfası yükleniyor...",
 "boostPackage": "Boost Paketi",
 "boostPaymentCancelMessage": "Boost ödemesi iptal edilecek. Emin misiniz?",
-"secureBoostPayment": "Güvenli Boost Ödemesi"
+"secureBoostPayment": "Güvenli Boost Ödemesi",
+"foodCargoTitle": "Kurye Paneli",
+  "foodCargoPoolTab": "Sipariş Havuzu",
+  "foodCargoMyDeliveriesTab": "Teslimatlarım",
+
+  "foodCargoPoolEmpty": "Şu an bekleyen sipariş yok",
+  "foodCargoPoolEmptySub": "Hazır siparişler burada anlık olarak görünecek",
+  "foodCargoMyEmpty": "Aktif teslimat yok",
+  "foodCargoMyEmptySub": "Havuzdan aldığınız siparişler burada görünecek",
+
+  "foodCargoTakeOrder": "Siparişi Al",
+  "foodCargoTakeConfirmTitle": "Bu siparişi almak istiyor musun?",
+  "foodCargoTakeConfirmBody": "{restaurant} restoranından {city} adresine teslimat yapacaksınız.",
+  "@foodCargoTakeConfirmBody": {
+    "placeholders": {
+      "restaurant": { "type": "String" },
+      "city": { "type": "String" }
+    }
+  },
+  "foodCargoTakeConfirmOk": "Al",
+  "foodCargoCancel": "İptal",
+
+  "foodCargoAlreadyTaken": "Bu sipariş başka bir kurye tarafından alındı",
+  "foodCargoAssignError": "Bir hata oluştu. Lütfen tekrar deneyin.",
+  "foodCargoDeliveredSuccess": "Teslim edildi olarak işaretlendi ✓",
+
+  "foodCargoCallCustomer": "Ara",
+  "foodCargoOpenMap": "Harita",
+  "foodCargoMarkDelivered": "Teslim Edildi",
+
+  "foodCargoOrderId": "Sipariş",
+  "foodCargoCustomer": "Müşteri",
+  "foodCargoItems": "Ürünler",
+  "foodCargoItemCount": "{count} ürün",
+  "@foodCargoItemCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "foodCargoAddressLabel": "Teslimat adresi",
+  "foodCargoTotalLabel": "Toplam",
+  "foodCargoPaid": "Online ödendi",
+  "foodCargoPaymentAtDoor": "Kapıda ödeme",
+
+  "foodCargoSignInRequired": "Devam etmek için giriş yapın",
+  "foodCargoLogout": "Çıkış yap",
+  "foodCargoLogoutConfirm": "Çıkış yapmak istediğinize emin misiniz?",
+
+  "foodCargoJustNow": "Az önce",
+  "foodCargoMinAgo": "{minutes} dk önce",
+  "@foodCargoMinAgo": {
+    "placeholders": {
+      "minutes": { "type": "int" }
+    }
+  },
+  "foodCargoHrAgo": "{hours} sa {minutes} dk önce",
+  "@foodCargoHrAgo": {
+    "placeholders": {
+      "hours": { "type": "int" },
+      "minutes": { "type": "int" }
+    }
+  }
 }

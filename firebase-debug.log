@@ -1,0 +1,17 @@
+[debug] [2026-03-10T07:52:56.753Z] ----------------------------------------------------------------------
+[debug] [2026-03-10T07:52:56.755Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Digikey\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only functions:setCargoGuyClaim
+[debug] [2026-03-10T07:52:56.755Z] CLI Version:   15.7.0
+[debug] [2026-03-10T07:52:56.756Z] Platform:      win32
+[debug] [2026-03-10T07:52:56.756Z] Node Version:  v20.18.0
+[debug] [2026-03-10T07:52:56.756Z] Time:          Tue Mar 10 2026 03:52:56 GMT-0400 (Eastern Daylight Time)
+[debug] [2026-03-10T07:52:56.756Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-03-10T07:52:58.088Z] Object "" in "firebase.json" has unknown property: {"additionalProperty":"flutter"}
+[debug] [2026-03-10T07:52:58.092Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-03-10T07:52:58.092Z] > authorizing via signed-in user (tekin@ctscyprushomes.com)
+[debug] [2026-03-10T07:52:58.093Z] [iam] checking project emlak-mobile-app for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[debug] [2026-03-10T07:52:58.094Z] Checked if tokens are valid: true, expires at: 1773132727879
+[debug] [2026-03-10T07:52:58.094Z] Checked if tokens are valid: true, expires at: 1773132727879
+[debug] [2026-03-10T07:52:58.095Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/emlak-mobile-app:testIamPermissions [none]
+[debug] [2026-03-10T07:52:58.095Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/emlak-mobile-app:testIamPermissions  x-goog-user-project=emlak-mobile-app
+[debug] [2026-03-10T07:52:58.095Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/emlak-mobile-app:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}

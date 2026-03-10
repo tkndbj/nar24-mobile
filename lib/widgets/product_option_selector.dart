@@ -817,7 +817,8 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          if (_currentProduct.imageUrls.isNotEmpty)
+          if (_currentProduct.imageUrls.isNotEmpty &&
+              _currentProduct.quantity > 0)
             _buildColorThumb(
               key: 'default',
               url: _currentProduct.imageUrls.first,

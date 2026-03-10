@@ -6545,5 +6545,66 @@
 "boostPaymentLoading": "Loading Boost payment page...",
 "boostPackage": "Boost Package",
 "boostPaymentCancelMessage": "The Boost payment will be cancelled. Are you sure?",
-"secureBoostPayment": "Secure Boost Payment"
+"secureBoostPayment": "Secure Boost Payment",
+"foodCargoTitle": "Delivery Panel",
+  "foodCargoPoolTab": "Order Pool",
+  "foodCargoMyDeliveriesTab": "My Deliveries",
+
+  "foodCargoPoolEmpty": "No orders available right now",
+  "foodCargoPoolEmptySub": "Ready orders will appear here in real time",
+  "foodCargoMyEmpty": "No active deliveries",
+  "foodCargoMyEmptySub": "Orders you take from the pool will appear here",
+
+  "foodCargoTakeOrder": "Take Order",
+  "foodCargoTakeConfirmTitle": "Take this order?",
+  "foodCargoTakeConfirmBody": "You will be assigned to deliver from {restaurant} to {city}.",
+  "@foodCargoTakeConfirmBody": {
+    "placeholders": {
+      "restaurant": { "type": "String" },
+      "city": { "type": "String" }
+    }
+  },
+  "foodCargoTakeConfirmOk": "Take It",
+  "foodCargoCancel": "Cancel",
+
+  "foodCargoAlreadyTaken": "This order was already taken by another rider",
+  "foodCargoAssignError": "Something went wrong. Please try again.",
+  "foodCargoDeliveredSuccess": "Marked as delivered ✓",
+
+  "foodCargoCallCustomer": "Call",
+  "foodCargoOpenMap": "Map",
+  "foodCargoMarkDelivered": "Mark as Delivered",
+
+  "foodCargoOrderId": "Order",
+  "foodCargoCustomer": "Customer",
+  "foodCargoItems": "Items",
+  "foodCargoItemCount": "{count} item(s)",
+  "@foodCargoItemCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "foodCargoAddressLabel": "Deliver to",
+  "foodCargoTotalLabel": "Total",
+  "foodCargoPaid": "Paid online",
+  "foodCargoPaymentAtDoor": "Cash on delivery",
+
+  "foodCargoSignInRequired": "Please sign in to continue",
+  "foodCargoLogout": "Log out",
+  "foodCargoLogoutConfirm": "Are you sure you want to log out?",
+
+  "foodCargoJustNow": "Just now",
+  "foodCargoMinAgo": "{minutes}m ago",
+  "@foodCargoMinAgo": {
+    "placeholders": {
+      "minutes": { "type": "int" }
+    }
+  },
+  "foodCargoHrAgo": "{hours}h {minutes}m ago",
+  "@foodCargoHrAgo": {
+    "placeholders": {
+      "hours": { "type": "int" },
+      "minutes": { "type": "int" }
+    }
+  }
 }

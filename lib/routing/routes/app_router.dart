@@ -58,6 +58,7 @@ class AppRouter {
         final isLoggingIn = loc == '/login' || loc == '/register';
         final isEmailVerification = loc == '/email-verification';
         final isCargoPanel = loc.startsWith('/cargo');
+        final isFoodCargoPanel = loc == '/food-cargo';
         final isCompleteName = loc == '/complete-name';
 
         // ✅ Email verification check (skip for social users)
@@ -66,11 +67,18 @@ class AppRouter {
           return isEmailVerification ? null : '/email-verification';
         }
 
+        // ✅ Food cargo guy routing (must be checked before cargoGuy)
+        final isFoodCargoGuy =
+            userProvider.profileData?['foodCargoGuy'] == true;
+        if (isFoodCargoGuy) {
+          return isFoodCargoPanel ? null : '/food-cargo';
+        }
+
         // ✅ Cargo guy routing
         final isCargoGuy = userProvider.profileData?['cargoGuy'] == true;
         if (isCargoGuy) {
           return isCargoPanel ? null : '/cargo-dashboard';
-        } else if (isCargoPanel) {
+        } else if (isCargoPanel || isFoodCargoPanel) {
           return '/';
         }
 

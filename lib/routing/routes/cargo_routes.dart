@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 // Import your screens
 import '../../screens/CARGO-PANEL/cargo_dashboard.dart';
 import '../../screens/CARGO-PANEL/cargo_route.dart';
+import '../../screens/CARGO-FOOD-PANEL/food_cargo_screen.dart';
 
 class CargoRoutes {
   // Reusable slide transition
@@ -40,6 +41,22 @@ class CargoRoutes {
 
   static List<RouteBase> get routes {
     return [
+      // ==================== FOOD CARGO ====================
+
+      // Food Cargo Panel (delivery rider screen for foodCargoGuy users)
+      GoRoute(
+        path: '/food-cargo',
+        name: 'food-cargo',
+        pageBuilder: (context, state) {
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: const FoodCargoScreen(),
+            transitionsBuilder: _slideTransition,
+            transitionDuration: const Duration(milliseconds: 200),
+          );
+        },
+      ),
+
       // ==================== CARGO DASHBOARD ====================
 
       // Cargo Dashboard (Main cargo management screen)

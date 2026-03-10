@@ -15417,4 +15417,109 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get secureBoostPayment => 'Безопасная оплата Boost';
+
+  @override
+  String get foodCargoTitle => 'Панель курьера';
+
+  @override
+  String get foodCargoPoolTab => 'Очередь заказов';
+
+  @override
+  String get foodCargoMyDeliveriesTab => 'Мои доставки';
+
+  @override
+  String get foodCargoPoolEmpty => 'Сейчас нет доступных заказов';
+
+  @override
+  String get foodCargoPoolEmptySub =>
+      'Готовые заказы появятся здесь в реальном времени';
+
+  @override
+  String get foodCargoMyEmpty => 'Нет активных доставок';
+
+  @override
+  String get foodCargoMyEmptySub => 'Принятые заказы будут отображаться здесь';
+
+  @override
+  String get foodCargoTakeOrder => 'Взять заказ';
+
+  @override
+  String get foodCargoTakeConfirmTitle => 'Взять этот заказ?';
+
+  @override
+  String foodCargoTakeConfirmBody(String restaurant, String city) {
+    return 'Вам будет назначена доставка из $restaurant в $city.';
+  }
+
+  @override
+  String get foodCargoTakeConfirmOk => 'Взять';
+
+  @override
+  String get foodCargoCancel => 'Отмена';
+
+  @override
+  String get foodCargoAlreadyTaken => 'Этот заказ уже взял другой курьер';
+
+  @override
+  String get foodCargoAssignError => 'Что-то пошло не так. Попробуйте снова.';
+
+  @override
+  String get foodCargoDeliveredSuccess => 'Отмечено как доставлено ✓';
+
+  @override
+  String get foodCargoCallCustomer => 'Звонок';
+
+  @override
+  String get foodCargoOpenMap => 'Карта';
+
+  @override
+  String get foodCargoMarkDelivered => 'Доставлено';
+
+  @override
+  String get foodCargoOrderId => 'Заказ';
+
+  @override
+  String get foodCargoCustomer => 'Клиент';
+
+  @override
+  String get foodCargoItems => 'Товары';
+
+  @override
+  String foodCargoItemCount(int count) {
+    return '$count поз.';
+  }
+
+  @override
+  String get foodCargoAddressLabel => 'Адрес доставки';
+
+  @override
+  String get foodCargoTotalLabel => 'Итого';
+
+  @override
+  String get foodCargoPaid => 'Оплачено онлайн';
+
+  @override
+  String get foodCargoPaymentAtDoor => 'Оплата при получении';
+
+  @override
+  String get foodCargoSignInRequired => 'Войдите, чтобы продолжить';
+
+  @override
+  String get foodCargoLogout => 'Выйти';
+
+  @override
+  String get foodCargoLogoutConfirm => 'Вы уверены, что хотите выйти?';
+
+  @override
+  String get foodCargoJustNow => 'Только что';
+
+  @override
+  String foodCargoMinAgo(int minutes) {
+    return '$minutes мин назад';
+  }
+
+  @override
+  String foodCargoHrAgo(int hours, int minutes) {
+    return '$hours ч $minutes мин назад';
+  }
 }

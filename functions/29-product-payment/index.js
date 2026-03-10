@@ -597,7 +597,7 @@ function getAdCollectionName(adType) {
   
       for (const {data, item} of productsMeta) {
         const qty = Math.max(1, item.quantity || 1);
-        const colorKey = item.selectedColor;
+        const colorKey = (item.selectedColor && item.selectedColor !== 'default') ? item.selectedColor : null;
       
         // ✅ FIX: Check if color EXISTS first (don't check stock yet)
         const hasColorVariant = colorKey && 
@@ -736,7 +736,7 @@ function getAdCollectionName(adType) {
       for (const meta of productsMeta) {
         const {ref, data, item, sellerName} = meta;
         const qty = Math.max(1, item.quantity || 1);
-        const colorKey = item.selectedColor;
+        const colorKey = (item.selectedColor && item.selectedColor !== 'default') ? item.selectedColor : null;
   
         const hasColorVariant = colorKey && 
                             data.colorQuantities && 

@@ -168,50 +168,49 @@ class _MyCartScreenState extends State<MyCartScreen>
     }
   }
 
- Future<void> _removeItem(String productId) async {
-  if (_cartProvider == null) return;
+  Future<void> _removeItem(String productId) async {
+    if (_cartProvider == null) return;
 
-  final result = await _cartProvider!.removeFromCart(productId);
+    final result = await _cartProvider!.removeFromCart(productId);
 
-  if (result == 'Removed from cart') {
-    _deselectedProducts.remove(productId);  // ✅ CHANGED
-    _updateTotalsForCurrentSelection();
-  } else {
-    _showSnackBar(result, isError: true);
-  }
-}
-
- Future<void> _deleteSelectedProducts() async {
-  if (_cartProvider == null) return;
-  final l10n = AppLocalizations.of(context);
-
-  // ✅ CHANGED: Get selected IDs (items NOT in deselected set)
-  final allProductIds = _cartProvider!.cartItems
-      .where((item) => item['product'] != null)
-      .map((item) => (item['product'] as Product).id)
-      .toList();
-  
-  final selectedIds = allProductIds
-      .where((id) => !_deselectedProducts.contains(id))
-      .toList();
-
-  if (selectedIds.isEmpty) {
-    _showSnackBar(l10n.noItemsSelected, isError: true);
-    return;
+    if (result == 'Removed from cart') {
+      _deselectedProducts.remove(productId); // ✅ CHANGED
+      _updateTotalsForCurrentSelection();
+    } else {
+      _showSnackBar(result, isError: true);
+    }
   }
 
-  final result = await _cartProvider!.removeMultipleFromCart(selectedIds);
+  Future<void> _deleteSelectedProducts() async {
+    if (_cartProvider == null) return;
+    final l10n = AppLocalizations.of(context);
 
-  if (result == 'Products removed from cart') {
-    setState(() {
-      // No need to update _deselectedProducts - items are removed from cart
-    });
-    _updateTotalsForCurrentSelection();
-    _showSnackBar(l10n.itemsRemoved);
-  } else {
-    _showSnackBar(result, isError: true);
+    // ✅ CHANGED: Get selected IDs (items NOT in deselected set)
+    final allProductIds = _cartProvider!.cartItems
+        .where((item) => item['product'] != null)
+        .map((item) => (item['product'] as Product).id)
+        .toList();
+
+    final selectedIds =
+        allProductIds.where((id) => !_deselectedProducts.contains(id)).toList();
+
+    if (selectedIds.isEmpty) {
+      _showSnackBar(l10n.noItemsSelected, isError: true);
+      return;
+    }
+
+    final result = await _cartProvider!.removeMultipleFromCart(selectedIds);
+
+    if (result == 'Products removed from cart') {
+      setState(() {
+        // No need to update _deselectedProducts - items are removed from cart
+      });
+      _updateTotalsForCurrentSelection();
+      _showSnackBar(l10n.itemsRemoved);
+    } else {
+      _showSnackBar(result, isError: true);
+    }
   }
-}
 
   List<Map<String, dynamic>> _prepareItemsForPayment(
       List<Map<String, dynamic>> cartItems) {
@@ -224,7 +223,9 @@ class _MyCartScreenState extends State<MyCartScreen>
 
       // Add selectedColor if present
       final selectedColor = item['selectedColor'] ?? cartData?['selectedColor'];
-      if (selectedColor != null && selectedColor != '') {
+      if (selectedColor != null &&
+          selectedColor != '' &&
+          selectedColor != 'default') {
         selectedAttributes['selectedColor'] = selectedColor;
       }
 
@@ -254,13 +255,12 @@ class _MyCartScreenState extends State<MyCartScreen>
     final l10n = AppLocalizations.of(context);
 
     final allProductIds = _cartProvider!.cartItems
-    .where((item) => item['product'] != null)
-    .map((item) => (item['product'] as Product).id)
-    .toList();
+        .where((item) => item['product'] != null)
+        .map((item) => (item['product'] as Product).id)
+        .toList();
 
-final selectedIds = allProductIds
-    .where((id) => !_deselectedProducts.contains(id))
-    .toList();
+    final selectedIds =
+        allProductIds.where((id) => !_deselectedProducts.contains(id)).toList();
 
     if (selectedIds.isEmpty) {
       _showSnackBar(l10n.pleaseSelectItemsToCheckout, isError: true);
@@ -320,12 +320,11 @@ final selectedIds = allProductIds
       if (validation['isValid'] == true &&
           (validation['warnings'] as Map).isEmpty) {
         // ✅ No issues - proceed directly to payment
-        final excludedIds = allProductIds
-    .where((id) => !selectedIds.contains(id))
-    .toList();
-final totals = await _cartProvider!.calculateCartTotals(
-  excludedProductIds: excludedIds.isNotEmpty ? excludedIds : null,
-);
+        final excludedIds =
+            allProductIds.where((id) => !selectedIds.contains(id)).toList();
+        final totals = await _cartProvider!.calculateCartTotals(
+          excludedProductIds: excludedIds.isNotEmpty ? excludedIds : null,
+        );
         final rawItems =
             await _cartProvider!.fetchAllSelectedItems(selectedIds);
         final items = _prepareItemsForPayment(rawItems);
@@ -405,13 +404,15 @@ final totals = await _cartProvider!.calculateCartTotals(
                       _prepareItemsForPayment(rawValidCartItems);
 
                   // ✅ Calculate totals from validated items (which have fresh prices)
-                  final allIdsForTotals = _cartProvider!.cartProductIds.toList();
-final excludedForTotals = allIdsForTotals
-    .where((id) => !validIds.contains(id))
-    .toList();
-final totals = await _cartProvider!.calculateCartTotals(
-  excludedProductIds: excludedForTotals.isNotEmpty ? excludedForTotals : null,
-);
+                  final allIdsForTotals =
+                      _cartProvider!.cartProductIds.toList();
+                  final excludedForTotals = allIdsForTotals
+                      .where((id) => !validIds.contains(id))
+                      .toList();
+                  final totals = await _cartProvider!.calculateCartTotals(
+                    excludedProductIds:
+                        excludedForTotals.isNotEmpty ? excludedForTotals : null,
+                  );
 
                   if (mounted) {
                     // ✅ FIX: Navigate to payment immediately
@@ -458,10 +459,11 @@ final totals = await _cartProvider!.calculateCartTotals(
       );
     }
   }
-void _updateTotalsForCurrentSelection() {
-  // ✅ SIMPLIFIED: Pass deselected IDs to provider
-  _cartProvider?.updateTotalsForExcluded(_deselectedProducts.toList());
-}
+
+  void _updateTotalsForCurrentSelection() {
+    // ✅ SIMPLIFIED: Pass deselected IDs to provider
+    _cartProvider?.updateTotalsForExcluded(_deselectedProducts.toList());
+  }
 
   void _showSalesPausedDialog(String? reason) {
     final l10n = AppLocalizations.of(context);
@@ -593,31 +595,30 @@ void _updateTotalsForCurrentSelection() {
         title: Text(l10n.myCart),
         centerTitle: true,
         actions: [
-  // Delete selected button
-  ValueListenableBuilder<List<Map<String, dynamic>>>(
-    valueListenable:
-        _cartProvider?.cartItemsNotifier ?? ValueNotifier([]),
-    builder: (context, items, _) {
-      // ✅ CHANGED: Check if any items are selected (not deselected)
-      final allProductIds = items
-          .where((item) => item['product'] != null)
-          .map((item) => (item['product'] as Product).id)
-          .toSet();
-      
-      final hasSelected = allProductIds.any(
-        (id) => !_deselectedProducts.contains(id)
-      );
+          // Delete selected button
+          ValueListenableBuilder<List<Map<String, dynamic>>>(
+            valueListenable:
+                _cartProvider?.cartItemsNotifier ?? ValueNotifier([]),
+            builder: (context, items, _) {
+              // ✅ CHANGED: Check if any items are selected (not deselected)
+              final allProductIds = items
+                  .where((item) => item['product'] != null)
+                  .map((item) => (item['product'] as Product).id)
+                  .toSet();
 
-      if (!hasSelected) return const SizedBox.shrink();
+              final hasSelected =
+                  allProductIds.any((id) => !_deselectedProducts.contains(id));
 
-      return IconButton(
-        icon: const Icon(Icons.delete_outline),
-        onPressed: _deleteSelectedProducts,
-        tooltip: l10n.delete,
-      );
-    },
-  ),
-],
+              if (!hasSelected) return const SizedBox.shrink();
+
+              return IconButton(
+                icon: const Icon(Icons.delete_outline),
+                onPressed: _deleteSelectedProducts,
+                tooltip: l10n.delete,
+              );
+            },
+          ),
+        ],
       ),
       body: user == null ? _buildAuthPrompt(l10n) : _buildCartContent(l10n),
       bottomNavigationBar: user != null ? _buildCheckoutButton(l10n) : null,
@@ -737,16 +738,16 @@ void _updateTotalsForCurrentSelection() {
     );
   }
 
- void _syncSelections(List<Map<String, dynamic>> items) {
-  // ✅ SIMPLIFIED: Just remove deselections for items no longer in cart
-  final currentProductIds = items
-      .where((item) => item['product'] != null)
-      .map((item) => (item['product'] as Product).id)
-      .toSet();
+  void _syncSelections(List<Map<String, dynamic>> items) {
+    // ✅ SIMPLIFIED: Just remove deselections for items no longer in cart
+    final currentProductIds = items
+        .where((item) => item['product'] != null)
+        .map((item) => (item['product'] as Product).id)
+        .toSet();
 
-  // Remove deselections for items that are no longer in cart
-  _deselectedProducts.removeWhere((id) => !currentProductIds.contains(id));
-}
+    // Remove deselections for items that are no longer in cart
+    _deselectedProducts.removeWhere((id) => !currentProductIds.contains(id));
+  }
 
   Widget _buildSellerHeader(Map<String, dynamic> item) {
     final sellerName = item['sellerName'] as String? ?? 'Unknown';
@@ -790,7 +791,7 @@ void _updateTotalsForCurrentSelection() {
       );
     }
 
-    final isSelected = !_deselectedProducts.contains(product.id); 
+    final isSelected = !_deselectedProducts.contains(product.id);
     final quantity = item['quantity'] as int? ?? 1;
     final cartData = item['cartData'] as Map<String, dynamic>;
     final selectedColor = cartData['selectedColor'] as String?;
@@ -835,23 +836,24 @@ void _updateTotalsForCurrentSelection() {
               children: [
                 // Checkbox - toggles selection
                 Transform.scale(
-  scale: 0.9,
-  child: Checkbox(
-    value: !_deselectedProducts.contains(product.id),  // ✅ CHANGED
-    onChanged: (value) {
-      setState(() {
-        if (value == true) {
-          _deselectedProducts.remove(product.id);  // ✅ CHANGED
-        } else {
-          _deselectedProducts.add(product.id);  // ✅ CHANGED
-        }
-      });
-      _updateTotalsForCurrentSelection();
-    },
-    activeColor: Colors.orange,
-    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-  ),
-),
+                  scale: 0.9,
+                  child: Checkbox(
+                    value:
+                        !_deselectedProducts.contains(product.id), // ✅ CHANGED
+                    onChanged: (value) {
+                      setState(() {
+                        if (value == true) {
+                          _deselectedProducts.remove(product.id); // ✅ CHANGED
+                        } else {
+                          _deselectedProducts.add(product.id); // ✅ CHANGED
+                        }
+                      });
+                      _updateTotalsForCurrentSelection();
+                    },
+                    activeColor: Colors.orange,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
                 const SizedBox(width: 8),
 
                 // Product image & details - navigates to product detail
@@ -1074,17 +1076,17 @@ void _updateTotalsForCurrentSelection() {
     }
 
     return ValueListenableBuilder<List<Map<String, dynamic>>>(
-  valueListenable: _cartProvider!.cartItemsNotifier,
-  builder: (context, items, _) {
-    // ✅ CHANGED: Calculate selected IDs
-    final allProductIds = items
-        .where((item) => item['product'] != null)
-        .map((item) => (item['product'] as Product).id)
-        .toSet();
-    
-    final selectedIds = allProductIds
-        .where((id) => !_deselectedProducts.contains(id))
-        .toList();
+      valueListenable: _cartProvider!.cartItemsNotifier,
+      builder: (context, items, _) {
+        // ✅ CHANGED: Calculate selected IDs
+        final allProductIds = items
+            .where((item) => item['product'] != null)
+            .map((item) => (item['product'] as Product).id)
+            .toSet();
+
+        final selectedIds = allProductIds
+            .where((id) => !_deselectedProducts.contains(id))
+            .toList();
 
         final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -1201,20 +1203,21 @@ void _updateTotalsForCurrentSelection() {
                     final hasDiscount = couponDiscount > 0 || useFreeShipping;
 
                     // Auto-clear coupon if no longer applicable (cart total changed)
-if (_discountService.selectedCoupon != null && couponDiscount == 0) {
-  // Coupon selected but not applicable - could show a message
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    _discountService.selectCoupon(null);
-  });
-}
+                    if (_discountService.selectedCoupon != null &&
+                        couponDiscount == 0) {
+                      // Coupon selected but not applicable - could show a message
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        _discountService.selectCoupon(null);
+                      });
+                    }
 
 // Same for free shipping
-if (_discountService.useFreeShipping && 
-    !_couponService.isFreeShippingApplicable(subtotal)) {
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    _discountService.setFreeShipping(false);
-  });
-}
+                    if (_discountService.useFreeShipping &&
+                        !_couponService.isFreeShippingApplicable(subtotal)) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        _discountService.setFreeShipping(false);
+                      });
+                    }
 
                     // Check if user has any available coupons/benefits
                     return ValueListenableBuilder<List<Coupon>>(
