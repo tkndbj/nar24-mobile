@@ -6602,5 +6602,16 @@
       "hours": { "type": "int" },
       "minutes": { "type": "int" }
     }
+  },
+
+  "pastFoodCargosTitle": "Gecmis Teslimatlar",
+  "pastFoodCargosEmpty": "Henuz gecmis teslimat yok",
+  "pastFoodCargosEmptySub": "Tamamlanan teslimatlariniz burada gorunecek",
+  "pastFoodCargosLoadMore": "Daha Fazla Yukle",
+  "pastFoodCargosDeliveredAt": "Teslim tarihi: {date}",
+  "@pastFoodCargosDeliveredAt": {
+    "placeholders": {
+      "date": { "type": "String" }
+    }
   }
 }

@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../screens/CARGO-PANEL/cargo_dashboard.dart';
 import '../../screens/CARGO-PANEL/cargo_route.dart';
 import '../../screens/CARGO-FOOD-PANEL/food_cargo_screen.dart';
+import '../../screens/CARGO-FOOD-PANEL/past_food_cargos_screen.dart';
 
 class CargoRoutes {
   // Reusable slide transition
@@ -51,6 +52,20 @@ class CargoRoutes {
           return CustomTransitionPage(
             key: state.pageKey,
             child: const FoodCargoScreen(),
+            transitionsBuilder: _slideTransition,
+            transitionDuration: const Duration(milliseconds: 200),
+          );
+        },
+      ),
+
+      // Past Food Cargo Deliveries
+      GoRoute(
+        path: '/past-food-cargos',
+        name: 'past-food-cargos',
+        pageBuilder: (context, state) {
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: const PastFoodCargosScreen(),
             transitionsBuilder: _slideTransition,
             transitionDuration: const Duration(milliseconds: 200),
           );

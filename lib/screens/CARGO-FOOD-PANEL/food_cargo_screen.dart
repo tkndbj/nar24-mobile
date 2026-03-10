@@ -1,17 +1,5 @@
 // lib/screens/food/food_cargo_screen.dart
-//
-// Cargo (delivery rider) panel.
-//
-// Pool tab  — live stream of orders with status == 'ready' + deliveryType == 'delivery'
-//             Rider taps "Take Order" → Firestore transaction claims it atomically
-//             (status: ready → out_for_delivery, cargoUserId = rider uid)
-//
-// My Deliveries tab — live stream of orders where cargoUserId == currentUser.uid
-//                     Rider can call customer, open maps, or mark as delivered
-//
-// Required Firestore composite indexes:
-//   orders-food: (status ASC, deliveryType ASC, updatedAt ASC)
-//   orders-food: (cargoUserId ASC, status ASC, assignedAt ASC)
+
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -19,7 +7,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
-
+import 'package:cloud_functions/cloud_functions.dart';
 import '../../auth_service.dart';
 import '../../generated/l10n/app_localizations.dart';
 
@@ -59,6 +47,11 @@ class FoodCargoScreen extends StatelessWidget {
             ],
           ),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.history_rounded),
+              tooltip: loc.pastFoodCargosTitle,
+              onPressed: () => context.push('/past-food-cargos'),
+            ),
             IconButton(
               icon: const Icon(Icons.logout_rounded),
               tooltip: loc.foodCargoLogout,
@@ -421,29 +414,25 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
     }
   }
 
-  Future<void> _markDelivered() async {
-    final loc = AppLocalizations.of(context);
-    setState(() => _loading = true);
-    try {
-      await FirebaseFirestore.instance
-          .collection('orders-food')
-          .doc(widget.orderId)
-          .update({
-        'status': 'delivered',
-        'deliveredAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'needsReview': true,
-      });
-      if (mounted) _showSnack(loc.foodCargoDeliveredSuccess);
-    } catch (_) {
-      if (mounted) {
-        _showSnack(AppLocalizations.of(context).foodCargoAssignError,
-            isError: true);
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
+Future<void> _markDelivered() async {
+  final loc = AppLocalizations.of(context);
+  setState(() => _loading = true);
+  try {
+    final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+        .httpsCallable('updateFoodOrderStatus');
+    await callable.call({
+      'orderId': widget.orderId,
+      'newStatus': 'delivered',
+    });
+    if (mounted) _showSnack(loc.foodCargoDeliveredSuccess);
+  } catch (e) {
+    if (mounted) {
+      _showSnack(AppLocalizations.of(context).foodCargoAssignError, isError: true);
     }
+  } finally {
+    if (mounted) setState(() => _loading = false);
   }
+}
 
   Future<void> _callPhone() async {
     final phone = _customerPhone;
@@ -615,6 +604,20 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
                   isDark: isDark,
                   valueColor: isDark ? Colors.blue[300] : Colors.blue[700],
                 ),
+                if ((widget.data['mainRegion'] as String? ?? '').isNotEmpty ||
+                    (widget.data['addressLine2'] as String? ?? '').isNotEmpty)
+                  ...[
+                    const SizedBox(height: 8),
+                    _InfoRow(
+                      icon: Icons.map_outlined,
+                      label: 'Region',
+                      value: [
+                        widget.data['mainRegion'] as String? ?? '',
+                        widget.data['addressLine2'] as String? ?? '',
+                      ].where((s) => s.isNotEmpty).join(' · '),
+                      isDark: isDark,
+                    ),
+                  ],
                 const SizedBox(height: 8),
                 _InfoRow(
                   icon: Icons.receipt_rounded,

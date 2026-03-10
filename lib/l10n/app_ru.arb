@@ -6241,5 +6241,16 @@
       "hours": { "type": "int" },
       "minutes": { "type": "int" }
     }
+  },
+
+  "pastFoodCargosTitle": "Прошлые доставки",
+  "pastFoodCargosEmpty": "Нет прошлых доставок",
+  "pastFoodCargosEmptySub": "Завершённые доставки будут отображаться здесь",
+  "pastFoodCargosLoadMore": "Загрузить ещё",
+  "pastFoodCargosDeliveredAt": "Доставлено {date}",
+  "@pastFoodCargosDeliveredAt": {
+    "placeholders": {
+      "date": { "type": "String" }
+    }
   }
 }

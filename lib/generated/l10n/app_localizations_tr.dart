@@ -15449,4 +15449,22 @@ class AppLocalizationsTr extends AppLocalizations {
   String foodCargoHrAgo(int hours, int minutes) {
     return '$hours sa $minutes dk önce';
   }
+
+  @override
+  String get pastFoodCargosTitle => 'Gecmis Teslimatlar';
+
+  @override
+  String get pastFoodCargosEmpty => 'Henuz gecmis teslimat yok';
+
+  @override
+  String get pastFoodCargosEmptySub =>
+      'Tamamlanan teslimatlariniz burada gorunecek';
+
+  @override
+  String get pastFoodCargosLoadMore => 'Daha Fazla Yukle';
+
+  @override
+  String pastFoodCargosDeliveredAt(String date) {
+    return 'Teslim tarihi: $date';
+  }
 }

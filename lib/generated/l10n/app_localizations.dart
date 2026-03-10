@@ -29459,6 +29459,36 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'{hours} sa {minutes} dk önce'**
   String foodCargoHrAgo(int hours, int minutes);
+
+  /// No description provided for @pastFoodCargosTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Gecmis Teslimatlar'**
+  String get pastFoodCargosTitle;
+
+  /// No description provided for @pastFoodCargosEmpty.
+  ///
+  /// In tr, this message translates to:
+  /// **'Henuz gecmis teslimat yok'**
+  String get pastFoodCargosEmpty;
+
+  /// No description provided for @pastFoodCargosEmptySub.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tamamlanan teslimatlariniz burada gorunecek'**
+  String get pastFoodCargosEmptySub;
+
+  /// No description provided for @pastFoodCargosLoadMore.
+  ///
+  /// In tr, this message translates to:
+  /// **'Daha Fazla Yukle'**
+  String get pastFoodCargosLoadMore;
+
+  /// No description provided for @pastFoodCargosDeliveredAt.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslim tarihi: {date}'**
+  String pastFoodCargosDeliveredAt(String date);
 }
 
 class _AppLocalizationsDelegate

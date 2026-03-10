@@ -733,9 +733,6 @@ export const initializeFoodPayment = onCall(
   }
 );
 
-// ============================================================================
-// HTTP: foodPaymentCallback (İşbank 3D callback)
-// ============================================================================
 
 // ============================================================================
 // HTTP: foodPaymentCallback (İşbank 3D callback) — FIXED
@@ -1760,26 +1757,30 @@ export const updateFoodOrderStatus = onCall(
       throw new HttpsError('invalid-argument', 'Invalid orderId or status.');
     }
 
-    // ✅ Read claims ONCE, outside the transaction
     const userRecord = await admin.auth().getUser(request.auth.uid);
     const restaurantClaims = userRecord.customClaims?.restaurants || {};
-
-
+    const isCargoCourier = userRecord.customClaims?.foodcargoguy === true;
+    
     const db = admin.firestore();
-
+    
     await db.runTransaction(async (tx) => {
       const orderRef = db.collection('orders-food').doc(orderId);
       const orderSnap = await tx.get(orderRef);
-
+    
       if (!orderSnap.exists) {
         throw new HttpsError('not-found', 'Order not found.');
       }
-
+    
       const order = orderSnap.data();
-
-      // ✅ Check membership, not ownership
-      if (!(order.restaurantId in restaurantClaims)) {
-        throw new HttpsError('permission-denied', 'You are not a member of this restaurant.');
+    
+      const isRestaurantMember = order.restaurantId in restaurantClaims;
+      const isCargoDelivery = isCargoCourier &&
+        order.status === 'out_for_delivery' &&
+        newStatus === 'delivered' &&
+        order.cargoUserId === request.auth.uid;
+    
+      if (!isRestaurantMember && !isCargoDelivery) {
+        throw new HttpsError('permission-denied', 'You are not authorized to update this order.');
       }
 
       const VALID_TRANSITIONS = {

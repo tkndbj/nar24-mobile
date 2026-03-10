@@ -15522,4 +15522,22 @@ class AppLocalizationsRu extends AppLocalizations {
   String foodCargoHrAgo(int hours, int minutes) {
     return '$hours ч $minutes мин назад';
   }
+
+  @override
+  String get pastFoodCargosTitle => 'Прошлые доставки';
+
+  @override
+  String get pastFoodCargosEmpty => 'Нет прошлых доставок';
+
+  @override
+  String get pastFoodCargosEmptySub =>
+      'Завершённые доставки будут отображаться здесь';
+
+  @override
+  String get pastFoodCargosLoadMore => 'Загрузить ещё';
+
+  @override
+  String pastFoodCargosDeliveredAt(String date) {
+    return 'Доставлено $date';
+  }
 }

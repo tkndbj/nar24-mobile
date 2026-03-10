@@ -15421,4 +15421,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String foodCargoHrAgo(int hours, int minutes) {
     return '${hours}h ${minutes}m ago';
   }
+
+  @override
+  String get pastFoodCargosTitle => 'Past Deliveries';
+
+  @override
+  String get pastFoodCargosEmpty => 'No past deliveries yet';
+
+  @override
+  String get pastFoodCargosEmptySub =>
+      'Your completed deliveries will appear here';
+
+  @override
+  String get pastFoodCargosLoadMore => 'Load More';
+
+  @override
+  String pastFoodCargosDeliveredAt(String date) {
+    return 'Delivered $date';
+  }
 }

@@ -6606,5 +6606,16 @@
       "hours": { "type": "int" },
       "minutes": { "type": "int" }
     }
+  },
+
+  "pastFoodCargosTitle": "Past Deliveries",
+  "pastFoodCargosEmpty": "No past deliveries yet",
+  "pastFoodCargosEmptySub": "Your completed deliveries will appear here",
+  "pastFoodCargosLoadMore": "Load More",
+  "pastFoodCargosDeliveredAt": "Delivered {date}",
+  "@pastFoodCargosDeliveredAt": {
+    "placeholders": {
+      "date": { "type": "String" }
+    }
   }
 }

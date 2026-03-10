@@ -58,7 +58,8 @@ class AppRouter {
         final isLoggingIn = loc == '/login' || loc == '/register';
         final isEmailVerification = loc == '/email-verification';
         final isCargoPanel = loc.startsWith('/cargo');
-        final isFoodCargoPanel = loc == '/food-cargo';
+        final isFoodCargoPanel =
+            loc == '/food-cargo' || loc == '/past-food-cargos';
         final isCompleteName = loc == '/complete-name';
 
         // ✅ Email verification check (skip for social users)
