@@ -19,6 +19,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:intl/intl.dart';
 import '../../auth_service.dart';
 import '../../generated/l10n/app_localizations.dart';
+import 'package:rxdart/rxdart.dart';
 
 // ─── FCM topic (must match Cloud Function constant) ──────────────────────────
 const _kFcmTopic = 'food_couriers';
@@ -111,13 +112,25 @@ class _FoodCargoScreenState extends State<FoodCargoScreen> {
         action: SnackBarAction(
           label: 'VIEW',
           textColor: Colors.white,
-          onPressed: () {
-            setState(() => _notifPanelOpen = true);
-          },
+         onPressed: () {
+  setState(() => _notifPanelOpen = true);
+  _markAllAsRead();
+},
         ),
       ),
     );
   }
+
+    Future<void> _markAllAsRead() async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return;
+
+  // One write. That's it. No matter how many notifications exist.
+  await FirebaseFirestore.instance
+      .collection('courier_notification_reads')
+      .doc(uid)
+      .set({'lastReadAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+}
 
   void _handleNotificationTap(RemoteMessage message) {
     // App opened from a notification — open the cargo screen (already here)
@@ -129,13 +142,35 @@ class _FoodCargoScreenState extends State<FoodCargoScreen> {
 
   // ── Unread badge ───────────────────────────────────────────────────────────
 
-  void _setupUnreadStream() {
-    _unreadCountStream = FirebaseFirestore.instance
-        .collection('food_courier_notifications')
-        .where('isActive', isEqualTo: true)
-        .snapshots()
-        .map((snap) => snap.size);
-  }
+void _setupUnreadStream() {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return;
+
+  // Stream both sources together
+  final notifsStream = FirebaseFirestore.instance
+      .collection('food_courier_notifications')
+      .where('isActive', isEqualTo: true)
+      .snapshots();
+
+  final readStream = FirebaseFirestore.instance
+      .collection('courier_notification_reads')
+      .doc(uid)
+      .snapshots();
+
+  _unreadCountStream = Rx.combineLatest2(
+    notifsStream,
+    readStream,
+    (QuerySnapshot notifs, DocumentSnapshot read) {
+      final lastReadAt = (read.data() as Map<String, dynamic>?)?['lastReadAt'] as Timestamp?;
+      if (lastReadAt == null) return notifs.size;
+      return notifs.docs.where((doc) {
+        final createdAt = doc['createdAt'] as Timestamp?;
+        if (createdAt == null) return false;
+        return createdAt.compareTo(lastReadAt) > 0;
+      }).length;
+    },
+  );
+}
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -182,8 +217,11 @@ class _FoodCargoScreenState extends State<FoodCargoScreen> {
                     IconButton(
                       icon: const Icon(Icons.notifications_rounded),
                       tooltip: 'Notifications',
-                      onPressed: () =>
-                          setState(() => _notifPanelOpen = !_notifPanelOpen),
+                      onPressed: () {
+  final opening = !_notifPanelOpen;
+  setState(() => _notifPanelOpen = opening);
+  if (opening) _markAllAsRead();
+},
                     ),
                     if (count > 0)
                       Positioned(
