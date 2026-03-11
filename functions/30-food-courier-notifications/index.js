@@ -1,0 +1,349 @@
+/**
+ * food_courier_notifications.js
+ *
+ * Scalable courier notification system.
+ *
+ * Architecture:
+ * ─────────────────────────────────────────────────────────────────
+ * • food_courier_notifications/{notifId}  — shared broadcast collection.
+ *   ONE document per event, ALL couriers read it. Efficient at any scale.
+ *   No per-courier fan-out write storms.
+ *
+ * • FCM Topic  "food_couriers"            — push to all couriers in one call.
+ *   Firebase handles delivery to every subscribed device automatically.
+ *
+ * • Firestore trigger (onDocumentUpdated) — decoupled, reliable, catches
+ *   every status change regardless of code path (callable, direct write, etc.)
+ *
+ * Notification lifecycle:
+ *   order accepted  ──► restaurant can "Inform Courier" (heads_up, 5 min cooldown)
+ *   order → ready   ──► automatic (order_ready) notification + FCM topic push
+ *   order claimed   ──► notification deactivated (isActive = false)
+ *   order rejected/cancelled ──► notification deactivated
+ *   30 min TTL      ──► scheduled cleanup
+ * ─────────────────────────────────────────────────────────────────
+ */
+
+import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onSchedule as onScheduleFn } from 'firebase-functions/v2/scheduler';
+import admin from 'firebase-admin';
+
+const REGION = 'europe-west3';
+
+// ─── FCM topic all active couriers subscribe to on login ─────────────────────
+const FCM_TOPIC_ALL_COURIERS = 'food_couriers';
+
+// ─── Notification TTLs ───────────────────────────────────────────────────────
+const TTL_ORDER_READY_MS  = 30 * 60 * 1000; // 30 min
+const TTL_HEADS_UP_MS     = 15 * 60 * 1000; // 15 min
+const INFORM_COOLDOWN_MS  =  5 * 60 * 1000; //  5 min between Inform Courier presses
+
+// ─── FCM Android channel (create in Flutter) ─────────────────────────────────
+const FCM_CHANNEL_ID = 'food_orders_high';
+
+// ============================================================================
+// FIRESTORE TRIGGER — react to every status change on orders-food
+// ============================================================================
+
+export const onFoodOrderStatusChange = onDocumentUpdated(
+  {
+    document: 'orders-food/{orderId}',
+    region: REGION,
+    memory: '256MiB',
+    timeoutSeconds: 30,
+  },
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+
+    // Nothing to do if status hasn't changed
+    if (before.status === after.status) return;
+
+    const orderId       = event.params.orderId;
+    const previousStatus = before.status;
+    const newStatus      = after.status;
+
+    const db = admin.firestore();
+
+    // ── 1. Order becomes READY → notify couriers ─────────────────────────
+    if (newStatus === 'ready' && previousStatus !== 'ready') {
+      try {
+        await createCourierNotification(db, orderId, after, 'order_ready');
+        await sendFcmToTopic(after, orderId, 'order_ready');
+        console.log(`[CourierNotif] order_ready notification created for ${orderId}`);
+      } catch (err) {
+        console.error('[CourierNotif] Failed to create order_ready notification:', err);
+      }
+      return;
+    }
+
+    // ── 2. Order claimed (out_for_delivery) or ended → deactivate notification
+    const terminalStatuses = ['out_for_delivery', 'delivered', 'cancelled', 'rejected'];
+    if (terminalStatuses.includes(newStatus)) {
+      try {
+        await deactivateCourierNotification(db, orderId);
+      } catch (err) {
+        console.error('[CourierNotif] Failed to deactivate notification:', err);
+      }
+    }
+  },
+);
+
+// ============================================================================
+// CALLABLE — Restaurant triggers "Inform Courier" (heads-up)
+// ============================================================================
+
+export const informFoodCourier = onCall(
+  {
+    region: REGION,
+    memory: '256MiB',
+    timeoutSeconds: 20,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be signed in.');
+    }
+
+    const { orderId } = request.data;
+    if (!orderId || typeof orderId !== 'string') {
+      throw new HttpsError('invalid-argument', 'orderId is required.');
+    }
+
+    const db     = admin.firestore();
+    const uid    = request.auth.uid;
+    const claims = request.auth.token;
+
+    // ── 1. Fetch the order ──────────────────────────────────────────────
+    const orderRef  = db.collection('orders-food').doc(orderId);
+    const orderSnap = await orderRef.get();
+
+    if (!orderSnap.exists) {
+      throw new HttpsError('not-found', 'Order not found.');
+    }
+
+    const order = orderSnap.data();
+
+    // ── 2. Authorisation — caller must belong to this restaurant ────────
+    const restaurantClaims = claims.restaurants || {};
+    if (!(order.restaurantId in restaurantClaims)) {
+      throw new HttpsError('permission-denied', 'Not authorised for this restaurant.');
+    }
+
+    // ── 3. Order must be in accepted or preparing state ─────────────────
+    if (!['accepted', 'preparing'].includes(order.status)) {
+      throw new HttpsError(
+        'failed-precondition',
+        `Cannot inform courier when order is "${order.status}".`
+      );
+    }
+
+    // ── 4. Cooldown check — prevent spam (5 min between calls) ──────────
+    if (order.lastInformedAt) {
+      const lastInformedMs = order.lastInformedAt.toDate().getTime();
+      const msSinceLastInform = Date.now() - lastInformedMs;
+      if (msSinceLastInform < INFORM_COOLDOWN_MS) {
+        const remainingSec = Math.ceil((INFORM_COOLDOWN_MS - msSinceLastInform) / 1000);
+        throw new HttpsError(
+          'resource-exhausted',
+          `Please wait ${remainingSec} seconds before informing again.`
+        );
+      }
+    }
+
+    // ── 5. Create in-app notification + stamp cooldown ───────────────────
+    const batch = db.batch();
+
+    const notifRef = db.collection('food_courier_notifications').doc();
+    batch.set(notifRef, buildNotifDoc(orderId, order, 'heads_up'));
+
+    batch.update(orderRef, {
+      lastInformedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+
+    // ── 6. FCM topic push ────────────────────────────────────────────────
+    await sendFcmToTopic(order, orderId, 'heads_up');
+
+    console.log(`[CourierNotif] heads_up sent for order ${orderId} by ${uid}`);
+    return { success: true };
+  },
+);
+
+// ============================================================================
+// SCHEDULED — Clean up expired notifications (runs every 30 min)
+// ============================================================================
+
+export const cleanupExpiredCourierNotifications = onScheduleFn(
+  {
+    schedule: 'every 30 minutes',
+    region: REGION,
+    memory: '256MiB',
+    timeoutSeconds: 60,
+  },
+  async () => {
+    const db  = admin.firestore();
+    const now = admin.firestore.Timestamp.now();
+
+    const expiredSnap = await db
+      .collection('food_courier_notifications')
+      .where('expiresAt', '<', now)
+      .where('isActive', '==', true)
+      .limit(200)
+      .get();
+
+    if (expiredSnap.empty) {
+      console.log('[CourierNotif] No expired notifications to clean up.');
+      return;
+    }
+
+    // Batch delete in chunks of 500
+    const CHUNK = 500;
+    for (let i = 0; i < expiredSnap.docs.length; i += CHUNK) {
+      const batch = db.batch();
+      expiredSnap.docs.slice(i, i + CHUNK).forEach((doc) =>
+        batch.update(doc.ref, { isActive: false })
+      );
+      await batch.commit();
+    }
+
+    console.log(`[CourierNotif] Deactivated ${expiredSnap.size} expired notifications.`);
+  },
+);
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+function buildNotifDoc(orderId, order, type) {
+  const ttlMs = type === 'order_ready' ? TTL_ORDER_READY_MS : TTL_HEADS_UP_MS;
+
+  const deliveryCity   = order.deliveryAddress?.city || '';
+  const deliveryRegion = order.deliveryAddress?.mainRegion || '';
+
+  const restaurantName = order.restaurantName || '';
+  const itemCount      = order.itemCount || 0;
+  const totalPrice     = order.totalPrice || 0;
+  const currency       = order.currency || 'TL';
+
+  const messages = buildMessages(type, restaurantName, itemCount, totalPrice, currency);
+
+  return {
+    type,                        // 'order_ready' | 'heads_up'
+    orderId,
+    restaurantId: order.restaurantId,
+    restaurantName,
+    restaurantProfileImage: order.restaurantProfileImage || '',
+    itemCount,
+    totalPrice,
+    currency,
+    deliveryCity,
+    deliveryRegion,
+    message_en: messages.en,
+    message_tr: messages.tr,
+    isActive: true,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + ttlMs),
+  };
+}
+
+async function createCourierNotification(db, orderId, order, type) {
+  const docId  = `${orderId}_${type}`;          // deterministic → idempotent
+  const notifRef = db.collection('food_courier_notifications').doc(docId);
+
+  await notifRef.set(buildNotifDoc(orderId, order, type), { merge: false });
+}
+
+async function deactivateCourierNotification(db, orderId) {
+  // Query by orderId field (index needed: orderId ASC + isActive ASC)
+  const snap = await db
+    .collection('food_courier_notifications')
+    .where('orderId', '==', orderId)
+    .where('isActive', '==', true)
+    .get();
+
+  if (snap.empty) return;
+
+  const batch = db.batch();
+  snap.docs.forEach((doc) => batch.update(doc.ref, { isActive: false }));
+  await batch.commit();
+}
+
+async function sendFcmToTopic(order, orderId, type) {
+  const restaurantName = order.restaurantName || '';
+  const itemCount      = order.itemCount || 0;
+  const totalPrice     = order.totalPrice || 0;
+  const currency       = order.currency || 'TL';
+
+  const messages = buildMessages(type, restaurantName, itemCount, totalPrice, currency);
+
+  const message = {
+    topic: FCM_TOPIC_ALL_COURIERS,
+
+    // Notification payload (system tray — shown when app is in background/killed)
+    notification: {
+      title: messages.fcmTitle,
+      body: messages.tr,       // default to Turkish; Flutter can localise
+    },
+
+    // Data payload (available in both foreground and background handlers)
+    data: {
+      type,
+      orderId,
+      restaurantId: order.restaurantId  || '',
+      restaurantName: order.restaurantName || '',
+      itemCount: String(itemCount),
+      totalPrice: String(totalPrice),
+      currency,
+      click_action: 'FLUTTER_NOTIFICATION_CLICK',
+    },
+
+    // Android — high priority to wake screen
+    android: {
+      priority: 'high',
+      notification: {
+        channelId: FCM_CHANNEL_ID,
+        sound: 'order_alert',   // put order_alert.mp3 in res/raw/
+        priority: 'max',
+        visibility: 'public',
+      },
+    },
+
+    // iOS
+    apns: {
+      headers: { 'apns-priority': '10' },
+      payload: {
+        aps: {
+          'sound': 'order_alert.caf',
+          'badge': 1,
+          'content-available': 1,
+        },
+      },
+    },
+  };
+
+  try {
+    const response = await admin.messaging().send(message);
+    console.log(`[CourierNotif] FCM ${type} sent, messageId: ${response}`);
+  } catch (err) {
+    // FCM failure must NOT fail the Cloud Function — notification is already in Firestore
+    console.error('[CourierNotif] FCM send failed (non-fatal):', err.message);
+  }
+}
+
+function buildMessages(type, restaurantName, itemCount, totalPrice, currency) {
+  if (type === 'order_ready') {
+    return {
+      fcmTitle: '📦 Yeni Sipariş Hazır',
+      en: `${restaurantName} — ${itemCount} item(s), ${totalPrice} ${currency}. Ready for pickup!`,
+      tr: `${restaurantName} — ${itemCount} ürün, ${totalPrice} ${currency}. Teslimata hazır!`,
+    };
+  }
+  // heads_up
+  return {
+    fcmTitle: '⏳ Sipariş Neredeyse Hazır',
+    en: `${restaurantName} — ${itemCount} item(s) almost ready. Heading to restaurant soon?`,
+    tr: `${restaurantName} — ${itemCount} ürün neredeyse hazır. Restorana gidebilirsiniz!`,
+  };
+}
