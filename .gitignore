@@ -17,5 +17,7 @@ build/
 *.dSYM/
 *.framework/
 .flutter-plugins-dependencies
+firebase-debug.log
+firebase-debug.*.log
 
 

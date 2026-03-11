@@ -3309,17 +3309,26 @@ if (payload.orderId) {
     tokens,
     notification: {title, body},
     data: dataPayload,
-    apns: {
-      headers: {'apns-priority': '10'},
-      payload: {aps: {sound: 'default', badge: 1}},
-    },
     android: {
       priority: 'high',
       notification: {
-        channelId: 'high_importance_channel',
-        sound: 'default',
+        channelId: originalType === 'food_order_delivered_review' || originalType === 'food_order_status_update' ?
+          'food_orders_high' :
+          'high_importance_channel',
+        sound: originalType === 'food_order_delivered_review' || originalType === 'food_order_status_update' ?
+          'order_alert' :
+          'default',
         icon: 'ic_notification',
       },
+    },
+    apns: {
+      headers: {'apns-priority': '10'},
+      payload: { aps: {
+        sound: originalType === 'food_order_delivered_review' || originalType === 'food_order_status_update' ?
+          'order_alert.caf' :
+          'default',
+        badge: 1,
+      }},
     },
   };
 
@@ -3480,17 +3489,26 @@ export const sendRestaurantNotificationOnCreation = onDocumentCreated({
       tokens: batch,
       notification: { title, body },
       data: dataPayload,
-      apns: {
-        headers: { 'apns-priority': '10' },
-        payload: { aps: { sound: 'default', badge: 1 } },
-      },
       android: {
         priority: 'high',
         notification: {
-          channelId: 'high_importance_channel',
-          sound: 'default',
+          channelId: type === 'new_food_order' || type === 'restaurant_new_review' ?
+            'food_orders_high' :
+            'high_importance_channel',
+          sound: type === 'new_food_order' || type === 'restaurant_new_review' ?
+            'order_alert' :
+            'default',
           icon: 'ic_notification',
         },
+      },
+      apns: {
+        headers: { 'apns-priority': '10' },
+        payload: { aps: {
+          sound: type === 'new_food_order' || type === 'restaurant_new_review' ?
+            'order_alert.caf' :
+            'default',
+          badge: 1,
+        }},
       },
     };
 
@@ -3776,9 +3794,9 @@ export const sendShopNotificationOnCreation = onDocumentCreated({
         // iOS Configuration
         apns: {
           headers: { 'apns-priority': '10' },
-          payload: { 
-            aps: { 
-              sound: 'default', 
+          payload: {
+            aps: {
+              sound: 'order_alert.caf',
               badge: 1,
               mutableContent: 1,
             }
@@ -3789,8 +3807,8 @@ export const sendShopNotificationOnCreation = onDocumentCreated({
         android: {
           priority: 'high',
           notification: {
-            channelId: 'high_importance_channel',
-            sound: 'default',
+            channelId: 'food_orders_high',
+            sound: 'order_alert',
             icon: 'ic_notification',
           },
         },

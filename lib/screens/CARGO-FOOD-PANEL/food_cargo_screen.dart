@@ -38,7 +38,7 @@ class FoodCargoScreen extends StatefulWidget {
 class _FoodCargoScreenState extends State<FoodCargoScreen> {
   final _messaging = FirebaseMessaging.instance;
   bool _notifPanelOpen = false;
-
+final _localReadController = BehaviorSubject<DateTime?>.seeded(null);
   // Real-time unread count from food_courier_notifications
   Stream<int>? _unreadCountStream;
 
@@ -121,11 +121,14 @@ class _FoodCargoScreenState extends State<FoodCargoScreen> {
     );
   }
 
-    Future<void> _markAllAsRead() async {
+Future<void> _markAllAsRead() async {
+  // Instantly zero out the badge — no waiting for Firestore
+  _localReadController.add(DateTime.now());
+
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null) return;
 
-  // One write. That's it. No matter how many notifications exist.
+  // Write to Firestore in background
   await FirebaseFirestore.instance
       .collection('courier_notification_reads')
       .doc(uid)
@@ -146,7 +149,6 @@ void _setupUnreadStream() {
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null) return;
 
-  // Stream both sources together
   final notifsStream = FirebaseFirestore.instance
       .collection('food_courier_notifications')
       .where('isActive', isEqualTo: true)
@@ -157,16 +159,27 @@ void _setupUnreadStream() {
       .doc(uid)
       .snapshots();
 
-  _unreadCountStream = Rx.combineLatest2(
+  _unreadCountStream = Rx.combineLatest3(
     notifsStream,
     readStream,
-    (QuerySnapshot notifs, DocumentSnapshot read) {
-      final lastReadAt = (read.data() as Map<String, dynamic>?)?['lastReadAt'] as Timestamp?;
-      if (lastReadAt == null) return notifs.size;
+    _localReadController.stream,
+    (QuerySnapshot notifs, DocumentSnapshot read, DateTime? localReadAt) {
+      final firestoreTs = (read.data() as Map<String, dynamic>?)?['lastReadAt'] as Timestamp?;
+      
+      // Use whichever is more recent — local (instant) or Firestore
+      DateTime? effectiveReadAt = firestoreTs?.toDate();
+      if (localReadAt != null) {
+        if (effectiveReadAt == null || localReadAt.isAfter(effectiveReadAt)) {
+          effectiveReadAt = localReadAt;
+        }
+      }
+      
+      if (effectiveReadAt == null) return notifs.size;
+      
       return notifs.docs.where((doc) {
         final createdAt = doc['createdAt'] as Timestamp?;
         if (createdAt == null) return false;
-        return createdAt.compareTo(lastReadAt) > 0;
+        return createdAt.toDate().isAfter(effectiveReadAt!);
       }).length;
     },
   );
@@ -174,11 +187,11 @@ void _setupUnreadStream() {
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
-  @override
-  void dispose() {
-    // Unsubscribe when a courier logs out (handled in _confirmLogout too)
-    super.dispose();
-  }
+@override
+void dispose() {
+  _localReadController.close();
+  super.dispose();
+}
 
   @override
   Widget build(BuildContext context) {
