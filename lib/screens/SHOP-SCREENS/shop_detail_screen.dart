@@ -180,20 +180,30 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
 @immutable
 class _TabConfiguration {
   final bool hasHomeImages;
+  final bool hasCollections;
 
-  const _TabConfiguration({required this.hasHomeImages});
+  const _TabConfiguration({
+    required this.hasHomeImages,
+    required this.hasCollections,
+  });
 
-  int get tabCount => hasHomeImages ? 6 : 5;
+  int get tabCount {
+    int count = 2; // All Products + Reviews (always present)
+    if (hasHomeImages) count++;
+    if (hasCollections) count++;
+    return count;
+  }
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is _TabConfiguration &&
           runtimeType == other.runtimeType &&
-          hasHomeImages == other.hasHomeImages;
+          hasHomeImages == other.hasHomeImages &&
+          hasCollections == other.hasCollections;
 
   @override
-  int get hashCode => hasHomeImages.hashCode;
+  int get hashCode => Object.hash(hasHomeImages, hasCollections);
 }
 
 /// Determines tab configuration from shop data, then creates tabbed content.
@@ -221,7 +231,11 @@ class _ShopContentWithTabs extends StatelessWidget {
         final shopData = provider.shopDoc?.data();
         final homeUrls =
             (shopData?['homeImageUrls'] as List?)?.cast<String>() ?? [];
-        return _TabConfiguration(hasHomeImages: homeUrls.isNotEmpty);
+        final collections = provider.collectionsNotifier.value;
+        return _TabConfiguration(
+          hasHomeImages: homeUrls.isNotEmpty,
+          hasCollections: collections.isNotEmpty,
+        );
       },
       builder: (context, tabConfig, _) {
         // ValueKey ensures widget is fully recreated when tab config changes
@@ -287,6 +301,7 @@ class _TabbedContentState extends State<_TabbedContent>
     return _ShopContent(
       tabController: _tabController,
       hasHomeTab: widget.tabConfiguration.hasHomeImages,
+      hasCollectionsTab: widget.tabConfiguration.hasCollections,
       searchController: widget.searchController,
       searchFocusNode: widget.searchFocusNode,
       scrollController: widget.scrollController,
@@ -300,6 +315,7 @@ class _TabbedContentState extends State<_TabbedContent>
 class _ShopContent extends StatelessWidget {
   final TabController tabController;
   final bool hasHomeTab;
+  final bool hasCollectionsTab;
   final TextEditingController searchController;
   final FocusNode searchFocusNode;
   final ScrollController scrollController;
@@ -309,6 +325,7 @@ class _ShopContent extends StatelessWidget {
   const _ShopContent({
     required this.tabController,
     required this.hasHomeTab,
+    required this.hasCollectionsTab,
     required this.searchController,
     required this.searchFocusNode,
     required this.scrollController,
@@ -334,6 +351,7 @@ class _ShopContent extends StatelessWidget {
               _TabBarSection(
                 tabController: tabController,
                 hasHomeTab: hasHomeTab,
+                hasCollectionsTab: hasCollectionsTab,
               ),
               const Divider(color: Colors.grey, thickness: 1, height: 1),
             ],
@@ -346,6 +364,7 @@ class _ShopContent extends StatelessWidget {
       body: _TabContent(
         tabController: tabController,
         hasHomeTab: hasHomeTab,
+        hasCollectionsTab: hasCollectionsTab,
       ),
     );
   }
@@ -666,10 +685,12 @@ class _SearchField extends StatelessWidget {
 class _TabBarSection extends StatelessWidget {
   final TabController tabController;
   final bool hasHomeTab;
+  final bool hasCollectionsTab;
 
   const _TabBarSection({
     required this.tabController,
     required this.hasHomeTab,
+    required this.hasCollectionsTab,
   });
 
   @override
@@ -679,9 +700,7 @@ class _TabBarSection extends StatelessWidget {
     final tabs = [
       if (hasHomeTab) Tab(text: l10n.home2),
       Tab(text: l10n.allProducts),
-      Tab(text: l10n.collections),
-      Tab(text: l10n.dealProducts),
-      Tab(text: l10n.bestSellers),
+      if (hasCollectionsTab) Tab(text: l10n.collections),
       Tab(text: l10n.reviews),
     ];
 
@@ -1014,10 +1033,12 @@ class _FilterButtonWithBadge extends StatelessWidget {
 class _TabContent extends StatelessWidget {
   final TabController tabController;
   final bool hasHomeTab;
+  final bool hasCollectionsTab;
 
   const _TabContent({
     required this.tabController,
     required this.hasHomeTab,
+    required this.hasCollectionsTab,
   });
 
   @override
@@ -1026,10 +1047,8 @@ class _TabContent extends StatelessWidget {
       controller: tabController,
       children: [
         if (hasHomeTab) _HomeTab(),
-        _ProductsTab(type: _ProductTabType.all),
-        _CollectionsTab(),
-        _ProductsTab(type: _ProductTabType.deals),
-        _ProductsTab(type: _ProductTabType.bestSellers),
+        _ProductsTab(),
+        if (hasCollectionsTab) _CollectionsTab(),
         _ReviewsTab(),
       ],
     );
@@ -1101,13 +1120,9 @@ class _HomeImage extends StatelessWidget {
   }
 }
 
-/// Product tabs
-enum _ProductTabType { all, deals, bestSellers }
-
+/// Products tab (All Products)
 class _ProductsTab extends StatelessWidget {
-  final _ProductTabType type;
-
-  const _ProductsTab({required this.type});
+  const _ProductsTab();
 
   @override
   Widget build(BuildContext context) {
@@ -1186,25 +1201,11 @@ class _ProductsTab extends StatelessWidget {
   }
 
   ValueNotifier<List<Product>> _getNotifier(ShopProvider provider) {
-    switch (type) {
-      case _ProductTabType.all:
-        return provider.allProductsNotifier;
-      case _ProductTabType.deals:
-        return provider.dealProductsNotifier;
-      case _ProductTabType.bestSellers:
-        return provider.bestSellersNotifier;
-    }
+    return provider.allProductsNotifier;
   }
 
   String _getScreenName() {
-    switch (type) {
-      case _ProductTabType.all:
-        return 'shop_detail_screen';
-      case _ProductTabType.deals:
-        return 'shop_detail_screen_deal_products';
-      case _ProductTabType.bestSellers:
-        return 'shop_detail_screen_best_sellers';
-    }
+    return 'shop_detail_screen';
   }
 
   bool _handleScroll(ScrollNotification scrollInfo, ShopProvider provider) {

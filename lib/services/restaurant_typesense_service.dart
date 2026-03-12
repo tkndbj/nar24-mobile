@@ -355,6 +355,7 @@ class RestaurantTypesenseService {
     String? query,
     List<String>? cuisineTypes,
     List<String>? foodType,
+    List<String>? deliveryRegions,
   }) async {
     final filterParts = <String>['isActive:=true'];
 
@@ -368,6 +369,13 @@ class RestaurantTypesenseService {
       final orParts = foodType.map((f) => 'foodType:=$f').toList();
       filterParts.add(
           orParts.length == 1 ? orParts.first : '(${orParts.join(' || ')})');
+    }
+
+    if (deliveryRegions != null && deliveryRegions.isNotEmpty) {
+      final orParts =
+          deliveryRegions.map((r) => 'deliveryRegions:=`$r`').toList();
+      orParts.add('deliveryRegions:=`__ALL__`');
+      filterParts.add('(${orParts.join(' || ')})');
     }
 
     final params = <String, String>{

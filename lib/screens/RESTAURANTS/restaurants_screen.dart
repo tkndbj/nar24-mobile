@@ -203,11 +203,16 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
   }
 
   /// Fetch cuisine facets from Typesense for the filter pills.
+  /// Uses the same delivery-region filter as the restaurant list so facets
+  /// only reflect cuisines the user can actually order from.
   Future<void> _fetchFacets() async {
     try {
-      final facets = await _typesense.fetchRestaurantFacets();
-      if (mounted && (facets.cuisineTypes?.isNotEmpty ?? false)) {
-        setState(() => _cuisineFacets = facets.cuisineTypes!);
+      final facets = await _typesense.fetchRestaurantFacets(
+        deliveryRegions: _deliveryFilterRegions(),
+      );
+      if (mounted) {
+        setState(() =>
+            _cuisineFacets = facets.cuisineTypes ?? <FacetValue>[]);
       }
     } catch (e) {
       debugPrint('[RestaurantsScreen] Facets error: $e');
@@ -328,11 +333,17 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
         ? FoodAddress.fromMap(rawFoodAddress)
         : null;
 
-    // Re-fetch when the user's delivery address changes
+    // Re-fetch restaurants AND facets when the user's delivery address changes
     if (foodAddress != _lastFoodAddress) {
       _lastFoodAddress = foodAddress;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _fetchRestaurants();
+        if (!mounted) return;
+        // Clear stale cuisine filter that may not exist in the new region
+        if (_selectedCuisine != null) {
+          _selectedCuisine = null;
+        }
+        _fetchRestaurants();
+        _fetchFacets();
       });
     }
 

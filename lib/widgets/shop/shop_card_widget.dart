@@ -328,8 +328,13 @@ class _OptimizedCoverImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Strip query params for a stable cache key so token rotation
+    // doesn't cause re-downloads and re-decode glitches.
+    final cacheKey = imageUrl.split('?').first;
+
     return CachedNetworkImage(
       imageUrl: imageUrl,
+      cacheKey: cacheKey,
       fit: BoxFit.cover,
       width: double.infinity,
       height: double.infinity,
@@ -338,9 +343,10 @@ class _OptimizedCoverImage extends StatelessWidget {
       fadeOutDuration: Duration.zero,
       placeholderFadeInDuration: Duration.zero,
       // Cap decoded bitmap at ~360px wide (covers ~120dp cover at 3x).
-      // This keeps memory usage predictable when many cards are loaded.
+      // Only constrain width — setting both width+height forces a fixed
+      // aspect ratio that mismatches non-3:2 source images, causing brief
+      // matrix-glitch artifacts when BoxFit.cover re-scales at render time.
       memCacheWidth: 360,
-      memCacheHeight: 240,
       placeholder: (context, url) => const _ShimmerCoverPlaceholder(),
       errorWidget: (context, url, error) => const _ImageErrorPlaceholder(),
       filterQuality: FilterQuality.medium,

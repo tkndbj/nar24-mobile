@@ -18,6 +18,7 @@ import '../../utils/food_localization.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const _kPageSize = 15;
+const _kInformCooldownMs = 5 * 60 * 1000; // mirrors Cloud Function
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
@@ -205,6 +206,7 @@ class _FoodOrder {
   final int estimatedPrepTime;
   final Timestamp? createdAt;
   final Timestamp? updatedAt;
+  final Timestamp? lastInformedAt; // ← NEW
 
   const _FoodOrder({
     required this.id,
@@ -225,6 +227,7 @@ class _FoodOrder {
     required this.estimatedPrepTime,
     this.createdAt,
     this.updatedAt,
+    this.lastInformedAt, // ← NEW
   });
 
   factory _FoodOrder.fromDoc(DocumentSnapshot doc) {
@@ -278,6 +281,7 @@ class _FoodOrder {
       estimatedPrepTime: (d['estimatedPrepTime'] as num?)?.toInt() ?? 0,
       createdAt: d['createdAt'] as Timestamp?,
       updatedAt: d['updatedAt'] as Timestamp?,
+      lastInformedAt: d['lastInformedAt'] as Timestamp?, // ← NEW
     );
   }
 }
@@ -414,6 +418,7 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
   int _currentLimit = _kPageSize;
 
   final Map<String, _OrderStatus> _updatingTo = {};
+  final Set<String> _informingIds = {}; // ← NEW
   final Set<String> _expandedIds = {};
 
   StreamSubscription<QuerySnapshot>? _sub;
@@ -450,7 +455,6 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
     _sub?.cancel();
     if (mounted) {
       setState(() {
-        // Only show full shimmer on fresh loads, not on load-more
         if (!isLoadMore) {
           _loading = true;
           _orders = [];
@@ -485,11 +489,12 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
       },
       onError: (Object e) {
         debugPrint('FoodOrdersTab stream error: $e');
-        if (mounted)
+        if (mounted) {
           setState(() {
             _loading = false;
             _loadingMore = false;
           });
+        }
       },
     );
   }
@@ -514,7 +519,7 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
       _loadingMore = true;
       _currentLimit += _kPageSize;
     });
-    _subscribe(isLoadMore: true); // ← don't clear orders
+    _subscribe(isLoadMore: true);
   }
 
   Future<void> _updateStatus(String orderId, _OrderStatus newStatus) async {
@@ -536,6 +541,49 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
       }
     } finally {
       if (mounted) setState(() => _updatingTo.remove(orderId));
+    }
+  }
+
+  // ── NEW: Inform Courier ───────────────────────────────────────────────────
+
+  Future<void> _informCourier(String orderId) async {
+    if (_informingIds.contains(orderId)) return;
+    setState(() => _informingIds.add(orderId));
+    try {
+      await FirebaseFunctions.instanceFor(region: 'europe-west3')
+          .httpsCallable('informFoodCourier')
+          .call({'orderId': orderId});
+      if (mounted) {
+        final locale = Localizations.localeOf(context).languageCode;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            locale == 'tr'
+                ? 'Kurye bildirildi ✓'
+                : (locale == 'ru'
+                    ? 'Курьеры уведомлены ✓'
+                    : 'Couriers notified ✓'),
+          ),
+          backgroundColor: const Color(0xFF7C3AED),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        final locale = Localizations.localeOf(context).languageCode;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            locale == 'tr'
+                ? 'Bildirim gönderilemedi'
+                : (locale == 'ru'
+                    ? 'Не удалось уведомить курьеров'
+                    : 'Failed to notify couriers'),
+          ),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _informingIds.remove(orderId));
     }
   }
 
@@ -580,7 +628,6 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
       child: Row(
         children: _TabStatus.values.map((tab) {
           final isActive = tab == _activeTab;
-          final count = isActive ? _orders.length : 0;
           return Expanded(
             child: GestureDetector(
               onTap: () => _switchTab(tab),
@@ -603,46 +650,17 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
                               : const Color(0xFFE5E7EB),
                         ),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        _tabLabel(tab, locale),
-                        style: GoogleFonts.figtree(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: isActive
-                              ? Colors.white
-                              : (isDark
-                                  ? Colors.grey[400]
-                                  : const Color(0xFF6B7280)),
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                    if (isActive && count > 0) ...[
-                      const SizedBox(width: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 5, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          _hasMore ? '$count+' : '$count',
-                          style: GoogleFonts.figtree(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
+                child: Text(
+                  _tabLabel(tab, locale),
+                  style: GoogleFonts.figtree(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: isActive
+                        ? Colors.white
+                        : (isDark ? Colors.grey[400] : const Color(0xFF6B7280)),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
                 ),
               ),
             ),
@@ -769,8 +787,10 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
             isDark: isDark,
             isExpanded: _expandedIds.contains(order.id),
             updatingTo: _updatingTo[order.id],
+            isInforming: _informingIds.contains(order.id), // ← NEW
             onTap: () => _toggleExpand(order.id),
             onUpdateStatus: _updateStatus,
+            onInformCourier: _informCourier, // ← NEW
           );
         },
       ),
@@ -828,8 +848,10 @@ class _OrderCard extends StatelessWidget {
   final bool isDark;
   final bool isExpanded;
   final _OrderStatus? updatingTo;
+  final bool isInforming; // ← NEW
   final VoidCallback onTap;
   final Future<void> Function(String, _OrderStatus) onUpdateStatus;
+  final Future<void> Function(String) onInformCourier; // ← NEW
 
   const _OrderCard({
     required this.order,
@@ -837,8 +859,10 @@ class _OrderCard extends StatelessWidget {
     required this.isDark,
     required this.isExpanded,
     required this.updatingTo,
+    required this.isInforming, // ← NEW
     required this.onTap,
     required this.onUpdateStatus,
+    required this.onInformCourier, // ← NEW
   });
 
   bool get _isPending => order.status == _OrderStatus.pending;
@@ -1140,7 +1164,8 @@ class _OrderCard extends StatelessWidget {
 
   Widget _buildAddressRow() {
     final da = order.deliveryAddress!;
-    if (da.addressLine1.isEmpty && da.city.isEmpty) return const SizedBox.shrink();
+    if (da.addressLine1.isEmpty && da.city.isEmpty)
+      return const SizedBox.shrink();
     final lines = <String>[
       da.addressLine1,
       if (da.addressLine2.isNotEmpty) da.addressLine2,
@@ -1211,6 +1236,7 @@ class _OrderCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       child: Row(children: [
+        // ── PENDING: Accept + Reject ─────────────────────────────────────
         if (_isPending) ...[
           Expanded(
               child: _ActionBtn(
@@ -1234,6 +1260,8 @@ class _OrderCard extends StatelessWidget {
             onTap: () => onUpdateStatus(order.id, _OrderStatus.rejected),
           )),
         ],
+
+        // ── ACCEPTED: Mark Delivered + Inform Courier (delivery only) + Reject
         if (_isAccepted) ...[
           Expanded(
               child: _ActionBtn(
@@ -1245,6 +1273,16 @@ class _OrderCard extends StatelessWidget {
             enabled: !_isUpdating,
             onTap: () => onUpdateStatus(order.id, _OrderStatus.delivered),
           )),
+          // ← NEW: Inform Courier button — delivery orders only
+          if (order.deliveryType == 'delivery') ...[
+            const SizedBox(width: 8),
+            _InformCourierBtn(
+              lastInformedAt: order.lastInformedAt,
+              loading: isInforming,
+              locale: locale,
+              onTap: () => onInformCourier(order.id),
+            ),
+          ],
           const SizedBox(width: 8),
           _ActionBtn(
             label: locale == 'tr' ? 'Reddet' : 'Reject',
@@ -1256,6 +1294,8 @@ class _OrderCard extends StatelessWidget {
             onTap: () => onUpdateStatus(order.id, _OrderStatus.rejected),
           ),
         ],
+
+        // ── NEXT STATUS (e.g. ready → delivered) ─────────────────────────
         if (!_isPending && !_isAccepted && _nextStatus != null)
           Expanded(
               child: _ActionBtn(
@@ -1304,6 +1344,131 @@ class _OrderCard extends StatelessWidget {
               color: isDark ? Colors.grey[600] : const Color(0xFFD1D5DB)),
         ),
       ]),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _InformCourierBtn — self-contained cooldown countdown (NEW)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _InformCourierBtn extends StatefulWidget {
+  final Timestamp? lastInformedAt;
+  final bool loading;
+  final String locale;
+  final VoidCallback onTap;
+
+  const _InformCourierBtn({
+    required this.lastInformedAt,
+    required this.loading,
+    required this.locale,
+    required this.onTap,
+  });
+
+  @override
+  State<_InformCourierBtn> createState() => _InformCourierBtnState();
+}
+
+class _InformCourierBtnState extends State<_InformCourierBtn> {
+  int _cooldownSec = 0;
+  Timer? _timer;
+
+  int _calcRemaining() {
+    if (widget.lastInformedAt == null) return 0;
+    final elapsed = DateTime.now()
+        .difference(widget.lastInformedAt!.toDate())
+        .inMilliseconds;
+    final rem = _kInformCooldownMs - elapsed;
+    return rem > 0 ? (rem / 1000).ceil() : 0;
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    _cooldownSec = _calcRemaining();
+    if (_cooldownSec <= 0) return;
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      final rem = _calcRemaining();
+      if (mounted) setState(() => _cooldownSec = rem);
+      if (rem <= 0) _timer?.cancel();
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _startTimer();
+  }
+
+  @override
+  void didUpdateWidget(_InformCourierBtn old) {
+    super.didUpdateWidget(old);
+    if (old.lastInformedAt != widget.lastInformedAt) _startTimer();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final onCooldown = _cooldownSec > 0;
+    final disabled = widget.loading || onCooldown;
+
+    final label = onCooldown
+        ? '${(_cooldownSec ~/ 60).toString().padLeft(2, '0')}:${(_cooldownSec % 60).toString().padLeft(2, '0')}'
+        : (widget.locale == 'tr'
+            ? 'Kuryeyi Bildir'
+            : (widget.locale == 'ru' ? 'Вызвать курьера' : 'Inform Courier'));
+
+    return GestureDetector(
+      onTap: disabled ? null : widget.onTap,
+      child: AnimatedOpacity(
+        opacity: disabled ? 0.6 : 1.0,
+        duration: const Duration(milliseconds: 150),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          decoration: BoxDecoration(
+            color: disabled ? const Color(0xFFF3F4F6) : const Color(0xFFF5F3FF),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color:
+                  disabled ? const Color(0xFFE5E7EB) : const Color(0xFFDDD6FE),
+            ),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            widget.loading
+                ? const SizedBox(
+                    width: 11,
+                    height: 11,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        valueColor: AlwaysStoppedAnimation(Color(0xFF7C3AED))),
+                  )
+                : Icon(
+                    onCooldown
+                        ? Icons.notifications_active_outlined
+                        : Icons.notifications_outlined,
+                    size: 13,
+                    color: disabled
+                        ? const Color(0xFF9CA3AF)
+                        : const Color(0xFF7C3AED),
+                  ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: GoogleFonts.figtree(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: disabled
+                    ? const Color(0xFF9CA3AF)
+                    : const Color(0xFF7C3AED),
+              ),
+            ),
+          ]),
+        ),
+      ),
     );
   }
 }

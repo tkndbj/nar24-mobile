@@ -101,6 +101,8 @@ class FoodOrder {
   final bool isPaid;
   final FoodOrderStatus status;
   final Timestamp createdAt;
+  final Timestamp?
+      lastInformedAt; // ← order-level courier notification timestamp
 
   const FoodOrder({
     required this.id,
@@ -114,6 +116,7 @@ class FoodOrder {
     required this.isPaid,
     required this.status,
     required this.createdAt,
+    this.lastInformedAt,
   });
 
   factory FoodOrder.fromDoc(DocumentSnapshot doc) {
@@ -139,6 +142,7 @@ class FoodOrder {
       isPaid: d['isPaid'] as bool? ?? false,
       status: FoodOrderStatusX.fromString(d['status'] as String?),
       createdAt: d['createdAt'] as Timestamp? ?? Timestamp.now(),
+      lastInformedAt: d['lastInformedAt'] as Timestamp?, // ← NEW
     );
   }
 

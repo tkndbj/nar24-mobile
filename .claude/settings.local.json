@@ -22,7 +22,8 @@
       "Bash(flutter:*)",
       "Bash(find /c/Users/Digikey/Desktop/EE-CTS/flutter_application_1/lib -name \"*food*\" -o -name \"*restaurant*\" | grep -E \"\\\\.\\(dart\\)$\" | sort)",
       "Bash(/tmp/restaurant_files_summary.txt:*)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(cd \"C:\\\\Users\\\\Digikey\\\\Desktop\\\\EE-CTS\\\\flutter_application_1\" && dart analyze lib/screens/SHOP-SCREENS/shop_detail_screen.dart 2>&1 | head -30)"
     ],
     "deny": [],
     "ask": []

@@ -190,7 +190,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
       child: TabBar(
         controller: _tabController,
         isScrollable: true,
-        tabAlignment: TabAlignment.start,
+        tabAlignment: TabAlignment.center,
         padding: const EdgeInsets.all(4),
         dividerColor: Colors.transparent,
         indicator: BoxDecoration(
