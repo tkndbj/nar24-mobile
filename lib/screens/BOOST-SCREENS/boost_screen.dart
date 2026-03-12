@@ -1072,14 +1072,14 @@ class _BoostScreenState extends State<BoostScreen>
       final responseData = Map<String, dynamic>.from(result.data as Map);
       if (responseData['success'] == true) {
         final gatewayUrl = responseData['gatewayUrl'] as String;
-        final paymentParams =
-            Map<String, dynamic>.from(responseData['paymentParams'] as Map);
+        final paymentParams = Map<String, String>.from(
+    responseData['paymentParams'] as Map);
         final orderNumber = responseData['orderNumber'] as String;
 
         // Navigate to payment webview
         final paymentResult = await Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (ctx) => BoostPaymentWebView(
+            builder: (ctx) => BoostPaymentScreen(
               gatewayUrl: gatewayUrl,
               paymentParams: paymentParams,
               orderNumber: orderNumber,

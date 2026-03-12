@@ -1,11 +1,21 @@
-import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
-import 'dart:convert';
-import '../../generated/l10n/app_localizations.dart';
+// lib/screens/ads/isbank_ads_images_payment_screen.dart
+
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+
+import '../../generated/l10n/app_localizations.dart';
+
+// =============================================================================
+// ENTRY POINT
+// =============================================================================
 
 class IsbankAdsImagesPaymentScreen extends StatefulWidget {
   final String submissionId;
@@ -13,29 +23,48 @@ class IsbankAdsImagesPaymentScreen extends StatefulWidget {
   final double price;
 
   const IsbankAdsImagesPaymentScreen({
-    Key? key,
+    super.key,
     required this.submissionId,
     required this.paymentLink,
     required this.price,
-  }) : super(key: key);
+  });
 
   @override
   State<IsbankAdsImagesPaymentScreen> createState() =>
       _IsbankAdsImagesPaymentScreenState();
 }
 
+// =============================================================================
+// STATE
+// =============================================================================
+
+enum _PaymentStatus { initializing, initError, pending, completed, failed, timeout }
+
 class _IsbankAdsImagesPaymentScreenState
     extends State<IsbankAdsImagesPaymentScreen> {
-  late final WebViewController _controller;
-  bool _isLoading = true;
-  bool _isInitializing = true;
-  String? _errorMessage;
-  Timer? _statusCheckTimer;
-  bool _isNavigating = false;
-
+  // Initialization
   String? _gatewayUrl;
-  Map<String, dynamic>? _paymentParams;
+  Map<String, String>? _paymentParams;
   String? _orderNumber;
+  String? _initError;
+
+  // WebView
+  InAppWebViewController? _webController;
+  bool _initialLoadDone = false;
+
+  // Payment state
+  _PaymentStatus _status = _PaymentStatus.initializing;
+  String? _failureMessage;
+
+  // Guard against double-handling
+  bool _resultHandled = false;
+
+  // Realtime listener + fallback poll timer
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _firestoreListener;
+  Timer? _fallbackTimer;
+  int _fallbackPollCount = 0;
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   @override
   void initState() {
@@ -43,123 +72,493 @@ class _IsbankAdsImagesPaymentScreenState
     _initializePayment();
   }
 
-  Future<void> _initializePayment() async {
-    try {
-      setState(() {
-        _isInitializing = true;
-        _errorMessage = null;
-      });
+  @override
+  void dispose() {
+    _firestoreListener?.cancel();
+    _fallbackTimer?.cancel();
+    super.dispose();
+  }
 
+  // =============================================================================
+  // INITIALIZATION — calls Cloud Function to get gateway URL + params
+  // =============================================================================
+
+  Future<void> _initializePayment() async {
+    setState(() {
+      _status    = _PaymentStatus.initializing;
+      _initError = null;
+    });
+
+    try {
       final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
           .httpsCallable('initializeIsbankAdPayment');
 
       final result = await callable.call({
         'submissionId': widget.submissionId,
-        'paymentLink': widget.paymentLink,
+        'paymentLink':  widget.paymentLink,
       });
 
-      final responseData = Map<String, dynamic>.from(result.data as Map);
+      final data = Map<String, dynamic>.from(result.data as Map);
 
-      if (responseData['success'] == true) {
-        setState(() {
-          _gatewayUrl = responseData['gatewayUrl'];
-          _paymentParams =
-              Map<String, dynamic>.from(responseData['paymentParams']);
-          _orderNumber = responseData['orderNumber'];
-          _isInitializing = false;
-        });
-
-        _initializeWebView();
-        _startStatusPolling();
-      } else {
+      if (data['success'] != true) {
         throw Exception('Payment initialization failed');
       }
-    } catch (e) {
-      print('Error initializing payment: $e');
+
+      // Cast paymentParams values to String — the form requires String values
+      final rawParams = Map<String, dynamic>.from(data['paymentParams'] as Map);
+
+      if (!mounted) return;
       setState(() {
-        _errorMessage = e.toString();
-        _isInitializing = false;
+        _gatewayUrl    = data['gatewayUrl'] as String;
+        _paymentParams = rawParams.map((k, v) => MapEntry(k, v.toString()));
+        _orderNumber   = data['orderNumber'] as String;
+        _status        = _PaymentStatus.pending;
+      });
+
+      _startFirestoreListener();
+      _startFallbackPolling();
+    } catch (e) {
+      debugPrint('[AdPayment] Initialization error: $e');
+      if (!mounted) return;
+      setState(() {
+        _initError = e.toString();
+        _status    = _PaymentStatus.initError;
       });
     }
   }
 
-  void _startStatusPolling() {
-    _checkPaymentStatus();
+  // =============================================================================
+  // REALTIME FIRESTORE LISTENER (primary mechanism)
+  // =============================================================================
 
-    _statusCheckTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      _checkPaymentStatus();
+  void _startFirestoreListener() {
+    _firestoreListener = FirebaseFirestore.instance
+        .collection('pendingAdPayments')
+        .doc(_orderNumber)
+        .snapshots()
+        .listen(
+      (snap) {
+        if (!snap.exists || _resultHandled || !mounted) return;
+        final data   = snap.data()!;
+        final status = data['status'] as String?;
 
-      if (timer.tick > 200) {
-        timer.cancel();
-        _handleTimeout();
+        switch (status) {
+          case 'completed':
+            _handlePaymentSuccess();
+            break;
+          case 'payment_failed':
+          case 'hash_verification_failed':
+            _handlePaymentFailed((data['errorMessage'] as String?) ?? '');
+            break;
+          case 'payment_succeeded_activation_failed':
+            _handlePaymentFailed(
+              AppLocalizations.of(context).paymentReceivedActivationFailed,
+            );
+            break;
+        }
+      },
+      onError: (Object e) {
+        debugPrint('[AdPayment] Firestore listener error: $e');
+      },
+    );
+  }
+
+  // =============================================================================
+  // FALLBACK POLLING (safety net if Firestore listener drops)
+  // =============================================================================
+  //
+  //   • First 10 polls: every 5s  (0–50s)
+  //   • Next  20 polls: every 10s (50s–250s ≈ 4 min)
+  //   Total: 30 polls before timeout.
+
+  void _startFallbackPolling() {
+    _fallbackTimer?.cancel();
+    _fallbackPollCount = 0;
+    _scheduleFallbackPoll();
+  }
+
+  void _scheduleFallbackPoll() {
+    if (!mounted || _resultHandled) return;
+
+    final delay = _fallbackPollCount < 10
+        ? const Duration(seconds: 5)
+        : const Duration(seconds: 10);
+
+    _fallbackTimer = Timer(delay, () async {
+      if (!mounted || _resultHandled) return;
+      _fallbackPollCount++;
+
+      if (_fallbackPollCount > 30) {
+        if (mounted && !_resultHandled) {
+          setState(() {
+            _status         = _PaymentStatus.timeout;
+            _failureMessage = AppLocalizations.of(context).paymentTimedOutRetry;
+          });
+        }
+        return;
+      }
+
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('pendingAdPayments')
+            .doc(_orderNumber)
+            .get();
+
+        if (!snap.exists || _resultHandled || !mounted) return;
+        final status = snap.data()?['status'] as String?;
+
+        if (status == 'completed') {
+          _handlePaymentSuccess();
+          return;
+        } else if (status == 'payment_failed' ||
+            status == 'hash_verification_failed') {
+          _handlePaymentFailed(
+            (snap.data()?['errorMessage'] as String?) ?? '',
+          );
+          return;
+        }
+      } catch (e) {
+        debugPrint('[AdPayment] Fallback poll error: $e');
+      }
+
+      if (!_resultHandled && mounted && _status == _PaymentStatus.pending) {
+        _scheduleFallbackPoll();
       }
     });
   }
 
-  void _handleTimeout() {
-    if (mounted && !_isNavigating) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(AppLocalizations.of(context).paymentTimeout),
-          content: Text(AppLocalizations.of(context).paymentTimeoutMessage),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                Navigator.of(context).pop(false);
-              },
-              child: Text(AppLocalizations.of(context).ok),
+  // =============================================================================
+  // DEEP LINK INTERCEPTION
+  // =============================================================================
+
+  Future<NavigationActionPolicy> _onShouldOverrideUrlLoading(
+    InAppWebViewController controller,
+    NavigationAction action,
+  ) async {
+    final url = action.request.url?.toString() ?? '';
+
+    if (url.startsWith('ad-payment-success://')) {
+      _handlePaymentSuccess();
+      return NavigationActionPolicy.CANCEL;
+    }
+
+    if (url.startsWith('ad-payment-failed://')) {
+      final message = Uri.decodeComponent(
+        url.replaceFirst('ad-payment-failed://', ''),
+      );
+      _handlePaymentFailed(message);
+      return NavigationActionPolicy.CANCEL;
+    }
+
+    if (url.startsWith('ad-payment-status://')) {
+      return NavigationActionPolicy.CANCEL;
+    }
+
+    return NavigationActionPolicy.ALLOW;
+  }
+
+  // =============================================================================
+  // RESULT HANDLERS
+  // =============================================================================
+
+  void _handlePaymentSuccess() {
+    if (_resultHandled) return;
+    _resultHandled = true;
+
+    _fallbackTimer?.cancel();
+    _firestoreListener?.cancel();
+
+    if (!mounted) return;
+
+    setState(() => _status = _PaymentStatus.completed);
+
+    // Brief success screen, then pop + show confirmation dialog in caller
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+      // Show success dialog on the underlying screen after route pops
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) _showSuccessDialog();
+      });
+    });
+  }
+
+  void _handlePaymentFailed(String message) {
+    if (_resultHandled) return;
+    _resultHandled = true;
+
+    _fallbackTimer?.cancel();
+    _firestoreListener?.cancel();
+
+    if (!mounted) return;
+    setState(() {
+      _status         = _PaymentStatus.failed;
+      _failureMessage = message.trim().isEmpty
+          ? AppLocalizations.of(context).paymentFailedDefault
+          : message;
+    });
+  }
+
+  // =============================================================================
+  // POST FORM SUBMISSION
+  // =============================================================================
+
+  void _submitPostForm(InAppWebViewController controller) {
+    final encoded = _paymentParams!.entries
+        .map((e) =>
+            '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+        .join('&');
+
+    controller.postUrl(
+      url: WebUri(_gatewayUrl!),
+      postData: Uint8List.fromList(utf8.encode(encoded)),
+    );
+  }
+
+  // =============================================================================
+  // CANCEL HANDLER
+  // =============================================================================
+
+  Future<void> _handleCancel() async {
+    if (_status == _PaymentStatus.completed || _resultHandled) {
+      if (mounted) Navigator.of(context).pop(true);
+      return;
+    }
+
+    if (_status == _PaymentStatus.failed || _status == _PaymentStatus.timeout) {
+      if (mounted) Navigator.of(context).pop(false);
+      return;
+    }
+
+    _fallbackTimer?.cancel();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => _CancelDialog(isDark: _isDark),
+    );
+
+    if (!mounted) return;
+
+    if (confirmed == true) {
+      Navigator.of(context).pop(false);
+    } else {
+      if (!_resultHandled) _startFallbackPolling();
+    }
+  }
+
+  // =============================================================================
+  // HELPERS
+  // =============================================================================
+
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+
+  // =============================================================================
+  // BUILD
+  // =============================================================================
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = _isDark;
+    final l10n   = AppLocalizations.of(context);
+
+    // ── Initializing ─────────────────────────────────────────────────────────
+    if (_status == _PaymentStatus.initializing) {
+      return _Scaffold(
+        isDark: isDark,
+        onCancel: null, // disabled during init
+        child: _InitializingView(isDark: isDark, l10n: l10n),
+      );
+    }
+
+    // ── Init error ────────────────────────────────────────────────────────────
+    if (_status == _PaymentStatus.initError) {
+      return _Scaffold(
+        isDark: isDark,
+        onCancel: () => Navigator.of(context).pop(false),
+        child: _ErrorView(
+          isDark: isDark,
+          l10n: l10n,
+          message: _initError ?? l10n.paymentProcessingError,
+          onRetry: _initializePayment,
+        ),
+      );
+    }
+
+    // ── Success screen ────────────────────────────────────────────────────────
+    if (_status == _PaymentStatus.completed) {
+      return _FullScreenMessage(
+        isDark: isDark,
+        icon: Icons.check_circle_rounded,
+        iconColor: const Color(0xFF38A169),
+        iconBgColor: const Color(0xFF38A169).withOpacity(0.15),
+        title: l10n.paymentSuccessful,
+        subtitle: l10n.adPaymentSuccessMessage,
+        footer: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                color: const Color(0xFF38A169),
+                strokeWidth: 2,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              l10n.redirecting,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF38A169),
+              ),
             ),
           ],
         ),
       );
     }
-  }
 
-  Future<void> _checkPaymentStatus() async {
-    if (_isNavigating || _orderNumber == null) return;
-
-    try {
-      final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-          .httpsCallable('checkIsbankAdPaymentStatus');
-
-      final result = await callable.call({
-        'orderNumber': _orderNumber,
-      });
-
-      final responseData = Map<String, dynamic>.from(result.data as Map);
-      final status = responseData['status'];
-
-      print('🔍 Ad payment status check: $status');
-
-      if (status == 'completed' && !_isNavigating) {
-        _handlePaymentSuccess();
-      } else if ((status == 'payment_failed' ||
-              status == 'hash_verification_failed' ||
-              status == 'payment_succeeded_activation_failed') &&
-          !_isNavigating) {
-        _handlePaymentFailure(responseData['errorMessage'] ?? 'Payment failed');
-      }
-    } catch (e) {
-      print('Error checking ad payment status: $e');
+    // ── Failed / Timeout screen ───────────────────────────────────────────────
+    if (_status == _PaymentStatus.failed || _status == _PaymentStatus.timeout) {
+      return _FullScreenMessage(
+        isDark: isDark,
+        icon: Icons.error_outline_rounded,
+        iconColor: Colors.red,
+        title: _status == _PaymentStatus.timeout
+            ? l10n.paymentTimedOutTitle
+            : l10n.paymentFailedTitle,
+        subtitle: _failureMessage ?? l10n.paymentProcessingError,
+        actions: [
+          _PrimaryButton(
+            label: l10n.tryAgain,
+            onTap: () => Navigator.of(context).pop(false),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              l10n.cancel,
+              style: TextStyle(
+                color: isDark ? Colors.grey[400] : Colors.grey[500],
+              ),
+            ),
+          ),
+        ],
+      );
     }
+
+    // ── Active payment WebView ────────────────────────────────────────────────
+    return _Scaffold(
+      isDark: isDark,
+      onCancel: _handleCancel,
+      child: Stack(
+        children: [
+          // WebView container
+          Container(
+            margin: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1F2937) : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDark
+                    ? Colors.grey[700]!.withOpacity(0.5)
+                    : Colors.grey[200]!,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: InAppWebView(
+                initialSettings: InAppWebViewSettings(
+                  javaScriptEnabled: true,
+                  domStorageEnabled: true,
+                  useShouldOverrideUrlLoading: true,
+                  mediaPlaybackRequiresUserGesture: false,
+                  transparentBackground: false,
+                ),
+                onWebViewCreated: (controller) {
+                  _webController = controller;
+                  _submitPostForm(controller);
+                },
+                onLoadStop: (controller, url) {
+                  if (!_initialLoadDone && mounted) {
+                    setState(() => _initialLoadDone = true);
+                  }
+                },
+                onReceivedError: (controller, request, error) {
+                  debugPrint('[AdPayment] WebView error: ${error.description}');
+                  if (!_initialLoadDone && mounted) {
+                    setState(() => _initialLoadDone = true);
+                  }
+                },
+                shouldOverrideUrlLoading: _onShouldOverrideUrlLoading,
+              ),
+            ),
+          ),
+
+          // Loading overlay
+          if (!_initialLoadDone)
+            Container(
+              color: Colors.black.withOpacity(0.6),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SizedBox(
+                          width: 80,
+                          height: 80,
+                          child: CircularProgressIndicator(
+                            color: const Color(0xFF667EEA).withOpacity(0.5),
+                            strokeWidth: 4,
+                          ),
+                        ),
+                        const SizedBox(
+                          width: 40,
+                          height: 40,
+                          child: CircularProgressIndicator(
+                            color: Color(0xFF667EEA),
+                            strokeWidth: 3,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      l10n.loadingPaymentPage,
+                      style: GoogleFonts.figtree(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      l10n.pleaseWait,
+                      style: GoogleFonts.figtree(
+                        fontSize: 13,
+                        color: Colors.grey[300],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
-  void _handlePaymentSuccess() {
-    if (_isNavigating || !mounted) return;
-
-    setState(() => _isNavigating = true);
-    _statusCheckTimer?.cancel();
-
-    print('✅ Ad payment completed! Submission ID: ${widget.submissionId}');
-
-    Navigator.of(context).pop(true);
-
-    if (mounted) {
-      _showSuccessDialog();
-    }
-  }
+  // =============================================================================
+  // SUCCESS DIALOG (shown on the underlying screen after pop)
+  // =============================================================================
 
   void _showSuccessDialog() {
     final l10n = AppLocalizations.of(context);
@@ -167,10 +566,8 @@ class _IsbankAdsImagesPaymentScreenState
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -184,11 +581,7 @@ class _IsbankAdsImagesPaymentScreenState
                 ),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.check_rounded,
-                size: 48,
-                color: Colors.white,
-              ),
+              child: const Icon(Icons.check_rounded, size: 48, color: Colors.white),
             ),
             const SizedBox(height: 24),
             Text(
@@ -215,7 +608,7 @@ class _IsbankAdsImagesPaymentScreenState
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
-                Navigator.of(context).pop();
+                Navigator.of(ctx).pop();
                 context.go('/seller-panel');
               },
               style: ElevatedButton.styleFrom(
@@ -225,6 +618,7 @@ class _IsbankAdsImagesPaymentScreenState
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
+                elevation: 0,
               ),
               child: Text(
                 l10n.gotIt,
@@ -239,274 +633,27 @@ class _IsbankAdsImagesPaymentScreenState
       ),
     );
   }
+}
 
-  void _handlePaymentFailure(String errorMessage) {
-    if (_isNavigating || !mounted) return;
+// =============================================================================
+// SCAFFOLD WRAPPER
+// Keeps the AppBar consistent across all sub-states.
+// =============================================================================
 
-    setState(() => _isNavigating = true);
-    _statusCheckTimer?.cancel();
+class _Scaffold extends StatelessWidget {
+  final bool isDark;
+  final VoidCallback? onCancel;
+  final Widget child;
 
-    print('❌ Ad payment failed: $errorMessage');
-
-    _showErrorDialog(errorMessage);
-  }
-
-  @override
-  void dispose() {
-    _statusCheckTimer?.cancel();
-    super.dispose();
-  }
-
-  void _initializeWebView() {
-    if (_gatewayUrl == null || _paymentParams == null) return;
-
-    final html = _generatePaymentForm();
-
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.white)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageStarted: (url) {
-            if (mounted) {
-              setState(() {
-                _isLoading = true;
-                _errorMessage = null;
-              });
-            }
-          },
-          onPageFinished: (url) {
-            print('📄 Page finished loading: $url');
-            if (mounted) {
-              setState(() => _isLoading = false);
-            }
-          },
-          onWebResourceError: (error) {
-            if (mounted) {
-              setState(() {
-                _isLoading = false;
-                _errorMessage = error.description;
-              });
-            }
-          },
-          onNavigationRequest: (NavigationRequest request) {
-            if (_isNavigating) return NavigationDecision.prevent;
-
-            if (request.url.startsWith('ad-payment-success://')) {
-              _handlePaymentSuccess();
-              return NavigationDecision.prevent;
-            } else if (request.url.startsWith('ad-payment-failed://')) {
-              final error = Uri.decodeComponent(
-                  request.url.replaceFirst('ad-payment-failed://', ''));
-              _handlePaymentFailure(error);
-              return NavigationDecision.prevent;
-            }
-            return NavigationDecision.navigate;
-          },
-        ),
-      )
-      ..loadRequest(
-        Uri.dataFromString(
-          html,
-          mimeType: 'text/html',
-          encoding: Encoding.getByName('utf-8'),
-        ),
-      );
-  }
-
-  String _generatePaymentForm() {
-    final formFields = _paymentParams!.entries
-        .map((e) => '<input type="hidden" name="${e.key}" value="${e.value}">')
-        .join('\n');
-
-    return '''
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Güvenli Ödeme</title>
-        <style>
-          body {
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .loading-container {
-            text-align: center;
-            color: white;
-            padding: 40px;
-          }
-          .spinner {
-            width: 50px;
-            height: 50px;
-            margin: 0 auto 20px;
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-top-color: white;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-          }
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
-          .loading-text {
-            font-size: 18px;
-            font-weight: 500;
-            margin: 0;
-          }
-          .secure-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: rgba(255, 255, 255, 0.2);
-            padding: 8px 16px;
-            border-radius: 20px;
-            margin-top: 20px;
-            font-size: 14px;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="loading-container">
-          <div class="spinner"></div>
-          <p class="loading-text">Güvenli Ödeme sayfası yükleniyor...</p>
-          <div class="secure-badge">
-            🔒 Güvenli Bağlantı
-          </div>
-        </div>
-        <form id="paymentForm" method="post" action="$_gatewayUrl">
-          $formFields
-        </form>
-        <script>
-          setTimeout(() => document.getElementById('paymentForm').submit(), 1500);
-        </script>
-      </body>
-      </html>
-    ''';
-  }
-
-  void _showErrorDialog(String message) {
-    if (!mounted) return;
-
-    final l10n = AppLocalizations.of(context);
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: Row(
-          children: [
-            Icon(Icons.error_outline, color: Colors.red.shade400, size: 28),
-            const SizedBox(width: 12),
-            Text(
-              l10n.paymentError,
-              style: GoogleFonts.figtree(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-        content: Text(
-          message,
-          style: GoogleFonts.figtree(
-            fontSize: 16,
-            color: const Color(0xFF64748B),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context, false);
-            },
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Text(
-              l10n.ok,
-              style: GoogleFonts.figtree(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showCancelDialog() {
-    final l10n = AppLocalizations.of(context);
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: Text(
-          l10n.cancelPaymentTitle,
-          style: GoogleFonts.figtree(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        content: Text(
-          l10n.cancelPaymentMessage,
-          style: GoogleFonts.figtree(
-            fontSize: 16,
-            color: const Color(0xFF64748B),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              l10n.no,
-              style: GoogleFonts.figtree(
-                fontSize: 16,
-                color: const Color(0xFF64748B),
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              Navigator.pop(context, false);
-            },
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.red,
-            ),
-            child: Text(
-              l10n.yes,
-              style: GoogleFonts.figtree(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  const _Scaffold({
+    required this.isDark,
+    required this.onCancel,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor:
@@ -517,15 +664,11 @@ class _IsbankAdsImagesPaymentScreenState
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
           icon: const Icon(Icons.close, size: 24),
-          onPressed: _isInitializing ? null : _showCancelDialog,
+          onPressed: onCancel,
         ),
         title: Row(
           children: [
-            Icon(
-              Icons.lock_outline,
-              size: 20,
-              color: Colors.green.shade600,
-            ),
+            Icon(Icons.lock_outline, size: 20, color: Colors.green.shade600),
             const SizedBox(width: 8),
             Text(
               l10n.securePayment,
@@ -538,84 +681,72 @@ class _IsbankAdsImagesPaymentScreenState
           ],
         ),
       ),
-      body: _isInitializing
-          ? _buildInitializingView(isDark, l10n)
-          : _errorMessage != null
-              ? _buildErrorView(isDark, l10n)
-              : Stack(
-                  children: [
-                    WebViewWidget(controller: _controller),
-                    if (_isLoading) _buildLoadingOverlay(isDark, l10n),
-                  ],
-                ),
+      body: SafeArea(child: child),
     );
   }
+}
 
-  Widget _buildInitializingView(bool isDark, AppLocalizations l10n) {
-    return Container(
-      color: isDark ? const Color(0xFF0F0F23) : const Color(0xFFF8FAFC),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircularProgressIndicator(
-              strokeWidth: 3,
-              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF667EEA)),
+// =============================================================================
+// INITIALIZING VIEW
+// =============================================================================
+
+class _InitializingView extends StatelessWidget {
+  final bool isDark;
+  final AppLocalizations l10n;
+
+  const _InitializingView({required this.isDark, required this.l10n});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularProgressIndicator(
+            strokeWidth: 3,
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF667EEA)),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            l10n.initializingPayment,
+            style: GoogleFonts.figtree(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: isDark ? Colors.white70 : const Color(0xFF64748B),
             ),
-            const SizedBox(height: 24),
-            Text(
-              l10n.initializingPayment,
-              style: GoogleFonts.figtree(
-                fontSize: 16,
-                color: isDark ? Colors.white70 : const Color(0xFF64748B),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+}
 
-  Widget _buildLoadingOverlay(bool isDark, AppLocalizations l10n) {
-    return Container(
-      color: isDark ? const Color(0xFF0F0F23) : Colors.white,
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircularProgressIndicator(
-              strokeWidth: 3,
-              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF667EEA)),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              l10n.loadingPaymentPage,
-              style: GoogleFonts.figtree(
-                fontSize: 16,
-                color: isDark ? Colors.white70 : const Color(0xFF64748B),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+// =============================================================================
+// ERROR VIEW (initialization failure with retry)
+// =============================================================================
 
-  Widget _buildErrorView(bool isDark, AppLocalizations l10n) {
-    return Container(
-      color: isDark ? const Color(0xFF0F0F23) : Colors.white,
-      padding: const EdgeInsets.all(32),
-      child: Center(
+class _ErrorView extends StatelessWidget {
+  final bool isDark;
+  final AppLocalizations l10n;
+  final String message;
+  final VoidCallback onRetry;
+
+  const _ErrorView({
+    required this.isDark,
+    required this.l10n,
+    required this.message,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.red.shade400,
-            ),
+            Icon(Icons.error_outline, size: 64, color: Colors.red.shade400),
             const SizedBox(height: 24),
             Text(
               l10n.connectionError,
@@ -628,7 +759,7 @@ class _IsbankAdsImagesPaymentScreenState
             ),
             const SizedBox(height: 12),
             Text(
-              _errorMessage!,
+              message,
               style: GoogleFonts.figtree(
                 fontSize: 14,
                 color: isDark ? Colors.white70 : const Color(0xFF64748B),
@@ -637,24 +768,196 @@ class _IsbankAdsImagesPaymentScreenState
             ),
             const SizedBox(height: 32),
             ElevatedButton.icon(
-              onPressed: _initializePayment,
+              onPressed: onRetry,
               icon: const Icon(Icons.refresh),
               label: Text(l10n.retry),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF667EEA),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 16,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
+                elevation: 0,
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+// =============================================================================
+// FULL SCREEN MESSAGE (success / failure / timeout)
+// =============================================================================
+
+class _FullScreenMessage extends StatelessWidget {
+  final bool isDark;
+  final IconData icon;
+  final Color iconColor;
+  final Color? iconBgColor;
+  final String title;
+  final String subtitle;
+  final Widget? footer;
+  final List<Widget> actions;
+
+  const _FullScreenMessage({
+    required this.isDark,
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    this.iconBgColor,
+    this.footer,
+    this.actions = const [],
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor:
+          isDark ? const Color(0xFF0F0F23) : const Color(0xFFF8FAFC),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  color: iconBgColor ?? iconColor.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 48, color: iconColor),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.figtree(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : const Color(0xFF1A202C),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.figtree(
+                  fontSize: 14,
+                  color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+                ),
+              ),
+              if (footer != null) ...[
+                const SizedBox(height: 16),
+                footer!,
+              ],
+              if (actions.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                ...actions,
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// PRIMARY BUTTON
+// =============================================================================
+
+class _PrimaryButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _PrimaryButton({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: onTap,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF667EEA),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 0,
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.figtree(fontWeight: FontWeight.bold, fontSize: 15),
+        ),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// CANCEL DIALOG
+// =============================================================================
+
+class _CancelDialog extends StatelessWidget {
+  final bool isDark;
+
+  const _CancelDialog({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
+    return AlertDialog(
+      backgroundColor: isDark ? const Color(0xFF1F2937) : Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(
+        l10n.cancelPaymentTitle,
+        style: GoogleFonts.figtree(
+          fontWeight: FontWeight.bold,
+          color: isDark ? Colors.white : const Color(0xFF1A202C),
+        ),
+      ),
+      content: Text(
+        l10n.cancelPaymentMessage,
+        style: GoogleFonts.figtree(
+          fontSize: 14,
+          color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text(
+            l10n.no,
+            style: GoogleFonts.figtree(
+              color: isDark ? Colors.grey[300] : const Color(0xFF64748B),
+            ),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            elevation: 0,
+          ),
+          child: Text(
+            l10n.yes,
+            style: GoogleFonts.figtree(fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -5753,6 +5753,20 @@ class AppLocalizationsRu extends AppLocalizations {
   String get joiningRestaurant => 'Загрузка панели ресторана...';
 
   @override
+  String get paymentReceivedActivationFailed =>
+      'Оплата получена, но активация объявления не удалась. Пожалуйста, обратитесь в поддержку.';
+
+  @override
+  String get boostPaymentSuccessfulTitle => 'Оплата буста прошла успешно';
+
+  @override
+  String get cancelBoostPaymentMessage =>
+      'Оплата буста будет отменена. Вы уверены?';
+
+  @override
+  String get boostOrder => 'Заказ буста';
+
+  @override
   String get revokeAccess => 'Отозвать доступ';
 
   @override

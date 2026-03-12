@@ -5727,6 +5727,20 @@ class AppLocalizationsTr extends AppLocalizations {
   String get joiningRestaurant => 'Restoran restaurant panel...';
 
   @override
+  String get paymentReceivedActivationFailed =>
+      'Ödeme alındı ancak ilan aktivasyonu başarısız oldu. Lütfen destek ile iletişime geçin.';
+
+  @override
+  String get boostPaymentSuccessfulTitle => 'Öne Çıkarma Ödemesi Başarılı';
+
+  @override
+  String get cancelBoostPaymentMessage =>
+      'Öne çıkarma ödemeniz iptal edilecek. Emin misiniz?';
+
+  @override
+  String get boostOrder => 'Öne Çıkarma Siparişi';
+
+  @override
   String get revokeAccess => 'Erişimi İptal Et';
 
   @override

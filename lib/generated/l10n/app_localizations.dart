@@ -11098,6 +11098,30 @@ abstract class AppLocalizations {
   /// **'Restoran restaurant panel...'**
   String get joiningRestaurant;
 
+  /// No description provided for @paymentReceivedActivationFailed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme alındı ancak ilan aktivasyonu başarısız oldu. Lütfen destek ile iletişime geçin.'**
+  String get paymentReceivedActivationFailed;
+
+  /// No description provided for @boostPaymentSuccessfulTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Öne Çıkarma Ödemesi Başarılı'**
+  String get boostPaymentSuccessfulTitle;
+
+  /// No description provided for @cancelBoostPaymentMessage.
+  ///
+  /// In tr, this message translates to:
+  /// **'Öne çıkarma ödemeniz iptal edilecek. Emin misiniz?'**
+  String get cancelBoostPaymentMessage;
+
+  /// No description provided for @boostOrder.
+  ///
+  /// In tr, this message translates to:
+  /// **'Öne Çıkarma Siparişi'**
+  String get boostOrder;
+
   /// No description provided for @revokeAccess.
   ///
   /// In tr, this message translates to:

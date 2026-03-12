@@ -5717,6 +5717,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get joiningRestaurant => 'Loading restaurant panel...';
 
   @override
+  String get paymentReceivedActivationFailed =>
+      'Payment received but ad activation failed. Please contact support.';
+
+  @override
+  String get boostPaymentSuccessfulTitle => 'Boost Payment Successful';
+
+  @override
+  String get cancelBoostPaymentMessage =>
+      'Your boost payment will be cancelled. Are you sure?';
+
+  @override
+  String get boostOrder => 'Boost Order';
+
+  @override
   String get revokeAccess => 'Revoke Access';
 
   @override

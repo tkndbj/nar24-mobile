@@ -1,519 +1,814 @@
-import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+// lib/screens/boost/boost_payment_screen.dart
+
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../generated/l10n/app_localizations.dart';
 
-class BoostPaymentWebView extends StatefulWidget {
-  final String gatewayUrl;
-  final Map<String, dynamic> paymentParams;
-  final String orderNumber;
+// =============================================================================
+// ENTRY POINT
+// =============================================================================
 
-  const BoostPaymentWebView({
-    Key? key,
+class BoostPaymentScreen extends StatefulWidget {
+  final String gatewayUrl;
+  final String orderNumber;
+  final Map<String, String> paymentParams;
+
+  const BoostPaymentScreen({
+    super.key,
     required this.gatewayUrl,
-    required this.paymentParams,
     required this.orderNumber,
-  }) : super(key: key);
+    required this.paymentParams,
+  });
 
   @override
-  State<BoostPaymentWebView> createState() => _BoostPaymentWebViewState();
+  State<BoostPaymentScreen> createState() => _BoostPaymentScreenState();
 }
 
-class _BoostPaymentWebViewState extends State<BoostPaymentWebView> {
-  late final WebViewController _controller;
-  bool _isLoading = true;
-  String? _errorMessage;
-  Timer? _statusCheckTimer;
+// =============================================================================
+// STATE
+// =============================================================================
+
+enum _PaymentStatus { pending, completed, failed, timeout }
+
+class _BoostPaymentScreenState extends State<BoostPaymentScreen> {
+  // WebView
+  InAppWebViewController? _webController;
+  bool _initialLoadDone = false;
+
+  // Payment state
+  _PaymentStatus _paymentStatus = _PaymentStatus.pending;
+  String? _error;
+
+  // Guard against double-handling
+  bool _resultHandled = false;
+
+  // Realtime listener + fallback poll timer
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+      _firestoreListener;
+  Timer? _fallbackTimer;
+  int _fallbackPollCount = 0;
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
-    _initializeWebView();
-    _startStatusPolling();
-  }
-
-  void _initializeWebView() {
-    final html = _generatePaymentForm();
-
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.white)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageStarted: (url) {
-            if (mounted) {
-              setState(() {
-                _isLoading = true;
-                _errorMessage = null;
-              });
-            }
-            _handleNavigation(url);
-          },
-          onPageFinished: (url) {
-            if (mounted) {
-              setState(() => _isLoading = false);
-            }
-          },
-          onWebResourceError: (error) {
-            if (mounted) {
-              setState(() {
-                _isLoading = false;
-                _errorMessage = error.description;
-              });
-            }
-          },
-          onNavigationRequest: (NavigationRequest request) {
-            if (request.url.startsWith('boost-payment-success://')) {
-              _statusCheckTimer?.cancel();
-              _showSuccessAndReturn();
-              return NavigationDecision.prevent;
-            } else if (request.url.startsWith('boost-payment-failed://')) {
-              _statusCheckTimer?.cancel();
-              final error =
-                  request.url.replaceFirst('boost-payment-failed://', '');
-              _showErrorDialog(Uri.decodeComponent(error));
-              return NavigationDecision.prevent;
-            }
-            return NavigationDecision.navigate;
-          },
-        ),
-      )
-      ..loadRequest(
-        Uri.dataFromString(
-          html,
-          mimeType: 'text/html',
-          encoding: Encoding.getByName('utf-8'),
-        ),
-      );
-  }
-
-  String _generatePaymentForm() {
-    final formFields = widget.paymentParams.entries
-        .map((e) => '<input type="hidden" name="${e.key}" value="${e.value}">')
-        .join('\n');
-
-    return '''
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Güvenli Ödeme</title>
-        <style>
-          body {
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #00A86B 0%, #008F5A 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .loading-container {
-            text-align: center;
-            color: white;
-            padding: 40px;
-          }
-          .spinner {
-            width: 50px;
-            height: 50px;
-            margin: 0 auto 20px;
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-top-color: white;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-          }
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
-          .loading-text {
-            font-size: 18px;
-            font-weight: 500;
-            margin: 0;
-          }
-          .secure-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: rgba(255, 255, 255, 0.2);
-            padding: 8px 16px;
-            border-radius: 20px;
-            margin-top: 20px;
-            font-size: 14px;
-          }
-          .boost-badge {
-            display: inline-block;
-            background: rgba(255, 255, 255, 0.15);
-            padding: 6px 14px;
-            border-radius: 16px;
-            margin-top: 12px;
-            font-size: 13px;
-            font-weight: 600;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="loading-container">
-          <div class="spinner"></div>
-          <p class="loading-text">Boost Ödeme sayfası yükleniyor...</p>
-          <div class="boost-badge">🚀 Boost Paketi</div>
-          <div class="secure-badge">
-            🔒 Güvenli Bağlantı
-          </div>
-        </div>
-        <form id="paymentForm" method="post" action="${widget.gatewayUrl}">
-          $formFields
-        </form>
-        <script>
-          setTimeout(() => document.getElementById('paymentForm').submit(), 1500);
-        </script>
-      </body>
-      </html>
-    ''';
-  }
-
-  void _startStatusPolling() {
-    _statusCheckTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
-      _checkPaymentStatus();
-    });
-  }
-
-  Future<void> _checkPaymentStatus() async {
-    try {
-      final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-          .httpsCallable('checkBoostPaymentStatus');
-
-      final result = await callable.call({
-        'orderNumber': widget.orderNumber,
-      });
-
-      final responseData = Map<String, dynamic>.from(result.data as Map);
-      final status = responseData['status'];
-
-      if (status == 'completed') {
-        _statusCheckTimer?.cancel();
-        if (mounted) {
-          _showSuccessAndReturn();
-        }
-      } else if (status == 'payment_failed' ||
-          status == 'hash_verification_failed' ||
-          status == 'payment_succeeded_boost_failed') {
-        _statusCheckTimer?.cancel();
-        if (mounted) {
-          Navigator.of(context).pop('failed');
-        }
-      }
-    } catch (e) {
-      print('Error checking payment status: $e');
-    }
-  }
-
-  void _handleNavigation(String url) {
-    if (url.contains('boost-payment-success://')) {
-      _statusCheckTimer?.cancel();
-      _showSuccessAndReturn();
-    } else if (url.contains('boost-payment-failed://')) {
-      _statusCheckTimer?.cancel();
-      Navigator.of(context).pop('failed');
-    }
-  }
-
-  void _showSuccessAndReturn() {
-    if (!mounted) return;
-    final l10n = AppLocalizations.of(context);
-    // Pop the payment screen
-    Navigator.of(context).pop('success');
-
-    // Show success message after a short delay to ensure we're back on the boost screen
-    Future.delayed(const Duration(milliseconds: 300), () {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.check_circle,
-                  color: Colors.white,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      l10n.paymentSuccessful,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        fontFamily: 'Figtree',
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      l10n.yourProductsAreNowBoosted,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.white,
-                        fontFamily: 'Figtree',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: const Color(0xFF00A86B),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          duration: const Duration(seconds: 4),
-          elevation: 8,
-        ),
-      );
-    });
-  }
-
-  void _showErrorDialog(String message) {
-    if (!mounted) return;
-
-    final l10n = AppLocalizations.of(context);
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: Row(
-          children: [
-            Icon(Icons.error_outline, color: Colors.red.shade400, size: 28),
-            const SizedBox(width: 12),
-            const Text(
-              'Ödeme Hatası',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
-        content: Text(
-          message,
-          style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context, 'failed');
-            },
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Text(
-              l10n.ok,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showCancelDialog() {
-    final l10n = AppLocalizations.of(context);
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text(
-          'Ödemeyi İptal Et?',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-        ),
-        content: Text(
-          'Boost ödemesi iptal edilecek. Emin misiniz?',
-          style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              l10n.no,
-              style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              Navigator.pop(context, 'cancelled');
-            },
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.red,
-            ),
-            child: Text(
-              l10n.yes,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    );
+    _startFirestoreListener();
+    _startFallbackPolling();
   }
 
   @override
   void dispose() {
-    _statusCheckTimer?.cancel();
+    _firestoreListener?.cancel();
+    _fallbackTimer?.cancel();
     super.dispose();
   }
 
+  // =============================================================================
+  // REALTIME FIRESTORE LISTENER (primary mechanism)
+  // =============================================================================
+
+  void _startFirestoreListener() {
+    _firestoreListener = FirebaseFirestore.instance
+        .collection('pendingBoostPayments')
+        .doc(widget.orderNumber)
+        .snapshots()
+        .listen(
+      (snap) {
+        if (!snap.exists || _resultHandled || !mounted) return;
+        final data = snap.data()!;
+        final status = data['status'] as String?;
+
+        switch (status) {
+          case 'completed':
+            _handlePaymentSuccess();
+            break;
+          case 'payment_failed':
+          case 'hash_verification_failed':
+            _handlePaymentFailed(
+              (data['errorMessage'] as String?) ?? '',
+            );
+            break;
+          case 'payment_succeeded_boost_failed':
+            _handlePaymentFailed(
+              AppLocalizations.of(context).paymentReceivedBoostFailed,
+            );
+            break;
+        }
+      },
+      onError: (Object e) {
+        debugPrint('[BoostPayment] Firestore listener error: $e');
+      },
+    );
+  }
+
+  // =============================================================================
+  // FALLBACK POLLING (safety net if Firestore listener drops)
+  // =============================================================================
+  //
+  //   • First 10 polls: every 5s  (0–50s)
+  //   • Next  20 polls: every 10s (50s–250s ≈ 4 min)
+  //   Total: 30 polls before timeout.
+
+  void _startFallbackPolling() {
+    _fallbackTimer?.cancel();
+    _fallbackPollCount = 0;
+    _scheduleFallbackPoll();
+  }
+
+  void _scheduleFallbackPoll() {
+    if (!mounted || _resultHandled) return;
+
+    final delay = _fallbackPollCount < 10
+        ? const Duration(seconds: 5)
+        : const Duration(seconds: 10);
+
+    _fallbackTimer = Timer(delay, () async {
+      if (!mounted || _resultHandled) return;
+      _fallbackPollCount++;
+
+      if (_fallbackPollCount > 30) {
+        if (mounted && !_resultHandled) {
+          setState(() {
+            _paymentStatus = _PaymentStatus.timeout;
+            _error = AppLocalizations.of(context).paymentTimedOutRetry;
+          });
+        }
+        return;
+      }
+
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('pendingBoostPayments')
+            .doc(widget.orderNumber)
+            .get();
+
+        if (!snap.exists || _resultHandled || !mounted) return;
+        final status = snap.data()?['status'] as String?;
+
+        if (status == 'completed') {
+          _handlePaymentSuccess();
+          return;
+        } else if (status == 'payment_failed' ||
+            status == 'hash_verification_failed') {
+          _handlePaymentFailed(
+            (snap.data()?['errorMessage'] as String?) ?? '',
+          );
+          return;
+        }
+      } catch (e) {
+        debugPrint('[BoostPayment] Fallback poll error: $e');
+      }
+
+      if (!_resultHandled &&
+          mounted &&
+          _paymentStatus == _PaymentStatus.pending) {
+        _scheduleFallbackPoll();
+      }
+    });
+  }
+
+  // =============================================================================
+  // DEEP LINK INTERCEPTION
+  // =============================================================================
+
+  Future<NavigationActionPolicy> _onShouldOverrideUrlLoading(
+    InAppWebViewController controller,
+    NavigationAction action,
+  ) async {
+    final url = action.request.url?.toString() ?? '';
+
+    if (url.startsWith('boost-payment-success://')) {
+      _handlePaymentSuccess();
+      return NavigationActionPolicy.CANCEL;
+    }
+
+    if (url.startsWith('boost-payment-failed://')) {
+      final message = Uri.decodeComponent(
+        url.replaceFirst('boost-payment-failed://', ''),
+      );
+      _handlePaymentFailed(message);
+      return NavigationActionPolicy.CANCEL;
+    }
+
+    if (url.startsWith('boost-payment-status://')) {
+      return NavigationActionPolicy.CANCEL;
+    }
+
+    return NavigationActionPolicy.ALLOW;
+  }
+
+  // =============================================================================
+  // RESULT HANDLERS
+  // =============================================================================
+
+  void _handlePaymentSuccess() {
+    if (_resultHandled) return;
+    _resultHandled = true;
+
+    _fallbackTimer?.cancel();
+    _firestoreListener?.cancel();
+
+    if (!mounted) return;
+
+    setState(() => _paymentStatus = _PaymentStatus.completed);
+
+    // Brief success screen, then pop back with result
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) context.pop('success');
+    });
+  }
+
+  void _handlePaymentFailed(String message) {
+    if (_resultHandled) return;
+    _resultHandled = true;
+
+    _fallbackTimer?.cancel();
+    _firestoreListener?.cancel();
+
+    if (!mounted) return;
+    setState(() {
+      _paymentStatus = _PaymentStatus.failed;
+      _error = message.trim().isEmpty
+          ? AppLocalizations.of(context).paymentFailedDefault
+          : message;
+    });
+  }
+
+  // =============================================================================
+  // CANCEL HANDLER
+  // =============================================================================
+
+  Future<void> _handleCancel() async {
+    // Payment already succeeded — pop with success
+    if (_paymentStatus == _PaymentStatus.completed || _resultHandled) {
+      if (mounted) context.pop('success');
+      return;
+    }
+
+    // Payment already failed/timed out — just pop
+    if (_paymentStatus == _PaymentStatus.failed ||
+        _paymentStatus == _PaymentStatus.timeout) {
+      if (mounted) context.pop();
+      return;
+    }
+
+    // Payment still in progress — confirm cancellation
+    _fallbackTimer?.cancel();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => _CancelDialog(isDark: _isDark),
+    );
+
+    if (!mounted) return;
+
+    if (confirmed == true) {
+      context.pop();
+    } else {
+      // User wants to continue — resume fallback polling
+      if (!_resultHandled) _startFallbackPolling();
+    }
+  }
+
+  // =============================================================================
+  // POST FORM SUBMISSION
+  // =============================================================================
+
+  void _submitPostForm(InAppWebViewController controller) {
+    final encoded = widget.paymentParams.entries
+        .map((e) =>
+            '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+        .join('&');
+
+    controller.postUrl(
+      url: WebUri(widget.gatewayUrl),
+      postData: Uint8List.fromList(utf8.encode(encoded)),
+    );
+  }
+
+  // =============================================================================
+  // HELPERS
+  // =============================================================================
+
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+
+  // =============================================================================
+  // BUILD
+  // =============================================================================
+
   @override
   Widget build(BuildContext context) {
+    final isDark = _isDark;
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF1C1A29) : Colors.white,
-      appBar: AppBar(
-        backgroundColor: isDark ? const Color(0xFF1C1A29) : Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        leading: IconButton(
-          icon: const Icon(Icons.close, size: 24),
-          onPressed: _showCancelDialog,
-        ),
-        title: Row(
+    // ── Guard: missing params ────────────────────────────────────────────────
+    if (widget.gatewayUrl.isEmpty || widget.orderNumber.isEmpty) {
+      return _FullScreenMessage(
+        isDark: isDark,
+        icon: Icons.error_outline_rounded,
+        iconColor: Colors.red,
+        title: l10n.paymentError,
+        subtitle: _error ?? l10n.missingPaymentInfo,
+        actions: [
+          _PrimaryButton(label: l10n.goBack, onTap: () => context.pop()),
+        ],
+      );
+    }
+
+    // ── Success screen ───────────────────────────────────────────────────────
+    if (_paymentStatus == _PaymentStatus.completed) {
+      return _FullScreenMessage(
+        isDark: isDark,
+        icon: Icons.rocket_launch_rounded,
+        iconColor: const Color(0xFF00A86B),
+        iconBgColor: const Color(0xFF00A86B).withOpacity(0.15),
+        title: l10n.boostPaymentSuccessfulTitle,
+        subtitle: l10n.yourProductsAreNowBoosted,
+        footer: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.lock_outline,
-              size: 20,
-              color: Colors.green.shade600,
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                color: const Color(0xFF00A86B),
+                strokeWidth: 2,
+              ),
             ),
             const SizedBox(width: 8),
             Text(
-              'Güvenli Boost Ödemesi',
+              l10n.redirecting,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF00A86B),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ── Failed / Timeout screen ──────────────────────────────────────────────
+    if (_paymentStatus == _PaymentStatus.failed ||
+        _paymentStatus == _PaymentStatus.timeout) {
+      return _FullScreenMessage(
+        isDark: isDark,
+        icon: Icons.error_outline_rounded,
+        iconColor: Colors.red,
+        title: _paymentStatus == _PaymentStatus.timeout
+            ? l10n.paymentTimedOutTitle
+            : l10n.paymentFailedTitle,
+        subtitle: _error ?? l10n.paymentProcessingError,
+        actions: [
+          _PrimaryButton(label: l10n.tryAgain, onTap: () => context.pop()),
+          TextButton(
+            onPressed: () => context.pop(),
+            child: Text(
+              l10n.cancel,
               style: TextStyle(
-                color: isDark ? Colors.white : Colors.black,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.grey[400] : Colors.grey[500],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // ── Active payment WebView ───────────────────────────────────────────────
+    return Scaffold(
+      backgroundColor:
+          isDark ? const Color(0xFF111827) : const Color(0xFFF9FAFB),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _PaymentHeader(isDark: isDark, onCancel: _handleCancel),
+            Expanded(
+              child: Stack(
+                children: [
+                  // WebView container
+                  Container(
+                    margin: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1F2937) : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.grey[700]!.withOpacity(0.5)
+                            : Colors.grey[200]!,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.08),
+                          blurRadius: 20,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: InAppWebView(
+                        initialSettings: InAppWebViewSettings(
+                          javaScriptEnabled: true,
+                          domStorageEnabled: true,
+                          useShouldOverrideUrlLoading: true,
+                          mediaPlaybackRequiresUserGesture: false,
+                          transparentBackground: false,
+                        ),
+                        onWebViewCreated: (controller) {
+                          _webController = controller;
+                          _submitPostForm(controller);
+                        },
+                        onLoadStop: (controller, url) {
+                          if (!_initialLoadDone && mounted) {
+                            setState(() => _initialLoadDone = true);
+                          }
+                        },
+                        onReceivedError: (controller, request, error) {
+                          debugPrint(
+                            '[BoostPayment] WebView error: ${error.description}',
+                          );
+                          if (!_initialLoadDone && mounted) {
+                            setState(() => _initialLoadDone = true);
+                          }
+                        },
+                        shouldOverrideUrlLoading: _onShouldOverrideUrlLoading,
+                      ),
+                    ),
+                  ),
+
+                  // Loading overlay
+                  if (!_initialLoadDone)
+                    Container(
+                      color: Colors.black.withOpacity(0.6),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 80,
+                                  height: 80,
+                                  child: CircularProgressIndicator(
+                                    color: const Color(0xFF00A86B)
+                                        .withOpacity(0.5),
+                                    strokeWidth: 4,
+                                  ),
+                                ),
+                                const SizedBox(
+                                  width: 40,
+                                  height: 40,
+                                  child: CircularProgressIndicator(
+                                    color: Color(0xFF00A86B),
+                                    strokeWidth: 3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+                            Text(
+                              l10n.loadingPaymentPage,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              l10n.pleaseWait,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey[300],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            // Footer
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.lock_rounded,
+                          size: 13, color: Colors.green),
+                      const SizedBox(width: 6),
+                      Text(
+                        l10n.secureSSLConnection,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    l10n.paymentProcessedByIsbank,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? Colors.grey[600] : Colors.grey[400],
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
       ),
-      body: Stack(
+    );
+  }
+}
+
+// =============================================================================
+// PAYMENT HEADER
+// =============================================================================
+
+class _PaymentHeader extends StatelessWidget {
+  final bool isDark;
+  final VoidCallback onCancel;
+
+  const _PaymentHeader({required this.isDark, required this.onCancel});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.grey[900]!.withOpacity(0.8)
+            : Colors.white.withOpacity(0.8),
+        border: Border(
+          bottom: BorderSide(
+            color: isDark
+                ? Colors.grey[700]!.withOpacity(0.5)
+                : Colors.grey[200]!,
+          ),
+        ),
+      ),
+      child: Row(
         children: [
-          WebViewWidget(controller: _controller),
-
-          // Loading overlay
-          if (_isLoading)
-            Container(
-              color: isDark ? const Color(0xFF1C1A29) : Colors.white,
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const CircularProgressIndicator(
-                      strokeWidth: 3,
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(Color(0xFF00A86B)),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Ödeme sayfası yükleniyor...',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: isDark ? Colors.white70 : Colors.grey.shade600,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
+          GestureDetector(
+            onTap: onCancel,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.grey[800] : Colors.grey[100],
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.close_rounded,
+                size: 18,
+                color: isDark ? Colors.grey[400] : Colors.grey[500],
               ),
             ),
-
-          // Error overlay
-          if (_errorMessage != null && !_isLoading)
-            Container(
-              color: isDark ? const Color(0xFF1C1A29) : Colors.white,
-              padding: const EdgeInsets.all(32),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.error_outline,
-                      size: 64,
-                      color: Colors.red.shade400,
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Bağlantı Hatası',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white : Colors.black,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _errorMessage!,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: isDark ? Colors.white70 : Colors.grey.shade600,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 32),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          _errorMessage = null;
-                          _initializeWebView();
-                        });
-                      },
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Tekrar Dene'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00A86B),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 32,
-                          vertical: 16,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+          ),
+          const SizedBox(width: 12),
+          const Icon(Icons.lock_rounded, size: 17, color: Colors.green),
+          const SizedBox(width: 6),
+          Text(
+            l10n.securePayment,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : Colors.grey[900],
             ),
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? const Color(0xFF00A86B).withOpacity(0.15)
+                  : const Color(0xFFE8F8F0),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.rocket_launch_rounded,
+                  size: 13,
+                  color: isDark
+                      ? const Color(0xFF34D399)
+                      : const Color(0xFF00A86B),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  l10n.boostOrder,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: isDark
+                        ? const Color(0xFF34D399)
+                        : const Color(0xFF00A86B),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
+    );
+  }
+}
+
+// =============================================================================
+// FULL SCREEN MESSAGE
+// =============================================================================
+
+class _FullScreenMessage extends StatelessWidget {
+  final bool isDark;
+  final IconData icon;
+  final Color iconColor;
+  final Color? iconBgColor;
+  final String title;
+  final String subtitle;
+  final Widget? trailing;
+  final Widget? footer;
+  final List<Widget> actions;
+
+  const _FullScreenMessage({
+    required this.isDark,
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    this.iconBgColor,
+    this.trailing,
+    this.footer,
+    this.actions = const [],
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor:
+          isDark ? const Color(0xFF111827) : const Color(0xFFF9FAFB),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  color: iconBgColor ?? iconColor.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 48, color: iconColor),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.grey[900],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+              ),
+              if (trailing != null) ...[
+                const SizedBox(height: 8),
+                trailing!,
+              ],
+              if (footer != null) ...[
+                const SizedBox(height: 16),
+                footer!,
+              ],
+              if (actions.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                ...actions,
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// PRIMARY BUTTON
+// =============================================================================
+
+class _PrimaryButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _PrimaryButton({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: onTap,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF00A86B),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 0,
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+        ),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// CANCEL DIALOG
+// =============================================================================
+
+class _CancelDialog extends StatelessWidget {
+  final bool isDark;
+
+  const _CancelDialog({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
+    return AlertDialog(
+      backgroundColor: isDark ? const Color(0xFF1F2937) : Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(
+        l10n.cancelPaymentTitle,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: isDark ? Colors.white : Colors.grey[900],
+        ),
+      ),
+      content: Text(
+        l10n.cancelBoostPaymentMessage,
+        style: TextStyle(
+          fontSize: 14,
+          color: isDark ? Colors.grey[400] : Colors.grey[600],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text(
+            l10n.continuePayment,
+            style: TextStyle(
+              color: isDark ? Colors.grey[300] : Colors.grey[700],
+            ),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            elevation: 0,
+          ),
+          child: Text(
+            l10n.cancelPaymentButton,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
     );
   }
 }
