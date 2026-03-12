@@ -11,12 +11,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../utils/food_localization.dart';
 
-// ─── Re-use all models, enums, helpers, and sub-widgets from food_orders.dart
-// They are defined here as private to this file, mirroring the standalone page.
-// The only difference: FoodOrdersTab has no Scaffold/AppBar — it is designed
-// to live inside a TabBarView.
-// ─────────────────────────────────────────────────────────────────────────────
-
 const _kPageSize = 15;
 const _kInformCooldownMs = 5 * 60 * 1000; // mirrors Cloud Function
 
@@ -26,28 +20,31 @@ enum _OrderStatus {
   pending,
   accepted,
   rejected,
-  preparing,
+  preparing, // kept for parsing/display only — not in any tab filter
   ready,
+  out_for_delivery, // ← ADDED (matches Next.js)
   delivered,
   cancelled,
 }
 
 enum _TabStatus { pending, accepted, delivered, rejected }
 
+// FIX 1: accepted tab now matches Next.js — [accepted, ready, out_for_delivery]
+// (was [accepted, preparing, ready])
 const _kTabStatuses = <_TabStatus, List<_OrderStatus>>{
   _TabStatus.pending: [_OrderStatus.pending],
   _TabStatus.accepted: [
     _OrderStatus.accepted,
-    _OrderStatus.preparing,
     _OrderStatus.ready,
+    _OrderStatus.out_for_delivery,
   ],
   _TabStatus.delivered: [_OrderStatus.delivered],
   _TabStatus.rejected: [_OrderStatus.rejected, _OrderStatus.cancelled],
 };
 
-const _kNextStatus = <_OrderStatus, _OrderStatus>{
-  _OrderStatus.ready: _OrderStatus.delivered,
-};
+// FIX 2: removed ready → delivered shortcut — Next.js has no such transition.
+// Ready orders show "Waiting for cargo" text only.
+const _kNextStatus = <_OrderStatus, _OrderStatus>{};
 
 // ─── Status display config ────────────────────────────────────────────────────
 
@@ -89,6 +86,13 @@ const _kStatusCfg = <_OrderStatus, _StatusCfg>{
     dot: Color(0xFF34D399),
     icon: Icons.inventory_2_outlined,
   ),
+  // FIX 3: added out_for_delivery config (mirrors Next.js Bike/gray styling)
+  _OrderStatus.out_for_delivery: _StatusCfg(
+    bg: Color(0xFFF9FAFB),
+    fg: Color(0xFF6B7280),
+    dot: Color(0xFF9CA3AF),
+    icon: Icons.directions_bike_rounded,
+  ),
   _OrderStatus.delivered: _StatusCfg(
     bg: Color(0xFFF9FAFB),
     fg: Color(0xFF6B7280),
@@ -121,6 +125,8 @@ _OrderStatus _parseStatus(String? raw) {
       return _OrderStatus.preparing;
     case 'ready':
       return _OrderStatus.ready;
+    case 'out_for_delivery': // ← ADDED
+      return _OrderStatus.out_for_delivery;
     case 'delivered':
       return _OrderStatus.delivered;
     case 'cancelled':
@@ -140,6 +146,8 @@ String _statusToString(_OrderStatus s) {
       return 'preparing';
     case _OrderStatus.ready:
       return 'ready';
+    case _OrderStatus.out_for_delivery: // ← ADDED
+      return 'out_for_delivery';
     case _OrderStatus.delivered:
       return 'delivered';
     case _OrderStatus.cancelled:
@@ -206,7 +214,7 @@ class _FoodOrder {
   final int estimatedPrepTime;
   final Timestamp? createdAt;
   final Timestamp? updatedAt;
-  final Timestamp? lastInformedAt; // ← NEW
+  final Timestamp? lastInformedAt;
 
   const _FoodOrder({
     required this.id,
@@ -227,7 +235,7 @@ class _FoodOrder {
     required this.estimatedPrepTime,
     this.createdAt,
     this.updatedAt,
-    this.lastInformedAt, // ← NEW
+    this.lastInformedAt,
   });
 
   factory _FoodOrder.fromDoc(DocumentSnapshot doc) {
@@ -281,7 +289,7 @@ class _FoodOrder {
       estimatedPrepTime: (d['estimatedPrepTime'] as num?)?.toInt() ?? 0,
       createdAt: d['createdAt'] as Timestamp?,
       updatedAt: d['updatedAt'] as Timestamp?,
-      lastInformedAt: d['lastInformedAt'] as Timestamp?, // ← NEW
+      lastInformedAt: d['lastInformedAt'] as Timestamp?,
     );
   }
 }
@@ -360,6 +368,10 @@ String _statusLabel(_OrderStatus status, String locale) {
           : (locale == 'ru' ? 'Готовится' : 'Preparing');
     case _OrderStatus.ready:
       return locale == 'tr' ? 'Hazır' : (locale == 'ru' ? 'Готов' : 'Ready');
+    case _OrderStatus.out_for_delivery: // ← ADDED
+      return locale == 'tr'
+          ? 'Teslim Ediliyor'
+          : (locale == 'ru' ? 'В пути' : 'Out for Delivery');
     case _OrderStatus.delivered:
       return locale == 'tr'
           ? 'Teslim Edildi'
@@ -397,7 +409,7 @@ String _tabLabel(_TabStatus tab, String locale) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FoodOrdersTab — no Scaffold, designed to live inside a TabBarView
+// FoodOrdersTab
 // ─────────────────────────────────────────────────────────────────────────────
 
 class FoodOrdersTab extends StatefulWidget {
@@ -418,7 +430,8 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
   int _currentLimit = _kPageSize;
 
   final Map<String, _OrderStatus> _updatingTo = {};
-  final Set<String> _informingIds = {}; // ← NEW
+  // FIX 4: _informingIds removed — _InformCourierBtn now manages its own
+  // loading state internally, matching Next.js InformCourierButton behaviour.
   final Set<String> _expandedIds = {};
 
   StreamSubscription<QuerySnapshot>? _sub;
@@ -544,17 +557,21 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
     }
   }
 
-  // ── NEW: Inform Courier ───────────────────────────────────────────────────
+  // ── Inform Courier ────────────────────────────────────────────────────────
+  // FIX 5: Cooldown errors (resource-exhausted / "wait") now show a warning
+  // snackbar and return normally so the button does NOT start an optimistic
+  // countdown — matching Next.js informCourier behaviour exactly.
+  // All other errors show an error snackbar and re-throw so the button also
+  // skips its optimistic countdown.
 
   Future<void> _informCourier(String orderId) async {
-    if (_informingIds.contains(orderId)) return;
-    setState(() => _informingIds.add(orderId));
+    final locale = Localizations.localeOf(context).languageCode;
     try {
       await FirebaseFunctions.instanceFor(region: 'europe-west3')
           .httpsCallable('informFoodCourier')
           .call({'orderId': orderId});
+
       if (mounted) {
-        final locale = Localizations.localeOf(context).languageCode;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
             locale == 'tr'
@@ -567,14 +584,49 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
           behavior: SnackBarBehavior.floating,
         ));
       }
-    } catch (e) {
-      if (mounted) {
-        final locale = Localizations.localeOf(context).languageCode;
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+
+      // Cooldown / rate-limit error — warn but do NOT re-throw so the button
+      // skips its optimistic local countdown (mirrors Next.js resource-exhausted
+      // and "wait" check).
+      if (e.code == 'resource-exhausted' ||
+          (e.message?.toLowerCase().contains('wait') ?? false)) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
             locale == 'tr'
-                ? 'Bildirim gönderilemedi'
+                ? 'Çok hızlı! ${e.message ?? ''}'
                 : (locale == 'ru'
+                    ? 'Слишком быстро! ${e.message ?? ''}'
+                    : 'Too soon! ${e.message ?? ''}'),
+          ),
+          backgroundColor: const Color(0xFFF59E0B),
+          behavior: SnackBarBehavior.floating,
+        ));
+        return; // do NOT re-throw
+      }
+
+      // Other errors — show error and re-throw so the button skips countdown.
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          locale == 'tr'
+              ? 'Bildirim gönderilemedi'
+              : (locale == 'ru'
+                  ? 'Не удалось уведомить курьеров'
+                  : 'Failed to notify couriers'),
+        ),
+        backgroundColor: const Color(0xFFEF4444),
+        behavior: SnackBarBehavior.floating,
+      ));
+      rethrow;
+    } catch (e) {
+      if (mounted) {
+        final locale2 = Localizations.localeOf(context).languageCode;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            locale2 == 'tr'
+                ? 'Bildirim gönderilemedi'
+                : (locale2 == 'ru'
                     ? 'Не удалось уведомить курьеров'
                     : 'Failed to notify couriers'),
           ),
@@ -582,8 +634,7 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
           behavior: SnackBarBehavior.floating,
         ));
       }
-    } finally {
-      if (mounted) setState(() => _informingIds.remove(orderId));
+      rethrow;
     }
   }
 
@@ -618,8 +669,6 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
       ],
     );
   }
-
-  // ── Status filter tabs ────────────────────────────────────────────────────
 
   Widget _buildTabBar(bool isDark, String locale) {
     return Container(
@@ -669,8 +718,6 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
       ),
     );
   }
-
-  // ── Shimmer ───────────────────────────────────────────────────────────────
 
   Widget _buildShimmer(bool isDark) {
     final base = isDark ? const Color(0xFF2A2840) : Colors.grey.shade200;
@@ -725,8 +772,6 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
     );
   }
 
-  // ── Empty ─────────────────────────────────────────────────────────────────
-
   Widget _buildEmpty(bool isDark, String locale) {
     return Center(
       child: Column(
@@ -769,8 +814,6 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
     );
   }
 
-  // ── List ──────────────────────────────────────────────────────────────────
-
   Widget _buildList(bool isDark, String locale) {
     return RefreshIndicator(
       color: const Color(0xFFEA580C),
@@ -787,10 +830,9 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
             isDark: isDark,
             isExpanded: _expandedIds.contains(order.id),
             updatingTo: _updatingTo[order.id],
-            isInforming: _informingIds.contains(order.id), // ← NEW
             onTap: () => _toggleExpand(order.id),
             onUpdateStatus: _updateStatus,
-            onInformCourier: _informCourier, // ← NEW
+            onInformCourier: _informCourier,
           );
         },
       ),
@@ -848,10 +890,10 @@ class _OrderCard extends StatelessWidget {
   final bool isDark;
   final bool isExpanded;
   final _OrderStatus? updatingTo;
-  final bool isInforming; // ← NEW
+  // FIX 4 (cont): isInforming removed — button manages its own loading state.
   final VoidCallback onTap;
   final Future<void> Function(String, _OrderStatus) onUpdateStatus;
-  final Future<void> Function(String) onInformCourier; // ← NEW
+  final Future<void> Function(String) onInformCourier;
 
   const _OrderCard({
     required this.order,
@@ -859,17 +901,19 @@ class _OrderCard extends StatelessWidget {
     required this.isDark,
     required this.isExpanded,
     required this.updatingTo,
-    required this.isInforming, // ← NEW
     required this.onTap,
     required this.onUpdateStatus,
-    required this.onInformCourier, // ← NEW
+    required this.onInformCourier,
   });
 
   bool get _isPending => order.status == _OrderStatus.pending;
   bool get _isAccepted => order.status == _OrderStatus.accepted;
+  // FIX 6: added _isReady getter to mirror Next.js isReady
+  bool get _isReady => order.status == _OrderStatus.ready;
   bool get _isUpdating => updatingTo != null;
-  _OrderStatus? get _nextStatus => _kNextStatus[order.status];
-  bool get _showActions => _isPending || _isAccepted || _nextStatus != null;
+
+  // FIX 7: showActions now mirrors Next.js: isPending || isAccepted || isReady
+  bool get _showActions => _isPending || _isAccepted || _isReady;
 
   @override
   Widget build(BuildContext context) {
@@ -1004,7 +1048,7 @@ class _OrderCard extends StatelessWidget {
   }
 
   Widget _buildItemsSummary(BuildContext context) {
-    final _l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       child: Column(
@@ -1040,7 +1084,7 @@ class _OrderCard extends StatelessWidget {
                                   child: Text(
                                     item.extras
                                         .map((e) =>
-                                            '+${localizeExtra(e.name, _l10n)}${e.price > 0 ? ' ${e.price.toStringAsFixed(2)}' : ''}')
+                                            '+${localizeExtra(e.name, l10n)}${e.price > 0 ? ' ${e.price.toStringAsFixed(2)}' : ''}')
                                         .join(', '),
                                     style: GoogleFonts.figtree(
                                         fontSize: 12,
@@ -1164,8 +1208,9 @@ class _OrderCard extends StatelessWidget {
 
   Widget _buildAddressRow() {
     final da = order.deliveryAddress!;
-    if (da.addressLine1.isEmpty && da.city.isEmpty)
+    if (da.addressLine1.isEmpty && da.city.isEmpty) {
       return const SizedBox.shrink();
+    }
     final lines = <String>[
       da.addressLine1,
       if (da.addressLine2.isNotEmpty) da.addressLine2,
@@ -1218,16 +1263,29 @@ class _OrderCard extends StatelessWidget {
         '${_formatDate(order.createdAt)} ${_formatTime(order.createdAt)}';
     final showUpdated = order.updatedAt != null &&
         order.updatedAt!.seconds != order.createdAt?.seconds;
+    // FIX 8: Show lastInformedAt in footer — mirrors Next.js lastInformedAt display.
+    final showInformed = order.lastInformedAt != null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      child: Text(
-        showUpdated
-            ? '$created · ${locale == 'tr' ? 'güncellendi' : 'updated'} ${_formatTime(order.updatedAt)}'
-            : created,
-        style: GoogleFonts.figtree(
-            fontSize: 12,
-            color: isDark ? Colors.grey[600] : const Color(0xFFD1D5DB)),
-        textAlign: TextAlign.center,
+      child: Column(
+        children: [
+          Text(
+            showUpdated
+                ? '$created · ${locale == 'tr' ? 'güncellendi' : 'updated'} ${_formatTime(order.updatedAt)}'
+                : created,
+            style: GoogleFonts.figtree(
+                fontSize: 12,
+                color: isDark ? Colors.grey[600] : const Color(0xFFD1D5DB)),
+            textAlign: TextAlign.center,
+          ),
+          if (showInformed)
+            Text(
+              '· ${locale == 'tr' ? 'Kurye bildirildi' : 'Courier informed'} ${_formatTime(order.lastInformedAt)}',
+              style: GoogleFonts.figtree(
+                  fontSize: 12, color: const Color(0xFFC4B5FD)), // violet-300
+              textAlign: TextAlign.center,
+            ),
+        ],
       ),
     );
   }
@@ -1261,24 +1319,24 @@ class _OrderCard extends StatelessWidget {
           )),
         ],
 
-        // ── ACCEPTED: Mark Delivered + Inform Courier (delivery only) + Reject
+        // ── ACCEPTED: Mark As Ready + Inform Courier (delivery only) + Reject
+        // FIX 9: primary action changed from "Mark Delivered" → "Mark Ready"
+        // to match Next.js (accepted → ready, not accepted → delivered).
         if (_isAccepted) ...[
           Expanded(
               child: _ActionBtn(
-            label: locale == 'tr' ? 'Teslim Edildi' : 'Mark Delivered',
-            icon: Icons.check_circle_outline_rounded,
+            label: locale == 'tr' ? 'Hazır İşaretle' : 'Mark As Ready',
+            icon: Icons.inventory_2_outlined,
             bg: const Color(0xFF22C55E),
             fg: Colors.white,
-            loading: _isUpdating && updatingTo == _OrderStatus.delivered,
+            loading: _isUpdating && updatingTo == _OrderStatus.ready,
             enabled: !_isUpdating,
-            onTap: () => onUpdateStatus(order.id, _OrderStatus.delivered),
+            onTap: () => onUpdateStatus(order.id, _OrderStatus.ready),
           )),
-          // ← NEW: Inform Courier button — delivery orders only
           if (order.deliveryType == 'delivery') ...[
             const SizedBox(width: 8),
             _InformCourierBtn(
               lastInformedAt: order.lastInformedAt,
-              loading: isInforming,
               locale: locale,
               onTap: () => onInformCourier(order.id),
             ),
@@ -1295,24 +1353,25 @@ class _OrderCard extends StatelessWidget {
           ),
         ],
 
-        // ── NEXT STATUS (e.g. ready → delivered) ─────────────────────────
-        if (!_isPending && !_isAccepted && _nextStatus != null)
+        // ── READY: "Waiting for cargo" text only — no button.
+        // FIX 10: mirrors Next.js isReady block which shows text, not a button.
+        if (_isReady)
           Expanded(
-              child: _ActionBtn(
-            label: _nextStatus == _OrderStatus.ready
-                ? (locale == 'tr' ? 'Hazır İşaretle' : 'Mark Ready')
-                : (locale == 'tr' ? 'Teslim Edildi' : 'Mark Delivered'),
-            icon: _nextStatus == _OrderStatus.ready
-                ? Icons.inventory_2_outlined
-                : Icons.check_circle_outline_rounded,
-            bg: _nextStatus == _OrderStatus.delivered
-                ? const Color(0xFF374151)
-                : const Color(0xFF22C55E),
-            fg: Colors.white,
-            loading: _isUpdating && updatingTo == _nextStatus,
-            enabled: !_isUpdating,
-            onTap: () => onUpdateStatus(order.id, _nextStatus!),
-          )),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                locale == 'tr'
+                    ? 'Kargo bekleniyor'
+                    : (locale == 'ru'
+                        ? 'Ожидание курьера'
+                        : 'Waiting for cargo'),
+                style: GoogleFonts.figtree(
+                    fontSize: 12,
+                    color: isDark ? Colors.grey[500] : const Color(0xFF9CA3AF)),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
       ]),
     );
   }
@@ -1349,18 +1408,19 @@ class _OrderCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _InformCourierBtn — self-contained cooldown countdown (NEW)
+// _InformCourierBtn — self-contained cooldown countdown
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _InformCourierBtn extends StatefulWidget {
   final Timestamp? lastInformedAt;
-  final bool loading;
   final String locale;
-  final VoidCallback onTap;
+  // FIX 11: onTap is now Future<void> Function() so the button can await it
+  // and start its own optimistic countdown — matching Next.js handleClick.
+  // The external loading bool is gone; the button owns its own _loading state.
+  final Future<void> Function() onTap;
 
   const _InformCourierBtn({
     required this.lastInformedAt,
-    required this.loading,
     required this.locale,
     required this.onTap,
   });
@@ -1370,6 +1430,7 @@ class _InformCourierBtn extends StatefulWidget {
 }
 
 class _InformCourierBtnState extends State<_InformCourierBtn> {
+  bool _loading = false;
   int _cooldownSec = 0;
   Timer? _timer;
 
@@ -1382,27 +1443,52 @@ class _InformCourierBtnState extends State<_InformCourierBtn> {
     return rem > 0 ? (rem / 1000).ceil() : 0;
   }
 
-  void _startTimer() {
+  // Starts a Firestore-backed countdown from lastInformedAt.
+  void _startFirestoreTimer() {
     _timer?.cancel();
-    _cooldownSec = _calcRemaining();
-    if (_cooldownSec <= 0) return;
+    final rem = _calcRemaining();
+    if (rem <= 0) {
+      if (mounted) setState(() => _cooldownSec = 0);
+      return;
+    }
+    if (mounted) setState(() => _cooldownSec = rem);
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      final rem = _calcRemaining();
-      if (mounted) setState(() => _cooldownSec = rem);
-      if (rem <= 0) _timer?.cancel();
+      final r = _calcRemaining();
+      if (mounted) setState(() => _cooldownSec = r);
+      if (r <= 0) _timer?.cancel();
+    });
+  }
+
+  // FIX 12: Starts an optimistic local countdown immediately after a
+  // successful call — mirrors Next.js InformCourierButton handleClick which
+  // sets its own endAt timer before Firestore propagates lastInformedAt.
+  void _startOptimisticTimer() {
+    _timer?.cancel();
+    final endMs = DateTime.now().millisecondsSinceEpoch + _kInformCooldownMs;
+    final initial = ((_kInformCooldownMs) / 1000).ceil();
+    if (mounted) setState(() => _cooldownSec = initial);
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      final rem = endMs - DateTime.now().millisecondsSinceEpoch;
+      final secs = rem > 0 ? (rem / 1000).ceil() : 0;
+      if (mounted) setState(() => _cooldownSec = secs);
+      if (secs <= 0) _timer?.cancel();
     });
   }
 
   @override
   void initState() {
     super.initState();
-    _startTimer();
+    _startFirestoreTimer();
   }
 
   @override
   void didUpdateWidget(_InformCourierBtn old) {
     super.didUpdateWidget(old);
-    if (old.lastInformedAt != widget.lastInformedAt) _startTimer();
+    // When Firestore delivers a new lastInformedAt, switch to Firestore-backed
+    // countdown (which will naturally sync if it's more accurate).
+    if (old.lastInformedAt != widget.lastInformedAt) {
+      _startFirestoreTimer();
+    }
   }
 
   @override
@@ -1411,10 +1497,25 @@ class _InformCourierBtnState extends State<_InformCourierBtn> {
     super.dispose();
   }
 
+  Future<void> _handleTap() async {
+    if (_loading || _cooldownSec > 0) return;
+    setState(() => _loading = true);
+    try {
+      await widget.onTap();
+      // Success — start optimistic countdown immediately (matches Next.js).
+      _startOptimisticTimer();
+    } catch (_) {
+      // Error or cooldown warning already handled + toasted by parent.
+      // Do NOT start countdown (matches Next.js re-throw branch).
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final onCooldown = _cooldownSec > 0;
-    final disabled = widget.loading || onCooldown;
+    final disabled = _loading || onCooldown;
 
     final label = onCooldown
         ? '${(_cooldownSec ~/ 60).toString().padLeft(2, '0')}:${(_cooldownSec % 60).toString().padLeft(2, '0')}'
@@ -1423,7 +1524,7 @@ class _InformCourierBtnState extends State<_InformCourierBtn> {
             : (widget.locale == 'ru' ? 'Вызвать курьера' : 'Inform Courier'));
 
     return GestureDetector(
-      onTap: disabled ? null : widget.onTap,
+      onTap: disabled ? null : _handleTap,
       child: AnimatedOpacity(
         opacity: disabled ? 0.6 : 1.0,
         duration: const Duration(milliseconds: 150),
@@ -1438,7 +1539,7 @@ class _InformCourierBtnState extends State<_InformCourierBtn> {
             ),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            widget.loading
+            _loading
                 ? const SizedBox(
                     width: 11,
                     height: 11,

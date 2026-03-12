@@ -85,6 +85,7 @@ class ImpressionBatcher {
   Timer? _cleanupTimer;
 
   // ── Dependencies ─────────────────────────────────────────────────────────────
+  bool get isInitialized => _marketProvider != null;
   MarketProvider? _marketProvider;
   String? _currentUserId;
   StreamSubscription<User?>? _authSubscription;
@@ -235,88 +236,71 @@ class ImpressionBatcher {
       final cutoff = now.subtract(_impressionCooldown).millisecondsSinceEpoch;
       final userId = _currentUserId!;
 
-      // ── Check 1: Already recorded on THIS screen within cooldown ─────────────
-      final existingOnScreen = await _db!.rawQuery(
-        '''
-        SELECT COUNT(*) as count
-        FROM page_impressions
-        WHERE user_id    = ?
-          AND product_id  = ?
-          AND screen_name = ?
-          AND created_at >= ?
-        ''',
-        [userId, productId, screenName, cutoff],
-      );
-
-      final countOnScreen = Sqflite.firstIntValue(existingOnScreen) ?? 0;
-      if (countOnScreen > 0) {
-        debugPrint(
-          '⏳ ImpressionBatcher: $productId already recorded '
-          'on $screenName for $userId',
-        );
-        return;
-      }
-
-      // ── Check 2: Max impressions per hour across all screens ──────────────────
-      final existingTotal = await _db!.rawQuery(
-        '''
-        SELECT COUNT(*) as count
-        FROM page_impressions
-        WHERE user_id    = ?
-          AND product_id  = ?
-          AND created_at >= ?
-        ''',
-        [userId, productId, cutoff],
-      );
-
-      final totalCount = Sqflite.firstIntValue(existingTotal) ?? 0;
-      if (totalCount >= _maxImpressionsPerHour) {
-        debugPrint(
-          '⚠️ ImpressionBatcher: $productId reached max impressions '
-          '($_maxImpressionsPerHour) for $userId',
-        );
-        return;
-      }
-
-      // ── Enforce per-user row cap (FIFO eviction) ──────────────────────────────
-      final countResult = await _db!.rawQuery(
-        'SELECT COUNT(*) as count FROM page_impressions WHERE user_id = ?',
-        [userId],
-      );
-      final rowCount = Sqflite.firstIntValue(countResult) ?? 0;
-
-      if (rowCount >= _maxRowsPerUser) {
-        final toEvict = rowCount - _maxRowsPerUser + 1;
-        await _db!.rawDelete(
+      // ── Single transaction: dedup check + optional insert ─────────────────────
+      final recorded = await _db!.transaction<bool>((txn) async {
+        // Check 1: Already recorded on THIS screen within cooldown
+        final countOnScreen = Sqflite.firstIntValue(await txn.rawQuery(
           '''
-          DELETE FROM page_impressions
-          WHERE id IN (
-            SELECT id FROM page_impressions
-            WHERE user_id = ?
-            ORDER BY id ASC
-            LIMIT ?
-          )
+          SELECT COUNT(*) as count
+          FROM page_impressions
+          WHERE user_id    = ?
+            AND product_id  = ?
+            AND screen_name = ?
+            AND created_at >= ?
           ''',
-          [userId, toEvict],
-        );
-        debugPrint(
-          '🧹 ImpressionBatcher: evicted $toEvict old rows for $userId',
-        );
-      }
+          [userId, productId, screenName, cutoff],
+        )) ?? 0;
 
-      // ── Write new impression ──────────────────────────────────────────────────
-      await _db!.insert('page_impressions', {
-        'user_id': userId,
-        'product_id': productId,
-        'screen_name': screenName,
-        'created_at': now.millisecondsSinceEpoch,
+        if (countOnScreen > 0) return false;
+
+        // Check 2: Max impressions per hour across all screens
+        final totalCount = Sqflite.firstIntValue(await txn.rawQuery(
+          '''
+          SELECT COUNT(*) as count
+          FROM page_impressions
+          WHERE user_id    = ?
+            AND product_id  = ?
+            AND created_at >= ?
+          ''',
+          [userId, productId, cutoff],
+        )) ?? 0;
+
+        if (totalCount >= _maxImpressionsPerHour) return false;
+
+        // Enforce per-user row cap (FIFO eviction)
+        final rowCount = Sqflite.firstIntValue(await txn.rawQuery(
+          'SELECT COUNT(*) as count FROM page_impressions WHERE user_id = ?',
+          [userId],
+        )) ?? 0;
+
+        if (rowCount >= _maxRowsPerUser) {
+          final toEvict = rowCount - _maxRowsPerUser + 1;
+          await txn.rawDelete(
+            '''
+            DELETE FROM page_impressions
+            WHERE id IN (
+              SELECT id FROM page_impressions
+              WHERE user_id = ?
+              ORDER BY id ASC
+              LIMIT ?
+            )
+            ''',
+            [userId, toEvict],
+          );
+        }
+
+        // Write new impression
+        await txn.insert('page_impressions', {
+          'user_id': userId,
+          'product_id': productId,
+          'screen_name': screenName,
+          'created_at': now.millisecondsSinceEpoch,
+        });
+
+        return true;
       });
 
-      debugPrint(
-        '✅ ImpressionBatcher: recorded impression '
-        '#${totalCount + 1} for $productId on $screenName '
-        'by $userId (${_maxImpressionsPerHour - totalCount - 1} remaining)',
-      );
+      if (!recorded) return;
 
       // ── Add to send buffer ────────────────────────────────────────────────────
       _impressionBuffer.add(ImpressionRecord(
@@ -328,11 +312,10 @@ class ImpressionBatcher {
       _scheduleBatch();
 
       if (_impressionBuffer.length >= _maxBatchSize) {
-        debugPrint('⚠️ ImpressionBatcher: buffer full, forcing flush');
-        unawaited(flush());
+        flush(); // ignore future — fire and forget
       }
     } catch (e) {
-      debugPrint('❌ ImpressionBatcher: _recordImpression failed — $e');
+      debugPrint('ImpressionBatcher: _recordImpression failed — $e');
     }
   }
 
@@ -476,13 +459,10 @@ class _BoostedVisibilityWrapperState extends State<BoostedVisibilityWrapper> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_batcher._marketProvider == null) {
+    if (!_batcher.isInitialized) {
       final marketProvider =
           Provider.of<MarketProvider>(context, listen: false);
-      // initialize() is now async but safe to call unawaited here —
-      // it completes before any impression can be recorded since
-      // addImpression() checks _db != null before writing.
-      unawaited(_batcher.initialize(marketProvider));
+      _batcher.initialize(marketProvider);
     }
   }
 
@@ -522,8 +502,4 @@ class _BoostedVisibilityWrapperState extends State<BoostedVisibilityWrapper> {
     _hasRecordedImpression = false;
     super.dispose();
   }
-}
-
-void unawaited(Future<void> future) {
-  future.catchError((e) => debugPrint('Unawaited error: $e'));
 }

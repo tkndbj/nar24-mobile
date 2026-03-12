@@ -49,8 +49,7 @@ class ProductCard extends StatefulWidget {
   State<ProductCard> createState() => _ProductCardState();
 }
 
-class _ProductCardState extends State<ProductCard>
-    with AutomaticKeepAliveClientMixin {
+class _ProductCardState extends State<ProductCard> {
   String? _selectedColor;
   int _currentImageIndex = 0;
   static const Color jadeGreen = Color(0xFF00A86B);
@@ -65,10 +64,6 @@ class _ProductCardState extends State<ProductCard>
   late bool _isFantasyProduct;
   late List<String> _imageUrls;
   late int _imageCount;
-
-  // ✅ OPTIMIZATION 2: Keep widget alive to avoid rebuilds when scrolling
-  @override
-  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -163,21 +158,17 @@ class _ProductCardState extends State<ProductCard>
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
     final mediaQuery = MediaQuery.of(context);
     final theme = Theme.of(context);
 
-    // FIX: Add RepaintBoundary for render isolation
-    return RepaintBoundary(
-      child: MediaQuery(
-        data: mediaQuery.copyWith(textScaler: TextScaler.noScaling),
-        child: _ProductCardContent(
-          key: ValueKey('product_card_${widget.product.id}'),
-          widget: widget,
-          state: this,
-          mediaQuery: mediaQuery,
-          theme: theme,
-        ),
+    return MediaQuery(
+      data: mediaQuery.copyWith(textScaler: TextScaler.noScaling),
+      child: _ProductCardContent(
+        key: ValueKey('product_card_${widget.product.id}'),
+        widget: widget,
+        state: this,
+        mediaQuery: mediaQuery,
+        theme: theme,
       ),
     );
   }
