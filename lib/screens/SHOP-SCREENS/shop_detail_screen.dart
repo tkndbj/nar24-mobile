@@ -725,37 +725,41 @@ class _FilterSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final provider = context.watch<ShopProvider>();
-    final sortLabel = provider.sortOption != 'date'
-        ? _localizedSortLabel(provider.sortOption, l10n)
-        : l10n.sort;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: _FilterButton(
-              icon: Icons.sort,
-              label: sortLabel,
-              onPressed: () => _showSortOptions(context),
-            ),
+    return Selector<ShopProvider, String>(
+      selector: (_, p) => p.sortOption,
+      builder: (context, sortOption, _) {
+        final sortLabel = sortOption != 'date'
+            ? _localizedSortLabel(sortOption, l10n)
+            : l10n.sort;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: _FilterButton(
+                  icon: Icons.sort,
+                  label: sortLabel,
+                  onPressed: () => _showSortOptions(context),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: _FilterButtonWithBadge(
+                      onDismissKeyboard: onDismissKeyboard)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _FilterButton(
+                  icon: Icons.category,
+                  label: l10n.category,
+                  onPressed: () => _showCategoryOptions(context),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Expanded(
-              child:
-                  _FilterButtonWithBadge(onDismissKeyboard: onDismissKeyboard)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _FilterButton(
-              icon: Icons.category,
-              label: l10n.category,
-              onPressed: () => _showCategoryOptions(context),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1018,8 +1022,6 @@ class _TabContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<ShopProvider>();
-
     return TabBarView(
       controller: tabController,
       children: [
@@ -1109,39 +1111,73 @@ class _ProductsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<ShopProvider>();
+    final provider = context.read<ShopProvider>();
 
-    return ValueListenableBuilder<bool>(
-      valueListenable: provider.isLoadingProductsNotifier,
-      builder: (context, isLoading, _) {
-        if (isLoading || provider.isSearching) {
-          return const _ProductShimmerGrid();
-        }
+    return Selector<ShopProvider, ({bool isSearching, String searchQuery, String? selectedColor})>(
+      selector: (_, p) => (
+        isSearching: p.isSearching,
+        searchQuery: p.searchQuery,
+        selectedColor: p.selectedColorForDisplay,
+      ),
+      builder: (context, state, _) {
+        return ValueListenableBuilder<bool>(
+          valueListenable: provider.isLoadingProductsNotifier,
+          builder: (context, isLoading, _) {
+            if (isLoading || state.isSearching) {
+              return const _ProductShimmerGrid();
+            }
 
-        return ValueListenableBuilder<List<Product>>(
-          valueListenable: _getNotifier(provider),
-          builder: (context, products, _) {
-            return _RefreshableList(
-              child: NotificationListener<ScrollNotification>(
-                onNotification: (scrollInfo) =>
-                    _handleScroll(scrollInfo, provider),
-                child: CustomScrollView(
-                  cacheExtent: 1000,
-                  slivers: [
-                    if (provider.searchQuery.isNotEmpty)
-                      const SliverToBoxAdapter(child: _SearchResultsHeader()),
-                    ProductListSliver(
-                      products: products.map((p) => p.toSummary()).toList(),
-                      boostedProducts: const [],
-                      hasMore: provider.hasMoreProducts &&
-                          provider.searchQuery.isEmpty,
-                      isLoadingMore: provider.isLoadingMoreProducts,
-                      screenName: _getScreenName(),
-                      selectedColor: provider.selectedColorForDisplay,
+            return ValueListenableBuilder<List<Product>>(
+              valueListenable: _getNotifier(provider),
+              builder: (context, products, _) {
+                return _RefreshableList(
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (scrollInfo) =>
+                        _handleScroll(scrollInfo, provider),
+                    child: CustomScrollView(
+                      cacheExtent: 1000,
+                      slivers: [
+                        if (state.searchQuery.isNotEmpty)
+                          const SliverToBoxAdapter(
+                              child: _SearchResultsHeader()),
+                        ProductListSliver(
+                          products: products
+                              .map((p) => p.toSummary())
+                              .toList(),
+                          boostedProducts: const [],
+                          hasMore: false,
+                          isLoadingMore: false,
+                          screenName: _getScreenName(),
+                          selectedColor: state.selectedColor,
+                        ),
+                        ValueListenableBuilder<bool>(
+                          valueListenable:
+                              provider.isLoadingMoreProductsNotifier,
+                          builder: (context, isLoadingMore, _) {
+                            if (!isLoadingMore) {
+                              return const SliverToBoxAdapter(
+                                  child: SizedBox.shrink());
+                            }
+                            return const SliverToBoxAdapter(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(vertical: 24),
+                                child: Center(
+                                  child: SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2.5),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             );
           },
         );
@@ -1345,7 +1381,7 @@ class _ReviewsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final provider = context.watch<ShopProvider>();
+    final provider = context.read<ShopProvider>();
 
     return ValueListenableBuilder<bool>(
       valueListenable: provider.isLoadingReviewsNotifier,

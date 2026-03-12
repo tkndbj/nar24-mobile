@@ -656,6 +656,7 @@ class FoodCartProvider extends ChangeNotifier {
     if (newQuantity <= 0) {
       return removeItem(foodId);
     }
+    if (newQuantity > 99) newQuantity = 99;
 
     if (!_rateLimiter.canProceed('qty_$foodId')) return;
 

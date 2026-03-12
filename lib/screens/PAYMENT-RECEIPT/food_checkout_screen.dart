@@ -2,6 +2,7 @@
 //
 // Mirrors: app/food-checkout/page.tsx + FoodCheckoutContent
 
+import 'dart:math';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -238,8 +239,8 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
 
   String _randomSuffix() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    final t = DateTime.now().microsecondsSinceEpoch;
-    return List.generate(6, (i) => chars[(t >> i) % chars.length]).join();
+    final rng = Random.secure();
+    return List.generate(6, (_) => chars[rng.nextInt(chars.length)]).join();
   }
 
   @override

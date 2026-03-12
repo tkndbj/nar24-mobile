@@ -19,7 +19,10 @@
       "Bash(fi)",
       "Bash(done)",
       "Bash(flutter build:*)",
-      "Bash(flutter:*)"
+      "Bash(flutter:*)",
+      "Bash(find /c/Users/Digikey/Desktop/EE-CTS/flutter_application_1/lib -name \"*food*\" -o -name \"*restaurant*\" | grep -E \"\\\\.\\(dart\\)$\" | sort)",
+      "Bash(/tmp/restaurant_files_summary.txt:*)",
+      "Read(//tmp/**)"
     ],
     "deny": [],
     "ask": []

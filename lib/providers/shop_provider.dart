@@ -162,13 +162,14 @@ class ShopProvider with ChangeNotifier {
   final Duration _refreshInterval = const Duration(seconds: 30);
 
   DocumentSnapshot? _lastProductDocument;
-  bool _hasMoreProducts = true;
-  bool _isLoadingMoreProducts = false;
+  final ValueNotifier<bool> hasMoreProductsNotifier = ValueNotifier<bool>(true);
+  final ValueNotifier<bool> isLoadingMoreProductsNotifier =
+      ValueNotifier<bool>(false);
   final int _productsLimit = 20;
   List<Product> _allFetchedProducts = [];
 
-  bool get hasMoreProducts => _hasMoreProducts;
-  bool get isLoadingMoreProducts => _isLoadingMoreProducts;
+  bool get hasMoreProducts => hasMoreProductsNotifier.value;
+  bool get isLoadingMoreProducts => isLoadingMoreProductsNotifier.value;
 
   // Getters
   List<String> get selectedBrands => _selectedBrands;
@@ -589,8 +590,8 @@ class ShopProvider with ChangeNotifier {
     _dynamicSpecFilters = {};
 
     _lastProductDocument = null;
-    _hasMoreProducts = true;
-    _isLoadingMoreProducts = false;
+    hasMoreProductsNotifier.value = true;
+    isLoadingMoreProductsNotifier.value = false;
     _allFetchedProducts = [];
 
     _safeNotifyListeners();
@@ -730,6 +731,8 @@ class ShopProvider with ChangeNotifier {
     cartCount.dispose();
     collectionsNotifier.dispose();
     isLoadingCollectionsNotifier.dispose();
+    hasMoreProductsNotifier.dispose();
+    isLoadingMoreProductsNotifier.dispose();
     _searchDebounce?.cancel();
     super.dispose();
   }
@@ -1440,15 +1443,15 @@ class ShopProvider with ChangeNotifier {
     if (_shopDoc == null) return;
 
     if (loadMore) {
-      if (!_hasMoreProducts || _isLoadingMoreProducts) return;
-      _isLoadingMoreProducts = true;
+      if (!hasMoreProductsNotifier.value || isLoadingMoreProductsNotifier.value) return;
+      isLoadingMoreProductsNotifier.value = true;
     } else {
-      _hasMoreProducts = true;
+      hasMoreProductsNotifier.value = true;
       _allFetchedProducts = [];
       _lastProductDocument = null;
       isLoadingProductsNotifier.value = true;
+      _safeNotifyListeners();
     }
-    _safeNotifyListeners();
 
     try {
       final shopId = _shopDoc!.id;
@@ -1513,7 +1516,7 @@ class ShopProvider with ChangeNotifier {
           .toList();
 
       if (newProducts.length < _productsLimit) {
-        _hasMoreProducts = false;
+        hasMoreProductsNotifier.value = false;
       }
 
       if (loadMore) {
@@ -1535,11 +1538,11 @@ class ShopProvider with ChangeNotifier {
       debugPrint('Error fetching products from Typesense: $e');
     } finally {
       if (loadMore) {
-        _isLoadingMoreProducts = false;
+        isLoadingMoreProductsNotifier.value = false;
       } else {
         isLoadingProductsNotifier.value = false;
+        _safeNotifyListeners();
       }
-      _safeNotifyListeners();
     }
   }
 
@@ -1561,21 +1564,20 @@ class ShopProvider with ChangeNotifier {
 
     // If loading more, check if we can
     if (loadMore) {
-      if (!_hasMoreProducts ||
-          _isLoadingMoreProducts ||
+      if (!hasMoreProductsNotifier.value ||
+          isLoadingMoreProductsNotifier.value ||
           _lastProductDocument == null) {
         return;
       }
-      _isLoadingMoreProducts = true;
+      isLoadingMoreProductsNotifier.value = true;
     } else {
       // Reset pagination for new fetch
       _lastProductDocument = null;
-      _hasMoreProducts = true;
+      hasMoreProductsNotifier.value = true;
       _allFetchedProducts = [];
       isLoadingProductsNotifier.value = true;
+      _safeNotifyListeners();
     }
-
-    _safeNotifyListeners();
 
     try {
       final String shopId = _shopDoc!.id;
@@ -1630,7 +1632,7 @@ class ShopProvider with ChangeNotifier {
           snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
 
       if (snapshot.docs.isEmpty || newProducts.length < _productsLimit) {
-        _hasMoreProducts = false;
+        hasMoreProductsNotifier.value = false;
       }
 
       if (snapshot.docs.isNotEmpty) {
@@ -1657,11 +1659,11 @@ class ShopProvider with ChangeNotifier {
       }
     } finally {
       if (loadMore) {
-        _isLoadingMoreProducts = false;
+        isLoadingMoreProductsNotifier.value = false;
       } else {
         isLoadingProductsNotifier.value = false;
+        _safeNotifyListeners();
       }
-      _safeNotifyListeners();
     }
   }
 
