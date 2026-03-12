@@ -1266,7 +1266,7 @@ async function processBatchBoost(db, batchItems, userId, boostDuration, isAdmin)
   // checkBoostPaymentStatus — unchanged
   // ─────────────────────────────────────────────────────────────────────────────
   export const checkBoostPaymentStatus = onCall(
-    { region: 'europe-west3', memory: '128MiB', timeoutSeconds: 10 },
+    { region: 'europe-west3', memory: '256MiB', timeoutSeconds: 10 },
     async (request) => {
       try {
         if (!request.auth) throw new HttpsError('unauthenticated', 'User must be authenticated');

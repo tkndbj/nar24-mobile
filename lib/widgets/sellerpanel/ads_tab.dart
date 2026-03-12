@@ -80,6 +80,7 @@ class _AdsTabState extends State<AdsTab> {
     _scrollCtrl.addListener(() {
       if (_throttle?.isActive ?? false) return;
       _throttle = Timer(const Duration(milliseconds: 200), () {
+        try {
         if (_scrollCtrl.position.pixels >
             _scrollCtrl.position.maxScrollExtent * 0.8) {
           final provider = context.read<SellerPanelProvider>();
@@ -95,6 +96,7 @@ class _AdsTabState extends State<AdsTab> {
             }
           }
         }
+        } catch (_) {}
       });
     });
   }
@@ -167,8 +169,12 @@ class _AdsTabState extends State<AdsTab> {
           return _buildEmptyState(context, l10n.noProductsFound, isDark);
         }
 
-        final boostedProducts =
-            searchResults.where((p) => p.isBoosted == true).toList();
+        final boostedProducts = searchResults
+    .where((p) =>
+        p.isBoosted == true &&
+        p.boostEndTime != null &&
+        p.boostEndTime!.toDate().isAfter(DateTime.now()))
+    .toList();
 
         return Column(
           children: [
@@ -230,8 +236,12 @@ class _AdsTabState extends State<AdsTab> {
     return ValueListenableBuilder<List<Product>>(
       valueListenable: provider.filteredProductsNotifier,
       builder: (context, products, _) {
-        final boostedProducts =
-            products.where((p) => p.isBoosted == true).toList();
+        final boostedProducts = products
+    .where((p) =>
+        p.isBoosted == true &&
+        p.boostEndTime != null &&
+        p.boostEndTime!.toDate().isAfter(DateTime.now())) // ← ADD THIS
+    .toList();
 
         return Column(
           children: [
@@ -397,9 +407,6 @@ class _AdsTabState extends State<AdsTab> {
     IconData icon,
     VoidCallback onPressed,
   ) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final isGraphButton = label == AppLocalizations.of(context).graph;
-    final isGraphActive = isGraphButton && _showGraph;
 
     return Container(
       decoration: const BoxDecoration(
@@ -1094,7 +1101,7 @@ class _ProductsList extends StatelessWidget {
 }
 
 // Individual product item widget to minimize rebuilds
-class _ProductItem extends StatelessWidget {
+class _ProductItem extends StatefulWidget {
   final dynamic product;
   final AppLocalizations l10n;
   final bool isViewer;
@@ -1107,9 +1114,21 @@ class _ProductItem extends StatelessWidget {
   });
 
   @override
+  State<_ProductItem> createState() => _ProductItemState();
+}
+
+class _ProductItemState extends State<_ProductItem> {
+  bool _boostExpiredLocally = false;  
+  bool _isChecking = false;
+
+  @override
   Widget build(BuildContext context) {
-    final isShopProduct = product.shopId != null;
-    final isBoosted = product.isBoosted == true && product.boostEndTime != null;
+    final isShopProduct = widget.product.shopId != null;
+    final now = DateTime.now();
+    final isBoosted = !_boostExpiredLocally &&
+        widget.product.isBoosted == true &&
+        widget.product.boostEndTime != null &&
+        widget.product.boostEndTime!.toDate().isAfter(now);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
@@ -1117,30 +1136,33 @@ class _ProductItem extends StatelessWidget {
         children: [
           Expanded(
             child: ProductCard4(
-              imageUrl:
-                  (product.imageUrls != null && product.imageUrls.isNotEmpty)
-                      ? product.imageUrls.first
-                      : '',
-              colorImages: (product.colorImages != null)
-                  ? Map<String, List<String>>.from(product.colorImages)
+              imageUrl: (widget.product.imageUrls != null &&
+                      widget.product.imageUrls.isNotEmpty)
+                  ? widget.product.imageUrls.first
+                  : '',
+              colorImages: (widget.product.colorImages != null)
+                  ? Map<String, List<String>>.from(widget.product.colorImages)
                   : <String, List<String>>{},
-              productName: product.productName,
-              brandModel: product.brandModel ?? '',
-              price: (product.price is num)
-                  ? (product.price as num).toDouble()
+              productName: widget.product.productName,
+              brandModel: widget.product.brandModel ?? '',
+              price: (widget.product.price is num)
+                  ? (widget.product.price as num).toDouble()
                   : 0.0,
-              currency: product.currency,
-              productId: product.id,
+              currency: widget.product.currency,
+              productId: widget.product.id,
               isShopProduct: isShopProduct,
             ),
           ),
           const SizedBox(width: 8),
           if (isBoosted)
             _BoostLabel(
-              endTime: product.boostEndTime!.toDate(),
-              l10n: l10n,
+              endTime: widget.product.boostEndTime!.toDate(),
+              l10n: widget.l10n,
+              onExpired: () {
+                if (mounted) setState(() => _boostExpiredLocally = true);
+              },
             )
-          else if (!isViewer)
+          else if (!widget.isViewer)
             Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
@@ -1150,29 +1172,70 @@ class _ProductItem extends StatelessWidget {
               ),
               child: TextButton(
                 onPressed: () async {
-                  final provider =
-                      Provider.of<SellerPanelProvider>(context, listen: false);
-                  final shopId = provider.selectedShop?.id;
+  if (_isChecking) return;
+  if (mounted) setState(() => _isChecking = true);
 
-                  if (shopId == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          l10n.noShopSelected ?? 'No shop selected',
-                          style: const TextStyle(fontFamily: 'Figtree'),
-                        ),
-                      ),
-                    );
-                    return;
-                  }
+  try {
+    final provider =
+        Provider.of<SellerPanelProvider>(context, listen: false);
+    final shopId = provider.selectedShop?.id;
 
-                  // ✅ FIXED: Use the correct route with path parameters
-                  await context
-                      .push('/boost-shop-product/$shopId/${product.id}');
+    if (shopId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.l10n.noShopSelected ?? 'No shop selected',
+            style: const TextStyle(fontFamily: 'Figtree'),
+          ),
+        ),
+      );
+      return; // finally still runs ✅
+    }
 
-                  // Refresh the single item after boost
-                  await provider.updateBoostOnProduct(product.id);
-                },
+    // ✅ Re-validate boost status from Firestore before navigating
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('shop_products')
+          .doc(widget.product.id)
+          .get();
+
+      if (!context.mounted) return;
+
+      final data = doc.data();
+      final boostEndTime =
+          (data?['boostEndTime'] as Timestamp?)?.toDate();
+      final isStillBoosted = (data?['isBoosted'] == true) &&
+          boostEndTime != null &&
+          boostEndTime.isAfter(DateTime.now());
+
+      if (isStillBoosted) {
+        await provider.updateBoostOnProduct(widget.product.id);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                widget.l10n.productAlreadyBoosted ??
+                    'This product is already boosted',
+                style: const TextStyle(fontFamily: 'Figtree'),
+              ),
+            ),
+          );
+        }
+        return; // finally still runs ✅
+      }
+    } catch (e) {
+      debugPrint('[AdsTab] Boost guard check failed: $e');
+      // Fail open — let the boost screen handle it
+    }
+
+    await context.push(
+        '/boost-shop-product/$shopId/${widget.product.id}');
+    await provider.updateBoostOnProduct(widget.product.id);
+
+  } finally {
+    if (mounted) setState(() => _isChecking = false); // ✅ ALWAYS resets
+  }
+},
                 style: TextButton.styleFrom(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -1181,15 +1244,18 @@ class _ProductItem extends StatelessWidget {
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                child: Text(
-                  l10n.boostProduct,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontFamily: 'Figtree',
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                child: _isChecking
+    ? const SizedBox(
+        width: 12, height: 12,
+        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+      )
+    : Text(
+        widget.l10n.boostProduct,
+        style: const TextStyle(
+          color: Colors.white, fontSize: 12,
+          fontFamily: 'Figtree', fontWeight: FontWeight.w600,
+        ),
+      ),
               ),
             ),
         ],
@@ -1208,8 +1274,13 @@ class _MetricData {
 class _BoostLabel extends StatefulWidget {
   final DateTime endTime;
   final AppLocalizations l10n;
+  final VoidCallback onExpired;
 
-  const _BoostLabel({required this.endTime, required this.l10n});
+  const _BoostLabel({
+    required this.endTime,
+    required this.l10n,
+    required this.onExpired,
+  });
 
   @override
   State<_BoostLabel> createState() => _BoostLabelState();
@@ -1224,10 +1295,19 @@ class _BoostLabelState extends State<_BoostLabel> {
     super.initState();
     _remainingTime = widget.endTime.difference(DateTime.now());
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      setState(() {
-        _remainingTime = widget.endTime.difference(DateTime.now());
-      });
-    });
+  if (!mounted) {
+    timer.cancel();
+    return;
+  }
+  final remaining = widget.endTime.difference(DateTime.now());
+  if (remaining <= Duration.zero) {
+    timer.cancel();
+    if (mounted) setState(() => _remainingTime = Duration.zero);
+    widget.onExpired();
+  } else {
+    setState(() => _remainingTime = remaining);
+  }
+});
   }
 
   @override
@@ -1238,7 +1318,7 @@ class _BoostLabelState extends State<_BoostLabel> {
 
   @override
   Widget build(BuildContext context) {
-    if (_remainingTime == Duration.zero) return const SizedBox.shrink();
+    if (_remainingTime <= Duration.zero) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(

@@ -311,6 +311,7 @@ class _DashboardTabState extends State<DashboardTab>
                         imageUrl: ad.imageUrl,
                         shopName: ad.shopName,
                         paymentLink: ad.paymentLink!,
+                        shopId: ad.shopId,
                       ),
                     ),
                   );

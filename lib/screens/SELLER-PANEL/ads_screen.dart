@@ -1777,6 +1777,7 @@ class _AdsScreenState extends State<AdsScreen>
                                     imageUrl: submission.imageUrl,
                                     shopName: submission.shopName,
                                     paymentLink: submission.paymentLink!,
+                                    shopId: submission.shopId,
                                   ),
                                 ),
                               );
@@ -2007,6 +2008,7 @@ class _AdsScreenState extends State<AdsScreen>
                                 imageUrl: submission.imageUrl,
                                 shopName: submission.shopName,
                                 paymentLink: submission.paymentLink!,
+                                shopId: submission.shopId,
                               ),
                             ),
                           );

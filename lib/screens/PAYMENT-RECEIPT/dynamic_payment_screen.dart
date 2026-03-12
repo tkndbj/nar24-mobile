@@ -12,7 +12,7 @@ class DynamicPaymentScreen extends StatefulWidget {
   final String imageUrl;
   final String shopName;
   final String paymentLink;
-
+  final String shopId;
   const DynamicPaymentScreen({
     super.key,
     required this.submissionId,
@@ -22,6 +22,7 @@ class DynamicPaymentScreen extends StatefulWidget {
     required this.imageUrl,
     required this.shopName,
     required this.paymentLink,
+    required this.shopId,
   });
 
   @override
@@ -94,11 +95,12 @@ class _DynamicPaymentScreenState extends State<DynamicPaymentScreen> {
       return;
     }
 
-    // TODO: Navigate to payment screen
+   
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => IsbankAdsImagesPaymentScreen(
+          shopId: widget.shopId,
           submissionId: widget.submissionId,
           paymentLink: widget.paymentLink,
           price: widget.price,

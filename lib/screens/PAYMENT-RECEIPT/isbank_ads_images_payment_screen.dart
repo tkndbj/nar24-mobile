@@ -21,12 +21,14 @@ class IsbankAdsImagesPaymentScreen extends StatefulWidget {
   final String submissionId;
   final String paymentLink;
   final double price;
+  final String shopId;
 
   const IsbankAdsImagesPaymentScreen({
     super.key,
     required this.submissionId,
     required this.paymentLink,
     required this.price,
+    required this.shopId,
   });
 
   @override
@@ -261,27 +263,23 @@ class _IsbankAdsImagesPaymentScreenState
   // RESULT HANDLERS
   // =============================================================================
 
-  void _handlePaymentSuccess() {
-    if (_resultHandled) return;
-    _resultHandled = true;
+void _handlePaymentSuccess() {
+  if (_resultHandled) return;
+  _resultHandled = true;
 
-    _fallbackTimer?.cancel();
-    _firestoreListener?.cancel();
+  _fallbackTimer?.cancel();
+  _firestoreListener?.cancel();
 
+  if (!mounted) return;
+  setState(() => _status = _PaymentStatus.completed);
+
+  Future.delayed(const Duration(seconds: 2), () {
     if (!mounted) return;
-
-    setState(() => _status = _PaymentStatus.completed);
-
-    // Brief success screen, then pop + show confirmation dialog in caller
-    Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
-      Navigator.of(context).pop(true);
-      // Show success dialog on the underlying screen after route pops
-      Future.delayed(const Duration(milliseconds: 300), () {
-        if (mounted) _showSuccessDialog();
-      });
-    });
-  }
+    // BEFORE: Navigator.of(context).pop(true); + _showSuccessDialog()
+    // AFTER: go directly to seller panel tab 5
+    context.go('/seller-panel?tab=5&shopId=${widget.shopId}');
+  });
+}
 
   void _handlePaymentFailed(String message) {
     if (_resultHandled) return;
@@ -609,7 +607,7 @@ class _IsbankAdsImagesPaymentScreenState
             child: ElevatedButton(
               onPressed: () {
                 Navigator.of(ctx).pop();
-                context.go('/seller-panel');
+                context.go('/seller-panel?tab=5&shopId=${widget.shopId}');
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF38A169),
