@@ -1159,8 +1159,7 @@ await checkBoostPaymentRateLimit(db, userId);
   export const boostPaymentCallback = onRequest(
     {
       region: 'europe-west3',
-      memory: '512MiB',
-      minInstances: 1,
+      memory: '512MiB',      
       timeoutSeconds: 90,
       cors: true,
       invoker: 'public',
