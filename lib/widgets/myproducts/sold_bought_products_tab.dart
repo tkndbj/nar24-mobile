@@ -67,6 +67,8 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
   static const Duration _scrollThrottleDelay = Duration(milliseconds: 100);
   static const double _loadMoreTriggerOffset = 0.8;
 
+  void refresh() => _refreshData();
+
   @override
   bool get wantKeepAlive => true;
 

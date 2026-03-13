@@ -248,17 +248,29 @@ class ProfileRoutes {
 
       // My Orders
       GoRoute(
-        path: '/my_orders',
-        name: 'my-orders',
-        pageBuilder: (context, state) {
-          return CustomTransitionPage(
-            key: state.pageKey,
-            child: const MyOrdersScreen(),
-            transitionsBuilder: _slideTransition,
-            transitionDuration: const Duration(milliseconds: 200),
-          );
-        },
+  path: '/my_orders',
+  name: 'my-orders',
+  pageBuilder: (context, state) {
+    // Passed by IsbankPaymentScreen on payment-status://processing redirect
+    final pendingOrderNumber =
+        state.uri.queryParameters['pendingOrderNumber'];
+ 
+    // Passed by IsbankPaymentScreen on payment-success:// redirect
+    // (order already created — just show a success banner)
+    final pendingOrderId =
+        state.uri.queryParameters['pendingOrderId'];
+ 
+    return CustomTransitionPage(
+      key: state.pageKey,
+      child: MyOrdersScreen(
+        pendingOrderNumber: pendingOrderNumber,
+        pendingOrderId: pendingOrderId,
       ),
+      transitionsBuilder: _slideTransition,
+      transitionDuration: const Duration(milliseconds: 200),
+    );
+  },
+),
 
       // Refund Order Selection
       GoRoute(

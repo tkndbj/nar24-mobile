@@ -1,5 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 class AdAnalyticsService {
@@ -7,6 +8,7 @@ class AdAnalyticsService {
       FirebaseFunctions.instanceFor(region: 'europe-west3');
 
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static final FirebaseAuth _auth = FirebaseAuth.instance;
 
   /// Track when user clicks on an ad
   static Future<void> trackAdClick({
@@ -17,7 +19,6 @@ class AdAnalyticsService {
   }) async {
     try {
       final callable = _functions.httpsCallable('trackAdClick');
-
       await callable.call({
         'adId': adId,
         'adType': adType,
@@ -25,10 +26,17 @@ class AdAnalyticsService {
         'linkedId': linkedId,
       });
 
+      // Set hasAdClicks flag — fire and forget, never throws
+      final uid = _auth.currentUser?.uid;
+      if (uid != null) {
+        _firestore.collection('users').doc(uid).update({
+          'hasAdClicks': true,
+        }).catchError((_) {});
+      }
+
       debugPrint('✅ Ad click tracked: $adId');
     } catch (e) {
       debugPrint('❌ Error tracking ad click: $e');
-      // Don't throw - analytics failures shouldn't break UX
     }
   }
 

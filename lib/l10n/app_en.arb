@@ -1489,6 +1489,7 @@
 "boostPaymentSuccessfulTitle": "Boost Payment Successful",
 "cancelBoostPaymentMessage": "Your boost payment will be cancelled. Are you sure?",
 "boostOrder": "Boost Order",
+"paymentPageLoadFailed": "Payment page could not be loaded. Please try again.",
   "revokeAccess": "Revoke Access",
 "revokeAccessConfirmation": "This will remove their access to the shop.",
 "deleteAccountWarning": "This action cannot be undone. All your data will be permanently deleted.",

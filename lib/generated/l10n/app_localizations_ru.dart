@@ -5767,6 +5767,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get boostOrder => 'Заказ буста';
 
   @override
+  String get paymentPageLoadFailed =>
+      'Страница оплаты не загрузилась. Пожалуйста, попробуйте снова.';
+
+  @override
   String get revokeAccess => 'Отозвать доступ';
 
   @override

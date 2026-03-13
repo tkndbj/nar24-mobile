@@ -8852,7 +8852,8 @@ export { addProductsToCampaign, removeProductFromCampaign, updateCampaignProduct
 export { submitProduct, submitProductEdit } from './26-list-product/index.js';
 export { processFoodOrder, initializeFoodPayment, foodPaymentCallback, checkFoodPaymentStatus, generateFoodReceiptBackground, updateFoodOrderStatus, submitRestaurantReview } from './27-food-payment/index.js';
 export { sendShopInvitation, handleShopInvitation, revokeShopAccess, leaveShop, cancelShopInvitation, backfillShopClaims, setAdminClaim } from './28-shop-invitation/index.js';
-export { processPurchase, initializeIsbankPayment, isbankPaymentCallback, checkIsbankPaymentStatus } from './29-product-payment/index.js';
+export { initializeIsbankPayment, isbankPaymentCallback, checkIsbankPaymentStatus, clearPurchasedCartItems, processOrderNotification, recoverStuckPayments } from './29-product-payment/index.js';
 export { onFoodOrderStatusChange, informFoodCourier, cleanupExpiredCourierNotifications } from './30-food-courier-notifications/index.js';
 export { extractColorOnly, initializeIsbankAdPayment, isbankAdPaymentCallback, checkIsbankAdPaymentStatus, processAdColorExtraction, processAdExpiration, processAdAnalytics, trackAdConversion, createDailyAdAnalyticsSnapshot, cleanupExpiredAds } from './31-homescreen-ads-payment/index.js';
-export { expireSingleBoost, initializeBoostPayment, boostPaymentCallback, checkBoostPaymentStatus } from './32-product-boost-payment/index.js';
+export { expireSingleBoost, initializeBoostPayment, boostPaymentCallback, checkBoostPaymentStatus, recoverStuckBoostPayments } from './32-product-boost-payment/index.js';
+export { cleanupPaymentCollections } from './33-payment-cleanup/index.js';

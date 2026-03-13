@@ -3,51 +3,31 @@ import { onRequest, onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import admin from 'firebase-admin';
 import { transliterate } from 'transliteration';
-import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
 import {CloudTasksClient} from '@google-cloud/tasks';
 import { computeScores, DEFAULT_THRESHOLDS } from '../24-promotion-score/index.js';
+import { setBoostPaymentExpiresAt } from '../33-payment-cleanup/index.js';
 
 const tasksClient = new CloudTasksClient();
-const secretClient = new SecretManagerServiceClient();
 
-// ── Helper to fetch a secret ──────────────────────────────────────────────────
-async function getSecret(secretName) {
-  const [version] = await secretClient.accessSecretVersion({ name: secretName });
-  return version.payload.data.toString('utf8');
-}
-
-// ── İş Bankası Configuration ──────────────────────────────────────────────────
-let isbankConfig = null;
-
-async function getIsbankConfig() {
-  if (!isbankConfig) {
-    const [clientId, apiUser, apiPassword, storeKey] = await Promise.all([
-      getSecret('projects/emlak-mobile-app/secrets/ISBANK_CLIENT_ID/versions/latest'),
-      getSecret('projects/emlak-mobile-app/secrets/ISBANK_API_USER/versions/latest'),
-      getSecret('projects/emlak-mobile-app/secrets/ISBANK_API_PASSWORD/versions/latest'),
-      getSecret('projects/emlak-mobile-app/secrets/ISBANK_STORE_KEY/versions/latest'),
-    ]);
-
-    isbankConfig = {
-      clientId,
-      apiUser,
-      apiPassword,
-      storeKey,
-      gatewayUrl: 'https://sanalpos.isbank.com.tr/fim/est3Dgate',
-      currency: '949',
-      storeType: '3d_pay_hosting',
-    };
-  }
-  return isbankConfig;
+function getIsbankConfig() {
+  return {
+    clientId: process.env.ISBANK_CLIENT_ID,
+    apiUser: process.env.ISBANK_API_USER,
+    apiPassword: process.env.ISBANK_API_PASSWORD,
+    storeKey: process.env.ISBANK_STORE_KEY,
+    gatewayUrl: 'https://sanalpos.isbank.com.tr/fim/est3Dgate',
+    currency: '949',
+    storeType: '3d_pay_hosting',
+  };
 }
 
 // ── Hash ver3 generator (used for payment initialization) ─────────────────────
-async function generateHashVer3(params) {
+function generateHashVer3(params) {
   const keys = Object.keys(params)
     .filter((key) => key !== 'hash' && key !== 'encoding')
     .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), 'en-US'));
 
-  const config = await getIsbankConfig();
+  const config = getIsbankConfig();
 
   const values = keys.map((key) => {
     let value = String(params[key] || '');
@@ -56,9 +36,6 @@ async function generateHashVer3(params) {
   });
 
   const plainText = values.join('|') + '|' + config.storeKey.trim();
-
-  console.log('Hash keys order:', keys.join('|'));
-  console.log('Hash plain text:', plainText);
 
   return crypto.createHash('sha512').update(plainText, 'utf8').digest('base64');
 }
@@ -83,6 +60,46 @@ function computeCallbackHashVer3(bodyFields, storeKey) {
     storeKey.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
 
   return crypto.createHash('sha512').update(plainText, 'utf8').digest('base64');
+}
+
+async function checkBoostPaymentRateLimit(db, userId) {
+  const windowMs = 10 * 60 * 1000; // 10 minutes
+  const maxAttempts = 5;
+  const rateLimitRef = db.collection('_rate_limits').doc(`boost_payment_init_${userId}`);
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(rateLimitRef);
+    const now = Date.now();
+
+    if (!snap.exists) {
+      tx.set(rateLimitRef, {
+        count: 1,
+        windowStart: now,
+        expiresAt: admin.firestore.Timestamp.fromMillis(now + windowMs),
+      });
+      return;
+    }
+
+    const { count, windowStart } = snap.data();
+
+    if (now - windowStart > windowMs) {
+      // Window expired — reset
+      tx.set(rateLimitRef, {
+        count: 1,
+        windowStart: now,
+        expiresAt: admin.firestore.Timestamp.fromMillis(now + windowMs),
+      });
+      return;
+    }
+
+    if (count >= maxAttempts) {
+      throw new HttpsError('resource-exhausted', 'Too many payment attempts. Please try again later.');
+    }
+
+    tx.update(rateLimitRef, {
+      count: admin.firestore.FieldValue.increment(1),
+    });
+  });
 }
 
 // ── Safe HTML redirect builder (prevents XSS from raw bank response values) ───
@@ -181,7 +198,7 @@ async function processExpiredBoostDoc(db, doc, processedBy) {
         .where('processedAt', '==', null)
         .where('boostEndTime', '<=', now)
         .orderBy('boostEndTime', 'asc') // oldest-first so the longest-overdue clear first
-        .limit(400)
+        .limit(450)
         .get();
    
       if (expiredSnap.empty) {
@@ -272,9 +289,24 @@ async function processExpiredBoostDoc(db, doc, processedBy) {
       );
    
       const missedSnap = await db.collection('boostedProducts')
-        .where('processedAt', '==', null)
-        .where('boostEndTime', '<=', twoHoursAgo)
-        .get(); // intentionally no limit — must catch everything
+  .where('processedAt', '==', null)
+  .where('boostEndTime', '<=', twoHoursAgo)
+  .limit(200)
+  .get();
+
+if (missedSnap.size === 200) {
+  console.warn(`[Cleanup] ⚠️ Hit limit of 200 — more missed boosts may remain. Consider investigating scheduler health.`);
+  try {
+    await db.collection('_payment_alerts').add({
+      type: 'boost_cleanup_limit_hit',
+      severity: 'high',
+      message: 'expiredBoostCleanup hit the 200-doc limit — missed boosts may still be unprocessed',
+      isRead: false,
+      isResolved: false,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (_) {/* alerting must never throw */}
+}
    
       if (!missedSnap.empty) {
         const count = missedSnap.docs.length;
@@ -567,186 +599,199 @@ async function claimExpiredBoost(db, boostIndexRef, processedBy, expectedTaskNam
 // The index doc has processedAt = null (meaning "active / not yet expired").
 // ─────────────────────────────────────────────────────────────────────────────
 async function processBatchBoost(db, batchItems, userId, boostDuration, isAdmin) {
-    const validatedItems = [];
-    const failedItems    = [];
-   
-    await db.runTransaction(async (transaction) => {
-      const now              = new Date();
-      const boostEndDate     = new Date(now.getTime() + boostDuration * 60 * 1000);
-      const boostStartTimestamp = admin.firestore.Timestamp.fromDate(now);
-      const boostEndTimestamp   = admin.firestore.Timestamp.fromDate(boostEndDate);
-   
-      const shopMembershipCache    = new Map();
-      const userVerificationCache  = new Map();
-      const basePricePerProduct    = 1.0;
-      const itemsData              = [];
-   
-      // ── PHASE 1: ALL READS ───────────────────────────────────────────────────
-      for (const item of batchItems) {
-        try {
-          const { itemId, collection, shopId: itemShopId } = item;
-   
-          const productRef  = db.collection(collection).doc(itemId);
-          const productSnap = await transaction.get(productRef);
-   
-          if (!productSnap.exists) {
-            console.warn(`Product ${itemId} not found in ${collection}`);
-            failedItems.push({ ...item, error: 'Product not found' });
-            continue;
-          }
-   
-          const productData = productSnap.data();
-          let hasPermission = false;
-   
-          if (collection === 'products') {
-            hasPermission = productData.userId === userId || isAdmin;
-          } else if (collection === 'shop_products') {
-            const targetShopId = itemShopId || productData.shopId;
-            if (!targetShopId) {
-              failedItems.push({ ...item, error: 'Missing shopId' });
-              continue;
-            }
-            if (isAdmin) {
-              hasPermission = true;
-            } else if (shopMembershipCache.has(targetShopId)) {
-              hasPermission = shopMembershipCache.get(targetShopId);
-            } else {
-              const shopSnap = await transaction.get(db.collection('shops').doc(targetShopId));
-              if (shopSnap.exists) {
-                const sd = shopSnap.data();
-                hasPermission =
-                  sd.ownerId === userId ||
-                  (sd.editors   && sd.editors.includes(userId))   ||
-                  (sd.coOwners  && sd.coOwners.includes(userId))  ||
-                  (sd.viewers   && sd.viewers.includes(userId));
-                shopMembershipCache.set(targetShopId, hasPermission);
-              }
-            }
-          }
-   
-          if (!hasPermission) {
-            failedItems.push({ ...item, error: 'Insufficient permissions' });
-            continue;
-          }
-   
-          if (productData.isBoosted && productData.boostEndTime?.toDate() > now) {
-            failedItems.push({ ...item, error: 'Already boosted' });
-            continue;
-          }
-   
-          const ownerUserId = productData.userId || userId;
-          let isVerified = false;
-          if (userVerificationCache.has(ownerUserId)) {
-            isVerified = userVerificationCache.get(ownerUserId);
-          } else {
-            try {
-              const ownerSnap = await transaction.get(db.collection('users').doc(ownerUserId));
-              isVerified = ownerSnap.exists ? (ownerSnap.data().verified || false) : false;
-              userVerificationCache.set(ownerUserId, isVerified);
-            } catch (e) {
-              userVerificationCache.set(ownerUserId, false);
-            }
-          }
-   
-          itemsData.push({
-            item, productRef, productData, isVerified,
-            targetShopId: itemShopId || productData.shopId,
-          });
-        } catch (itemError) {
-          console.error(`Error processing item ${item.itemId}:`, itemError);
-          failedItems.push({ ...item, error: itemError.message });
-        }
+  const validatedItems = [];
+  const failedItems    = [];
+
+  await db.runTransaction(async (transaction) => {
+    // Reset on every retry — same guard used in createOrderTransaction
+    validatedItems.length = 0;
+    failedItems.length    = 0;
+
+    const now               = new Date();
+    const boostEndDate      = new Date(now.getTime() + boostDuration * 60 * 1000);
+    const boostStartTimestamp = admin.firestore.Timestamp.fromDate(now);
+    const boostEndTimestamp   = admin.firestore.Timestamp.fromDate(boostEndDate);
+    const basePricePerProduct = 1.0;
+
+    // ── PHASE 1a: ALL product reads in parallel ───────────────────────────────
+    // One round-trip for every product in the batch, regardless of batch size.
+    const productRefs  = batchItems.map((item) => db.collection(item.collection).doc(item.itemId));
+    const productSnaps = await Promise.all(productRefs.map((ref) => transaction.get(ref)));
+
+    // ── Pre-validate existence + basic eligibility; collect secondary read IDs ─
+    // We need shops (for permission checks) and users (for verified flag).
+    // Deduplicate so we never fetch the same doc twice.
+    const shopIdsNeeded = new Set();
+    const userIdsNeeded = new Set();
+    const preValidated  = []; // items that survive the first pass
+
+    for (let i = 0; i < batchItems.length; i++) {
+      const item        = batchItems[i];
+      const snap        = productSnaps[i];
+      const { itemId, collection, shopId: itemShopId } = item;
+
+      if (!snap.exists) {
+        console.warn(`Product ${itemId} not found in ${collection}`);
+        failedItems.push({ ...item, error: 'Product not found' });
+        continue;
       }
-   
-      // ── PHASE 2: ALL WRITES ──────────────────────────────────────────────────
-      for (const { item, productRef, productData, isVerified, targetShopId } of itemsData) {
-        const { itemId, collection } = item;
-   
-        const currentImpressions = productData.boostedImpressionCount || 0;
-        const currentClicks      = productData.clickCount || 0;
-        const boostScreen        = isVerified ? 'shop_product' : 'product';
-        const screenType         = isVerified ? 'shop_product' : 'product';
-   
-        const taskName =
-          `expire-boost-${collection}-${itemId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-   
-        // Update the product itself
-        transaction.update(productRef, {
-          boostStartTime: boostStartTimestamp,
-          boostEndTime: boostEndTimestamp,
-          boostDuration,
-          isBoosted: true,
-          boostImpressionCountAtStart: currentImpressions,
-          boostClickCountAtStart: currentClicks,
-          boostScreen,
-          screenType,
-          boostExpirationTaskName: taskName,
-          promotionScore: (productData.rankingScore || 0) + 1000,
-          lastRankingUpdate: admin.firestore.FieldValue.serverTimestamp(),
-        });
-   
-        // Boost history
-        const historyData = {
-          userId, itemId,
-          itemType: collection === 'shop_products' ? 'shop_product' : 'product',
-          itemName: productData.productName || 'Unnamed Product',
-          boostStartTime: boostStartTimestamp,
-          boostEndTime: boostEndTimestamp,
-          boostDuration,
-          pricePerMinutePerItem: basePricePerProduct,
-          boostPrice: boostDuration * basePricePerProduct,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          boostImpressionCountAtStart: currentImpressions,
-          boostClickCountAtStart: currentClicks,
-          finalImpressions: 0, finalClicks: 0,
-          totalImpressionCount: 0, totalClickCount: 0,
-          demographics: {}, viewerAgeGroups: {},
-        };
-   
-        if (collection === 'shop_products' && targetShopId) {
-          transaction.set(
-            db.collection('shops').doc(targetShopId).collection('boostHistory').doc(),
-            historyData,
-          );
+
+      const productData  = snap.data();
+      const targetShopId = itemShopId || productData.shopId;
+
+      if (collection === 'shop_products') {
+        if (!targetShopId) {
+          failedItems.push({ ...item, error: 'Missing shopId' });
+          continue;
+        }
+        if (!isAdmin) shopIdsNeeded.add(targetShopId);
+      }
+
+      if (productData.isBoosted && productData.boostEndTime?.toDate() > now) {
+        failedItems.push({ ...item, error: 'Already boosted' });
+        continue;
+      }
+
+      // Always need the owner's verified flag
+      userIdsNeeded.add(productData.userId || userId);
+
+      preValidated.push({
+        item,
+        productRef: productRefs[i],
+        productData,
+        targetShopId: targetShopId || null,
+      });
+    }
+
+    // ── PHASE 1b: ALL secondary reads in parallel (single round-trip) ─────────
+    // Shops (for permission) and users (for verified flag) fetched together.
+    const shopIdArray = Array.from(shopIdsNeeded);
+    const userIdArray = Array.from(userIdsNeeded);
+
+    const [shopSnaps, userSnaps] = await Promise.all([
+      Promise.all(shopIdArray.map((id) => transaction.get(db.collection('shops').doc(id)))),
+      Promise.all(userIdArray.map((id) => transaction.get(db.collection('users').doc(id)))),
+    ]);
+
+    const shopDataMap = new Map(shopIdArray.map((id, i) => [id, shopSnaps[i].exists ? shopSnaps[i].data() : null]));
+    const userDataMap = new Map(userIdArray.map((id, i) => [id, userSnaps[i].exists ? userSnaps[i].data() : null]));
+
+    // ── Final validation using cached data (no more Firestore reads) ──────────
+    const itemsData = [];
+
+    for (const { item, productRef, productData, targetShopId } of preValidated) {
+      const { collection } = item;
+      let hasPermission = false;
+
+      if (collection === 'products') {
+        hasPermission = productData.userId === userId || isAdmin;
+      } else if (collection === 'shop_products') {
+        if (isAdmin) {
+          hasPermission = true;
         } else {
-          transaction.set(
-            db.collection('users').doc(userId).collection('boostHistory').doc(),
-            historyData,
+          const sd = shopDataMap.get(targetShopId);
+          hasPermission = !!sd && (
+            sd.ownerId === userId ||
+            (sd.editors  && sd.editors.includes(userId))  ||
+            (sd.coOwners && sd.coOwners.includes(userId)) ||
+            (sd.viewers  && sd.viewers.includes(userId))
           );
         }
-   
-        // ── NEW: Write boostedProducts index doc ─────────────────────────────
-        // This is the entry-point for the scheduler-based expiration engine.
-        // processedAt = null means "active, not yet expired."
-        // The scheduler queries: WHERE processedAt == null AND boostEndTime <= now
-        // Requires composite index: processedAt ASC, boostEndTime ASC
-        transaction.set(db.collection('boostedProducts').doc(itemId), {
-          productId: itemId,
-          collection,
-          shopId: targetShopId || null,
-          userId,                          // initiating user
-          productUserId: productData.userId || null, // actual product owner
-          boostStartTime: boostStartTimestamp,
-          boostEndTime: boostEndTimestamp,
-          boostDuration,
-          taskName,                        // used by backup task for stale-task detection
-          processedAt: null,           // null = active, Timestamp = expired
-          processedBy: null,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-   
-        validatedItems.push({
-          itemId, collection,
-          shopId: targetShopId,
-          productData,
-          currentImpressions, currentClicks,
-          boostScreen, boostEndDate, taskName,
-        });
       }
-    });
-   
-    return { validatedItems, failedItems };
-  }
+
+      if (!hasPermission) {
+        failedItems.push({ ...item, error: 'Insufficient permissions' });
+        continue;
+      }
+
+      const ownerUserId = productData.userId || userId;
+      const isVerified  = userDataMap.get(ownerUserId)?.verified || false;
+
+      itemsData.push({ item, productRef, productData, isVerified, targetShopId });
+    }
+
+    // ── PHASE 2: ALL WRITES — identical to original ───────────────────────────
+    for (const { item, productRef, productData, isVerified, targetShopId } of itemsData) {
+      const { itemId, collection } = item;
+
+      const currentImpressions = productData.boostedImpressionCount || 0;
+      const currentClicks      = productData.clickCount || 0;
+      const boostScreen        = isVerified ? 'shop_product' : 'product';
+      const screenType         = isVerified ? 'shop_product' : 'product';
+
+      const taskName =
+        `expire-boost-${collection}-${itemId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      transaction.update(productRef, {
+        boostStartTime: boostStartTimestamp,
+        boostEndTime: boostEndTimestamp,
+        boostDuration,
+        isBoosted: true,
+        boostImpressionCountAtStart: currentImpressions,
+        boostClickCountAtStart: currentClicks,
+        boostScreen,
+        screenType,
+        boostExpirationTaskName: taskName,
+        promotionScore: (productData.rankingScore || 0) + 1000,
+        lastRankingUpdate: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      const historyData = {
+        userId, itemId,
+        itemType: collection === 'shop_products' ? 'shop_product' : 'product',
+        itemName: productData.productName || 'Unnamed Product',
+        boostStartTime: boostStartTimestamp,
+        boostEndTime: boostEndTimestamp,
+        boostDuration,
+        pricePerMinutePerItem: basePricePerProduct,
+        boostPrice: boostDuration * basePricePerProduct,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        boostImpressionCountAtStart: currentImpressions,
+        boostClickCountAtStart: currentClicks,
+        finalImpressions: 0, finalClicks: 0,
+        totalImpressionCount: 0, totalClickCount: 0,
+        demographics: {}, viewerAgeGroups: {},
+      };
+
+      if (collection === 'shop_products' && targetShopId) {
+        transaction.set(
+          db.collection('shops').doc(targetShopId).collection('boostHistory').doc(),
+          historyData,
+        );
+      } else {
+        transaction.set(
+          db.collection('users').doc(userId).collection('boostHistory').doc(),
+          historyData,
+        );
+      }
+
+      transaction.set(db.collection('boostedProducts').doc(itemId), {
+        productId: itemId,
+        collection,
+        shopId: targetShopId || null,
+        userId,
+        productUserId: productData.userId || null,
+        boostStartTime: boostStartTimestamp,
+        boostEndTime: boostEndTimestamp,
+        boostDuration,
+        taskName,
+        processedAt: null,
+        processedBy: null,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      validatedItems.push({
+        itemId, collection,
+        shopId: targetShopId,
+        productData,
+        currentImpressions, currentClicks,
+        boostScreen, boostEndDate, taskName,
+      });
+    }
+  });
+
+  return { validatedItems, failedItems };
+}
    
   // ─────────────────────────────────────────────────────────────────────────────
   // scheduleExpirationTasks
@@ -916,6 +961,18 @@ async function processBatchBoost(db, batchItems, userId, boostDuration, isAdmin)
     }
    
     if (allValidatedItems.length === 0) {
+      const allAlreadyBoosted = failedItems.every((i) => i.error === 'Already boosted');
+      if (allAlreadyBoosted) {
+        console.log('[executeBoostLogic] All items already boosted — idempotent recovery, treating as success');
+        return {
+          boostedItemsCount: 0,
+          totalRequestedItems: items.length,
+          failedItemsCount: failedItems.length,
+          alreadyBoosted: true,
+          boostedItems: [],
+          failedItems,
+        };
+      }
       throw new Error('No valid items found to boost. Check permissions and item validity.');
     }
    
@@ -945,19 +1002,30 @@ async function processBatchBoost(db, batchItems, userId, boostDuration, isAdmin)
   // initializeBoostPayment — unchanged
   // ─────────────────────────────────────────────────────────────────────────────
   export const initializeBoostPayment = onCall(
-    { region: 'europe-west3', memory: '256MiB', timeoutSeconds: 30 },
+    {
+      region: 'europe-west3',
+      memory: '256MiB',
+      timeoutSeconds: 30,
+      secrets: [
+        'ISBANK_CLIENT_ID',
+        'ISBANK_API_USER', 
+        'ISBANK_API_PASSWORD',
+        'ISBANK_STORE_KEY',
+      ],
+    },
     async (request) => {
+      const db = admin.firestore();
+      let docWritten = false; // guard — never return params unless this flips true
+  
       try {
         if (!request.auth) throw new HttpsError('unauthenticated', 'User must be authenticated');
-   
+
+const userId = request.auth.uid;
+
+await checkBoostPaymentRateLimit(db, userId);
+  
         const { items, boostDuration, isShopContext, shopId, customerName, customerEmail, customerPhone } =
           request.data;
-   
-        const sanitizedCustomerName = (() => {
-          if (!customerName) return 'Customer';
-          const s = transliterate(customerName).replace(/[^a-zA-Z0-9\s]/g, '').trim().substring(0, 50);
-          return s || 'Customer';
-        })();
    
         if (!items || !Array.isArray(items) || items.length === 0)
           {throw new HttpsError('invalid-argument', 'Items array is required and must not be empty.');}
@@ -975,18 +1043,22 @@ async function processBatchBoost(db, batchItems, userId, boostDuration, isAdmin)
             {throw new HttpsError('invalid-argument', 'Shop products must include a valid shopId.');}
         }
    
-        const db                 = admin.firestore();
-        const basePricePerProduct = 1.0;
-        const totalPrice         = items.length * boostDuration * basePricePerProduct;
-        const formattedAmount    = Math.round(totalPrice).toString();
-        const orderNumber        = `BOOST-${Date.now()}-${request.auth.uid.substring(0, 8)}`;
-        const rnd                = Date.now().toString();
-        const config             = await getIsbankConfig();
-        const baseUrl            = `https://europe-west3-emlak-mobile-app.cloudfunctions.net`;
-        const okUrl              = `${baseUrl}/boostPaymentCallback`;
-        const failUrl            = okUrl;
-        const callbackUrl        = okUrl;
-   
+        const config          = getIsbankConfig();
+        const orderNumber     = `BOOST-${Date.now()}-${request.auth.uid.substring(0, 8)}`;
+        const rnd             = Date.now().toString();
+        const totalPrice      = items.length * boostDuration * 1.0;
+        const formattedAmount = Math.round(totalPrice).toString();
+        const baseUrl         = `https://europe-west3-emlak-mobile-app.cloudfunctions.net`;
+        const okUrl           = `${baseUrl}/boostPaymentCallback`;
+        const failUrl         = okUrl;
+        const callbackUrl     = okUrl;
+  
+        const sanitizedCustomerName = (() => {
+          if (!customerName) return 'Customer';
+          const s = transliterate(customerName).replace(/[^a-zA-Z0-9\s]/g, '').trim().substring(0, 50);
+          return s || 'Customer';
+        })();
+  
         const hashParams = {
           BillToName: sanitizedCustomerName, amount: formattedAmount,
           callbackurl: callbackUrl, clientid: config.clientId, currency: config.currency,
@@ -994,29 +1066,86 @@ async function processBatchBoost(db, batchItems, userId, boostDuration, isAdmin)
           islemtipi: 'Auth', lang: 'tr', oid: orderNumber, okurl: okUrl, rnd,
           storetype: config.storeType, taksit: '', tel: customerPhone || '',
         };
-   
-        const hash = await generateHashVer3(hashParams);
+  
+        const hash = generateHashVer3(hashParams);
         const paymentParams = {
           clientid: config.clientId, storetype: config.storeType, hash, hashAlgorithm: 'ver3',
           islemtipi: 'Auth', amount: formattedAmount, currency: config.currency, oid: orderNumber,
           okurl: okUrl, failurl: failUrl, callbackurl: callbackUrl, lang: 'tr', rnd, taksit: '',
           BillToName: sanitizedCustomerName, email: customerEmail || '', tel: customerPhone || '',
         };
-   
-        await db.collection('pendingBoostPayments').doc(orderNumber).set({
+  
+        const docData = {
           userId: request.auth.uid,
           amount: totalPrice,
           formattedAmount, orderNumber,
           status: 'awaiting_3d',
           paymentParams,
-          boostData: { items, boostDuration, isShopContext: isShopContext || false, shopId: shopId || null, basePricePerProduct },
+          boostData: { items, boostDuration, isShopContext: isShopContext || false, shopId: shopId || null, basePricePerProduct: 1.0 },
           customerInfo: { name: sanitizedCustomerName, email: customerEmail, phone: customerPhone },
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
-        });
-   
-        return { success: true, gatewayUrl: config.gatewayUrl, paymentParams, orderNumber, totalPrice, itemCount: items.length };
+        };
+  
+        // ── Write to both collections atomically with retry ───────────────────
+        // If the batch fails, docWritten stays false and we throw before returning params.
+        const MAX_RETRIES = 3;
+        let lastWriteError = null;
+  
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            const batch = db.batch();
+            // Primary lookup doc
+            batch.set(db.collection('pendingBoostPayments').doc(orderNumber), docData);
+            // Backup — never deleted, callback falls back to this if primary is missing
+            batch.set(db.collection('boostPaymentBackup').doc(orderNumber), {
+              ...docData,
+              _isBackup: true,
+            });
+            await batch.commit();
+  
+            docWritten = true; // only flips on confirmed write
+            lastWriteError = null;
+            break;
+          } catch (writeErr) {
+            lastWriteError = writeErr;
+            console.error(`[initializeBoostPayment] Write attempt ${attempt}/${MAX_RETRIES} failed:`, writeErr.message);
+            if (attempt < MAX_RETRIES) {
+              await new Promise((r) => setTimeout(r, 300 * attempt)); // 300ms, 600ms
+            }
+          }
+        }
+  
+        // ── Hard block: do NOT return payment params if doc wasn't written ────
+        if (!docWritten) {
+          console.error(`[initializeBoostPayment] All ${MAX_RETRIES} write attempts failed for ${orderNumber}. Blocking payment params.`);
+          // Alert ops — this is a Firestore availability issue
+          try {
+            await db.collection('_payment_alerts').add({
+              type: 'boost_payment_doc_write_failed',
+              severity: 'high',
+              orderNumber,
+              userId: request.auth.uid,
+              errorMessage: lastWriteError?.message || 'Unknown write error',
+              isRead: false,
+              isResolved: false,
+              timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          } catch (_) {/* alerting must never throw */}
+          throw new HttpsError('internal', 'Payment session could not be created. Please try again.');
+        }
+  
+        return {
+          success: true,
+          gatewayUrl: config.gatewayUrl,
+          paymentParams,
+          orderNumber,
+          totalPrice,
+          itemCount: items.length,
+        };
       } catch (error) {
+        // If this is our own HttpsError (doc write failed), re-throw as-is
+        if (error instanceof HttpsError) throw error;
         console.error('Boost payment initialization error:', error);
         throw new HttpsError('internal', error.message);
       }
@@ -1028,7 +1157,20 @@ async function processBatchBoost(db, batchItems, userId, boostDuration, isAdmin)
   // No changes to payment logic; only added processingDuration tracking.
   // ─────────────────────────────────────────────────────────────────────────────
   export const boostPaymentCallback = onRequest(
-    { region: 'europe-west3', memory: '512MiB', timeoutSeconds: 90, cors: true, invoker: 'public' },
+    {
+      region: 'europe-west3',
+      memory: '512MiB',
+      minInstances: 1,
+      timeoutSeconds: 90,
+      cors: true,
+      invoker: 'public',
+      secrets: [
+        'ISBANK_CLIENT_ID',
+        'ISBANK_API_USER',
+        'ISBANK_API_PASSWORD',
+        'ISBANK_STORE_KEY',
+      ],
+    },
     async (request, response) => {
       const startTime = Date.now();
       const db = admin.firestore();
@@ -1046,7 +1188,7 @@ async function processBatchBoost(db, batchItems, userId, boostDuration, isAdmin)
         }
         if (!oid) {response.status(400).send('Order number missing'); return;}
    
-        const storeKey    = (await getSecret('projects/emlak-mobile-app/secrets/ISBANK_STORE_KEY/versions/latest')).trim();
+        const storeKey = process.env.ISBANK_STORE_KEY.trim();
         const computedHash = computeCallbackHashVer3(request.body, storeKey);
         const hashValid    = HASH && computedHash === HASH;
    
@@ -1064,9 +1206,45 @@ async function processBatchBoost(db, batchItems, userId, boostDuration, isAdmin)
    
         const txResult = await db.runTransaction(async (tx) => {
           const snap = await tx.get(pendingPaymentRef);
-          if (!snap.exists) return { error: 'not_found' };
-   
-          const p = snap.data();
+        
+          if (!snap.exists) {
+            const backupSnap = await tx.get(
+              db.collection('boostPaymentBackup').doc(oid)
+            );
+        
+            if (backupSnap.exists) {
+              console.warn(`[BoostPayment] Primary doc missing for ${oid} — restoring from backup`);
+              const backupData = backupSnap.data();
+              tx.set(pendingPaymentRef, {
+                ...backupData,
+                _restoredFromBackup: true,
+                _restoredAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+            
+              // ── MUST still verify payment before proceeding ───────────────────────
+              if (!hashValid) {
+                tx.update(pendingPaymentRef, { status: 'hash_verification_failed', receivedHash: HASH || null, computedHash, callbackLogId: callbackLogRef.id, updatedAt: admin.firestore.FieldValue.serverTimestamp(), ...setBoostPaymentExpiresAt('hash_verification_failed') });
+                return { error: 'hash_failed' };
+              }
+            
+              const isAuthSuccess = ['1', '2', '3', '4'].includes(mdStatus);
+              const isTxnSuccess  = bankResponse === 'Approved' && ProcReturnCode === '00';
+            
+              if (!isAuthSuccess || !isTxnSuccess) {
+                tx.update(pendingPaymentRef, { status: 'payment_failed', mdStatus, procReturnCode: ProcReturnCode, errorMessage: ErrMsg || 'Payment failed', rawResponse: request.body, callbackLogId: callbackLogRef.id, updatedAt: admin.firestore.FieldValue.serverTimestamp(), ...setBoostPaymentExpiresAt('payment_failed') });
+                return { error: 'payment_failed', message: ErrMsg || 'Payment failed' };
+              }
+            
+              tx.update(pendingPaymentRef, { status: 'processing', mdStatus, procReturnCode: ProcReturnCode, rawResponse: request.body, callbackLogId: callbackLogRef.id, processingStartedAt: admin.firestore.FieldValue.serverTimestamp(), ...setBoostPaymentExpiresAt('processing') });
+              return { success: true, pendingPayment: backupData, restoredFromBackup: true };
+            }
+        
+            // Both missing — capture everything for manual recovery
+            console.error(`[BoostPayment] CRITICAL: No doc found for ${oid} in primary or backup`);
+            return { error: 'not_found', callbackBody: request.body };
+          }         
+        
+          const p = snap.data(); 
           if (p.status === 'completed')                          return { alreadyProcessed: true, status: 'completed', pendingPayment: p };
           if (p.status === 'payment_succeeded_boost_failed')     return { alreadyProcessed: true, status: p.status };
           if (p.status === 'payment_failed')                     return { alreadyProcessed: true, status: p.status };
@@ -1076,7 +1254,7 @@ async function processBatchBoost(db, batchItems, userId, boostDuration, isAdmin)
           if (p.status !== 'awaiting_3d')                        return { alreadyProcessed: true, status: p.status };
    
           if (!hashValid) {
-            tx.update(pendingPaymentRef, { status: 'hash_verification_failed', receivedHash: HASH || null, computedHash, callbackLogId: callbackLogRef.id, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+            tx.update(pendingPaymentRef, { status: 'hash_verification_failed', receivedHash: HASH || null, computedHash, callbackLogId: callbackLogRef.id, updatedAt: admin.firestore.FieldValue.serverTimestamp(), ...setBoostPaymentExpiresAt('hash_verification_failed') });
             return { error: 'hash_failed' };
           }
    
@@ -1084,15 +1262,40 @@ async function processBatchBoost(db, batchItems, userId, boostDuration, isAdmin)
           const isTxnSuccess  = bankResponse === 'Approved' && ProcReturnCode === '00';
    
           if (!isAuthSuccess || !isTxnSuccess) {
-            tx.update(pendingPaymentRef, { status: 'payment_failed', mdStatus, procReturnCode: ProcReturnCode, errorMessage: ErrMsg || 'Payment failed', rawResponse: request.body, callbackLogId: callbackLogRef.id, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+            tx.update(pendingPaymentRef, { status: 'payment_failed', mdStatus, procReturnCode: ProcReturnCode, errorMessage: ErrMsg || 'Payment failed', rawResponse: request.body, callbackLogId: callbackLogRef.id, updatedAt: admin.firestore.FieldValue.serverTimestamp(), ...setBoostPaymentExpiresAt('payment_failed') });
             return { error: 'payment_failed', message: ErrMsg || 'Payment failed' };
           }
    
-          tx.update(pendingPaymentRef, { status: 'processing', mdStatus, procReturnCode: ProcReturnCode, rawResponse: request.body, callbackLogId: callbackLogRef.id, processingStartedAt: admin.firestore.FieldValue.serverTimestamp() });
+          tx.update(pendingPaymentRef, { status: 'processing', mdStatus, procReturnCode: ProcReturnCode, rawResponse: request.body, callbackLogId: callbackLogRef.id, processingStartedAt: admin.firestore.FieldValue.serverTimestamp(), ...setBoostPaymentExpiresAt('processing') });
           return { success: true, pendingPayment: p };
         });
    
-        if (txResult.error === 'not_found') {response.status(404).send('Payment session not found'); return;}
+        if (txResult.error === 'not_found') {
+          // Write alert here — outside transaction, fires exactly once
+          try {
+            await db.collection('_payment_alerts').add({
+              type: 'boost_callback_no_doc',
+              severity: 'critical',
+              orderNumber: oid,
+              bankCallbackBody: request.body,
+              mdStatus,
+              bankResponse,
+              ProcReturnCode,
+              ip: request.ip || request.headers['x-forwarded-for'] || null,
+              isRead: false,
+              isResolved: false,
+              timestamp: admin.firestore.FieldValue.serverTimestamp(),
+              message: 'Payment may have been charged but no session doc exists. Manual recovery required.',
+            });
+          } catch (_) {/* alerting must never throw */}
+        
+          response.send(buildRedirectHtml(
+            'boost-payment-failed://session-not-found',
+            'Ödeme Oturumu Bulunamadı',
+            `Ödemeniz alınmış olabilir. Lütfen destek ile iletişime geçin. Referans: ${oid}`,
+          ));
+          return;
+        }
         if (txResult.error === 'hash_failed')    {response.send(buildRedirectHtml('boost-payment-failed://hash-error', 'Ödeme Doğrulama Hatası', 'Lütfen tekrar deneyin.')); return;}
         if (txResult.error === 'payment_failed') {response.send(buildRedirectHtml(`boost-payment-failed://${encodeURIComponent(txResult.message)}`, 'Boost Ödemesi Başarısız', txResult.message)); return;}
    
@@ -1103,16 +1306,12 @@ async function processBatchBoost(db, batchItems, userId, boostDuration, isAdmin)
         }
    
         if (txResult.retry) {
-          let retries = 0;
-          while (retries < 20) {
-            await new Promise((r) => setTimeout(r, 500));
-            const check = (await pendingPaymentRef.get()).data();
-            if (check.status === 'completed') {response.send(buildRedirectHtml(`boost-payment-success://${oid}`, '✓ Boost Ödemesi Başarılı', 'Boost işleminiz tamamlandı.')); return;}
-            if (check.status === 'payment_succeeded_boost_failed' || check.status === 'payment_failed') {response.send(buildRedirectHtml('boost-payment-failed://processing-error', 'İşlem Hatası', 'Lütfen destek ile iletişime geçin.')); return;}
-            retries++;
-          }
-          console.error(`[BoostPayment] Timeout polling for ${oid}`);
-          response.status(500).send('Processing timeout');
+          console.log(`[BoostPayment] ${oid} already processing — client listener will handle completion`);
+          response.send(buildRedirectHtml(
+            `boost-payment-status://processing`,
+            'İşleminiz Devam Ediyor',
+            'Ödemeniz işleniyor, lütfen bekleyin.',
+          ));
           return;
         }
    
@@ -1171,6 +1370,7 @@ async function processBatchBoost(db, batchItems, userId, boostDuration, isAdmin)
             status: 'completed', boostResult: cleanBoostResult,
             completedAt: admin.firestore.FieldValue.serverTimestamp(),
             processingDuration: Date.now() - startTime,
+            ...setBoostPaymentExpiresAt('completed'),
           });
           await callbackLogRef.update({
             processingCompleted: admin.firestore.FieldValue.serverTimestamp(),
@@ -1242,7 +1442,7 @@ async function processBatchBoost(db, batchItems, userId, boostDuration, isAdmin)
         } catch (boostError) {
           console.error('[BoostPayment] Boost processing failed after payment:', boostError);
    
-          await pendingPaymentRef.update({ status: 'payment_succeeded_boost_failed', boostError: boostError.message, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+          await pendingPaymentRef.update({ status: 'payment_succeeded_boost_failed', boostError: boostError.message, updatedAt: admin.firestore.FieldValue.serverTimestamp(), ...setBoostPaymentExpiresAt('payment_succeeded_boost_failed') });
           await callbackLogRef.update({ processingFailed: admin.firestore.FieldValue.serverTimestamp(), error: boostError.message, success: false });
    
           logBoostPaymentAlert('boost_execution_failed_after_payment', 'high', oid, txResult.pendingPayment?.userId, boostError.message);
@@ -1284,5 +1484,135 @@ async function processBatchBoost(db, batchItems, userId, boostDuration, isAdmin)
         console.error('Check boost payment status error:', error);
         throw new HttpsError('internal', error.message);
       }
+    },
+  );
+
+  export const recoverStuckBoostPayments = onSchedule(
+    { schedule: '*/5 * * * *', region: 'europe-west3', memory: '512MiB', timeoutSeconds: 300 },
+    async () => {
+      const db = admin.firestore();
+      const fiveMinutesAgo = admin.firestore.Timestamp.fromMillis(Date.now() - 5 * 60 * 1000);
+  
+      const stuckSnap = await db.collection('pendingBoostPayments')
+        .where('status', 'in', ['processing', 'payment_verified_processing_boost'])
+        .where('processingStartedAt', '<=', fiveMinutesAgo)
+        .limit(100)
+        .get();
+  
+      if (stuckSnap.empty) return;
+  
+      console.warn(`[Recovery] Found ${stuckSnap.docs.length} stuck boost payment(s)`);
+  
+      const CONCURRENCY = 5;
+      const results = { recovered: 0, skipped: 0, failed: 0 };
+  
+      for (let i = 0; i < stuckSnap.docs.length; i += CONCURRENCY) {
+        const chunk = stuckSnap.docs.slice(i, i + CONCURRENCY);
+  
+        const settled = await Promise.allSettled(chunk.map(async (doc) => {
+          const oid = doc.id;
+          const p   = doc.data();
+  
+          if ((p.recoveryAttemptCount || 0) >= 5) {
+            console.error(`[Recovery] ${oid} exceeded max attempts, giving up`);
+            await doc.ref.update({
+              status: 'payment_succeeded_boost_failed',
+              boostError: 'Max recovery attempts exceeded',
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              ...setBoostPaymentExpiresAt('payment_succeeded_boost_failed'),
+            });
+            try {
+              await db.collection('_payment_alerts').add({
+                type: 'boost_recovery_max_attempts', severity: 'high',
+                orderNumber: oid, userId: p.userId,
+                message: `Boost payment ${oid} exceeded max recovery attempts`,
+                isRead: false, isResolved: false,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+              });
+            } catch (_) {/* alerting must never throw */}
+            return 'skipped';
+          }
+  
+          const claimed = await db.runTransaction(async (tx) => {
+            const fresh = (await tx.get(doc.ref)).data();
+            if (!['processing', 'payment_verified_processing_boost'].includes(fresh.status)) return false;
+            tx.update(doc.ref, {
+              status: 'payment_verified_processing_boost',
+              recoveryAttemptedAt: admin.firestore.FieldValue.serverTimestamp(),
+              recoveryAttemptCount: admin.firestore.FieldValue.increment(1),
+            });
+            return true;
+          });
+  
+          if (!claimed) {
+            console.log(`[Recovery] ${oid} already resolved by concurrent run, skipping`);
+            return 'skipped';
+          }
+  
+          let isAdmin = false;
+          try {
+            const userRecord = await admin.auth().getUser(p.userId);
+            isAdmin = userRecord.customClaims?.admin === true;
+          } catch (_) {/* alerting must never throw */}
+  
+          const boostResult = await executeBoostLogic(
+            db, p.userId, p.boostData.items, p.boostData.boostDuration, isAdmin,
+          );
+  
+          await doc.ref.update({
+            status: 'completed',
+            boostResult,
+            completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            recoveredBy: 'recovery_scheduler',
+            ...setBoostPaymentExpiresAt('completed'),
+          });
+  
+          try {
+            await db.collection('_payment_alerts').add({
+              type: 'boost_payment_recovered', severity: 'medium',
+              orderNumber: oid, userId: p.userId,
+              message: `Recovery scheduler fixed stuck boost payment: ${oid}`,
+              isRead: false, isResolved: false,
+              timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          } catch (_) {/* alerting must never throw */}
+  
+          console.log(`[Recovery] ✅ Recovered boost ${oid}`);
+          return 'recovered';
+        }));
+  
+        settled.forEach((result, idx) => {
+          if (result.status === 'fulfilled') {
+            result.value === 'recovered' ? results.recovered++ : results.skipped++;
+          } else {
+            results.failed++;
+            const oid = chunk[idx].id;
+            const p   = chunk[idx].data();
+            console.error(`[Recovery] Failed to recover boost ${oid}:`, result.reason?.message);
+  
+            db.runTransaction(async (tx) => {
+              const fresh = (await tx.get(chunk[idx].ref)).data();
+              if (fresh.status === 'payment_verified_processing_boost') {
+                tx.update(chunk[idx].ref, {
+                  status: 'payment_succeeded_boost_failed',
+                  boostError: result.reason?.message || 'Recovery failed',
+                  updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                  ...setBoostPaymentExpiresAt('payment_succeeded_boost_failed'),
+                });
+              }
+            }).catch(console.error);
+  
+            db.collection('_payment_alerts').add({
+              type: 'boost_recovery_failed', severity: 'high',
+              orderNumber: oid, userId: p.userId,
+              errorMessage: result.reason?.message || 'Unknown error',
+              isRead: false, isResolved: false,
+              timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            }).catch(() => {});
+          }
+        });
+      }
+  
+      console.log(`[Recovery] Done — ${results.recovered} recovered, ${results.skipped} skipped, ${results.failed} failed`);
     },
   );

@@ -37,7 +37,9 @@ class IsbankPaymentScreen extends StatefulWidget {
 // STATE
 // =============================================================================
 
-enum _PaymentStatus { pending, completed, failed, timeout }
+// Only two terminal states on this screen.
+// Success and processing both navigate away to the orders screen immediately.
+enum _PaymentStatus { pending, failed }
 
 class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
   // WebView
@@ -47,16 +49,19 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
   // Payment state
   _PaymentStatus _paymentStatus = _PaymentStatus.pending;
   String? _error;
-  String _successOrderId = '';
 
-  // Guard against double-handling
+  // Guard against double-handling across all three signal sources
+  // (deep link, Firestore fast-path, WebView timeout)
   bool _resultHandled = false;
 
-  // Realtime listener + fallback poll timer
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
-      _firestoreListener;
-  Timer? _fallbackTimer;
-  int _fallbackPollCount = 0;
+  // Fast-path listener: catches the rare case where the server processes
+  // the callback and writes 'completed' before the bank even redirects
+  // the WebView (e.g. very fast 3DS auth + no network latency).
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _firestoreListener;
+
+  // Hard timeout for the WebView loading phase only.
+  // If the bank page never loads in 60s, something is wrong upstream.
+  Timer? _webViewLoadTimer;
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -64,19 +69,40 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
   void initState() {
     super.initState();
     _startFirestoreListener();
-    _startFallbackPolling();
+    _startWebViewLoadTimer();
   }
 
   @override
   void dispose() {
     _firestoreListener?.cancel();
-    _fallbackTimer?.cancel();
+    _webViewLoadTimer?.cancel();
     super.dispose();
   }
 
   // =============================================================================
-  // REALTIME FIRESTORE LISTENER (primary mechanism)
+  // WEBVIEW LOAD TIMEOUT (60s — bank page never rendered)
   // =============================================================================
+
+  void _startWebViewLoadTimer() {
+    _webViewLoadTimer = Timer(const Duration(seconds: 60), () {
+      if (!mounted || _resultHandled || _initialLoadDone) return;
+      // Page never loaded — genuine network/gateway error
+      if (mounted) {
+        setState(() {
+          _paymentStatus = _PaymentStatus.failed;
+          _error = AppLocalizations.of(context).paymentPageLoadFailed;
+        });
+      }
+    });
+  }
+
+  // =============================================================================
+  // FIRESTORE FAST-PATH LISTENER
+  // =============================================================================
+  // Only active while the WebView is open. The moment any terminal status
+  // arrives we cancel this and navigate. For the common case this fires
+  // after the bank has already redirected (deep link wins the race), so
+  // the double-handling guard makes both paths safe.
 
   void _startFirestoreListener() {
     _firestoreListener = FirebaseFirestore.instance
@@ -95,14 +121,12 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
             break;
           case 'payment_failed':
           case 'hash_verification_failed':
-            _handlePaymentFailed(
-              (data['errorMessage'] as String?) ?? '',
-            );
+            _handlePaymentFailed((data['errorMessage'] as String?) ?? '');
             break;
           case 'payment_succeeded_order_failed':
-            _handlePaymentFailed(
-              AppLocalizations.of(context).paymentReceivedOrderFailed,
-            );
+            // Payment was charged and our ops team has been alerted.
+            // Navigate to orders — user should NOT be offered a retry.
+            _handlePaymentProcessing();
             break;
         }
       },
@@ -110,71 +134,6 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
         debugPrint('[ProductPayment] Firestore listener error: $e');
       },
     );
-  }
-
-  // =============================================================================
-  // FALLBACK POLLING (safety net if Firestore listener drops)
-  // =============================================================================
-  //
-  //   • First 10 polls: every 5s  (0–50s)
-  //   • Next  20 polls: every 10s (50s–250s ≈ 4 min)
-  //   Total: 30 polls before timeout.
-
-  void _startFallbackPolling() {
-    _fallbackTimer?.cancel();
-    _fallbackPollCount = 0;
-    _scheduleFallbackPoll();
-  }
-
-  void _scheduleFallbackPoll() {
-    if (!mounted || _resultHandled) return;
-
-    final delay = _fallbackPollCount < 10
-        ? const Duration(seconds: 5)
-        : const Duration(seconds: 10);
-
-    _fallbackTimer = Timer(delay, () async {
-      if (!mounted || _resultHandled) return;
-      _fallbackPollCount++;
-
-      if (_fallbackPollCount > 30) {
-        if (mounted && !_resultHandled) {
-          setState(() {
-            _paymentStatus = _PaymentStatus.timeout;
-            _error = AppLocalizations.of(context).paymentTimedOutRetry;
-          });
-        }
-        return;
-      }
-
-      try {
-        final snap = await FirebaseFirestore.instance
-            .collection('pendingPayments')
-            .doc(widget.orderNumber)
-            .get();
-
-        if (!snap.exists || _resultHandled || !mounted) return;
-        final status = snap.data()?['status'] as String?;
-
-        if (status == 'completed') {
-          await _handlePaymentSuccess(
-              (snap.data()?['orderId'] as String?) ?? '');
-          return;
-        } else if (status == 'payment_failed' ||
-            status == 'hash_verification_failed') {
-          _handlePaymentFailed((snap.data()?['errorMessage'] as String?) ?? '');
-          return;
-        }
-      } catch (e) {
-        debugPrint('[ProductPayment] Fallback poll error: $e');
-      }
-
-      if (!_resultHandled &&
-          mounted &&
-          _paymentStatus == _PaymentStatus.pending) {
-        _scheduleFallbackPoll();
-      }
-    });
   }
 
   // =============================================================================
@@ -191,7 +150,7 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
       final orderId = Uri.decodeComponent(
         url.replaceFirst('payment-success://', ''),
       );
-      await _handlePaymentSuccess(orderId);
+      _handlePaymentSuccess(orderId);
       return NavigationActionPolicy.CANCEL;
     }
 
@@ -204,6 +163,9 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
     }
 
     if (url.startsWith('payment-status://')) {
+      // Any processing status → hand off to orders screen immediately.
+      // The user should not wait here — orders screen owns the pending state.
+      _handlePaymentProcessing();
       return NavigationActionPolicy.CANCEL;
     }
 
@@ -214,44 +176,49 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
   // RESULT HANDLERS
   // =============================================================================
 
+  /// Called when the bank confirms payment AND the order was created.
+  /// Fast path: navigate directly to orders, which will show a success banner.
   Future<void> _handlePaymentSuccess(String orderId) async {
     if (_resultHandled) return;
     _resultHandled = true;
 
-    _fallbackTimer?.cancel();
     _firestoreListener?.cancel();
-
-    // Clear cart — best effort, never block navigation on this
-    try {
-      if (mounted) {
-        final cartProvider = context.read<CartProvider>();
-        cartProvider.clearLocalCache();
-        cartProvider.refresh();
-      }
-    } catch (e) {
-      debugPrint('[ProductPayment] Cart clear failed (non-critical): $e');
-    }
+    _webViewLoadTimer?.cancel();
+    _clearCart();
 
     if (!mounted) return;
 
-    setState(() {
-      _paymentStatus = _PaymentStatus.completed;
-      _successOrderId = orderId;
-    });
-
-    // Brief success screen, then navigate
-    await Future.delayed(const Duration(seconds: 2));
-    if (mounted) {
-      context.go('/my_orders?success=true&orderId=$_successOrderId');
-    }
+    final destination = orderId.isNotEmpty
+        ? '/my_orders?pendingOrderId=${Uri.encodeComponent(orderId)}'
+        : '/my_orders';
+    context.go(destination);
   }
 
+  /// Called when the bank confirms payment but order creation is still
+  /// in progress (or succeeded_order_failed — ops is notified either way).
+  /// Navigate to orders screen which will watch Firestore and resolve itself.
+  void _handlePaymentProcessing() {
+    if (_resultHandled) return;
+    _resultHandled = true;
+
+    _firestoreListener?.cancel();
+    _webViewLoadTimer?.cancel();
+    _clearCart();
+
+    if (!mounted) return;
+    context.go(
+      '/my_orders?pendingOrderNumber=${Uri.encodeComponent(widget.orderNumber)}',
+    );
+  }
+
+  /// Called on a genuine payment failure (bank declined, hash mismatch).
+  /// Stay on this screen so the user can try again.
   void _handlePaymentFailed(String message) {
     if (_resultHandled) return;
     _resultHandled = true;
 
-    _fallbackTimer?.cancel();
     _firestoreListener?.cancel();
+    _webViewLoadTimer?.cancel();
 
     if (!mounted) return;
     setState(() {
@@ -263,41 +230,45 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
   }
 
   // =============================================================================
+  // HELPERS
+  // =============================================================================
+
+  void _clearCart() {
+    try {
+      if (mounted) {
+        final cartProvider = context.read<CartProvider>();
+        cartProvider.clearLocalCache();
+        cartProvider.refresh();
+      }
+    } catch (e) {
+      debugPrint('[ProductPayment] Cart clear failed (non-critical): $e');
+    }
+  }
+
+  // =============================================================================
   // CANCEL HANDLER
   // =============================================================================
 
   Future<void> _handleCancel() async {
-    // Payment already succeeded — navigate forward, not back
-    if (_paymentStatus == _PaymentStatus.completed || _resultHandled) {
-      if (mounted) {
-        context.go('/my_orders?success=true&orderId=$_successOrderId');
-      }
-      return;
-    }
+    // Already navigating away — nothing to do
+    if (_resultHandled) return;
 
-    // Payment already failed/timed out — just pop
-    if (_paymentStatus == _PaymentStatus.failed ||
-        _paymentStatus == _PaymentStatus.timeout) {
+    // Genuine failure already shown — just pop
+    if (_paymentStatus == _PaymentStatus.failed) {
       if (mounted) context.pop();
       return;
     }
 
-    // Payment still in progress — confirm cancellation
-    _fallbackTimer?.cancel();
-
+    // Payment in progress — confirm before leaving
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => _CancelDialog(isDark: _isDark),
     );
 
     if (!mounted) return;
-
-    if (confirmed == true) {
-      context.pop();
-    } else {
-      // User wants to continue — resume fallback polling
-      if (!_resultHandled) _startFallbackPolling();
-    }
+    if (confirmed == true) context.pop();
+    // If user wants to continue, payment keeps running — no restart needed
+    // since we have no polling to resume.
   }
 
   // =============================================================================
@@ -315,10 +286,6 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
       postData: Uint8List.fromList(utf8.encode(encoded)),
     );
   }
-
-  // =============================================================================
-  // HELPERS
-  // =============================================================================
 
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
 
@@ -345,63 +312,13 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
       );
     }
 
-    // ── Success screen ───────────────────────────────────────────────────────
-    if (_paymentStatus == _PaymentStatus.completed) {
-      return _FullScreenMessage(
-        isDark: isDark,
-        icon: Icons.check_circle_rounded,
-        iconColor: Colors.green,
-        iconBgColor: Colors.green.withOpacity(0.15),
-        title: l10n.paymentSuccessfulTitle,
-        subtitle: l10n.orderCreatedSuccessfully,
-        trailing: _successOrderId.isNotEmpty
-            ? Text(
-                l10n.orderLabel(
-                  _successOrderId
-                      .substring(0, _successOrderId.length.clamp(0, 8))
-                      .toUpperCase(),
-                ),
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isDark ? Colors.grey[600] : Colors.grey[400],
-                ),
-              )
-            : null,
-        footer: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                color: const Color(0xFF00A86B),
-                strokeWidth: 2,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              l10n.redirecting,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF00A86B),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // ── Failed / Timeout screen ──────────────────────────────────────────────
-    if (_paymentStatus == _PaymentStatus.failed ||
-        _paymentStatus == _PaymentStatus.timeout) {
+    // ── Failed screen (genuine bank decline / gateway error) ─────────────────
+    if (_paymentStatus == _PaymentStatus.failed) {
       return _FullScreenMessage(
         isDark: isDark,
         icon: Icons.error_outline_rounded,
         iconColor: Colors.red,
-        title: _paymentStatus == _PaymentStatus.timeout
-            ? l10n.paymentTimedOutTitle
-            : l10n.paymentFailedTitle,
+        title: l10n.paymentFailedTitle,
         subtitle: _error ?? l10n.paymentProcessingError,
         actions: [
           _PrimaryButton(label: l10n.tryAgain, onTap: () => context.pop()),
@@ -465,6 +382,8 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
                         onLoadStop: (controller, url) {
                           if (!_initialLoadDone && mounted) {
                             setState(() => _initialLoadDone = true);
+                            // Page loaded — WebView timeout no longer needed
+                            _webViewLoadTimer?.cancel();
                           }
                         },
                         onReceivedError: (controller, request, error) {
@@ -595,8 +514,9 @@ class _PaymentHeader extends StatelessWidget {
             : Colors.white.withOpacity(0.8),
         border: Border(
           bottom: BorderSide(
-            color:
-                isDark ? Colors.grey[700]!.withOpacity(0.5) : Colors.grey[200]!,
+            color: isDark
+                ? Colors.grey[700]!.withOpacity(0.5)
+                : Colors.grey[200]!,
           ),
         ),
       ),

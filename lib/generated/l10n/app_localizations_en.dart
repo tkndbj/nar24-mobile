@@ -5731,6 +5731,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get boostOrder => 'Boost Order';
 
   @override
+  String get paymentPageLoadFailed =>
+      'Payment page could not be loaded. Please try again.';
+
+  @override
   String get revokeAccess => 'Revoke Access';
 
   @override

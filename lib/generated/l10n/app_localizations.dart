@@ -11122,6 +11122,12 @@ abstract class AppLocalizations {
   /// **'Öne Çıkarma Siparişi'**
   String get boostOrder;
 
+  /// No description provided for @paymentPageLoadFailed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme sayfası yüklenemedi. Lütfen tekrar deneyin.'**
+  String get paymentPageLoadFailed;
+
   /// No description provided for @revokeAccess.
   ///
   /// In tr, this message translates to:

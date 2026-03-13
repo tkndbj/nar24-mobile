@@ -1,958 +1,1041 @@
 import crypto from 'crypto';
 import { onRequest, onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import admin from 'firebase-admin';
 import { transliterate } from 'transliteration';
-import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
-
 import {trackPurchaseActivity} from '../11-user-activity/index.js';
 import {createQRCodeTask} from '../16-qr-for-orders/index.js';
-import {CloudTasksClient} from '@google-cloud/tasks';
+import { CloudTasksClient } from '@google-cloud/tasks';
+import { setPaymentExpiresAt } from '../33-payment-cleanup/index.js';
 
 const tasksClient = new CloudTasksClient();
 
-const secretClient = new SecretManagerServiceClient();
+function getIsbankConfig() {
+  return {
+    clientId: process.env.ISBANK_CLIENT_ID,
+    apiUser: process.env.ISBANK_API_USER,
+    apiPassword: process.env.ISBANK_API_PASSWORD,
+    storeKey: process.env.ISBANK_STORE_KEY,
+    gatewayUrl: 'https://sanalpos.isbank.com.tr/fim/est3Dgate',
+    currency: '949',
+    storeType: '3d_pay_hosting',
+  };
+}
 
-// Helper to fetch a secret
-async function getSecret(secretName) {
-    const [version] = await secretClient.accessSecretVersion({name: secretName});
-    return version.payload.data.toString('utf8');
-  } 
-  
-  // İş Bankası Configuration
-  let isbankConfig = null;
-  
-  async function getIsbankConfig() {
-    if (!isbankConfig) {
-      const [clientId, apiUser, apiPassword, storeKey] = await Promise.all([
-        getSecret('projects/emlak-mobile-app/secrets/ISBANK_CLIENT_ID/versions/latest'),
-        getSecret('projects/emlak-mobile-app/secrets/ISBANK_API_USER/versions/latest'),
-        getSecret('projects/emlak-mobile-app/secrets/ISBANK_API_PASSWORD/versions/latest'),
-        getSecret('projects/emlak-mobile-app/secrets/ISBANK_STORE_KEY/versions/latest'),
-      ]);
-  
-      isbankConfig = {
-        clientId,
-        apiUser,
-        apiPassword,
-        storeKey,
-        gatewayUrl: 'https://sanalpos.isbank.com.tr/fim/est3Dgate',
-        currency: '949',
-        storeType: '3d_pay_hosting',
-      };
-    }
-    return isbankConfig;
-  }
-
-// Helper function to get collection name based on ad type
 function getAdCollectionName(adType) {
-    switch (adType) {
-    case 'topBanner':
-      return 'market_top_ads_banners';
-    case 'thinBanner':
-      return 'market_thin_banners';
-    case 'marketBanner':
-      return 'market_banners';
-    default:
-      return 'market_banners';
+  switch (adType) {
+    case 'topBanner':  return 'market_top_ads_banners';
+    case 'thinBanner': return 'market_thin_banners';
+    case 'marketBanner': return 'market_banners';
+    default: return 'market_banners';
+  }
+}
+
+async function checkPaymentRateLimit(db, userId) {
+  const windowMs = 10 * 60 * 1000; // 10 minutes
+  const maxAttempts = 5;
+  const rateLimitRef = db.collection('_rate_limits').doc(`payment_init_${userId}`);
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(rateLimitRef);
+    const now = Date.now();
+
+    if (!snap.exists) {
+      tx.set(rateLimitRef, {
+        count: 1,
+        windowStart: now,
+        expiresAt: admin.firestore.Timestamp.fromMillis(now + windowMs),
+      });
+      return;
+    }
+
+    const { count, windowStart } = snap.data();
+
+    if (now - windowStart > windowMs) {
+      // Window expired — reset
+      tx.set(rateLimitRef, {
+        count: 1,
+        windowStart: now,
+        expiresAt: admin.firestore.Timestamp.fromMillis(now + windowMs),
+      });
+      return;
+    }
+
+    if (count >= maxAttempts) {
+      throw new HttpsError('resource-exhausted', 'Too many payment attempts. Please try again later.');
+    }
+
+    tx.update(rateLimitRef, {
+      count: admin.firestore.FieldValue.increment(1),
+    });
+  });
+}
+
+async function validateDiscounts(tx, db, userId, couponId, benefitId, cartTotal) {
+  let couponDiscount = 0;
+  let freeShippingApplied = false;
+  let couponCode = null;
+  let couponRef = null;
+  let benefitRef = null;
+
+  if (couponId) {
+    couponRef = db.collection('users').doc(userId).collection('coupons').doc(couponId);
+    const couponDoc = await tx.get(couponRef);
+
+    if (!couponDoc.exists) throw new HttpsError('not-found', 'Coupon not found');
+    const coupon = couponDoc.data();
+    if (coupon.isUsed) throw new HttpsError('failed-precondition', 'Coupon has already been used');
+    if (coupon.expiresAt && coupon.expiresAt.toDate() < new Date()) throw new HttpsError('failed-precondition', 'Coupon has expired');
+
+    couponDiscount = Math.min(coupon.amount || 0, cartTotal);
+    couponCode = coupon.code || null;
+  }
+
+  if (benefitId) {
+    benefitRef = db.collection('users').doc(userId).collection('benefits').doc(benefitId);
+    const benefitDoc = await tx.get(benefitRef);
+
+    if (!benefitDoc.exists) throw new HttpsError('not-found', 'Free shipping benefit not found');
+    const benefit = benefitDoc.data();
+    if (benefit.isUsed) throw new HttpsError('failed-precondition', 'Free shipping has already been used');
+    if (benefit.expiresAt && benefit.expiresAt.toDate() < new Date()) throw new HttpsError('failed-precondition', 'Free shipping benefit has expired');
+
+    freeShippingApplied = true;
+  }
+
+  return { couponDiscount, freeShippingApplied, couponCode, couponRef, benefitRef };
+}
+
+function markDiscountsAsUsed(tx, discountResult, orderId) {
+  const { couponRef, benefitRef } = discountResult;
+
+  if (couponRef) {
+    tx.update(couponRef, {
+      isUsed: true,
+      usedAt: admin.firestore.FieldValue.serverTimestamp(),
+      orderId,
+    });
+    console.log(`Coupon marked as used for order ${orderId}`);
+  }
+
+  if (benefitRef) {
+    tx.update(benefitRef, {
+      isUsed: true,
+      usedAt: admin.firestore.FieldValue.serverTimestamp(),
+      orderId,
+    });
+    console.log(`Benefit marked as used for order ${orderId}`);
+  }
+}
+
+async function createCartClearTask(buyerId, purchasedProductIds, orderId) {
+  const project = 'emlak-mobile-app';
+  const location = 'europe-west3';
+  const parent = tasksClient.queuePath(project, location, 'cart-operations');
+
+  try {
+    await tasksClient.createTask({
+      parent,
+      task: {
+        httpRequest: {
+          httpMethod: 'POST',
+          url: `https://${location}-${project}.cloudfunctions.net/clearPurchasedCartItems`,
+          body: Buffer.from(JSON.stringify({ buyerId, purchasedProductIds, orderId })).toString('base64'),
+          headers: { 'Content-Type': 'application/json' },
+          oidcToken: { serviceAccountEmail: `${project}@appspot.gserviceaccount.com` },
+        },
+      },
+    });
+    console.log(`Cart clear task created for buyer ${buyerId}, order ${orderId}`);
+  } catch (error) {
+    console.error('Error creating cart clear task:', error);
+  }
+}
+
+export const clearPurchasedCartItems = onRequest(
+  { region: 'europe-west3', memory: '256MiB', timeoutSeconds: 60, invoker: 'private' },
+  async (request, response) => {
+    try {
+      const {buyerId, purchasedProductIds, orderId} = request.body;
+
+      if (!buyerId || !Array.isArray(purchasedProductIds) || purchasedProductIds.length === 0) {
+        console.error('Invalid cart clear request:', {buyerId, purchasedProductIds});
+        response.status(400).send('Invalid request parameters');
+        return;
+      }
+
+      const db = admin.firestore();
+      const cartRef = db.collection('users').doc(buyerId).collection('cart');
+      let deletedCount = 0;
+
+      for (let i = 0; i < purchasedProductIds.length; i += 500) {
+        const batch = db.batch();
+        purchasedProductIds.slice(i, i + 500).forEach((productId) => {
+          batch.delete(cartRef.doc(productId));
+          deletedCount++;
+        });
+        await batch.commit();
+      }
+
+      await db.collection('cart_clear_logs').add({
+        buyerId, orderId, purchasedProductIds, deletedCount,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        success: true,
+      });
+
+      response.status(200).send({ success: true, deletedCount });
+    } catch (error) {
+      console.error('Error clearing cart items:', error);
+      try {
+        const {buyerId, orderId} = request.body;
+        await admin.firestore().collection('cart_clear_logs').add({
+          buyerId: buyerId || 'unknown', orderId: orderId || 'unknown',
+          error: error.message, stack: error.stack,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(), success: false,
+        });
+      } catch (logError) {
+        console.error('Failed to log cart clear error:', logError);
+      }
+      response.status(500).send({ success: false, error: error.message });
+    }
+  },
+);
+
+async function createNotificationTask(orderId, productData, recipientId, buyerName, buyerId) {
+  const project = 'emlak-mobile-app';
+  const location = 'europe-west3';
+  const parent = tasksClient.queuePath(project, location, 'order-notifications');
+
+  try {
+    await tasksClient.createTask({
+      parent,
+      task: {
+        httpRequest: {
+          httpMethod: 'POST',
+          url: `https://${location}-${project}.cloudfunctions.net/processOrderNotification`,
+          body: Buffer.from(JSON.stringify({
+            orderId,
+            productId: productData.productId,
+            productName: productData.productName,
+            recipientId,
+            buyerName,
+            buyerId,
+            quantity: productData.quantity,
+            shopId: productData.shopId,
+            shopName: productData.shopName,
+            sellerId: productData.sellerId,
+            isShopProduct: productData.isShopProduct,
+          })).toString('base64'),
+          headers: { 'Content-Type': 'application/json' },
+          oidcToken: { serviceAccountEmail: `${project}@appspot.gserviceaccount.com` },
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Error creating notification task:', error);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX 2: batchFetchProducts — two-phase fully parallel fetch
+//
+// Before: Phase 2 (shop_products fallback) was sequential — one await per miss.
+// After:  Phase 1 fetches ALL items from `products` in parallel.
+//         Phase 2 collects ALL misses and fetches them from `shop_products`
+//         in a single parallel round-trip. Total: 2 round-trips max, regardless
+//         of cart size or how many items are shop products.
+// ─────────────────────────────────────────────────────────────────────────────
+async function batchFetchProducts(tx, db, items) {
+  // Validate all items up front
+  for (const item of items) {
+    if (!item.productId || typeof item.productId !== 'string') {
+      throw new HttpsError('invalid-argument', 'Each cart item needs a valid productId.');
     }
   }
 
-   
-  async function validateDiscounts(tx, db, userId, couponId, benefitId, cartTotal) {
-    let couponDiscount = 0;
-    let freeShippingApplied = false;
-    let couponCode = null;
-    let couponRef = null;
-    let benefitRef = null;
-  
-    // Validate coupon (READ ONLY)
-    if (couponId) {
-      couponRef = db.collection('users').doc(userId).collection('coupons').doc(couponId);
-      const couponDoc = await tx.get(couponRef);
-  
-      if (!couponDoc.exists) {
-        throw new HttpsError('not-found', 'Coupon not found');
-      }
-  
-      const coupon = couponDoc.data();
-  
-      if (coupon.isUsed) {
-        throw new HttpsError('failed-precondition', 'Coupon has already been used');
-      }
-  
-      if (coupon.expiresAt && coupon.expiresAt.toDate() < new Date()) {
-        throw new HttpsError('failed-precondition', 'Coupon has expired');
-      }
-  
-      // Cap discount at cart total
-      couponDiscount = Math.min(coupon.amount || 0, cartTotal);
-      couponCode = coupon.code || null;
-    }
-  
-    // Validate free shipping benefit (READ ONLY)
-    if (benefitId) {
-      benefitRef = db.collection('users').doc(userId).collection('benefits').doc(benefitId);
-      const benefitDoc = await tx.get(benefitRef);
-  
-      if (!benefitDoc.exists) {
-        throw new HttpsError('not-found', 'Free shipping benefit not found');
-      }
-  
-      const benefit = benefitDoc.data();
-  
-      if (benefit.isUsed) {
-        throw new HttpsError('failed-precondition', 'Free shipping has already been used');
-      }
-  
-      if (benefit.expiresAt && benefit.expiresAt.toDate() < new Date()) {
-        throw new HttpsError('failed-precondition', 'Free shipping benefit has expired');
-      }
-  
-      freeShippingApplied = true;
-    }
-  
-    return { 
-      couponDiscount, 
-      freeShippingApplied, 
-      couponCode,
-      couponRef,  // Pass ref for later write
-      benefitRef, // Pass ref for later write
-    };
+  // Phase 1: fetch everything from `products` in parallel
+  const primaryRefs = items.map((item) => db.collection('products').doc(item.productId));
+  const primarySnaps = await Promise.all(primaryRefs.map((ref) => tx.get(ref)));
+
+  // Collect indices of misses
+  const missIndices = [];
+  primarySnaps.forEach((snap, i) => {
+    if (!snap.exists) missIndices.push(i);
+  });
+
+  // Phase 2: fetch ALL misses from `shop_products` in parallel (single round-trip)
+  let shopRefs = [];
+  let shopSnaps = [];
+  if (missIndices.length > 0) {
+    shopRefs = missIndices.map((i) => db.collection('shop_products').doc(items[i].productId));
+    shopSnaps = await Promise.all(shopRefs.map((ref) => tx.get(ref)));
   }
-  
-  // STEP 2: Mark discounts as used (WRITES ONLY - call after all reads)
-  function markDiscountsAsUsed(tx, discountResult, orderId) {
-    const { couponRef, benefitRef } = discountResult;
-  
-    if (couponRef) {
-      tx.update(couponRef, {
-        isUsed: true,
-        usedAt: admin.firestore.FieldValue.serverTimestamp(),
-        orderId: orderId,
-      });
-      console.log(`Coupon marked as used for order ${orderId}`);
+
+  // Map miss index → shop result
+  const shopResultByOriginalIndex = new Map();
+  missIndices.forEach((origIdx, shopIdx) => {
+    shopResultByOriginalIndex.set(origIdx, { ref: shopRefs[shopIdx], snap: shopSnaps[shopIdx] });
+  });
+
+  // Assemble final ordered result
+  return items.map((item, i) => {
+    if (primarySnaps[i].exists) {
+      return { ref: primaryRefs[i], data: primarySnaps[i].data(), item };
     }
-  
-    if (benefitRef) {
-      tx.update(benefitRef, {
-        isUsed: true,
-        usedAt: admin.firestore.FieldValue.serverTimestamp(),
-        orderId: orderId,
-      });
-      console.log(`Benefit marked as used for order ${orderId}`);
+    const shopEntry = shopResultByOriginalIndex.get(i);
+    if (!shopEntry.snap.exists) {
+      throw new HttpsError('not-found', `Product ${item.productId} not found.`);
     }
+    return { ref: shopEntry.ref, data: shopEntry.snap.data(), item };
+  });
+}
+
+async function batchFetchSellers(db, productsMeta) {
+  const shopIds = new Set();
+  const userIds = new Set();
+
+  for (const meta of productsMeta) {
+    if (meta.data.shopId) shopIds.add(meta.data.shopId);
+    else userIds.add(meta.data.userId);
   }
-  
-  // Add this function to create the cart clearing task
-  async function createCartClearTask(buyerId, purchasedProductIds, orderId) {
-    const project = 'emlak-mobile-app';
-    const location = 'europe-west3';
-    const queue = 'cart-operations';
-  
-    const parent = tasksClient.queuePath(project, location, queue);
-  
-    const task = {
-      httpRequest: {
-        httpMethod: 'POST',
-        url: `https://${location}-${project}.cloudfunctions.net/clearPurchasedCartItems`,
-        body: Buffer.from(JSON.stringify({
-          buyerId,
-          purchasedProductIds,
-          orderId,
-        })).toString('base64'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        oidcToken: {
-          serviceAccountEmail: `${project}@appspot.gserviceaccount.com`,
-        },
-      },
-    };
-  
-    try {
-      await tasksClient.createTask({parent, task});
-      console.log(`Cart clear task created for buyer ${buyerId}, order ${orderId}`);
-    } catch (error) {
-      console.error('Error creating cart clear task:', error);
-      // Don't throw - cart clearing is non-critical
-    }
-  }
-  
-  // Cloud Task handler for cart clearing
-  export const clearPurchasedCartItems = onRequest(
-    {
-      region: 'europe-west3',
-      memory: '256MB',
-      timeoutSeconds: 60,
-      invoker: 'private',
-    },
-    async (request, response) => {
-      try {
-        const {buyerId, purchasedProductIds, orderId} = request.body;
-  
-        // Validate inputs
-        if (!buyerId || !Array.isArray(purchasedProductIds) || purchasedProductIds.length === 0) {
-          console.error('Invalid cart clear request:', {buyerId, purchasedProductIds});
-          response.status(400).send('Invalid request parameters');
-          return;
-        }
-  
-        const db = admin.firestore();
-        const cartRef = db.collection('users').doc(buyerId).collection('cart');
-  
-        // Log the operation
-        console.log(`Clearing ${purchasedProductIds.length} items from cart for user ${buyerId}, order ${orderId}`);
-        console.log(`Product IDs to remove:`, purchasedProductIds);
-  
-        // CRITICAL: Cart uses document IDs as product IDs (not a field)
-        // Firestore batch writes limited to 500 operations
-        const WRITE_BATCH_SIZE = 500;
-        let deletedCount = 0;
-  
-        // The cart document ID IS the productId, so we can delete directly
-        console.log(`Target product IDs to remove:`, purchasedProductIds);
-  
-        for (let i = 0; i < purchasedProductIds.length; i += WRITE_BATCH_SIZE) {
-          const batchProductIds = purchasedProductIds.slice(i, i + WRITE_BATCH_SIZE);
-          const batch = db.batch();
-  
-          // Delete each cart document directly by its ID (which is the productId)
-          batchProductIds.forEach((productId) => {
-            const cartItemRef = cartRef.doc(productId);
-            batch.delete(cartItemRef);
-            deletedCount++;
-            console.log(`✓ Marked for deletion: ${productId}`);
-          });
-  
-          // Commit the batch
-          await batch.commit();
-          console.log(`Write batch ${Math.floor(i / WRITE_BATCH_SIZE) + 1} committed: ${batchProductIds.length} items`);
-        }
-  
-        // Log the operation result
-        await db.collection('cart_clear_logs').add({
-          buyerId,
-          orderId,
-          purchasedProductIds,
-          deletedCount,
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-          success: true,
-        });
-  
-        console.log(`Cart clearing completed: ${deletedCount} items deleted`);
-        response.status(200).send({
-          success: true,
-          deletedCount,
-        });
-      } catch (error) {
-        console.error('Error clearing cart items:', error);
-  
-        // Log the error
-        try {
-          const {buyerId, orderId} = request.body;
-          await admin.firestore().collection('cart_clear_logs').add({
-            buyerId: buyerId || 'unknown',
-            orderId: orderId || 'unknown',
-            error: error.message,
-            stack: error.stack,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            success: false,
-          });
-        } catch (logError) {
-          console.error('Failed to log cart clear error:', logError);
-        }
-  
-        response.status(500).send({
-          success: false,
-          error: error.message,
-        });
-      }
-    },
-  );
-  
-  // Helper function to create notification tasks
-  async function createNotificationTask(orderId, productData, recipientId, buyerName, buyerId) {
-    const project = 'emlak-mobile-app';
-    const location = 'europe-west3';
-    const queue = 'order-notifications';
-  
-    const parent = tasksClient.queuePath(project, location, queue);
-  
-    const task = {
-      httpRequest: {
-        httpMethod: 'POST',
-        url: `https://${location}-${project}.cloudfunctions.net/processOrderNotification`,
-        body: Buffer.from(JSON.stringify({
-          orderId,
-          productId: productData.productId,
-          productName: productData.productName,
-          recipientId,
-          buyerName,
-          buyerId,
-          quantity: productData.quantity,
-          shopId: productData.shopId,
-          shopName: productData.shopName,
-          sellerId: productData.sellerId,
-          isShopProduct: productData.isShopProduct,
-        })).toString('base64'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        oidcToken: {
-          serviceAccountEmail: `${project}@appspot.gserviceaccount.com`,
-        },
-      },
-    };
-  
-    try {
-      await tasksClient.createTask({parent, task});
-    } catch (error) {
-      console.error('Error creating notification task:', error);
-      // Don't throw - notifications are non-critical
-    }
-  }
-  
-  // Batch fetch products to reduce transaction reads
-  async function batchFetchProducts(tx, db, items) {
-    const productRefs = [];
-    const productSnapPromises = [];
-  
-    for (const item of items) {
-      const {productId} = item;
-      if (!productId || typeof productId !== 'string') {
-        throw new HttpsError('invalid-argument', 'Each cart item needs a valid productId.');
-      }
-  
-      // Try products collection first
-      const pRef = db.collection('products').doc(productId);
-      productRefs.push({ref: pRef, item, collection: 'products'});
-      productSnapPromises.push(tx.get(pRef));
-    }
-  
-    const productSnaps = await Promise.all(productSnapPromises);
-    const productsMeta = [];
-  
-    for (let i = 0; i < productSnaps.length; i++) {
-      let pSnap = productSnaps[i];
-      let pRef = productRefs[i].ref;
-      const item = productRefs[i].item;
-  
-      if (!pSnap.exists) {
-        // Try shop_products collection
-        pRef = db.collection('shop_products').doc(item.productId);
-        pSnap = await tx.get(pRef);
-        if (!pSnap.exists) {
-          throw new HttpsError('not-found', `Product ${item.productId} not found.`);
-        }
-      }
-  
-      productsMeta.push({ref: pRef, data: pSnap.data(), item});
-    }
-  
-    return productsMeta;
-  }
-  
-  // Batch fetch seller information
-  async function batchFetchSellers(tx, db, productsMeta) {
-    const shopIds = new Set();
-    const userIds = new Set();
-  
-    for (const meta of productsMeta) {
-      if (meta.data.shopId) {
-        shopIds.add(meta.data.shopId);
-      } else {
-        userIds.add(meta.data.userId);
-      }
-    }
-  
-    const shopPromises = Array.from(shopIds).map((id) => tx.get(db.collection('shops').doc(id)));
-    const userPromises = Array.from(userIds).map((id) => tx.get(db.collection('users').doc(id)));
-  
-    const [shopSnaps, userSnaps] = await Promise.all([
-      Promise.all(shopPromises),
-      Promise.all(userPromises),
-    ]);
-  
-    const shopData = new Map();
-    const userData = new Map();
-  
-    shopSnaps.forEach((snap, idx) => {
-      const id = Array.from(shopIds)[idx];
-      shopData.set(id, snap.data());
-    });
-  
-    userSnaps.forEach((snap, idx) => {
-      const id = Array.from(userIds)[idx];
-      userData.set(id, snap.data());
-    });
-  
-    // Attach seller names to metadata
-    for (const meta of productsMeta) {
-      if (meta.data.shopId) {
-        const shop = shopData.get(meta.data.shopId);
-        meta.sellerName = shop?.name || 'Unknown Shop';
-        meta.sellerType = 'shop';
-        meta.shopMembers = getShopMemberIdsFromData(shop);
-        meta.sellerContactNo = shop?.contactNo || null;
-        // NEW: Add location
-        meta.sellerAddress = {
-          addressLine1: shop?.address || 'N/A',
-          location: (shop?.latitude && shop?.longitude) ? {
-            lat: shop.latitude,
-            lng: shop.longitude,
-          } : null,
-        };
-      } else {
-        const user = userData.get(meta.data.userId);
-        meta.sellerName = user?.displayName || 'Unknown Seller';
-        meta.sellerType = 'user';
-        meta.sellerContactNo = user?.sellerInfo?.phone || null;
-        // NEW: Add location
-        meta.sellerAddress = user?.sellerInfo ? {
-          addressLine1: user.sellerInfo.address || 'N/A',
-          location: (user.sellerInfo.latitude && user.sellerInfo.longitude) ? {
-            lat: user.sellerInfo.latitude,
-            lng: user.sellerInfo.longitude,
-          } : null,
-        } : null;
-      }
-    }
-  
-    return productsMeta;
-  }
-  
-  // Extract shop member IDs from shop data (no external read)
-  function getShopMemberIdsFromData(shopData) {
-    if (!shopData) return [];
-  
-    const memberIds = [];
-    if (shopData.ownerId) memberIds.push(shopData.ownerId);
-    if (Array.isArray(shopData.coOwners)) memberIds.push(...shopData.coOwners);
-    if (Array.isArray(shopData.editors)) memberIds.push(...shopData.editors);
-    if (Array.isArray(shopData.viewers)) memberIds.push(...shopData.viewers);
-  
-    return [...new Set(memberIds)];
-  }
-  
-  // Fire-and-forget alert for post-order task failures
-  function logTaskFailureAlert(taskName, orderId, buyerId, buyerName, error) {
-    try {
-      admin.firestore().collection('_payment_alerts').doc(`${orderId}_${taskName}`).set({
-        type: `task_${taskName}_failed`,
-        severity: 'low',
-        orderNumber: orderId,
-        pendingPaymentId: null,
-        orderId,
-        userId: buyerId,
-        buyerName: buyerName || '',
-        amount: 0,
-        errorMessage: `${taskName} failed: ${error?.message || String(error)}`,
-        isRead: false,
-        isResolved: false,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        detectedBy: 'task_catch',
-      });
-    } catch (_) {
-      // Silent — alerting should never break anything
-    }
-  }
-  
-  async function createOrderTransaction(buyerId, requestData) {
-    const {
-      items,
-      address,
-      pickupPoint,
-      paymentMethod,
-      cartCalculatedTotal,
-      deliveryOption = 'normal',
-      saveAddress = false,
-      paymentOrderId,
-      couponId = null,
-      freeShippingBenefitId = null,
-      clientDeliveryPrice = 0,
-    } = requestData;
-  
-    // Validate required fields
-    if (!Array.isArray(items) || items.length === 0) {
-      throw new HttpsError('invalid-argument', 'Cart must contain at least one item.');
-    }
-  
-    if (deliveryOption === 'pickup') {
-      if (!pickupPoint || typeof pickupPoint !== 'object') {
-        throw new HttpsError('invalid-argument', 'Pickup point is required for pickup delivery.');
-      }
-      ['pickupPointId', 'pickupPointName', 'pickupPointAddress'].forEach((f) => {
-        if (!(f in pickupPoint)) {
-          throw new HttpsError('invalid-argument', `Missing pickup point field: ${f}`);
-        }
-      });
+
+  const [shopSnaps, userSnaps] = await Promise.all([
+    Promise.all(Array.from(shopIds).map((id) => db.collection('shops').doc(id).get())),  // db.get, not tx.get
+    Promise.all(Array.from(userIds).map((id) => db.collection('users').doc(id).get())),  // db.get, not tx.get
+  ]);
+
+  const shopData = new Map();
+  const userData = new Map();
+  shopSnaps.forEach((snap, idx) => shopData.set(Array.from(shopIds)[idx], snap.data()));
+  userSnaps.forEach((snap, idx) => userData.set(Array.from(userIds)[idx], snap.data()));
+
+  for (const meta of productsMeta) {
+    if (meta.data.shopId) {
+      const shop = shopData.get(meta.data.shopId);
+      meta.sellerName = shop?.name || 'Unknown Shop';
+      meta.sellerType = 'shop';
+      meta.shopMembers = getShopMemberIdsFromData(shop);
+      meta.sellerContactNo = shop?.contactNo || null;
+      meta.sellerAddress = {
+        addressLine1: shop?.address || 'N/A',
+        location: (shop?.latitude && shop?.longitude) ? { lat: shop.latitude, lng: shop.longitude } : null,
+      };
     } else {
-      if (!address || typeof address !== 'object') {
-        throw new HttpsError('invalid-argument', 'A valid address object is required.');
+      const user = userData.get(meta.data.userId);
+      meta.sellerName = user?.displayName || 'Unknown Seller';
+      meta.sellerType = 'user';
+      meta.sellerContactNo = user?.sellerInfo?.phone || null;
+      meta.sellerAddress = user?.sellerInfo ? {
+        addressLine1: user.sellerInfo.address || 'N/A',
+        location: (user.sellerInfo.latitude && user.sellerInfo.longitude) ? {
+          lat: user.sellerInfo.latitude,
+          lng: user.sellerInfo.longitude,
+        } : null,
+      } : null;
+    }
+  }
+
+  return productsMeta;
+}
+
+function getShopMemberIdsFromData(shopData) {
+  if (!shopData) return [];
+  const memberIds = [];
+  if (shopData.ownerId) memberIds.push(shopData.ownerId);
+  if (Array.isArray(shopData.coOwners)) memberIds.push(...shopData.coOwners);
+  if (Array.isArray(shopData.editors)) memberIds.push(...shopData.editors);
+  if (Array.isArray(shopData.viewers)) memberIds.push(...shopData.viewers);
+  return [...new Set(memberIds)];
+}
+
+function logTaskFailureAlert(taskName, orderId, buyerId, buyerName, error) {
+  try {
+    admin.firestore().collection('_payment_alerts').doc(`${orderId}_${taskName}`).set({
+      type: `task_${taskName}_failed`,
+      severity: 'low',
+      orderNumber: orderId,
+      pendingPaymentId: null,
+      orderId,
+      userId: buyerId,
+      buyerName: buyerName || '',
+      amount: 0,
+      errorMessage: `${taskName} failed: ${error?.message || String(error)}`,
+      isRead: false,
+      isResolved: false,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      detectedBy: 'task_catch',
+    });
+  } catch (_) {/* alerting must never throw */}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// createOrderTransaction
+//
+// FIX 1: notificationData.length = 0 at top of tx body — prevents duplicate
+//         notifications on Firestore transaction retries.
+//
+// FIX 3: Transaction contains ONLY atomically-critical writes:
+//   • Duplicate order check
+//   • Buyer read
+//   • Discount validation + marking
+//   • Product + seller reads (now fully parallel via batchFetchProducts fix)
+//   • Stock validation
+//   • Order document
+//   • Order items subcollection
+//   • Inventory decrements
+//
+// Moved OUT of transaction (post-tx, individually fault-tolerant):
+//   • Seller metrics (totalProductsSold, totalSoldPrice) — eventual consistency OK
+//   • Address save — user preference, non-critical
+//   • receiptTasks write — queued work, non-critical
+//   • Notifications, cart clear, activity tracking, QR, ad conversion
+//
+// This keeps the transaction lean, predictable, and well within Firestore's
+// limits even for large multi-seller carts.
+// ─────────────────────────────────────────────────────────────────────────────
+async function createOrderTransaction(buyerId, requestData) {
+  const {
+    items,
+    address,
+    pickupPoint,
+    paymentMethod,
+    cartCalculatedTotal,
+    deliveryOption = 'normal',
+    saveAddress = false,
+    paymentOrderId,
+    couponId = null,
+    freeShippingBenefitId = null,
+    clientDeliveryPrice = 0,
+  } = requestData;
+
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new HttpsError('invalid-argument', 'Cart must contain at least one item.');
+  }
+
+  if (deliveryOption === 'pickup') {
+    if (!pickupPoint || typeof pickupPoint !== 'object') {
+      throw new HttpsError('invalid-argument', 'Pickup point is required for pickup delivery.');
+    }
+    ['pickupPointId', 'pickupPointName', 'pickupPointAddress'].forEach((f) => {
+      if (!(f in pickupPoint)) throw new HttpsError('invalid-argument', `Missing pickup point field: ${f}`);
+    });
+  } else {
+    if (!address || typeof address !== 'object') {
+      throw new HttpsError('invalid-argument', 'A valid address object is required.');
+    }
+    ['addressLine1', 'city', 'phoneNumber', 'location'].forEach((f) => {
+      if (!(f in address)) throw new HttpsError('invalid-argument', `Missing address field: ${f}`);
+    });
+  }
+
+  if (!['normal', 'express'].includes(deliveryOption)) {
+    throw new HttpsError('invalid-argument', 'Invalid delivery option.');
+  }
+
+  const db = admin.firestore();
+  let orderResult;
+  const notificationData = []; // reset on each tx retry — see FIX 1
+  let productsMeta = [];
+  let finalOrderId = null;
+
+  // Data collected inside tx, used for post-tx writes
+  let postTxData = null;
+
+  await db.runTransaction(async (tx) => {
+    // ── FIX 1: Reset on every retry — prevents duplicate notifications ───────
+    notificationData.length = 0;
+
+    // ── Duplicate order guard ────────────────────────────────────────────────
+    if (paymentOrderId) {
+      const existingOrdersSnap = await tx.get(
+        db.collection('orders').where('paymentOrderId', '==', paymentOrderId).limit(1),
+      );
+      if (!existingOrdersSnap.empty) {
+        console.log(`Order already exists for payment ${paymentOrderId}`);
+        orderResult = {
+          orderId: existingOrdersSnap.docs[0].id,
+          success: true,
+          duplicate: true,
+          message: 'Order already processed for this payment.',
+        };
+        return;
       }
-      ['addressLine1', 'city', 'phoneNumber', 'location'].forEach((f) => {
-        if (!(f in address)) {
-          throw new HttpsError('invalid-argument', `Missing address field: ${f}`);
+    }
+
+    // ── Buyer read ───────────────────────────────────────────────────────────
+    const buyerRef = db.collection('users').doc(buyerId);
+    const buyerSnap = await tx.get(buyerRef);
+    if (!buyerSnap.exists) throw new HttpsError('not-found', `Buyer ${buyerId} not found.`);
+    const buyerData = buyerSnap.data() || {};
+    const buyerName = buyerData.displayName || buyerData.name || 'Unknown Buyer';
+    const userLanguage = buyerData.languageCode || 'en';
+
+    const orderRef = db.collection('orders').doc();
+    finalOrderId = orderRef.id;
+
+    // ── Discount reads ───────────────────────────────────────────────────────
+    let discountResult = {
+      couponDiscount: 0, freeShippingApplied: false,
+      couponCode: null, couponRef: null, benefitRef: null,
+    };
+    if (couponId || freeShippingBenefitId) {
+      discountResult = await validateDiscounts(tx, db, buyerId, couponId, freeShippingBenefitId, cartCalculatedTotal || 0);
+    }
+
+    // ── Price resolution ─────────────────────────────────────────────────────
+    const preCalc = requestData.serverCalculation || null;
+    let serverFinalTotal; let serverDeliveryPrice; let serverCouponDiscount;
+
+    if (preCalc) {
+      serverFinalTotal = preCalc.finalTotal;
+      serverDeliveryPrice = preCalc.deliveryPrice;
+      serverCouponDiscount = preCalc.couponDiscount;
+      console.log(`💰 Using pre-calculated totals: final=${serverFinalTotal}, delivery=${serverDeliveryPrice}, coupon=-${serverCouponDiscount}`);
+    } else {
+      serverDeliveryPrice = discountResult.freeShippingApplied ? 0 : (clientDeliveryPrice || 0);
+      serverCouponDiscount = discountResult.couponDiscount;
+      serverFinalTotal = Math.max(0, (cartCalculatedTotal || 0) - serverCouponDiscount) + serverDeliveryPrice;
+      console.log(`💰 Fallback calculation: final=${serverFinalTotal}, delivery=${serverDeliveryPrice}, coupon=-${serverCouponDiscount}`);
+    }
+
+    // ── FIX 2: Product + seller reads — fully parallel ───────────────────────
+    productsMeta = await batchFetchProducts(tx, db, items);
+    await batchFetchSellers(db, productsMeta);
+
+    // ── Stock validation + seller group accumulation ─────────────────────────
+    let totalQuantity = 0;
+    const sellerGroups = new Map();
+
+    const systemFieldsForGroups = new Set([
+      'productId', 'quantity', 'addedAt', 'updatedAt', 'sellerId', 'sellerName', 'isShop',
+      'salePreferences', 'calculatedUnitPrice', 'calculatedTotal', 'isBundleItem',
+      'price', 'finalPrice', 'unitPrice', 'totalPrice', 'currency',
+      'bundleInfo', 'isBundle', 'bundleId', 'mainProductPrice', 'bundlePrice',
+      'selectedColorImage', 'productImage', 'productName', 'brandModel', 'brand',
+      'category', 'subcategory', 'subsubcategory', 'condition', 'averageRating',
+      'productAverageRating', 'reviewCount', 'productReviewCount', 'clothingType',
+      'clothingFit', 'gender', 'shipmentStatus', 'deliveryOption', 'needsProductReview',
+      'needsSellerReview', 'needsAnyReview', 'timestamp', 'availableStock',
+      'maxQuantityAllowed', 'ourComission', 'sellerContactNo', 'showSellerHeader',
+    ]);
+
+    for (const meta of productsMeta) {
+      const {data, item} = meta;
+      const qty = Math.max(1, item.quantity || 1);
+      const colorKey = (item.selectedColor && item.selectedColor !== 'default') ? item.selectedColor : null;
+      const hasColorVariant = colorKey && data.colorQuantities &&
+        Object.prototype.hasOwnProperty.call(data.colorQuantities, colorKey);
+      const available = hasColorVariant ? (data.colorQuantities[colorKey] || 0) : (data.quantity || 0);
+
+      if (available < qty) {
+        const stockInfo = hasColorVariant ? `color '${colorKey}' stock: ${available}` : `general stock: ${available}`;
+        throw new HttpsError('failed-precondition',
+          `Not enough stock for ${data.productName}. Requested: ${qty}, Available: ${available} (${stockInfo})`);
+      }
+
+      totalQuantity += qty;
+
+      // Build seller groups (for receipt)
+      const sellerId = data.shopId || data.userId;
+      if (!sellerGroups.has(sellerId)) {
+        sellerGroups.set(sellerId, { sellerName: meta.sellerName, items: [] });
+      }
+      const dynAttrs = {};
+      Object.keys(item).forEach((key) => {
+        if (!systemFieldsForGroups.has(key) && item[key] !== undefined && item[key] !== null && item[key] !== '') {
+          dynAttrs[key] = item[key];
         }
       });
+      sellerGroups.get(sellerId).items.push({
+        productName: data.productName || 'Unknown Product',
+        quantity: item.quantity || 1,
+        unitPrice: item.calculatedUnitPrice || data.price,
+        totalPrice: item.calculatedTotal || ((data.price || 0) * (item.quantity || 1)),
+        selectedAttributes: dynAttrs,
+        sellerName: meta.sellerName,
+        sellerId: data.shopId || data.userId,
+      });
     }
-  
-    const validDeliveryOptions = ['normal', 'express'];
-    if (!validDeliveryOptions.includes(deliveryOption)) {
-      throw new HttpsError('invalid-argument', 'Invalid delivery option.');
-    }
-  
-    const db = admin.firestore();
-    let orderResult;
-    const notificationData = [];
-  
-    let productsMeta = [];
-    let finalOrderId = null;
-  
-    // TRANSACTION: Critical operations only
-    await db.runTransaction(async (tx) => {
-      // CRITICAL: Prevent duplicate orders for same payment
-      if (paymentOrderId) {
-        const existingOrdersQuery = db.collection('orders')
-          .where('paymentOrderId', '==', paymentOrderId)
-          .limit(1);
-  
-        const existingOrdersSnap = await tx.get(existingOrdersQuery);
-  
-        if (!existingOrdersSnap.empty) {
-          console.log(`Order already exists for payment ${paymentOrderId}`);
-          orderResult = {
-            orderId: existingOrdersSnap.docs[0].id,
-            success: true,
-            duplicate: true,
-            message: 'Order already processed for this payment.',
-          };
-          return;
-        }
-      }
-      // FETCH BUYER
-      const buyerRef = db.collection('users').doc(buyerId);
-      const buyerSnap = await tx.get(buyerRef);
-      if (!buyerSnap.exists) {
-        throw new HttpsError('not-found', `Buyer ${buyerId} not found.`);
-      }
-      const buyerData = buyerSnap.data() || {};
-      const buyerName = buyerData.displayName || buyerData.name || 'Unknown Buyer';
-      const userLanguage = buyerData.languageCode || 'en';
-  
-      const orderRef = db.collection('orders').doc(); // Create ref early for orderId
-      finalOrderId = orderRef.id;
-      
-      let discountResult = { 
-        couponDiscount: 0, 
-        freeShippingApplied: false, 
-        couponCode: null,
-        couponRef: null,
-        benefitRef: null,
+
+    // ── Order document ───────────────────────────────────────────────────────
+    const orderDocument = {
+      buyerId,
+      buyerName,
+      totalPrice: serverFinalTotal,
+      totalQuantity,
+      deliveryPrice: serverDeliveryPrice,
+      paymentMethod,
+      paymentOrderId: paymentOrderId || null,
+      deliveryOption,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      itemCount: items.length,
+      couponId: couponId || null,
+      couponCode: discountResult.couponCode || null,
+      couponDiscount: serverCouponDiscount,
+      freeShippingApplied: discountResult.freeShippingApplied,
+      freeShippingBenefitId: freeShippingBenefitId || null,
+      itemsSubtotal: cartCalculatedTotal || 0,
+    };
+
+    if (deliveryOption === 'pickup') {
+      orderDocument.pickupPoint = {
+        pickupPointId: pickupPoint.pickupPointId,
+        pickupPointName: pickupPoint.pickupPointName,
+        pickupPointAddress: pickupPoint.pickupPointAddress,
+        pickupPointPhone: pickupPoint.pickupPointPhone || null,
+        pickupPointHours: pickupPoint.pickupPointHours || null,
+        pickupPointContactPerson: pickupPoint.pickupPointContactPerson || null,
+        pickupPointNotes: pickupPoint.pickupPointNotes || null,
+        pickupPointLocation: pickupPoint.pickupPointLocation ?
+          new admin.firestore.GeoPoint(
+            pickupPoint.pickupPointLocation.latitude,
+            pickupPoint.pickupPointLocation.longitude,
+          ) : null,
       };
-      
-      if (couponId || freeShippingBenefitId) {
-        discountResult = await validateDiscounts(
-          tx,
-          db,
-          buyerId,
-          couponId,
-          freeShippingBenefitId,
-          cartCalculatedTotal || 0
-        );
+    } else {
+      orderDocument.address = {
+        addressLine1: address.addressLine1,
+        addressLine2: address.addressLine2 || '',
+        city: address.city,
+        phoneNumber: address.phoneNumber,
+        location: new admin.firestore.GeoPoint(address.location.latitude, address.location.longitude),
+      };
+    }
+
+    if (couponId || freeShippingBenefitId) {
+      markDiscountsAsUsed(tx, discountResult, finalOrderId);
+    }
+
+    tx.set(orderRef, orderDocument);
+
+    // ── Order items + inventory decrements ───────────────────────────────────
+    const receiptItems = [];
+    const systemFieldsForItems = new Set([
+      'productId', 'quantity', 'addedAt', 'updatedAt',
+      'sellerId', 'sellerName', 'isShop', 'salePreferences',
+    ]);
+
+    for (const meta of productsMeta) {
+      const {ref, data, item, sellerName} = meta;
+      const qty = Math.max(1, item.quantity || 1);
+      const colorKey = (item.selectedColor && item.selectedColor !== 'default') ? item.selectedColor : null;
+      const hasColorVariant = colorKey && data.colorQuantities &&
+        Object.prototype.hasOwnProperty.call(data.colorQuantities, colorKey);
+
+      let productImage = '';
+      let selectedColorImage = '';
+      if (colorKey && data.colorImages?.[colorKey]?.length > 0) {
+        productImage = data.colorImages[colorKey][0];
+        selectedColorImage = data.colorImages[colorKey][0];
+      } else if (Array.isArray(data.imageUrls) && data.imageUrls.length > 0) {
+        productImage = data.imageUrls[0];
       }
-  
-      const preCalc = requestData.serverCalculation || null;
-  
-  let serverFinalTotal;
-  let serverDeliveryPrice;
-  let serverCouponDiscount;
-  
-  if (preCalc) {
-    serverFinalTotal = preCalc.finalTotal;
-    serverDeliveryPrice = preCalc.deliveryPrice;
-    serverCouponDiscount = preCalc.couponDiscount;
-    console.log(`💰 Using pre-calculated totals: final=${serverFinalTotal}, delivery=${serverDeliveryPrice}, coupon=-${serverCouponDiscount}`);
-  } else {
-    serverDeliveryPrice = discountResult.freeShippingApplied ? 0 : (clientDeliveryPrice || 0);
-    serverCouponDiscount = discountResult.couponDiscount;
-    serverFinalTotal = Math.max(0, (cartCalculatedTotal || 0) - serverCouponDiscount) + serverDeliveryPrice;
-    console.log(`💰 Fallback calculation: final=${serverFinalTotal}, delivery=${serverDeliveryPrice}, coupon=-${serverCouponDiscount}`);
-  }
-  
-      console.log(`Price calculation - Subtotal: ${cartCalculatedTotal}, Coupon: -${serverCouponDiscount}, Delivery: ${serverDeliveryPrice}, Final: ${serverFinalTotal}`);
-  
-      // BATCH FETCH PRODUCTS
-      productsMeta = await batchFetchProducts(tx, db, items);
-  
-      // BATCH FETCH SELLERS
-      await batchFetchSellers(tx, db, productsMeta);
-  
-      // STOCK VALIDATION
-      const totalPrice = cartCalculatedTotal || 0;
-      let totalQuantity = 0;
-      const shopTotals = new Map();
-      const userTotals = new Map();
-      const sellerGroups = new Map();
-  
-      for (const {data, item} of productsMeta) {
-        const qty = Math.max(1, item.quantity || 1);
-        const colorKey = (item.selectedColor && item.selectedColor !== 'default') ? item.selectedColor : null;
-      
-        // ✅ FIX: Check if color EXISTS first (don't check stock yet)
-        const hasColorVariant = colorKey && 
-                                data.colorQuantities && 
-                                Object.prototype.hasOwnProperty.call(data.colorQuantities, colorKey);
-      
-        // ✅ FIX: Get available stock (0 if color doesn't exist)
-        const available = hasColorVariant ? (data.colorQuantities[colorKey] || 0) : (data.quantity || 0);
-      
-        // ✅ FIX: Detailed error message with actual values
-        if (available < qty) {
-          const stockInfo = hasColorVariant ? `color '${colorKey}' stock: ${available}` : `general stock: ${available}`;
-          
-          throw new HttpsError(
-            'failed-precondition',
-            `Not enough stock for ${data.productName}. ` +
-            `Requested: ${qty}, Available: ${available} (${stockInfo})`,
-          );
-        }
-      
-        totalQuantity += qty;
-      
-        if (data.shopId) {
-          shopTotals.set(data.shopId, (shopTotals.get(data.shopId) || 0) + qty);
-        } else {
-          userTotals.set(data.userId, (userTotals.get(data.userId) || 0) + qty);
-        }
-      }
-  
-      // BUILD SELLER GROUPS FOR RECEIPT
-      for (const meta of productsMeta) {
-        const {data, item} = meta;
-        const sellerId = data.shopId || data.userId;
-  
-        if (!sellerGroups.has(sellerId)) {
-          sellerGroups.set(sellerId, {
-            sellerName: meta.sellerName,
-            items: [],
-          });
-        }
-  
-        const dynamicAttributes = {};
-        const systemFields = new Set([
-          'productId', 'quantity', 'addedAt', 'updatedAt',
-          'sellerId', 'sellerName', 'isShop',
-          'salePreferences', 'calculatedUnitPrice', 'calculatedTotal', 'isBundleItem',
-          'price', 'finalPrice', 'unitPrice', 'totalPrice', 'currency',
-          'bundleInfo', 'isBundle', 'bundleId', 'mainProductPrice', 'bundlePrice',
-          'selectedColorImage', 'productImage',
-          'productName', 'brandModel', 'brand', 'category', 'subcategory',
-          'subsubcategory', 'condition', 'averageRating', 'productAverageRating',
-          'reviewCount', 'productReviewCount', 'clothingType',
-          'clothingFit', 'gender',
-          'shipmentStatus', 'deliveryOption', 'needsProductReview',
-          'needsSellerReview', 'needsAnyReview', 'timestamp',
-          'availableStock', 'maxQuantityAllowed', 'ourComission', 'sellerContactNo', 'showSellerHeader',       
-        ]);
-  
-        Object.keys(item).forEach((key) => {
-          if (!systemFields.has(key) && item[key] !== undefined && item[key] !== null && item[key] !== '') {
-            dynamicAttributes[key] = item[key];
-          }
-        });
-  
-        sellerGroups.get(sellerId).items.push({
-          productName: data.productName || 'Unknown Product',
-          quantity: item.quantity || 1,
-          unitPrice: item.calculatedUnitPrice || data.price,
-          totalPrice: item.calculatedTotal || ((data.price || 0) * (item.quantity || 1)),
-          selectedAttributes: dynamicAttributes,
-          sellerName: meta.sellerName,
-          sellerId: data.shopId || data.userId,
-        });
-      }
-  
-      
-      const timestamp = admin.firestore.FieldValue.serverTimestamp();
-  
-      const orderDocument = {
+
+      const orderItemData = {
+        orderId: orderRef.id,
         buyerId,
+        productId: ref.id,
+        productName: data.productName || 'Unknown Product',
+        price: data.price || 0,
+        currency: data.currency || 'TL',
+        quantity: qty,
+        sellerName,
+        sellerContactNo: meta.sellerContactNo,
+        gatheringStatus: 'pending',
+        sellerAddress: meta.sellerAddress,
         buyerName,
-        totalPrice: serverFinalTotal,
-        totalQuantity,
-        deliveryPrice: serverDeliveryPrice,
-        paymentMethod,
-        paymentOrderId: paymentOrderId || null,
+        productImage,
+        selectedColorImage: selectedColorImage || null,
+        brandModel: data.brandModel || null,
+        category: data.category || null,
+        subcategory: data.subcategory || null,
+        subsubcategory: data.subsubcategory || null,
+        condition: data.condition || null,
+        sellerId: data.shopId || data.userId,
+        shopId: data.shopId || null,
+        isShopProduct: !!data.shopId,
+        ourComission: item.ourComission || 0,
+        bundleInfo: item.isBundleItem && item.calculatedUnitPrice && item.calculatedUnitPrice < data.price ? {
+          wasInBundle: true,
+          originalPrice: data.price,
+          bundlePrice: item.calculatedUnitPrice,
+          bundleDiscount: Math.round(((data.price - item.calculatedUnitPrice) / data.price) * 100),
+          bundleDiscountAmount: data.price - item.calculatedUnitPrice,
+          originalBundleDiscountPercentage: data.bundleDiscount || null,
+        } : null,
+        salePreferenceInfo: (() => {
+          const salePrefs = item.salePreferences;
+          if (salePrefs?.discountThreshold && salePrefs?.discountPercentage) {
+            const quantity = Math.max(1, item.quantity || 1);
+            return {
+              discountThreshold: salePrefs.discountThreshold,
+              discountPercentage: salePrefs.discountPercentage,
+              discountApplied: quantity >= salePrefs.discountThreshold,
+              wasSalePrefUsed: item.calculatedUnitPrice &&
+                item.calculatedUnitPrice < (data.price * (1 - (salePrefs.discountPercentage / 100))) + 0.01,
+            };
+          }
+          return null;
+        })(),
         deliveryOption,
-        timestamp,
-        itemCount: items.length,
-        couponId: couponId || null,
-        couponCode: discountResult.couponCode || null,
-        couponDiscount: serverCouponDiscount,
-        freeShippingApplied: discountResult.freeShippingApplied,
-        freeShippingBenefitId: freeShippingBenefitId || null,
-        itemsSubtotal: cartCalculatedTotal || 0, 
+        needsProductReview: true,
+        needsSellerReview: true,
+        needsAnyReview: true,
       };
-  
-      if (deliveryOption === 'pickup') {
-        orderDocument.pickupPoint = {
-          pickupPointId: pickupPoint.pickupPointId,
-          pickupPointName: pickupPoint.pickupPointName,
-          pickupPointAddress: pickupPoint.pickupPointAddress,
-          pickupPointPhone: pickupPoint.pickupPointPhone || null,
-          pickupPointHours: pickupPoint.pickupPointHours || null,
-          pickupPointContactPerson: pickupPoint.pickupPointContactPerson || null,
-          pickupPointNotes: pickupPoint.pickupPointNotes || null,
-          pickupPointLocation: pickupPoint.pickupPointLocation ?
-            new admin.firestore.GeoPoint(
-              pickupPoint.pickupPointLocation.latitude,
-              pickupPoint.pickupPointLocation.longitude,
-            ) : null,
-        };
-      } else {
-        orderDocument.address = {
-          addressLine1: address.addressLine1,
-          addressLine2: address.addressLine2 || '',
-          city: address.city,
-          phoneNumber: address.phoneNumber,
-          location: new admin.firestore.GeoPoint(
-            address.location.latitude,
-            address.location.longitude,
-          ),
-        };
-      }
-  
-      if (couponId || freeShippingBenefitId) {
-        markDiscountsAsUsed(tx, discountResult, finalOrderId);
-      }
-  
-      tx.set(orderRef, orderDocument);
-  
-      // WRITE ITEMS & UPDATE INVENTORY ATOMICALLY
-      const now = admin.firestore.FieldValue.serverTimestamp();
-      const receiptItems = [];
-  
-      for (const meta of productsMeta) {
-        const {ref, data, item, sellerName} = meta;
-        const qty = Math.max(1, item.quantity || 1);
-        const colorKey = (item.selectedColor && item.selectedColor !== 'default') ? item.selectedColor : null;
-  
-        const hasColorVariant = colorKey && 
-                            data.colorQuantities && 
-                            Object.prototype.hasOwnProperty.call(data.colorQuantities, colorKey);
-  
-        let productImage = '';
-        let selectedColorImage = '';
-  
-        if (colorKey && data.colorImages && data.colorImages[colorKey] &&
-            Array.isArray(data.colorImages[colorKey]) && data.colorImages[colorKey].length > 0) {
-          productImage = data.colorImages[colorKey][0];
-          selectedColorImage = data.colorImages[colorKey][0];
-        } else if (Array.isArray(data.imageUrls) && data.imageUrls.length > 0) {
-          productImage = data.imageUrls[0];
+
+      const dynAttrs = {};
+      Object.keys(item).forEach((key) => {
+        if (!systemFieldsForItems.has(key) && item[key] !== undefined && item[key] !== null && item[key] !== '') {
+          dynAttrs[key] = item[key];
         }
-  
-        const orderItemData = {
-          orderId: orderRef.id,
-          buyerId: buyerId,
+      });
+      if (Object.keys(dynAttrs).length > 0) orderItemData.selectedAttributes = dynAttrs;
+
+      tx.set(orderRef.collection('items').doc(), {
+        ...orderItemData,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      receiptItems.push({
+        productName: data.productName || 'Unknown Product',
+        quantity: qty,
+        unitPrice: item.calculatedUnitPrice || data.price,
+        totalPrice: item.calculatedTotal || (data.price * qty),
+        selectedAttributes: dynAttrs,
+        sellerName,
+        sellerId: data.shopId || data.userId,
+      });
+
+      // Inventory decrement (atomic — must stay in transaction)
+      const updates = {
+        purchaseCount: admin.firestore.FieldValue.increment(qty),
+        metricsUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      if (data.subsubcategory !== 'Curtains') {
+        if (hasColorVariant) {
+          updates[`colorQuantities.${colorKey}`] = admin.firestore.FieldValue.increment(-qty);
+        } else {
+          updates.quantity = admin.firestore.FieldValue.increment(-qty);
+        }
+      }
+      tx.update(ref, updates);
+
+      // Collect for post-tx notifications
+      if (data.shopId) {
+        notificationData.push({
           productId: ref.id,
           productName: data.productName || 'Unknown Product',
-          price: data.price || 0,
-          currency: data.currency || 'TL',
+          recipientId: null,
           quantity: qty,
-          sellerName,
-          sellerContactNo: meta.sellerContactNo,
-          gatheringStatus: 'pending',
-          sellerAddress: meta.sellerAddress,
-          buyerName,
-          productImage,
-          selectedColorImage: selectedColorImage || null,        
-          brandModel: data.brandModel || null,
-          category: data.category || null,
-          subcategory: data.subcategory || null,
-          subsubcategory: data.subsubcategory || null,
-          condition: data.condition || null,
-          sellerId: data.shopId || data.userId,
-          shopId: data.shopId || null,
-          isShopProduct: !!data.shopId,
-          ourComission: item.ourComission || 0,
-          bundleInfo: item.isBundleItem && item.calculatedUnitPrice && item.calculatedUnitPrice < data.price ? {
-            wasInBundle: true,
-            originalPrice: data.price,
-            bundlePrice: item.calculatedUnitPrice,
-            bundleDiscount: Math.round(((data.price - item.calculatedUnitPrice) / data.price) * 100),
-            bundleDiscountAmount: data.price - item.calculatedUnitPrice,
-            originalBundleDiscountPercentage: data.bundleDiscount || null,
-          } : null,
-          salePreferenceInfo: (() => {
-            const salePrefs = item.salePreferences;
-            if (salePrefs && salePrefs.discountThreshold && salePrefs.discountPercentage) {
-              const quantity = Math.max(1, item.quantity || 1);
-              const meetsThreshold = quantity >= salePrefs.discountThreshold;
-              return {
-                discountThreshold: salePrefs.discountThreshold,
-                discountPercentage: salePrefs.discountPercentage,
-                discountApplied: meetsThreshold,
-                wasSalePrefUsed: item.calculatedUnitPrice &&
-                                  item.calculatedUnitPrice < (data.price * (1 - (salePrefs.discountPercentage / 100))) + 0.01,
-              };
-            }
-            return null;
-          })(),
-          deliveryOption,
-          needsProductReview: true,
-          needsSellerReview: true,
-          needsAnyReview: true,
-        };
-  
-        const dynamicAttributes = {};
-        const systemFields = new Set([
-          'productId', 'quantity', 'addedAt', 'updatedAt',
-          'sellerId', 'sellerName', 'isShop', 'salePreferences',         
-        ]);
-  
-        Object.keys(item).forEach((key) => {
-          if (!systemFields.has(key) && item[key] !== undefined && item[key] !== null && item[key] !== '') {
-            dynamicAttributes[key] = item[key];
-          }
+          shopId: data.shopId,
+          shopName: meta.sellerName,
+          sellerId: data.shopId,
+          isShopProduct: true,
         });
-  
-        if (Object.keys(dynamicAttributes).length > 0) {
-          orderItemData.selectedAttributes = dynamicAttributes;
-        }
-  
-        const oiRef = orderRef.collection('items').doc();
-        tx.set(oiRef, {
-          ...orderItemData,
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        });
-  
-        receiptItems.push({
+      } else if (data.userId && data.userId !== buyerId) {
+        notificationData.push({
+          productId: ref.id,
           productName: data.productName || 'Unknown Product',
+          recipientId: data.userId,
           quantity: qty,
-          unitPrice: item.calculatedUnitPrice || data.price,
-          totalPrice: item.calculatedTotal || (data.price * qty),
-          selectedAttributes: dynamicAttributes,
-          sellerName,
-          sellerId: data.shopId || data.userId,
+          shopId: null,
+          sellerId: data.userId,
+          isShopProduct: false,
         });
-  
-        // ATOMIC INVENTORY UPDATE
-        const updates = {
-          purchaseCount: admin.firestore.FieldValue.increment(qty),
-          metricsUpdatedAt: now,
-        };
-        
-        const isCurtain = data.subsubcategory === 'Curtains';
-        
-        if (!isCurtain) {
-          // ✅ Use the same hasColorVariant variable
-          if (hasColorVariant) {
-            updates[`colorQuantities.${colorKey}`] = admin.firestore.FieldValue.increment(-qty);
-          } else {
-            updates.quantity = admin.firestore.FieldValue.increment(-qty);
-          }
-        }
-        
-        tx.update(ref, updates);
-  
-        // Collect notification data for post-transaction processing
-        if (data.shopId) {
-          // Shop product: Add ONE entry for shop_notifications (not per member)
-          notificationData.push({
-            productId: ref.id,
-            productName: data.productName || 'Unknown Product',
-            recipientId: null,  // No individual recipient
-            quantity: qty,
-            shopId: data.shopId,
-            shopName: meta.sellerName,
-            sellerId: data.shopId,
-            isShopProduct: true,
-          });
-        } else if (data.userId && data.userId !== buyerId) {
-          notificationData.push({
-            productId: ref.id,
-            productName: data.productName || 'Unknown Product',
-            recipientId: data.userId,
-            quantity: qty,
-            shopId: null,
-            sellerId: data.userId,
-            isShopProduct: false,
-          });
-        }
       }
-  
-      // UPDATE SELLER METRICS
-      userTotals.forEach((qty, uid) => {
-        let userTotalPrice = 0;
-        for (const {data, item} of productsMeta) {
-          if (data.userId === uid && !data.shopId) {
-            const itemPrice = item.calculatedTotal || ((data.price || 0) * (item.quantity || 1));
-            userTotalPrice += itemPrice;
+    }
+
+    // ── FIX 3: Capture data for post-tx writes (no writes here) ─────────────
+    postTxData = {
+      buyerName,
+      userLanguage,
+      hasAdClicks: buyerData.hasAdClicks || false,
+      receiptItems: [...receiptItems],
+      sellerGroups,
+      serverFinalTotal,
+      serverDeliveryPrice,
+      serverCouponDiscount,
+      couponCode: discountResult.couponCode,
+      freeShippingApplied: discountResult.freeShippingApplied,
+      preCalc,
+      saveAddress: saveAddress && deliveryOption !== 'pickup' && !!address,
+      addressToSave: saveAddress && deliveryOption !== 'pickup' && address ? {
+        addressLine1: address.addressLine1,
+        addressLine2: address.addressLine2 || '',
+        city: address.city,
+        phoneNumber: address.phoneNumber,
+        location: new admin.firestore.GeoPoint(address.location.latitude, address.location.longitude),
+      } : null,
+    };
+
+    orderResult = { orderId: orderRef.id, buyerName };
+  });
+
+  if (orderResult?.duplicate) return orderResult;
+
+   // ── POST-TRANSACTION WRITES ───────────────────────────────────────────────
+
+  // Build serializable seller metrics — computed here so productsMeta
+  // doesn't need to be passed through the task payload.
+  const sellerMetrics = [];
+  {
+    const userTotals = new Map();
+    const shopTotals = new Map();
+    for (const { data, item } of productsMeta) {
+      const qty   = Math.max(1, item.quantity || 1);
+      const price = item.calculatedTotal || ((data.price || 0) * qty);
+      if (data.shopId) {
+        const e = shopTotals.get(data.shopId) || { qty: 0, price: 0 };
+        e.qty += qty; e.price += price;
+        shopTotals.set(data.shopId, e);
+      } else if (data.userId) {
+        const e = userTotals.get(data.userId) || { qty: 0, price: 0 };
+        e.qty += qty; e.price += price;
+        userTotals.set(data.userId, e);
+      }
+    }
+    userTotals.forEach(({ qty, price }, id) => sellerMetrics.push({ type: 'user', id, qty, price }));
+    shopTotals.forEach(({ qty, price }, id) => sellerMetrics.push({ type: 'shop', id, qty, price }));
+  }
+
+  // 1. Consolidated post-order Cloud Task
+  //    Replaces fire-and-forget blocks for: seller metrics, address save,
+  //    receipt task, activity tracking, ad conversion.
+  await createPostOrderTask({
+    orderId: finalOrderId,
+    buyerId,
+    buyerName: postTxData.buyerName,
+    userLanguage: postTxData.userLanguage,
+    hasAdClicks: postTxData.hasAdClicks,
+    saveAddress: postTxData.saveAddress,
+    // Serialize GeoPoint → plain object so JSON serialization is safe
+    addressToSave: postTxData.addressToSave ? {
+      ...postTxData.addressToSave,
+      location: postTxData.addressToSave.location ? {
+        latitude: postTxData.addressToSave.location.latitude,
+        longitude: postTxData.addressToSave.location.longitude,
+      } : null,
+    } : null,
+    sellerMetrics,
+    receipt: {
+      receiptItems: postTxData.receiptItems,
+      sellerGroups: Array.from(postTxData.sellerGroups.values()), // Map → Array
+      serverFinalTotal: postTxData.serverFinalTotal,
+      serverDeliveryPrice: postTxData.serverDeliveryPrice,
+      serverCouponDiscount: postTxData.serverCouponDiscount,
+      couponCode: postTxData.couponCode,
+      freeShippingApplied: postTxData.freeShippingApplied,
+      preCalc: postTxData.preCalc,
+      cartCalculatedTotal: cartCalculatedTotal || 0,
+      paymentMethod,
+      deliveryOption,
+      clientDeliveryPrice: clientDeliveryPrice || 0,
+      pickupPoint: deliveryOption === 'pickup' ? pickupPoint : null,
+      address: deliveryOption !== 'pickup' ? address    : null,
+    },
+    activityItems: productsMeta.map(({ data, item }) => ({
+      productId: data.id || item.productId,
+      shopId: data.shopId || null,
+      category: data.category,
+      subcategory: data.subcategory,
+      subsubcategory: data.subsubcategory,
+      brandModel: data.brandModel,
+      price: item.calculatedUnitPrice || data.price,
+      quantity: item.quantity || 1,
+    })),
+    adConversion: {
+      productIds: items.map((i) => i.productId),
+      shopIds: [...new Set(productsMeta.filter((m) => m.data.shopId).map((m) => m.data.shopId))],
+    },
+  });
+
+  // 2. Notifications — already Cloud Tasks, unchanged
+  Promise.allSettled(
+    notificationData.map((notif) =>
+      createNotificationTask(orderResult.orderId, notif, notif.recipientId, orderResult.buyerName, buyerId),
+    ),
+  ).then((results) => {
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    if (failed > 0) {
+      logTaskFailureAlert('notification_partial', finalOrderId, buyerId, orderResult?.buyerName,
+        { message: `${failed}/${results.length} notifications failed` });
+    }
+  });
+
+  // 3. Cart clear — already Cloud Tasks, unchanged
+  try {
+    await createCartClearTask(buyerId, items.map((i) => i.productId), finalOrderId);
+  } catch (err) {
+    logTaskFailureAlert('cart_clear', finalOrderId, buyerId, orderResult?.buyerName, err);
+  }
+
+  // 4. QR code — already Cloud Tasks, unchanged
+  try {
+    await createQRCodeTask(finalOrderId, {
+      buyerId,
+      buyerName: orderResult.buyerName,
+      items,
+      totalPrice: cartCalculatedTotal,
+      deliveryOption,
+    });
+  } catch (err) {
+    logTaskFailureAlert('qr_code', finalOrderId, buyerId, orderResult?.buyerName, err);
+  }
+
+  return { orderId: orderResult.orderId, success: true, receiptPending: true };
+}
+
+
+async function createPostOrderTask(payload) {
+  const project  = 'emlak-mobile-app';
+  const location = 'europe-west3';
+  const parent   = tasksClient.queuePath(project, location, 'post-order-tasks');
+
+  try {
+    await tasksClient.createTask({
+      parent,
+      task: {
+        httpRequest: {
+          httpMethod: 'POST',
+          url: `https://${location}-${project}.cloudfunctions.net/processPostOrderWork`,
+          body: Buffer.from(JSON.stringify(payload)).toString('base64'),
+          headers: { 'Content-Type': 'application/json' },
+          oidcToken: { serviceAccountEmail: `${project}@appspot.gserviceaccount.com` },
+        },
+      },
+    });
+    console.log(`Post-order task created for order ${payload.orderId}`);
+  } catch (error) {
+    // Log but don't throw — order is already committed, task failure is non-fatal
+    // on first attempt. Cloud Tasks will not retry since we caught here, so
+    // alert ops so they can manually trigger if needed.
+    console.error('Failed to create post-order task:', error);
+    logTaskFailureAlert('post_order_task_create', payload.orderId, payload.buyerId, payload.buyerName, error);
+  }
+}
+
+export const processPostOrderWork = onRequest(
+  { region: 'europe-west3', memory: '512MiB', timeoutSeconds: 120, invoker: 'private' },
+  async (request, response) => {
+    const {
+      orderId,
+      buyerId,
+      buyerName,
+      userLanguage,
+      hasAdClicks,
+      saveAddress,
+      addressToSave,      // location serialized as {latitude, longitude}
+      sellerMetrics,      // [{type: 'user'|'shop', id, qty, price}]
+      receipt,
+      activityItems,
+      adConversion,       // {productIds, shopIds}
+    } = request.body;
+
+    if (!orderId || !buyerId) {
+      response.status(400).send('Missing orderId or buyerId');
+      return;
+    }
+
+    const db = admin.firestore();
+
+   // ── 1. Seller metrics ─────────────────────────────────────────────────────
+    // Guard doc prevents double-incrementing if Cloud Tasks retries this handler.
+    // The batch atomically writes the guard + all metric increments together,
+    // so a crash mid-batch won't leave the guard written without the increments.
+    try {
+      if (sellerMetrics && sellerMetrics.length > 0) {
+        const metricsGuardRef = db.collection('_order_metrics_applied').doc(orderId);
+
+        await db.runTransaction(async (tx) => {
+          const guardSnap = await tx.get(metricsGuardRef);
+          if (guardSnap.exists) {
+            console.log(`[PostOrder] Seller metrics already applied for order ${orderId}, skipping`);
+            return;
           }
-        }
-  
-        tx.update(db.collection('users').doc(uid), {
-          totalProductsSold: admin.firestore.FieldValue.increment(qty),
-          totalSoldPrice: admin.firestore.FieldValue.increment(userTotalPrice),
-        });
-      });
-  
-      shopTotals.forEach((qty, sid) => {
-        let shopTotalPrice = 0;
-        for (const {data, item} of productsMeta) {
-          if (data.shopId === sid) {
-            const itemPrice = item.calculatedTotal || ((data.price || 0) * (item.quantity || 1));
-            shopTotalPrice += itemPrice;
+
+          // Mark as applied + write all increments atomically
+          tx.set(metricsGuardRef, {
+            appliedAt: admin.firestore.FieldValue.serverTimestamp(),
+            orderId,
+            expiresAt: admin.firestore.Timestamp.fromMillis(
+              Date.now() + 7 * 24 * 60 * 60 * 1000,
+            ),
+          });
+
+          for (const { type, id, qty, price } of sellerMetrics) {
+            const ref = type === 'shop' ?
+              db.collection('shops').doc(id) :
+              db.collection('users').doc(id);
+            tx.update(ref, {
+              totalProductsSold: admin.firestore.FieldValue.increment(qty),
+              totalSoldPrice: admin.firestore.FieldValue.increment(price),
+            });
           }
-        }
-  
-        tx.update(db.collection('shops').doc(sid), {
-          totalProductsSold: admin.firestore.FieldValue.increment(qty),
-          totalSoldPrice: admin.firestore.FieldValue.increment(shopTotalPrice),
         });
-      });
-  
-      if (saveAddress && deliveryOption !== 'pickup' && address) {
-        const savedAddress = {
-          addressLine1: address.addressLine1,
-          addressLine2: address.addressLine2 || '',
-          city: address.city,
-          phoneNumber: address.phoneNumber,
+
+        console.log(`[PostOrder] Seller metrics updated for order ${orderId}`);
+      }
+    } catch (err) {
+      console.error(`[PostOrder] Seller metrics failed for ${orderId}:`, err.message);
+      logTaskFailureAlert('seller_metrics', orderId, buyerId, buyerName, err);
+    }
+
+    // ── 2. Address save ───────────────────────────────────────────────────────
+    try {
+      if (saveAddress && addressToSave) {
+        await db.collection('users').doc(buyerId).collection('addresses').add({
+          addressLine1: addressToSave.addressLine1,
+          addressLine2: addressToSave.addressLine2 || '',
+          city: addressToSave.city,
+          phoneNumber: addressToSave.phoneNumber,
+          // Reconstruct GeoPoint from serialized plain object
           location: new admin.firestore.GeoPoint(
-            address.location.latitude,
-            address.location.longitude,
+            addressToSave.location.latitude,
+            addressToSave.location.longitude,
           ),
-          addedAt: now,
-        };
-        tx.set(buyerRef.collection('addresses').doc(), savedAddress);
+          addedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        console.log(`[PostOrder] Address saved for user ${buyerId}`);
       }
-  
-      // CREATE RECEIPT GENERATION TASK
-      const receiptTaskRef = db.collection('receiptTasks').doc();
-      tx.set(receiptTaskRef, {
-        ...removeUndefined({
-          orderId: orderRef.id,
-          ownerId: buyerId, // ✅ ADD THIS LINE
-          ownerType: 'user',  
+    } catch (err) {
+      console.error(`[PostOrder] Address save failed for ${orderId}:`, err.message);
+      // Non-critical, no alert needed
+    }
+
+    // ── 3. Receipt task ───────────────────────────────────────────────────────
+    try {
+      if (receipt) {
+        const {
+          receiptItems, sellerGroups, serverFinalTotal, serverDeliveryPrice,
+          serverCouponDiscount, couponCode, freeShippingApplied, preCalc,
+          cartCalculatedTotal, paymentMethod, deliveryOption, clientDeliveryPrice,
+          pickupPoint, address,
+        } = receipt;
+
+        // Use orderId as document ID — idempotent on Cloud Tasks retry
+        await db.collection('receiptTasks').doc(orderId).set({
+          orderId,
+          ownerId: buyerId,
+          ownerType: 'user',
           buyerId,
           buyerName,
           items: receiptItems,
-          sellerGroups: Array.from(sellerGroups.values()),
+          sellerGroups: sellerGroups,
           totalPrice: serverFinalTotal,
-          itemsSubtotal: totalPrice,
+          itemsSubtotal: cartCalculatedTotal || 0,
           currency: 'TL',
           paymentMethod,
           deliveryOption,
           deliveryPrice: serverDeliveryPrice,
           couponDiscount: serverCouponDiscount,
-          couponCode: discountResult.couponCode,
-          freeShippingApplied: discountResult.freeShippingApplied,
-          originalDeliveryPrice: preCalc ? preCalc.deliveryPriceBeforeFreeShipping : (clientDeliveryPrice || 0),
+          couponCode,
+          freeShippingApplied,
+          originalDeliveryPrice: preCalc ?
+            preCalc.deliveryPriceBeforeFreeShipping :
+            (clientDeliveryPrice || 0),
           language: userLanguage,
           status: 'pending',
-          pickupPoint: deliveryOption === 'pickup' ? {
+          pickupPoint: deliveryOption === 'pickup' && pickupPoint ? {
             name: pickupPoint.pickupPointName,
             address: pickupPoint.pickupPointAddress,
             phone: pickupPoint.pickupPointPhone || null,
@@ -961,520 +1044,339 @@ function getAdCollectionName(adType) {
             notes: pickupPoint.pickupPointNotes || null,
           } : null,
           buyerAddress: deliveryOption !== 'pickup' ? address : null,
-        }),
-        orderDate: admin.firestore.FieldValue.serverTimestamp(),
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-  
-      orderResult = {
-        orderId: orderRef.id,
-        buyerName,
-      };
-    });
-  
-    if (orderResult && orderResult.duplicate) {
-      return orderResult;// Return early if duplicate was found
+          orderDate: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: false });
+        console.log(`[PostOrder] Receipt task created for order ${orderId}`);
+      }
+    } catch (err) {
+      console.error(`[PostOrder] Receipt task failed for ${orderId}:`, err.message);
+      logTaskFailureAlert('receipt_task', orderId, buyerId, buyerName, err);
     }
-  
-    Promise.resolve().then(async () => {
-      try {
-        const productIds = items.map((item) => item.productId);
-        const shopIds = [...new Set(productsMeta
-          .filter((meta) => meta.data.shopId)
-          .map((meta) => meta.data.shopId))];
-  
-        await trackAdConversionInternal(buyerId, finalOrderId, productIds, shopIds);
-      } catch (convError) {
-        console.error('Error tracking ad conversion:', convError);
-        logTaskFailureAlert('ad_conversion', finalOrderId, buyerId, orderResult?.buyerName, convError);
+
+    // ── 4. Activity tracking ──────────────────────────────────────────────────
+    try {
+      if (activityItems && activityItems.length > 0) {
+        await trackPurchaseActivity(buyerId, activityItems, orderId);
+        console.log(`[PostOrder] Activity tracked for order ${orderId}`);
       }
-    });
-  
-    Promise.allSettled(
-      notificationData.map((notif) =>
-        createNotificationTask(
-          orderResult.orderId,
-          notif,
-          notif.recipientId,
-          orderResult.buyerName,
-          buyerId,
-        ),
-      ),
-    ).then((results) => {
-      const failed = results.filter((r) => r.status === 'rejected').length;
-      const succeeded = results.length - failed;
-      if (results.length > 0) {
-        console.log(`Notifications: ${succeeded} succeeded, ${failed} failed out of ${results.length}`);
-      }
-      if (failed > 0) {
-        results.forEach((result, idx) => {
-          if (result.status === 'rejected') {
-            console.error(`Notification ${idx} failed:`, result.reason?.message || result.reason);
-          }
-        });
-        logTaskFailureAlert('notification_partial', finalOrderId, buyerId, orderResult?.buyerName, {message: `${failed}/${results.length} notifications failed`});
-      }
-    }).catch((err) => {
-      console.error('Unexpected error in notification batch:', err);
-      logTaskFailureAlert('notifications', finalOrderId, buyerId, orderResult?.buyerName, err);
-    });
-  
-    Promise.resolve().then(async () => {
-      try {
-        const purchasedProductIds = items.map((item) => item.productId);
-        await createCartClearTask(buyerId, purchasedProductIds, finalOrderId);
-      } catch (cartClearError) {
-        console.error('Error creating cart clear task:', cartClearError);
-        logTaskFailureAlert('cart_clear', finalOrderId, buyerId, orderResult?.buyerName, cartClearError);
-      }
-    });
-  
-    Promise.resolve().then(async () => {
-      try {
-        const trackingItems = productsMeta.map(({data, item}) => ({
-          productId: data.id || item.productId,
-          shopId: data.shopId || null,
-          category: data.category,
-          subcategory: data.subcategory,
-          subsubcategory: data.subsubcategory,
-          brandModel: data.brandModel,
-          price: item.calculatedUnitPrice || data.price,
-          quantity: item.quantity || 1,
-        }));
-        
-        await trackPurchaseActivity(buyerId, trackingItems, finalOrderId);
-      } catch (trackingError) {
-        console.error('User activity tracking failed:', trackingError);
-        logTaskFailureAlert('activity_tracking', finalOrderId, buyerId, orderResult?.buyerName, trackingError);
-      }
-    });
-  
-    Promise.resolve().then(async () => {
-      try {
-        await createQRCodeTask(finalOrderId, {
-          buyerId,
-          buyerName: orderResult.buyerName,
-          items: items,
-          totalPrice: cartCalculatedTotal,
-          deliveryOption,
-        });
-      } catch (qrError) {
-        console.error('Error creating QR code task:', qrError);
-        logTaskFailureAlert('qr_code', finalOrderId, buyerId, orderResult?.buyerName, qrError);
-      }
-    });
-  
-    return {
-      orderId: orderResult.orderId,
-      success: true,
-      receiptPending: true,    
-    };
-  }
-  
-  // Helper to remove undefined values - PRESERVES FIELDVALUE
-  function removeUndefined(obj) {
-    if (Array.isArray(obj)) {
-      return obj.map((item) => removeUndefined(item));
+    } catch (err) {
+      console.error(`[PostOrder] Activity tracking failed for ${orderId}:`, err.message);
+      logTaskFailureAlert('activity_tracking', orderId, buyerId, buyerName, err);
     }
-  
-    if (!obj || typeof obj !== 'object') {
-      return obj;
-    }
-  
-    if (obj instanceof admin.firestore.Timestamp || obj instanceof admin.firestore.GeoPoint) {
-      return obj;
-    }
-  
-    if (obj.constructor && obj.constructor.name === 'FieldValue') {
-      return obj;
-    }
-  
-    const cleaned = {};
-    for (const [key, value] of Object.entries(obj)) {
-      if (value !== undefined) {
-        if (value && typeof value === 'object' &&
-            value.constructor && value.constructor.name === 'FieldValue') {
-          cleaned[key] = value;
-        } else if (value && typeof value === 'object') {
-          cleaned[key] = removeUndefined(value);
-        } else {
-          cleaned[key] = value;
-        }
+
+    // ── 5. Ad conversion ──────────────────────────────────────────────────────
+    try {
+      if (hasAdClicks && adConversion) {
+        await trackAdConversionInternal(
+          buyerId, orderId,
+          adConversion.productIds,
+          adConversion.shopIds,
+        );
+        console.log(`[PostOrder] Ad conversion tracked for order ${orderId}`);
       }
+    } catch (err) {
+      console.error(`[PostOrder] Ad conversion failed for ${orderId}:`, err.message);
+      logTaskFailureAlert('ad_conversion', orderId, buyerId, buyerName, err);
     }
-    return cleaned;
-  }
-  
-  // Cloud Task handler for notifications
-  export const processOrderNotification = onRequest(
-    {
-      region: 'europe-west3',
-      memory: '256MB',
-      timeoutSeconds: 30,
-      invoker: 'private',
-    },
-    async (request, response) => {
-      try {
-        const {
-          orderId,
+
+    response.status(200).send({ success: true, orderId });
+  },
+);
+
+export const processOrderNotification = onRequest(
+  { region: 'europe-west3', memory: '256MiB', timeoutSeconds: 30, invoker: 'private' },
+  async (request, response) => {
+    try {
+      const {
+        orderId, productId, productName, recipientId, buyerName,
+        buyerId, quantity, shopId, shopName, sellerId, isShopProduct,
+      } = request.body;
+
+      const db = admin.firestore();
+
+      if (isShopProduct && shopId) {
+        await db.collection('shop_notifications').doc(`${orderId}_${productId}`).set({
+          type: 'product_sold',
+          shopId,
+          shopName: shopName || 'Your Shop',
           productId,
           productName,
-          recipientId,
           buyerName,
           buyerId,
+          orderId,
           quantity,
-          shopId,
-          shopName,
           sellerId,
-          isShopProduct,
-        } = request.body;
-  
-        const db = admin.firestore();
-  
-        if (isShopProduct && shopId) {
-          // ✅ Shop product: Write to shop_notifications only
-          const shopNotificationId = `${orderId}_${productId}`;
-          await db.collection('shop_notifications').doc(shopNotificationId).set({
-            type: 'product_sold',
-            shopId,
-            shopName: shopName || 'Your Shop',
-            productId,
-            productName,
-            buyerName,
-            buyerId,
-            orderId,
-            quantity,
-            sellerId,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            isRead: {},
-            message_en: `Product "${productName}" has been sold!`,
-            message_tr: `"${productName}" ürünü satıldı!`,
-            message_ru: `Продукт "${productName}" был продан!`,
-          });
-        } else if (recipientId) {
-          // ✅ Individual seller: Write to user's notifications
-          await db.collection('users').doc(recipientId).collection('notifications').doc().set({
-            type: 'product_sold_user',
-            productId,
-            productName,
-            buyerName,
-            buyerId,
-            orderId,
-            quantity,
-            shopId: null,
-            sellerId,
-            isShopProduct: false,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            isRead: false,
-            message: `Your product "${productName}" has been sold!`,
-            message_en: `Your product "${productName}" has been sold!`,
-            message_tr: `Ürününüz "${productName}" satıldı!`,
-            message_ru: `Ваш продукт "${productName}" был продан!`,
-          });
-        }
-  
-        response.status(200).send('Notification created');
-      } catch (error) {
-        console.error('Error creating notification:', error);
-        response.status(500).send('Error creating notification');
-      }
-    },
-  );
-  
-  export const processPurchase = onCall(
-    {
-      region: 'europe-west3',
-      memory: '512MB',
-      timeoutSeconds: 60,
-    },
-    async (request) => {
-      if (!request.auth) {
-        throw new HttpsError('unauthenticated', 'You must be signed in to checkout.');
-      }
-  
-      return createOrderTransaction(request.auth.uid, request.data || {});
-    },
-  );
-  
-  export const initializeIsbankPayment = onCall(
-    {
-      region: 'europe-west3',
-      memory: '256MB',
-      timeoutSeconds: 30,
-    },
-    async (request) => {
-      try {
-        if (!request.auth) {
-          throw new HttpsError('unauthenticated', 'User must be authenticated');
-        }
-  
-        const {
-          amount,            // Client-calculated (kept for logging/comparison only)
-          orderNumber,
-          customerName,
-          customerEmail,
-          customerPhone,
-          cartData,
-        } = request.data;
-  
-        const sanitizedCustomerName = (() => {
-          if (!customerName) return 'Customer';
-          const sanitized = transliterate(customerName)
-            .replace(/[^a-zA-Z0-9\s]/g, '')
-            .trim()
-            .substring(0, 50);
-          return sanitized || 'Customer';
-        })();
-  
-        if (!orderNumber || !cartData) {
-          throw new HttpsError('invalid-argument', 'orderNumber and cartData are required');
-        }
-  
-        // ═══════════════════════════════════════════════════════════════
-        // SERVER-SIDE TOTAL CALCULATION — Single Source of Truth
-        // ═══════════════════════════════════════════════════════════════
-        const db = admin.firestore();
-        const userId = request.auth.uid;
-  
-        const cartCalculatedTotal = parseFloat(cartData.cartCalculatedTotal) || 0;
-        const deliveryOption = cartData.deliveryOption || 'normal';
-        const couponId = cartData.couponId || null;
-        const freeShippingBenefitId = cartData.freeShippingBenefitId || null;
-  
-        // --- 1. Fetch delivery settings from Firestore ---
-        let deliverySettings = null;
-        try {
-          const deliveryDoc = await db.collection('settings').doc('delivery').get();
-          if (deliveryDoc.exists) {
-            deliverySettings = deliveryDoc.data();
-          }
-        } catch (e) {
-          console.error('Failed to fetch delivery settings:', e);
-        }
-  
-        // --- 2. Calculate server-side delivery price ---
-        const serverDeliveryPriceRaw = calculateDeliveryPrice(
-          deliveryOption,
-          cartCalculatedTotal,
-          deliverySettings,
-        );
-  
-        // --- 3. Validate coupon & free shipping (read-only, no marking as used) ---
-        let serverCouponDiscount = 0;
-        let serverFreeShippingApplied = false;
-        let couponCode = null;
-  
-        if (couponId) {
-          try {
-            const couponRef = db.collection('users').doc(userId).collection('coupons').doc(couponId);
-            const couponDoc = await couponRef.get();
-  
-            if (couponDoc.exists) {
-              const coupon = couponDoc.data();
-              if (!coupon.isUsed && (!coupon.expiresAt || coupon.expiresAt.toDate() >= new Date())) {
-                serverCouponDiscount = Math.min(coupon.amount || 0, cartCalculatedTotal);
-                couponCode = coupon.code || null;
-              } else {
-                console.warn(`Coupon ${couponId} is invalid (used or expired)`);
-                // Don't throw — let createOrderTransaction handle the final validation
-                // This is just pre-calculation
-              }
-            }
-          } catch (e) {
-            console.error('Coupon validation failed:', e);
-            // Continue without coupon — createOrderTransaction will validate again
-          }
-        }
-  
-        if (freeShippingBenefitId) {
-          try {
-            const benefitRef = db.collection('users').doc(userId).collection('benefits').doc(freeShippingBenefitId);
-            const benefitDoc = await benefitRef.get();
-  
-            if (benefitDoc.exists) {
-              const benefit = benefitDoc.data();
-              if (!benefit.isUsed && (!benefit.expiresAt || benefit.expiresAt.toDate() >= new Date())) {
-                serverFreeShippingApplied = true;
-              } else {
-                console.warn(`Benefit ${freeShippingBenefitId} is invalid (used or expired)`);
-              }
-            }
-          } catch (e) {
-            console.error('Benefit validation failed:', e);
-          }
-        }
-  
-        // --- 4. Compute final delivery price (apply free shipping) ---
-        const serverDeliveryPrice = serverFreeShippingApplied ? 0 : serverDeliveryPriceRaw;
-  
-        // --- 5. Calculate the REAL final total ---
-        const serverFinalTotal = Math.max(0, cartCalculatedTotal - serverCouponDiscount) + serverDeliveryPrice;
-  
-        // --- 6. Log comparison for monitoring ---
-        const clientAmount = parseFloat(amount) || 0;
-        const discrepancy = Math.abs(serverFinalTotal - clientAmount);
-        if (discrepancy > 0.01) {
-          console.warn(`⚠️ PRICE DISCREPANCY: client=${clientAmount}, server=${serverFinalTotal}, diff=${discrepancy.toFixed(2)}`);
-          console.warn(`  Breakdown: subtotal=${cartCalculatedTotal}, coupon=-${serverCouponDiscount}, delivery=+${serverDeliveryPrice}`);
-        }
-  
-        console.log(`💰 Server total: ${serverFinalTotal} (subtotal: ${cartCalculatedTotal}, coupon: -${serverCouponDiscount}, delivery: +${serverDeliveryPrice})`);
-  
-        // ═══════════════════════════════════════════════════════════════
-        // USE SERVER-CALCULATED TOTAL FOR BANK
-        // ═══════════════════════════════════════════════════════════════
-        const formattedAmount = Math.round(serverFinalTotal).toString();
-        const rnd = Date.now().toString();
-  
-        const baseUrl = `https://europe-west3-emlak-mobile-app.cloudfunctions.net`;
-        const okUrl = `${baseUrl}/isbankPaymentCallback`;
-        const failUrl = `${baseUrl}/isbankPaymentCallback`;
-        const callbackUrl = `${baseUrl}/isbankPaymentCallback`;
-        const isbankConfig = await getIsbankConfig();
-  
-        const hashParams = {
-          BillToName: sanitizedCustomerName || '',
-          amount: formattedAmount,
-          callbackurl: callbackUrl,
-          clientid: isbankConfig.clientId,
-          currency: isbankConfig.currency,
-          email: customerEmail || '',
-          failurl: failUrl,
-          hashAlgorithm: 'ver3',
-          islemtipi: 'Auth',
-          lang: 'tr',
-          oid: orderNumber,
-          okurl: okUrl,
-          rnd: rnd,
-          storetype: isbankConfig.storeType,
-          taksit: '',
-          tel: customerPhone || '',
-        };
-  
-        const hash = await generateHashVer3(hashParams);
-  
-        const paymentParams = {
-          clientid: isbankConfig.clientId,
-          storetype: isbankConfig.storeType,
-          hash: hash,
-          hashAlgorithm: 'ver3',
-          islemtipi: 'Auth',
-          amount: formattedAmount,
-          currency: isbankConfig.currency,
-          oid: orderNumber,
-          okurl: okUrl,
-          failurl: failUrl,
-          callbackurl: callbackUrl,
-          lang: 'tr',
-          rnd: rnd,
-          taksit: '',
-          BillToName: sanitizedCustomerName || '',
-          email: customerEmail || '',
-          tel: customerPhone || '',
-        };
-  
-        console.log('Hash params:', JSON.stringify(hashParams, null, 2));
-        console.log('Payment params being sent:', JSON.stringify(paymentParams, null, 2));
-  
-        const timestamp = admin.firestore.FieldValue.serverTimestamp();
-  
-        await db.collection('pendingPayments').doc(orderNumber).set({
-          userId: request.auth.uid,
-          amount: serverFinalTotal,              // ✅ Server-calculated
-          formattedAmount: formattedAmount,
-          clientAmount: clientAmount,            // ✅ Keep client value for comparison/debugging
-          orderNumber: orderNumber,
-          status: 'awaiting_3d',
-          paymentParams: paymentParams,
-          cartData: cartData,
-          customerInfo: {
-            name: sanitizedCustomerName,
-            email: customerEmail,
-            phone: customerPhone,
-          },
-          // ✅ NEW: Pre-calculated values for createOrderTransaction
-          serverCalculation: {
-            itemsSubtotal: cartCalculatedTotal,
-            couponDiscount: serverCouponDiscount,
-            couponCode: couponCode,
-            deliveryPrice: serverDeliveryPrice,
-            deliveryPriceBeforeFreeShipping: serverDeliveryPriceRaw,
-            freeShippingApplied: serverFreeShippingApplied,
-            finalTotal: serverFinalTotal,
-            deliveryOption: deliveryOption,
-            calculatedAt: new Date().toISOString(),
-          },
-          createdAt: timestamp,
-          expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          isRead: {},
+          message_en: `Product "${productName}" has been sold!`,
+          message_tr: `"${productName}" ürünü satıldı!`,
+          message_ru: `Продукт "${productName}" был продан!`,
         });
-  
-        return {
-          success: true,
-          gatewayUrl: isbankConfig.gatewayUrl,
-          paymentParams: paymentParams,
-          orderNumber: orderNumber,
-        };
-      } catch (error) {
-        console.error('İşbank payment initialization error:', error);
-        throw new HttpsError('internal', error.message);
+      } else if (recipientId) {
+        await db.collection('users').doc(recipientId).collection('notifications').doc().set({
+          type: 'product_sold_user',
+          productId,
+          productName,
+          buyerName,
+          buyerId,
+          orderId,
+          quantity,
+          shopId: null,
+          sellerId,
+          isShopProduct: false,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          isRead: false,
+          message: `Your product "${productName}" has been sold!`,
+          message_en: `Your product "${productName}" has been sold!`,
+          message_tr: `Ürününüz "${productName}" satıldı!`,
+          message_ru: `Ваш продукт "${productName}" был продан!`,
+        });
       }
-    },
-  );
-  
-  // ═══════════════════════════════════════════════════════════════════════
-  // NEW HELPER: Calculate delivery price (mirrors Flutter logic exactly)
-  // ═══════════════════════════════════════════════════════════════════════
-  function calculateDeliveryPrice(deliveryOption, cartTotal, deliverySettings) {
-    if (!deliverySettings) {
-      // Fallback defaults (same as Flutter defaults)
-      const defaults = {
-        normal: { price: 150, freeThreshold: 2000 },
-        express: { price: 350, freeThreshold: 10000 },
+
+      response.status(200).send('Notification created');
+    } catch (error) {
+      console.error('Error creating notification:', error);
+      response.status(500).send('Error creating notification');
+    }
+  },
+);
+
+export const initializeIsbankPayment = onCall(
+  {
+    region: 'europe-west3',
+    memory: '256MiB',
+    timeoutSeconds: 30,
+    secrets: [
+      'ISBANK_CLIENT_ID',
+      'ISBANK_API_USER', 
+      'ISBANK_API_PASSWORD',
+      'ISBANK_STORE_KEY',
+    ],
+  },
+  async (request) => {
+    try {
+      if (!request.auth) throw new HttpsError('unauthenticated', 'User must be authenticated');
+      
+      const db = admin.firestore();
+      const userId = request.auth.uid;
+
+      await checkPaymentRateLimit(db, userId);
+
+      const { amount, orderNumber, customerName, customerEmail, customerPhone, cartData } = request.data;
+
+      const sanitizedCustomerName = (() => {
+        if (!customerName) return 'Customer';
+        const s = transliterate(customerName).replace(/[^a-zA-Z0-9\s]/g, '').trim().substring(0, 50);
+        return s || 'Customer';
+      })();
+
+      if (!orderNumber || !cartData) {
+        throw new HttpsError('invalid-argument', 'orderNumber and cartData are required');
+      }
+
+      const cartCalculatedTotal = parseFloat(cartData.cartCalculatedTotal) || 0;
+      const deliveryOption = cartData.deliveryOption || 'normal';
+      const couponId = cartData.couponId || null;
+      const freeShippingBenefitId = cartData.freeShippingBenefitId || null;
+
+      let deliverySettings = null;
+      try {
+        const deliveryDoc = await db.collection('settings').doc('delivery').get();
+        if (deliveryDoc.exists) deliverySettings = deliveryDoc.data();
+      } catch (e) {
+        console.error('Failed to fetch delivery settings:', e);
+      }
+
+      const serverDeliveryPriceRaw = calculateDeliveryPrice(deliveryOption, cartCalculatedTotal, deliverySettings);
+
+      let serverCouponDiscount = 0;
+      let serverFreeShippingApplied = false;
+      let couponCode = null;
+
+      if (couponId) {
+        try {
+          const couponDoc = await db.collection('users').doc(userId).collection('coupons').doc(couponId).get();
+          if (couponDoc.exists) {
+            const coupon = couponDoc.data();
+            if (!coupon.isUsed && (!coupon.expiresAt || coupon.expiresAt.toDate() >= new Date())) {
+              serverCouponDiscount = Math.min(coupon.amount || 0, cartCalculatedTotal);
+              couponCode = coupon.code || null;
+            }
+          }
+        } catch (e) {console.error('Coupon validation failed:', e);}
+      }
+
+      if (freeShippingBenefitId) {
+        try {
+          const benefitDoc = await db.collection('users').doc(userId).collection('benefits').doc(freeShippingBenefitId).get();
+          if (benefitDoc.exists) {
+            const benefit = benefitDoc.data();
+            if (!benefit.isUsed && (!benefit.expiresAt || benefit.expiresAt.toDate() >= new Date())) {
+              serverFreeShippingApplied = true;
+            }
+          }
+        } catch (e) {console.error('Benefit validation failed:', e);}
+      }
+
+      const serverDeliveryPrice = serverFreeShippingApplied ? 0 : serverDeliveryPriceRaw;
+      const serverFinalTotal = Math.max(0, cartCalculatedTotal - serverCouponDiscount) + serverDeliveryPrice;
+
+      const clientAmount = parseFloat(amount) || 0;
+      const discrepancy = Math.abs(serverFinalTotal - clientAmount);
+      if (discrepancy > 0.01) {
+        console.warn(`⚠️ PRICE DISCREPANCY: client=${clientAmount}, server=${serverFinalTotal}, diff=${discrepancy.toFixed(2)}`);
+      }
+
+      const formattedAmount = Math.round(serverFinalTotal).toString();
+      const rnd = Date.now().toString();
+      const callbackUrl = `https://europe-west3-emlak-mobile-app.cloudfunctions.net/isbankPaymentCallback`;
+      const config = getIsbankConfig();
+
+      const hashParams = {
+        BillToName: sanitizedCustomerName,
+        amount: formattedAmount,
+        callbackurl: callbackUrl,
+        clientid: config.clientId,
+        currency: config.currency,
+        email: customerEmail || '',
+        failurl: callbackUrl,
+        hashAlgorithm: 'ver3',
+        islemtipi: 'Auth',
+        lang: 'tr',
+        oid: orderNumber,
+        okurl: callbackUrl,
+        rnd,
+        storetype: config.storeType,
+        taksit: '',
+        tel: customerPhone || '',
       };
-      const opt = defaults[deliveryOption] || defaults.normal;
-      return cartTotal >= opt.freeThreshold ? 0 : opt.price;
+
+      const hash = generateHashVer3(hashParams);
+
+      const paymentParams = {
+        clientid: config.clientId,
+        storetype: config.storeType,
+        hash,
+        hashAlgorithm: 'ver3',
+        islemtipi: 'Auth',
+        amount: formattedAmount,
+        currency: config.currency,
+        oid: orderNumber,
+        okurl: callbackUrl,
+        failurl: callbackUrl,
+        callbackurl: callbackUrl,
+        lang: 'tr',
+        rnd,
+        taksit: '',
+        BillToName: sanitizedCustomerName,
+        email: customerEmail || '',
+        tel: customerPhone || '',
+      };
+
+      const docData = {
+        userId,
+        amount: serverFinalTotal,
+        formattedAmount,
+        clientAmount,
+        orderNumber,
+        status: 'awaiting_3d',
+        paymentParams,
+        cartData,
+        customerInfo: { name: sanitizedCustomerName, email: customerEmail, phone: customerPhone },
+        serverCalculation: {
+          itemsSubtotal: cartCalculatedTotal,
+          couponDiscount: serverCouponDiscount,
+          couponCode,
+          deliveryPrice: serverDeliveryPrice,
+          deliveryPriceBeforeFreeShipping: serverDeliveryPriceRaw,
+          freeShippingApplied: serverFreeShippingApplied,
+          finalTotal: serverFinalTotal,
+          deliveryOption,
+          calculatedAt: new Date().toISOString(),
+        },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
+      };
+
+      let docWritten = false;
+      let lastWriteError = null;
+
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const batch = db.batch();
+          batch.set(db.collection('pendingPayments').doc(orderNumber), docData);
+          batch.set(db.collection('pendingPaymentsBackup').doc(orderNumber), { ...docData, _isBackup: true });
+          await batch.commit();
+          docWritten = true;
+          break;
+        } catch (writeErr) {
+          lastWriteError = writeErr;
+          console.error(`[initializeIsbankPayment] Write attempt ${attempt}/3 failed:`, writeErr.message);
+          if (attempt < 3) await new Promise((r) => setTimeout(r, 300 * attempt));
+        }
+      }
+
+      if (!docWritten) {
+        console.error(`[initializeIsbankPayment] All 3 write attempts failed for ${orderNumber}`);
+        try {
+          await db.collection('_payment_alerts').add({
+            type: 'payment_doc_write_failed',
+            severity: 'high',
+            orderNumber,
+            userId,
+            errorMessage: lastWriteError?.message || 'Unknown write error',
+            isRead: false,
+            isResolved: false,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        } catch (_) {/* alerting must never throw */}
+        throw new HttpsError('internal', 'Payment session could not be created. Please try again.');
+      }
+
+      return { success: true, gatewayUrl: config.gatewayUrl, paymentParams, orderNumber };
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      console.error('İşbank payment initialization error:', error);
+      throw new HttpsError('internal', error.message);
     }
-  
-    const optionSettings = deliverySettings[deliveryOption] || deliverySettings['normal'];
-    if (!optionSettings) {
-      return 0;
-    }
-  
-    const price = parseFloat(optionSettings.price) || 0;
-    const freeThreshold = parseFloat(optionSettings.freeThreshold) || Infinity;
-  
-    return cartTotal >= freeThreshold ? 0 : price;
+  },
+);
+
+function calculateDeliveryPrice(deliveryOption, cartTotal, deliverySettings) {
+  if (!deliverySettings) {
+    const defaults = {
+      normal: { price: 150, freeThreshold: 2000 },
+      express: { price: 350, freeThreshold: 10000 },
+    };
+    const opt = defaults[deliveryOption] || defaults.normal;
+    return cartTotal >= opt.freeThreshold ? 0 : opt.price;
   }
-  
-  async function generateHashVer3(params) {
-    // Get all parameter keys except 'hash' and 'encoding'!!!
-    const keys = Object.keys(params)
-      .filter((key) => key !== 'hash' && key !== 'encoding')
-      .sort((a, b) => {
-        return a.toLowerCase().localeCompare(b.toLowerCase(), 'en-US'); // ✅
-      });
-      const isbankConfig = await getIsbankConfig();
-    // Build the plain text with pipe separators
-    const values = keys.map((key) => {
-      let value = String(params[key] || '');
-      // Escape special characters as per documentation
-      value = value.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
-      return value;
-    });
-  
-    const plainText = values.join('|') + '|' + isbankConfig.storeKey.trim();
-  
-    console.log('Hash keys order:', keys.join('|'));
-    console.log('Hash plain text:', plainText);
-  
-    return crypto.createHash('sha512').update(plainText, 'utf8').digest('base64');
-  }
-  
- // ── Helper ────────────────────────────────────────────────────────────────────
+  const optionSettings = deliverySettings[deliveryOption] || deliverySettings['normal'];
+  if (!optionSettings) return 0;
+  const price = parseFloat(optionSettings.price) || 0;
+  const freeThreshold = parseFloat(optionSettings.freeThreshold) || Infinity;
+  return cartTotal >= freeThreshold ? 0 : price;
+}
+
+function generateHashVer3(params) {
+  const config = getIsbankConfig();
+
+  const keys = Object.keys(params)
+    .filter((key) => key !== 'hash' && key !== 'encoding')
+    .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), 'en-US'));
+
+  const plainText = keys
+    .map((key) => String(params[key] || '').replace(/\\/g, '\\\\').replace(/\|/g, '\\|'))
+    .join('|') + '|' + config.storeKey.trim();
+
+  return crypto.createHash('sha512').update(plainText, 'utf8').digest('base64');
+}
+
 function buildRedirectHtml(deepLink, title, subtitle = '') {
   const esc = (s) => String(s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   return `<!DOCTYPE html>
 <html>
 <head><title>${esc(title)}</title></head>
@@ -1488,14 +1390,20 @@ function buildRedirectHtml(deepLink, title, subtitle = '') {
 </html>`;
 }
 
-// ── Cloud Function ─────────────────────────────────────────────────────────────
 export const isbankPaymentCallback = onRequest(
   {
     region: 'europe-west3',
-    memory: '512MB',
+    memory: '512MiB',
+    minInstances: 1,
     timeoutSeconds: 90,
     cors: true,
     invoker: 'public',
+    secrets: [
+      'ISBANK_CLIENT_ID',
+      'ISBANK_API_USER',
+      'ISBANK_API_PASSWORD',
+      'ISBANK_STORE_KEY',
+    ],
   },
   async (request, response) => {
     const startTime = Date.now();
@@ -1505,35 +1413,17 @@ export const isbankPaymentCallback = onRequest(
       console.log('[Payment] Callback invoked:', request.method);
       console.log('[Payment] Body:', JSON.stringify(request.body, null, 2));
 
-      const {
-        Response: bankResponse,
-        mdStatus,
-        oid,
-        ProcReturnCode,
-        ErrMsg,
-        HASH,
-      } = request.body;
+      const { Response: bankResponse, mdStatus, oid, ProcReturnCode, ErrMsg, HASH } = request.body;
 
-      // ── 1. İşbank probe request guard ──────────────────────────────────────
       if (!request.body.oid && request.body.HASH && request.body.rnd) {
-        console.log('[Payment] İşbank probe request — responding OK');
         response.status(200).send('<html><body></body></html>');
         return;
       }
 
-      // ── 2. Require oid ──────────────────────────────────────────────────────
-      if (!oid) {
-        console.error('[Payment] Missing oid. Body:', request.body);
-        response.status(400).send('Order number missing');
-        return;
-      }
+      if (!oid) {response.status(400).send('Order number missing'); return;}
 
-      // ── 3. Fetch storeKey before transaction (no async allowed inside tx) ───
-      const storeKey = (await getSecret(
-        'projects/emlak-mobile-app/secrets/ISBANK_STORE_KEY/versions/latest',
-      )).trim();
+      const storeKey = process.env.ISBANK_STORE_KEY.trim();
 
-      // ── 4. Compute Hash v3 before transaction ───────────────────────────────
       const computedHash = (() => {
         const keys = Object.keys(request.body)
           .filter((key) => {
@@ -1543,20 +1433,17 @@ export const isbankPaymentCallback = onRequest(
           })
           .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), 'en-US'));
 
-        const plainText =
-          keys
-            .map((key) => String(request.body[key] ?? '')
-              .replace(/\\/g, '\\\\').replace(/\|/g, '\\|'))
-            .join('|') +
-          '|' +
-          storeKey.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
-
-        return crypto.createHash('sha512').update(plainText, 'utf8').digest('base64');
+        return crypto.createHash('sha512')
+          .update(
+            keys.map((key) => String(request.body[key] ?? '').replace(/\\/g, '\\\\').replace(/\|/g, '\\|'))
+              .join('|') + '|' + storeKey.replace(/\\/g, '\\\\').replace(/\|/g, '\\|'),
+            'utf8',
+          )
+          .digest('base64');
       })();
 
       const hashValid = HASH && computedHash === HASH;
 
-      // ── 5. Log every callback attempt (forensics) ───────────────────────────
       const callbackLogRef = db.collection('payment_callback_logs').doc();
       await callbackLogRef.set({
         oid,
@@ -1568,172 +1455,174 @@ export const isbankPaymentCallback = onRequest(
         processingStarted: new Date(startTime).toISOString(),
       });
 
-      // ── 6. Define ref before transaction ────────────────────────────────────
       const pendingPaymentRef = db.collection('pendingPayments').doc(oid);
 
-      // ── 7. Atomic transaction ────────────────────────────────────────────────
-      const transactionResult = await db.runTransaction(async (tx) => {
-        const pendingSnap = await tx.get(pendingPaymentRef);
+      const txResult = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(pendingPaymentRef);
 
-        if (!pendingSnap.exists) {
+        if (!snap.exists) {
+          const backupSnap = await tx.get(db.collection('pendingPaymentsBackup').doc(oid));
+
+          if (backupSnap.exists) {
+            console.warn(`[Payment] Primary doc missing for ${oid} — restoring from backup`);
+            const backupData = backupSnap.data();
+
+            tx.set(pendingPaymentRef, {
+              ...backupData,
+              _restoredFromBackup: true,
+              _restoredAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+
+            if (!hashValid) {
+              tx.update(pendingPaymentRef, {
+                status: 'hash_verification_failed',
+                receivedHash: HASH || null,
+                computedHash,
+                callbackLogId: callbackLogRef.id,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                ...setPaymentExpiresAt('hash_verification_failed'),
+              });
+              return { error: 'hash_failed' };
+            }
+
+            const isAuthSuccess = ['1', '2', '3', '4'].includes(mdStatus);
+            const isTxnSuccess = bankResponse === 'Approved' && ProcReturnCode === '00';
+
+            if (!isAuthSuccess || !isTxnSuccess) {
+              tx.update(pendingPaymentRef, {
+                status: 'payment_failed', mdStatus, procReturnCode: ProcReturnCode,
+                errorMessage: ErrMsg || 'Payment failed', rawResponse: request.body,
+                callbackLogId: callbackLogRef.id, updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                ...setPaymentExpiresAt('payment_failed'),
+              });
+              return { error: 'payment_failed', message: ErrMsg || 'Payment failed' };
+            }
+
+            tx.update(pendingPaymentRef, {
+              status: 'processing', mdStatus, procReturnCode: ProcReturnCode,
+              rawResponse: request.body, callbackLogId: callbackLogRef.id,
+              processingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+              ...setPaymentExpiresAt('processing'),
+            });
+            return { success: true, pendingPayment: backupData, restoredFromBackup: true };
+          }
+
+          console.error(`[Payment] CRITICAL: No doc found for ${oid} in primary or backup`);
           return { error: 'not_found' };
         }
 
-        const pendingPayment = pendingSnap.data();
+        const p = snap.data();
 
-        // Idempotency guards
-        if (pendingPayment.status === 'completed') {
-          return { alreadyProcessed: true, status: 'completed', orderId: pendingPayment.orderId };
-        }
-        if (pendingPayment.status === 'payment_succeeded_order_failed') {
-          return { alreadyProcessed: true, status: 'payment_succeeded_order_failed' };
-        }
-        if (pendingPayment.status === 'payment_failed') {
-          return { alreadyProcessed: true, status: 'payment_failed' };
-        }
-        if (pendingPayment.status === 'processing' ||
-            pendingPayment.status === 'payment_verified_processing_order') {
-          return { retry: true, pendingPayment };
-        }
-        if (pendingPayment.status !== 'awaiting_3d') {
-          return { alreadyProcessed: true, status: pendingPayment.status };
-        }
+        if (p.status === 'completed')                         return { alreadyProcessed: true, status: 'completed', orderId: p.orderId };
+        if (p.status === 'payment_succeeded_order_failed')    return { alreadyProcessed: true, status: p.status };
+        if (p.status === 'payment_failed')                    return { alreadyProcessed: true, status: p.status };
+        if (p.status === 'hash_verification_failed')          return { alreadyProcessed: true, status: p.status };
+        if (p.status === 'processing' ||
+            p.status === 'payment_verified_processing_order') return { retry: true, pendingPayment: p };
+        if (p.status !== 'awaiting_3d')                       return { alreadyProcessed: true, status: p.status };
 
-        // Hash check (computed outside, acted on inside)
         if (!hashValid) {
-          console.error('[Payment] Hash mismatch for oid:', oid);
           tx.update(pendingPaymentRef, {
             status: 'hash_verification_failed',
             receivedHash: HASH || null,
             computedHash,
             callbackLogId: callbackLogRef.id,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            ...setPaymentExpiresAt('hash_verification_failed'),
           });
           return { error: 'hash_failed' };
         }
 
-        // Payment result check
         const isAuthSuccess = ['1', '2', '3', '4'].includes(mdStatus);
         const isTxnSuccess = bankResponse === 'Approved' && ProcReturnCode === '00';
 
         if (!isAuthSuccess || !isTxnSuccess) {
           tx.update(pendingPaymentRef, {
-            status: 'payment_failed',
-            mdStatus,
-            procReturnCode: ProcReturnCode,
-            errorMessage: ErrMsg || 'Payment failed',
-            rawResponse: request.body,
-            callbackLogId: callbackLogRef.id,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            status: 'payment_failed', mdStatus, procReturnCode: ProcReturnCode,
+            errorMessage: ErrMsg || 'Payment failed', rawResponse: request.body,
+            callbackLogId: callbackLogRef.id, updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            ...setPaymentExpiresAt('payment_failed'),
           });
           return { error: 'payment_failed', message: ErrMsg || 'Payment failed' };
         }
 
-        // Mark as processing — prevents race conditions on duplicate callbacks
         tx.update(pendingPaymentRef, {
-          status: 'processing',
-          mdStatus,
-          procReturnCode: ProcReturnCode,
-          rawResponse: request.body,
-          callbackLogId: callbackLogRef.id,
+          status: 'processing', mdStatus, procReturnCode: ProcReturnCode,
+          rawResponse: request.body, callbackLogId: callbackLogRef.id,
           processingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+          ...setPaymentExpiresAt('processing'),
         });
 
-        return { success: true, pendingPayment };
+        return { success: true, pendingPayment: p };
       });
 
-      // ── 8. Handle transaction outcomes ──────────────────────────────────────
+      if (txResult.error === 'not_found') {
+        try {
+          await db.collection('_payment_alerts').add({
+            type: 'payment_callback_no_doc',
+            severity: 'critical',
+            orderNumber: oid,
+            bankCallbackBody: request.body,
+            mdStatus, bankResponse, ProcReturnCode,
+            ip: request.ip || request.headers['x-forwarded-for'] || null,
+            isRead: false,
+            isResolved: false,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            message: 'Payment may have been charged but no session doc exists. Manual recovery required.',
+          });
+        } catch (_) {/* alerting must never throw */}
 
-      if (transactionResult.error === 'not_found') {
-        response.status(404).send('Payment session not found');
-        return;
-      }
-
-      if (transactionResult.error === 'hash_failed') {
         response.send(buildRedirectHtml(
-          'payment-failed://hash-error',
-          'Ödeme Doğrulama Hatası',
-          'Lütfen tekrar deneyin.',
+          'payment-failed://session-not-found',
+          'Ödeme Oturumu Bulunamadı',
+          `Ödemeniz alınmış olabilir. Lütfen destek ile iletişime geçin. Referans: ${oid}`,
         ));
         return;
       }
 
-      if (transactionResult.error === 'payment_failed') {
+      if (txResult.error === 'hash_failed') {
+        response.send(buildRedirectHtml('payment-failed://hash-error', 'Ödeme Doğrulama Hatası', 'Lütfen tekrar deneyin.'));
+        return;
+      }
+
+      if (txResult.error === 'payment_failed') {
         response.send(buildRedirectHtml(
-          `payment-failed://${encodeURIComponent(transactionResult.message)}`,
-          'Ödeme Başarısız',
-          transactionResult.message,
+          `payment-failed://${encodeURIComponent(txResult.message)}`, 'Ödeme Başarısız', txResult.message,
         ));
         return;
       }
 
-      if (transactionResult.alreadyProcessed) {
-        if (transactionResult.status === 'completed') {
-          response.send(buildRedirectHtml(
-            `payment-success://${transactionResult.orderId}`,
-            '✓ Ödeme Başarılı',
-            'Siparişiniz oluşturuldu.',
-          ));
+      if (txResult.alreadyProcessed) {
+        if (txResult.status === 'completed') {
+          response.send(buildRedirectHtml(`payment-success://${txResult.orderId}`, '✓ Ödeme Başarılı', 'Siparişiniz oluşturuldu.'));
         } else {
-          response.send(buildRedirectHtml(
-            `payment-status://${transactionResult.status}`,
-            'İşlem Zaten İşlendi',
-          ));
+          response.send(buildRedirectHtml(`payment-status://${txResult.status}`, 'İşlem Zaten İşlendi'));
         }
         return;
       }
 
-      if (transactionResult.retry) {
-        // Another callback invocation is already processing — poll until resolved
-        console.log(`[Payment] ${oid} already processing, polling for completion...`);
-        let retryCount = 0;
-        const maxRetries = 20;
-        const retryDelay = 500;
-
-        while (retryCount < maxRetries) {
-          await new Promise((resolve) => setTimeout(resolve, retryDelay));
-          const checkSnap = await pendingPaymentRef.get();
-          const checkData = checkSnap.data();
-
-          if (checkData.status === 'completed') {
-            response.send(buildRedirectHtml(
-              `payment-success://${checkData.orderId}`,
-              '✓ Ödeme Başarılı',
-              'Siparişiniz oluşturuldu.',
-            ));
-            return;
-          }
-          if (checkData.status === 'payment_succeeded_order_failed' ||
-              checkData.status === 'payment_failed') {
-            response.send(buildRedirectHtml(
-              'payment-failed://processing-error',
-              'İşlem Hatası',
-              'Lütfen destek ile iletişime geçin.',
-            ));
-            return;
-          }
-          retryCount++;
-        }
-
-        console.error(`[Payment] Timeout polling for ${oid}`);
-        response.status(500).send('Processing timeout');
+      if (txResult.retry) {
+        console.log(`[Payment] ${oid} already processing — client listener will handle completion`);
+        response.send(buildRedirectHtml(
+          `payment-status://processing`,
+          'İşleminiz Devam Ediyor',
+          'Ödemeniz işleniyor, lütfen bekleyin.',
+        ));
         return;
       }
 
-      // ── 9. Create the order ─────────────────────────────────────────────────
       try {
-        const orderResult = await createOrderTransaction(
-          transactionResult.pendingPayment.userId,
-          {
-            ...transactionResult.pendingPayment.cartData,
-            paymentOrderId: oid,
-            paymentMethod: 'isbank_3d',
-            serverCalculation: transactionResult.pendingPayment.serverCalculation || null,
-          },
-        );
+        const { pendingPayment } = txResult;
+
+        const orderResult = await createOrderTransaction(pendingPayment.userId, {
+          ...pendingPayment.cartData,
+          paymentOrderId: oid,
+          paymentMethod: 'isbank_3d',
+          serverCalculation: pendingPayment.serverCalculation || null,
+        });
 
         if (orderResult.duplicate) {
-          console.log(`[Payment] Duplicate order detected for payment ${oid}: ${orderResult.orderId}`);
+          console.log(`[Payment] Duplicate order for payment ${oid}: ${orderResult.orderId}`);
         }
 
         await pendingPaymentRef.update({
@@ -1741,6 +1630,7 @@ export const isbankPaymentCallback = onRequest(
           orderId: orderResult.orderId,
           completedAt: admin.firestore.FieldValue.serverTimestamp(),
           processingDuration: Date.now() - startTime,
+          ...setPaymentExpiresAt('completed'),
         });
 
         await callbackLogRef.update({
@@ -1750,12 +1640,8 @@ export const isbankPaymentCallback = onRequest(
           processingDuration: Date.now() - startTime,
         });
 
-        console.log(`[Payment] ${oid} → order ${orderResult.orderId} created successfully`);
-        response.send(buildRedirectHtml(
-          `payment-success://${orderResult.orderId}`,
-          '✓ Ödeme Başarılı',
-          'Siparişiniz oluşturuldu.',
-        ));
+        console.log(`[Payment] ${oid} → order ${orderResult.orderId} created`);
+        response.send(buildRedirectHtml(`payment-success://${orderResult.orderId}`, '✓ Ödeme Başarılı', 'Siparişiniz oluşturuldu.'));
       } catch (orderError) {
         console.error('[Payment] Order creation failed after successful payment:', orderError);
 
@@ -1763,6 +1649,7 @@ export const isbankPaymentCallback = onRequest(
           status: 'payment_succeeded_order_failed',
           orderError: orderError.message,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          ...setPaymentExpiresAt('payment_succeeded_order_failed'),
         });
 
         await callbackLogRef.update({
@@ -1771,27 +1658,27 @@ export const isbankPaymentCallback = onRequest(
           success: false,
         });
 
-        // Alert for manual resolution — payment taken but no order
-        await db.collection('_payment_alerts').doc(`product_${oid}`).set({
-          type: 'order_creation_failed_after_payment',
-          severity: 'high',
-          paymentOrderId: oid,
-          userId: transactionResult.pendingPayment?.userId,
-          errorMessage: orderError.message,
-          isRead: false,
-          isResolved: false,
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        });
+        try {
+          await db.collection('_payment_alerts').doc(`product_${oid}`).set({
+            type: 'order_creation_failed_after_payment',
+            severity: 'high',
+            paymentOrderId: oid,
+            userId: txResult.pendingPayment?.userId,
+            errorMessage: orderError.message,
+            isRead: false,
+            isResolved: false,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        } catch (_) {/* alerting must never throw */}
 
         response.send(buildRedirectHtml(
           'payment-failed://order-creation-error',
           'Sipariş Hatası',
-          'Ödeme alındı ancak sipariş oluşturulamadı. Lütfen destek ile iletişime geçin.',
+          `Ödeme alındı ancak sipariş oluşturulamadı. Lütfen destek ile iletişime geçin. Referans: ${oid}`,
         ));
       }
     } catch (error) {
       console.error('[Payment] Critical callback error:', error);
-
       try {
         await db.collection('payment_callback_errors').add({
           oid: request.body?.oid || 'unknown',
@@ -1800,131 +1687,230 @@ export const isbankPaymentCallback = onRequest(
           requestBody: request.body,
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
         });
-      } catch (_) {
-        // silent — logging must never throw
-      }
-
+      } catch (_) {/* alerting must never throw */}
       response.status(500).send('Internal server error');
     }
   },
 );
-  
-  export const checkIsbankPaymentStatus = onCall(
-    {
-      region: 'europe-west3',
-      memory: '128MB',
-      timeoutSeconds: 10,
-    },
-    async (request) => {
-      try {
-        if (!request.auth) {
-          throw new HttpsError('unauthenticated', 'User must be authenticated');
+
+export const checkIsbankPaymentStatus = onCall(
+  { region: 'europe-west3', memory: '128MiB', timeoutSeconds: 10 },
+  async (request) => {
+    try {
+      if (!request.auth) throw new HttpsError('unauthenticated', 'User must be authenticated');
+      const {orderNumber} = request.data;
+      if (!orderNumber) throw new HttpsError('invalid-argument', 'Order number is required');
+
+      const snap = await admin.firestore().collection('pendingPayments').doc(orderNumber).get();
+      if (!snap.exists) throw new HttpsError('not-found', 'Payment not found');
+
+      const p = snap.data();
+      if (p.userId !== request.auth.uid) throw new HttpsError('permission-denied', 'Unauthorized');
+
+      return { orderNumber, status: p.status, orderId: p.orderId || null, errorMessage: p.errorMessage || null };
+    } catch (error) {
+      console.error('Check payment status error:', error);
+      throw new HttpsError('internal', error.message);
+    }
+  },
+);
+
+export const recoverStuckPayments = onSchedule(
+  { schedule: '*/5 * * * *', region: 'europe-west3', memory: '512MiB', timeoutSeconds: 300 },
+  async () => {
+    const db = admin.firestore();
+    const fiveMinutesAgo = admin.firestore.Timestamp.fromMillis(Date.now() - 5 * 60 * 1000);
+
+    const stuckSnap = await db.collection('pendingPayments')
+      .where('status', 'in', ['processing', 'payment_verified_processing_order'])
+      .where('processingStartedAt', '<=', fiveMinutesAgo)
+      .limit(100)
+      .get();
+
+    if (stuckSnap.empty) return;
+
+    console.warn(`[Recovery] Found ${stuckSnap.docs.length} stuck payment(s)`);
+
+    const CONCURRENCY = 5;
+    const results = { recovered: 0, skipped: 0, failed: 0 };
+
+    for (let i = 0; i < stuckSnap.docs.length; i += CONCURRENCY) {
+      const chunk = stuckSnap.docs.slice(i, i + CONCURRENCY);
+
+      const settled = await Promise.allSettled(chunk.map(async (doc) => {
+        const oid = doc.id;
+        const p   = doc.data();
+
+        if ((p.recoveryAttemptCount || 0) >= 5) {
+          console.error(`[Recovery] ${oid} exceeded max attempts, giving up`);
+          await doc.ref.update({
+            status: 'payment_succeeded_order_failed',
+            orderError: 'Max recovery attempts exceeded',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            ...setPaymentExpiresAt('payment_succeeded_order_failed'),
+          });
+          // Alert only on the give-up — not on every attempt
+          try {
+            await db.collection('_payment_alerts').add({
+              type: 'payment_recovery_max_attempts', severity: 'high',
+              orderNumber: oid, userId: p.userId,
+              message: `Payment ${oid} exceeded max recovery attempts`,
+              isRead: false, isResolved: false,
+              timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          } catch (_) {/* alerting must never throw */}
+          return 'skipped';
         }
-  
-        const {orderNumber} = request.data;
-  
-        if (!orderNumber) {
-          throw new HttpsError('invalid-argument', 'Order number is required');
+
+        // Atomic claim — prevents double-execution if two scheduler runs overlap
+        const claimed = await db.runTransaction(async (tx) => {
+          const fresh = (await tx.get(doc.ref)).data();
+          if (!['processing', 'payment_verified_processing_order'].includes(fresh.status)) return false;
+          tx.update(doc.ref, {
+            status: 'payment_verified_processing_order',
+            recoveryAttemptedAt: admin.firestore.FieldValue.serverTimestamp(),
+            recoveryAttemptCount: admin.firestore.FieldValue.increment(1),
+          });
+          return true;
+        });
+
+        if (!claimed) {
+          console.log(`[Recovery] ${oid} already resolved by concurrent run, skipping`);
+          return 'skipped';
         }
-  
-        const db = admin.firestore();
-        const pendingPaymentSnap = await db.collection('pendingPayments').doc(orderNumber).get();
-  
-        if (!pendingPaymentSnap.exists) {
-          throw new HttpsError('not-found', 'Payment not found');
+
+        const orderResult = await createOrderTransaction(p.userId, {
+          ...p.cartData,
+          paymentOrderId: oid,
+          paymentMethod: 'isbank_3d',
+          serverCalculation: p.serverCalculation || null,
+        });
+
+        await doc.ref.update({
+          status: 'completed',
+          orderId: orderResult.orderId,
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+          recoveredBy: 'recovery_scheduler',
+          ...setPaymentExpiresAt('completed'),
+        });
+
+        try {
+          await db.collection('_payment_alerts').add({
+            type: 'payment_recovered', severity: 'medium',
+            orderNumber: oid, userId: p.userId, orderId: orderResult.orderId,
+            message: `Recovery scheduler fixed stuck payment: ${oid}`,
+            isRead: false, isResolved: false,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        } catch (_) {/* alerting must never throw */}
+
+        console.log(`[Recovery] ✅ Recovered ${oid} → order ${orderResult.orderId}`);
+        return 'recovered';
+      }));
+
+      settled.forEach((result, idx) => {
+        if (result.status === 'fulfilled') {
+          result.value === 'recovered' ? results.recovered++ : results.skipped++;
+        } else {
+          results.failed++;
+          const oid = chunk[idx].id;
+          const p   = chunk[idx].data();
+          console.error(`[Recovery] Failed to recover ${oid}:`, result.reason?.message);
+
+          // Fire-and-forget — don't let alert failure propagate
+          db.runTransaction(async (tx) => {
+            const fresh = (await tx.get(chunk[idx].ref)).data();
+            // Only mark as failed if we actually claimed it (status was flipped)
+            if (fresh.status === 'payment_verified_processing_order') {
+              tx.update(chunk[idx].ref, {
+                status: 'payment_succeeded_order_failed',
+                orderError: result.reason?.message || 'Recovery failed',
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                ...setPaymentExpiresAt('payment_succeeded_order_failed'),
+              });
+            }
+          }).catch(console.error);
+
+          db.collection('_payment_alerts').add({
+            type: 'payment_recovery_failed', severity: 'high',
+            orderNumber: oid, userId: p.userId,
+            errorMessage: result.reason?.message || 'Unknown error',
+            isRead: false, isResolved: false,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          }).catch(() => {});
         }
-  
-        const pendingPayment = pendingPaymentSnap.data();
-  
-        if (pendingPayment.userId !== request.auth.uid) {
-          throw new HttpsError('permission-denied', 'Unauthorized');
-        }
-  
-        return {
-          orderNumber: orderNumber,
-          status: pendingPayment.status,
-          orderId: pendingPayment.orderId || null,
-          errorMessage: pendingPayment.errorMessage || null,
-        };
-      } catch (error) {
-        console.error('Check payment status error:', error);
-        throw new HttpsError('internal', error.message);
-      }
-    },
+      });
+    }
+
+    console.log(`[Recovery] Done — ${results.recovered} recovered, ${results.skipped} skipped, ${results.failed} failed`);
+  },
+);
+
+async function trackAdConversionInternal(userId, orderId, productIds, shopIds) {
+  const db = admin.firestore();
+  const thirtyDaysAgo = admin.firestore.Timestamp.fromMillis(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const userClicksSnap = await db.collection('users').doc(userId).collection('ad_clicks')
+    .where('clickedAt', '>=', thirtyDaysAgo)
+    .where('converted', '==', false)
+    .get();
+
+  if (userClicksSnap.empty) return;
+
+  // Filter to actual conversions first — no point querying click records for non-conversions
+  const matchingClicks = userClicksSnap.docs.filter((clickDoc) => {
+    const d = clickDoc.data();
+    return (
+      (d.linkedType === 'product' && productIds.includes(d.linkedId)) ||
+      (d.linkedType === 'shop' && shopIds && shopIds.includes(d.linkedId))
+    );
+  });
+
+  if (matchingClicks.length === 0) return;
+
+  // Fire all nested click-record lookups in parallel — one round-trip total
+  const clickRecordQueries = await Promise.all(
+    matchingClicks.map((clickDoc) => {
+      const d = clickDoc.data();
+      const adCollectionName = getAdCollectionName(d.adType);
+      return db.collection(adCollectionName).doc(d.adId)
+        .collection('clicks')
+        .where('userId', '==', userId)
+        .where('clickedAt', '==', d.clickedAt)
+        .limit(1)
+        .get();
+    }),
   );
 
-  async function trackAdConversionInternal(userId, orderId, productIds, shopIds) {
-    const db = admin.firestore();
-  
-    const thirtyDaysAgo = admin.firestore.Timestamp.fromMillis(
-      Date.now() - 30 * 24 * 60 * 60 * 1000,
-    );
-  
-    const userClicksSnap = await db
-      .collection('users')
-      .doc(userId)
-      .collection('ad_clicks')
-      .where('clickedAt', '>=', thirtyDaysAgo)
-      .where('converted', '==', false)
-      .get();
-  
-    if (userClicksSnap.empty) {
-      return;
+  const batch = db.batch();
+  let conversionsCount = 0;
+
+  matchingClicks.forEach((clickDoc, i) => {
+    const d = clickDoc.data();
+    const adCollectionName = getAdCollectionName(d.adType);
+    conversionsCount++;
+
+    batch.update(clickDoc.ref, {
+      converted: true,
+      convertedAt: admin.firestore.FieldValue.serverTimestamp(),
+      orderId,
+    });
+
+    batch.update(db.collection(adCollectionName).doc(d.adId), {
+      totalConversions: admin.firestore.FieldValue.increment(1),
+      lastConvertedAt: admin.firestore.FieldValue.serverTimestamp(),
+      metricsUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    if (!clickRecordQueries[i].empty) {
+      batch.update(clickRecordQueries[i].docs[0].ref, {
+        converted: true,
+        convertedAt: admin.firestore.FieldValue.serverTimestamp(),
+        orderId,
+      });
     }
-  
-    const batch = db.batch();
-    let conversionsCount = 0;
-  
-    for (const clickDoc of userClicksSnap.docs) {
-      const clickData = clickDoc.data();
-  
-      let isConversion = false;
-  
-      if (clickData.linkedType === 'product' && productIds.includes(clickData.linkedId)) {
-        isConversion = true;
-      } else if (clickData.linkedType === 'shop' && shopIds && shopIds.includes(clickData.linkedId)) {
-        isConversion = true;
-      }
-  
-      if (isConversion) {
-        conversionsCount++;
-  
-        batch.update(clickDoc.ref, {
-          converted: true,
-          convertedAt: admin.firestore.FieldValue.serverTimestamp(),
-          orderId: orderId,
-        });
-  
-        const adCollectionName = getAdCollectionName(clickData.adType);
-        const adRef = db.collection(adCollectionName).doc(clickData.adId);
-  
-        batch.update(adRef, {
-          totalConversions: admin.firestore.FieldValue.increment(1),
-          lastConvertedAt: admin.firestore.FieldValue.serverTimestamp(),
-          metricsUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-  
-        const clickRecordsSnap = await db
-          .collection(adCollectionName)
-          .doc(clickData.adId)
-          .collection('clicks')
-          .where('userId', '==', userId)
-          .where('clickedAt', '==', clickData.clickedAt)
-          .limit(1)
-          .get();
-  
-        if (!clickRecordsSnap.empty) {
-          batch.update(clickRecordsSnap.docs[0].ref, {
-            converted: true,
-            convertedAt: admin.firestore.FieldValue.serverTimestamp(),
-            orderId: orderId,
-          });
-        }
-      }
-    }
-  
-    if (conversionsCount > 0) {
-      await batch.commit();
-      console.log(`✅ Tracked ${conversionsCount} ad conversions for order ${orderId}`);
-    }
-  }
+  });
+
+  await batch.commit();
+  console.log(`✅ Tracked ${conversionsCount} ad conversions for order ${orderId}`);
+}

@@ -2268,6 +2268,7 @@
 "boostPaymentSuccessfulTitle": "Оплата буста прошла успешно",
 "cancelBoostPaymentMessage": "Оплата буста будет отменена. Вы уверены?",
 "boostOrder": "Заказ буста",
+"paymentPageLoadFailed": "Страница оплаты не загрузилась. Пожалуйста, попробуйте снова.",
   "revokeAccess": "Отозвать доступ",
   "revokeAccessConfirmation": "Доступ этого пользователя к магазину будет удален.",
   "deleteAccountWarning": "Это действие не может быть отменено. Все ваши данные будут удалены навсегда.",

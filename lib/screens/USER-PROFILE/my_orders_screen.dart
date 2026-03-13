@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,12 +9,43 @@ import 'package:provider/provider.dart';
 import '../../providers/my_products_provider.dart';
 import 'package:go_router/go_router.dart';
 
+// =============================================================================
+// PENDING ORDER BANNER STATE
+// =============================================================================
+
+enum _PendingBannerState {
+  none,
+  processing, // payment received, order being created
+  succeeded,  // order created successfully
+  failed,     // payment_succeeded_order_failed — ops notified
+}
+
+// =============================================================================
+// ENTRY POINT
+// =============================================================================
+
 class MyOrdersScreen extends StatefulWidget {
-  const MyOrdersScreen({Key? key}) : super(key: key);
+  /// Passed when the payment callback returned 'processing' — order not yet
+  /// created. Orders screen owns the wait and resolves via Firestore listener.
+  final String? pendingOrderNumber;
+
+  /// Passed when the server already created the order (fast path via
+  /// payment-success:// deep link). Just show a brief success banner.
+  final String? pendingOrderId;
+
+  const MyOrdersScreen({
+    Key? key,
+    this.pendingOrderNumber,
+    this.pendingOrderId,
+  }) : super(key: key);
 
   @override
   _MyOrdersScreenState createState() => _MyOrdersScreenState();
 }
+
+// =============================================================================
+// STATE
+// =============================================================================
 
 class _MyOrdersScreenState extends State<MyOrdersScreen>
     with TickerProviderStateMixin {
@@ -31,42 +63,157 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
   // Keys to communicate with child widgets
   final GlobalKey<SoldBoughtProductsTabState> _soldTabKey = GlobalKey();
   final GlobalKey<SoldBoughtProductsTabState> _boughtTabKey = GlobalKey();
-  // Track if tabs are syncing to prevent infinite loops
   bool _isTabSyncing = false;
+
+  // ── Pending order resolution ───────────────────────────────────────────────
+  _PendingBannerState _bannerState = _PendingBannerState.none;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _pendingOrderSub;
+  Timer? _bannerDismissTimer;
+
+  // =============================================================================
+  // LIFECYCLE
+  // =============================================================================
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _pageController = PageController();
-
-    // Sync tab controller with page controller
     _tabController.addListener(_handleTabChange);
-
-    // Setup search listener
     _searchController.addListener(_onSearchChanged);
-
-    // Setup focus listener for search
     _searchFocusNode.addListener(_onSearchFocusChange);
 
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
     ]);
+
+    _initPendingOrder();
   }
+
+  /// Wire up the pending order state depending on which param was passed.
+  void _initPendingOrder() {
+    if (widget.pendingOrderNumber != null) {
+      // Payment received but order not yet created — listen for resolution.
+      _bannerState = _PendingBannerState.processing;
+      _listenToPendingOrder(widget.pendingOrderNumber!);
+      _switchToBoughtTab();
+    } else if (widget.pendingOrderId != null) {
+      // Order already created (fast path) — show brief success banner.
+      _bannerState = _PendingBannerState.succeeded;
+      _switchToBoughtTab();
+      _refreshBoughtTab();
+      _scheduleBannerDismiss();
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController.removeListener(_handleTabChange);
+    _searchFocusNode.removeListener(_onSearchFocusChange);
+    _tabController.dispose();
+    _pageController.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    _searchDebounce?.cancel();
+    _pendingOrderSub?.cancel();
+    _bannerDismissTimer?.cancel();
+
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    super.dispose();
+  }
+
+  // =============================================================================
+  // PENDING ORDER LISTENER
+  // =============================================================================
+
+  void _listenToPendingOrder(String orderNumber) {
+    _pendingOrderSub = FirebaseFirestore.instance
+        .collection('pendingPayments')
+        .doc(orderNumber)
+        .snapshots()
+        .listen(
+      (snap) {
+        if (!snap.exists || !mounted) return;
+        final status = snap.data()?['status'] as String?;
+
+        if (status == 'completed') {
+          _pendingOrderSub?.cancel();
+          setState(() => _bannerState = _PendingBannerState.succeeded);
+          _refreshBoughtTab();
+          _scheduleBannerDismiss();
+        } else if (status == 'payment_succeeded_order_failed') {
+          // Ops team has been alerted. Surface a gentle message; no retry.
+          _pendingOrderSub?.cancel();
+          setState(() => _bannerState = _PendingBannerState.failed);
+          // Keep failed banner visible — don't auto-dismiss.
+        }
+        // 'payment_failed' won't appear here (user already paid and we
+        // navigated here), but guard defensively.
+        else if (status == 'payment_failed' ||
+            status == 'hash_verification_failed') {
+          _pendingOrderSub?.cancel();
+          setState(() => _bannerState = _PendingBannerState.failed);
+        }
+      },
+      onError: (Object e) {
+        debugPrint('[MyOrders] Pending order listener error: $e');
+      },
+    );
+  }
+
+  // =============================================================================
+  // TAB / BANNER HELPERS
+  // =============================================================================
+
+  void _switchToBoughtTab() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _tabController.index == 1) return;
+      _isTabSyncing = true;
+      _tabController.animateTo(1);
+      _pageController
+          .animateToPage(
+            1,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOutCubic,
+          )
+          .then((_) => _isTabSyncing = false);
+    });
+  }
+
+  void _refreshBoughtTab() {
+    // Post-frame to ensure the tab's State is mounted after any navigation.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _boughtTabKey.currentState?.refresh();
+    });
+  }
+
+  void _scheduleBannerDismiss() {
+    _bannerDismissTimer?.cancel();
+    _bannerDismissTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _bannerState = _PendingBannerState.none);
+    });
+  }
+
+  // =============================================================================
+  // TAB / SEARCH HANDLERS
+  // =============================================================================
 
   void _handleTabChange() {
     if (_tabController.indexIsChanging && !_isTabSyncing) {
       _isTabSyncing = true;
       _pageController
           .animateToPage(
-        _tabController.index,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeInOutCubic,
-      )
-          .then((_) {
-        _isTabSyncing = false;
-      });
+            _tabController.index,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOutCubic,
+          )
+          .then((_) => _isTabSyncing = false);
     }
   }
 
@@ -81,9 +228,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
     _searchDebounce = Timer(const Duration(milliseconds: 300), () {
       final query = _searchController.text.toLowerCase().trim();
       if (_currentSearchQuery != query) {
-        setState(() {
-          _currentSearchQuery = query;
-        });
+        setState(() => _currentSearchQuery = query);
         _applySearchToAllTabs();
       }
     });
@@ -97,9 +242,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
   void _clearSearch() {
     _searchController.clear();
     _searchFocusNode.unfocus();
-    setState(() {
-      _currentSearchQuery = '';
-    });
+    setState(() => _currentSearchQuery = '');
     _applySearchToAllTabs();
   }
 
@@ -110,24 +253,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
     }
   }
 
-  @override
-  void dispose() {
-    _tabController.removeListener(_handleTabChange);
-    _searchFocusNode.removeListener(_onSearchFocusChange);
-    _tabController.dispose();
-    _pageController.dispose();
-    _searchController.dispose();
-    _searchFocusNode.dispose();
-    _searchDebounce?.cancel();
-
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
-    super.dispose();
-  }
+  // =============================================================================
+  // DATE PICKER
+  // =============================================================================
 
   Future<void> _pickDateRange() async {
     _dismissKeyboard();
@@ -173,6 +301,38 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
           .updateSelectedDateRange(picked);
     }
   }
+
+  // =============================================================================
+  // PENDING ORDER BANNER WIDGET
+  // =============================================================================
+
+  Widget _buildPendingOrderBanner() {
+    if (_bannerState == _PendingBannerState.none) return const SizedBox.shrink();
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      transitionBuilder: (child, animation) => SizeTransition(
+        sizeFactor: animation,
+        child: FadeTransition(opacity: animation, child: child),
+      ),
+      child: _bannerState == _PendingBannerState.none
+          ? const SizedBox.shrink()
+          : _PendingBannerContent(
+              key: ValueKey(_bannerState),
+              state: _bannerState,
+              isDark: isDark,
+              onDismiss: _bannerState == _PendingBannerState.failed
+                  ? () => setState(() => _bannerState = _PendingBannerState.none)
+                  : null,
+            ),
+    );
+  }
+
+  // =============================================================================
+  // TAB BAR
+  // =============================================================================
 
   Widget _buildModernTabBar() {
     final l10n = AppLocalizations.of(context);
@@ -253,12 +413,14 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
     );
   }
 
+  // =============================================================================
+  // SEARCH BOX
+  // =============================================================================
+
   Widget _buildSearchBox() {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-
-    final hintText = l10n.searchOrders;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -307,7 +469,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
               ),
             ),
             suffixIcon: _buildSuffixIcon(isDark),
-            hintText: hintText,
+            hintText: l10n.searchOrders,
             hintStyle: GoogleFonts.inter(
               fontSize: 14,
               color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
@@ -337,9 +499,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
               _searchFocusNode.requestFocus();
             }
           },
-          onSubmitted: (value) {
-            _dismissKeyboard();
-          },
+          onSubmitted: (_) => _dismissKeyboard(),
         ),
       ),
     );
@@ -370,6 +530,10 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
       ),
     );
   }
+
+  // =============================================================================
+  // BUILD
+  // =============================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -435,6 +599,8 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
             child: Column(
               children: [
                 _buildSearchBox(),
+                // ── Pending order banner ─────────────────────────────────────
+                _buildPendingOrderBanner(),
                 _buildModernTabBar(),
                 Expanded(
                   child: PageView(
@@ -458,13 +624,10 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                       }
                     },
                     children: [
-                      // ── Sold products tab (unchanged) ──────────────────
                       SoldBoughtProductsTab(
                         key: _soldTabKey,
                         isSold: true,
                       ),
-
-                      // ── Bought products tab (unchanged) ────────────────
                       SoldBoughtProductsTab(
                         key: _boughtTabKey,
                         isSold: false,
@@ -479,4 +642,224 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
       ),
     );
   }
+}
+
+// =============================================================================
+// PENDING BANNER CONTENT
+// =============================================================================
+// Extracted as a stateful widget so only the banner re-renders on state changes,
+// not the entire screen.
+
+class _PendingBannerContent extends StatefulWidget {
+  final _PendingBannerState state;
+  final bool isDark;
+  final VoidCallback? onDismiss;
+
+  const _PendingBannerContent({
+    super.key,
+    required this.state,
+    required this.isDark,
+    this.onDismiss,
+  });
+
+  @override
+  State<_PendingBannerContent> createState() => _PendingBannerContentState();
+}
+
+class _PendingBannerContentState extends State<_PendingBannerContent>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _pulseAnimation = Tween<double>(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+    if (widget.state == _PendingBannerState.processing) {
+      _pulseController.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(_PendingBannerContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.state != _PendingBannerState.processing) {
+      _pulseController.stop();
+      _pulseController.value = 1.0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final config = _bannerConfig(widget.state, widget.isDark);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      decoration: BoxDecoration(
+        color: config.backgroundColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: config.borderColor, width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            // Icon / spinner
+            if (widget.state == _PendingBannerState.processing)
+              FadeTransition(
+                opacity: _pulseAnimation,
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(config.iconColor),
+                  ),
+                ),
+              )
+            else
+              Icon(config.icon, size: 18, color: config.iconColor),
+
+            const SizedBox(width: 12),
+
+            // Text
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    config.title,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: config.titleColor,
+                    ),
+                  ),
+                  if (config.subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      config.subtitle!,
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: config.subtitleColor,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            // Dismiss button (only for failed state)
+            if (widget.onDismiss != null)
+              GestureDetector(
+                onTap: widget.onDismiss,
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 16,
+                  color: config.iconColor.withOpacity(0.7),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  _BannerConfig _bannerConfig(_PendingBannerState state, bool isDark) {
+    switch (state) {
+      case _PendingBannerState.processing:
+        return _BannerConfig(
+          backgroundColor: isDark
+              ? const Color(0xFF2D2410)
+              : const Color(0xFFFFFBEB),
+          borderColor: const Color(0xFFF59E0B).withOpacity(0.4),
+          iconColor: const Color(0xFFF59E0B),
+          titleColor: isDark ? const Color(0xFFFCD34D) : const Color(0xFF92400E),
+          subtitleColor: isDark
+              ? const Color(0xFFFCD34D).withOpacity(0.7)
+              : const Color(0xFF92400E).withOpacity(0.7),
+          icon: Icons.hourglass_top_rounded,
+          title: 'Processing payment…',
+          subtitle: 'Your order will appear here automatically.',
+        );
+      case _PendingBannerState.succeeded:
+        return _BannerConfig(
+          backgroundColor: isDark
+              ? const Color(0xFF0D2818)
+              : const Color(0xFFECFDF5),
+          borderColor: const Color(0xFF00A86B).withOpacity(0.4),
+          iconColor: const Color(0xFF00A86B),
+          titleColor: isDark ? const Color(0xFF34D399) : const Color(0xFF065F46),
+          subtitleColor: isDark
+              ? const Color(0xFF34D399).withOpacity(0.7)
+              : const Color(0xFF065F46).withOpacity(0.7),
+          icon: Icons.check_circle_rounded,
+          title: 'Order placed successfully!',
+          subtitle: null,
+        );
+      case _PendingBannerState.failed:
+        return _BannerConfig(
+          backgroundColor: isDark
+              ? const Color(0xFF2D1010)
+              : const Color(0xFFFEF2F2),
+          borderColor: Colors.red.withOpacity(0.4),
+          iconColor: Colors.red,
+          titleColor: isDark ? const Color(0xFFFCA5A5) : const Color(0xFF991B1B),
+          subtitleColor: isDark
+              ? const Color(0xFFFCA5A5).withOpacity(0.7)
+              : const Color(0xFF991B1B).withOpacity(0.7),
+          icon: Icons.info_outline_rounded,
+          title: 'Payment received — our team has been notified.',
+          subtitle: 'Your order will be resolved shortly.',
+        );
+      case _PendingBannerState.none:
+        // Should never render in none state
+        return _BannerConfig(
+          backgroundColor: Colors.transparent,
+          borderColor: Colors.transparent,
+          iconColor: Colors.transparent,
+          titleColor: Colors.transparent,
+          subtitleColor: Colors.transparent,
+          icon: Icons.circle,
+          title: '',
+          subtitle: null,
+        );
+    }
+  }
+}
+
+class _BannerConfig {
+  final Color backgroundColor;
+  final Color borderColor;
+  final Color iconColor;
+  final Color titleColor;
+  final Color subtitleColor;
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+
+  const _BannerConfig({
+    required this.backgroundColor,
+    required this.borderColor,
+    required this.iconColor,
+    required this.titleColor,
+    required this.subtitleColor,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
 }

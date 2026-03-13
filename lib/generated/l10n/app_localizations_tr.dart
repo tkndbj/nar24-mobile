@@ -5741,6 +5741,10 @@ class AppLocalizationsTr extends AppLocalizations {
   String get boostOrder => 'Öne Çıkarma Siparişi';
 
   @override
+  String get paymentPageLoadFailed =>
+      'Ödeme sayfası yüklenemedi. Lütfen tekrar deneyin.';
+
+  @override
   String get revokeAccess => 'Erişimi İptal Et';
 
   @override

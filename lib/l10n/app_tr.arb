@@ -2436,6 +2436,7 @@
 "boostPaymentSuccessfulTitle": "Öne Çıkarma Ödemesi Başarılı",
 "cancelBoostPaymentMessage": "Öne çıkarma ödemeniz iptal edilecek. Emin misiniz?",
 "boostOrder": "Öne Çıkarma Siparişi",
+"paymentPageLoadFailed": "Ödeme sayfası yüklenemedi. Lütfen tekrar deneyin.",
 "revokeAccess": "Erişimi İptal Et",
 "revokeAccessConfirmation": "Bu kullanıcının mağazaya erişimi kaldırılacak.",
 "deleteAccountWarning": "Bu işlem geri alınamaz. Tüm verileriniz kalıcı olarak silinecektir.",
