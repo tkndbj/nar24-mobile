@@ -397,9 +397,9 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
           return _buildEmptyState();
         }
 
-        // Check if viewport needs more content after loading completes
-        // (for tablets/large screens)
-        _checkViewportAndLoadMoreIfNeeded();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _checkViewportAndLoadMoreIfNeeded();
+        });
 
         return _buildProductsList(
           displayProducts,
@@ -469,30 +469,21 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
       onRefresh: () async {
         await terasProvider.refresh();
       },
-      child: NotificationListener<ScrollNotification>(
-        onNotification: (scrollInfo) {
-          if (scrollInfo.metrics.pixels >=
-                  scrollInfo.metrics.maxScrollExtent - 300 &&
-              !terasProvider.isLoadingMore &&
-              terasProvider.hasMore) {
-            terasProvider.fetchMoreProducts();
-          }
-          return false;
-        },
-        child: CustomScrollView(
-          slivers: [
-            ProductListSliver(
-              products: displayProducts,
-              boostedProducts: const [],
-              hasMore: terasProvider.hasMore,
-              screenName: 'dynamic_teras_screen',
-              isLoadingMore: terasProvider.isLoadingMore,
-              selectedColor:
-                  _dynamicColors.isNotEmpty ? _dynamicColors.first : null,
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 80.0)),
-          ],
-        ),
+      child: CustomScrollView(
+        controller: _scrollController,
+        cacheExtent: 1000,
+        slivers: [
+          ProductListSliver(
+            products: displayProducts,
+            boostedProducts: const [],
+            hasMore: terasProvider.hasMore,
+            screenName: 'dynamic_teras_screen',
+            isLoadingMore: terasProvider.isLoadingMore,
+            selectedColor:
+                _dynamicColors.isNotEmpty ? _dynamicColors.first : null,
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 80.0)),
+        ],
       ),
     );
   }

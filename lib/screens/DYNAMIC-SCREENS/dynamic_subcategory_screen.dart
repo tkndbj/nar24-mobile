@@ -9,7 +9,6 @@ import '../../widgets/dynamicscreens/market_app_bar.dart';
 import '../../widgets/product_list_sliver.dart';
 import '../../widgets/product_card_shimmer.dart';
 import '../../models/product_summary.dart';
-import 'dart:async';
 import '../../widgets/market_search_delegate.dart';
 import '../../providers/search_history_provider.dart';
 import '../../providers/search_provider.dart';
@@ -40,7 +39,6 @@ class DynamicSubcategoryScreen extends StatefulWidget {
 
 class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
   late SpecialFilterProviderMarket _specialFilterProvider;
-  Timer? _debounceTimer;
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   List<String> _dynamicBrands = [];
@@ -96,8 +94,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
 
   @override
   void dispose() {
-    _debounceTimer?.cancel();
-    _removeSearchListener(); // ✅ ADD: Clean up search listener
+    _removeSearchListener();
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
@@ -415,27 +412,22 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
 
         return NotificationListener<ScrollNotification>(
           onNotification: (notif) {
-            if (notif is ScrollEndNotification &&
-                hasMore &&
-                // ✅ FIX: Pass gender for Women/Men View All
+            if (hasMore &&
                 !prov.isLoadingMoreSubcategory(
                   widget.category,
                   widget.subcategoryId,
                   gender: widget.gender,
                 ) &&
-                notif.metrics.pixels >= notif.metrics.maxScrollExtent * 0.9) {
-              _debounceTimer?.cancel();
-              _debounceTimer = Timer(const Duration(milliseconds: 200), () {
-                // Server-side filtering is already applied - just fetch more
-                prov.fetchMoreSubcategoryProducts(
-                  widget.category,
-                  widget.subcategoryId,
-                );
-              });
+                notif.metrics.pixels >= notif.metrics.maxScrollExtent * 0.8) {
+              prov.fetchMoreSubcategoryProducts(
+                widget.category,
+                widget.subcategoryId,
+              );
             }
             return false;
           },
           child: CustomScrollView(
+            cacheExtent: 1000,
             slivers: [
               if (displayProducts.isNotEmpty)
                 SliverPadding(

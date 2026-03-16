@@ -44,10 +44,16 @@ function getEntityConfig(businessType) {
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
 async function syncUserClaims(uid) {
-  const userSnap = await db().doc(`users/${uid}`).get();
+  const [userSnap, userRecord] = await Promise.all([
+    db().doc(`users/${uid}`).get(),
+    admin.auth().getUser(uid),
+  ]);
+
   const data = userSnap.data() ?? {};
+  const existingClaims = userRecord.customClaims ?? {};
 
   await admin.auth().setCustomUserClaims(uid, {
+    ...existingClaims,                        // preserve isAdmin and anything else
     shops: data.memberOfShops ?? {},
     restaurants: data.memberOfRestaurants ?? {},
   });
@@ -136,7 +142,7 @@ if (!requesterIsAdmin) {
 
   const inviteeId = inviteeQuery.docs[0].id;
 
-  if (inviteeId === request.auth.uid) {
+  if (!requesterIsAdmin && inviteeId === request.auth.uid) {
     throw new HttpsError('invalid-argument', 'You cannot invite yourself');
   }
 
@@ -346,7 +352,7 @@ export const revokeShopAccess = onCall(FUNCTION_CONFIG, async (request) => {
     throw new HttpsError('permission-denied', 'Co-owners cannot revoke other co-owners');
   }
 
-  if (targetUserId === request.auth.uid) {
+  if (!requesterIsAdmin && targetUserId === request.auth.uid) {
     throw new HttpsError('invalid-argument', 'Use the leaveShop endpoint to remove yourself');
   }
 

@@ -83,7 +83,6 @@ class ShopProvider with ChangeNotifier {
   int _searchRaceToken = 0;
 
   // Memory management constants
-  static const int _maxProductsInMemory = 200;
   static const int _maxCacheSizeBytes = 5 * 1024 * 1024; // 5MB per shop
   static const Duration _cacheExpiryDuration = Duration(days: 7);
 
@@ -869,12 +868,6 @@ class ShopProvider with ChangeNotifier {
   }
 
   /// Trims product list to maximum allowed size (LRU eviction)
-  void _trimProductListIfNeeded() {
-    if (_allFetchedProducts.length > _maxProductsInMemory) {
-      final excess = _allFetchedProducts.length - _maxProductsInMemory;
-      _allFetchedProducts = _allFetchedProducts.sublist(excess);
-    }
-  }
 
   void setShopDocError(bool err) {
     shopDocErrorNotifier.value = err;
@@ -1652,8 +1645,6 @@ class ShopProvider with ChangeNotifier {
 
       if (loadMore) {
         _allFetchedProducts.addAll(newProducts);
-        // Apply memory management: trim if exceeds limit
-        _trimProductListIfNeeded();
       } else {
         _allFetchedProducts = newProducts;
       }

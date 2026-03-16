@@ -61,26 +61,26 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
   static const int _pageSize = 20;
   DocumentSnapshot? _lastDocument;
 
-  // Scroll state
-  double _scrollOffset = 0.0;
+  // Scroll state — use ValueNotifier to avoid full widget rebuilds on scroll
+  final ValueNotifier<double> _scrollOffsetNotifier = ValueNotifier<double>(0.0);
+
   double get _overlayOpacity {
-    // Base opacity starts at 0.3, increases as user scrolls
-    return (0.3 + (_scrollOffset / 200 * 0.4)).clamp(0.3, 0.7);
+    final offset = _scrollOffsetNotifier.value;
+    return (0.3 + (offset / 200 * 0.4)).clamp(0.3, 0.7);
   }
 
   double get _titleOpacity {
-    // Title becomes visible in header after scrolling 75px (synchronized with header fade)
-    return ((_scrollOffset - 75) / 50).clamp(0.0, 1.0);
+    final offset = _scrollOffsetNotifier.value;
+    return ((offset - 75) / 50).clamp(0.0, 1.0);
   }
 
-  // Fixed: Better control for header opacity - smooth fade based on scroll position
   double get _headerOpacity {
-    // Header fades out smoothly as user scrolls down
-    return (1.0 - (_scrollOffset / 100)).clamp(0.0, 1.0);
+    final offset = _scrollOffsetNotifier.value;
+    return (1.0 - (offset / 100)).clamp(0.0, 1.0);
   }
 
   bool get _showHeaderBackground {
-    return _scrollOffset > 50;
+    return _scrollOffsetNotifier.value > 50;
   }
 
   @override
@@ -92,16 +92,15 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
 
   @override
   void dispose() {
+    _scrollOffsetNotifier.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
   void _setupScrollListener() {
     _scrollController.addListener(() {
-      // Update scroll offset for smooth transitions
-      setState(() {
-        _scrollOffset = _scrollController.offset;
-      });
+      // Update offset notifier — listeners rebuild only scroll-dependent widgets
+      _scrollOffsetNotifier.value = _scrollController.offset;
 
       // Load more products
       if (_scrollController.position.pixels >=
@@ -579,11 +578,14 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
         children: [
           // Main content
           _isLoading
-              ? _buildShimmerLoading() // Fixed: Use shimmer instead of loading indicator
+              ? _buildShimmerLoading()
               : _buildContent(l10n, isDark),
 
-          // App bar overlay
-          _buildAppBarOverlay(l10n, isDark),
+          // App bar overlay — rebuilds only on scroll offset changes
+          ValueListenableBuilder<double>(
+            valueListenable: _scrollOffsetNotifier,
+            builder: (context, _, __) => _buildAppBarOverlay(l10n, isDark),
+          ),
         ],
       ),
     );
@@ -596,13 +598,19 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
         // Cover image (always show, but manage visibility through opacity)
         if (_collectionData != null)
           SliverToBoxAdapter(
-            child: _buildCoverImage(isDark),
+            child: ValueListenableBuilder<double>(
+              valueListenable: _scrollOffsetNotifier,
+              builder: (context, _, __) => _buildCoverImage(isDark),
+            ),
           ),
 
         // Collection name header
         if (_collectionData != null)
           SliverToBoxAdapter(
-            child: _buildCollectionNameHeader(l10n, isDark),
+            child: ValueListenableBuilder<double>(
+              valueListenable: _scrollOffsetNotifier,
+              builder: (context, _, __) => _buildCollectionNameHeader(l10n, isDark),
+            ),
           ),
 
         // Active filters

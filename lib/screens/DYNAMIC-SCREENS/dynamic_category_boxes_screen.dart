@@ -164,29 +164,6 @@ class _DynamicCategoryBoxesScreenState extends State<DynamicCategoryBoxesScreen>
     return Future.value();
   }
 
-List<ProductSummary> _getSortedProducts(List<ProductSummary> products) {
-  final sorted = List<ProductSummary>.from(products);
-    switch (_selectedSortOption) {
-      case 'Alphabetical':
-        sorted.sort((a, b) =>
-            a.productName.toLowerCase().compareTo(b.productName.toLowerCase()));
-        break;
-      case 'Date':
-        sorted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        break;
-      case 'Price Low to High':
-        sorted.sort((a, b) => a.price.compareTo(b.price));
-        break;
-      case 'Price High to Low':
-        sorted.sort((a, b) => b.price.compareTo(a.price));
-        break;
-      case 'None':
-      default:
-        break;
-    }
-    return sorted;
-  }
-
   String _localizedSortOption(String option, AppLocalizations l10n) {
     switch (option) {
       case 'None':
@@ -364,36 +341,25 @@ List<ProductSummary> _getSortedProducts(List<ProductSummary> products) {
   ) {
     return RefreshIndicator(
       onRefresh: () async {
-        // Preserve filters during refresh
         await provider.refresh();
         await provider.fetchBoosted();
-        // Filters are automatically reapplied in the provider
       },
-      child: NotificationListener<ScrollNotification>(
-        onNotification: (scrollInfo) {
-          if (scrollInfo.metrics.pixels >=
-                  scrollInfo.metrics.maxScrollExtent - 300 &&
-              !provider.isLoadingMore &&
-              provider.hasMore) {
-            provider.fetchMoreProducts();
-          }
-          return false;
-        },
-        child: CustomScrollView(
-          slivers: [
-            ProductListSliver(
-              products: displayProducts,
-              boostedProducts: boostedProducts,
-              hasMore: provider.hasMore,
-              isLoadingMore: provider.isLoadingMore,
-              screenName: 'dynamic_category_boxes_screen',
-              selectedColor: provider.dynamicColors.isNotEmpty
-                  ? provider.dynamicColors.first
-                  : null,
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 80.0)),
-          ],
-        ),
+      child: CustomScrollView(
+        controller: _scrollController,
+        cacheExtent: 1000,
+        slivers: [
+          ProductListSliver(
+            products: displayProducts,
+            boostedProducts: boostedProducts,
+            hasMore: provider.hasMore,
+            isLoadingMore: provider.isLoadingMore,
+            screenName: 'dynamic_category_boxes_screen',
+            selectedColor: provider.dynamicColors.isNotEmpty
+                ? provider.dynamicColors.first
+                : null,
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 80.0)),
+        ],
       ),
     );
   }

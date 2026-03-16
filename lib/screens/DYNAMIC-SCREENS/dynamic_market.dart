@@ -467,30 +467,21 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
       onRefresh: () async {
         await marketProvider.refresh();
       },
-      child: NotificationListener<ScrollNotification>(
-        onNotification: (scrollInfo) {
-          if (scrollInfo.metrics.pixels >=
-                  scrollInfo.metrics.maxScrollExtent - 300 &&
-              !marketProvider.isLoadingMore &&
-              marketProvider.hasMore) {
-            marketProvider.fetchMoreProducts();
-          }
-          return false;
-        },
-        child: CustomScrollView(
-          slivers: [
-            ProductListSliver(
-              products: displayProducts,
-              boostedProducts: const [],
-              hasMore: marketProvider.hasMore,
-              isLoadingMore: marketProvider.isLoadingMore,
-              screenName: 'dynamic_market_screen',
-              selectedColor:
-                  _dynamicColors.isNotEmpty ? _dynamicColors.first : null,
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 80.0)),
-          ],
-        ),
+      child: CustomScrollView(
+        controller: _scrollController,
+        cacheExtent: 1000,
+        slivers: [
+          ProductListSliver(
+            products: displayProducts,
+            boostedProducts: const [],
+            hasMore: marketProvider.hasMore,
+            isLoadingMore: marketProvider.isLoadingMore,
+            screenName: 'dynamic_market_screen',
+            selectedColor:
+                _dynamicColors.isNotEmpty ? _dynamicColors.first : null,
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 80.0)),
+        ],
       ),
     );
   }
