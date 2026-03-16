@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:Nar24/generated/l10n/app_localizations.dart';
 import '../models/product.dart';
+import '../models/product_summary.dart';
 import 'package:Nar24/models/mock_document_snapshot.dart';
 import 'package:flutter/foundation.dart';
 import 'package:Nar24/constants/all_in_one_category_data.dart';
@@ -59,6 +60,8 @@ class ShopProvider with ChangeNotifier {
       ValueNotifier<bool>(true);
   final ValueNotifier<List<Product>> allProductsNotifier =
       ValueNotifier<List<Product>>([]);
+  final ValueNotifier<List<ProductSummary>> allProductSummariesNotifier =
+      ValueNotifier<List<ProductSummary>>([]);
   final ValueNotifier<List<Product>> dealProductsNotifier =
       ValueNotifier<List<Product>>([]);
   final ValueNotifier<List<Product>> bestSellersNotifier =
@@ -92,6 +95,13 @@ class ShopProvider with ChangeNotifier {
 
   List<Product> get searchResults => _searchResults;
   bool get isSearching => _isSearching;
+
+  /// Sets allProductsNotifier and keeps the cached summaries in sync.
+  void _setAllProducts(List<Product> products) {
+    allProductsNotifier.value = products;
+    allProductSummariesNotifier.value =
+        products.map((p) => p.toSummary()).toList();
+  }
 
 // Add getter
   List<Map<String, dynamic>> get collections => collectionsNotifier.value;
@@ -559,7 +569,7 @@ class ShopProvider with ChangeNotifier {
 
   void _resetShopState() {
     _shopDoc = null;
-    allProductsNotifier.value = [];
+    _setAllProducts([]);
     dealProductsNotifier.value = [];
     bestSellersNotifier.value = [];
     _reviews = [];
@@ -722,6 +732,7 @@ class ShopProvider with ChangeNotifier {
     isLoadingProductsNotifier.dispose();
     isLoadingReviewsNotifier.dispose();
     allProductsNotifier.dispose();
+    allProductSummariesNotifier.dispose();
     dealProductsNotifier.dispose();
     bestSellersNotifier.dispose();
     totalFiltersAppliedNotifier.dispose();
@@ -1210,7 +1221,7 @@ class ShopProvider with ChangeNotifier {
 
         final products =
             productMaps.map((json) => Product.fromJson(json)).toList();
-        allProductsNotifier.value = products;
+        _setAllProducts(products);
         dealProductsNotifier.value =
             products.where((p) => (p.discountPercentage ?? 0) > 0).toList();
         bestSellersNotifier.value = List.from(products)
@@ -1527,7 +1538,7 @@ class ShopProvider with ChangeNotifier {
 
       _unfilteredProducts = List.from(_allFetchedProducts);
       // No need for local _applyAllFilters — Typesense already filtered
-      allProductsNotifier.value = List.from(_allFetchedProducts);
+      _setAllProducts(List.from(_allFetchedProducts));
       dealProductsNotifier.value = _allFetchedProducts
           .where((p) => (p.discountPercentage ?? 0) > 0)
           .toList();
@@ -1553,7 +1564,7 @@ class ShopProvider with ChangeNotifier {
     }
 
     if (_shopDoc == null) {
-      allProductsNotifier.value = [];
+      _setAllProducts([]);
       dealProductsNotifier.value = [];
       bestSellersNotifier.value = [];
       _unfilteredProducts = [];
@@ -1727,7 +1738,7 @@ class ShopProvider with ChangeNotifier {
       }).toList();
     }
 
-    allProductsNotifier.value = products;
+    _setAllProducts(products);
     dealProductsNotifier.value =
         products.where((p) => (p.discountPercentage ?? 0) > 0).toList();
     bestSellersNotifier.value = List.from(products)
@@ -1888,7 +1899,7 @@ class ShopProvider with ChangeNotifier {
         _searchResults = results;
 
         // Update the main product lists with search results
-        allProductsNotifier.value = results;
+        _setAllProducts(results);
         dealProductsNotifier.value =
             results.where((p) => (p.discountPercentage ?? 0) > 0).toList();
         bestSellersNotifier.value = List.from(results)

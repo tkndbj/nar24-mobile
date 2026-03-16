@@ -76,6 +76,11 @@ async function syncUserClaimsSafe(uid) {
   }
 }
 
+async function isAdmin(uid) {
+  const claims = (await admin.auth().getUser(uid)).customClaims ?? {};
+  return claims.isAdmin === true;
+}
+
 async function assertOwnerOrCoOwner(requesterId, entityId, entityCollection, entityLabel) {
   const snap = await db().collection(entityCollection).doc(entityId).get();
 
@@ -113,7 +118,11 @@ export const sendShopInvitation = onCall(FUNCTION_CONFIG, async (request) => {
 
   const config = getEntityConfig(businessType);
 
+  const requesterIsAdmin = await isAdmin(request.auth.uid);
+
+if (!requesterIsAdmin) {
   await assertOwnerOrCoOwner(request.auth.uid, shopId, config.entityCollection, config.entityLabel);
+}
 
   const inviteeQuery = await db()
     .collection('users')
@@ -322,15 +331,18 @@ export const revokeShopAccess = onCall(FUNCTION_CONFIG, async (request) => {
   }
 
   const config = getEntityConfig(businessType);
+  const requesterIsAdmin = await isAdmin(request.auth.uid);
 
-  const requesterRole = await assertOwnerOrCoOwner(
-    request.auth.uid,
-    shopId,
-    config.entityCollection,
-    config.entityLabel,
-  );
-
-  if (requesterRole === 'co-owner' && role === 'co-owner') {
+  const requesterRole = requesterIsAdmin ?
+    'owner' : // treat admin as owner for permission purposes
+    await assertOwnerOrCoOwner(
+        request.auth.uid,
+        shopId,
+        config.entityCollection,
+        config.entityLabel,
+      );
+  
+  if (!requesterIsAdmin && requesterRole === 'co-owner' && role === 'co-owner') {
     throw new HttpsError('permission-denied', 'Co-owners cannot revoke other co-owners');
   }
 
@@ -443,12 +455,16 @@ export const cancelShopInvitation = onCall(FUNCTION_CONFIG, async (request) => {
 
   const config = getEntityConfig(invitation.businessType);
 
+  const requesterIsAdmin = await isAdmin(request.auth.uid);
+
+if (!requesterIsAdmin) {
   await assertOwnerOrCoOwner(
     request.auth.uid,
     invitation.shopId,
     config.entityCollection,
     config.entityLabel,
   );
+}
 
   const now = admin.firestore.FieldValue.serverTimestamp();
   const batch = db().batch();

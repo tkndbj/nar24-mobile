@@ -4,7 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
-import '../../models/product.dart';
+import '../../models/product_summary.dart';
 import '../../models/mock_document_snapshot.dart';
 import '../../providers/shop_provider.dart';
 import '../../widgets/product_list_sliver.dart';
@@ -1121,11 +1121,21 @@ class _HomeImage extends StatelessWidget {
 }
 
 /// Products tab (All Products)
-class _ProductsTab extends StatelessWidget {
+class _ProductsTab extends StatefulWidget {
   const _ProductsTab();
 
   @override
+  State<_ProductsTab> createState() => _ProductsTabState();
+}
+
+class _ProductsTabState extends State<_ProductsTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context);
     final provider = context.read<ShopProvider>();
 
     return Selector<ShopProvider, ({bool isSearching, String searchQuery, String? selectedColor})>(
@@ -1142,9 +1152,9 @@ class _ProductsTab extends StatelessWidget {
               return const _ProductShimmerGrid();
             }
 
-            return ValueListenableBuilder<List<Product>>(
-              valueListenable: _getNotifier(provider),
-              builder: (context, products, _) {
+            return ValueListenableBuilder<List<ProductSummary>>(
+              valueListenable: provider.allProductSummariesNotifier,
+              builder: (context, summaries, _) {
                 return _RefreshableList(
                   child: NotificationListener<ScrollNotification>(
                     onNotification: (scrollInfo) =>
@@ -1156,13 +1166,11 @@ class _ProductsTab extends StatelessWidget {
                           const SliverToBoxAdapter(
                               child: _SearchResultsHeader()),
                         ProductListSliver(
-                          products: products
-                              .map((p) => p.toSummary())
-                              .toList(),
+                          products: summaries,
                           boostedProducts: const [],
                           hasMore: false,
                           isLoadingMore: false,
-                          screenName: _getScreenName(),
+                          screenName: 'shop_detail_screen',
                           selectedColor: state.selectedColor,
                         ),
                         ValueListenableBuilder<bool>(
@@ -1198,14 +1206,6 @@ class _ProductsTab extends StatelessWidget {
         );
       },
     );
-  }
-
-  ValueNotifier<List<Product>> _getNotifier(ShopProvider provider) {
-    return provider.allProductsNotifier;
-  }
-
-  String _getScreenName() {
-    return 'shop_detail_screen';
   }
 
   bool _handleScroll(ScrollNotification scrollInfo, ShopProvider provider) {
