@@ -53,6 +53,29 @@ async function syncUserClaims(uid) {
   });
 }
 
+async function syncUserClaimsSafe(uid) {
+  try {
+    await syncUserClaims(uid);
+  } catch (err) {
+    console.error(`[syncUserClaims] Failed for uid=${uid}:`, err);
+
+    // Queue for the backfillShopClaims job to pick up
+    try {
+      await db().collection('claimsSyncQueue').add({
+        uid,
+        failedAt: admin.firestore.FieldValue.serverTimestamp(),
+        error: err?.message ?? 'unknown',
+        retryCount: 0,
+      });
+    } catch (queueErr) {
+      // Last resort — at minimum it's in Cloud Logging
+      console.error(`[syncUserClaims] Also failed to queue retry for uid=${uid}:`, queueErr);
+    }
+
+    // Do NOT rethrow — Firestore is consistent, claims sync is eventual
+  }
+}
+
 async function assertOwnerOrCoOwner(requesterId, entityId, entityCollection, entityLabel) {
   const snap = await db().collection(entityCollection).doc(entityId).get();
 
@@ -253,7 +276,7 @@ export const handleShopInvitation = onCall(FUNCTION_CONFIG, async (request) => {
     }
 
     await batch.commit();
-    await syncUserClaims(userId);
+    await syncUserClaimsSafe(userId);
   } else {
     batch.update(invitationRef, { status: 'rejected', rejectedAt: now });
 
@@ -326,7 +349,7 @@ export const revokeShopAccess = onCall(FUNCTION_CONFIG, async (request) => {
   });
 
   await batch.commit();
-  await syncUserClaims(targetUserId);
+  await syncUserClaimsSafe(targetUserId);
 
   return { success: true, message: 'Access revoked successfully' };
 });
@@ -382,7 +405,7 @@ export const leaveShop = onCall(FUNCTION_CONFIG, async (request) => {
   });
 
   await batch.commit();
-  await syncUserClaims(userId);
+  await syncUserClaimsSafe(userId);
 
   return { success: true };
 });
