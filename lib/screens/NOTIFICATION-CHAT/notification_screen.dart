@@ -1041,7 +1041,13 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
         appBar: AppBar(
           leading: IconButton(
             icon: Icon(Icons.arrow_back, color: backButtonColor),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              } else {
+                context.go('/');
+              }
+            },
           ),
           title: Text(
             l10n.notifications,
@@ -1154,7 +1160,13 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
       appBar: AppBar(
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: backButtonColor),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              context.go('/');
+            }
+          },
         ),
         title: Text(
           l10n.notifications,

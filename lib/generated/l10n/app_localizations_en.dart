@@ -4082,7 +4082,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addProductsToShop => 'Add products to your shop to get started';
 
   @override
-  String get clearSearch => 'Clear Search';
+  String get clearSearch => 'Clear search';
 
   @override
   String get selectAtLeastOneProduct => 'Please select at least one product';
@@ -9383,11 +9383,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'No internet connection. Please check your network and try again.';
 
   @override
-  String get networkError =>
-      'Network error. Please check your connection and try again.';
+  String get networkError => 'Network error. Please check your connection.';
 
   @override
-  String get permissionDenied => 'Permission denied. Please try again.';
+  String get permissionDenied =>
+      'Permission denied. Please try logging in again.';
 
   @override
   String get sessionExpired => 'Session expired. Please log in again.';
@@ -15457,4 +15457,35 @@ class AppLocalizationsEn extends AppLocalizations {
   String pastFoodCargosDeliveredAt(String date) {
     return 'Delivered $date';
   }
+
+  @override
+  String get filterByDateRange => 'Filter by date range';
+
+  @override
+  String get processingPayment => 'Processing payment…';
+
+  @override
+  String get orderWillAppearAutomatically =>
+      'Your order will appear here automatically.';
+
+  @override
+  String get orderPlacedSuccessfully => 'Order placed successfully!';
+
+  @override
+  String get paymentReceivedTeamNotified =>
+      'Payment received — our team has been notified.';
+
+  @override
+  String get orderWillBeResolvedShortly =>
+      'Your order will be resolved shortly.';
+
+  @override
+  String get somethingWentWrongTryAgain =>
+      'Something went wrong. Please try again.';
+
+  @override
+  String get somethingWentWrong => 'Something went wrong';
+
+  @override
+  String get unableToFindOrderDetails => 'Unable to find order details';
 }

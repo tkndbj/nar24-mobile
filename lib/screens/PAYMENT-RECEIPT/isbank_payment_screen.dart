@@ -50,6 +50,10 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
   _PaymentStatus _paymentStatus = _PaymentStatus.pending;
   String? _error;
 
+  // Brief success overlay shown before navigating away — gives visual feedback
+  // and lets the framework dispose the WebView before the new route builds.
+  bool _isNavigatingAway = false;
+
   // Guard against double-handling across all three signal sources
   // (deep link, Firestore fast-path, WebView timeout)
   bool _resultHandled = false;
@@ -188,16 +192,22 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
 
     if (!mounted) return;
 
+    // Show a brief success overlay before navigating — gives visual feedback
+    // and separates WebView disposal from the new route build.
+    setState(() => _isNavigatingAway = true);
+
     final destination = orderId.isNotEmpty
         ? '/my_orders?pendingOrderId=${Uri.encodeComponent(orderId)}'
         : '/my_orders';
-    context.go(destination);
+
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) context.go(destination);
   }
 
   /// Called when the bank confirms payment but order creation is still
   /// in progress (or succeeded_order_failed — ops is notified either way).
   /// Navigate to orders screen which will watch Firestore and resolve itself.
-  void _handlePaymentProcessing() {
+  Future<void> _handlePaymentProcessing() async {
     if (_resultHandled) return;
     _resultHandled = true;
 
@@ -206,9 +216,16 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
     _clearCart();
 
     if (!mounted) return;
-    context.go(
-      '/my_orders?pendingOrderNumber=${Uri.encodeComponent(widget.orderNumber)}',
-    );
+
+    // Show a brief processing overlay before navigating.
+    setState(() => _isNavigatingAway = true);
+
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) {
+      context.go(
+        '/my_orders?pendingOrderNumber=${Uri.encodeComponent(widget.orderNumber)}',
+      );
+    }
   }
 
   /// Called on a genuine payment failure (bank declined, hash mismatch).
@@ -297,6 +314,43 @@ class _IsbankPaymentScreenState extends State<IsbankPaymentScreen> {
   Widget build(BuildContext context) {
     final isDark = _isDark;
     final l10n = AppLocalizations.of(context);
+
+    // ── Navigating away: brief success / processing overlay ─────────────────
+    if (_isNavigatingAway) {
+      return Scaffold(
+        backgroundColor:
+            isDark ? const Color(0xFF111827) : const Color(0xFFF9FAFB),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00A86B).withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check_circle_rounded,
+                  size: 48,
+                  color: Color(0xFF00A86B),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                l10n.paymentSuccessful,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.grey[900],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     // ── Guard: missing params ────────────────────────────────────────────────
     if (widget.gatewayUrl.isEmpty || widget.orderNumber.isEmpty) {

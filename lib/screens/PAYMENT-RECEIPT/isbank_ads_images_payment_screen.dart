@@ -22,6 +22,7 @@ class IsbankAdsImagesPaymentScreen extends StatefulWidget {
   final String paymentLink;
   final double price;
   final String shopId;
+  final String shopName;
 
   const IsbankAdsImagesPaymentScreen({
     super.key,
@@ -29,6 +30,7 @@ class IsbankAdsImagesPaymentScreen extends StatefulWidget {
     required this.paymentLink,
     required this.price,
     required this.shopId,
+    required this.shopName,
   });
 
   @override
@@ -273,11 +275,16 @@ void _handlePaymentSuccess() {
   if (!mounted) return;
   setState(() => _status = _PaymentStatus.completed);
 
-  Future.delayed(const Duration(seconds: 2), () {
+  Future.delayed(const Duration(milliseconds: 500), () {
     if (!mounted) return;
-    // BEFORE: Navigator.of(context).pop(true); + _showSuccessDialog()
-    // AFTER: go directly to seller panel tab 5
-    context.go('/seller-panel?tab=5&shopId=${widget.shopId}');
+    context.go(
+      '/seller-panel/ads_screen',
+      extra: {
+        'shopId': widget.shopId,
+        'shopName': widget.shopName,
+        'initialTabIndex': 1,      // land on "My Ads" tab
+      },
+    );
   });
 }
 
@@ -318,10 +325,7 @@ void _handlePaymentSuccess() {
   // =============================================================================
 
   Future<void> _handleCancel() async {
-    if (_status == _PaymentStatus.completed || _resultHandled) {
-      if (mounted) Navigator.of(context).pop(true);
-      return;
-    }
+    if (_status == _PaymentStatus.completed || _resultHandled) return;
 
     if (_status == _PaymentStatus.failed || _status == _PaymentStatus.timeout) {
       if (mounted) Navigator.of(context).pop(false);
@@ -554,84 +558,7 @@ void _handlePaymentSuccess() {
     );
   }
 
-  // =============================================================================
-  // SUCCESS DIALOG (shown on the underlying screen after pop)
-  // =============================================================================
-
-  void _showSuccessDialog() {
-    final l10n = AppLocalizations.of(context);
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF38A169), Color(0xFF2F855A)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.check_rounded, size: 48, color: Colors.white),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              l10n.paymentSuccessful,
-              style: GoogleFonts.figtree(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF1A202C),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              l10n.adPaymentSuccessMessage,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.figtree(
-                fontSize: 14,
-                color: const Color(0xFF64748B),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                context.go('/seller-panel?tab=5&shopId=${widget.shopId}');
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF38A169),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                elevation: 0,
-              ),
-              child: Text(
-                l10n.gotIt,
-                style: GoogleFonts.figtree(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+ }
 
 // =============================================================================
 // SCAFFOLD WRAPPER

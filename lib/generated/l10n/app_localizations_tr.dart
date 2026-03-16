@@ -4088,7 +4088,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get addProductsToShop => 'Başlamak için mağazanıza ürün ekleyin';
 
   @override
-  String get clearSearch => 'Aramayı Temizle';
+  String get clearSearch => 'Aramayı temizle';
 
   @override
   String get selectAtLeastOneProduct => 'Lütfen en az bir ürün seçin';
@@ -9396,11 +9396,11 @@ class AppLocalizationsTr extends AppLocalizations {
       'İnternet bağlantısı yok. Lütfen ağınızı kontrol edin ve tekrar deneyin.';
 
   @override
-  String get networkError =>
-      'Ağ hatası. Lütfen bağlantınızı kontrol edin ve tekrar deneyin.';
+  String get networkError => 'Ağ hatası. Lütfen bağlantınızı kontrol edin.';
 
   @override
-  String get permissionDenied => 'İzin reddedildi. Lütfen tekrar deneyin.';
+  String get permissionDenied =>
+      'Erişim reddedildi. Lütfen tekrar giriş yapın.';
 
   @override
   String get sessionExpired =>
@@ -15485,4 +15485,35 @@ class AppLocalizationsTr extends AppLocalizations {
   String pastFoodCargosDeliveredAt(String date) {
     return 'Teslim tarihi: $date';
   }
+
+  @override
+  String get filterByDateRange => 'Tarih aralığına göre filtrele';
+
+  @override
+  String get processingPayment => 'Ödeme işleniyor…';
+
+  @override
+  String get orderWillAppearAutomatically =>
+      'Siparişiniz burada otomatik olarak görünecektir.';
+
+  @override
+  String get orderPlacedSuccessfully => 'Sipariş başarıyla oluşturuldu!';
+
+  @override
+  String get paymentReceivedTeamNotified =>
+      'Ödeme alındı — ekibimiz bilgilendirildi.';
+
+  @override
+  String get orderWillBeResolvedShortly =>
+      'Siparişiniz kısa sürede çözümlenecektir.';
+
+  @override
+  String get somethingWentWrongTryAgain =>
+      'Bir şeyler ters gitti. Lütfen tekrar deneyin.';
+
+  @override
+  String get somethingWentWrong => 'Bir şeyler ters gitti';
+
+  @override
+  String get unableToFindOrderDetails => 'Sipariş detayları bulunamadı';
 }

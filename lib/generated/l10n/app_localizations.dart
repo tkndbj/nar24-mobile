@@ -8137,7 +8137,7 @@ abstract class AppLocalizations {
   /// Arama sorgusunu temizleme düğmesi metni
   ///
   /// In tr, this message translates to:
-  /// **'Aramayı Temizle'**
+  /// **'Aramayı temizle'**
   String get clearSearch;
 
   /// Ürün seçmeden devam etmeye çalışırken gösterilen hata mesajı
@@ -17925,13 +17925,13 @@ abstract class AppLocalizations {
   /// No description provided for @networkError.
   ///
   /// In tr, this message translates to:
-  /// **'Ağ hatası. Lütfen bağlantınızı kontrol edin ve tekrar deneyin.'**
+  /// **'Ağ hatası. Lütfen bağlantınızı kontrol edin.'**
   String get networkError;
 
   /// No description provided for @permissionDenied.
   ///
   /// In tr, this message translates to:
-  /// **'İzin reddedildi. Lütfen tekrar deneyin.'**
+  /// **'Erişim reddedildi. Lütfen tekrar giriş yapın.'**
   String get permissionDenied;
 
   /// No description provided for @sessionExpired.
@@ -29519,6 +29519,60 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Teslim tarihi: {date}'**
   String pastFoodCargosDeliveredAt(String date);
+
+  /// No description provided for @filterByDateRange.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tarih aralığına göre filtrele'**
+  String get filterByDateRange;
+
+  /// No description provided for @processingPayment.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme işleniyor…'**
+  String get processingPayment;
+
+  /// No description provided for @orderWillAppearAutomatically.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişiniz burada otomatik olarak görünecektir.'**
+  String get orderWillAppearAutomatically;
+
+  /// No description provided for @orderPlacedSuccessfully.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş başarıyla oluşturuldu!'**
+  String get orderPlacedSuccessfully;
+
+  /// No description provided for @paymentReceivedTeamNotified.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme alındı — ekibimiz bilgilendirildi.'**
+  String get paymentReceivedTeamNotified;
+
+  /// No description provided for @orderWillBeResolvedShortly.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişiniz kısa sürede çözümlenecektir.'**
+  String get orderWillBeResolvedShortly;
+
+  /// No description provided for @somethingWentWrongTryAgain.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bir şeyler ters gitti. Lütfen tekrar deneyin.'**
+  String get somethingWentWrongTryAgain;
+
+  /// No description provided for @somethingWentWrong.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bir şeyler ters gitti'**
+  String get somethingWentWrong;
+
+  /// No description provided for @unableToFindOrderDetails.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş detayları bulunamadı'**
+  String get unableToFindOrderDetails;
 }
 
 class _AppLocalizationsDelegate

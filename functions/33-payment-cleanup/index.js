@@ -44,6 +44,20 @@ const BOOST_RETENTION = {
   ...RETENTION,
   payment_succeeded_boost_failed: { days: 180 },
 };
+
+const AD_PAYMENT_RETENTION = {
+  awaiting_3d: { days: 1   },
+  completed: { days: 90  },
+  payment_failed: { days: 30  },
+  hash_verification_failed: { days: 30  },
+  payment_succeeded_activation_failed: { days: 180 },
+  processing: { days: 7   },
+  payment_verified_activating_ad: { days: 7   },
+};
+
+export function setAdPaymentExpiresAt(status) {
+  return setPaymentExpiresAt(status, AD_PAYMENT_RETENTION);
+}
  
 // ─────────────────────────────────────────────────────────────────────────────
 // setPaymentExpiresAt
@@ -208,6 +222,8 @@ export const cleanupPaymentCollections = onSchedule(
       { name: 'pendingBoostPayments',   retentionMap: BOOST_RETENTION, label: 'boosts' },
       { name: 'pendingPaymentsBackup',  retentionMap: RETENTION,       label: 'orders-backup' },
       { name: 'boostPaymentBackup',     retentionMap: BOOST_RETENTION, label: 'boosts-backup' },
+      { name: 'pendingAdPayments',       retentionMap: AD_PAYMENT_RETENTION, label: 'ads'        },
+{ name: 'pendingAdPaymentsBackup', retentionMap: AD_PAYMENT_RETENTION, label: 'ads-backup' },
     ];
  
     const summary = {};

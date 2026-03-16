@@ -104,6 +104,7 @@ class _DynamicPaymentScreenState extends State<DynamicPaymentScreen> {
           submissionId: widget.submissionId,
           paymentLink: widget.paymentLink,
           price: widget.price,
+          shopName: widget.shopName,
         ),
       ),
     );

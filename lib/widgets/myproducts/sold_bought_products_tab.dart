@@ -50,9 +50,15 @@ class SellerGroup {
 class SoldBoughtProductsTab extends StatefulWidget {
   final bool isSold;
 
+  /// When true, the tab won't load data until [SoldBoughtProductsTabState.ensureLoaded]
+  /// is called. Use for off-screen tabs to avoid unnecessary Firestore queries
+  /// during route transitions.
+  final bool lazyLoad;
+
   const SoldBoughtProductsTab({
     Key? key,
     required this.isSold,
+    this.lazyLoad = false,
   }) : super(key: key);
 
   @override
@@ -67,7 +73,16 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
   static const Duration _scrollThrottleDelay = Duration(milliseconds: 100);
   static const double _loadMoreTriggerOffset = 0.8;
 
+  bool _hasStartedLoading = false;
+
   void refresh() => _refreshData();
+
+  /// Triggers initial data load for lazy-loaded tabs.
+  /// No-op if data has already been loaded or is currently loading.
+  void ensureLoaded() {
+    if (_hasStartedLoading) return;
+    _loadInitialPage();
+  }
 
   @override
   bool get wantKeepAlive => true;
@@ -117,7 +132,17 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
     super.initState();
     _initializeControllers();
     _setupListeners();
-    _loadInitialPage();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Load data here (not initState) so the Provider ancestor is guaranteed
+    // to be accessible via context. The guard prevents re-loading on
+    // subsequent dependency changes.
+    if (!widget.lazyLoad && !_hasStartedLoading) {
+      _loadInitialPage();
+    }
   }
 
   void _initializeControllers() {
@@ -316,8 +341,17 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
     });
   }
 
+  bool _isInitialLoadInFlight = false;
+
   Future<void> _loadInitialPage() async {
     if (!mounted) return;
+
+    // Guard against concurrent calls (e.g. didChangeDependencies +
+    // _refreshBoughtTab firing back-to-back). The second call would clear
+    // data mid-flight from the first, leaving the tab empty.
+    if (_isInitialLoadInFlight) return;
+    _isInitialLoadInFlight = true;
+    _hasStartedLoading = true;
 
     try {
       setState(() {
@@ -332,6 +366,8 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
       await _loadTransactionsPage(isSold, isInitial: true);
     } catch (e) {
       _handleLoadError(e, isInitial: true);
+    } finally {
+      _isInitialLoadInFlight = false;
     }
   }
 
@@ -423,6 +459,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
 
   List<CategorizedTransactions> _categorizeTransactions(
       List<Map<String, dynamic>> transactions) {
+    final l10n = AppLocalizations.of(context);
     // Group by date first
     final Map<String, List<Map<String, dynamic>>> dateGroups = {};
     final DateFormat dateFormatter = DateFormat('dd/MM/yyyy');
@@ -463,7 +500,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
       for (final tx in dateTransactions) {
         final data = tx['data'] as Map<String, dynamic>;
         final sellerId = data['sellerId'] as String? ?? 'unknown';
-        final sellerName = data['sellerName'] as String? ?? 'Unknown Seller';
+        final sellerName = data['sellerName'] as String? ?? l10n.unknownSeller;
 
         final sellerKey =
             '$sellerId|$sellerName'; // Use both ID and name for uniqueness
@@ -479,7 +516,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
       for (final entry in sellerGroups.entries) {
         final parts = entry.key.split('|');
         final sellerId = parts[0];
-        final sellerName = parts.length > 1 ? parts[1] : 'Unknown Seller';
+        final sellerName = parts.length > 1 ? parts[1] : l10n.unknownSeller;
 
         // Sort transactions within seller group by time (newest first)
         final sortedTransactions = entry.value
@@ -536,12 +573,13 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
   }
 
   String _getErrorMessage(dynamic error) {
+    final l10n = AppLocalizations.of(context);
     if (error.toString().contains('network')) {
-      return 'Network error. Please check your connection.';
+      return l10n.networkError;
     } else if (error.toString().contains('permission')) {
-      return 'Permission denied. Please try logging in again.';
+      return l10n.permissionDenied;
     } else {
-      return 'Something went wrong. Please try again.';
+      return l10n.somethingWentWrongTryAgain;
     }
   }
 
@@ -705,6 +743,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
 
   Widget _buildErrorWidget() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
 
     return Center(
       child: Padding(
@@ -719,7 +758,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
             ),
             const SizedBox(height: 16),
             Text(
-              _errorMessage ?? 'Something went wrong',
+              _errorMessage ?? l10n.somethingWentWrong,
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
                 fontSize: 16,
@@ -739,7 +778,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
               child: Text(
-                'Retry',
+                l10n.retry,
                 style: GoogleFonts.inter(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -1110,7 +1149,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
     final data = tx['data'] as Map<String, dynamic>;
     final tid = tx['id'] as String;
 
-    final name = data['productName'] as String? ?? 'Unnamed';
+    final name = data['productName'] as String? ?? l10n.unnamed;
     final price = (data['price'] as num?)?.toDouble() ?? 0.0;
     final currency = data['currency'] as String? ?? 'TRY';
     final selImg = data['selectedColorImage'] as String?;
@@ -1529,7 +1568,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
     final orderId = data['orderId'] as String?;
 
     if (orderId == null) {
-      _showErrorSnackBar('Unable to find order details');
+      _showErrorSnackBar(AppLocalizations.of(context).unableToFindOrderDetails);
       return;
     }
 

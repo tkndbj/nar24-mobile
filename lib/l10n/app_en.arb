@@ -6622,5 +6622,21 @@
     "placeholders": {
       "date": { "type": "String" }
     }
-  }
+  },
+
+  "clearSearch": "Clear search",
+  "filterByDateRange": "Filter by date range",
+  "processingPayment": "Processing payment…",
+  "orderWillAppearAutomatically": "Your order will appear here automatically.",
+  "orderPlacedSuccessfully": "Order placed successfully!",
+  "paymentReceivedTeamNotified": "Payment received — our team has been notified.",
+  "orderWillBeResolvedShortly": "Your order will be resolved shortly.",
+  "networkError": "Network error. Please check your connection.",
+  "permissionDenied": "Permission denied. Please try logging in again.",
+  "somethingWentWrongTryAgain": "Something went wrong. Please try again.",
+  "somethingWentWrong": "Something went wrong",
+  "retry": "Retry",
+  "unnamed": "Unnamed",
+  "unableToFindOrderDetails": "Unable to find order details",
+  "unknownSeller": "Unknown Seller"
 }

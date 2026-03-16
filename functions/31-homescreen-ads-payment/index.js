@@ -9,6 +9,7 @@ import path from 'path';
 import os from 'os';
 import fs from 'fs';
 import {getDominantColor} from '../getDominantColor.js';
+import { setAdPaymentExpiresAt } from '../33-payment-cleanup/index.js';
 
 const tasksClient = new CloudTasksClient();
 
@@ -362,38 +363,70 @@ async function generateHashVer3(params) {
         };
   
         console.log('Ad Payment params:', JSON.stringify(paymentParams, null, 2));
-  
-        // Store pending ad payment
-        await db
-          .collection('pendingAdPayments')
-          .doc(orderNumber)
-          .set({
-            userId: request.auth.uid,
-            submissionId: submissionId,
-            amount: amount,
-            totalAmount: parseFloat(formattedAmount),
-            formattedAmount: formattedAmount,
-            orderNumber: orderNumber,
-            status: 'awaiting_3d',
-            paymentParams: paymentParams,
-            adData: {
-              adType: submission.adType,
-              duration: submission.duration,
-              shopId: submission.shopId,
-              shopName: submission.shopName,
-              imageUrl: submission.imageUrl,
-              linkType: submission.linkType || null,
-              linkedShopId: submission.linkedShopId || null,
-              linkedProductId: submission.linkedProductId || null,
-            },
-            customerInfo: {
-              name: sanitizedCustomerName,
-              email: customerEmail,
-              phone: customerPhone,
-            },
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
-          });
+
+        const docData = {
+          userId: request.auth.uid,
+          submissionId: submissionId,
+          amount: amount,
+          totalAmount: parseFloat(formattedAmount),
+          formattedAmount: formattedAmount,
+          orderNumber: orderNumber,
+          status: 'awaiting_3d',
+          paymentParams: paymentParams,
+          adData: {
+            adType: submission.adType,
+            duration: submission.duration,
+            shopId: submission.shopId,
+            shopName: submission.shopName,
+            imageUrl: submission.imageUrl,
+            linkType: submission.linkType || null,
+            linkedShopId: submission.linkedShopId || null,
+            linkedProductId: submission.linkedProductId || null,
+          },
+          customerInfo: {
+            name: sanitizedCustomerName,
+            email: customerEmail,
+            phone: customerPhone,
+          },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
+        };
+
+        let docWritten = false;
+let lastWriteError = null;
+
+for (let attempt = 1; attempt <= 3; attempt++) {
+  try {
+    const batch = db.batch();
+    batch.set(db.collection('pendingAdPayments').doc(orderNumber), docData);
+    batch.set(db.collection('pendingAdPaymentsBackup').doc(orderNumber), { ...docData, _isBackup: true });
+    await batch.commit();
+    docWritten = true;
+    break;
+  } catch (writeErr) {
+    lastWriteError = writeErr;
+    console.error(`[initializeIsbankAdPayment] Write attempt ${attempt}/3 failed:`, writeErr.message);
+    if (attempt < 3) await new Promise((r) => setTimeout(r, 300 * attempt));
+  }
+}
+
+if (!docWritten) {
+  console.error(`[initializeIsbankAdPayment] All 3 write attempts failed for ${orderNumber}`);
+  try {
+    await db.collection('_payment_alerts').add({
+      type: 'ad_payment_doc_write_failed',
+      severity: 'high',
+      orderNumber,
+      userId: request.auth.uid,
+      errorMessage: lastWriteError?.message || 'Unknown write error',
+      isRead: false,
+      isResolved: false,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (_) {/* alerting must never throw */}
+  throw new HttpsError('internal', 'Payment session could not be created. Please try again.');
+}
+      
   
         return {
           success: true,
@@ -423,6 +456,76 @@ async function generateHashVer3(params) {
     <script>window.location.href = '${esc(deepLink)}';</script>
   </body>
   </html>`;
+  }
+
+  async function activateAdAfterPayment(db, oid, pendingPayment) {
+    const adData = pendingPayment.adData;
+    const submissionId = pendingPayment.submissionId;
+  
+    const expirationDate = calculateExpirationDate(adData.duration);
+    const adActivationRef = db.collection(getAdCollectionName(adData.adType)).doc();
+  
+    const activationBatch = db.batch();
+  
+    activationBatch.update(db.collection('ad_submissions').doc(submissionId), {
+      status: 'active',
+      paidAt: admin.firestore.FieldValue.serverTimestamp(),
+      expiresAt: admin.firestore.Timestamp.fromDate(expirationDate),
+      paymentOrderId: oid,
+      activeAdId: adActivationRef.id,
+    });
+  
+    activationBatch.set(adActivationRef, {
+      submissionId,
+      shopId: adData.shopId,
+      shopName: adData.shopName,
+      imageUrl: adData.imageUrl,
+      adType: adData.adType,
+      duration: adData.duration,
+      activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      expiresAt: admin.firestore.Timestamp.fromDate(expirationDate),
+      isActive: true,
+      isManual: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      linkType: adData.linkType || null,
+      linkedShopId: adData.linkedShopId || null,
+      linkedProductId: adData.linkedProductId || null,
+      dominantColor: null,
+      colorExtractionQueued: adData.adType === 'topBanner',
+    });
+  
+    await activationBatch.commit();
+  
+    await queueDominantColorExtraction(adActivationRef.id, adData.imageUrl, adData.adType);
+    await scheduleAdExpiration(submissionId, expirationDate);
+  
+    await db.collection('receiptTasks').add({
+      receiptType: 'ad',
+      ownerType: 'shop',
+      ownerId: adData.shopId,
+      buyerId: adData.shopId,
+      orderId: oid,
+      buyerName: adData.shopName,
+      buyerEmail: pendingPayment.customerInfo?.email || '',
+      buyerPhone: pendingPayment.customerInfo?.phone || '',
+      totalPrice: pendingPayment.totalAmount,
+      itemsSubtotal: pendingPayment.amount,
+      taxAmount: pendingPayment.totalAmount - pendingPayment.amount,
+      currency: 'TL',
+      paymentMethod: 'Credit Card (3D Secure)',
+      language: 'tr',
+      adData: {
+        adType: adData.adType,
+        duration: adData.duration,
+        shopName: adData.shopName,
+        submissionId,
+      },
+      status: 'pending',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      orderDate: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  
+    return adActivationRef.id;
   }
   
   // Ad Payment Callback
@@ -498,112 +601,117 @@ async function generateHashVer3(params) {
   
         const pendingPaymentRef = db.collection('pendingAdPayments').doc(oid);
   
-        // TRANSACTION: Atomic operations
         const transactionResult = await db.runTransaction(async (transaction) => {
           const pendingPaymentSnap = await transaction.get(pendingPaymentRef);
-  
+        
           if (!pendingPaymentSnap.exists) {
-            return {error: 'not_found', message: 'Payment session not found'};
-          }
-  
-          const pendingPayment = pendingPaymentSnap.data();
-  
-          // Idempotency checks
-          if (pendingPayment.status === 'completed') {
-            console.log(`Ad payment ${oid} already completed`);
-            return {
-              alreadyProcessed: true,
-              status: 'completed',
-              message: 'Payment already successfully processed',
-            };
-          }
-  
-          if (pendingPayment.status === 'payment_succeeded_activation_failed') {
-            console.log(`Ad payment ${oid} succeeded but activation failed`);
-            return {
-              alreadyProcessed: true,
-              status: 'payment_succeeded_activation_failed',
-              message: 'Payment succeeded but ad activation failed',
-            };
-          }
-  
-          if (pendingPayment.status === 'payment_failed') {
-            console.log(`Ad payment ${oid} already marked as failed`);
-            return {
-              alreadyProcessed: true,
-              status: 'payment_failed',
-              message: 'Payment already marked as failed',
-            };
-          }
-  
-          // Only proceed if awaiting_3d
-          if (pendingPayment.status !== 'awaiting_3d') {
-            console.warn(`Unexpected status for ${oid}: ${pendingPayment.status}`);
-  
-            if (
-              pendingPayment.status === 'processing' ||
-              pendingPayment.status === 'payment_verified_activating_ad'
-            ) {
-              return {
-                retry: true,
-                currentStatus: pendingPayment.status,
-                pendingPayment: pendingPayment,
-              };
+            // Backup restore (mirrors product payment system)
+            const backupSnap = await transaction.get(db.collection('pendingAdPaymentsBackup').doc(oid));
+            if (backupSnap.exists) {
+              console.warn(`[AdPayment] Primary doc missing for ${oid} — restoring from backup`);
+              const backupData = backupSnap.data();
+              transaction.set(pendingPaymentRef, {
+                ...backupData,
+                _restoredFromBackup: true,
+                _restoredAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+        
+              if (!hashValid) {
+                transaction.update(pendingPaymentRef, {
+                  status: 'hash_verification_failed',
+                  receivedHash: HASH || null,
+                  computedHash,
+                  callbackLogId: callbackLogRef.id,
+                  updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                  ...setAdPaymentExpiresAt('hash_verification_failed'),
+                });
+                return { error: 'hash_failed' };
+              }
+        
+              const isAuthSuccess = ['1', '2', '3', '4'].includes(mdStatus);
+              const isTransactionSuccess = Response === 'Approved' && ProcReturnCode === '00';
+              if (!isAuthSuccess || !isTransactionSuccess) {
+                transaction.update(pendingPaymentRef, {
+                  status: 'payment_failed',
+                  mdStatus, procReturnCode: ProcReturnCode,
+                  errorMessage: ErrMsg || 'Payment failed',
+                  rawResponse: request.body,
+                  callbackLogId: callbackLogRef.id,
+                  updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                  ...setAdPaymentExpiresAt('payment_failed'),
+                });
+                return { error: 'payment_failed', message: ErrMsg || 'Payment failed' };
+              }
+        
+              transaction.update(pendingPaymentRef, {
+                status: 'processing',
+                mdStatus, procReturnCode: ProcReturnCode,
+                processingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+                rawResponse: request.body,
+                callbackLogId: callbackLogRef.id,
+                ...setAdPaymentExpiresAt('processing'),
+              });
+              return { success: true, pendingPayment: backupData, restoredFromBackup: true };
             }
-  
-            return {
-              alreadyProcessed: true,
-              status: pendingPayment.status,
-              message: 'Payment in unexpected state',
-            };
+        
+            return { error: 'not_found', message: 'Payment session not found' };
           }
-  
-         
-          // Hash check (computed outside, acted on inside)
+        
+          const pendingPayment = pendingPaymentSnap.data();
+        
+          if (pendingPayment.status === 'completed')
+            {return { alreadyProcessed: true, status: 'completed' };}
+          if (pendingPayment.status === 'payment_succeeded_activation_failed')
+            {return { alreadyProcessed: true, status: pendingPayment.status };}
+          if (pendingPayment.status === 'payment_failed')
+            {return { alreadyProcessed: true, status: pendingPayment.status };}
+          if (pendingPayment.status === 'hash_verification_failed')
+            {return { alreadyProcessed: true, status: pendingPayment.status };}
+          if (pendingPayment.status === 'processing' ||
+              pendingPayment.status === 'payment_verified_activating_ad')
+            {return { retry: true, pendingPayment };}
+          if (pendingPayment.status !== 'awaiting_3d')
+            {return { alreadyProcessed: true, status: pendingPayment.status };}
+        
           if (!hashValid) {
-            console.error('[AdPayment] Hash mismatch for oid:', oid);
             transaction.update(pendingPaymentRef, {
               status: 'hash_verification_failed',
               receivedHash: HASH || null,
               computedHash,
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
               callbackLogId: callbackLogRef.id,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              ...setAdPaymentExpiresAt('hash_verification_failed'),
             });
             return { error: 'hash_failed' };
           }
-  
-          // Check payment status
+        
           const isAuthSuccess = ['1', '2', '3', '4'].includes(mdStatus);
           const isTransactionSuccess = Response === 'Approved' && ProcReturnCode === '00';
-  
+        
           if (!isAuthSuccess || !isTransactionSuccess) {
             transaction.update(pendingPaymentRef, {
               status: 'payment_failed',
-              response: Response,
-              mdStatus: mdStatus,
-              procReturnCode: ProcReturnCode,
+              mdStatus, procReturnCode: ProcReturnCode,
               errorMessage: ErrMsg || 'Payment failed',
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
               rawResponse: request.body,
               callbackLogId: callbackLogRef.id,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              ...setAdPaymentExpiresAt('payment_failed'),
             });
-  
-            return {error: 'payment_failed', message: ErrMsg || 'Payment failed'};
+            return { error: 'payment_failed', message: ErrMsg || 'Payment failed' };
           }
-  
-          // Mark as processing
+        
           transaction.update(pendingPaymentRef, {
             status: 'processing',
-            response: Response,
-            mdStatus: mdStatus,
-            procReturnCode: ProcReturnCode,
+            mdStatus, procReturnCode: ProcReturnCode,
             processingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
             rawResponse: request.body,
             callbackLogId: callbackLogRef.id,
+            ...setAdPaymentExpiresAt('processing'),
           });
-  
-          return {success: true, pendingPayment: pendingPayment};
-        });
+        
+          return { success: true, pendingPayment };
+        });  
   
         // Handle transaction results
         if (transactionResult.error) {
@@ -652,167 +760,47 @@ async function generateHashVer3(params) {
           }
         }
   
-        // Handle retry
         if (transactionResult.retry) {
-          console.log(
-            `Ad payment ${oid} is being processed by another callback, waiting...`,
-          );
-  
-          let retryCount = 0;
-          const maxRetries = 20;
-          const retryDelay = 500;
-  
-          while (retryCount < maxRetries) {
-            await new Promise((resolve) => setTimeout(resolve, retryDelay));
-  
-            const checkSnap = await pendingPaymentRef.get();
-            const checkData = checkSnap.data();
-  
-            if (checkData.status === 'completed') {
-                response.send(buildAdRedirectHtml(
-                    'ad-payment-success://',
-                    '✓ Ödeme Başarılı',
-                    'Reklamınız aktif edildi.',
-                  ));
-              return;
-            }
-  
-            if (
-              checkData.status === 'payment_succeeded_activation_failed' ||
-              checkData.status === 'payment_failed'
-            ) {
-                response.send(buildAdRedirectHtml(
-                    'ad-payment-failed://processing-error',
-                    'İşlem Hatası',
-                    'Lütfen destek ile iletişime geçin.',
-                  ));
-              return;
-            }
-  
-            retryCount++;
-          }
-  
-          console.error(`Timeout waiting for ad payment ${oid} processing`);
-          response.status(500).send('Processing timeout');
+          console.log(`[AdPayment] ${oid} already processing — client listener will handle completion`);
+          response.send(buildAdRedirectHtml(
+            'ad-payment-status://processing',
+            'İşleminiz Devam Ediyor',
+            'Ödemeniz işleniyor, lütfen bekleyin.',
+          ));
           return;
         }
   
         // Activate ad
         try {
-          console.log(`Activating ad for payment ${oid}`);
-  
-          const pendingPayment = transactionResult.pendingPayment;
-          const submissionId = pendingPayment.submissionId;
-          const adData = pendingPayment.adData;
-  
-          // Calculate expiration date
-          const expirationDate = calculateExpirationDate(adData.duration);
-  
-          const adActivationRef = db.collection(getAdCollectionName(adData.adType)).doc();
-
-const activationBatch = db.batch();
-
-activationBatch.update(db.collection('ad_submissions').doc(submissionId), {
-  status: 'active',
-  paidAt: admin.firestore.FieldValue.serverTimestamp(),
-  expiresAt: admin.firestore.Timestamp.fromDate(expirationDate),
-  paymentOrderId: oid,
-  activeAdId: adActivationRef.id,
-});
-
-activationBatch.set(adActivationRef, {
-  submissionId: submissionId,
-  shopId: adData.shopId,
-  shopName: adData.shopName,
-  imageUrl: adData.imageUrl,
-  adType: adData.adType,
-  duration: adData.duration,
-  activatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  expiresAt: admin.firestore.Timestamp.fromDate(expirationDate),
-  isActive: true,
-  isManual: false,
-  createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  linkType: adData.linkType || null,
-  linkedShopId: adData.linkedShopId || null,
-  linkedProductId: adData.linkedProductId || null,
-  dominantColor: null,
-  colorExtractionQueued: adData.adType === 'topBanner',
-});
-
-await activationBatch.commit();
-  
-  
-          // ✅ Queue dominant color extraction (non-blocking, async)
-          await queueDominantColorExtraction(
-            adActivationRef.id,
-            adData.imageUrl,
-            adData.adType,
-          );
-  
-          // Schedule expiration task
-          await scheduleAdExpiration(submissionId, expirationDate);
-  
-          // Generate ad receipt
-  await db.collection('receiptTasks').add({
-    receiptType: 'ad',
-    ownerType: 'shop',
-    ownerId: adData.shopId,
-    buyerId: adData.shopId,
-    orderId: oid,
-    buyerName: adData.shopName,
-    buyerEmail: pendingPayment.customerInfo?.email || '',
-    buyerPhone: pendingPayment.customerInfo?.phone || '',
-    totalPrice: pendingPayment.totalAmount,
-    itemsSubtotal: pendingPayment.amount,
-    taxAmount: pendingPayment.totalAmount - pendingPayment.amount,
-    currency: 'TL',
-    paymentMethod: 'Credit Card (3D Secure)',
-    language: 'tr',
-    adData: {
-      adType: adData.adType,
-      duration: adData.duration,
-      shopName: adData.shopName,
-      submissionId: pendingPayment.submissionId,
-    },
-    status: 'pending',
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    orderDate: admin.firestore.FieldValue.serverTimestamp(),
-  });
-  
-          // Update payment status
+          const { pendingPayment } = transactionResult;
+          const activeAdId = await activateAdAfterPayment(db, oid, pendingPayment);
+        
           await pendingPaymentRef.update({
             status: 'completed',
-            activeAdId: adActivationRef.id,
+            activeAdId,
             completedAt: admin.firestore.FieldValue.serverTimestamp(),
             processingDuration: Date.now() - startTime,
+            ...setAdPaymentExpiresAt('completed'),
           });
-  
-          // Update callback log
+        
           await callbackLogRef.update({
             processingCompleted: admin.firestore.FieldValue.serverTimestamp(),
-            activeAdId: adActivationRef.id,
+            activeAdId,
             success: true,
             processingDuration: Date.now() - startTime,
           });
-  
-          response.send(buildAdRedirectHtml(
-            'ad-payment-success://',
-            '✓ Ödeme Başarılı',
-            'Reklamınız aktif edildi.',
-          ));
-  
-          console.log(`✅ Ad payment ${oid} successfully processed`);
-          return;
+        
+          response.send(buildAdRedirectHtml('ad-payment-success://', '✓ Ödeme Başarılı', 'Reklamınız aktif edildi.'));
         } catch (activationError) {
           console.error('Ad activation failed after payment:', activationError);
-  
+        
           await pendingPaymentRef.update({
             status: 'payment_succeeded_activation_failed',
             activationError: activationError.message,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            ...setAdPaymentExpiresAt('payment_succeeded_activation_failed'),
           });
-
-          // Alert for manual resolution — payment taken but ad not activated
+        
           await db.collection('_payment_alerts').doc(`ad_${oid}`).set({
             type: 'ad_activation_failed_after_payment',
             severity: 'high',
@@ -824,20 +812,19 @@ await activationBatch.commit();
             isResolved: false,
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
           });
-  
+        
           await callbackLogRef.update({
             processingFailed: admin.firestore.FieldValue.serverTimestamp(),
             error: activationError.message,
             success: false,
           });
-  
+        
           response.send(buildAdRedirectHtml(
             'ad-payment-failed://activation-error',
             'Ödeme alındı ancak reklam aktif edilemedi',
             `Lütfen destek ile iletişime geçin. Referans: ${oid}`,
           ));
-          return;
-        }
+        } 
       } catch (error) {
         console.error('Ad payment callback critical error:', error);
   
@@ -1624,5 +1611,120 @@ await activationBatch.commit();
       } catch (error) {
         console.error('Error creating daily analytics snapshots:', error);
       }
+    },
+  );
+
+  export const recoverStuckAdPayments = onSchedule(
+    { schedule: '*/5 * * * *', region: 'europe-west3', memory: '256MiB', timeoutSeconds: 300 },
+    async () => {
+      const db = admin.firestore();
+      const fiveMinutesAgo = admin.firestore.Timestamp.fromMillis(Date.now() - 5 * 60 * 1000);
+  
+      const stuckSnap = await db.collection('pendingAdPayments')
+        .where('status', 'in', ['processing', 'payment_verified_activating_ad'])
+        .where('processingStartedAt', '<=', fiveMinutesAgo)
+        .limit(50)
+        .get();
+  
+      if (stuckSnap.empty) return;
+  
+      console.warn(`[AdRecovery] Found ${stuckSnap.docs.length} stuck ad payment(s)`);
+  
+      const results = { recovered: 0, skipped: 0, failed: 0 };
+  
+      for (let i = 0; i < stuckSnap.docs.length; i += 3) {
+        const chunk = stuckSnap.docs.slice(i, i + 3);
+  
+        const settled = await Promise.allSettled(chunk.map(async (doc) => {
+          const oid = doc.id;
+          const p   = doc.data();
+  
+          if ((p.recoveryAttemptCount || 0) >= 5) {
+            console.error(`[AdRecovery] ${oid} exceeded max attempts, giving up`);
+            await doc.ref.update({
+              status: 'payment_succeeded_activation_failed',
+              activationError: 'Max recovery attempts exceeded',
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              ...setAdPaymentExpiresAt('payment_succeeded_activation_failed'),
+            });
+            await db.collection('_payment_alerts').add({
+              type: 'ad_recovery_max_attempts', severity: 'high',
+              orderNumber: oid, userId: p.userId,
+              message: `Ad payment ${oid} exceeded max recovery attempts`,
+              isRead: false, isResolved: false,
+              timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            }).catch(() => {});
+            return 'skipped';
+          }
+  
+          // Atomic claim
+          const claimed = await db.runTransaction(async (tx) => {
+            const fresh = (await tx.get(doc.ref)).data();
+            if (!['processing', 'payment_verified_activating_ad'].includes(fresh.status)) return false;
+            tx.update(doc.ref, {
+              status: 'payment_verified_activating_ad',
+              recoveryAttemptedAt: admin.firestore.FieldValue.serverTimestamp(),
+              recoveryAttemptCount: admin.firestore.FieldValue.increment(1),
+            });
+            return true;
+          });
+  
+          if (!claimed) return 'skipped';
+  
+          const activeAdId = await activateAdAfterPayment(db, oid, p);
+  
+          await doc.ref.update({
+            status: 'completed',
+            activeAdId,
+            completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            recoveredBy: 'ad_recovery_scheduler',
+            ...setAdPaymentExpiresAt('completed'),
+          });
+  
+          await db.collection('_payment_alerts').add({
+            type: 'ad_payment_recovered', severity: 'medium',
+            orderNumber: oid, userId: p.userId, activeAdId,
+            message: `Recovery scheduler fixed stuck ad payment: ${oid}`,
+            isRead: false, isResolved: false,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          }).catch(() => {});
+  
+          console.log(`[AdRecovery] ✅ Recovered ${oid} → ad ${activeAdId}`);
+          return 'recovered';
+        }));
+  
+        settled.forEach((result, idx) => {
+          if (result.status === 'fulfilled') {
+            result.value === 'recovered' ? results.recovered++ : results.skipped++;
+          } else {
+            results.failed++;
+            const oid  = chunk[idx].id;
+            const p    = chunk[idx].data();
+            console.error(`[AdRecovery] Failed to recover ${oid}:`, result.reason?.message);
+  
+            db.runTransaction(async (tx) => {
+              const fresh = (await tx.get(chunk[idx].ref)).data();
+              if (fresh.status === 'payment_verified_activating_ad') {
+                tx.update(chunk[idx].ref, {
+                  status: 'payment_succeeded_activation_failed',
+                  activationError: result.reason?.message || 'Recovery failed',
+                  updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                  ...setAdPaymentExpiresAt('payment_succeeded_activation_failed'),
+                });
+              }
+            }).catch(console.error);
+  
+            db.collection('_payment_alerts').add({
+              type: 'ad_recovery_failed', severity: 'high',
+              orderNumber: oid, userId: p.userId,
+              errorMessage: result.reason?.message || 'Unknown error',
+              isRead: false, isResolved: false,
+              timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            }).catch(() => {});
+          }
+        });
+      }
+  
+      console.log(`[AdRecovery] Done — ${results.recovered} recovered, ${results.skipped} skipped, ${results.failed} failed`);
     },
   );

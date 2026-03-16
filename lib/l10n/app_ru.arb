@@ -6257,5 +6257,21 @@
     "placeholders": {
       "date": { "type": "String" }
     }
-  }
+  },
+
+  "clearSearch": "Очистить поиск",
+  "filterByDateRange": "Фильтр по диапазону дат",
+  "processingPayment": "Обработка платежа…",
+  "orderWillAppearAutomatically": "Ваш заказ появится здесь автоматически.",
+  "orderPlacedSuccessfully": "Заказ успешно оформлен!",
+  "paymentReceivedTeamNotified": "Платёж получен — наша команда уведомлена.",
+  "orderWillBeResolvedShortly": "Ваш заказ будет обработан в ближайшее время.",
+  "networkError": "Ошибка сети. Пожалуйста, проверьте подключение.",
+  "permissionDenied": "Доступ запрещён. Пожалуйста, войдите снова.",
+  "somethingWentWrongTryAgain": "Что-то пошло не так. Пожалуйста, попробуйте снова.",
+  "somethingWentWrong": "Что-то пошло не так",
+  "retry": "Повторить",
+  "unnamed": "Без названия",
+  "unableToFindOrderDetails": "Не удалось найти детали заказа",
+  "unknownSeller": "Неизвестный продавец"
 }

@@ -9448,11 +9448,10 @@ class AppLocalizationsRu extends AppLocalizations {
       'Нет подключения к интернету. Проверьте сеть и попробуйте снова.';
 
   @override
-  String get networkError =>
-      'Ошибка сети. Проверьте подключение и попробуйте снова.';
+  String get networkError => 'Ошибка сети. Пожалуйста, проверьте подключение.';
 
   @override
-  String get permissionDenied => 'Доступ запрещён. Попробуйте снова.';
+  String get permissionDenied => 'Доступ запрещён. Пожалуйста, войдите снова.';
 
   @override
   String get sessionExpired => 'Сессия истекла. Пожалуйста, войдите снова.';
@@ -15558,4 +15557,35 @@ class AppLocalizationsRu extends AppLocalizations {
   String pastFoodCargosDeliveredAt(String date) {
     return 'Доставлено $date';
   }
+
+  @override
+  String get filterByDateRange => 'Фильтр по диапазону дат';
+
+  @override
+  String get processingPayment => 'Обработка платежа…';
+
+  @override
+  String get orderWillAppearAutomatically =>
+      'Ваш заказ появится здесь автоматически.';
+
+  @override
+  String get orderPlacedSuccessfully => 'Заказ успешно оформлен!';
+
+  @override
+  String get paymentReceivedTeamNotified =>
+      'Платёж получен — наша команда уведомлена.';
+
+  @override
+  String get orderWillBeResolvedShortly =>
+      'Ваш заказ будет обработан в ближайшее время.';
+
+  @override
+  String get somethingWentWrongTryAgain =>
+      'Что-то пошло не так. Пожалуйста, попробуйте снова.';
+
+  @override
+  String get somethingWentWrong => 'Что-то пошло не так';
+
+  @override
+  String get unableToFindOrderDetails => 'Не удалось найти детали заказа';
 }

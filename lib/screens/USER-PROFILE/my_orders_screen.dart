@@ -97,11 +97,11 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
       // Payment received but order not yet created — listen for resolution.
       _bannerState = _PendingBannerState.processing;
       _listenToPendingOrder(widget.pendingOrderNumber!);
-      _switchToBoughtTab();
+      // Bought tab is already at index 0 (default) — no tab switch needed.
     } else if (widget.pendingOrderId != null) {
       // Order already created (fast path) — show brief success banner.
       _bannerState = _PendingBannerState.succeeded;
-      _switchToBoughtTab();
+      // Bought tab is already at index 0 (default) — no tab switch needed.
       _refreshBoughtTab();
       _scheduleBannerDismiss();
     }
@@ -173,12 +173,12 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
 
   void _switchToBoughtTab() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _tabController.index == 1) return;
+      if (!mounted || _tabController.index == 0) return;
       _isTabSyncing = true;
-      _tabController.animateTo(1);
+      _tabController.animateTo(0);
       _pageController
           .animateToPage(
-            1,
+            0,
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeInOutCubic,
           )
@@ -382,6 +382,10 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
         indicatorSize: TabBarIndicatorSize.tab,
         onTap: (index) {
           _dismissKeyboard();
+          // Trigger lazy load when the sold tab (index 1) is tapped.
+          if (index == 1) {
+            _soldTabKey.currentState?.ensureLoaded();
+          }
           if (_currentSearchQuery.isNotEmpty) {
             Future.delayed(const Duration(milliseconds: 100), () {
               _applySearchToAllTabs();
@@ -389,8 +393,8 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
           }
         },
         tabs: [
-          _buildModernTab(l10n.soldProducts, Icons.sell_rounded),
           _buildModernTab(l10n.boughtProducts, Icons.shopping_cart_rounded),
+          _buildModernTab(l10n.soldProducts, Icons.sell_rounded),
         ],
       ),
     );
@@ -516,7 +520,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
             color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
           ),
           onPressed: _clearSearch,
-          tooltip: 'Clear search',
+          tooltip: AppLocalizations.of(context).clearSearch,
         ),
       );
     }
@@ -581,7 +585,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                   color: isDark ? Colors.grey[400] : Colors.grey[600],
                 ),
                 onPressed: _pickDateRange,
-                tooltip: 'Filter by date range',
+                tooltip: AppLocalizations.of(context).filterByDateRange,
               ),
             ],
           ),
@@ -607,6 +611,11 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                     controller: _pageController,
                     physics: const BouncingScrollPhysics(),
                     onPageChanged: (index) {
+                      // Trigger lazy load when the sold tab (index 1) becomes visible.
+                      if (index == 1) {
+                        _soldTabKey.currentState?.ensureLoaded();
+                      }
+
                       if (_tabController.index != index && !_isTabSyncing) {
                         _isTabSyncing = true;
                         _tabController.animateTo(index);
@@ -625,12 +634,13 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                     },
                     children: [
                       SoldBoughtProductsTab(
-                        key: _soldTabKey,
-                        isSold: true,
-                      ),
-                      SoldBoughtProductsTab(
                         key: _boughtTabKey,
                         isSold: false,
+                      ),
+                      SoldBoughtProductsTab(
+                        key: _soldTabKey,
+                        isSold: true,
+                        lazyLoad: true,
                       ),
                     ],
                   ),
@@ -703,7 +713,8 @@ class _PendingBannerContentState extends State<_PendingBannerContent>
 
   @override
   Widget build(BuildContext context) {
-    final config = _bannerConfig(widget.state, widget.isDark);
+    final l10n = AppLocalizations.of(context);
+    final config = _bannerConfig(widget.state, widget.isDark, l10n);
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
@@ -779,7 +790,7 @@ class _PendingBannerContentState extends State<_PendingBannerContent>
     );
   }
 
-  _BannerConfig _bannerConfig(_PendingBannerState state, bool isDark) {
+  _BannerConfig _bannerConfig(_PendingBannerState state, bool isDark, AppLocalizations l10n) {
     switch (state) {
       case _PendingBannerState.processing:
         return _BannerConfig(
@@ -793,8 +804,8 @@ class _PendingBannerContentState extends State<_PendingBannerContent>
               ? const Color(0xFFFCD34D).withOpacity(0.7)
               : const Color(0xFF92400E).withOpacity(0.7),
           icon: Icons.hourglass_top_rounded,
-          title: 'Processing payment…',
-          subtitle: 'Your order will appear here automatically.',
+          title: l10n.processingPayment,
+          subtitle: l10n.orderWillAppearAutomatically,
         );
       case _PendingBannerState.succeeded:
         return _BannerConfig(
@@ -808,7 +819,7 @@ class _PendingBannerContentState extends State<_PendingBannerContent>
               ? const Color(0xFF34D399).withOpacity(0.7)
               : const Color(0xFF065F46).withOpacity(0.7),
           icon: Icons.check_circle_rounded,
-          title: 'Order placed successfully!',
+          title: l10n.orderPlacedSuccessfully,
           subtitle: null,
         );
       case _PendingBannerState.failed:
@@ -823,8 +834,8 @@ class _PendingBannerContentState extends State<_PendingBannerContent>
               ? const Color(0xFFFCA5A5).withOpacity(0.7)
               : const Color(0xFF991B1B).withOpacity(0.7),
           icon: Icons.info_outline_rounded,
-          title: 'Payment received — our team has been notified.',
-          subtitle: 'Your order will be resolved shortly.',
+          title: l10n.paymentReceivedTeamNotified,
+          subtitle: l10n.orderWillBeResolvedShortly,
         );
       case _PendingBannerState.none:
         // Should never render in none state

@@ -6618,5 +6618,21 @@
     "placeholders": {
       "date": { "type": "String" }
     }
-  }
+  },
+
+  "clearSearch": "Aramayı temizle",
+  "filterByDateRange": "Tarih aralığına göre filtrele",
+  "processingPayment": "Ödeme işleniyor…",
+  "orderWillAppearAutomatically": "Siparişiniz burada otomatik olarak görünecektir.",
+  "orderPlacedSuccessfully": "Sipariş başarıyla oluşturuldu!",
+  "paymentReceivedTeamNotified": "Ödeme alındı — ekibimiz bilgilendirildi.",
+  "orderWillBeResolvedShortly": "Siparişiniz kısa sürede çözümlenecektir.",
+  "networkError": "Ağ hatası. Lütfen bağlantınızı kontrol edin.",
+  "permissionDenied": "Erişim reddedildi. Lütfen tekrar giriş yapın.",
+  "somethingWentWrongTryAgain": "Bir şeyler ters gitti. Lütfen tekrar deneyin.",
+  "somethingWentWrong": "Bir şeyler ters gitti",
+  "retry": "Tekrar Dene",
+  "unnamed": "İsimsiz",
+  "unableToFindOrderDetails": "Sipariş detayları bulunamadı",
+  "unknownSeller": "Bilinmeyen Satıcı"
 }

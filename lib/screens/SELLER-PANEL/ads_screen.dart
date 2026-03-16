@@ -12,6 +12,7 @@ import '../../utils/image_compression_utils.dart';
 import '../../models/product.dart';
 import 'ad_analytics_screen.dart';
 import 'dart:async';
+import 'package:go_router/go_router.dart';
 
 enum AdType { topBanner, thinBanner, marketBanner }
 
@@ -983,19 +984,29 @@ class _AdsScreenState extends State<AdsScreen>
     );
   }
 
-  PreferredSizeWidget _buildAppBar(AppLocalizations l10n, bool isDark) {
-    return AppBar(
-      elevation: 0,
-      backgroundColor: isDark ? const Color(0xFF1A1B23) : Colors.white,
-      foregroundColor: isDark ? Colors.white : const Color(0xFF1A202C),
-      title: Text(
-        l10n.adManagement,
-        style: GoogleFonts.figtree(
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-          color: isDark ? Colors.white : const Color(0xFF1A202C),
-        ),
+ PreferredSizeWidget _buildAppBar(AppLocalizations l10n, bool isDark) {
+  return AppBar(
+    elevation: 0,
+    backgroundColor: isDark ? const Color(0xFF1A1B23) : Colors.white,
+    foregroundColor: isDark ? Colors.white : const Color(0xFF1A202C),
+    leading: IconButton(
+      icon: const Icon(Icons.arrow_back_ios),
+      onPressed: () {
+  if (context.canPop()) {
+    context.pop();
+  } else {
+    context.go('/seller-panel?shopId=${widget.shopId}');
+  }
+},
+    ),
+    title: Text(
+      l10n.adManagement,
+      style: GoogleFonts.figtree(
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+        color: isDark ? Colors.white : const Color(0xFF1A202C),
       ),
+    ),
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
         child: Container(
