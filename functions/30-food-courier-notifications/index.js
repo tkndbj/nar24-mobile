@@ -38,9 +38,282 @@ const FCM_TOPIC_ALL_COURIERS = 'food_couriers';
 const TTL_ORDER_READY_MS  = 30 * 60 * 1000; // 30 min
 const TTL_HEADS_UP_MS     = 15 * 60 * 1000; // 15 min
 const INFORM_COOLDOWN_MS  =  5 * 60 * 1000; //  5 min between Inform Courier presses
+const CALL_COURIER_COOLDOWN_MS = 2 * 60 * 1000; // 2 min between calls
+const CALL_COURIER_TTL_MS      = 30 * 60 * 1000; // call expires after 30 min
 
 // ─── FCM Android channel (create in Flutter) ─────────────────────────────────
 const FCM_CHANNEL_ID = 'food_orders_high';
+
+export const callFoodCourier = onCall(
+  { region: REGION, memory: '256MiB', timeoutSeconds: 20 },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be signed in.');
+    }
+
+    const { restaurantId, callNote = '' } = request.data;
+    if (!restaurantId || typeof restaurantId !== 'string') {
+      throw new HttpsError('invalid-argument', 'restaurantId is required.');
+    }
+
+    const db   = admin.firestore();
+    const claims = request.auth.token;
+
+    // ── 1. Verify caller belongs to this restaurant ───────────────────
+    const restaurantClaims = claims.restaurants || {};
+    if (!(restaurantId in restaurantClaims)) {
+      throw new HttpsError('permission-denied', 'Not authorised for this restaurant.');
+    }
+
+    // ── 2. Fetch restaurant doc ───────────────────────────────────────
+    const restaurantSnap = await db.collection('restaurants').doc(restaurantId).get();
+    if (!restaurantSnap.exists) {
+      throw new HttpsError('not-found', 'Restaurant not found.');
+    }
+    const restaurant = restaurantSnap.data();
+
+    // ── 3. Cooldown — prevent spam ────────────────────────────────────
+    if (restaurant.lastCourierCallAt) {
+      const lastCallMs = restaurant.lastCourierCallAt.toDate().getTime();
+      if (Date.now() - lastCallMs < CALL_COURIER_COOLDOWN_MS) {
+        const remaining = Math.ceil(
+          (CALL_COURIER_COOLDOWN_MS - (Date.now() - lastCallMs)) / 1000
+        );
+        throw new HttpsError(
+          'resource-exhausted',
+          `Please wait ${remaining}s before calling again.`
+        );
+      }
+    }
+
+    // ── 4. Check no active call already exists for this restaurant ────
+    const activeSnap = await db
+      .collection('courier_calls')
+      .where('restaurantId', '==', restaurantId)
+      .where('isActive', '==', true)
+      .limit(1)
+      .get();
+
+    if (!activeSnap.empty) {
+      // Return the existing call rather than creating a duplicate
+      return { success: true, callId: activeSnap.docs[0].id, existing: true };
+    }
+
+    // ── 5. Create the courier_calls document ─────────────────────────
+    const batch = db.batch();
+
+    const callRef = db.collection('courier_calls').doc();
+    batch.set(callRef, {
+      restaurantId,
+      restaurantName: restaurant.name || '',
+      restaurantProfileImage: restaurant.profileImageUrl || '',
+      restaurantOwnerId: restaurant.ownerId || '',
+      restaurantAddress: restaurant.address || '',
+      callNote: typeof callNote === 'string' ? callNote.substring(0, 200) : '',
+      status: 'waiting',          // waiting | accepted | completed
+      acceptedBy: null,
+      acceptedByName: null,
+      acceptedAt: null,
+      isActive: true,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      expiresAt: admin.firestore.Timestamp.fromMillis(
+        Date.now() + CALL_COURIER_TTL_MS
+      ),
+    });
+
+    // Stamp cooldown on restaurant doc
+    batch.update(db.collection('restaurants').doc(restaurantId), {
+      lastCourierCallAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+
+    // ── 6. FCM push to all couriers ───────────────────────────────────
+    try {
+      await admin.messaging().send({
+        topic: FCM_TOPIC_ALL_COURIERS,
+        notification: {
+          title: '🛵 Kurye Çağrısı',
+          body: `${restaurant.name || 'Restoran'} kurye bekliyor!`,
+        },
+        data: {
+          type: 'courier_call',
+          callId: callRef.id,
+          restaurantId,
+          restaurantName: restaurant.name || '',
+          click_action: 'FLUTTER_NOTIFICATION_CLICK',
+        },
+        android: {
+          priority: 'high',
+          notification: { channelId: FCM_CHANNEL_ID, priority: 'max' },
+        },
+        apns: {
+          headers: { 'apns-priority': '10' },
+          payload: { aps: { sound: 'order_alert.caf', badge: 1 } },
+        },
+      });
+    } catch (err) {
+      console.error('[CourierCall] FCM send failed (non-fatal):', err.message);
+    }
+
+    console.log(`[CourierCall] Call created ${callRef.id} for restaurant ${restaurantId}`);
+    return { success: true, callId: callRef.id };
+  }
+);
+
+// ============================================================================
+// CALLABLE: createScannedFoodOrder — courier scans receipt, creates the order
+// ============================================================================
+
+export const createScannedFoodOrder = onCall(
+  { region: REGION, memory: '512MiB', timeoutSeconds: 30 },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be signed in.');
+    }
+
+    const {
+      callId,
+      scannedRawText   = '',
+      detectedAddress  = null,
+      detectedTotal    = null,
+    } = request.data;
+
+    if (!callId || typeof callId !== 'string') {
+      throw new HttpsError('invalid-argument', 'callId is required.');
+    }
+
+    const db  = admin.firestore();
+    const uid = request.auth.uid;
+
+    // Verify courier custom claim
+    const userRecord = await admin.auth().getUser(uid);
+    if (!userRecord.customClaims?.foodcargoguy) {
+      throw new HttpsError('permission-denied', 'Not a registered courier.');
+    }
+    const courierName = userRecord.displayName || userRecord.email || 'Courier';
+
+    let orderId;
+
+    await db.runTransaction(async (tx) => {
+      // ── 1. Fetch and validate the call ─────────────────────────────
+      const callRef  = db.collection('courier_calls').doc(callId);
+      const callSnap = await tx.get(callRef);
+
+      if (!callSnap.exists) {
+        throw new HttpsError('not-found', 'Courier call not found.');
+      }
+
+      const call = callSnap.data();
+
+      if (!call.isActive) {
+        throw new HttpsError('failed-precondition', 'This call is no longer active.');
+      }
+      if (call.status === 'completed') {
+        throw new HttpsError('already-exists', 'This call has already been completed.');
+      }
+      if (call.status !== 'accepted' || call.acceptedBy !== uid) {
+        throw new HttpsError(
+          'permission-denied',
+          'You must accept this call before scanning.'
+        );
+      }
+
+      // ── 2. Build the scanned order ──────────────────────────────────
+      const orderRef = db.collection('orders-food').doc();
+      orderId = orderRef.id;
+
+      tx.set(orderRef, {
+        // Source tracking
+        sourceType: 'scanned_receipt',
+        courierCallId: callId,
+
+        // Restaurant (from the call — this is why the call is needed)
+        restaurantId: call.restaurantId,
+        restaurantName: call.restaurantName,
+        restaurantProfileImage: call.restaurantProfileImage || '',
+        restaurantOwnerId: call.restaurantOwnerId || '',
+
+        // Courier
+        cargoUserId: uid,
+        cargoName: courierName,
+
+        // Buyer — unknown from external receipt
+        buyerId: null,
+        buyerName: 'External Customer',
+        buyerPhone: '',
+
+        // Items — unknown from external receipt
+        items: [],
+        itemCount: 0,
+
+        // Pricing — from OCR if detected, else 0
+        subtotal: typeof detectedTotal === 'number' ? detectedTotal : 0,
+        deliveryFee: 0,
+        totalPrice: typeof detectedTotal === 'number' ? detectedTotal : 0,
+        currency: 'TL',
+
+        // Payment — unknown for external orders
+        paymentMethod: 'unknown',
+        isPaid: false,
+
+        // Delivery — address from OCR if detected
+        deliveryType: 'delivery',
+        deliveryAddress: detectedAddress ? { addressLine1: detectedAddress, city: '', phoneNumber: '' } : null,
+
+        // Scanned receipt raw data for audit
+        scannedReceipt: {
+          rawText: scannedRawText.substring(0, 2000),
+          detectedAddress: detectedAddress || null,
+          detectedTotal: typeof detectedTotal === 'number' ? detectedTotal : null,
+          scannedAt: new Date().toISOString(),
+        },
+
+        // Status — starts at out_for_delivery (no kitchen pipeline)
+        status: 'out_for_delivery',
+        assignedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        needsReview: false,
+        orderNotes: call.callNote || '',
+        estimatedPrepTime: 0,
+      });
+
+      // ── 3. Mark the call as completed ──────────────────────────────
+      tx.update(callRef, {
+        status: 'completed',
+        isActive: false,
+        orderId,
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+
+    console.log(`[CourierCall] Scanned order ${orderId} created from call ${callId}`);
+    return { success: true, orderId };
+  }
+);
+
+export const cleanupExpiredCourierCalls = onScheduleFn(
+  { schedule: 'every 30 minutes', region: REGION, memory: '256MiB' },
+  async () => {
+    const db  = admin.firestore();
+    const now = admin.firestore.Timestamp.now();
+    const snap = await db
+      .collection('courier_calls')
+      .where('expiresAt', '<', now)
+      .where('isActive', '==', true)
+      .limit(200)
+      .get();
+
+    if (snap.empty) return;
+    const batch = db.batch();
+    snap.docs.forEach((d) =>
+      batch.update(d.ref, { isActive: false, status: 'expired' })
+    );
+    await batch.commit();
+    console.log(`[CourierCall] Expired ${snap.size} calls.`);
+  }
+);
 
 // ============================================================================
 // FIRESTORE TRIGGER — react to every status change on orders-food

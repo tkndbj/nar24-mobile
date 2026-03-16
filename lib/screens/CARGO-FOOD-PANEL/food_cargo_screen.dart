@@ -1,12 +1,4 @@
 // lib/screens/food/food_cargo_screen.dart
-//
-// Changes vs original:
-//  • FCM topic subscription on mount (food_couriers)
-//  • Foreground message handler → shows themed SnackBar
-//  • Notification bell icon in AppBar with unread badge
-//  • _NotificationPanel — slides up from bottom, shows
-//    food_courier_notifications (isActive == true), real-time
-//  • Background / terminated message opens the screen via GoRouter
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -20,9 +12,49 @@ import 'package:intl/intl.dart';
 import '../../auth_service.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'package:rxdart/rxdart.dart';
+import 'receipt_scanner.dart';
 
-// ─── FCM topic (must match Cloud Function constant) ──────────────────────────
 const _kFcmTopic = 'food_couriers';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COURIER CALL MODEL
+// ─────────────────────────────────────────────────────────────────────────────
+
+class CourierCall {
+  final String id;
+  final String restaurantId;
+  final String restaurantName;
+  final String restaurantProfileImage;
+  final String callNote;
+  final String status; // waiting | accepted | completed
+  final String? acceptedBy;
+  final Timestamp? createdAt;
+
+  const CourierCall({
+    required this.id,
+    required this.restaurantId,
+    required this.restaurantName,
+    required this.restaurantProfileImage,
+    required this.callNote,
+    required this.status,
+    this.acceptedBy,
+    this.createdAt,
+  });
+
+  factory CourierCall.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final d = doc.data()!;
+    return CourierCall(
+      id: doc.id,
+      restaurantId: d['restaurantId'] as String? ?? '',
+      restaurantName: d['restaurantName'] as String? ?? '',
+      restaurantProfileImage: d['restaurantProfileImage'] as String? ?? '',
+      callNote: d['callNote'] as String? ?? '',
+      status: d['status'] as String? ?? 'waiting',
+      acceptedBy: d['acceptedBy'] as String?,
+      createdAt: d['createdAt'] as Timestamp?,
+    );
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCREEN
@@ -35,60 +67,51 @@ class FoodCargoScreen extends StatefulWidget {
   State<FoodCargoScreen> createState() => _FoodCargoScreenState();
 }
 
-class _FoodCargoScreenState extends State<FoodCargoScreen> {
+class _FoodCargoScreenState extends State<FoodCargoScreen>
+    with SingleTickerProviderStateMixin {
   final _messaging = FirebaseMessaging.instance;
   bool _notifPanelOpen = false;
-final _localReadController = BehaviorSubject<DateTime?>.seeded(null);
-  // Real-time unread count from food_courier_notifications
+  final _localReadController = BehaviorSubject<DateTime?>.seeded(null);
   Stream<int>? _unreadCountStream;
+  late final TabController _tabController;
+  String? _highlightedOrderId;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _setupFcm();
     _setupUnreadStream();
   }
 
-  // ── FCM setup ──────────────────────────────────────────────────────────────
+  // ── FCM ───────────────────────────────────────────────────────────────────
 
   Future<void> _setupFcm() async {
-    // 1. Request permission (iOS / macOS)
-    await _messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-
-    // 2. Subscribe to the shared courier topic
+    await _messaging.requestPermission(alert: true, badge: true, sound: true);
     await _messaging.subscribeToTopic(_kFcmTopic);
-    debugPrint('[FCM] Subscribed to topic: $_kFcmTopic');
-
-    // 3. Foreground messages — show custom in-app banner
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-
-    // 4. App was in background and user tapped notification
     FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
-
-    // 5. App was terminated — check if launched via notification
     final initial = await _messaging.getInitialMessage();
     if (initial != null) _handleNotificationTap(initial);
   }
 
   void _handleForegroundMessage(RemoteMessage message) {
     if (!mounted) return;
-
-    final data  = message.data;
-    final type  = data['type'] as String? ?? '';
+    final data = message.data;
+    final type = data['type'] as String? ?? '';
     final title = message.notification?.title ?? '';
-    final body  = message.notification?.body  ?? '';
-
+    final body = message.notification?.body ?? '';
     final isOrderReady = type == 'order_ready';
+    final isCourierCall = type == 'courier_call';
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
-            Text(isOrderReady ? '📦' : '⏳', style: const TextStyle(fontSize: 22)),
+            Text(
+              isCourierCall ? '🛵' : (isOrderReady ? '📦' : '⏳'),
+              style: const TextStyle(fontSize: 22),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -97,7 +120,8 @@ final _localReadController = BehaviorSubject<DateTime?>.seeded(null);
                 children: [
                   if (title.isNotEmpty)
                     Text(title,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 13)),
                   if (body.isNotEmpty)
                     Text(body, style: const TextStyle(fontSize: 12)),
                 ],
@@ -105,221 +129,254 @@ final _localReadController = BehaviorSubject<DateTime?>.seeded(null);
             ),
           ],
         ),
-        backgroundColor: isOrderReady ? Colors.green[800] : Colors.orange[800],
+        backgroundColor: isCourierCall
+            ? Colors.green[800]
+            : (isOrderReady ? Colors.green[800] : Colors.orange[800]),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 5),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         action: SnackBarAction(
           label: 'VIEW',
           textColor: Colors.white,
-         onPressed: () {
-  setState(() => _notifPanelOpen = true);
-  _markAllAsRead();
-},
+          onPressed: () {
+            if (isCourierCall) {
+              _tabController.animateTo(0);
+            } else {
+              setState(() => _notifPanelOpen = true);
+              _markAllAsRead();
+            }
+          },
         ),
       ),
     );
   }
 
-Future<void> _markAllAsRead() async {
-  // Instantly zero out the badge — no waiting for Firestore
-  _localReadController.add(DateTime.now());
-
-  final uid = FirebaseAuth.instance.currentUser?.uid;
-  if (uid == null) return;
-
-  // Write to Firestore in background
-  await FirebaseFirestore.instance
-      .collection('courier_notification_reads')
-      .doc(uid)
-      .set({'lastReadAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
-}
+  Future<void> _markAllAsRead() async {
+    _localReadController.add(DateTime.now());
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    await FirebaseFirestore.instance
+        .collection('courier_notification_reads')
+        .doc(uid)
+        .set({'lastReadAt': FieldValue.serverTimestamp()},
+            SetOptions(merge: true));
+  }
 
   void _handleNotificationTap(RemoteMessage message) {
-    // App opened from a notification — open the cargo screen (already here)
-    // and pop open the notification panel
-    if (mounted) {
+    if (!mounted) return;
+    final type = message.data['type'] as String? ?? '';
+    if (type == 'courier_call') {
+      _tabController.animateTo(0);
+    } else {
       setState(() => _notifPanelOpen = true);
     }
   }
 
-  // ── Unread badge ───────────────────────────────────────────────────────────
+  // ── Scanner (legacy — for My Deliveries tab) ──────────────────────────────
 
-void _setupUnreadStream() {
-  final uid = FirebaseAuth.instance.currentUser?.uid;
-  if (uid == null) return;
+  Future<void> _openScanner() async {
+    final scannedId = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const ReceiptScanScreen()),
+    );
+    if (scannedId == null || !mounted) return;
+    _onScannedOrderCreated(scannedId);
+  }
 
-  final notifsStream = FirebaseFirestore.instance
-      .collection('food_courier_notifications')
-      .where('isActive', isEqualTo: true)
-      .snapshots();
+  // Called from both the legacy scanner and the call card scanner
+  void _onScannedOrderCreated(String orderId) {
+    if (!mounted) return;
+    _tabController.animateTo(1);
+    setState(() => _highlightedOrderId = orderId);
+    Future.delayed(const Duration(seconds: 5), () {
+      if (mounted) setState(() => _highlightedOrderId = null);
+    });
+  }
 
-  final readStream = FirebaseFirestore.instance
-      .collection('courier_notification_reads')
-      .doc(uid)
-      .snapshots();
+  // ── Unread stream ─────────────────────────────────────────────────────────
 
-  _unreadCountStream = Rx.combineLatest3(
-    notifsStream,
-    readStream,
-    _localReadController.stream,
-    (QuerySnapshot notifs, DocumentSnapshot read, DateTime? localReadAt) {
-      final firestoreTs = (read.data() as Map<String, dynamic>?)?['lastReadAt'] as Timestamp?;
-      
-      // Use whichever is more recent — local (instant) or Firestore
-      DateTime? effectiveReadAt = firestoreTs?.toDate();
-      if (localReadAt != null) {
-        if (effectiveReadAt == null || localReadAt.isAfter(effectiveReadAt)) {
-          effectiveReadAt = localReadAt;
+  void _setupUnreadStream() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    final notifsStream = FirebaseFirestore.instance
+        .collection('food_courier_notifications')
+        .where('isActive', isEqualTo: true)
+        .snapshots();
+
+    final readStream = FirebaseFirestore.instance
+        .collection('courier_notification_reads')
+        .doc(uid)
+        .snapshots();
+
+    _unreadCountStream = Rx.combineLatest3(
+      notifsStream,
+      readStream,
+      _localReadController.stream,
+      (QuerySnapshot notifs, DocumentSnapshot read, DateTime? localReadAt) {
+        final firestoreTs =
+            (read.data() as Map<String, dynamic>?)?['lastReadAt'] as Timestamp?;
+        DateTime? effectiveReadAt = firestoreTs?.toDate();
+        if (localReadAt != null) {
+          if (effectiveReadAt == null || localReadAt.isAfter(effectiveReadAt)) {
+            effectiveReadAt = localReadAt;
+          }
         }
-      }
-      
-      if (effectiveReadAt == null) return notifs.size;
-      
-      return notifs.docs.where((doc) {
-        final createdAt = doc['createdAt'] as Timestamp?;
-        if (createdAt == null) return false;
-        return createdAt.toDate().isAfter(effectiveReadAt!);
-      }).length;
-    },
-  );
-}
+        if (effectiveReadAt == null) return notifs.size;
+        return notifs.docs.where((doc) {
+          final createdAt = doc['createdAt'] as Timestamp?;
+          if (createdAt == null) return false;
+          return createdAt.toDate().isAfter(effectiveReadAt!);
+        }).length;
+      },
+    );
+  }
 
-  // ── Lifecycle ──────────────────────────────────────────────────────────────
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-@override
-void dispose() {
-  _localReadController.close();
-  super.dispose();
-}
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _localReadController.close();
+    super.dispose();
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    final user   = FirebaseAuth.instance.currentUser;
+    final user = FirebaseAuth.instance.currentUser;
     if (user == null) return const _UnauthView();
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final loc    = AppLocalizations.of(context);
+    final loc = AppLocalizations.of(context);
 
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
+    return Scaffold(
+      backgroundColor:
+          isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
+      appBar: AppBar(
         backgroundColor:
             isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
-        appBar: AppBar(
-          backgroundColor:
-              isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          title: Row(
-            children: [
-              Text(loc.foodCargoTitle,
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(width: 8),
-              _LiveBadge(isDark: isDark),
-            ],
-          ),
-          actions: [
-            // ── Notification bell with unread badge ──────────────────
-            StreamBuilder<int>(
-              stream: _unreadCountStream,
-              builder: (context, snap) {
-                final count = snap.data ?? 0;
-                return Stack(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.notifications_rounded),
-                      tooltip: 'Notifications',
-                      onPressed: () {
-  final opening = !_notifPanelOpen;
-  setState(() => _notifPanelOpen = opening);
-  if (opening) _markAllAsRead();
-},
-                    ),
-                    if (count > 0)
-                      Positioned(
-                        right: 8,
-                        top: 8,
-                        child: Container(
-                          width: 16,
-                          height: 16,
-                          decoration: const BoxDecoration(
-                            color: Colors.orange,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Center(
-                            child: Text(
-                              count > 9 ? '9+' : '$count',
-                              style: const TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: Row(
+          children: [
+            Text(loc.foodCargoTitle,
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(width: 8),
+            _LiveBadge(isDark: isDark),
+          ],
+        ),
+        actions: [
+          // Notification bell
+          StreamBuilder<int>(
+            stream: _unreadCountStream,
+            builder: (context, snap) {
+              final count = snap.data ?? 0;
+              return Stack(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications_rounded),
+                    tooltip: 'Notifications',
+                    onPressed: () {
+                      final opening = !_notifPanelOpen;
+                      setState(() => _notifPanelOpen = opening);
+                      if (opening) _markAllAsRead();
+                    },
+                  ),
+                  if (count > 0)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        width: 16,
+                        height: 16,
+                        decoration: const BoxDecoration(
+                          color: Colors.orange,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            count > 9 ? '9+' : '$count',
+                            style: const TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
                             ),
                           ),
                         ),
                       ),
-                  ],
-                );
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.history_rounded),
-              tooltip: loc.pastFoodCargosTitle,
-              onPressed: () => context.push('/past-food-cargos'),
-            ),
-            IconButton(
-              icon: const Icon(Icons.logout_rounded),
-              tooltip: loc.foodCargoLogout,
-              onPressed: () async {
-                await _confirmLogout(context, loc);
-                // Unsubscribe from FCM topic on logout
-                await _messaging.unsubscribeFromTopic(_kFcmTopic);
-              },
-            ),
+                    ),
+                ],
+              );
+            },
+          ),
+          // Legacy scanner (for My Deliveries tab)
+          IconButton(
+            icon: const Icon(Icons.document_scanner_rounded),
+            tooltip: 'Scan Receipt',
+            onPressed: _openScanner,
+          ),
+          IconButton(
+            icon: const Icon(Icons.history_rounded),
+            tooltip: loc.pastFoodCargosTitle,
+            onPressed: () => context.push('/past-food-cargos'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout_rounded),
+            tooltip: loc.foodCargoLogout,
+            onPressed: () async {
+              await _confirmLogout(context, loc);
+              await _messaging.unsubscribeFromTopic(_kFcmTopic);
+            },
+          ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: Colors.orange,
+          unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[500],
+          indicatorColor: Colors.orange,
+          indicatorSize: TabBarIndicatorSize.label,
+          tabs: [
+            Tab(text: loc.foodCargoPoolTab),
+            Tab(text: loc.foodCargoMyDeliveriesTab),
           ],
-          bottom: TabBar(
-            labelColor: Colors.orange,
-            unselectedLabelColor:
-                isDark ? Colors.grey[400] : Colors.grey[500],
-            indicatorColor: Colors.orange,
-            indicatorSize: TabBarIndicatorSize.label,
-            tabs: [
-              Tab(text: loc.foodCargoPoolTab),
-              Tab(text: loc.foodCargoMyDeliveriesTab),
+        ),
+      ),
+      body: Stack(
+        children: [
+          TabBarView(
+            controller: _tabController,
+            children: [
+              _PoolTab(
+                currentUser: user,
+                isDark: isDark,
+                onScannedOrderCreated: _onScannedOrderCreated,
+              ),
+              _MyDeliveriesTab(
+                currentUser: user,
+                isDark: isDark,
+                highlightedOrderId: _highlightedOrderId,
+              ),
             ],
           ),
-        ),
-        body: Stack(
-          children: [
-            TabBarView(
-              children: [
-                _PoolTab(currentUser: user, isDark: isDark),
-                _MyDeliveriesTab(currentUser: user, isDark: isDark),
-              ],
+          if (_notifPanelOpen)
+            _NotificationPanel(
+              isDark: isDark,
+              onClose: () => setState(() => _notifPanelOpen = false),
             ),
-
-            // ── Slide-up notification panel ──────────────────────────
-            if (_notifPanelOpen)
-              _NotificationPanel(
-                isDark: isDark,
-                onClose: () => setState(() => _notifPanelOpen = false),
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NOTIFICATION PANEL — real-time list of food_courier_notifications
+// NOTIFICATION PANEL
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _NotificationPanel extends StatelessWidget {
   final bool isDark;
   final VoidCallback onClose;
-
   const _NotificationPanel({required this.isDark, required this.onClose});
 
   @override
@@ -331,7 +388,7 @@ class _NotificationPanel extends StatelessWidget {
         child: Align(
           alignment: Alignment.bottomCenter,
           child: GestureDetector(
-            onTap: () {}, // Prevent tap-through
+            onTap: () {},
             child: Container(
               height: MediaQuery.of(context).size.height * 0.6,
               decoration: BoxDecoration(
@@ -341,7 +398,6 @@ class _NotificationPanel extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  // Handle
                   const SizedBox(height: 12),
                   Container(
                     width: 40,
@@ -352,8 +408,6 @@ class _NotificationPanel extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Header
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Row(
@@ -378,10 +432,7 @@ class _NotificationPanel extends StatelessWidget {
                       ],
                     ),
                   ),
-
                   const Divider(height: 16),
-
-                  // Notification list
                   Expanded(
                     child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: FirebaseFirestore.instance
@@ -396,16 +447,14 @@ class _NotificationPanel extends StatelessWidget {
                               child: CircularProgressIndicator(
                                   color: Colors.orange, strokeWidth: 2));
                         }
-
                         final docs = snap.data?.docs ?? [];
-
                         if (docs.isEmpty) {
                           return Center(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text('🔔',
-                                    style: const TextStyle(fontSize: 40)),
+                                const Text('🔔',
+                                    style: TextStyle(fontSize: 40)),
                                 const SizedBox(height: 12),
                                 Text(
                                   'No active notifications',
@@ -420,7 +469,6 @@ class _NotificationPanel extends StatelessWidget {
                             ),
                           );
                         }
-
                         return ListView.separated(
                           padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
                           itemCount: docs.length,
@@ -453,43 +501,33 @@ class _NotifCard extends StatelessWidget {
   final Map<String, dynamic> data;
   final bool isDark;
   final VoidCallback onClose;
-
   const _NotifCard(
       {required this.data, required this.isDark, required this.onClose});
 
   @override
   Widget build(BuildContext context) {
-    final type          = data['type'] as String? ?? '';
+    final type = data['type'] as String? ?? '';
     final restaurantName = data['restaurantName'] as String? ?? '';
-    final itemCount     = (data['itemCount'] as num?)?.toInt() ?? 0;
-    final totalPrice    = (data['totalPrice'] as num?)?.toDouble() ?? 0;
-    final currency      = data['currency'] as String? ?? 'TL';
-    final deliveryCity  = data['deliveryCity'] as String? ?? '';
-    final msgTr         = data['message_tr'] as String? ?? '';
-    final createdAt     = data['createdAt'] as Timestamp?;
-
+    final deliveryCity = data['deliveryCity'] as String? ?? '';
+    final msgTr = data['message_tr'] as String? ?? '';
+    final createdAt = data['createdAt'] as Timestamp?;
     final isOrderReady = type == 'order_ready';
-    final color        = isOrderReady ? Colors.green : Colors.orange;
-    final emoji        = isOrderReady ? '📦' : '⏳';
-    final label        = isOrderReady ? 'HAZIR' : 'YAKINDA HAZIR';
-
-    final timeStr = createdAt != null
-        ? DateFormat('HH:mm').format(createdAt.toDate())
-        : '';
+    final color = isOrderReady ? Colors.green : Colors.orange;
+    final emoji = isOrderReady ? '📦' : '⏳';
+    final label = isOrderReady ? 'HAZIR' : 'YAKINDA HAZIR';
+    final timeStr =
+        createdAt != null ? DateFormat('HH:mm').format(createdAt.toDate()) : '';
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: isDark
-            ? color.withOpacity(0.08)
-            : color.withOpacity(0.05),
+        color: isDark ? color.withOpacity(0.08) : color.withOpacity(0.05),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: color.withOpacity(0.2)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Emoji badge
           Container(
             width: 40,
             height: 40,
@@ -498,16 +536,13 @@ class _NotifCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
             ),
             child: Center(
-              child: Text(emoji, style: const TextStyle(fontSize: 20)),
-            ),
+                child: Text(emoji, style: const TextStyle(fontSize: 20))),
           ),
           const SizedBox(width: 12),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Label + time
                 Row(
                   children: [
                     Container(
@@ -517,64 +552,45 @@ class _NotifCard extends StatelessWidget {
                         color: color.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: Text(
-                        label,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: color,
-                        ),
-                      ),
+                      child: Text(label,
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: color)),
                     ),
                     const Spacer(),
-                    Text(
-                      timeStr,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? Colors.grey[500] : Colors.grey[500],
-                      ),
-                    ),
+                    Text(timeStr,
+                        style: TextStyle(
+                            fontSize: 11,
+                            color:
+                                isDark ? Colors.grey[500] : Colors.grey[500])),
                   ],
                 ),
                 const SizedBox(height: 6),
-
-                // Restaurant name
-                Text(
-                  restaurantName,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.grey[900],
-                  ),
-                ),
+                Text(restaurantName,
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.grey[900])),
                 const SizedBox(height: 2),
-
-                // Message
-                Text(
-                  msgTr,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                  ),
-                ),
-
+                Text(msgTr,
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600])),
                 if (deliveryCity.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Row(
                     children: [
                       Icon(Icons.location_on_outlined,
                           size: 13,
-                          color: isDark
-                              ? Colors.grey[500]
-                              : Colors.grey[500]),
+                          color: isDark ? Colors.grey[500] : Colors.grey[500]),
                       const SizedBox(width: 3),
-                      Text(
-                        deliveryCity,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? Colors.grey[500] : Colors.grey[500],
-                        ),
-                      ),
+                      Text(deliveryCity,
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: isDark
+                                  ? Colors.grey[500]
+                                  : Colors.grey[500])),
                     ],
                   ),
                 ],
@@ -588,7 +604,7 @@ class _NotifCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LOGOUT (unchanged)
+// LOGOUT
 // ─────────────────────────────────────────────────────────────────────────────
 
 Future<void> _confirmLogout(BuildContext context, AppLocalizations loc) async {
@@ -633,69 +649,116 @@ Future<void> _confirmLogout(BuildContext context, AppLocalizations loc) async {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POOL TAB (unchanged from original except stream init pattern kept)
+// POOL TAB — shows courier call cards at top, then ready orders below
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PoolTab extends StatefulWidget {
   final User currentUser;
   final bool isDark;
-  const _PoolTab({required this.currentUser, required this.isDark});
+  final void Function(String orderId) onScannedOrderCreated;
+
+  const _PoolTab({
+    required this.currentUser,
+    required this.isDark,
+    required this.onScannedOrderCreated,
+  });
 
   @override
   State<_PoolTab> createState() => _PoolTabState();
 }
 
 class _PoolTabState extends State<_PoolTab> {
-  late final Stream<QuerySnapshot<Map<String, dynamic>>> _stream;
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _ordersStream;
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _callsStream;
 
   @override
   void initState() {
     super.initState();
-    _stream = FirebaseFirestore.instance
+    _ordersStream = FirebaseFirestore.instance
         .collection('orders-food')
         .where('status', isEqualTo: 'ready')
         .orderBy('updatedAt', descending: false)
+        .snapshots();
+
+    _callsStream = FirebaseFirestore.instance
+        .collection('courier_calls')
+        .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: false)
         .snapshots();
   }
 
   @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context);
+    final myUid = widget.currentUser.uid;
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: _stream,
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const _Loader();
-        }
-        if (snap.hasError) {
-          return _ErrorView(message: snap.error.toString());
-        }
+      stream: _callsStream,
+      builder: (context, callSnap) {
+        // Show calls that are:
+        // - waiting (any courier can accept)
+        // - accepted by ME (so I can scan)
+        final visibleCalls = (callSnap.data?.docs ?? []).map((d) {
+          return CourierCall.fromDoc(d);
+        }).where((c) {
+          return c.status == 'waiting' ||
+              (c.status == 'accepted' && c.acceptedBy == myUid);
+        }).toList();
 
-        final docs = snap.data?.docs ?? [];
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: _ordersStream,
+          builder: (context, orderSnap) {
+            if (orderSnap.connectionState == ConnectionState.waiting &&
+                callSnap.connectionState == ConnectionState.waiting) {
+              return const _Loader();
+            }
+            if (orderSnap.hasError) {
+              return _ErrorView(message: orderSnap.error.toString());
+            }
 
-        if (docs.isEmpty) {
-          return _EmptyState(
-            emoji: '📦',
-            title: loc.foodCargoPoolEmpty,
-            subtitle: loc.foodCargoPoolEmptySub,
-            isDark: widget.isDark,
-          );
-        }
+            final orderDocs = orderSnap.data?.docs ?? [];
+            final hasContent = visibleCalls.isNotEmpty || orderDocs.isNotEmpty;
 
-        return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-          itemCount: docs.length,
-          itemBuilder: (_, i) => Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: _CargoOrderCard(
-              orderId: docs[i].id,
-              data: docs[i].data(),
-              isDark: widget.isDark,
-              isPool: true,
-              currentUser: widget.currentUser,
-            ),
-          ),
+            if (!hasContent) {
+              return _EmptyState(
+                emoji: '📦',
+                title: loc.foodCargoPoolEmpty,
+                subtitle: loc.foodCargoPoolEmptySub,
+                isDark: widget.isDark,
+              );
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+              itemCount: visibleCalls.length + orderDocs.length,
+              itemBuilder: (_, i) {
+                // Call cards first
+                if (i < visibleCalls.length) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _CourierCallCard(
+                      call: visibleCalls[i],
+                      currentUser: widget.currentUser,
+                      isDark: widget.isDark,
+                      onOrderCreated: widget.onScannedOrderCreated,
+                    ),
+                  );
+                }
+                // Then ready orders
+                final orderIdx = i - visibleCalls.length;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: _CargoOrderCard(
+                    orderId: orderDocs[orderIdx].id,
+                    data: orderDocs[orderIdx].data(),
+                    isDark: widget.isDark,
+                    isPool: true,
+                    currentUser: widget.currentUser,
+                  ),
+                );
+              },
+            );
+          },
         );
       },
     );
@@ -703,13 +766,327 @@ class _PoolTabState extends State<_PoolTab> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MY DELIVERIES TAB (unchanged)
+// COURIER CALL CARD
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CourierCallCard extends StatefulWidget {
+  final CourierCall call;
+  final User currentUser;
+  final bool isDark;
+  final void Function(String orderId) onOrderCreated;
+
+  const _CourierCallCard({
+    required this.call,
+    required this.currentUser,
+    required this.isDark,
+    required this.onOrderCreated,
+  });
+
+  @override
+  State<_CourierCallCard> createState() => _CourierCallCardState();
+}
+
+class _CourierCallCardState extends State<_CourierCallCard> {
+  bool _loading = false;
+
+  bool get _isMyCall =>
+      widget.call.status == 'accepted' &&
+      widget.call.acceptedBy == widget.currentUser.uid;
+
+  String _timeAgo() {
+    final ts = widget.call.createdAt;
+    if (ts == null) return '';
+    final diff = DateTime.now().difference(ts.toDate());
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+    return '${diff.inHours}h ago';
+  }
+
+  Future<void> _acceptCall() async {
+    setState(() => _loading = true);
+    try {
+      final db = FirebaseFirestore.instance;
+      await db.runTransaction((tx) async {
+        final ref = db.collection('courier_calls').doc(widget.call.id);
+        final snap = await tx.get(ref);
+        if (!snap.exists) throw Exception('not_found');
+        final current = snap.data()!;
+        if (current['status'] != 'waiting') {
+          throw Exception('already_accepted');
+        }
+        final displayName = widget.currentUser.displayName ??
+            widget.currentUser.email ??
+            'Courier';
+        tx.update(ref, {
+          'status': 'accepted',
+          'acceptedBy': widget.currentUser.uid,
+          'acceptedByName': displayName,
+          'acceptedAt': FieldValue.serverTimestamp(),
+        });
+      });
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e.toString().contains('already_accepted')
+          ? 'Another courier accepted this call.'
+          : 'Could not accept call. Please try again.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.red[700],
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _openScanForCall() async {
+    final orderId = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => ReceiptScanScreen.forCall(courierCall: widget.call),
+      ),
+    );
+    if (orderId != null) {
+      widget.onOrderCreated(orderId);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1C2A1E) : const Color(0xFFF0FBF4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _isMyCall
+              ? Colors.orange.withOpacity(0.6)
+              : Colors.green.withOpacity(0.4),
+          width: _isMyCall ? 2 : 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: (_isMyCall ? Colors.orange : Colors.green).withOpacity(0.12),
+            blurRadius: 10,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header ────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    color: isDark ? const Color(0xFF2D2B3F) : Colors.green[50],
+                    child: widget.call.restaurantProfileImage.isNotEmpty
+                        ? Image.network(
+                            widget.call.restaurantProfileImage,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Center(
+                                child: Text('🍽️',
+                                    style: TextStyle(fontSize: 22))),
+                          )
+                        : const Center(
+                            child: Text('🍽️', style: TextStyle(fontSize: 22))),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.call.restaurantName,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 15),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: (_isMyCall ? Colors.orange : Colors.green)
+                                  .withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              _isMyCall ? 'KABUL ETTİN' : 'KURYE BEKLİYOR',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: _isMyCall ? Colors.orange : Colors.green,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _timeAgo(),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color:
+                                  isDark ? Colors.grey[500] : Colors.grey[500],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                _PulsingDot(color: _isMyCall ? Colors.orange : Colors.green),
+              ],
+            ),
+          ),
+
+          // ── Note ──────────────────────────────────────
+          if (widget.call.callNote.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: Row(
+                children: [
+                  Icon(Icons.notes_rounded,
+                      size: 13,
+                      color: isDark ? Colors.grey[500] : Colors.grey[500]),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      widget.call.callNote,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          Divider(
+            height: 1,
+            color: isDark ? const Color(0xFF2D2B3F) : const Color(0xFFE5E7EB),
+          ),
+
+          // ── Action button ──────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+            child: SizedBox(
+              width: double.infinity,
+              child: _isMyCall
+                  ? ElevatedButton.icon(
+                      onPressed: _loading ? null : _openScanForCall,
+                      icon:
+                          const Icon(Icons.document_scanner_rounded, size: 18),
+                      label: const Text('Fişi Tara',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 14)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                      ),
+                    )
+                  : ElevatedButton.icon(
+                      onPressed: _loading ? null : _acceptCall,
+                      icon: _loading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2))
+                          : const Icon(Icons.delivery_dining_rounded, size: 18),
+                      label: const Text('Çağrıyı Kabul Et',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 14)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.green.withOpacity(0.5),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PULSING DOT
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PulsingDot extends StatefulWidget {
+  final Color color;
+  const _PulsingDot({required this.color});
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl =
+        AnimationController(vsync: this, duration: const Duration(seconds: 1))
+          ..repeat(reverse: true);
+    _anim = Tween<double>(begin: 0.4, end: 1.0).animate(_ctrl);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FadeTransition(
+        opacity: _anim,
+        child: Container(
+          width: 10,
+          height: 10,
+          decoration:
+              BoxDecoration(color: widget.color, shape: BoxShape.circle),
+        ),
+      );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MY DELIVERIES TAB
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _MyDeliveriesTab extends StatefulWidget {
   final User currentUser;
   final bool isDark;
-  const _MyDeliveriesTab({required this.currentUser, required this.isDark});
+  final String? highlightedOrderId;
+
+  const _MyDeliveriesTab({
+    required this.currentUser,
+    required this.isDark,
+    this.highlightedOrderId,
+  });
 
   @override
   State<_MyDeliveriesTab> createState() => _MyDeliveriesTabState();
@@ -717,6 +1094,8 @@ class _MyDeliveriesTab extends StatefulWidget {
 
 class _MyDeliveriesTabState extends State<_MyDeliveriesTab> {
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _stream;
+  final _scrollController = ScrollController();
+  final Map<String, GlobalKey> _cardKeys = {};
 
   @override
   void initState() {
@@ -727,6 +1106,12 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab> {
         .where('status', isEqualTo: 'out_for_delivery')
         .orderBy('assignedAt', descending: false)
         .snapshots();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -752,18 +1137,39 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab> {
         }
 
         return ListView.builder(
+          controller: _scrollController,
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
           itemCount: docs.length,
-          itemBuilder: (_, i) => Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: _CargoOrderCard(
-              orderId: docs[i].id,
-              data: docs[i].data(),
-              isDark: widget.isDark,
-              isPool: false,
-              currentUser: widget.currentUser,
-            ),
-          ),
+          itemBuilder: (_, i) {
+            final docId = docs[i].id;
+            _cardKeys[docId] ??= GlobalKey();
+            final isHit = docId == widget.highlightedOrderId;
+
+            if (isHit) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                final ctx = _cardKeys[docId]?.currentContext;
+                if (ctx != null) {
+                  Scrollable.ensureVisible(ctx,
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.easeInOut,
+                      alignment: 0.15);
+                }
+              });
+            }
+
+            return Padding(
+              key: _cardKeys[docId],
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _CargoOrderCard(
+                orderId: docId,
+                data: docs[i].data(),
+                isDark: widget.isDark,
+                isPool: false,
+                currentUser: widget.currentUser,
+                isHighlighted: isHit,
+              ),
+            );
+          },
         );
       },
     );
@@ -771,7 +1177,7 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ORDER CARD (unchanged from original)
+// ORDER CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _CargoOrderCard extends StatefulWidget {
@@ -780,6 +1186,7 @@ class _CargoOrderCard extends StatefulWidget {
   final bool isDark;
   final bool isPool;
   final User currentUser;
+  final bool isHighlighted;
 
   const _CargoOrderCard({
     required this.orderId,
@@ -787,6 +1194,7 @@ class _CargoOrderCard extends StatefulWidget {
     required this.isDark,
     required this.isPool,
     required this.currentUser,
+    this.isHighlighted = false,
   });
 
   @override
@@ -880,20 +1288,17 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
     setState(() => _loading = true);
     try {
       final db = FirebaseFirestore.instance;
-
       await db.runTransaction((tx) async {
         final ref = db.collection('orders-food').doc(widget.orderId);
         final snap = await tx.get(ref);
-
         if (!snap.exists) throw Exception('not_found');
-
         final currentStatus = snap.data()?['status'] as String?;
-        if (currentStatus != 'ready') throw Exception('already_taken');
-
+        if (currentStatus != 'ready') {
+          throw Exception('already_taken');
+        }
         final displayName = widget.currentUser.displayName ??
             widget.currentUser.email ??
             'Cargo';
-
         tx.update(ref, {
           'cargoUserId': widget.currentUser.uid,
           'cargoName': displayName,
@@ -901,9 +1306,6 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
           'assignedAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         });
-
-        // The Firestore trigger onFoodOrderStatusChange will automatically
-        // deactivate the food_courier_notifications doc for this order.
       });
     } catch (e) {
       if (!context.mounted) return;
@@ -953,8 +1355,7 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
           'https://www.google.com/maps/dir/?api=1&destination=${geo.latitude},${geo.longitude}');
     } else {
       final q = Uri.encodeComponent(_addressLine);
-      uri =
-          Uri.parse('https://www.google.com/maps/search/?api=1&query=$q');
+      uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$q');
     }
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -965,11 +1366,9 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
-        backgroundColor:
-            isError ? Colors.red[700] : Colors.green[700],
+        backgroundColor: isError ? Colors.red[700] : Colors.green[700],
         behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
@@ -979,28 +1378,37 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
     final isDark = widget.isDark;
     final loc = AppLocalizations.of(context);
 
-    final restaurantName =
-        widget.data['restaurantName'] as String? ?? '—';
-    final restaurantImage =
-        widget.data['restaurantProfileImage'] as String?;
+    final restaurantName = widget.data['restaurantName'] as String? ?? '—';
+    final restaurantImage = widget.data['restaurantProfileImage'] as String?;
     final buyerName = widget.data['buyerName'] as String? ?? '—';
-    final totalPrice =
-        (widget.data['totalPrice'] as num?)?.toDouble() ?? 0;
+    final totalPrice = (widget.data['totalPrice'] as num?)?.toDouble() ?? 0;
     final currency = widget.data['currency'] as String? ?? 'TL';
     final isPaid = widget.data['isPaid'] as bool? ?? false;
     final itemCount =
         (widget.data['itemCount'] as num?)?.toInt() ?? _items.length;
     final orderId = widget.orderId.substring(0, 8).toUpperCase();
+    final isScanned = widget.data['sourceType'] == 'scanned_receipt';
 
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 400),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF211F31) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark
-              ? const Color(0xFF2D2B3F)
-              : const Color(0xFFD1D5DB),
+          color: widget.isHighlighted
+              ? Colors.orange
+              : (isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB)),
+          width: widget.isHighlighted ? 2 : 1,
         ),
+        boxShadow: widget.isHighlighted
+            ? [
+                BoxShadow(
+                  color: Colors.orange.withOpacity(0.25),
+                  blurRadius: 12,
+                  spreadRadius: 2,
+                ),
+              ]
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1015,23 +1423,15 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
                   child: Container(
                     width: 44,
                     height: 44,
-                    color: isDark
-                        ? const Color(0xFF2D2B3F)
-                        : Colors.orange[50],
-                    child: restaurantImage != null &&
-                            restaurantImage.isNotEmpty
-                        ? Image.network(
-                            restaurantImage,
+                    color: isDark ? const Color(0xFF2D2B3F) : Colors.orange[50],
+                    child: restaurantImage != null && restaurantImage.isNotEmpty
+                        ? Image.network(restaurantImage,
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => const Center(
-                              child: Text('🍽️',
-                                  style: TextStyle(fontSize: 22)),
-                            ),
-                          )
+                                child: Text('🍽️',
+                                    style: TextStyle(fontSize: 22))))
                         : const Center(
-                            child: Text('🍽️',
-                                style: TextStyle(fontSize: 22)),
-                          ),
+                            child: Text('🍽️', style: TextStyle(fontSize: 22))),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1039,31 +1439,47 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        restaurantName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(restaurantName,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 15),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          // Badge for scanned receipt orders
+                          if (isScanned)
+                            Container(
+                              margin: const EdgeInsets.only(left: 6),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.purple.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text('FİŞ',
+                                  style: TextStyle(
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.purple)),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 2),
                       Text(
                         '${loc.foodCargoOrderId} #$orderId',
                         style: TextStyle(
                           fontSize: 11,
-                          color: isDark
-                              ? Colors.grey[500]
-                              : Colors.grey[400],
+                          color: isDark ? Colors.grey[500] : Colors.grey[400],
                         ),
                       ),
                     ],
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: isDark
                         ? Colors.orange.withOpacity(0.13)
@@ -1075,23 +1491,17 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: isDark
-                          ? Colors.orange[300]
-                          : Colors.orange[700],
+                      color: isDark ? Colors.orange[300] : Colors.orange[700],
                     ),
                   ),
                 ),
               ],
             ),
           ),
-
           Divider(
-            height: 1,
-            color: isDark
-                ? const Color(0xFF2D2B3F)
-                : const Color(0xFFE5E7EB),
-          ),
-
+              height: 1,
+              color:
+                  isDark ? const Color(0xFF2D2B3F) : const Color(0xFFE5E7EB)),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             child: Column(
@@ -1106,7 +1516,9 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
                 _InfoRow(
                   icon: Icons.fastfood_rounded,
                   label: loc.foodCargoItems,
-                  value: _itemsSummary(loc, itemCount),
+                  value: isScanned
+                      ? 'Harici sipariş (fiş)'
+                      : _itemsSummary(loc, itemCount),
                   isDark: isDark,
                 ),
                 const SizedBox(height: 8),
@@ -1115,33 +1527,29 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
                   label: loc.foodCargoAddressLabel,
                   value: _addressLine,
                   isDark: isDark,
-                  valueColor:
-                      isDark ? Colors.blue[300] : Colors.blue[700],
+                  valueColor: isDark ? Colors.blue[300] : Colors.blue[700],
                 ),
                 const SizedBox(height: 8),
                 _InfoRow(
                   icon: Icons.receipt_rounded,
                   label: loc.foodCargoTotalLabel,
-                  value:
-                      '${totalPrice.toStringAsFixed(0)} $currency  ·  ${isPaid ? loc.foodCargoPaid : loc.foodCargoPaymentAtDoor}',
+                  value: totalPrice > 0
+                      ? '${totalPrice.toStringAsFixed(0)} $currency  ·  ${isPaid ? loc.foodCargoPaid : loc.foodCargoPaymentAtDoor}'
+                      : isScanned
+                          ? 'Bilinmiyor (fiş)'
+                          : '—',
                   isDark: isDark,
                   valueColor: isPaid
                       ? (isDark ? Colors.green[400] : Colors.green[700])
-                      : (isDark
-                          ? Colors.orange[300]
-                          : Colors.orange[700]),
+                      : (isDark ? Colors.orange[300] : Colors.orange[700]),
                 ),
               ],
             ),
           ),
-
           Divider(
-            height: 1,
-            color: isDark
-                ? const Color(0xFF2D2B3F)
-                : const Color(0xFFE5E7EB),
-          ),
-
+              height: 1,
+              color:
+                  isDark ? const Color(0xFF2D2B3F) : const Color(0xFFE5E7EB)),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
             child: widget.isPool
@@ -1167,7 +1575,7 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ACTION WIDGETS (unchanged)
+// ACTION WIDGETS
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PoolActions extends StatelessWidget {
@@ -1176,9 +1584,7 @@ class _PoolActions extends StatelessWidget {
   final AppLocalizations loc;
 
   const _PoolActions(
-      {required this.loading,
-      required this.onAssign,
-      required this.loc});
+      {required this.loading, required this.onAssign, required this.loc});
 
   @override
   Widget build(BuildContext context) {
@@ -1191,8 +1597,8 @@ class _PoolActions extends StatelessWidget {
           foregroundColor: Colors.white,
           disabledBackgroundColor: Colors.orange.withOpacity(0.5),
           padding: const EdgeInsets.symmetric(vertical: 13),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           elevation: 0,
         ),
         child: loading
@@ -1206,11 +1612,9 @@ class _PoolActions extends StatelessWidget {
                 children: [
                   const Icon(Icons.delivery_dining_rounded, size: 18),
                   const SizedBox(width: 6),
-                  Text(
-                    loc.foodCargoTakeOrder,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
+                  Text(loc.foodCargoTakeOrder,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 14)),
                 ],
               ),
       ),
@@ -1277,11 +1681,9 @@ class _MyDeliveryActions extends StatelessWidget {
                     height: 16,
                     child: CircularProgressIndicator(
                         color: Colors.white, strokeWidth: 2))
-                : Text(
-                    loc.foodCargoMarkDelivered,
+                : Text(loc.foodCargoMarkDelivered,
                     style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
+                        fontWeight: FontWeight.bold, fontSize: 13)),
           ),
         ),
       ],
@@ -1290,7 +1692,7 @@ class _MyDeliveryActions extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REUSABLE WIDGETS (unchanged)
+// REUSABLE WIDGETS
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _IconActionBtn extends StatelessWidget {
@@ -1315,44 +1717,34 @@ class _IconActionBtn extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
         decoration: BoxDecoration(
           color: enabled
               ? color.withOpacity(isDark ? 0.13 : 0.08)
-              : (isDark
-                  ? const Color(0xFF2D2B3F)
-                  : Colors.grey[100]),
+              : (isDark ? const Color(0xFF2D2B3F) : Colors.grey[100]),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: enabled
                 ? color.withOpacity(0.25)
-                : (isDark
-                    ? const Color(0xFF2D2B3F)
-                    : const Color(0xFFD1D5DB)),
+                : (isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB)),
           ),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 20,
-              color: enabled
-                  ? color
-                  : (isDark ? Colors.grey[600] : Colors.grey[400]),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+            Icon(icon,
+                size: 20,
                 color: enabled
                     ? color
-                    : (isDark ? Colors.grey[600] : Colors.grey[400]),
-              ),
-            ),
+                    : (isDark ? Colors.grey[600] : Colors.grey[400])),
+            const SizedBox(height: 3),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: enabled
+                        ? color
+                        : (isDark ? Colors.grey[600] : Colors.grey[400]))),
           ],
         ),
       ),
@@ -1382,33 +1774,24 @@ class _InfoRow extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 1),
-          child: Icon(
-            icon,
-            size: 15,
-            color: isDark ? Colors.grey[500] : Colors.grey[400],
-          ),
+          child: Icon(icon,
+              size: 15, color: isDark ? Colors.grey[500] : Colors.grey[400]),
         ),
         const SizedBox(width: 8),
         SizedBox(
           width: 78,
-          child: Text(
-            '$label:',
-            style: TextStyle(
-              fontSize: 12,
-              color: isDark ? Colors.grey[500] : Colors.grey[500],
-            ),
-          ),
+          child: Text('$label:',
+              style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.grey[500] : Colors.grey[500])),
         ),
         Expanded(
-          child: Text(
-            value,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: valueColor ??
-                  (isDark ? Colors.grey[200] : Colors.grey[800]),
-            ),
-          ),
+          child: Text(value,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: valueColor ??
+                      (isDark ? Colors.grey[200] : Colors.grey[800]))),
         ),
       ],
     );
@@ -1416,13 +1799,12 @@ class _InfoRow extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LIVE BADGE (unchanged)
+// LIVE BADGE
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _LiveBadge extends StatefulWidget {
   final bool isDark;
   const _LiveBadge({required this.isDark});
-
   @override
   State<_LiveBadge> createState() => _LiveBadgeState();
 }
@@ -1435,10 +1817,9 @@ class _LiveBadgeState extends State<_LiveBadge>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 1),
-    )..repeat(reverse: true);
+    _ctrl =
+        AnimationController(vsync: this, duration: const Duration(seconds: 1))
+          ..repeat(reverse: true);
     _fade = Tween<double>(begin: 0.3, end: 1.0).animate(_ctrl);
   }
 
@@ -1453,14 +1834,11 @@ class _LiveBadgeState extends State<_LiveBadge>
     return FadeTransition(
       opacity: _fade,
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
         decoration: BoxDecoration(
-          color: Colors.green
-              .withOpacity(widget.isDark ? 0.15 : 0.12),
+          color: Colors.green.withOpacity(widget.isDark ? 0.15 : 0.12),
           borderRadius: BorderRadius.circular(8),
-          border:
-              Border.all(color: Colors.green.withOpacity(0.3)),
+          border: Border.all(color: Colors.green.withOpacity(0.3)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1469,22 +1847,16 @@ class _LiveBadgeState extends State<_LiveBadge>
               width: 6,
               height: 6,
               decoration: const BoxDecoration(
-                color: Colors.green,
-                shape: BoxShape.circle,
-              ),
+                  color: Colors.green, shape: BoxShape.circle),
             ),
             const SizedBox(width: 4),
-            Text(
-              'LIVE',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                color: widget.isDark
-                    ? Colors.green[400]
-                    : Colors.green[700],
-                letterSpacing: 0.5,
-              ),
-            ),
+            Text('LIVE',
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color:
+                        widget.isDark ? Colors.green[400] : Colors.green[700],
+                    letterSpacing: 0.5)),
           ],
         ),
       ),
@@ -1493,7 +1865,7 @@ class _LiveBadgeState extends State<_LiveBadge>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PLACEHOLDERS (unchanged)
+// PLACEHOLDERS
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
@@ -1519,21 +1891,16 @@ class _EmptyState extends StatelessWidget {
           children: [
             Text(emoji, style: const TextStyle(fontSize: 56)),
             const SizedBox(height: 16),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 17, fontWeight: FontWeight.w600),
-            ),
+            Text(title,
+                textAlign: TextAlign.center,
+                style:
+                    const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: isDark ? Colors.grey[500] : Colors.grey[500],
-              ),
-            ),
+            Text(subtitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? Colors.grey[500] : Colors.grey[500])),
           ],
         ),
       ),
@@ -1543,34 +1910,29 @@ class _EmptyState extends StatelessWidget {
 
 class _Loader extends StatelessWidget {
   const _Loader();
-
   @override
   Widget build(BuildContext context) => const Center(
-        child: CircularProgressIndicator(
-            color: Colors.orange, strokeWidth: 2.5),
+        child:
+            CircularProgressIndicator(color: Colors.orange, strokeWidth: 2.5),
       );
 }
 
 class _ErrorView extends StatelessWidget {
   final String message;
   const _ErrorView({required this.message});
-
   @override
   Widget build(BuildContext context) => Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.red),
-          ),
+          child: Text(message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.red)),
         ),
       );
 }
 
 class _UnauthView extends StatelessWidget {
   const _UnauthView();
-
   @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context);
@@ -1579,14 +1941,11 @@ class _UnauthView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.lock_rounded,
-                size: 48, color: Colors.grey),
+            const Icon(Icons.lock_rounded, size: 48, color: Colors.grey),
             const SizedBox(height: 16),
-            Text(
-              loc.foodCargoSignInRequired,
-              style: const TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.w600),
-            ),
+            Text(loc.foodCargoSignInRequired,
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           ],
         ),
       ),

@@ -81,6 +81,7 @@ dependencies:
   package_info_plus: ^8.0.0
   sentry_flutter: ^9.9.0
   sign_in_with_apple: ^7.0.1
+  google_mlkit_text_recognition: ^0.15.1
 
   flutter_localizations:
     sdk: flutter
