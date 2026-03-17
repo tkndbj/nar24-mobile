@@ -135,7 +135,7 @@ class VitrinProductApplication {
   }
 }
 
-enum VitrinApplicationTab { all, pending, approved, rejected }
+enum VitrinApplicationTab { pending, approved, rejected }
 
 class VitrinPendingProductApplications extends StatefulWidget {
   const VitrinPendingProductApplications({super.key});
@@ -175,13 +175,12 @@ class _VitrinPendingProductApplicationsState
   final Set<VitrinApplicationTab> _tabsBeingLoaded = {};
 
   Map<VitrinApplicationTab, int> _counts = {
-    VitrinApplicationTab.all: 0,
     VitrinApplicationTab.pending: 0,
     VitrinApplicationTab.approved: 0,
     VitrinApplicationTab.rejected: 0,
   };
 
-  VitrinApplicationTab _activeTab = VitrinApplicationTab.all;
+  VitrinApplicationTab _activeTab = VitrinApplicationTab.pending;
   static const int _pageSize = 10;
 
   // Track last known tab index for animation listener
@@ -192,7 +191,7 @@ class _VitrinPendingProductApplicationsState
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(_onTabChanged);
     // Add animation listener for detecting swipes in progress
     _tabController.animation?.addListener(_onTabAnimation);
@@ -214,8 +213,8 @@ class _VitrinPendingProductApplicationsState
     _lastUserId = _currentUserId;
     _setupAuthListener();
     _fetchCounts();
-    // Load first tab (all) immediately
-    _loadTabDataIfNeeded(VitrinApplicationTab.all);
+    // Load first tab (pending) immediately
+    _loadTabDataIfNeeded(VitrinApplicationTab.pending);
   }
 
   /// Animation listener to detect tab changes during swipe gestures
@@ -229,7 +228,7 @@ class _VitrinPendingProductApplicationsState
     final targetIndex = animValue.round();
 
     // If we're swiping towards a new tab, start loading its data
-    if (targetIndex != _lastTabIndex && targetIndex >= 0 && targetIndex < 4) {
+    if (targetIndex != _lastTabIndex && targetIndex >= 0 && targetIndex < 3) {
       _lastTabIndex = targetIndex;
       final targetTab = VitrinApplicationTab.values[targetIndex];
       _loadTabDataIfNeeded(targetTab);
@@ -260,7 +259,6 @@ class _VitrinPendingProductApplicationsState
               _tabIsLoadingMore[tab] = false;
             }
             _counts = {
-              VitrinApplicationTab.all: 0,
               VitrinApplicationTab.pending: 0,
               VitrinApplicationTab.approved: 0,
               VitrinApplicationTab.rejected: 0,
@@ -380,7 +378,6 @@ class _VitrinPendingProductApplicationsState
       if (mounted) {
         setState(() {
           _counts = {
-            VitrinApplicationTab.all: pending + approved + rejected,
             VitrinApplicationTab.pending: pending,
             VitrinApplicationTab.approved: approved,
             VitrinApplicationTab.rejected: rejected,
@@ -435,72 +432,37 @@ class _VitrinPendingProductApplicationsState
       final List<Future<QuerySnapshot>> futures = [];
       final List<String> futureTypes = [];
 
-      // Determine if this is a filtered tab (requires different query approach)
-      final bool isFilteredTab = tab != VitrinApplicationTab.all;
+      // All tabs are filtered by status — query by status without orderBy
+      // to avoid composite index. Results are sorted client-side.
 
       // Build query for vitrin_product_applications (only if there might be more)
       if (_tabHasMoreNewApps[tab] ?? false) {
         Query newAppsQuery = _firestore
             .collection('vitrin_product_applications')
-            .where('userId', isEqualTo: userId);
+            .where('userId', isEqualTo: userId)
+            .where('status', isEqualTo: tab.name);
 
-        if (isFilteredTab) {
-          // For filtered tabs: query by status without orderBy to avoid composite index
-          // We'll sort results client-side
-          newAppsQuery = newAppsQuery.where('status', isEqualTo: tab.name);
-          // Note: Pagination for filtered tabs loads all matching documents
-          // since we can't use startAfterDocument without orderBy
-          if (!isLoadMore) {
-            futures.add(newAppsQuery.get());
-            futureTypes.add('new');
-          }
-          // For filtered tabs, we load all at once (no pagination)
-          _tabHasMoreNewApps[tab] = false;
-        } else {
-          // For "All" tab: use orderBy with pagination
-          newAppsQuery = newAppsQuery.orderBy('createdAt', descending: true);
-
-          // Use cursor for pagination
-          if (isLoadMore && _tabLastNewAppDoc[tab] != null) {
-            newAppsQuery =
-                newAppsQuery.startAfterDocument(_tabLastNewAppDoc[tab]!);
-          }
-
-          newAppsQuery = newAppsQuery.limit(_pageSize);
+        if (!isLoadMore) {
           futures.add(newAppsQuery.get());
           futureTypes.add('new');
         }
+        // Load all at once (no pagination for status-filtered queries)
+        _tabHasMoreNewApps[tab] = false;
       }
 
       // Build query for vitrin_product_edit_applications (only if there might be more)
       if (_tabHasMoreEditApps[tab] ?? false) {
         Query editAppsQuery = _firestore
             .collection('vitrin_product_edit_applications')
-            .where('userId', isEqualTo: userId);
+            .where('userId', isEqualTo: userId)
+            .where('status', isEqualTo: tab.name);
 
-        if (isFilteredTab) {
-          // For filtered tabs: query by status without orderBy
-          editAppsQuery = editAppsQuery.where('status', isEqualTo: tab.name);
-          if (!isLoadMore) {
-            futures.add(editAppsQuery.get());
-            futureTypes.add('edit');
-          }
-          // For filtered tabs, we load all at once (no pagination)
-          _tabHasMoreEditApps[tab] = false;
-        } else {
-          // For "All" tab: use orderBy with pagination
-          editAppsQuery = editAppsQuery.orderBy('submittedAt', descending: true);
-
-          // Use cursor for pagination
-          if (isLoadMore && _tabLastEditAppDoc[tab] != null) {
-            editAppsQuery =
-                editAppsQuery.startAfterDocument(_tabLastEditAppDoc[tab]!);
-          }
-
-          editAppsQuery = editAppsQuery.limit(_pageSize);
+        if (!isLoadMore) {
           futures.add(editAppsQuery.get());
           futureTypes.add('edit');
         }
+        // Load all at once (no pagination for status-filtered queries)
+        _tabHasMoreEditApps[tab] = false;
       }
 
       // No more data to fetch
@@ -529,24 +491,10 @@ class _VitrinPendingProductApplicationsState
             newBatch
                 .add(VitrinProductApplication.fromDocument(doc, isEdit: false));
           }
-          // Update cursor and hasMore flag (only for "All" tab with pagination)
-          if (!isFilteredTab) {
-            if (snapshot.docs.isNotEmpty) {
-              _tabLastNewAppDoc[tab] = snapshot.docs.last;
-            }
-            _tabHasMoreNewApps[tab] = snapshot.docs.length == _pageSize;
-          }
         } else if (type == 'edit') {
           for (final doc in snapshot.docs) {
             newBatch
                 .add(VitrinProductApplication.fromDocument(doc, isEdit: true));
-          }
-          // Update cursor and hasMore flag (only for "All" tab with pagination)
-          if (!isFilteredTab) {
-            if (snapshot.docs.isNotEmpty) {
-              _tabLastEditAppDoc[tab] = snapshot.docs.last;
-            }
-            _tabHasMoreEditApps[tab] = snapshot.docs.length == _pageSize;
           }
         }
       }
@@ -775,11 +723,6 @@ class _VitrinPendingProductApplicationsState
         indicatorSize: TabBarIndicatorSize.tab,
         tabs: [
           _buildModernTab(
-            l10n.all,
-            Icons.apps_rounded,
-            _counts[VitrinApplicationTab.all] ?? 0,
-          ),
-          _buildModernTab(
             l10n.pending,
             Icons.hourglass_empty_rounded,
             _counts[VitrinApplicationTab.pending] ?? 0,
@@ -867,11 +810,6 @@ class _VitrinPendingProductApplicationsState
     String icon;
 
     switch (tab) {
-      case VitrinApplicationTab.all:
-        title = l10n.noApplicationsTitle;
-        description = l10n.noVitrinApplicationsDescription;
-        icon = '📦';
-        break;
       case VitrinApplicationTab.pending:
         title = l10n.noPendingTitle;
         description = l10n.noPendingDescription;
