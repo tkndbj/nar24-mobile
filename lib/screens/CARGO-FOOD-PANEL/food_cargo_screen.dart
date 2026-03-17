@@ -872,13 +872,6 @@ class _CourierCallCardState extends State<_CourierCallCard> {
               : Colors.green.withOpacity(0.4),
           width: _isMyCall ? 2 : 1.5,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: (_isMyCall ? Colors.orange : Colors.green).withOpacity(0.12),
-            blurRadius: 10,
-            spreadRadius: 1,
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1407,15 +1400,6 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
               : (isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB)),
           width: widget.isHighlighted ? 2 : 1,
         ),
-        boxShadow: widget.isHighlighted
-            ? [
-                BoxShadow(
-                  color: Colors.orange.withOpacity(0.25),
-                  blurRadius: 12,
-                  spreadRadius: 2,
-                ),
-              ]
-            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
