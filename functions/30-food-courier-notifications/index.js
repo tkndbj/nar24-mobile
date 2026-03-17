@@ -174,10 +174,17 @@ export const createScannedFoodOrder = onCall(
 
     const {
       callId,
-      scannedRawText   = '',
-      detectedAddress  = null,
-      detectedTotal    = null,
+      scannedRawText  = '',
+      detectedAddress = null,
+      detectedTotal   = null,
+      detectedPhone   = null,
+      detectedLat     = null,
+      detectedLng     = null,
     } = request.data;
+
+    const locationGeoPoint = (
+      typeof detectedLat === 'number' && typeof detectedLng === 'number'
+    ) ? new admin.firestore.GeoPoint(detectedLat, detectedLng) : null;
 
     if (!callId || typeof callId !== 'string') {
       throw new HttpsError('invalid-argument', 'callId is required.');
@@ -241,7 +248,7 @@ export const createScannedFoodOrder = onCall(
         // Buyer — unknown from external receipt
         buyerId: null,
         buyerName: 'External Customer',
-        buyerPhone: '',
+        buyerPhone: detectedPhone || '',
 
         // Items — unknown from external receipt
         items: [],
@@ -259,7 +266,12 @@ export const createScannedFoodOrder = onCall(
 
         // Delivery — address from OCR if detected
         deliveryType: 'delivery',
-        deliveryAddress: detectedAddress ? { addressLine1: detectedAddress, city: '', phoneNumber: '' } : null,
+        deliveryAddress: detectedAddress ? {
+          addressLine1: detectedAddress,
+          city: '',
+          phoneNumber: detectedPhone || '',
+          location: locationGeoPoint,   // ← matches your existing orders-food format
+        } : null,
 
         // Scanned receipt raw data for audit
         scannedReceipt: {

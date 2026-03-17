@@ -1,22 +1,33 @@
 // lib/screens/food/receipt_scanner.dart
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'food_cargo_screen.dart'; // for CourierCall
+import 'package:http/http.dart' as http;
+import 'food_cargo_screen.dart';
+import 'package:google_mlkit_barcode_scanning/google_mlkit_barcode_scanning.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCAN RESULT MODEL
 // ─────────────────────────────────────────────────────────────────────────────
+
+class LatLng {
+  final double lat;
+  final double lng;
+  const LatLng(this.lat, this.lng);
+}
 
 class ReceiptScanResult {
   final String rawText;
   final String? detectedAddress;
   final double? detectedTotal;
   final String? detectedOrderId;
+  final String? detectedPhone;
+  final LatLng? detectedLatLng;
   final double confidence;
 
   const ReceiptScanResult({
@@ -24,17 +35,27 @@ class ReceiptScanResult {
     this.detectedAddress,
     this.detectedTotal,
     this.detectedOrderId,
+    this.detectedPhone,
+    this.detectedLatLng,
     required this.confidence,
   });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCANNER SERVICE
+// ML Kit does OCR (free, on-device)
+// Claude Haiku does extraction (intelligent, ~$0.00004 per scan)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ReceiptScannerService {
   final _recognizer = TextRecognizer(script: TextRecognitionScript.latin);
   final _picker = ImagePicker();
+
+  // API key passed via --dart-define=ANTHROPIC_API_KEY=...
+  static const _apiKey =
+      String.fromEnvironment('ANTHROPIC_API_KEY', defaultValue: '');
+
+  final _barcodeScanner = BarcodeScanner(formats: [BarcodeFormat.qrCode]);
 
   Future<ReceiptScanResult?> scanFromCamera(BuildContext context) async {
     final photo = await _picker.pickImage(
@@ -54,19 +75,206 @@ class ReceiptScannerService {
 
   Future<ReceiptScanResult> _processImage(String path) async {
     final inputImage = InputImage.fromFilePath(path);
-    final recognized = await _recognizer.processImage(inputImage);
+
+    // Run OCR and QR scan in parallel — same image, no extra cost
+    final results = await Future.wait([
+      _recognizer.processImage(inputImage),
+      _barcodeScanner.processImage(inputImage),
+    ]);
+
+    final recognized = results[0] as RecognizedText;
+    final barcodes = results[1] as List<Barcode>;
     final rawText = recognized.text;
+
+    // Try to extract coordinates from any QR code found
+    final coords = await _extractCoordsFromBarcodes(barcodes);
+
+    // Haiku extracts the rest
+    final extracted = await _extractWithHaiku(rawText);
 
     return ReceiptScanResult(
       rawText: rawText,
-      detectedAddress: _extractAddress(rawText),
-      detectedTotal: _extractTotal(rawText),
-      detectedOrderId: _extractOrderId(rawText),
-      confidence: _estimateConfidence(rawText),
+      detectedAddress: extracted['address'] as String?,
+      detectedTotal: (extracted['total'] as num?)?.toDouble(),
+      detectedOrderId: extracted['order_id'] as String?,
+      detectedPhone: extracted['phone'] as String?,
+      detectedLatLng: coords, // new field
+      confidence: rawText.length > 100 ? 0.85 : 0.3,
     );
   }
 
-  String? _extractAddress(String text) {
+  Future<LatLng?> _extractCoordsFromBarcodes(List<Barcode> barcodes) async {
+    for (final barcode in barcodes) {
+      final raw = barcode.rawValue;
+      if (raw == null) continue;
+
+      // Try direct coordinate patterns first
+      final direct = _tryExtractFromUrl(raw);
+      if (direct != null) return direct;
+
+      // If it's a shortened URL, follow the redirect to get real coordinates
+      if (raw.contains('goo.gl') ||
+          raw.contains('maps.app') ||
+          raw.contains('bit.ly')) {
+        final resolved = await _followRedirect(raw);
+        if (resolved != null) {
+          final fromResolved = _tryExtractFromUrl(resolved);
+          if (fromResolved != null) return fromResolved;
+        }
+      }
+    }
+    return null;
+  }
+
+  LatLng? _tryExtractFromUrl(String raw) {
+    // geo:35.1933,33.8274
+    final geoMatch = RegExp(r'geo:(-?\d+\.?\d*),(-?\d+\.?\d*)').firstMatch(raw);
+    if (geoMatch != null) {
+      final lat = double.tryParse(geoMatch.group(1)!);
+      final lng = double.tryParse(geoMatch.group(2)!);
+      if (lat != null && lng != null) return LatLng(lat, lng);
+    }
+
+    // ?q=35.1933,33.8274
+    final qMatch =
+        RegExp(r'[?&]q=(?:loc:)?(-?\d+\.?\d*),(-?\d+\.?\d*)').firstMatch(raw);
+    if (qMatch != null) {
+      final lat = double.tryParse(qMatch.group(1)!);
+      final lng = double.tryParse(qMatch.group(2)!);
+      if (lat != null && lng != null) return LatLng(lat, lng);
+    }
+
+    // @35.1933,33.8274,15z
+    final atMatch = RegExp(r'@(-?\d+\.?\d*),(-?\d+\.?\d*)').firstMatch(raw);
+    if (atMatch != null) {
+      final lat = double.tryParse(atMatch.group(1)!);
+      final lng = double.tryParse(atMatch.group(2)!);
+      if (lat != null && lng != null) return LatLng(lat, lng);
+    }
+
+    return null;
+  }
+
+  Future<String?> _followRedirect(String shortUrl) async {
+    final client = http.Client();
+    try {
+      String currentUrl = shortUrl;
+
+      // Follow up to 5 redirect hops
+      for (int i = 0; i < 5; i++) {
+        final request = http.Request('GET', Uri.parse(currentUrl))
+          ..followRedirects = false;
+
+        final response =
+            await client.send(request).timeout(const Duration(seconds: 5));
+
+        final location = response.headers['location'];
+
+        // No more redirects
+        if (location == null) return currentUrl;
+
+        // If this hop already contains coordinates, return it immediately
+        if (_tryExtractFromUrl(location) != null) return location;
+
+        currentUrl = location;
+      }
+
+      return currentUrl;
+    } catch (_) {
+      return null;
+    } finally {
+      client.close();
+    }
+  }
+
+  // ── Haiku extraction ───────────────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> _extractWithHaiku(String rawText) async {
+    if (_apiKey.isEmpty) {
+      debugPrint('[ReceiptScanner] No API key — falling back to regex');
+      return _fallbackRegex(rawText);
+    }
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('https://api.anthropic.com/v1/messages'),
+            headers: {
+              'x-api-key': _apiKey,
+              'anthropic-version': '2023-06-01',
+              'content-type': 'application/json',
+            },
+            body: jsonEncode({
+              'model': 'claude-haiku-4-5-20251001',
+              'max_tokens': 300,
+              'messages': [
+                {
+                  'role': 'user',
+                  'content':
+                      '''Extract delivery information from this receipt OCR text.
+The text may contain OCR errors (garbled characters, broken numbers, etc).
+Reply ONLY with a valid JSON object — no explanation, no markdown fences.
+
+{
+  "total": <grand total as a number, fix OCR errors like 295,0( → 295.00, null if not found>,
+  "address": "<full delivery address as a single string, null if not found>",
+  "phone": "<customer phone number including country code if present, null if not found>",
+  "order_id": "<order or receipt number, null if not found>"
+}
+
+Rules:
+- total: find the FINAL amount the customer pays after any discounts. Rules in order:
+  1. NEVER return "Ara Toplam" (subtotal). 
+  2. If a discount percentage is mentioned (e.g. %15 indirim), the final total is LESS than the ara toplam — look for the smaller number after the discount line.
+  3. On YemekSepeti receipts the numbers appear in this order on one line: [ara toplam] [toplam] [kdv] — so if you see a sequence of numbers, the SECOND main amount is the final total, not the first.
+  4. Fix garbled digits like 250,7: → 250.75, 295,0( → 295.00.
+  Return as a plain number with no currency symbol.
+- address: look for street names, district, city, postal code. In North Cyprus receipts look for KKTC, Kuzey Kıbrıs, Lefkoşa, Gazimağusa, Girne, İskele, KYK, yurdu, üniversite. Return the full address on one line.
+- phone: look for TEL, telefon, GSM patterns. Include + prefix if present.
+- order_id: look for sipariş no, order no, receipt no, # prefixed codes.
+
+Receipt OCR text:
+${rawText.length > 1500 ? rawText.substring(0, 1500) : rawText}''',
+                }
+              ],
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode != 200) {
+        debugPrint(
+            '[ReceiptScanner] Haiku error ${response.statusCode}: ${response.body}');
+        return _fallbackRegex(rawText);
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final content = (data['content'] as List).first['text'] as String;
+
+      // Strip markdown fences if model adds them despite instructions
+      final clean =
+          content.replaceAll('```json', '').replaceAll('```', '').trim();
+
+      final parsed = jsonDecode(clean) as Map<String, dynamic>;
+      debugPrint('[ReceiptScanner] Haiku extracted: $parsed');
+      return parsed;
+    } catch (e) {
+      debugPrint('[ReceiptScanner] Haiku failed: $e — using regex fallback');
+      return _fallbackRegex(rawText);
+    }
+  }
+
+  // ── Regex fallback (used if API key missing or Haiku call fails) ───────────
+
+  Map<String, dynamic> _fallbackRegex(String text) {
+    return {
+      'address': _regexAddress(text),
+      'total': _regexTotal(text),
+      'order_id': _regexOrderId(text),
+      'phone': _regexPhone(text),
+    };
+  }
+
+  String? _regexAddress(String text) {
     final lines = text.split('\n');
     for (final line in lines) {
       final lower = line.toLowerCase();
@@ -75,42 +283,66 @@ class ReceiptScannerService {
           lower.contains('mahalle') ||
           lower.contains('apt') ||
           lower.contains('no:') ||
-          lower.contains('adres')) {
+          lower.contains('adres') ||
+          lower.contains('kyk') ||
+          lower.contains('yurdu') ||
+          lower.contains('üniversite') ||
+          lower.contains('universitesi') ||
+          lower.contains('kktc') ||
+          lower.contains('kibris') ||
+          lower.contains('kıbrıs') ||
+          lower.contains('lefkoşa') ||
+          lower.contains('gazimağusa') ||
+          lower.contains('girne') ||
+          lower.contains('iskele')) {
         return line.trim();
       }
     }
     return null;
   }
 
-  double? _extractTotal(String text) {
+  double? _regexTotal(String text) {
     final patterns = [
       RegExp(r'(?:toplam|total|genel toplam)[:\s]*([0-9]+[.,][0-9]{0,2})',
           caseSensitive: false),
       RegExp(r'([0-9]+[.,][0-9]{0,2})\s*TL', caseSensitive: false),
       RegExp(r'TL\s*([0-9]+[.,][0-9]{0,2})', caseSensitive: false),
+      RegExp(r'([0-9]{2,}[.,][0-9]{1,2})[^0-9]'),
     ];
+
+    final candidates = <double>[];
     for (final pattern in patterns) {
-      final match = pattern.firstMatch(text);
-      if (match != null) {
-        final raw = match.group(1)!.replaceAll(',', '.');
-        return double.tryParse(raw);
+      for (final match in pattern.allMatches(text)) {
+        final raw = match
+            .group(1)!
+            .replaceAll(',', '.')
+            .replaceAll(RegExp(r'[^0-9.]'), '');
+        final value = double.tryParse(raw);
+        if (value != null && value > 0) candidates.add(value);
       }
     }
-    return null;
+
+    if (candidates.isEmpty) return null;
+    candidates.sort();
+    return candidates.last; // Grand total is usually the largest number
   }
 
-  String? _extractOrderId(String text) {
+  String? _regexOrderId(String text) {
     final match = RegExp(r'\b([A-F0-9]{8})\b').firstMatch(text);
     return match?.group(1);
   }
 
-  double _estimateConfidence(String text) {
-    if (text.length < 20) return 0.1;
-    if (text.length < 100) return 0.5;
-    return 0.85;
+  String? _regexPhone(String text) {
+    final match = RegExp(r'(?:tel|telefon|gsm)[;:\s]*(\+?[0-9\s\-]{10,15})',
+            caseSensitive: false)
+        .firstMatch(text);
+    return match?.group(1)?.trim();
   }
 
-  void dispose() => _recognizer.close();
+  void dispose() {
+    _recognizer.close();
+    _barcodeScanner.close(); // ← add this
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -149,6 +381,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
   final _service = ReceiptScannerService();
   bool _scanning = false;
   String? _error;
+  String? _statusMessage;
 
   bool get _isCallMode => widget.courierCall != null;
 
@@ -162,6 +395,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
     setState(() {
       _scanning = true;
       _error = null;
+      _statusMessage = _isCallMode ? 'Fiş okunuyor...' : 'Fiş taranıyor...';
     });
 
     try {
@@ -172,6 +406,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
       if (result == null || !mounted) return;
 
       if (_isCallMode) {
+        setState(() => _statusMessage = 'Sipariş oluşturuluyor...');
         await _handleCallModeScan(result);
       } else {
         await _handleLegacyModeScan(result);
@@ -197,6 +432,9 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
       'scannedRawText': result.rawText,
       'detectedAddress': result.detectedAddress,
       'detectedTotal': result.detectedTotal,
+      'detectedPhone': result.detectedPhone,
+      'detectedLat': result.detectedLatLng?.lat,
+      'detectedLng': result.detectedLatLng?.lng,
     });
 
     final orderId = response.data['orderId'] as String?;
@@ -335,9 +573,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
                   const CircularProgressIndicator(color: Colors.orange),
                   const SizedBox(height: 16),
                   Text(
-                    _isCallMode
-                        ? 'Fiş okunuyor ve sipariş oluşturuluyor...'
-                        : 'Fiş okunuyor...',
+                    _statusMessage ?? 'İşleniyor...',
                     style: TextStyle(
                       fontSize: 12,
                       color: isDark ? Colors.grey[400] : Colors.grey[600],

@@ -7,5 +7,6 @@
   "APP_ID": "1:373622886371:web:25dac7b6de3a98d5225ad6",
   "MEASUREMENT_ID": "G-G468FCCEJL",
   "GOOGLE_SERVER_CLIENT_ID": "373622886371-it8pcemjud8oomjjjn1gel759e627j6m.apps.googleusercontent.com",
-  "GOOGLE_IOS_CLIENT_ID": "373622886371-std6lqva2p2496mq6f53cglu825fuavo.apps.googleusercontent.com"
+  "GOOGLE_IOS_CLIENT_ID": "373622886371-std6lqva2p2496mq6f53cglu825fuavo.apps.googleusercontent.com",
+  "ANTHROPIC_API_KEY": "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"
 }

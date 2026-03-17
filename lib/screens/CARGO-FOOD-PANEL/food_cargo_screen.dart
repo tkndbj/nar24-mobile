@@ -737,6 +737,9 @@ class _PoolTabState extends State<_PoolTab> {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16),
                     child: _CourierCallCard(
+                      // Key changes when status changes → forces fresh widget state
+                      key: ValueKey(
+                          '${visibleCalls[i].id}_${visibleCalls[i].status}'),
                       call: visibleCalls[i],
                       currentUser: widget.currentUser,
                       isDark: widget.isDark,
@@ -776,6 +779,7 @@ class _CourierCallCard extends StatefulWidget {
   final void Function(String orderId) onOrderCreated;
 
   const _CourierCallCard({
+    super.key,
     required this.call,
     required this.currentUser,
     required this.isDark,
@@ -824,11 +828,13 @@ class _CourierCallCardState extends State<_CourierCallCard> {
           'acceptedAt': FieldValue.serverTimestamp(),
         });
       });
+      // Transaction succeeded — stream will update within ~200ms
+      // but we don't need to wait for it, loading reset is enough
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString().contains('already_accepted')
-          ? 'Another courier accepted this call.'
-          : 'Could not accept call. Please try again.';
+          ? 'Bu çağrı zaten kabul edildi.'
+          : 'Çağrı kabul edilemedi. Tekrar deneyin.';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(msg),
         backgroundColor: Colors.red[700],
@@ -836,6 +842,7 @@ class _CourierCallCardState extends State<_CourierCallCard> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ));
     } finally {
+      // Always reset loading — the ValueKey + stream update handles the UI switch
       if (mounted) setState(() => _loading = false);
     }
   }
