@@ -50,7 +50,6 @@ import 'package:firebase_performance/firebase_performance.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'routing/routes/app_router.dart';
 import 'dart:ui';
-import 'package:Nar24/utils/memory_manager.dart';
 import 'package:Nar24/services/click_tracking_service.dart';
 import 'services/user_activity_service.dart';
 import 'services/version_check_service.dart';
@@ -272,8 +271,6 @@ Future<void> main() async {
       debugPrint("Stacktrace: $stacktrace");
     }
   }
-
-  MemoryManager().setupMemoryManagement();
 
   await SentryFlutter.init((options) {
     options.dsn =
@@ -585,14 +582,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
 
     if (state == AppLifecycleState.resumed) {
-      // Memory cleanup is now handled efficiently after provider resume
-      // Schedule it with a slight delay to avoid competing with provider resume
-      Future.delayed(const Duration(milliseconds: 800), () {
-        if (mounted) {
-          MemoryManager().checkAndClearIfNeeded();
-        }
-      });
-
       // Re-initialize deep link handler if needed
       if (!_deepLinkInitialized) {
         if (kDebugMode) {

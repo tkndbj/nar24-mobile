@@ -11,7 +11,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:Nar24/providers/product_repository.dart';
 import 'package:Nar24/services/related_products_service.dart';
 import 'dart:convert';
-import 'package:Nar24/utils/memory_manager.dart';
 
 class ProductDetailProvider with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -140,9 +139,6 @@ class ProductDetailProvider with ChangeNotifier {
     if (_navigationCount > _maxNavigationsBeforeClear) {
       clearAllStaticCaches();
       _navigationCount = 0;
-
-      // ADD THIS: Also check memory on navigation
-      MemoryManager().checkAndClearIfNeeded();
     }
 
     if (initialProduct != null) {

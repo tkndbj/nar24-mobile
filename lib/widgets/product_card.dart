@@ -1018,6 +1018,7 @@ class _ImageSection extends StatelessWidget {
         fadeOutDuration: Duration.zero,
         useOldImageOnUrlChange: true,
         filterQuality: FilterQuality.medium,
+        memCacheWidth: 540,
         placeholder: (context, url) =>
             _buildImagePlaceholder(effectiveScaleFactor),
         errorWidget: (context, url, error) =>
