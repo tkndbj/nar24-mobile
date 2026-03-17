@@ -288,14 +288,17 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
           body: Stack(
             children: [
               ListView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
+                padding: const EdgeInsets.fromLTRB(0, 0, 0, 140),
                 children: [
-                  Text(loc.foodCheckoutTitle,
-                      style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : Colors.grey[900])),
-                  const SizedBox(height: 20),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: Text(loc.foodCheckoutTitle,
+                        style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.grey[900])),
+                  ),
+                  const SizedBox(height: 10),
 
                   // Restaurant Info
                   if (cart.currentRestaurant != null) ...[
@@ -303,7 +306,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                         restaurant: cart.currentRestaurant!,
                         prepTime: prepTime,
                         isDark: isDark),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                   ],
 
                   // Your Order
@@ -319,7 +322,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                                 ))
                             .toList()),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
 
                   // Delivery Address — read-only from profile
                   if (_deliveryType == DeliveryType.delivery) ...[
@@ -329,7 +332,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                       child: _FoodAddressCard(
                           foodAddress: foodAddress, isDark: isDark),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                   ],
 
                   // Order Notes
@@ -369,7 +372,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
 
                   // Payment Method
                   _Section(
@@ -546,15 +549,20 @@ class _RestaurantInfoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context)!;
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: isDark
-            ? const Color(0xFF211F31)
-            : Colors.orange[50]!.withOpacity(0.6),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-            color:
-                isDark ? Colors.white.withOpacity(0.08) : Colors.orange[100]!),
+            ? const Color.fromARGB(255, 40, 38, 59)
+            : Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            spreadRadius: 0,
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Row(children: [
         if (restaurant.profileImageUrl != null)
@@ -608,14 +616,20 @@ class _Section extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: isDark ? Colors.transparent : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-            color: isDark
-                ? Colors.white.withOpacity(0.08)
-                : const Color(0xFFD1D5DB)),
+        color: isDark
+            ? const Color.fromARGB(255, 40, 38, 59)
+            : Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            spreadRadius: 0,
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(title,
@@ -1188,18 +1202,34 @@ class _FoodCheckoutSkeleton extends StatelessWidget {
         decoration:
             BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)));
     Widget card(Widget child) => Container(
-        padding: const EdgeInsets.all(16),
-        margin: const EdgeInsets.only(bottom: 12),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: border)),
+            color: isDark
+                ? const Color.fromARGB(255, 40, 38, 59)
+                : Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                spreadRadius: 0,
+                blurRadius: 2,
+                offset: const Offset(0, 1),
+              ),
+            ]),
         child: child);
 
-    return ListView(padding: const EdgeInsets.all(16), children: [
-      box(14, 96),
+    return ListView(padding: EdgeInsets.zero, children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        child: box(14, 96),
+      ),
       const SizedBox(height: 16),
-      box(28, 120),
-      const SizedBox(height: 20),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: box(28, 120),
+      ),
+      const SizedBox(height: 10),
       // Restaurant row
       card(Row(children: [
         box(40, 40),

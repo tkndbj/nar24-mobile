@@ -446,43 +446,58 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
 
               // ── Tab buttons + search row ──────────────────────────────
               SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-                  child: _TabAndSearchRow(
-                    activeTab: _activeTab,
-                    foodCount: widget.foods.length,
-                    isDark: isDark,
-                    searchController: _searchController,
-                    onTabChange: (tab) => setState(() => _activeTab = tab),
+                child: Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(top: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color.fromARGB(255, 40, 38, 59)
+                        : Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        spreadRadius: 0,
+                        blurRadius: 2,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _TabAndSearchRow(
+                        activeTab: _activeTab,
+                        foodCount: widget.foods.length,
+                        isDark: isDark,
+                        searchController: _searchController,
+                        onTabChange: (tab) => setState(() => _activeTab = tab),
+                      ),
+                      if (_activeTab == 'menu' && _restaurantFoodCategories.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        _FoodTypeIconRow(
+                          selected: _selectedIconCategory,
+                          isDark: isDark,
+                          categories: _restaurantFoodCategories,
+                          onSelect: (cat) {
+                            setState(() {
+                              _selectedIconCategory = cat;
+                              if (_searchQuery.trim().isNotEmpty) {
+                                _performSearch();
+                              } else {
+                                _typesenseResults = null;
+                              }
+                            });
+                          },
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),
 
               // ── Menu tab content ──────────────────────────────────────
               if (_activeTab == 'menu') ...[
-                // FilterIcons — only when categories loaded
-                if (_restaurantFoodCategories.isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                      child: _FoodTypeIconRow(
-                        selected: _selectedIconCategory,
-                        isDark: isDark,
-                        categories: _restaurantFoodCategories,
-                        onSelect: (cat) {
-                          setState(() {
-                            _selectedIconCategory = cat;
-                            // Re-run search with new category if text active
-                            if (_searchQuery.trim().isNotEmpty) {
-                              _performSearch();
-                            } else {
-                              _typesenseResults = null;
-                            }
-                          });
-                        },
-                      ),
-                    ),
-                  ),
 
                 // Food list
                 if (filtered.isNotEmpty)
@@ -556,45 +571,48 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
   SliverToBoxAdapter _buildClosedBanner(bool isDark) {
     final loc = AppLocalizations.of(context);
     return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          decoration: BoxDecoration(
-            color: isDark ? Colors.red.withOpacity(0.10) : Colors.red[50],
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark ? Colors.red.withOpacity(0.20) : Colors.red[200]!,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.red.withOpacity(0.10) : Colors.red[50],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              spreadRadius: 0,
+              blurRadius: 2,
+              offset: const Offset(0, 1),
             ),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.access_time_rounded,
-                  size: 20, color: isDark ? Colors.red[400] : Colors.red[500]),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      loc.currentlyClosed,
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.red[400] : Colors.red[600]),
-                    ),
-                    Text(
-                      loc.browseMenuWhenReopen,
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: (isDark ? Colors.red[400]! : Colors.red[500]!)
-                              .withOpacity(0.7)),
-                    ),
-                  ],
-                ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.access_time_rounded,
+                size: 20, color: isDark ? Colors.red[400] : Colors.red[500]),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    loc.currentlyClosed,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.red[400] : Colors.red[600]),
+                  ),
+                  Text(
+                    loc.browseMenuWhenReopen,
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: (isDark ? Colors.red[400]! : Colors.red[500]!)
+                            .withOpacity(0.7)),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -611,33 +629,36 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
 
   SliverToBoxAdapter _buildNoDeliveryBanner(bool isDark) {
     return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          decoration: BoxDecoration(
-            color: isDark ? Colors.orange.withOpacity(0.10) : Colors.orange[50],
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark ? Colors.orange.withOpacity(0.20) : Colors.orange[200]!,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.orange.withOpacity(0.10) : Colors.orange[50],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              spreadRadius: 0,
+              blurRadius: 2,
+              offset: const Offset(0, 1),
             ),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.location_off_rounded,
-                  size: 20, color: isDark ? Colors.orange[400] : Colors.orange[700]),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  AppLocalizations.of(context).noDeliveryBanner,
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: isDark ? Colors.orange[400] : Colors.orange[800]),
-                ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.location_off_rounded,
+                size: 20, color: isDark ? Colors.orange[400] : Colors.orange[700]),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                AppLocalizations.of(context).noDeliveryBanner,
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? Colors.orange[400] : Colors.orange[800]),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -695,24 +716,23 @@ class _RestaurantHeader extends StatelessWidget {
     final loc = AppLocalizations.of(context);
 
     return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header card
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF211F31) : Colors.white,
-                border: Border.all(
-                  color: isDark
-                      ? const Color(0xFF2D2B3F)
-                      : const Color(0xFFD1D5DB),
-                ),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: isDark
+              ? const Color.fromARGB(255, 40, 38, 59)
+              : Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              spreadRadius: 0,
+              blurRadius: 2,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Profile image
@@ -842,9 +862,6 @@ class _RestaurantHeader extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -1031,8 +1048,8 @@ class _FoodTypeIconRow extends StatelessWidget {
                       color: isActive
                           ? Colors.orange
                           : isDark
-                              ? const Color(0xFF211F31)
-                              : Colors.white,
+                              ? const Color.fromARGB(255, 39, 36, 57)
+                              : const Color.fromARGB(255, 243, 243, 243),
                       borderRadius: BorderRadius.circular(12),
                       border: isActive
                           ? Border.all(color: Colors.orange, width: 2)
@@ -1123,7 +1140,7 @@ class _GroupedFoodList extends StatelessWidget {
     final entries = grouped.entries.toList();
 
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+      padding: const EdgeInsets.fromLTRB(0, 10, 0, 80),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
           (context, idx) {
@@ -1133,19 +1150,13 @@ class _GroupedFoodList extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Divider between groups (idx > 0)
+                // Spacer between groups (idx > 0)
                 if (idx > 0)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Divider(
-                      color: isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB),
-                      height: 1,
-                    ),
-                  ),
+                  const SizedBox(height: 20),
 
                 // Category heading
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                   child: Text(
                     localizeCategory(category, AppLocalizations.of(context)),
                     style: TextStyle(
@@ -1158,7 +1169,7 @@ class _GroupedFoodList extends StatelessWidget {
 
                 // Food cards
                 ...items.map((food) => Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.only(bottom: 10),
                       child: _FoodCard(
                         food: food,
                         restaurant: restaurant,
@@ -1208,11 +1219,11 @@ class _FlatFoodList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+      padding: const EdgeInsets.fromLTRB(0, 10, 0, 80),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
           (context, i) => Padding(
-            padding: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.only(bottom: 10),
             child: _FoodCard(
               food: foods[i],
               restaurant: restaurant,
@@ -1260,38 +1271,69 @@ class _FoodCard extends StatelessWidget {
   /// TODO: replace with AppLocalizations lookup when i18n is wired up.
   String get _displayType => food.foodType;
 
+  void _openFullScreenImage(BuildContext context, String imageUrl, String title) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black87,
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return _FullScreenImageViewer(
+            imageUrl: imageUrl,
+            title: title,
+            heroTag: 'food-image-${food.id}',
+          );
+        },
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final loc = AppLocalizations.of(context);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF211F31) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color:
-              isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB),
-        ),
+        color: isDark
+            ? const Color.fromARGB(255, 40, 38, 59)
+            : Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            spreadRadius: 0,
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Food image — only shown when available (mirrors conditional in TS)
           if (food.imageUrl != null) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: SizedBox(
-                width: 112,
-                height: 112,
-                child: Image.network(
-                  food.imageUrl!,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: isDark ? const Color(0xFF2D2B3F) : Colors.grey[100],
-                    alignment: Alignment.center,
-                    child: const Text('🍽️', style: TextStyle(fontSize: 24)),
+            GestureDetector(
+              onTap: () => _openFullScreenImage(context, food.imageUrl!, food.name),
+              child: Hero(
+                tag: 'food-image-${food.id}',
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: SizedBox(
+                    width: 112,
+                    height: 112,
+                    child: Image.network(
+                      food.imageUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: isDark ? const Color(0xFF2D2B3F) : Colors.grey[100],
+                        alignment: Alignment.center,
+                        child: const Text('🍽️', style: TextStyle(fontSize: 24)),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -2507,20 +2549,31 @@ class _LoadingSkeleton extends StatelessWidget {
       backgroundColor: isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.zero,
           children: [
             // Back link skeleton
-            Container(height: 14, width: 120, color: bg),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: Container(height: 14, width: 120, color: bg),
+            ),
             const SizedBox(height: 16),
 
             // Header card skeleton
             Container(
-              padding: const EdgeInsets.all(20),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF211F31) : Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                    color: isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB)),
+                color: isDark
+                    ? const Color.fromARGB(255, 40, 38, 59)
+                    : Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    spreadRadius: 0,
+                    blurRadius: 2,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2552,18 +2605,22 @@ class _LoadingSkeleton extends StatelessWidget {
             ...List.generate(
               4,
               (_) => Padding(
-                padding: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.only(bottom: 10),
                 child: Container(
-                  padding: const EdgeInsets.all(16),
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
                     color: isDark
-                        ? const Color(0xFF211F31)
+                        ? const Color.fromARGB(255, 40, 38, 59)
                         : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                        color: isDark
-                            ? const Color(0xFF2D2B3F)
-                            : const Color(0xFFD1D5DB)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        spreadRadius: 0,
+                        blurRadius: 2,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2640,6 +2697,128 @@ class _SearchBar extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Colors.orange),
         ),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// FULL SCREEN IMAGE VIEWER
+// =============================================================================
+
+class _FullScreenImageViewer extends StatefulWidget {
+  final String imageUrl;
+  final String title;
+  final String heroTag;
+
+  const _FullScreenImageViewer({
+    required this.imageUrl,
+    required this.title,
+    required this.heroTag,
+  });
+
+  @override
+  State<_FullScreenImageViewer> createState() => _FullScreenImageViewerState();
+}
+
+class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
+  final TransformationController _transformController = TransformationController();
+
+  @override
+  void dispose() {
+    _transformController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Dismiss on tap outside image
+          GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: const SizedBox.expand(),
+          ),
+
+          // Zoomable image
+          Center(
+            child: InteractiveViewer(
+              transformationController: _transformController,
+              minScale: 1.0,
+              maxScale: 4.0,
+              child: Hero(
+                tag: widget.heroTag,
+                child: Image.network(
+                  widget.imageUrl,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                loadingProgress.expectedTotalBytes!
+                            : null,
+                        color: Colors.white,
+                      ),
+                    );
+                  },
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.broken_image,
+                    color: Colors.white54,
+                    size: 64,
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Title bar at top
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.black54, Colors.transparent],
+                ),
+              ),
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          widget.title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

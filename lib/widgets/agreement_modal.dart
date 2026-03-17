@@ -9,7 +9,7 @@ import '../screens/AGREEMENTS/kullanim_kosullari.dart';
 import '../screens/AGREEMENTS/kisisel_veriler.dart';
 
 /// A modal dialog that requires users to accept agreements.
-/// This is shown to Google-registered users who haven't accepted agreements yet.
+/// This is shown to social login users (Google/Apple) who haven't accepted agreements yet.
 class AgreementModal extends StatefulWidget {
   final VoidCallback onAccepted;
 
@@ -18,27 +18,29 @@ class AgreementModal extends StatefulWidget {
     required this.onAccepted,
   }) : super(key: key);
 
-  /// Local storage key for agreement acceptance (per user)
-  static String _getAgreementKey(String uid) => 'agreements_accepted_$uid';
+  /// Local cache key for agreement acceptance (per user)
+  static String _getCacheKey(String uid) => 'agreements_accepted_$uid';
 
-  /// Check if user has accepted agreements (from local storage)
+  /// Check if user has accepted agreements.
+  /// Checks local cache first, then Firestore as the source of truth.
   static Future<bool> hasAcceptedAgreements(String uid) async {
     try {
+      // Check local cache first to avoid unnecessary Firestore reads
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getBool(_getAgreementKey(uid)) ?? false;
+      if (prefs.getBool(_getCacheKey(uid)) == true) return true;
+
+      // Check Firestore as the source of truth
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (doc.exists && doc.data()?['agreementsAccepted'] == true) {
+        // Update local cache
+        await prefs.setBool(_getCacheKey(uid), true);
+        return true;
+      }
+
+      return false;
     } catch (e) {
       if (kDebugMode) debugPrint('Error checking agreement status: $e');
       return false;
-    }
-  }
-
-  /// Clear agreement acceptance (call on logout)
-  static Future<void> clearAgreementStatus(String uid) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_getAgreementKey(uid));
-    } catch (e) {
-      if (kDebugMode) debugPrint('Error clearing agreement status: $e');
     }
   }
 
@@ -96,26 +98,15 @@ class _AgreementModalState extends State<AgreementModal> {
         return;
       }
 
-      // CRITICAL: Save to SharedPreferences FIRST (this always works)
-      // This ensures the modal won't appear again even if Firestore fails
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(AgreementModal._getAgreementKey(user.uid), true);
+      // Save to Firestore (source of truth)
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'agreementsAccepted': true,
+        'agreementAcceptedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
-      // Try to update Firestore as well (may fail due to security rules)
-      // This is secondary - the local storage is the primary source
-      try {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'agreementsAccepted': true,
-          'agreementAcceptedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-      } catch (e) {
-        // Firestore write failed (likely due to security rules requiring profile fields)
-        // This is OK - local storage has the acceptance recorded
-        // It will sync to Firestore when user completes their profile
-        if (kDebugMode) {
-          debugPrint('Firestore agreement write failed (expected for incomplete profiles): $e');
-        }
-      }
+      // Cache locally to avoid unnecessary Firestore reads
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(AgreementModal._getCacheKey(user.uid), true);
 
       widget.onAccepted();
     } catch (e) {

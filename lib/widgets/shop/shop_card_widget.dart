@@ -342,11 +342,10 @@ class _OptimizedCoverImage extends StatelessWidget {
       fadeInDuration: Duration.zero,
       fadeOutDuration: Duration.zero,
       placeholderFadeInDuration: Duration.zero,
-      // Cap decoded bitmap at ~360px wide (covers ~120dp cover at 3x).
-      // Only constrain width — setting both width+height forces a fixed
-      // aspect ratio that mismatches non-3:2 source images, causing brief
-      // matrix-glitch artifacts when BoxFit.cover re-scales at render time.
-      memCacheWidth: 360,
+      // 720px covers a full-width card on most phones (360dp × 2x/3x).
+      // Must be >= rendered pixel width or BoxFit.cover upscales the
+      // decoded bitmap, producing visible interpolation artifacts.
+      memCacheWidth: 720,
       placeholder: (context, url) => const _ShimmerCoverPlaceholder(),
       errorWidget: (context, url, error) => const _ImageErrorPlaceholder(),
       filterQuality: FilterQuality.medium,

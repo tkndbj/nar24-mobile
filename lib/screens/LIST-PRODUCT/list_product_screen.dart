@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
@@ -15,8 +14,8 @@ import '../../widgets/listproduct/delivery_options_accordion.dart';
 import '../../widgets/listproduct/media_picker_widget.dart';
 import '../../widgets/listproduct/product_info_form.dart';
 import '../../models/list_product_flow_model.dart';
-import '../../utils/image_compression_utils.dart';
 import '../../utils/attribute_route_mapper.dart';
+import '../../utils/image_compression_utils.dart';
 
 /// Custom formatter for price input that:
 /// - Allows digits, dot, and comma
@@ -41,7 +40,6 @@ class _PriceInputFormatter extends TextInputFormatter {
     // Ensure only one dot
     int dotCount = '.'.allMatches(text).length;
     if (dotCount > 1) {
-      // Keep only the first dot
       int firstDotIndex = text.indexOf('.');
       text = text.substring(0, firstDotIndex + 1) +
           text.substring(firstDotIndex + 1).replaceAll('.', '');
@@ -94,12 +92,16 @@ class _ListProductScreenState extends State<ListProductScreen> {
   String? _shopId;
   final _formKey = GlobalKey<FormState>();
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
 
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _quantityController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
+
+  bool _isCompressing = false;
+int _compressingCurrent = 0;
+int _compressingTotal = 0;
 
   // Dynamic attributes map - all specific details go here
   final Map<String, dynamic> _attributes = {};
@@ -119,7 +121,7 @@ class _ListProductScreenState extends State<ListProductScreen> {
   List<String> _existingImageUrls = [];
 
   String? _selectedDeliveryOption;
-  bool _hasDefect = false;
+
 
   List<ProductListingFlow> _flows = [];
 
@@ -137,7 +139,7 @@ class _ListProductScreenState extends State<ListProductScreen> {
         .where('isActive', isEqualTo: true)
         .snapshots()
         .listen((snap) {
-      if (!mounted) return; // Add this safety check
+      if (!mounted) return;
       setState(() {
         _flows =
             snap.docs.map((doc) => ProductListingFlow.fromDoc(doc)).toList();
@@ -169,13 +171,11 @@ class _ListProductScreenState extends State<ListProductScreen> {
         continue;
       }
 
-      // Check all steps for matching conditions
       for (final step in flow.steps.values) {
         for (final nextStep in step.nextSteps) {
           final conditions = nextStep.conditions;
           if (conditions == null) continue;
 
-          // Check category match
           final categoryList = conditions['category'];
           final categoryMatch =
               categoryList != null && categoryList.contains(cat);
@@ -184,7 +184,6 @@ class _ListProductScreenState extends State<ListProductScreen> {
             continue;
           }
 
-          // Check subcategory match
           final subcategoryList = conditions['subcategory'];
           bool subcategoryMatch = true;
           if (subcategoryList != null && subcategoryList.isNotEmpty) {
@@ -194,7 +193,6 @@ class _ListProductScreenState extends State<ListProductScreen> {
             }
           }
 
-          // Check subsubcategory match
           final subSubcategoryList = conditions['subsubcategory'];
           bool subSubcategoryMatch = true;
           if (subSubcategoryList != null && subSubcategoryList.isNotEmpty) {
@@ -204,10 +202,7 @@ class _ListProductScreenState extends State<ListProductScreen> {
             }
           }
 
-          // Calculate specificity score
-          // Higher score = more specific flow
           int specificity = 0;
-
           if (categoryList.isNotEmpty) specificity += 1;
           if (subcategoryList != null && subcategoryList.isNotEmpty)
             specificity += 10;
@@ -215,7 +210,7 @@ class _ListProductScreenState extends State<ListProductScreen> {
             specificity += 100;
 
           matchingFlows.add(MapEntry(flow, specificity));
-          break; // Found a match for this flow, no need to check other steps
+          break;
         }
       }
     }
@@ -224,12 +219,9 @@ class _ListProductScreenState extends State<ListProductScreen> {
       return null;
     }
 
-    // Sort by specificity (highest first) and take the most specific
     matchingFlows.sort((a, b) => b.value.compareTo(a.value));
 
-    final selectedFlow = matchingFlows.first;
-
-    return selectedFlow.key;
+    return matchingFlows.first.key;
   }
 
   /// Follow `nextSteps[0]` pointers to build an ordered list of stepIds.
@@ -239,14 +231,11 @@ class _ListProductScreenState extends State<ListProductScreen> {
     final visited = <String>{};
 
     while (cur != null && !visited.contains(cur)) {
-      // Prevent infinite loops
       visited.add(cur);
       out.add(cur);
 
-      // Stop if we reach preview
       if (cur == 'preview') break;
 
-      // Check if step exists
       final currentStep = flow.steps[cur];
       if (currentStep == null) {
         break;
@@ -274,13 +263,11 @@ class _ListProductScreenState extends State<ListProductScreen> {
     final product = widget.existingProduct!;
 
     setState(() {
-      // Pre-populate form fields
       _titleController.text = product.productName;
       _priceController.text = product.price.toString();
       _quantityController.text = product.quantity.toString();
       _descriptionController.text = product.description;
 
-      // Pre-populate fixed selections
       _selectedCategory = product.category;
       _selectedSubcategory = product.subcategory;
       _selectedSubsubcategory = product.subsubcategory;
@@ -288,7 +275,6 @@ class _ListProductScreenState extends State<ListProductScreen> {
       _selectedCondition = product.condition;
       _selectedDeliveryOption = product.deliveryOption;
 
-      // Pre-populate existing images & colors
       _existingImageUrls = product.imageUrls;
       _selectedColorImages.clear();
       product.colorQuantities.forEach((color, qty) {
@@ -298,22 +284,17 @@ class _ListProductScreenState extends State<ListProductScreen> {
         };
       });
 
-      // ✅ FIX: Load attributes and handle gender properly
       _attributes.clear();
       final cleanedAttrs = _cleanAttributes(product.attributes);
       _attributes.addAll(cleanedAttrs);
 
-      // ✅ FIX: Check root-level gender first (from Web), then fallback to attributes (from Flutter)
       if (product.gender != null && product.gender!.isNotEmpty) {
-        // Product has root-level gender (listed from Web)
         _attributes['gender'] = product.gender!;
       } else if (!_attributes.containsKey('gender') &&
           product.attributes.containsKey('gender')) {
-        // Fallback: check if gender is in attributes (listed from Flutter)
         _attributes['gender'] = product.attributes['gender'];
       }
 
-      // Load typed spec fields back into _attributes for form editing
       if (product.productType != null)
         _attributes['productType'] = product.productType;
       if (product.clothingSizes != null)
@@ -339,7 +320,6 @@ class _ListProductScreenState extends State<ListProductScreen> {
     });
   }
 
-// Helper method to clean attributes
   Map<String, dynamic> _cleanAttributes(Map<String, dynamic> attributes) {
     final Map<String, dynamic> cleaned = {};
 
@@ -368,7 +348,6 @@ class _ListProductScreenState extends State<ListProductScreen> {
     return cleaned;
   }
 
-// Helper to validate attribute values
   bool _isValidAttributeValue(dynamic value) {
     if (value == null) return false;
 
@@ -386,7 +365,7 @@ class _ListProductScreenState extends State<ListProductScreen> {
       return value.isNotEmpty;
     }
 
-    return true; // For numbers, booleans, etc.
+    return true;
   }
 
   Future<void> _initializeWithImageAndCategory() async {
@@ -398,46 +377,120 @@ class _ListProductScreenState extends State<ListProductScreen> {
     }
   }
 
-  // FIX 1: Properly dismiss modal and refresh UI after image picker
-  Future<void> _pickImages(ImageSource source) async {
-    // Dismiss keyboard before showing image picker
-    FocusScope.of(context).unfocus();
+ Future<void> _pickImages(ImageSource source) async {
+  FocusScope.of(context).unfocus();
+  await Future.delayed(const Duration(milliseconds: 100));
 
-    // Add a small delay to ensure keyboard is fully dismissed
-    await Future.delayed(const Duration(milliseconds: 100));
+  try {
+    List<XFile> picked = [];
 
-    try {
-      if (source == ImageSource.gallery) {
-        final pickedFiles = await ImagePicker().pickMultiImage();
-        if (pickedFiles.isNotEmpty) {
-          // Use mounted check before setState
-          if (mounted) {
-            setState(() {
-              _imageFiles.addAll(pickedFiles);
-            });
-          }
-        }
-      } else {
-        // source == ImageSource.camera
-        final pickedFile =
-            await ImagePicker().pickImage(source: ImageSource.camera);
-        if (pickedFile != null) {
-          if (mounted) {
-            setState(() {
-              _imageFiles.add(pickedFile);
-            });
-          }
-        }
-      }
-    } catch (e) {
-      print('Error picking images: $e');
+    if (source == ImageSource.gallery) {
+      picked = await ImagePicker().pickMultiImage();
+    } else {
+      final file = await ImagePicker().pickImage(source: ImageSource.camera);
+      if (file != null) picked = [file];
     }
 
-    // Force rebuild to remove any UI artifacts
+    if (picked.isEmpty) return;
+
+    // ── Max image count check ──────────────────────────────────────
+    const maxImages = 10;
+    final currentCount = _imageFiles.length + _existingImageUrls.length;
+    final remaining = maxImages - currentCount;
+
+    if (remaining <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Maximum $maxImages photos allowed')),
+        );
+      }
+      return;
+    }
+
+    if (picked.length > remaining) {
+      picked = picked.take(remaining).toList();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Only $remaining more photo(s) can be added. '
+              'Selecting first $remaining.',
+            ),
+          ),
+        );
+      }
+    }
+
+    // ── Per-file size check (before compression) ───────────────────
+    const maxFileSizeMB = 20;
+    final oversized = <String>[];
+    final validPicked = <XFile>[];
+
+    for (final file in picked) {
+      final bytes = await File(file.path).length();
+      final mb = bytes / (1024 * 1024);
+      if (mb > maxFileSizeMB) {
+        oversized.add(file.name);
+      } else {
+        validPicked.add(file);
+      }
+    }
+
+    if (oversized.isNotEmpty && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${oversized.length} file(s) exceed ${maxFileSizeMB}MB and were skipped: '
+            '${oversized.join(', ')}',
+          ),
+        ),
+      );
+    }
+
+    if (validPicked.isEmpty) return;
+
+    // ── Compression (unchanged from before) ───────────────────────
     if (mounted) {
-      setState(() {});
+      setState(() {
+        _isCompressing = true;
+        _compressingCurrent = 0;
+        _compressingTotal = validPicked.length;
+      });
+    }
+
+    final compressedFiles = <XFile>[];
+    const int compressionThresholdBytes = 300 * 1024; 
+
+for (int i = 0; i < validPicked.length; i++) {
+  if (mounted) setState(() => _compressingCurrent = i + 1);
+
+  final originalFile = File(validPicked[i].path);
+  final fileSize = await originalFile.length();
+
+  if (fileSize <= compressionThresholdBytes) {
+    // Already small enough — skip compression, use as-is
+    compressedFiles.add(validPicked[i]);
+  } else {
+    final compressed = await ImageCompressionUtils.ecommerceCompress(originalFile);
+    // If compression produces a larger file, fall back to original
+    if (compressed != null && await compressed.length() < fileSize) {
+      compressedFiles.add(XFile(compressed.path));
+    } else {
+      compressedFiles.add(validPicked[i]);
     }
   }
+}
+    if (mounted) {
+      setState(() {
+        _imageFiles.addAll(compressedFiles);
+        _isCompressing = false;
+      });
+    }
+  } catch (e) {
+    print('Error picking/compressing images: $e');
+    if (mounted) setState(() => _isCompressing = false);
+  }
+}
 
   void _removeImage(int index) {
     setState(() {
@@ -445,48 +498,53 @@ class _ListProductScreenState extends State<ListProductScreen> {
     });
   }
 
-  // FIX 1: Properly dismiss modal and refresh UI after video picker
-  Future<void> _pickVideo(ImageSource source) async {
-    // Dismiss keyboard before showing video picker
-    FocusScope.of(context).unfocus();
+ Future<void> _pickVideo(ImageSource source) async {
+  FocusScope.of(context).unfocus();
+  await Future.delayed(const Duration(milliseconds: 100));
 
-    // Add a small delay to ensure keyboard is fully dismissed
-    await Future.delayed(const Duration(milliseconds: 100));
+  const maxVideoSizeMB = 80;
 
-    try {
-      if (source == ImageSource.gallery) {
-        final pickedFile =
-            await ImagePicker().pickVideo(source: ImageSource.gallery);
-        if (pickedFile != null) {
-          if (mounted) {
-            setState(() {
-              _videoFiles = [pickedFile];
-              _newVideoFile = pickedFile;
-            });
-          }
-        }
-      } else {
-        // source == ImageSource.camera
-        final pickedFile =
-            await ImagePicker().pickVideo(source: ImageSource.camera);
-        if (pickedFile != null) {
-          if (mounted) {
-            setState(() {
-              _videoFiles = [pickedFile];
-              _newVideoFile = pickedFile;
-            });
-          }
-        }
+  try {
+    XFile? pickedFile;
+
+    if (source == ImageSource.gallery) {
+      pickedFile = await ImagePicker().pickVideo(source: ImageSource.gallery);
+    } else {
+      pickedFile = await ImagePicker().pickVideo(source: ImageSource.camera);
+    }
+
+    if (pickedFile == null) return;
+
+    // ── Size check ─────────────────────────────────────────────────
+    final bytes = await File(pickedFile.path).length();
+    final mb = bytes / (1024 * 1024);
+
+    if (mb > maxVideoSizeMB) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Video exceeds ${maxVideoSizeMB}MB limit '
+              '(${mb.toStringAsFixed(1)}MB). Please choose a shorter clip.',
+            ),
+          ),
+        );
       }
-    } catch (e) {
-      print('Error picking video: $e');
+      return;
     }
 
-    // Force rebuild to remove any UI artifacts
     if (mounted) {
-      setState(() {});
+      setState(() {
+        _videoFiles = [pickedFile!];
+        _newVideoFile = pickedFile;
+      });
     }
+  } catch (e) {
+    print('Error picking video: $e');
   }
+
+  if (mounted) setState(() {});
+}
 
   void _removeVideo(int index) {
     setState(() {
@@ -495,11 +553,9 @@ class _ListProductScreenState extends State<ListProductScreen> {
     });
   }
 
-  // FIX 2: Properly dismiss keyboard before category picker
   Future<void> _showCategoryPicker() async {
     FocusManager.instance.primaryFocus?.unfocus();
 
-    // 1) pick category → category/sub/subsub
     final result = await context.push(
       '/list_category',
       extra: {
@@ -516,7 +572,6 @@ class _ListProductScreenState extends State<ListProductScreen> {
     final newSub = result['subcategory'] as String;
     final newSubSub = result['subsubcategory'] as String;
 
-    // 2) if anything changed, clear dependent fields
     final changed = newCat != _selectedCategory ||
         newSub != _selectedSubcategory ||
         newSubSub != _selectedSubsubcategory;
@@ -524,39 +579,32 @@ class _ListProductScreenState extends State<ListProductScreen> {
       setState(() {
         _selectedBrand = null;
         _selectedColorImages = {};
-        _attributes.clear(); // Clear all dynamic attributes
+        _attributes.clear();
       });
     }
 
-    // 3) update the basic fields
     setState(() {
       _selectedCategory = newCat;
       _selectedSubcategory = newSub;
       _selectedSubsubcategory = newSubSub;
     });
 
-    // FIX: Ensure keyboard is FULLY dismissed before starting flow
     FocusScope.of(context).unfocus();
     await Future.delayed(const Duration(milliseconds: 200));
 
-    // 4) find matching flow and execute it
     await _executeProductFlow(newCat, newSub, newSubSub);
   }
 
   Future<void> _executeProductFlow(
       String cat, String sub, String subsub) async {
-    // Find matching flow from Firestore
     final flow = _findMatchingFlow(cat, sub, subsub);
-    if (flow == null) return; // No matching flow found
+    if (flow == null) return;
 
-    // Get linearized steps
     final stepIds = _linearizeFlow(flow);
 
-    // Execute each step in sequence
     for (final stepId in stepIds) {
       final success = await _executeFlowStep(stepId, cat, sub, subsub);
       if (!success) {
-        // User cancelled or error occurred, stop the flow
         return;
       }
     }
@@ -570,14 +618,12 @@ class _ListProductScreenState extends State<ListProductScreen> {
         return true;
       }
 
-      // ALL other steps handled dynamically
       return await _executeDynamicStep(stepId, cat, sub, subsub);
     } catch (e) {
       return false;
     }
   }
 
-// FIX 2: Ensure keyboard is dismissed before each dynamic step
   Future<bool> _executeDynamicStep(
       String stepId, String cat, String sub, String subsub) async {
     final routePath = '/$stepId';
@@ -597,22 +643,17 @@ class _ListProductScreenState extends State<ListProductScreen> {
       if (!mounted) return false;
       if (result == null) return false;
 
-      // Process result based on what it contains
       setState(() {
         if (result is Map<String, dynamic>) {
-          // ✅ Check if empty map first (user wants to clear colors)
           if (result.isEmpty) {
-            // Check if this was meant for colors by checking the route
             if (stepId == 'list_color') {
               _selectedColorImages.clear();
             }
-            return; // Exit setState early
+            return;
           }
 
-          // Check if this is color data by examining the structure
           bool isColorData = false;
 
-          // Check if all values in the map are maps containing 'image' and 'quantity' keys
           if (result.isNotEmpty) {
             isColorData = result.values.every((value) =>
                 value is Map &&
@@ -621,8 +662,6 @@ class _ListProductScreenState extends State<ListProductScreen> {
           }
 
           if (isColorData) {
-            // This is color data from list_color screen
-
             _selectedColorImages.clear();
             result.forEach((key, value) {
               if (value is Map) {
@@ -630,13 +669,10 @@ class _ListProductScreenState extends State<ListProductScreen> {
               }
             });
           } else {
-            // This is regular attribute data
-            // Handle top-level fields
             if (result.containsKey('brand')) {
               _selectedBrand = result['brand'] as String?;
             }
 
-            // Everything else goes to attributes
             result.forEach((key, value) {
               if (key != 'brand' && value != null) {
                 _attributes[key] = value;
@@ -657,14 +693,12 @@ class _ListProductScreenState extends State<ListProductScreen> {
     }
   }
 
-  // Helper method to display dynamic attributes
   String _formatAttributesDisplay() {
     final l10n = AppLocalizations.of(context);
     return AttributeLocalizationUtils.formatAttributesDisplay(
         _attributes, l10n);
   }
 
-  /// Navigates to brand selection screen to edit brand
   Future<void> _editBrand() async {
     if (_selectedCategory == null ||
         _selectedSubcategory == null ||
@@ -694,7 +728,6 @@ class _ListProductScreenState extends State<ListProductScreen> {
         if (result.containsKey('brand')) {
           _selectedBrand = result['brand'] as String?;
         }
-        // Update other attributes if returned
         result.forEach((key, value) {
           if (key != 'brand' && value != null) {
             _attributes[key] = value;
@@ -707,7 +740,6 @@ class _ListProductScreenState extends State<ListProductScreen> {
   Future<void> _editColors() async {
     FocusManager.instance.primaryFocus?.unfocus();
 
-    // Prepare initial color data for the screen with both images and quantities
     final Map<String, Map<String, dynamic>>? initialColorData;
     if (_selectedColorImages.isNotEmpty) {
       initialColorData =
@@ -716,7 +748,6 @@ class _ListProductScreenState extends State<ListProductScreen> {
       initialColorData = null;
     }
 
-    // ✅ Pass existing color image URLs from the original product
     Map<String, List<String>>? existingColorUrls;
     if (isEditMode && widget.existingProduct != null) {
       existingColorUrls = widget.existingProduct!.colorImages;
@@ -730,19 +761,15 @@ class _ListProductScreenState extends State<ListProductScreen> {
       },
     );
     if (!mounted) return;
-    // ✅ FIX: Handle empty map result (user wants to clear colors)
-    if (result == null) return; // User cancelled, no changes
+    if (result == null) return;
 
     setState(() {
-      // ✅ FIX: Check for Map (any type), not just Map<String, dynamic>
       if (result is Map) {
-        // ✅ If empty map, clear all colors
         if (result.isEmpty) {
           _selectedColorImages.clear();
           return;
         }
 
-        // Check if this is color data
         bool isColorData = result.values.every((value) =>
             value is Map &&
             value.containsKey('image') &&
@@ -760,7 +787,6 @@ class _ListProductScreenState extends State<ListProductScreen> {
     });
   }
 
-  /// Navigates to specific attribute screen to edit that attribute
   Future<void> _editAttribute(String attributeKey) async {
     if (_selectedCategory == null ||
         _selectedSubcategory == null ||
@@ -769,7 +795,7 @@ class _ListProductScreenState extends State<ListProductScreen> {
     }
 
     final route = AttributeRouteMapper.getRouteForAttribute(attributeKey);
-    if (route == null) return; // No screen available for this attribute
+    if (route == null) return;
 
     FocusManager.instance.primaryFocus?.unfocus();
 
@@ -787,7 +813,6 @@ class _ListProductScreenState extends State<ListProductScreen> {
 
     setState(() {
       if (result is Map<String, dynamic>) {
-        // Update all returned attributes
         result.forEach((key, value) {
           if (key != 'brand' && value != null) {
             _attributes[key] = value;
@@ -858,28 +883,6 @@ class _ListProductScreenState extends State<ListProductScreen> {
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 20),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  height: 8,
-                  width: double.infinity,
-                  color: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    duration: const Duration(seconds: 2),
-                    builder: (context, value, child) {
-                      return LinearProgressIndicator(
-                        value: value,
-                        backgroundColor: Colors.transparent,
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                          Color(0xFF00A86B),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -887,6 +890,11 @@ class _ListProductScreenState extends State<ListProductScreen> {
     );
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // _navigateToPreview — NO uploads here. Builds the Product with existing
+  // URLs only and passes raw files to the preview screen, which will upload
+  // everything when the user taps "Confirm".
+  // ─────────────────────────────────────────────────────────────────────────
   Future<void> _navigateToPreview() async {
     final l10n = AppLocalizations.of(context);
     if (!_formKey.currentState!.validate()) return;
@@ -903,13 +911,18 @@ class _ListProductScreenState extends State<ListProductScreen> {
       return;
     }
 
+    if (_selectedCondition == null) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(l10n.selectCondition)),
+  );
+  return;
+}
+
     for (var color in _selectedColorImages.keys) {
-      // In edit mode, check if there are existing color images
       final hasExistingColorImage = isEditMode &&
           widget.existingProduct!.colorImages.containsKey(color) &&
           widget.existingProduct!.colorImages[color]!.isNotEmpty;
 
-      // Check if there's a new image OR existing image
       if (_selectedColorImages[color]!['image'] == null &&
           !hasExistingColorImage) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -932,10 +945,10 @@ class _ListProductScreenState extends State<ListProductScreen> {
         return;
       }
 
-      // 1) Try to load the shop's own seller_info if we're in seller-panel mode
+      // Fetch seller info (unchanged)
       Map<String, dynamic>? sellerInfo;
       if (_shopId != null) {
-        final shopInfoSnap = await _firestore
+        final shopInfoSnap = await FirebaseFirestore.instance
             .collection('shops')
             .doc(_shopId)
             .collection('seller_info')
@@ -947,10 +960,11 @@ class _ListProductScreenState extends State<ListProductScreen> {
         }
       }
 
-      // 2) Fallback to the user's sellerInfo if no shop info found
       if (sellerInfo == null) {
-        final userDoc =
-            await _firestore.collection('users').doc(user.uid).get();
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
         sellerInfo =
             (userDoc.data() ?? {})['sellerInfo'] as Map<String, dynamic>?;
       }
@@ -958,90 +972,51 @@ class _ListProductScreenState extends State<ListProductScreen> {
       String? genderValue;
       final cleanedAttributes = Map<String, dynamic>.from(_attributes);
 
-      // Extract gender if it exists
       if (cleanedAttributes.containsKey('gender')) {
         genderValue = cleanedAttributes['gender'] as String?;
         cleanedAttributes.remove('gender');
       }
 
-      List<String> defaultImageUrls = [];
+      // ── Existing image URLs only — new images uploaded on confirm ──
+      final List<String> existingImageUrls =
+          isEditMode ? List<String>.from(_existingImageUrls) : [];
 
-      // Keep existing images in edit mode
-      if (isEditMode) {
-        defaultImageUrls.addAll(_existingImageUrls);
-      }
-
-      // Upload any new images
-      if (_imageFiles.isNotEmpty) {
-        final newImageUrls = await _uploadFiles(
-          _imageFiles.map((x) => File(x.path)).toList(),
-          'default_images',
-        );
-        defaultImageUrls.addAll(newImageUrls);
-      }
-
-      // ✅ FIXED: Handle color images properly
-      final colorImagesUrls = <String, List<String>>{};
+      // ── Color data: quantities for all colors, existing URLs only ──
       final colorQuantities = <String, int>{};
+      final existingColorImageUrls = <String, List<String>>{};
 
       for (var entry in _selectedColorImages.entries) {
         final color = entry.key;
-        final imageData = entry.value['image']; // ✅ Don't cast to XFile yet!
+        final imageData = entry.value['image'];
         final quantity = entry.value['quantity'] as int?;
-
-        // ✅ Start fresh for this color (don't carry over old data)
-        List<String>? urlsForThisColor;
-
-        // ✅ Handle the image based on its actual type
-        if (imageData != null) {
-          if (imageData is XFile) {
-            // ✅ New image uploaded - upload it
-            final urls = await _uploadFiles(
-              [File(imageData.path)],
-              'color_images/$color',
-            );
-            urlsForThisColor = urls;
-          } else if (imageData is String) {
-            // ✅ Existing image URL kept - use it directly
-            urlsForThisColor = [imageData];
-          }
-        } else if (isEditMode &&
-            widget.existingProduct!.colorImages.containsKey(color)) {
-          // ✅ No new image, but has existing image - keep existing
-          urlsForThisColor = widget.existingProduct!.colorImages[color]!;
-        }
-
-        // ✅ Only add if we have valid URLs
-        if (urlsForThisColor != null && urlsForThisColor.isNotEmpty) {
-          colorImagesUrls[color] = urlsForThisColor;
-        }
 
         if (quantity != null) {
           colorQuantities[color] = quantity;
         }
-      }
 
-      // Handle video - keep existing or upload new
-      String? videoUrl;
-      if (isEditMode && widget.existingProduct!.videoUrl != null) {
-        videoUrl = widget.existingProduct!.videoUrl;
-      }
-
-      // Upload new video if provided (this will override existing)
-      if (_videoFiles.isNotEmpty) {
-        final tempVideoUrls = await _uploadFiles(
-          _videoFiles.map((x) => File(x.path)).toList(),
-          'preview_videos',
-        );
-        if (tempVideoUrls.isNotEmpty) {
-          videoUrl = tempVideoUrls.first;
+        // Carry over existing URLs; new XFile images uploaded on confirm
+        if (imageData is String) {
+          existingColorImageUrls[color] = [imageData];
+        } else if (isEditMode &&
+            widget.existingProduct!.colorImages.containsKey(color)) {
+          existingColorImageUrls[color] =
+              widget.existingProduct!.colorImages[color]!;
         }
       }
 
-      // Derive sellerName (shop name overrides personal name)
+      // ── Existing video URL only — new video uploaded on confirm ──
+      String? existingVideoUrl;
+      if (isEditMode && widget.existingProduct?.videoUrl != null) {
+        existingVideoUrl = widget.existingProduct!.videoUrl;
+      }
+
+      // Derive seller name
       String sellerName = user.displayName ?? 'Unknown User';
       if (_shopId != null) {
-        final shopDoc = await _firestore.collection('shops').doc(_shopId).get();
+        final shopDoc = await FirebaseFirestore.instance
+            .collection('shops')
+            .doc(_shopId)
+            .get();
         if (shopDoc.exists) {
           sellerName = shopDoc.data()?['name'] ?? sellerName;
         }
@@ -1065,7 +1040,7 @@ class _ListProductScreenState extends State<ListProductScreen> {
         ..remove('curtainMaxWidth')
         ..remove('curtainMaxHeight');
 
-      // Build the Product model
+      // Build the Product with existing URLs — new uploads happen on confirm
       final product = Product(
         id: isEditMode ? widget.existingProduct!.id : '',
         ownerId: user.uid,
@@ -1074,8 +1049,7 @@ class _ListProductScreenState extends State<ListProductScreen> {
         price: double.parse(_priceController.text.trim()),
         condition: _selectedCondition ?? '',
         brandModel: _selectedBrand ?? '',
-        imageUrls:
-            defaultImageUrls, // ✅ FIXED: Use combined URLs, not just existing
+        imageUrls: existingImageUrls,           // existing only
         averageRating: isEditMode ? widget.existingProduct!.averageRating : 0.0,
         reviewCount: isEditMode ? widget.existingProduct!.reviewCount : 0,
         gender: genderValue,
@@ -1093,9 +1067,9 @@ class _ListProductScreenState extends State<ListProductScreen> {
         subsubcategory: _selectedSubsubcategory ?? '',
         quantity: int.tryParse(_quantityController.text.trim()) ?? 1,
         colorQuantities: colorQuantities,
-        colorImages: colorImagesUrls,
+        colorImages: existingColorImageUrls,    // existing only
         deliveryOption: _selectedDeliveryOption ?? '',
-        videoUrl: videoUrl,
+        videoUrl: existingVideoUrl,             // existing only
         promotionScore: isEditMode ? widget.existingProduct!.promotionScore : 0,
         paused: isEditMode ? widget.existingProduct!.paused : false,
         isFeatured: isEditMode ? widget.existingProduct!.isFeatured : false,
@@ -1120,16 +1094,16 @@ class _ListProductScreenState extends State<ListProductScreen> {
             (cleanedAttributes['curtainMaxWidth'] as num?)?.toDouble(),
         curtainMaxHeight:
             (cleanedAttributes['curtainMaxHeight'] as num?)?.toDouble(),
-        attributes:
-            _cleanAttributes(specCleanedAttributes), // ← was cleanedAttributes
+        attributes: _cleanAttributes(specCleanedAttributes),
       );
 
       if (mounted) {
         Navigator.of(context).pop();
         context.push('/list_product_preview', extra: {
           'product': product,
-          'imageFiles': _imageFiles,
-          'videoFile': _videoFiles.isNotEmpty ? _videoFiles.first : null,
+          'imageFiles': _imageFiles,                          // new images (not yet uploaded)
+          'videoFile': _videoFiles.isNotEmpty ? _videoFiles.first : null, // new video
+          'selectedColorImages': _selectedColorImages,        // raw color map with XFile images
           'phone': sellerInfo?['phone'] ?? '',
           'region': sellerInfo?['region'] ?? '',
           'address': sellerInfo?['address'] ?? '',
@@ -1148,68 +1122,6 @@ class _ListProductScreenState extends State<ListProductScreen> {
           SnackBar(content: Text(l10n.errorListingProduct)),
         );
       }
-    }
-  }
-
-  Future<List<String>> _uploadFiles(List<File> files, String folder) async {
-    final user = _auth.currentUser;
-    if (user == null) return [];
-    final userId = user.uid;
-
-    try {
-      final List<Future<String>> futures = [];
-
-      for (final file in files) {
-        futures.add(_compressAndUpload(file, userId, folder));
-      }
-
-      return await Future.wait(futures);
-    } catch (e) {
-      if (e.toString().contains('too large')) {
-        // Show user-friendly error with localization
-        final l10n = AppLocalizations.of(context);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(l10n.imageTooLarge), // or whatever key you add
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-      rethrow;
-    }
-  }
-
-  Future<String> _compressAndUpload(
-      File file, String userId, String folder) async {
-    try {
-      // Check file size first
-      final fileSize = await file.length();
-      if (fileSize > 20 * 1024 * 1024) {
-        // 20MB limit
-        throw Exception('IMAGE_TOO_LARGE');
-      }
-
-      // Use e-commerce optimized compression
-      final compressedFile =
-          await ImageCompressionUtils.ecommerceCompress(file);
-
-      // Use compressed file or original if compression failed
-      final fileToUpload = compressedFile ?? file;
-
-      final fileName =
-          '${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
-      final ref =
-          FirebaseStorage.instance.ref('products/$userId/$folder/$fileName');
-
-      final taskSnap = await ref.putFile(fileToUpload);
-      return await taskSnap.ref.getDownloadURL();
-    } catch (e) {
-      if (e.toString().contains('IMAGE_TOO_LARGE')) {
-        throw Exception('Image is too large. Maximum size is 20MB.');
-      }
-      rethrow; // Don't fallback for other errors
     }
   }
 
@@ -1267,34 +1179,91 @@ class _ListProductScreenState extends State<ListProductScreen> {
                             ),
                           ),
                         ),
-                        Container(
-                          width: double.infinity,
-                          color: isDarkMode
-                              ? const Color.fromARGB(255, 33, 31, 49)
-                              : Colors.white,
-                          padding: const EdgeInsets.all(16.0),
-                          child: MediaPickerWidget(
-                            videoFile: _videoFiles.isNotEmpty
-                                ? _videoFiles.first
-                                : null,
-                            imageFiles: _imageFiles,
-                            existingImageUrls: _existingImageUrls,
-                            onPickVideo: _pickVideo,
-                            onRemoveVideo: () {
-                              if (_videoFiles.isNotEmpty) _removeVideo(0);
-                            },
-                            onPickImages: _pickImages,
-                            onRemoveImage: (index) {
-                              if (_imageFiles.isNotEmpty) _removeImage(index);
-                            },
-                            onRemoveExistingImage: (url) {
-                              // Remove existing image from the list
-                              setState(() {
-                                _existingImageUrls.remove(url);
-                              });
-                            },
-                          ),
-                        ),
+                        Padding(
+  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+  child: Text(
+    '${_imageFiles.length + _existingImageUrls.length}/10',
+    style: TextStyle(
+      fontSize: 12,
+      color: (_imageFiles.length + _existingImageUrls.length) >= 10
+          ? Colors.red
+          : Colors.grey,
+    ),
+  ),
+),
+                         Stack(
+  children: [
+    Container(
+      width: double.infinity,
+      color: isDarkMode
+          ? const Color.fromARGB(255, 33, 31, 49)
+          : Colors.white,
+      padding: const EdgeInsets.all(16.0),
+      child: MediaPickerWidget(
+        videoFile: _videoFiles.isNotEmpty
+            ? _videoFiles.first
+            : null,
+        imageFiles: _imageFiles,
+        existingImageUrls: _existingImageUrls,
+        onPickVideo: _pickVideo,
+        onRemoveVideo: () {
+          if (_videoFiles.isNotEmpty) _removeVideo(0);
+        },
+        onPickImages: _pickImages,
+        onRemoveImage: (index) {
+          if (_imageFiles.isNotEmpty) _removeImage(index);
+        },
+        onRemoveExistingImage: (url) {
+          setState(() {
+            _existingImageUrls.remove(url);
+          });
+        },
+      ),
+    ),
+    if (_isCompressing)
+      Positioned.fill(
+        child: Container(
+          color: (isDarkMode
+                  ? const Color.fromARGB(255, 33, 31, 49)
+                  : Colors.white)
+              .withOpacity(0.92),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(
+                color: Color(0xFF00A86B),
+                strokeWidth: 2.5,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Compressing $_compressingCurrent of $_compressingTotal...',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 6),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: _compressingTotal > 0
+                      ? _compressingCurrent / _compressingTotal
+                      : 0,
+                  backgroundColor: isDarkMode
+                      ? Colors.white12
+                      : Colors.grey.shade200,
+                  color: const Color(0xFF00A86B),
+                  minHeight: 6,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+  ],
+),
                         const SizedBox(height: 16),
                         Padding(
                           padding: const EdgeInsets.symmetric(
@@ -1327,8 +1296,7 @@ class _ListProductScreenState extends State<ListProductScreen> {
                         // Category Selection
                         GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onTap:
-                              _showCategoryPicker, // SOLUTION 1: Direct call, no conditional logic
+                          onTap: _showCategoryPicker,
                           child: Container(
                             width: double.infinity,
                             padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1471,14 +1439,12 @@ class _ListProductScreenState extends State<ListProductScreen> {
                             final attributeKey = entry.key;
                             final attributeValue = entry.value;
 
-                            // Get localized title and value
                             final title = AttributeLocalizationUtils
                                 .getLocalizedAttributeTitle(attributeKey, l10n);
                             final displayValue = AttributeLocalizationUtils
                                 .getLocalizedAttributeValue(
                                     attributeKey, attributeValue, l10n);
 
-                            // Check if this attribute has an edit screen
                             final hasEditScreen =
                                 AttributeRouteMapper.hasEditScreen(
                                     attributeKey);
@@ -1720,12 +1686,12 @@ class _ListProductScreenState extends State<ListProductScreen> {
                         const SizedBox(height: 16),
                       ],
                     ),
-                  ),
+                        ),
                 ),
               ),
             ),
           ),
-        ],
+      ],
       ),
     );
   }

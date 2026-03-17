@@ -140,7 +140,7 @@ class _FoodCartContentState extends State<_FoodCartContent> {
               if (cart.currentRestaurant != null)
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
+                    padding: const EdgeInsets.only(top: 10),
                     child: _RestaurantHeaderCard(
                       restaurant: cart.currentRestaurant!,
                       prepTime: prepTime,
@@ -153,11 +153,11 @@ class _FoodCartContentState extends State<_FoodCartContent> {
 
               // ── Cart items ────────────────────────────────────────────
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                padding: const EdgeInsets.only(top: 10),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (_, i) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.only(bottom: 10),
                       child: _FoodCartItemCard(
                         item: cart.items[i],
                         isDark: isDark,
@@ -176,7 +176,7 @@ class _FoodCartContentState extends State<_FoodCartContent> {
               // ── Order summary ─────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                  padding: const EdgeInsets.only(top: 10),
                   child: _OrderSummary(
                     cart: cart,
                     isDark: isDark,
@@ -346,18 +346,25 @@ class _RestaurantHeaderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context)!;
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF211F31) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB),
-        ),
+        color: isDark
+            ? const Color.fromARGB(255, 40, 38, 59)
+            : Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            spreadRadius: 0,
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Column(
         children: [
           // ── Restaurant info row ─────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
                 // Profile image / ChefHat icon
@@ -432,20 +439,18 @@ class _RestaurantHeaderCard extends StatelessWidget {
           // ── Prep time indicator ─────────────────────────────────────
           if (prepTime > 0)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 color: isDark
-                    ? const Color(0xFF211F31)
+                    ? const Color.fromARGB(255, 39, 36, 57)
                     : Colors.grey[50]!.withOpacity(0.6),
                 border: Border(
                   top: BorderSide(
                     color: isDark
-                        ? const Color(0xFF2D2B3F)
+                        ? Colors.white.withOpacity(0.06)
                         : const Color(0xFFE5E7EB),
                   ),
                 ),
-                borderRadius:
-                    const BorderRadius.vertical(bottom: Radius.circular(16)),
               ),
               child: Row(
                 children: [
@@ -526,15 +531,22 @@ class _FoodCartItemCard extends StatelessWidget {
       opacity: (item.isOptimistic) ? 0.7 : 1.0,
       duration: const Duration(milliseconds: 200),
       child: Container(
+        width: double.infinity,
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF211F31) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB),
-          ),
+          color: isDark
+              ? const Color.fromARGB(255, 40, 38, 59)
+              : Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              spreadRadius: 0,
+              blurRadius: 2,
+              offset: const Offset(0, 1),
+            ),
+          ],
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Column(
             children: [
               Row(
@@ -992,15 +1004,22 @@ class _OrderSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context)!;
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF211F31) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB),
-        ),
+        color: isDark
+            ? const Color.fromARGB(255, 40, 38, 59)
+            : Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            spreadRadius: 0,
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1691,37 +1710,49 @@ class _FoodCartSkeleton extends StatelessWidget {
         isDark ? const Color(0xFF2D2B3F) : const Color(0xFFD1D5DB);
 
     return ListView(
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.zero,
       children: [
         // Back button skeleton
-        Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-                color: bg, borderRadius: BorderRadius.circular(12))),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                  color: bg, borderRadius: BorderRadius.circular(12))),
+        ),
         const SizedBox(height: 20),
 
         // Title row
-        Row(children: [
-          Container(height: 22, width: 100, color: bg),
-          const SizedBox(width: 10),
-          Container(
-              height: 18,
-              width: 56,
-              decoration: BoxDecoration(
-                  color: bg, borderRadius: BorderRadius.circular(20))),
-          const Spacer(),
-          Container(height: 18, width: 56, color: bg),
-        ]),
-        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(children: [
+            Container(height: 22, width: 100, color: bg),
+            const SizedBox(width: 10),
+            Container(
+                height: 18,
+                width: 56,
+                decoration: BoxDecoration(
+                    color: bg, borderRadius: BorderRadius.circular(20))),
+            const Spacer(),
+            Container(height: 18, width: 56, color: bg),
+          ]),
+        ),
+        const SizedBox(height: 10),
 
         // Restaurant card
         Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
               color: card,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: cardBorder)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  spreadRadius: 0,
+                  blurRadius: 2,
+                  offset: const Offset(0, 1),
+                ),
+              ]),
           child: Row(children: [
             Container(
                 width: 44,
@@ -1746,13 +1777,19 @@ class _FoodCartSkeleton extends StatelessWidget {
         ...List.generate(
             2,
             (_) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.only(bottom: 10),
                   child: Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
                         color: card,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: cardBorder)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            spreadRadius: 0,
+                            blurRadius: 2,
+                            offset: const Offset(0, 1),
+                          ),
+                        ]),
                     child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -1808,11 +1845,17 @@ class _FoodCartSkeleton extends StatelessWidget {
 
         // Summary skeleton
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           decoration: BoxDecoration(
               color: card,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: cardBorder)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  spreadRadius: 0,
+                  blurRadius: 2,
+                  offset: const Offset(0, 1),
+                ),
+              ]),
           child: Column(children: [
             Container(height: 14, width: 100, color: bg),
             const SizedBox(height: 16),

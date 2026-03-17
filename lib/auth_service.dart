@@ -1130,25 +1130,10 @@ class AuthService {
       // Step 2: Clear local data and caches (fast, local-only).
       final prefs = await SharedPreferences.getInstance();
 
-      // Preserve agreement acceptance keys (they're user-specific and should persist)
-      final agreementKeys = prefs
-          .getKeys()
-          .where((k) => k.startsWith('agreements_accepted_'))
-          .toList();
-      final preservedAgreements = <String, bool>{};
-      for (final key in agreementKeys) {
-        preservedAgreements[key] = prefs.getBool(key) ?? false;
-      }
-
       await Future.wait([
         prefs.clear(),
         PersonalizedFeedService.instance.clearCache(),
       ], eagerError: false);
-
-      // Restore agreement acceptance keys
-      for (final entry in preservedAgreements.entries) {
-        await prefs.setBool(entry.key, entry.value);
-      }
 
       // Sync cache clears (fast, no await needed)
       PreferenceProduct.clearCache();

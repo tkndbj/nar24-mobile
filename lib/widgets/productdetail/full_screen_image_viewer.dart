@@ -23,18 +23,39 @@ class FullScreenImageViewer extends StatefulWidget {
 class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
   late PageController _pageController;
   late int _currentIndex;
+  final List<TransformationController> _transformControllers = [];
+  bool _isZoomed = false;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: widget.initialIndex);
+    for (int i = 0; i < widget.imageUrls.length; i++) {
+      _transformControllers.add(TransformationController());
+    }
   }
 
   @override
   void dispose() {
     _pageController.dispose();
+    for (final c in _transformControllers) {
+      c.dispose();
+    }
     super.dispose();
+  }
+
+  void _onInteractionUpdate(int pageIndex) {
+    final scale = _transformControllers[pageIndex].value.getMaxScaleOnAxis();
+    final zoomed = scale > 1.01;
+    if (zoomed != _isZoomed) {
+      setState(() => _isZoomed = zoomed);
+    }
+  }
+
+  void _resetZoom(int pageIndex) {
+    _transformControllers[pageIndex].value = Matrix4.identity();
+    setState(() => _isZoomed = false);
   }
 
   /// Build a single thumbnail at position [thumbIndex].
@@ -121,26 +142,38 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
           Expanded(
             child: PageView.builder(
               controller: _pageController,
+              physics: _isZoomed
+                  ? const NeverScrollableScrollPhysics()
+                  : const PageScrollPhysics(),
               itemCount: widget.imageUrls.length,
               onPageChanged: (newIndex) {
+                // Reset zoom on previous image when swiping
+                _resetZoom(_currentIndex);
                 setState(() {
                   _currentIndex = newIndex;
                 });
               },
               itemBuilder: (context, pageIndex) {
                 final imageUrl = widget.imageUrls[pageIndex];
-                return CachedNetworkImage(
-                  imageUrl: imageUrl,
-                  fit: BoxFit.contain,
-                  memCacheWidth: fullScreenCacheWidth,
-                  memCacheHeight: fullScreenCacheHeight,
-                  maxWidthDiskCache: fullScreenCacheWidth,
-                  maxHeightDiskCache: fullScreenCacheHeight,
-                  placeholder: (_, __) =>
-                      const Center(child: CircularProgressIndicator()),
-                  errorWidget: (_, __, ___) => const Center(
-                      child: Icon(Icons.broken_image,
-                          color: Colors.white54, size: 60)),
+                return InteractiveViewer(
+                  transformationController: _transformControllers[pageIndex],
+                  minScale: 1.0,
+                  maxScale: 5.0,
+                  onInteractionUpdate: (_) => _onInteractionUpdate(pageIndex),
+                  onInteractionEnd: (_) => _onInteractionUpdate(pageIndex),
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.contain,
+                    memCacheWidth: fullScreenCacheWidth,
+                    memCacheHeight: fullScreenCacheHeight,
+                    maxWidthDiskCache: fullScreenCacheWidth,
+                    maxHeightDiskCache: fullScreenCacheHeight,
+                    placeholder: (_, __) =>
+                        const Center(child: CircularProgressIndicator()),
+                    errorWidget: (_, __, ___) => const Center(
+                        child: Icon(Icons.broken_image,
+                            color: Colors.white54, size: 60)),
+                  ),
                 );
               },
             ),

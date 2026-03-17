@@ -152,45 +152,42 @@ class _RestaurantListFoodScreenState extends State<RestaurantListFoodScreen> {
 
   // ── Image picker ──────────────────────────────────────────────────────────
 
-  Future<void> _pickImage() async {
-    FocusScope.of(context).unfocus();
-    final picker = ImagePicker();
-    final picked =
-        await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
-    if (picked == null || !mounted) return;
+Future<void> _pickImage() async {
+  FocusScope.of(context).unfocus();
+  final picker = ImagePicker();
+  final picked =
+      await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+  if (picked == null || !mounted) return;
 
-    final file = File(picked.path);
-    final fileSize = await file.length();
+  final file = File(picked.path);
+  final fileSize = await file.length();
 
-    const maxBytes = 10 * 1024 * 1024; // 10 MB
-    if (fileSize > maxBytes) {
-      _showSnackBar(AppLocalizations.of(context).fileSizeError, isError: true);
-      return;
-    }
-
-    setState(() {
-      _errors.remove('image');
-      _isCompressing = true;
-    });
-
-    try {
-      final compressed = await ImageCompressionUtils.compressIfNeeded(
-        file,
-        maxKb: 500,
-      );
-      if (!mounted) return;
-      setState(() {
-        _imageFile = compressed;
-        _isCompressing = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _imageFile = file;
-        _isCompressing = false;
-      });
-    }
+  const maxBytes = 20 * 1024 * 1024; // 20 MB
+  if (fileSize > maxBytes) {
+    _showSnackBar(AppLocalizations.of(context).fileSizeError, isError: true);
+    return;
   }
+
+  setState(() {
+    _errors.remove('image');
+    _isCompressing = true;
+  });
+
+  try {
+    final compressed = await ImageCompressionUtils.compressProductImage(file);
+    if (!mounted) return;
+    setState(() {
+      _imageFile = compressed ?? file;
+      _isCompressing = false;
+    });
+  } catch (_) {
+    if (!mounted) return;
+    setState(() {
+      _imageFile = file;
+      _isCompressing = false;
+    });
+  }
+}
 
   // ── Validation ────────────────────────────────────────────────────────────
 

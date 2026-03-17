@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../widgets/language_selector.dart';
@@ -155,6 +156,14 @@ class _RegistrationScreenState extends State<RegistrationScreen>
         _nameController.text,
         _surnameController.text,
       );
+
+      // Save agreement acceptance to Firestore
+      if (user != null) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'agreementsAccepted': true,
+          'agreementAcceptedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
 
       context.go('/email-verification');
     } on FirebaseAuthException catch (e) {

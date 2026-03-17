@@ -62,7 +62,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
-  /// Check if social user (Google/Apple) needs to accept agreements
+  /// Check if user needs to accept agreements
   Future<void> _checkAndShowAgreementModal() async {
     if (_agreementModalShown) return;
 
@@ -70,7 +70,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final firebaseUser = FirebaseAuth.instance.currentUser;
       if (firebaseUser == null) return;
 
-      // Verify token is valid
       try {
         await firebaseUser.getIdToken();
       } catch (e) {
@@ -78,31 +77,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return;
       }
 
-      final userProvider = Provider.of<UserProvider>(context, listen: false);
-
-      // Only check for social users (Google/Apple) who bypass registration form
-      if (!userProvider.isSocialUser) return;
-
-      // Check local storage first
-      final hasAcceptedLocally = await AgreementModal.hasAcceptedAgreements(firebaseUser.uid);
-      if (hasAcceptedLocally) return;
-
-      // Wait for profile state to be ready (max 3 seconds)
-      int waitAttempts = 0;
-      const maxWaitAttempts = 30;
-      while (!userProvider.isProfileStateReady && waitAttempts < maxWaitAttempts) {
-        await Future.delayed(const Duration(milliseconds: 100));
-        waitAttempts++;
-        if (!mounted) return;
-      }
-
-      // Re-check auth
-      if (FirebaseAuth.instance.currentUser == null) return;
-
-      // Check Firestore as secondary source
-      final profileData = userProvider.profileData;
-      final hasAcceptedInFirestore = profileData?['agreementsAccepted'] == true;
-      if (hasAcceptedInFirestore) return;
+      final hasAccepted = await AgreementModal.hasAcceptedAgreements(firebaseUser.uid);
+      if (hasAccepted) return;
 
       _agreementModalShown = true;
 
@@ -117,6 +93,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await AgreementModal.show(context);
 
       if (mounted) {
+        final userProvider = Provider.of<UserProvider>(context, listen: false);
         await userProvider.refreshUser();
       }
     } catch (e) {

@@ -547,8 +547,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
         'birthDate': _selectedBirthDate,
         'languageCode': languageCode, // Required by Firestore rules
         'isNew': false, // mark profile complete
-        'agreementsAccepted': true,
-        'agreementAcceptedAt': FieldValue.serverTimestamp(),
       };
 
       // ✅ CRITICAL FIX: Use set with merge instead of update

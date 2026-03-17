@@ -1,311 +1,186 @@
 import 'dart:io';
-import 'dart:typed_data';
+import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as path;
+import 'package:path/path.dart' as p;
 
+/// Marketplace-grade image compression utility.
+///
+/// Design principles:
+/// ─ Never upscale  — only downscale images that exceed the dimension cap
+/// ─ Never bloat    — if compression produces a larger file, return original
+/// ─ Never throw    — all errors are caught; original file is returned as fallback
+/// ─ Strip EXIF     — removes location data and reduces file size
+/// ─ PNG-aware      — transparent PNGs stay PNG; everything else → JPEG
+///
+/// Two public methods cover all use-cases in the product flow:
+///   compressProductImage  — main gallery photos  (max 1500 px · q85 · ~200–400 KB)
+///   compressColorImage    — color-variant swatches (max 800 px  · q82 · ~80–150 KB)
+///
+/// ecommerceCompress is kept as a backward-compatible alias.
 class ImageCompressionUtils {
-  // Compress image with optimal settings matching TypeScript version
-  static Future<File?> compressImage(
+
+  // ── Constants ────────────────────────────────────────────────────────────
+
+  /// Files below this threshold are already well-optimised — skip compression.
+  static const int _skipThresholdBytes = 200 * 1024; // 200 KB
+
+  /// Files above this threshold are rejected before any work is done.
+  /// This is a safety net; the primary guard lives in the image picker.
+  static const int _maxInputBytes = 20 * 1024 * 1024; // 20 MB
+
+  /// Main product gallery: crisp on retina displays, storage-friendly.
+  /// 1500 px covers a 750 px UI slot at 2× DPI — the sweet spot for
+  /// marketplace product pages without serving unnecessarily large files.
+  static const int _productMaxDimension = 1500;
+  static const int _productQuality = 85;
+
+  /// Color-variant swatch: shown at smaller sizes in the UI.
+  static const int _colorMaxDimension = 800;
+  static const int _colorQuality = 82;
+
+
+  // ── Public API ───────────────────────────────────────────────────────────
+
+  /// Compress a main product gallery image.
+  /// Output: max 1500×1500 px · quality 85 JPEG · target ~200–400 KB.
+  static Future<File?> compressProductImage(File file) => _compress(
+        file,
+        maxDimension: _productMaxDimension,
+        quality: _productQuality,
+        label: 'product',
+      );
+
+  /// Compress a color-variant image.
+  /// Output: max 800×800 px · quality 82 JPEG · target ~80–150 KB.
+  static Future<File?> compressColorImage(File file) => _compress(
+        file,
+        maxDimension: _colorMaxDimension,
+        quality: _colorQuality,
+        label: 'color',
+      );
+
+  /// Backward-compatible alias — delegates to [compressProductImage].
+  static Future<File?> ecommerceCompress(File file) =>
+      compressProductImage(file);
+
+
+  // ── Private implementation ───────────────────────────────────────────────
+
+  static Future<File?> _compress(
     File file, {
-    int quality = 90,
-    int maxWidth = 1920,
-    int maxHeight = 1920,
-    CompressFormat format = CompressFormat.jpeg,
+    required int maxDimension,
+    required int quality,
+    required String label,
   }) async {
     try {
-      // Get file info
       final fileSize = await file.length();
-      print('Original file size: ${(fileSize / 1024 / 1024).toStringAsFixed(2)} MB');
 
-      // Skip compression if file is already small (less than 500KB)
-      if (fileSize < 500 * 1024) {
-        print('File is already small, skipping compression');
+      // Guard: reject files that exceed the maximum allowed input size.
+      if (fileSize > _maxInputBytes) {
+        throw Exception(
+          'Image too large (${_fmt(fileSize)}). Maximum is 20 MB.',
+        );
+      }
+
+      // Skip: file is already small enough — compression adds overhead.
+      if (fileSize < _skipThresholdBytes) {
+        _log(label, 'skipped — ${_fmt(fileSize)} already under 200 KB');
         return file;
       }
 
-      // Get temporary directory
+      // Read original pixel dimensions.
+      // We decode via codec, read width/height, then immediately dispose
+      // the pixel buffer to avoid holding a large image in memory.
+      final imageData = await file.readAsBytes();
+      final codec = await ui.instantiateImageCodec(imageData);
+      final frame = await codec.getNextFrame();
+      final origWidth = frame.image.width;
+      final origHeight = frame.image.height;
+      frame.image.dispose();
+      codec.dispose();
+
+      // Calculate the scale factor.
+      // min(..., 1.0) ensures we never upscale an image that is already
+      // smaller than the dimension cap.
+      final scale = min(
+        min(maxDimension / origWidth, maxDimension / origHeight),
+        1.0,
+      );
+      final targetWidth = (origWidth * scale).round();
+      final targetHeight = (origHeight * scale).round();
+
+      // Preserve PNG transparency; convert everything else to JPEG.
+      final ext = p.extension(file.path).toLowerCase();
+      final isPng = ext == '.png';
+      final format = isPng ? CompressFormat.png : CompressFormat.jpeg;
+      final outputExt = isPng ? '.png' : '.jpg';
+
+      // Build a unique output path in the system temp directory.
       final tempDir = await getTemporaryDirectory();
-      final targetPath = path.join(
+      final targetPath = p.join(
         tempDir.path,
-        '${DateTime.now().millisecondsSinceEpoch}_compressed.jpg',
+        '${DateTime.now().millisecondsSinceEpoch}_${label}$outputExt',
       );
 
-      // Compress with file method that supports more parameters
-      final Uint8List? compressedBytes = await FlutterImageCompress.compressWithFile(
+      // Run compression.
+      // minWidth/minHeight here equal our calculated target — because we
+      // capped scale at 1.0 above, these values are always ≤ the original
+      // dimensions, so the library will only downscale, never upscale.
+      final result = await FlutterImageCompress.compressAndGetFile(
         file.absolute.path,
+        targetPath,
+        minWidth: targetWidth,
+        minHeight: targetHeight,
         quality: quality,
-        minWidth: 300,
-        minHeight: 300,
         format: format,
         keepExif: false,
       );
 
-      if (compressedBytes != null) {
-        // Write compressed bytes to file
-        final compressedFile = File(targetPath);
-        await compressedFile.writeAsBytes(compressedBytes);
-        
-        final compressedSize = compressedBytes.length;
-        final compressionRatio = (1 - (compressedSize / fileSize)) * 100;
-        
-        print('Compressed file size: ${(compressedSize / 1024 / 1024).toStringAsFixed(2)} MB');
-        print('Compression ratio: ${compressionRatio.toStringAsFixed(1)}%');
-        
-        return compressedFile;
-      }
-
-      return file; // Return original if compression failed
-    } catch (e) {
-      print('Error compressing image: $e');
-      return file; // Return original file if compression fails
-    }
-  }
-
-  // Alternative method with dimension control
-  static Future<File?> compressImageWithDimensions(
-    File file, {
-    int quality = 90,
-    int maxWidth = 1920,
-    int maxHeight = 1920,
-  }) async {
-    try {
-      final fileSize = await file.length();
-      print('Original file size: ${(fileSize / 1024 / 1024).toStringAsFixed(2)} MB');
-
-      if (fileSize < 500 * 1024) {
-        print('File is already small, skipping compression');
+      if (result == null) {
+        _log(label, 'compressor returned null — falling back to original');
         return file;
       }
 
-      final tempDir = await getTemporaryDirectory();
-      final targetPath = path.join(
-        tempDir.path,
-        '${DateTime.now().millisecondsSinceEpoch}_compressed.jpg',
-      );
+      final compressedFile = File(result.path);
+      final compressedSize = await compressedFile.length();
 
-      // Use compressAndGetFile with basic parameters
-      final compressedFile = await FlutterImageCompress.compressAndGetFile(
-        file.absolute.path,
-        targetPath,
-        quality: quality,
-        format: CompressFormat.jpeg,
-        keepExif: false,
-      );
-
-      if (compressedFile != null) {
-        final newFile = File(compressedFile.path);
-        final compressedSize = await newFile.length();
-        final compressionRatio = (1 - (compressedSize / fileSize)) * 100;
-        
-        print('Compressed file size: ${(compressedSize / 1024 / 1024).toStringAsFixed(2)} MB');
-        print('Compression ratio: ${compressionRatio.toStringAsFixed(1)}%');
-        
-        return newFile;
+      // Safety: if the output is somehow larger than the input
+      // (can happen with already-compressed low-res files), use the original.
+      if (compressedSize >= fileSize) {
+        _log(label, 'compressed ≥ original — falling back to original');
+        return file;
       }
 
-      return file;
+      final saved =
+          ((fileSize - compressedSize) / fileSize * 100).toStringAsFixed(1);
+      _log(
+        label,
+        '${_fmt(fileSize)} → ${_fmt(compressedSize)} (-$saved%)  '
+        '[$origWidth×$origHeight → $targetWidth×$targetHeight]',
+      );
+
+      return compressedFile;
     } catch (e) {
-      print('Error compressing image: $e');
+      // Never block the user — log the error and return the original file.
+      _log(label, 'error: $e — falling back to original');
       return file;
     }
   }
 
-  // Compress multiple images
-  static Future<List<File>> compressImages(List<File> files) async {
-    final List<File> compressedFiles = [];
-    
-    for (final file in files) {
-      final compressedFile = await compressImage(file);
-      if (compressedFile != null) {
-        compressedFiles.add(compressedFile);
-      }
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  static String _fmt(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(1)} KB';
     }
-    
-    return compressedFiles;
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
   }
 
-  // Smart compression based on use case (matches TypeScript smartCompress)
-  static Future<File?> smartCompress(
-    File file, {
-    String useCase = 'gallery', // 'gallery', 'color', or 'thumbnail'
-  }) async {
-    int quality;
-    int maxWidth;
-    int maxHeight;
-
-    switch (useCase) {
-      case 'gallery':
-        quality = 90;
-        maxWidth = 1920;
-        maxHeight = 1920;
-        break;
-      case 'color':
-        quality = 85;
-        maxWidth = 800;
-        maxHeight = 800;
-        break;
-      case 'thumbnail':
-        quality = 80;
-        maxWidth = 400;
-        maxHeight = 400;
-        break;
-      default:
-        quality = 90;
-        maxWidth = 1920;
-        maxHeight = 1920;
-    }
-
-    return compressImage(
-      file,
-      quality: quality,
-      maxWidth: maxWidth,
-      maxHeight: maxHeight,
-    );
-  }
-
-  // Different compression levels for different use cases (matches TypeScript)
-  static Future<File?> compressForGallery(File file) async {
-    return compressImage(
-      file,
-      quality: 90,
-      maxWidth: 1920,
-      maxHeight: 1920,
-    );
-  }
-
-  static Future<File?> compressForColorImages(File file) async {
-    return compressImage(
-      file,
-      quality: 85,
-      maxWidth: 800,
-      maxHeight: 800,
-    );
-  }
-
-  static Future<File?> compressForThumbnail(File file) async {
-    return compressImage(
-      file,
-      quality: 80,
-      maxWidth: 400,
-      maxHeight: 400,
-    );
-  }
-
-  static Future<File> compressIfNeeded(File file, {int maxKb = 500}) async {
-    final fileSize = await file.length();
-    if (fileSize <= maxKb * 1024) return file;
-
-    final result = await compressImage(file, quality: 90);
-    return result ?? file;
-  }
-
-  // Check if file needs compression (matches TypeScript shouldCompress)
-  static bool shouldCompress(File file, {int maxSizeKB = 500}) {
-    final fileSize = file.lengthSync();
-    final fileSizeKB = fileSize / 1024;
-    return fileSizeKB > maxSizeKB;
-  }
-
-  // Get human-readable file size (matches TypeScript formatFileSize)
-  static String formatFileSize(int bytes) {
-    if (bytes == 0) return '0 Bytes';
-    
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    final i = (bytes == 0) ? 0 : (bytes.bitLength - 1) ~/ 10;
-    
-    return '${(bytes / (1 << (i * 10))).toStringAsFixed(2)} ${sizes[i]}';
-  }
-
-  // Simple compression method (recommended) - now matches TS quality
-  static Future<File?> simpleCompress(File file) async {
-    try {
-      final fileSize = await file.length();
-      
-      // Skip if already small
-      if (fileSize < 500 * 1024) return file;
-
-      final tempDir = await getTemporaryDirectory();
-      final targetPath = path.join(
-        tempDir.path,
-        '${DateTime.now().millisecondsSinceEpoch}_compressed.jpg',
-      );
-
-      // Use consistent 90% quality to match TypeScript
-      const quality = 90;
-
-      final compressedFile = await FlutterImageCompress.compressAndGetFile(
-        file.absolute.path,
-        targetPath,
-        quality: quality,
-        minWidth: 400,
-        minHeight: 400,
-        format: CompressFormat.jpeg,
-        keepExif: false,
-      );
-
-      if (compressedFile != null) {
-        return File(compressedFile.path);
-      }
-      
-      return file;
-    } catch (e) {
-      print('Simple compression error: $e');
-      return file;
-    }
-  }
-
-  // E-commerce optimized compression - updated to match TS quality levels
-  static Future<File?> ecommerceCompress(File file) async {
-    try {
-      final fileSize = await file.length();
-      
-      // Reject files larger than 20MB
-      if (fileSize > 20 * 1024 * 1024) {
-        throw Exception('File too large (max 20MB)');
-      }
-      
-      // Skip if already small and good quality
-      if (fileSize < 300 * 1024) return file;
-
-      final tempDir = await getTemporaryDirectory();
-      final targetPath = path.join(
-        tempDir.path,
-        '${DateTime.now().millisecondsSinceEpoch}_ecommerce_compressed.jpg',
-      );
-
-      // Use consistent quality levels matching TypeScript
-      const quality = 90; // High quality for e-commerce
-      const minWidth = 800;
-      const minHeight = 800;
-
-      final compressedFile = await FlutterImageCompress.compressAndGetFile(
-        file.absolute.path,
-        targetPath,
-        quality: quality,
-        minWidth: minWidth,
-        minHeight: minHeight,
-        format: CompressFormat.jpeg,
-        keepExif: false,
-      );
-
-      if (compressedFile != null) {
-        final newFile = File(compressedFile.path);
-        final compressedSize = await newFile.length();
-        
-        print('📊 E-commerce compression results:');
-        print('   Original: ${(fileSize / 1024 / 1024).toStringAsFixed(2)} MB');
-        print('   Compressed: ${(compressedSize / 1024 / 1024).toStringAsFixed(2)} MB');
-        print('   Savings: ${(((fileSize - compressedSize) / fileSize) * 100).toStringAsFixed(1)}%');
-        
-        return newFile;
-      }
-      
-      return file;
-    } catch (e) {
-      print('E-commerce compression error: $e');
-      return file;
-    }
-  }
+  // ignore: avoid_print
+  static void _log(String label, String message) =>
+      print('🖼  [$label] $message');
 }

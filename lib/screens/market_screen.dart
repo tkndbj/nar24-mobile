@@ -369,18 +369,13 @@ class MarketScreenState extends State<MarketScreen>
   }
 
   /// Check if user needs to accept agreements and show modal if needed.
-  /// This only applies to Google-registered users who haven't accepted yet.
   Future<void> _checkAndShowAgreementModal() async {
-    // Prevent showing multiple times
     if (_agreementModalShown) return;
 
     try {
-      // CRITICAL: Double-check auth state directly from Firebase
-      // This prevents showing modal when user isn't truly authenticated
       final firebaseUser = FirebaseAuth.instance.currentUser;
       if (firebaseUser == null) return;
 
-      // Verify the user can actually get a valid token (proves they're authenticated)
       try {
         await firebaseUser.getIdToken();
       } catch (e) {
@@ -390,56 +385,24 @@ class MarketScreenState extends State<MarketScreen>
         return;
       }
 
-      final userProvider = Provider.of<UserProvider>(context, listen: false);
-
-      // Only check for social users (Google/Apple) who bypass registration form
-      if (!userProvider.isSocialUser) return;
-
-      // Check local storage first (this is the primary source)
-      final hasAcceptedLocally =
+      final hasAccepted =
           await AgreementModal.hasAcceptedAgreements(firebaseUser.uid);
-      if (hasAcceptedLocally) return;
+      if (hasAccepted) return;
 
-      // Wait for profile state to be ready (max 3 seconds)
-      // This prevents showing modal before we know if they've already accepted
-      int waitAttempts = 0;
-      const maxWaitAttempts = 30; // 30 * 100ms = 3 seconds max
-      while (
-          !userProvider.isProfileStateReady && waitAttempts < maxWaitAttempts) {
-        await Future.delayed(const Duration(milliseconds: 100));
-        waitAttempts++;
-        if (!mounted) return;
-      }
-
-      // Re-check auth after waiting (user might have logged out)
-      if (FirebaseAuth.instance.currentUser == null) return;
-
-      // Check Firestore as secondary source
-      final profileData = userProvider.profileData;
-      final hasAcceptedInFirestore = profileData?['agreementsAccepted'] == true;
-
-      if (hasAcceptedInFirestore) return;
-
-      // Mark as shown to prevent duplicate modals
       _agreementModalShown = true;
 
-      // Small delay to ensure UI is ready
       await Future.delayed(const Duration(milliseconds: 300));
-
       if (!mounted) return;
 
-      // Final auth check before showing modal
       if (FirebaseAuth.instance.currentUser == null) {
-        _agreementModalShown =
-            false; // Reset so it can show later if they login
+        _agreementModalShown = false;
         return;
       }
 
-      // Show the agreement modal
       await AgreementModal.show(context);
 
-      // Refresh user data after acceptance
       if (mounted) {
+        final userProvider = Provider.of<UserProvider>(context, listen: false);
         await userProvider.refreshUser();
       }
     } catch (e) {

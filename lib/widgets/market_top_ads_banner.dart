@@ -383,6 +383,9 @@ class _AdsBannerWidgetState extends State<AdsBannerWidget>
                         fadeOutDuration: Duration.zero,
                         useOldImageOnUrlChange: true,
                         filterQuality: FilterQuality.medium,
+                        // Use pre-computed physical pixel width from
+                        // didChangeDependencies — stable, not in build()
+                        memCacheWidth: _maxWidth.clamp(720, 1800),
                       ),
                     ),
                   ),

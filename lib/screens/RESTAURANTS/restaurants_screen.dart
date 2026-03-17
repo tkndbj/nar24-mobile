@@ -469,16 +469,27 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                                         color: isDark
                                             ? Colors.orange
                                                 .withValues(alpha: 0.12)
-                                            : Colors.orange
-                                                .withValues(alpha: 0.08),
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(
-                                          color: isDark
-                                              ? Colors.orange
-                                                  .withValues(alpha: 0.3)
-                                              : Colors.orange
-                                                  .withValues(alpha: 0.25),
-                                        ),
+                                            : Colors.white,
+                                        borderRadius: isDark
+                                            ? null
+                                            : BorderRadius.circular(8),
+                                        border: isDark
+                                            ? null
+                                            : Border.all(
+                                                color: Colors.orange,
+                                                width: 1,
+                                              ),
+                                        boxShadow: isDark
+                                            ? [
+                                                BoxShadow(
+                                                  color: Colors.black
+                                                      .withOpacity(0.15),
+                                                  spreadRadius: 0,
+                                                  blurRadius: 2,
+                                                  offset: const Offset(0, 1),
+                                                ),
+                                              ]
+                                            : null,
                                       ),
                                       child: Row(
                                         children: [
@@ -529,42 +540,58 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                         ),
                       ),
 
-                      // ── Cuisine pills ──────────────────────────────────────
-                      if (_cuisineFacets.isNotEmpty)
-                        SliverToBoxAdapter(
-                          child: _CuisinePillRow(
-                            facets: _cuisineFacets,
-                            selected: _selectedCuisine,
-                            isDark: isDark,
-                            onSelect: _onCuisineChanged,
-                          ),
-                        ),
-
-                      // ── Food type icon row ─────────────────────────────────
+                      // ── Cuisine pills + Food type icon row ──────────────────
                       SliverToBoxAdapter(
-                        child: _FoodTypeIconRow(
-                          selected: _selectedFoodType,
-                          isDark: isDark,
-                          onSelect: _onFoodTypeChanged,
+                        child: Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(top: 10),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color.fromARGB(255, 40, 38, 59)
+                                : Colors.white,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.15),
+                                spreadRadius: 0,
+                                blurRadius: 2,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              if (_cuisineFacets.isNotEmpty)
+                                _CuisinePillRow(
+                                  facets: _cuisineFacets,
+                                  selected: _selectedCuisine,
+                                  isDark: isDark,
+                                  onSelect: _onCuisineChanged,
+                                ),
+                              _FoodTypeIconRow(
+                                selected: _selectedFoodType,
+                                isDark: isDark,
+                                onSelect: _onFoodTypeChanged,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
 
                       // ── Current delivery address pill ────────────────────────
                       if (foodAddress != null)
                         SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                            child: GestureDetector(
-                              onTap: () => showFoodLocationPicker(context),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange,
-                                  borderRadius: BorderRadius.circular(24),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
+                          child: GestureDetector(
+                            onTap: () => showFoodLocationPicker(context),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 10),
+                              margin: const EdgeInsets.only(top: 10),
+                              decoration: const BoxDecoration(
+                                color: Colors.orange,
+                              ),
+                              child: Row(
                                   children: [
                                     const Icon(
                                       Icons.location_on_rounded,
@@ -595,33 +622,26 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                               ),
                             ),
                           ),
-                        ),
 
                       // ── Restaurant list ────────────────────────────────────
                       if (_isSearching)
-                        SliverPadding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          sliver: SliverGrid(
-                            delegate: SliverChildBuilderDelegate(
-                              (_, i) => _RestaurantCardSkeleton(isDark: isDark),
-                              childCount: 6,
+                        SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (_, i) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _RestaurantCardSkeleton(isDark: isDark),
                             ),
-                            gridDelegate:
-                                const SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 600,
-                              mainAxisExtent: 96,
-                              crossAxisSpacing: 12,
-                              mainAxisSpacing: 12,
-                            ),
+                            childCount: 6,
                           ),
                         )
                       else if (_restaurants.isNotEmpty) ...[
                         SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                          padding: EdgeInsets.only(
+                              top: foodAddress != null ? 4 : 10),
                           sliver: SliverList(
                             delegate: SliverChildBuilderDelegate(
                               (_, i) => Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.only(bottom: 10),
                                 child: _RestaurantCard(
                                   restaurant: _restaurants[i],
                                   isDark: isDark,
@@ -881,7 +901,7 @@ class _CuisinePillRow extends StatelessWidget {
           ),
           ...facets.map(
             (f) => _CuisinePill(
-              label: f.value,
+              label: localizeCategory(f.value, loc),
               count: f.count,
               isActive: selected == f.value,
               isDark: isDark,
@@ -1030,8 +1050,8 @@ class _FoodTypeIconRow extends StatelessWidget {
                         color: isActive
                             ? Colors.orange
                             : isDark
-                                ? const Color(0xFF2D2B3F)
-                                : Colors.grey[100],
+                                ? const Color.fromARGB(255, 39, 36, 57)
+                                : const Color.fromARGB(255, 243, 243, 243),
                         borderRadius: BorderRadius.circular(12),
                         border: isActive
                             ? Border.all(color: Colors.orange, width: 2)
@@ -1122,13 +1142,20 @@ class _RestaurantCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(12),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF211F31) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey[200]!,
-          ),
+          color: isDark
+              ? const Color.fromARGB(255, 40, 38, 59)
+              : Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              spreadRadius: 0,
+              blurRadius: 2,
+              offset: const Offset(0, 1),
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -1491,13 +1518,20 @@ class _RestaurantCardSkeleton extends StatelessWidget {
     final bg = isDark ? const Color(0xFF2D2B3F) : Colors.grey[200]!;
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF211F31) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? const Color(0xFF2D2B3F) : Colors.grey[100]!,
-        ),
+        color: isDark
+            ? const Color.fromARGB(255, 40, 38, 59)
+            : Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            spreadRadius: 0,
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Row(
         children: [

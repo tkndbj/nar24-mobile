@@ -84,7 +84,7 @@ class ReviewDialogViewModel {
       }
 
       // 2. Compress
-      final compressedFile = await ImageCompressionUtils.simpleCompress(imageFile);
+      final compressedFile = await ImageCompressionUtils.ecommerceCompress(imageFile);
       final fileToUpload = compressedFile ?? imageFile;
 
       // 3. Upload to final location

@@ -88,58 +88,70 @@ class ListProductRoutes {
       ),
 
       // List Product Preview
-      GoRoute(
-        path: '/list_product_preview',
-        name: 'list-product-preview',
-        pageBuilder: (context, state) {
-          final args = state.extra as Map<String, dynamic>?;
+    GoRoute(
+  path: '/list_product_preview',
+  name: 'list-product-preview',
+  pageBuilder: (context, state) {
+    final args = state.extra as Map<String, dynamic>?;
 
-          if (args == null) {
-            return CustomTransitionPage(
-              key: state.pageKey,
-              child: const Scaffold(
-                body: Center(child: Text('Error: No data provided')),
-              ),
-              transitionsBuilder: _slideTransition,
-              transitionDuration: const Duration(milliseconds: 200),
-            );
-          }
+    final product = args?['product'] as Product?;
+    final imageFiles = args?['imageFiles'] as List<XFile>?;
+    final phone = args?['phone'] as String?;
+    final region = args?['region'] as String?;
+    final address = args?['address'] as String?;
+    final ibanOwnerName = args?['ibanOwnerName'] as String?;
+    final ibanOwnerSurname = args?['ibanOwnerSurname'] as String?;
+    final iban = args?['iban'] as String?;
+    final selectedColorImages = args?['selectedColorImages'] as Map<String, Map<String, dynamic>>?;
 
-          final product = args['product'] as Product;
-          final imageFiles = args['imageFiles'] as List<XFile>;
-          final videoFile = args['videoFile'] as XFile?;
-          final phone = args['phone'] as String;
-          final region = args['region'] as String;
-          final address = args['address'] as String;
-          final ibanOwnerName = args['ibanOwnerName'] as String;
-          final ibanOwnerSurname = args['ibanOwnerSurname'] as String;
-          final iban = args['iban'] as String;
-          final isEditMode = args['isEditMode'] as bool? ?? false;
-          final originalProduct = args['originalProduct'] as Product?;
-          final isFromArchivedCollection =
-              args['isFromArchivedCollection'] as bool? ?? false; // NEW
+    if (args == null ||
+        product == null ||
+        imageFiles == null ||
+        phone == null ||
+        region == null ||
+        address == null ||
+        ibanOwnerName == null ||
+        ibanOwnerSurname == null ||
+        iban == null ||
+        selectedColorImages == null) {
+      return CustomTransitionPage(
+        key: state.pageKey,
+        child: const Scaffold(
+          body: Center(child: Text('Error: Missing required data')),
+        ),
+        transitionsBuilder: _slideTransition,
+        transitionDuration: const Duration(milliseconds: 200),
+      );
+    }
 
-          return CustomTransitionPage(
-            key: state.pageKey,
-            child: ListProductPreviewScreen(
-              product: product,
-              imageFiles: imageFiles,
-              videoFile: videoFile,
-              phone: phone,
-              region: region,
-              address: address,
-              ibanOwnerName: ibanOwnerName,
-              ibanOwnerSurname: ibanOwnerSurname,
-              iban: iban,
-              isEditMode: isEditMode,
-              originalProduct: originalProduct,
-              isFromArchivedCollection: isFromArchivedCollection, // NEW
-            ),
-            transitionsBuilder: _slideTransition,
-            transitionDuration: const Duration(milliseconds: 200),
-          );
-        },
+    final videoFile = args['videoFile'] as XFile?;
+    final isEditMode = args['isEditMode'] as bool? ?? false;
+    final originalProduct = args['originalProduct'] as Product?;
+    final isFromArchivedCollection =
+        args['isFromArchivedCollection'] as bool? ?? false;
+
+    return CustomTransitionPage(
+      key: state.pageKey,
+      child: ListProductPreviewScreen(
+        product: product,
+        imageFiles: imageFiles,
+        videoFile: videoFile,
+        selectedColorImages: selectedColorImages,
+        phone: phone,
+        region: region,
+        address: address,
+        ibanOwnerName: ibanOwnerName,
+        ibanOwnerSurname: ibanOwnerSurname,
+        iban: iban,
+        isEditMode: isEditMode,
+        originalProduct: originalProduct,
+        isFromArchivedCollection: isFromArchivedCollection,
       ),
+      transitionsBuilder: _slideTransition,
+      transitionDuration: const Duration(milliseconds: 200),
+    );
+  },
+),
 
       // ==================== CATEGORY & BRAND ====================
 

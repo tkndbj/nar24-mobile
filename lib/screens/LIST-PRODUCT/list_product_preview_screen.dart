@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:uuid/uuid.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:go_router/go_router.dart';
@@ -13,11 +15,58 @@ import 'package:image_picker/image_picker.dart';
 import '../../constants/all_in_one_category_data.dart';
 import '../../utils/attribute_localization_utils.dart';
 import '../../utils/firebase_data_cleaner.dart';
+import '../../utils/image_compression_utils.dart';
+import '../../widgets/listproduct/upload_progress_state.dart';
+import '../../widgets/listproduct/upload_progress_overlay.dart';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Internal data class — a compressed file + its Storage destination metadata.
+// ─────────────────────────────────────────────────────────────────────────────
+class _UploadJob {
+  final File file;
+  final String folder;
+
+  /// Non-null for color images; null for main images and video.
+  final String? colorKey;
+
+  /// True when this job carries the product video.
+  final bool isVideo;
+
+  const _UploadJob({
+    required this.file,
+    required this.folder,
+    this.colorKey,
+    this.isVideo = false,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Result produced by the upload pipeline, consumed by the CF / Firestore call.
+// ─────────────────────────────────────────────────────────────────────────────
+class _UploadResult {
+  final List<String> imageUrls;
+  final String? videoUrl;
+  final Map<String, List<String>> colorImageUrls;
+
+  const _UploadResult({
+    required this.imageUrls,
+    this.videoUrl,
+    required this.colorImageUrls,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Widget
+// ─────────────────────────────────────────────────────────────────────────────
 
 class ListProductPreviewScreen extends StatefulWidget {
   final Product product;
   final List<XFile> imageFiles;
   final XFile? videoFile;
+
+  /// Raw color map from ListProductScreen — XFile images NOT yet uploaded.
+  final Map<String, Map<String, dynamic>> selectedColorImages;
+
   final String phone;
   final String region;
   final String address;
@@ -33,6 +82,7 @@ class ListProductPreviewScreen extends StatefulWidget {
     required this.product,
     required this.imageFiles,
     this.videoFile,
+    required this.selectedColorImages,
     required this.phone,
     required this.region,
     required this.address,
@@ -50,749 +100,342 @@ class ListProductPreviewScreen extends StatefulWidget {
 }
 
 class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
-  bool _isLoading = false;
+  // ── Submission guards ─────────────────────────────────────────────
+  /// Set synchronously on first tap — prevents any second call entering
+  /// the pipeline before the first async frame even fires.
+  bool _isSubmitting = false;
 
+  /// Non-null while the upload + submit pipeline is running.
+  /// Drives [UploadProgressOverlay]; null = overlay hidden.
+  UploadState? _uploadState;
+
+  // ── Firebase handles ──────────────────────────────────────────────
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Map<String, dynamic> _buildDisplayAttributes() {
-    final p = widget.product;
-    final map = <String, dynamic>{};
-    if (p.clothingSizes != null) map['clothingSizes'] = p.clothingSizes;
-    if (p.clothingFit != null) map['clothingFit'] = p.clothingFit;
-    if (p.clothingTypes != null) map['clothingTypes'] = p.clothingTypes;
-    if (p.pantSizes != null) map['pantSizes'] = p.pantSizes;
-    if (p.pantFabricTypes != null) map['pantFabricTypes'] = p.pantFabricTypes;
-    if (p.footwearSizes != null) map['footwearSizes'] = p.footwearSizes;
-    if (p.jewelryMaterials != null)
-      map['jewelryMaterials'] = p.jewelryMaterials;
-    if (p.consoleBrand != null) map['consoleBrand'] = p.consoleBrand;
-    if (p.curtainMaxWidth != null) map['curtainMaxWidth'] = p.curtainMaxWidth;
-    if (p.curtainMaxHeight != null)
-      map['curtainMaxHeight'] = p.curtainMaxHeight;
-    map.addAll(p.attributes);
-    return map;
-  }
+  /// All active Storage subscriptions — cancelled on error or dispose so
+  /// no callbacks fire after the widget is gone.
+  final List<StreamSubscription<TaskSnapshot>> _storageSubs = [];
 
   @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final textTheme = Theme.of(context).textTheme;
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
-    String localizedCategory =
-        AllInOneCategoryData.localizeCategoryKey(widget.product.category, l10n);
-    String localizedSubcategory = AllInOneCategoryData.localizeSubcategoryKey(
-        widget.product.category, widget.product.subcategory, l10n);
-
-    String? localizedSubSubcategory;
-    if (widget.product.subsubcategory.isNotEmpty) {
-      localizedSubSubcategory = AllInOneCategoryData.localizeSubSubcategoryKey(
-          widget.product.category,
-          widget.product.subcategory,
-          widget.product.subsubcategory,
-          l10n);
+  void dispose() {
+    for (final sub in _storageSubs) {
+      sub.cancel();
     }
+    super.dispose();
+  }
 
-    String? colorDisplay;
-    if (widget.product.colorImages.isNotEmpty) {
-      List<String> localizedColors =
-          widget.product.colorImages.keys.map((colorName) {
-        return AttributeLocalizationUtils.localizeColorName(colorName, l10n);
-      }).toList();
-      colorDisplay = localizedColors.join(', ');
-    }
+  // ─────────────────────────────────────────────────────────────────
+  // Small helpers
+  // ─────────────────────────────────────────────────────────────────
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          widget.isEditMode ? l10n.previewEditProduct : l10n.previewProduct,
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-            fontSize: 16,
-          ),
-        ),
-        iconTheme:
-            IconThemeData(color: Theme.of(context).colorScheme.onSurface),
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        elevation: 0,
-      ),
-      body: Stack(
-        children: [
-          GestureDetector(
-            onTap: () => FocusScope.of(context).unfocus(),
-            child: Container(
-              color: isDarkMode
-                  ? const Color(0xFF1C1A29)
-                  : const Color(0xFFF5F5F5),
-              child: SafeArea(
-                bottom: true,
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(0.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Product Details Section
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16.0, vertical: 8.0),
-                        child: Text(
-                          l10n.productDetails,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        width: double.infinity,
-                        color: isDarkMode
-                            ? const Color.fromARGB(255, 33, 31, 49)
-                            : Colors.white,
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (widget.imageFiles.isNotEmpty ||
-                                (widget.isEditMode &&
-                                    widget.product.imageUrls.isNotEmpty))
-                              Wrap(
-                                spacing: 8.0,
-                                runSpacing: 8.0,
-                                children: [
-                                  if (widget.isEditMode &&
-                                      widget.product.imageUrls.isNotEmpty)
-                                    ...widget.product.imageUrls.map((imageUrl) {
-                                      return ClipRRect(
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
-                                        child: Image.network(
-                                          imageUrl,
-                                          width: 100,
-                                          height: 100,
-                                          fit: BoxFit.cover,
-                                          loadingBuilder: (context, child,
-                                              loadingProgress) {
-                                            if (loadingProgress == null)
-                                              return child;
-                                            return Container(
-                                              width: 100,
-                                              height: 100,
-                                              decoration: BoxDecoration(
-                                                color: Colors.grey[300],
-                                                borderRadius:
-                                                    BorderRadius.circular(8.0),
-                                              ),
-                                              child: Center(
-                                                child:
-                                                    CircularProgressIndicator(
-                                                  value: loadingProgress
-                                                              .expectedTotalBytes !=
-                                                          null
-                                                      ? loadingProgress
-                                                              .cumulativeBytesLoaded /
-                                                          loadingProgress
-                                                              .expectedTotalBytes!
-                                                      : null,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                          errorBuilder:
-                                              (context, error, stackTrace) {
-                                            return Container(
-                                              width: 100,
-                                              height: 100,
-                                              decoration: BoxDecoration(
-                                                color: Colors.grey[300],
-                                                borderRadius:
-                                                    BorderRadius.circular(8.0),
-                                              ),
-                                              child: Icon(
-                                                Icons.error,
-                                                color: Colors.red,
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      );
-                                    }).toList(),
-                                  ...widget.imageFiles.map((image) {
-                                    return ClipRRect(
-                                      borderRadius: BorderRadius.circular(8.0),
-                                      child: Image.file(
-                                        File(image.path),
-                                        width: 100,
-                                        height: 100,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    );
-                                  }).toList(),
-                                ],
-                              ),
-                            const SizedBox(height: 16),
-                            _buildDetailRow(
-                              context: context,
-                              title: l10n.productTitle,
-                              value: widget.product.productName,
-                            ),
-                            _buildDetailRow(
-                              context: context,
-                              title: l10n.category,
-                              value: localizedCategory,
-                            ),
-                            _buildDetailRow(
-                              context: context,
-                              title: l10n.subcategory,
-                              value: localizedSubcategory,
-                            ),
-                            _buildDetailRow(
-                              context: context,
-                              title: l10n.subSubcategory ?? 'Sub-subcategory',
-                              value: localizedSubSubcategory ?? '',
-                            ),
-                            _buildDetailRow(
-                              context: context,
-                              title: l10n.brand,
-                              value: widget.product.brandModel ?? '',
-                            ),
-                            if (colorDisplay != null)
-                              _buildDetailRow(
-                                context: context,
-                                title: l10n.color,
-                                value: colorDisplay,
-                              ),
-                            _buildDetailRow(
-                              context: context,
-                              title: l10n.condition,
-                              value: widget.product.condition,
-                            ),
-                            _buildDetailRow(
-                              context: context,
-                              title: l10n.price,
-                              value: '${widget.product.price}',
-                            ),
-                            _buildDetailRow(
-                              context: context,
-                              title: l10n.quantity,
-                              value: widget.product.quantity.toString(),
-                            ),
-                            _buildDetailRow(
-                              context: context,
-                              title: l10n.description,
-                              value: widget.product.description,
-                            ),
-                            if (_buildDisplayAttributes().isNotEmpty) ...[
-                              const SizedBox(height: 16),
-                              Text(
-                                l10n.details,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              ..._buildDisplayAttributes().entries.map((entry) {
-                                try {
-                                  String localizedTitle =
-                                      AttributeLocalizationUtils
-                                          .getLocalizedAttributeTitle(
-                                              entry.key, l10n);
-                                  String localizedValue =
-                                      AttributeLocalizationUtils
-                                          .getLocalizedAttributeValue(
-                                              entry.key, entry.value, l10n);
-                                  if (localizedValue.isNotEmpty) {
-                                    return _buildDetailRow(
-                                      context: context,
-                                      title: localizedTitle,
-                                      value: localizedValue,
-                                    );
-                                  }
-                                  return const SizedBox.shrink();
-                                } catch (e) {
-                                  String displayValue = '';
-                                  if (entry.value is List) {
-                                    displayValue =
-                                        (entry.value as List).join(', ');
-                                  } else {
-                                    displayValue = entry.value.toString();
-                                  }
-                                  if (displayValue.isNotEmpty) {
-                                    return _buildDetailRow(
-                                      context: context,
-                                      title: entry.key,
-                                      value: displayValue,
-                                    );
-                                  }
-                                  return const SizedBox.shrink();
-                                }
-                              }).toList(),
-                            ],
-                            if (widget.videoFile != null)
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    l10n.video,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  VideoPlayerWidget(
-                                      file: File(widget.videoFile!.path)),
-                                ],
-                              ),
-                            if (widget.product.colorImages.isNotEmpty) ...[
-                              const SizedBox(height: 16),
-                              Text(
-                                l10n.colorImages,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: widget.product.colorImages.entries
-                                    .map((entry) {
-                                  String localizedColorName =
-                                      AttributeLocalizationUtils
-                                          .localizeColorName(entry.key, l10n);
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 8.0),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          localizedColorName,
-                                          style: textTheme.bodyMedium?.copyWith(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .onSurface,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Wrap(
-                                          spacing: 8.0,
-                                          runSpacing: 8.0,
-                                          children: entry.value.map((url) {
-                                            return ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(8.0),
-                                              child: Image.network(
-                                                url,
-                                                width: 100,
-                                                height: 100,
-                                                fit: BoxFit.cover,
-                                              ),
-                                            );
-                                          }).toList(),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // Seller Information Section
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16.0, vertical: 8.0),
-                        child: Text(
-                          l10n.sellerInformation,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        width: double.infinity,
-                        color: isDarkMode
-                            ? const Color.fromARGB(255, 33, 31, 49)
-                            : Colors.white,
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildDetailRow(
-                              context: context,
-                              title: l10n.name,
-                              value: widget.product.sellerName,
-                            ),
-                            _buildDetailRow(
-                              context: context,
-                              title: l10n.phoneNumber,
-                              value: widget.phone,
-                            ),
-                            _buildDetailRow(
-                              context: context,
-                              title: l10n.region,
-                              value: widget.region,
-                            ),
-                            _buildDetailRow(
-                              context: context,
-                              title: l10n.addressDetails,
-                              value: widget.address,
-                            ),
-                            _buildDetailRow(
-                              context: context,
-                              title: l10n.bankAccountNumberIban,
-                              value: widget.iban,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // Delivery Option Section
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16.0, vertical: 8.0),
-                        child: Text(
-                          l10n.deliveryOption,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        width: double.infinity,
-                        color: isDarkMode
-                            ? const Color.fromARGB(255, 33, 31, 49)
-                            : Colors.white,
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8.0),
-                                  child: Image.asset(
-                                    widget.product.deliveryOption ==
-                                            'Self Delivery'
-                                        ? 'assets/images/selfdelivery.png'
-                                        : 'assets/images/fastdelivery.png',
-                                    width: 70,
-                                    height: 70,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Text(
-                                    widget.product.deliveryOption ==
-                                            'Self Delivery'
-                                        ? l10n.selfDelivery
-                                        : l10n.fastDelivery,
-                                    style: textTheme.bodyLarge?.copyWith(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurface,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              widget.product.deliveryOption == 'Self Delivery'
-                                  ? l10n.selfDeliveryDescription
-                                  : l10n.fastDeliveryDescription,
-                              style: textTheme.bodyMedium?.copyWith(
-                                fontSize: 14,
-                                color: Theme.of(context).brightness ==
-                                        Brightness.light
-                                    ? Colors.grey[700]
-                                    : Colors.grey[400],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // Stock Information Section
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16.0, vertical: 8.0),
-                        child: Text(
-                          l10n.stockInformation,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        width: double.infinity,
-                        color: isDarkMode
-                            ? const Color.fromARGB(255, 33, 31, 49)
-                            : Colors.white,
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Image.asset(
-                                  'assets/images/caution.png',
-                                  width: 40,
-                                  height: 40,
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Text(
-                                    l10n.stockInformation,
-                                    style: textTheme.bodyLarge?.copyWith(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurface,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              l10n.stockInformationDescription,
-                              style: textTheme.bodyMedium?.copyWith(
-                                fontSize: 14,
-                                color: Theme.of(context).brightness ==
-                                        Brightness.light
-                                    ? Colors.grey[700]
-                                    : Colors.grey[400],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      // Confirm and Edit Buttons
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  context.pop();
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF00A86B),
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(24.0),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16.0, vertical: 16.0),
-                                ),
-                                child: Text(
-                                  l10n.edit,
-                                  style: const TextStyle(fontSize: 14),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: _isLoading ? null : _submitProduct,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF00A86B),
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(24.0),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16.0, vertical: 16.0),
-                                ),
-                                child: Text(
-                                  widget.isEditMode
-                                      ? l10n.submitEdit
-                                      : l10n.confirmAndList,
-                                  style: const TextStyle(fontSize: 14),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          if (_isLoading)
-            Container(
-              color: Colors.black54,
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                          Theme.of(context).colorScheme.secondary),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      AppLocalizations.of(context)
-                          .pleaseWaitWhileWeLoadYourProduct,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
+  Map<String, dynamic> _buildDisplayAttributes() {
+    final p = widget.product;
+    return {
+      if (p.clothingSizes != null) 'clothingSizes': p.clothingSizes,
+      if (p.clothingFit != null) 'clothingFit': p.clothingFit,
+      if (p.clothingTypes != null) 'clothingTypes': p.clothingTypes,
+      if (p.pantSizes != null) 'pantSizes': p.pantSizes,
+      if (p.pantFabricTypes != null) 'pantFabricTypes': p.pantFabricTypes,
+      if (p.footwearSizes != null) 'footwearSizes': p.footwearSizes,
+      if (p.jewelryMaterials != null) 'jewelryMaterials': p.jewelryMaterials,
+      if (p.consoleBrand != null) 'consoleBrand': p.consoleBrand,
+      if (p.curtainMaxWidth != null) 'curtainMaxWidth': p.curtainMaxWidth,
+      if (p.curtainMaxHeight != null) 'curtainMaxHeight': p.curtainMaxHeight,
+      ...p.attributes,
+    };
+  }
+
+  /// Safe setState wrapper that also guards against post-dispose calls.
+  void _setUploadState(UploadState state) {
+    if (mounted) setState(() => _uploadState = state);
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Upload pipeline
+  //
+  // Phase 1 — Compress all images (fast, offline, 0–15 % of bar)
+  // Phase 2 — Measure compressed sizes → compute totalBytes
+  // Phase 3 — Upload in batches of 3 with per-file Firebase progress
+  //            events (15–95 % of bar)
+  // Phase 4 — Caller switches to UploadPhase.submitting (95–100 %)
+  // ─────────────────────────────────────────────────────────────────
+
+ Future<_UploadResult> _uploadAllFiles(String userId) async {
+  final mainFiles = widget.imageFiles.map((x) => File(x.path)).toList();
+  final videoFile =
+      widget.videoFile != null ? File(widget.videoFile!.path) : null;
+  final colorEntries = <MapEntry<String, File>>[
+    for (final entry in widget.selectedColorImages.entries)
+      if (entry.value['image'] is XFile)
+        MapEntry(entry.key, File((entry.value['image'] as XFile).path)),
+  ];
+
+  if (mainFiles.isEmpty && videoFile == null && colorEntries.isEmpty) {
+    return _UploadResult(
+      imageUrls: List<String>.from(widget.product.imageUrls),
+      videoUrl: widget.product.videoUrl,
+      colorImageUrls:
+          Map<String, List<String>>.from(widget.product.colorImages),
     );
   }
 
-  Widget _buildDetailRow({
-    required BuildContext context,
-    required String title,
-    required String value,
-  }) {
-    final textTheme = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 150,
-            child: Text(
-              '$title:',
-              style: textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: Theme.of(context).colorScheme.onSurface,
-                fontSize: 14,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).brightness == Brightness.light
-                    ? Colors.grey[800]
-                    : Colors.grey[300],
-                fontSize: 14,
-              ),
-            ),
-          ),
-        ],
-      ),
+  final jobs = <_UploadJob>[];
+
+  // Main images — already compressed at pick time, add directly.
+  for (final file in mainFiles) {
+    jobs.add(_UploadJob(file: file, folder: 'default_images'));
+  }
+
+  // Video — no compression.
+  if (videoFile != null) {
+    jobs.add(_UploadJob(
+      file: videoFile,
+      folder: 'preview_videos',
+      isVideo: true,
+    ));
+  }
+
+  // Color images — compress silently here since they come from
+  // a separate picker screen that doesn't compress on selection yet.
+  for (final entry in colorEntries) {
+    final compressed =
+        await ImageCompressionUtils.ecommerceCompress(entry.value);
+    jobs.add(_UploadJob(
+      file: compressed ?? entry.value,
+      folder: 'color_images/${entry.key}',
+      colorKey: entry.key,
+    ));
+  }
+
+  // ── Measure compressed sizes ───────────────────────────────────
+  int totalBytes = 0;
+  final fileSizes = <int>[];
+  for (final job in jobs) {
+    final size = await job.file.length();
+    fileSizes.add(size);
+    totalBytes += size;
+  }
+
+  // ── Upload ─────────────────────────────────────────────────────
+  _setUploadState(UploadState(
+    phase: UploadPhase.uploading,
+    uploadedFiles: 0,
+    totalFiles: jobs.length,
+    bytesTransferred: 0,
+    totalBytes: totalBytes,
+  ));
+
+  final bytesPerFile = List<int>.filled(jobs.length, 0);
+  int completedFiles = 0;
+
+  void onBytesUpdate(int idx, int bytes) {
+    bytesPerFile[idx] = bytes;
+    _setUploadState(_uploadState!.copyWith(
+      bytesTransferred: bytesPerFile.fold<int>(0, (a, b) => a + b),
+      uploadedFiles: completedFiles,
+    ));
+  }
+
+  const maxConcurrent = 3;
+  final uploadedUrls = List<String?>.filled(jobs.length, null);
+
+  for (int start = 0; start < jobs.length; start += maxConcurrent) {
+    final end = (start + maxConcurrent).clamp(0, jobs.length);
+
+    await Future.wait(
+      List.generate(end - start, (i) => start + i).map((globalIdx) async {
+        uploadedUrls[globalIdx] = await _uploadFileWithRetry(
+          file: jobs[globalIdx].file,
+          userId: userId,
+          folder: jobs[globalIdx].folder,
+          fileIndex: globalIdx,
+          onBytesUpdate: onBytesUpdate,
+        );
+        completedFiles++;
+        bytesPerFile[globalIdx] = fileSizes[globalIdx];
+        onBytesUpdate(globalIdx, fileSizes[globalIdx]);
+      }),
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // SUBMIT PRODUCT — Routes to CF (shop) or direct Firestore (vitrin)
-  // ═══════════════════════════════════════════════════════════════════
+  // ── Merge existing + newly uploaded URLs ──────────────────────
+  final finalImageUrls = [
+    ...widget.product.imageUrls,
+    for (int i = 0; i < jobs.length; i++)
+      if (!jobs[i].isVideo && jobs[i].colorKey == null) uploadedUrls[i]!,
+  ];
+
+  String? finalVideoUrl = widget.product.videoUrl;
+  for (int i = 0; i < jobs.length; i++) {
+    if (jobs[i].isVideo) {
+      finalVideoUrl = uploadedUrls[i];
+      break;
+    }
+  }
+
+  final finalColorImages =
+      Map<String, List<String>>.from(widget.product.colorImages);
+  for (int i = 0; i < jobs.length; i++) {
+    if (jobs[i].colorKey != null) {
+      finalColorImages[jobs[i].colorKey!] = [uploadedUrls[i]!];
+    }
+  }
+
+  return _UploadResult(
+    imageUrls: finalImageUrls,
+    videoUrl: finalVideoUrl,
+    colorImageUrls: finalColorImages,
+  );
+}
+
+  // ─────────────────────────────────────────────────────────────────
+  // Single-file upload with Firebase Storage progress events
+  // and exponential-backoff retry (up to 2 retries: 2 s, 4 s).
+  // ─────────────────────────────────────────────────────────────────
+
+  Future<String> _uploadFileWithRetry({
+    required File file,
+    required String userId,
+    required String folder,
+    required int fileIndex,
+    required void Function(int fileIndex, int bytes) onBytesUpdate,
+    int maxRetries = 2,
+  }) async {
+    int attempt = 0;
+
+    while (true) {
+      StreamSubscription<TaskSnapshot>? sub;
+      try {
+        final fileName =
+            '${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
+        final ref =
+            FirebaseStorage.instance.ref('products/$userId/$folder/$fileName');
+
+        final task = ref.putFile(file);
+
+        sub = task.snapshotEvents.listen(
+          (snap) => onBytesUpdate(fileIndex, snap.bytesTransferred),
+        );
+        _storageSubs.add(sub);
+
+        final snapshot = await task;
+        sub.cancel();
+        _storageSubs.remove(sub);
+
+        return await snapshot.ref.getDownloadURL();
+      } catch (e) {
+        sub?.cancel();
+        if (sub != null) _storageSubs.remove(sub);
+
+        attempt++;
+        if (attempt > maxRetries) rethrow;
+
+        // Reset this file's progress before retrying.
+        onBytesUpdate(fileIndex, 0);
+        await Future.delayed(Duration(seconds: attempt * 2));
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Submit — entry point called by the Confirm button
+  // ─────────────────────────────────────────────────────────────────
 
   Future<void> _submitProduct() async {
-    if (!mounted) return;
-    final l10n = AppLocalizations.of(context);
+    // Synchronous guard — blocks any second tap before the first await.
+    if (_isSubmitting) return;
+    _isSubmitting = true;
 
-    setState(() => _isLoading = true);
+    // Count files so the initial compressing state is accurate.
+    final newColorImageCount = widget.selectedColorImages.values
+        .where((v) => v['image'] is XFile)
+        .length;
+
+   setState(() {
+  _uploadState = UploadState(
+    phase: UploadPhase.uploading,
+    uploadedFiles: 0,
+    totalFiles: widget.imageFiles.length + newColorImageCount,
+    bytesTransferred: 0,
+    totalBytes: 0,
+  );
+});
 
     try {
-      User? user = _auth.currentUser;
+      final user = _auth.currentUser;
       if (user == null) {
         if (mounted) context.push('/login');
         return;
       }
 
-      final isShopProduct = widget.product.shopId != null;
+      // Step 1 — Upload everything new, report progress.
+      final upload = await _uploadAllFiles(user.uid);
 
-      if (isShopProduct) {
-        // ═══ SHOP PRODUCT: Use Cloud Functions (same as web app) ═══
-        await _submitViaCloudFunction(user);
+      // Step 2 — Switch to "submitting" phase (CF / Firestore call).
+      _setUploadState(UploadState(
+        phase: UploadPhase.submitting,
+        uploadedFiles: _uploadState?.totalFiles ?? 0,
+        totalFiles: _uploadState?.totalFiles ?? 0,
+        bytesTransferred: _uploadState?.totalBytes ?? 0,
+        totalBytes: _uploadState?.totalBytes ?? 0,
+      ));
+
+      // Step 3 — Persist the product.
+      if (widget.product.shopId != null) {
+        await _submitViaCloudFunction(user, upload);
       } else {
-        // ═══ VITRIN (personal) PRODUCT: Direct Firestore write ═══
-        await _submitVitrinProduct(user);
+        await _submitVitrinProduct(user, upload);
       }
 
       if (!mounted) return;
       context.go('/success');
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
-      String errorMessage = l10n.errorListingProduct;
-      switch (e.code) {
-        case 'invalid-argument':
-          errorMessage = e.message ?? errorMessage;
-          break;
-        case 'permission-denied':
-          errorMessage = e.message ?? errorMessage;
-          break;
-        case 'unauthenticated':
-          errorMessage = l10n.pleaseLoginToContinue;
-          break;
-        case 'not-found':
-          errorMessage = e.message ?? errorMessage;
-          break;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessage)),
-      );
-    } catch (e) {
+      final l10n = AppLocalizations.of(context);
+      final msg = switch (e.code) {
+        'invalid-argument' => e.message ?? l10n.errorListingProduct,
+        'permission-denied' => e.message ?? l10n.errorListingProduct,
+        'unauthenticated' => l10n.pleaseLoginToContinue,
+        'not-found' => e.message ?? l10n.errorListingProduct,
+        _ => l10n.errorListingProduct,
+      };
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(msg)));
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.errorListingProduct)),
+        SnackBar(
+            content: Text(AppLocalizations.of(context).errorListingProduct)),
       );
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _uploadState = null;
+        });
+      } else {
+        _isSubmitting = false;
+      }
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // CLOUD FUNCTION PATH (shop products — matches web app exactly)
-  //
-  // All files were already uploaded to Storage by
-  // ListProductScreen._navigateToPreview(). We just pass the URLs.
-  // ═══════════════════════════════════════════════════════════════════
+  // ─────────────────────────────────────────────────────────────────
+  // Cloud Function path (shop products)
+  // ─────────────────────────────────────────────────────────────────
 
-  Future<void> _submitViaCloudFunction(User user) async {
+  Future<void> _submitViaCloudFunction(
+    User user,
+    _UploadResult upload,
+  ) async {
     final functions = FirebaseFunctions.instanceFor(region: 'europe-west3');
-
-    // URLs already uploaded by ListProductScreen._navigateToPreview()
-    final imageUrls = widget.product.imageUrls;
-    final videoUrl = widget.product.videoUrl;
-    final colorImages = widget.product.colorImages;
     final colorQuantities = widget.product.colorQuantities;
+    final allColors = {
+      ...upload.colorImageUrls.keys,
+      ...colorQuantities.keys,
+    }.toList();
 
-    // Build availableColors from final color data
-    final Set<String> allColors = {};
-    allColors.addAll(colorImages.keys);
-    allColors.addAll(colorQuantities.keys);
-    final availableColors = allColors.toList();
-
-    // Build payload matching what the web app sends to the CF
-    final Map<String, dynamic> payload = {
-      // Core product info
+    final payload = <String, dynamic>{
       'productName': widget.product.productName,
       'description': widget.product.description,
       'price': widget.product.price,
@@ -806,15 +449,11 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
       'quantity': widget.product.quantity,
       'deliveryOption': widget.product.deliveryOption,
       'shopId': widget.product.shopId,
-
-      // Media (already uploaded to Storage)
-      'imageUrls': imageUrls,
-      'videoUrl': videoUrl,
-      'colorImages': colorImages,
+      'imageUrls': upload.imageUrls,
+      'videoUrl': upload.videoUrl,
+      'colorImages': upload.colorImageUrls,
       'colorQuantities': colorQuantities,
-      'availableColors': availableColors,
-
-      // Spec fields (top-level, same as web)
+      'availableColors': allColors,
       if (widget.product.clothingSizes != null)
         'clothingSizes': widget.product.clothingSizes,
       if (widget.product.clothingFit != null)
@@ -835,11 +474,7 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
         'curtainMaxWidth': widget.product.curtainMaxWidth,
       if (widget.product.curtainMaxHeight != null)
         'curtainMaxHeight': widget.product.curtainMaxHeight,
-
-      // Misc attributes
       'attributes': widget.product.attributes,
-
-      // Seller info
       'phone': widget.phone,
       'region': widget.region,
       'address': widget.address,
@@ -849,64 +484,51 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
     };
 
     if (widget.isEditMode && widget.originalProduct != null) {
-      // ─── EDIT MODE: Call submitProductEdit ───
-      final originalColors = widget.originalProduct!.colorImages.keys.toSet();
-      final currentColors = colorImages.keys.toSet();
-      final deletedColors = originalColors.difference(currentColors).toList();
+      final deletedColors = widget.originalProduct!.colorImages.keys
+          .toSet()
+          .difference(upload.colorImageUrls.keys.toSet())
+          .toList();
 
       payload['originalProductId'] = widget.originalProduct!.id;
       payload['isArchivedEdit'] = widget.isFromArchivedCollection;
       payload['deletedColors'] = deletedColors;
 
-      final callable = functions.httpsCallable('submitProductEdit');
-      final result = await callable.call(payload);
-
-      debugPrint(
-          '✅ Edit submitted via CF: ${result.data['applicationId']} '
-          '(${result.data['editedFieldCount']} fields changed)');
+      final result = await functions
+          .httpsCallable('submitProductEdit')
+          .call(payload);
+      debugPrint('✅ Edit via CF: ${result.data['applicationId']}');
     } else {
-      // ─── NEW PRODUCT: Call submitProduct ───
-      final callable = functions.httpsCallable('submitProduct');
-      final result = await callable.call(payload);
-
-      debugPrint('✅ Product submitted via CF: ${result.data['productId']}');
+      final result =
+          await functions.httpsCallable('submitProduct').call(payload);
+      debugPrint('✅ New product via CF: ${result.data['productId']}');
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // VITRIN (personal) PRODUCT PATH — Direct Firestore write
-  // (No Cloud Function exists for vitrin products yet)
-  //
-  // All files were already uploaded to Storage by
-  // ListProductScreen._navigateToPreview(). No re-uploads needed.
-  // ═══════════════════════════════════════════════════════════════════
+  // ─────────────────────────────────────────────────────────────────
+  // Vitrin (personal) path — direct Firestore write
+  // ─────────────────────────────────────────────────────────────────
 
-  Future<void> _submitVitrinProduct(User user) async {
-    // URLs already uploaded by ListProductScreen._navigateToPreview()
-    final imageUrls = widget.product.imageUrls;
-    final videoUrl = widget.product.videoUrl;
-    final colorImages = widget.product.colorImages;
+  Future<void> _submitVitrinProduct(
+    User user,
+    _UploadResult upload,
+  ) async {
     final colorQuantities = widget.product.colorQuantities;
+    final allColors = {
+      ...upload.colorImageUrls.keys,
+      ...colorQuantities.keys,
+    }.toList();
 
-    // Build availableColors
-    final Set<String> allColors = {};
-    allColors.addAll(colorImages.keys);
-    allColors.addAll(colorQuantities.keys);
-    final availableColors = allColors.toList();
+    final deletedColors = widget.isEditMode && widget.originalProduct != null
+        ? widget.originalProduct!.colorImages.keys
+            .toSet()
+            .difference(upload.colorImageUrls.keys.toSet())
+            .toList()
+        : <String>[];
 
-    // Compute deleted colors for edit mode
-    List<String> deletedColors = [];
-    if (widget.isEditMode && widget.originalProduct != null) {
-      final originalColors = widget.originalProduct!.colorImages.keys.toSet();
-      final currentColors = colorImages.keys.toSet();
-      deletedColors = originalColors.difference(currentColors).toList();
-    }
-
-    final uuid = Uuid();
     final productId =
-        widget.isEditMode ? widget.originalProduct!.id : uuid.v4();
+        widget.isEditMode ? widget.originalProduct!.id : const Uuid().v4();
 
-    Product product = Product(
+    final product = Product(
       id: productId,
       ownerId: user.uid,
       productName: widget.product.productName,
@@ -914,10 +536,10 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
       price: widget.product.price,
       condition: widget.product.condition,
       brandModel: widget.product.brandModel,
-      currency: "TL",
+      currency: 'TL',
       gender: widget.product.gender,
       boostClickCountAtStart: widget.product.boostClickCountAtStart,
-      imageUrls: imageUrls,
+      imageUrls: upload.imageUrls,
       averageRating:
           widget.isEditMode ? widget.originalProduct!.averageRating : 0.0,
       reviewCount:
@@ -926,7 +548,8 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
           widget.isEditMode ? widget.originalProduct!.clickCount : 0,
       favoritesCount:
           widget.isEditMode ? widget.originalProduct!.favoritesCount : 0,
-      cartCount: widget.isEditMode ? widget.originalProduct!.cartCount : 0,
+      cartCount:
+          widget.isEditMode ? widget.originalProduct!.cartCount : 0,
       purchaseCount:
           widget.isEditMode ? widget.originalProduct!.purchaseCount : 0,
       userId: user.uid,
@@ -954,18 +577,21 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
       promotionScore:
           widget.isEditMode ? widget.originalProduct!.promotionScore : 0,
       paused: widget.isEditMode ? widget.originalProduct!.paused : false,
-      boostStartTime:
-          widget.isEditMode ? widget.originalProduct!.boostStartTime : null,
+      boostStartTime: widget.isEditMode
+          ? widget.originalProduct!.boostStartTime
+          : null,
       boostEndTime:
           widget.isEditMode ? widget.originalProduct!.boostEndTime : null,
-      lastClickDate:
-          widget.isEditMode ? widget.originalProduct!.lastClickDate : null,
-      clickCountAtStart:
-          widget.isEditMode ? widget.originalProduct!.clickCountAtStart : 0,
-      colorImages: colorImages,
+      lastClickDate: widget.isEditMode
+          ? widget.originalProduct!.lastClickDate
+          : null,
+      clickCountAtStart: widget.isEditMode
+          ? widget.originalProduct!.clickCountAtStart
+          : 0,
+      colorImages: upload.colorImageUrls,
       colorQuantities: colorQuantities,
-      availableColors: availableColors,
-      videoUrl: videoUrl,
+      availableColors: allColors,
+      videoUrl: upload.videoUrl,
       attributes: widget.product.attributes,
       productType: widget.product.productType,
       clothingSizes: widget.product.clothingSizes,
@@ -985,11 +611,12 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
           ? (widget.originalProduct!.relatedLastUpdated ??
               Timestamp.fromDate(DateTime(1970, 1, 1)))
           : Timestamp.fromDate(DateTime(1970, 1, 1)),
-      relatedCount:
-          widget.isEditMode ? (widget.originalProduct!.relatedCount ?? 0) : 0,
+      relatedCount: widget.isEditMode
+          ? (widget.originalProduct!.relatedCount ?? 0)
+          : 0,
     );
 
-    Map<String, dynamic> productData = product.toMap();
+    var productData = product.toMap();
     productData['phone'] = widget.phone;
     productData['region'] = widget.region;
     productData['address'] = widget.address;
@@ -1001,28 +628,20 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
     productData['campaignName'] =
         widget.isEditMode ? (widget.originalProduct?.campaignName ?? '') : '';
     productData['updatedAt'] = FieldValue.serverTimestamp();
-
     productData = FirebaseDataCleaner.cleanData(productData);
 
     if (widget.isEditMode) {
-      final changeDetection =
-          _detectChanges(widget.originalProduct!, product);
-      final List<String> editedFields =
-          changeDetection['editedFields'] as List<String>;
-      final Map<String, dynamic> changes =
-          changeDetection['changes'] as Map<String, dynamic>;
+      final detection = _detectChanges(widget.originalProduct!, product);
+      final editedFields = detection['editedFields'] as List<String>;
+      final changes = detection['changes'] as Map<String, dynamic>;
 
       if (deletedColors.isNotEmpty) {
         productData['deletedColors'] = deletedColors;
-        if (!editedFields.contains('colorImages')) {
-          editedFields.add('colorImages');
-        }
-        if (!changes.containsKey('colorImages')) {
-          changes['colorImages'] = {
-            'old': widget.originalProduct!.colorImages,
-            'new': colorImages,
-          };
-        }
+        if (!editedFields.contains('colorImages')) editedFields.add('colorImages');
+        changes['colorImages'] ??= {
+          'old': widget.originalProduct!.colorImages,
+          'new': upload.colorImageUrls,
+        };
       }
 
       productData['originalProductId'] = widget.originalProduct!.id;
@@ -1047,10 +666,9 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
         productData['sourceCollection'] = 'shop_products';
       }
 
-      final editApplicationId = const Uuid().v4();
       await _firestore
           .collection('vitrin_edit_product_applications')
-          .doc(editApplicationId)
+          .doc(const Uuid().v4())
           .set(productData);
     } else {
       productData['status'] = 'pending';
@@ -1061,85 +679,500 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // CHANGE DETECTION (only used for vitrin products)
-  // For shop products, the Cloud Function handles this server-side.
-  // ═══════════════════════════════════════════════════════════════════
+  // ─────────────────────────────────────────────────────────────────
+  // Change detection (vitrin edit only)
+  // ─────────────────────────────────────────────────────────────────
 
   Map<String, dynamic> _detectChanges(Product original, Product updated) {
-    final List<String> editedFields = [];
-    final Map<String, dynamic> changes = {};
+    final editedFields = <String>[];
+    final changes = <String, dynamic>{};
 
-    dynamic normalizeValue(dynamic val) {
-      if (val == null ||
-          val == '' ||
-          (val is List && val.isEmpty) ||
-          (val is Map && val.isEmpty)) {
-        return null;
-      }
-      return val;
+    dynamic normalize(dynamic v) {
+      if (v == null || v == '' ||
+          (v is List && v.isEmpty) ||
+          (v is Map && v.isEmpty)) return null;
+      return v;
     }
 
-    void compareField(String fieldName, dynamic oldValue, dynamic newValue) {
-      final normalizedOld = normalizeValue(oldValue);
-      final normalizedNew = normalizeValue(newValue);
-      if (jsonEncode(normalizedOld) != jsonEncode(normalizedNew)) {
-        editedFields.add(fieldName);
-        changes[fieldName] = {'old': oldValue, 'new': newValue};
+    void compare(String field, dynamic oldVal, dynamic newVal) {
+      if (jsonEncode(normalize(oldVal)) != jsonEncode(normalize(newVal))) {
+        editedFields.add(field);
+        changes[field] = {'old': oldVal, 'new': newVal};
       }
     }
 
-    compareField('productName', original.productName, updated.productName);
-    compareField('description', original.description, updated.description);
-    compareField('price', original.price, updated.price);
-    compareField('condition', original.condition, updated.condition);
-    compareField('brandModel', original.brandModel, updated.brandModel);
-    compareField('category', original.category, updated.category);
-    compareField('subcategory', original.subcategory, updated.subcategory);
-    compareField(
-        'subsubcategory', original.subsubcategory, updated.subsubcategory);
-    compareField('gender', original.gender, updated.gender);
-    compareField('quantity', original.quantity, updated.quantity);
-    compareField(
-        'deliveryOption', original.deliveryOption, updated.deliveryOption);
-    compareField('imageUrls', original.imageUrls, updated.imageUrls);
-    compareField('videoUrl', original.videoUrl, updated.videoUrl);
-    compareField('colorImages', original.colorImages, updated.colorImages);
-    compareField(
-        'colorQuantities', original.colorQuantities, updated.colorQuantities);
-    compareField('productType', original.productType, updated.productType);
-    compareField(
-        'clothingSizes', original.clothingSizes, updated.clothingSizes);
-    compareField('clothingFit', original.clothingFit, updated.clothingFit);
-    compareField(
-        'clothingTypes', original.clothingTypes, updated.clothingTypes);
-    compareField('pantSizes', original.pantSizes, updated.pantSizes);
-    compareField(
-        'pantFabricTypes', original.pantFabricTypes, updated.pantFabricTypes);
-    compareField(
-        'footwearSizes', original.footwearSizes, updated.footwearSizes);
-    compareField('jewelryMaterials', original.jewelryMaterials,
-        updated.jewelryMaterials);
-    compareField('consoleBrand', original.consoleBrand, updated.consoleBrand);
-    compareField(
-        'curtainMaxWidth', original.curtainMaxWidth, updated.curtainMaxWidth);
-    compareField('curtainMaxHeight', original.curtainMaxHeight,
-        updated.curtainMaxHeight);
+    compare('productName', original.productName, updated.productName);
+    compare('description', original.description, updated.description);
+    compare('price', original.price, updated.price);
+    compare('condition', original.condition, updated.condition);
+    compare('brandModel', original.brandModel, updated.brandModel);
+    compare('category', original.category, updated.category);
+    compare('subcategory', original.subcategory, updated.subcategory);
+    compare('subsubcategory', original.subsubcategory, updated.subsubcategory);
+    compare('gender', original.gender, updated.gender);
+    compare('quantity', original.quantity, updated.quantity);
+    compare('deliveryOption', original.deliveryOption, updated.deliveryOption);
+    compare('imageUrls', original.imageUrls, updated.imageUrls);
+    compare('videoUrl', original.videoUrl, updated.videoUrl);
+    compare('colorImages', original.colorImages, updated.colorImages);
+    compare('colorQuantities', original.colorQuantities, updated.colorQuantities);
+    compare('productType', original.productType, updated.productType);
+    compare('clothingSizes', original.clothingSizes, updated.clothingSizes);
+    compare('clothingFit', original.clothingFit, updated.clothingFit);
+    compare('clothingTypes', original.clothingTypes, updated.clothingTypes);
+    compare('pantSizes', original.pantSizes, updated.pantSizes);
+    compare('pantFabricTypes', original.pantFabricTypes, updated.pantFabricTypes);
+    compare('footwearSizes', original.footwearSizes, updated.footwearSizes);
+    compare('jewelryMaterials', original.jewelryMaterials, updated.jewelryMaterials);
+    compare('consoleBrand', original.consoleBrand, updated.consoleBrand);
+    compare('curtainMaxWidth', original.curtainMaxWidth, updated.curtainMaxWidth);
+    compare('curtainMaxHeight', original.curtainMaxHeight, updated.curtainMaxHeight);
 
-    return {
-      'editedFields': editedFields,
-      'changes': changes,
-    };
+    return {'editedFields': editedFields, 'changes': changes};
   }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Build
+  // ─────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final localizedCategory = AllInOneCategoryData.localizeCategoryKey(
+        widget.product.category, l10n);
+    final localizedSubcategory = AllInOneCategoryData.localizeSubcategoryKey(
+        widget.product.category, widget.product.subcategory, l10n);
+    final localizedSubSub = widget.product.subsubcategory.isNotEmpty
+        ? AllInOneCategoryData.localizeSubSubcategoryKey(
+            widget.product.category,
+            widget.product.subcategory,
+            widget.product.subsubcategory,
+            l10n)
+        : null;
+
+    final colorDisplay = widget.selectedColorImages.isNotEmpty
+        ? widget.selectedColorImages.keys
+            .map((c) => AttributeLocalizationUtils.localizeColorName(c, l10n))
+            .join(', ')
+        : null;
+
+    // PopScope blocks the Android hardware back button while uploading.
+    return PopScope(
+      canPop: !_isSubmitting,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            widget.isEditMode ? l10n.previewEditProduct : l10n.previewProduct,
+            style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface, fontSize: 16),
+          ),
+          iconTheme:
+              IconThemeData(color: Theme.of(context).colorScheme.onSurface),
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          elevation: 0,
+          automaticallyImplyLeading: !_isSubmitting,
+        ),
+        body: Stack(
+          children: [
+            // ── Scrollable preview content ─────────────────────────
+            GestureDetector(
+              onTap: () => FocusScope.of(context).unfocus(),
+              child: Container(
+                color: isDark
+                    ? const Color(0xFF1C1A29)
+                    : const Color(0xFFF5F5F5),
+                child: SafeArea(
+                  bottom: true,
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // ── Product Details ────────────────────────
+                        _sectionHeader(l10n.productDetails),
+                        _card(
+                          isDark,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Image grid
+                              if (widget.imageFiles.isNotEmpty ||
+                                  widget.product.imageUrls.isNotEmpty)
+                                Wrap(
+                                  spacing: 8.0,
+                                  runSpacing: 8.0,
+                                  children: [
+                                    ...widget.product.imageUrls
+                                        .map(_networkThumb),
+                                    ...widget.imageFiles
+                                        .map((x) => _localThumb(x.path)),
+                                  ],
+                                ),
+                              const SizedBox(height: 16),
+                              _row(context, l10n.productTitle,
+                                  widget.product.productName),
+                              _row(context, l10n.category, localizedCategory),
+                              _row(context, l10n.subcategory,
+                                  localizedSubcategory),
+                              _row(
+                                  context,
+                                  l10n.subSubcategory ?? 'Sub-subcategory',
+                                  localizedSubSub ?? ''),
+                              _row(context, l10n.brand,
+                                  widget.product.brandModel ?? ''),
+                              if (colorDisplay != null)
+                                _row(context, l10n.color, colorDisplay),
+                              _row(context, l10n.condition,
+                                  widget.product.condition),
+                              _row(context, l10n.price,
+                                  '${widget.product.price}'),
+                              _row(context, l10n.quantity,
+                                  widget.product.quantity.toString()),
+                              _row(context, l10n.description,
+                                  widget.product.description),
+                              // Dynamic attributes
+                              ..._buildAttributeRows(context, l10n),
+                              // Video
+                              if (widget.videoFile != null) ...[
+                                const SizedBox(height: 16),
+                                Text(l10n.video,
+                                    style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 8),
+                                VideoPlayerWidget(
+                                    file: File(widget.videoFile!.path)),
+                              ],
+                              // Color variant images
+                              ..._buildColorRows(context, l10n, textTheme),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // ── Seller Info ────────────────────────────
+                        _sectionHeader(l10n.sellerInformation),
+                        _card(
+                          isDark,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _row(context, l10n.name,
+                                  widget.product.sellerName),
+                              _row(context, l10n.phoneNumber, widget.phone),
+                              _row(context, l10n.region, widget.region),
+                              _row(context, l10n.addressDetails, widget.address),
+                              _row(context, l10n.bankAccountNumberIban,
+                                  widget.iban),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // ── Delivery ───────────────────────────────
+                        _sectionHeader(l10n.deliveryOption),
+                        _card(
+                          isDark,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8.0),
+                                    child: Image.asset(
+                                      widget.product.deliveryOption ==
+                                              'Self Delivery'
+                                          ? 'assets/images/selfdelivery.png'
+                                          : 'assets/images/fastdelivery.png',
+                                      width: 70,
+                                      height: 70,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Text(
+                                      widget.product.deliveryOption ==
+                                              'Self Delivery'
+                                          ? l10n.selfDelivery
+                                          : l10n.fastDelivery,
+                                      style: textTheme.bodyLarge?.copyWith(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                widget.product.deliveryOption == 'Self Delivery'
+                                    ? l10n.selfDeliveryDescription
+                                    : l10n.fastDeliveryDescription,
+                                style: textTheme.bodyMedium?.copyWith(
+                                  fontSize: 14,
+                                  color: isDark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[700],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // ── Stock Notice ───────────────────────────
+                        _sectionHeader(l10n.stockInformation),
+                        _card(
+                          isDark,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Image.asset('assets/images/caution.png',
+                                      width: 40, height: 40),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Text(l10n.stockInformation,
+                                        style: textTheme.bodyLarge?.copyWith(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                l10n.stockInformationDescription,
+                                style: textTheme.bodyMedium?.copyWith(
+                                  fontSize: 14,
+                                  color: isDark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[700],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // ── Action Buttons ─────────────────────────
+                        Padding(
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed:
+                                      _isSubmitting ? null : () => context.pop(),
+                                  style: _buttonStyle(),
+                                  child: Text(l10n.edit,
+                                      style:
+                                          const TextStyle(fontSize: 14)),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed:
+                                      _isSubmitting ? null : _submitProduct,
+                                  style: _buttonStyle(),
+                                  child: Text(
+                                    widget.isEditMode
+                                        ? l10n.submitEdit
+                                        : l10n.confirmAndList,
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // ── Progress overlay (last in Stack = on top) ──────────
+            if (_uploadState != null)
+              UploadProgressOverlay(state: _uploadState!),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Attribute rows ────────────────────────────────────────────────
+
+  List<Widget> _buildAttributeRows(
+      BuildContext context, AppLocalizations l10n) {
+    final attrs = _buildDisplayAttributes();
+    if (attrs.isEmpty) return [];
+
+    return [
+      const SizedBox(height: 16),
+      Text(l10n.details,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 8),
+      ...attrs.entries.map((e) {
+        try {
+          final title = AttributeLocalizationUtils
+              .getLocalizedAttributeTitle(e.key, l10n);
+          final value = AttributeLocalizationUtils
+              .getLocalizedAttributeValue(e.key, e.value, l10n);
+          if (value.isEmpty) return const SizedBox.shrink();
+          return _row(context, title, value);
+        } catch (_) {
+          final v = e.value is List
+              ? (e.value as List).join(', ')
+              : e.value.toString();
+          if (v.isEmpty) return const SizedBox.shrink();
+          return _row(context, e.key, v);
+        }
+      }),
+    ];
+  }
+
+  List<Widget> _buildColorRows(
+      BuildContext context, AppLocalizations l10n, TextTheme textTheme) {
+    if (widget.selectedColorImages.isEmpty) return [];
+
+    return [
+      const SizedBox(height: 16),
+      Text(l10n.colorImages,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 8),
+      ...widget.selectedColorImages.entries.map((entry) {
+        final color = entry.key;
+        final imageData = entry.value['image'];
+        final localizedColor =
+            AttributeLocalizationUtils.localizeColorName(color, l10n);
+
+        Widget? imageWidget;
+        if (imageData is XFile) {
+          imageWidget = _localThumb(imageData.path);
+        } else if (imageData is String) {
+          imageWidget = _networkThumb(imageData);
+        } else if (widget.product.colorImages.containsKey(color)) {
+          final urls = widget.product.colorImages[color]!;
+          if (urls.isNotEmpty) imageWidget = _networkThumb(urls.first);
+        }
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(localizedColor,
+                  style: textTheme.bodyMedium
+                      ?.copyWith(fontSize: 14, fontWeight: FontWeight.w600)),
+              if (imageWidget != null) ...[
+                const SizedBox(height: 8),
+                imageWidget,
+              ],
+            ],
+          ),
+        );
+      }),
+    ];
+  }
+
+  // ── Reusable UI primitives ────────────────────────────────────────
+
+  Widget _sectionHeader(String title) => Padding(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        child: Text(title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      );
+
+  Widget _card(bool isDark, {required Widget child}) => Container(
+        width: double.infinity,
+        color: isDark ? const Color.fromARGB(255, 33, 31, 49) : Colors.white,
+        padding: const EdgeInsets.all(16.0),
+        child: child,
+      );
+
+  Widget _row(BuildContext context, String title, String value) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 150,
+            child: Text('$title:',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontSize: 14)),
+          ),
+          Expanded(
+            child: Text(value,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: isDark ? Colors.grey[300] : Colors.grey[800],
+                    fontSize: 14)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _networkThumb(String url) => ClipRRect(
+        borderRadius: BorderRadius.circular(8.0),
+        child: Image.network(
+          url,
+          width: 100,
+          height: 100,
+          fit: BoxFit.cover,
+          loadingBuilder: (_, child, progress) => progress == null
+              ? child
+              : Container(
+                  width: 100,
+                  height: 100,
+                  color: Colors.grey[300],
+                  child: const Center(child: CircularProgressIndicator()),
+                ),
+          errorBuilder: (_, __, ___) => Container(
+            width: 100,
+            height: 100,
+            color: Colors.grey[300],
+            child: const Icon(Icons.error, color: Colors.red),
+          ),
+        ),
+      );
+
+  Widget _localThumb(String path) => ClipRRect(
+        borderRadius: BorderRadius.circular(8.0),
+        child: Image.file(File(path),
+            width: 100, height: 100, fit: BoxFit.cover),
+      );
+
+  ButtonStyle _buttonStyle() => ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF00A86B),
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24.0),
+        ),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+      );
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// VIDEO PLAYER WIDGET (unchanged)
-// ═══════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// Video player (unchanged)
+// ─────────────────────────────────────────────────────────────────────────────
 
 class VideoPlayerWidget extends StatefulWidget {
   final File file;
-
   const VideoPlayerWidget({Key? key, required this.file}) : super(key: key);
 
   @override
@@ -1156,9 +1189,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
     _controller = VideoPlayerController.file(widget.file)
       ..initialize().then((_) {
         if (!mounted) return;
-        setState(() {
-          _isInitialized = true;
-        });
+        setState(() => _isInitialized = true);
         _controller.setLooping(true);
         _controller.play();
       });
@@ -1189,33 +1220,24 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
 }
 
 class _ControlsOverlay extends StatelessWidget {
+  final VideoPlayerController controller;
   const _ControlsOverlay({Key? key, required this.controller})
       : super(key: key);
-
-  final VideoPlayerController controller;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        controller.value.isPlaying ? controller.pause() : controller.play();
-      },
-      child: Stack(
-        children: <Widget>[
-          controller.value.isPlaying
-              ? const SizedBox.shrink()
-              : Container(
-                  color: Colors.black54,
-                  child: const Center(
-                    child: Icon(
-                      Icons.play_arrow,
-                      color: Colors.white,
-                      size: 60.0,
-                    ),
-                  ),
-                ),
-        ],
-      ),
+      onTap: () =>
+          controller.value.isPlaying ? controller.pause() : controller.play(),
+      child: controller.value.isPlaying
+          ? const SizedBox.shrink()
+          : Container(
+              color: Colors.black54,
+              child: const Center(
+                child:
+                    Icon(Icons.play_arrow, color: Colors.white, size: 60.0),
+              ),
+            ),
     );
   }
 }

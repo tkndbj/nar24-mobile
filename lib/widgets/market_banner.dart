@@ -436,6 +436,8 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
                 fadeOutDuration: Duration.zero,
                 useOldImageOnUrlChange: true,
                 filterQuality: FilterQuality.medium,
+                // Match prefetch constraint (1200) so decode happens once
+                memCacheWidth: _imageCacheWidth,
 
                 // Placeholder while loading
                 placeholder: (_, __) => Container(
