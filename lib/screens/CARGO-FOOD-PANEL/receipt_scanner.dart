@@ -160,27 +160,35 @@ class ReceiptScannerService {
     try {
       String currentUrl = shortUrl;
 
-      // Follow up to 5 redirect hops
       for (int i = 0; i < 5; i++) {
+        debugPrint('[QR] Hop $i: $currentUrl');
+
         final request = http.Request('GET', Uri.parse(currentUrl))
           ..followRedirects = false;
 
         final response =
             await client.send(request).timeout(const Duration(seconds: 5));
 
+        debugPrint('[QR] Status: ${response.statusCode}');
+        debugPrint('[QR] Location header: ${response.headers['location']}');
+
         final location = response.headers['location'];
 
-        // No more redirects
-        if (location == null) return currentUrl;
+        if (location == null) {
+          // No Location header — try reading body for JS redirect
+          final body = await response.stream.bytesToString();
+          debugPrint(
+              '[QR] Body snippet: ${body.substring(0, body.length.clamp(0, 300))}');
+          return currentUrl;
+        }
 
-        // If this hop already contains coordinates, return it immediately
         if (_tryExtractFromUrl(location) != null) return location;
-
         currentUrl = location;
       }
 
       return currentUrl;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[QR] Redirect error: $e');
       return null;
     } finally {
       client.close();
