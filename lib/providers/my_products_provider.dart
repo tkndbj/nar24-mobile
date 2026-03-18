@@ -29,6 +29,8 @@ class MyProductsProvider extends ChangeNotifier {
   // Product management
   List<Product> _products = [];
   bool _isLoading = true;
+  bool _isRefreshing = false;
+  String? _error;
 
   // Request deduplication
   final Map<String, Future<Map<String, dynamic>>> _pendingTransactionRequests =
@@ -47,6 +49,8 @@ class MyProductsProvider extends ChangeNotifier {
   // Getters
   List<Product> get products => _filteredProducts;
   bool get isLoading => _isLoading;
+  bool get isRefreshing => _isRefreshing;
+  String? get error => _error;
 
   List<Product> get _filteredProducts {
     var filtered = _products;
@@ -72,7 +76,7 @@ class MyProductsProvider extends ChangeNotifier {
   void _initialize() {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId != null) {
-      _listenToProducts(userId);
+      _fetchProducts(userId);
     }
   }
 
@@ -105,32 +109,54 @@ class MyProductsProvider extends ChangeNotifier {
     }
   }
 
-  void _listenToProducts(String userId) {
-    FirebaseFirestore.instance
-        .collection('products')
-        .where('userId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .listen(
-      (snapshot) {
-        _products =
-            snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
-        _isLoading = false;
+  Future<void> _fetchProducts(String userId) async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('products')
+          .where('userId', isEqualTo: userId)
+          .orderBy('createdAt', descending: true)
+          .get();
 
-        // Update product cache with fresh data
-        for (final doc in snapshot.docs) {
-          final product = Product.fromDocument(doc);
-          _productCache[product.id] = _CachedProduct(product, DateTime.now());
-        }
+      _products =
+          snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
+      _isLoading = false;
+      _error = null;
 
-        notifyListeners();
-      },
-      onError: (e) {
-        debugPrint('Error listening to products: $e');
-        _isLoading = false;
-        notifyListeners();
-      },
-    );
+      // Update product cache with fresh data
+      for (final doc in snapshot.docs) {
+        final product = Product.fromDocument(doc);
+        _productCache[product.id] = _CachedProduct(product, DateTime.now());
+      }
+
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error fetching products: $e');
+      _isLoading = false;
+      _error = e.toString();
+      notifyListeners();
+    }
+  }
+
+  /// Call this after product create, update, or delete to refresh the list.
+  Future<void> refresh() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+
+    _isRefreshing = true;
+    notifyListeners();
+
+    await _fetchProducts(userId);
+
+    _isRefreshing = false;
+    notifyListeners();
+  }
+
+  /// Removes a product from the local list immediately (optimistic update).
+  /// Call [refresh] after the server operation completes for consistency.
+  void removeProductLocally(String productId) {
+    _products.removeWhere((p) => p.id == productId);
+    _productCache.remove(productId);
+    notifyListeners();
   }
 
   void updateSelectedDateRange(DateTimeRange? range) {
@@ -507,7 +533,3 @@ class _CachedTransactionPage {
   });
 }
 
-// Extension for unawaited futures
-extension UnawaiteExtension on Future {
-  void get unawaited => null;
-}

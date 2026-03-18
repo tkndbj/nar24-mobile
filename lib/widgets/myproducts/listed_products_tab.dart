@@ -257,6 +257,11 @@ class _ListedProductsTabState extends State<ListedProductsTab>
               Navigator.of(ctx).pop();
               _showDeletingProductModal(l10n, isDark);
 
+              // Optimistic removal from local list
+              context
+                  .read<MyProductsProvider>()
+                  .removeProductLocally(product.id);
+
               try {
                 final functions =
                     FirebaseFunctions.instanceFor(region: 'europe-west3');
@@ -289,6 +294,10 @@ class _ListedProductsTabState extends State<ListedProductsTab>
                   );
                 }
               } on FirebaseFunctionsException catch (e) {
+                // Refresh to restore the list if delete failed
+                if (mounted && !_isDisposed) {
+                  context.read<MyProductsProvider>().refresh();
+                }
                 if (mounted && !_isDisposed) {
                   Navigator.of(context).pop();
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -316,6 +325,10 @@ class _ListedProductsTabState extends State<ListedProductsTab>
                 }
               } catch (e) {
                 debugPrint('Delete error: $e');
+                // Refresh to restore the list if delete failed
+                if (mounted && !_isDisposed) {
+                  context.read<MyProductsProvider>().refresh();
+                }
                 if (mounted && !_isDisposed) {
                   Navigator.of(context).pop();
                   ScaffoldMessenger.of(context).showSnackBar(
