@@ -91,6 +91,7 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
   final Map<String, Completer<void>> _pendingFetches = {};
 
   bool _disposed = false;
+  String? _currentUserId;
 
   // Public getters
   int get cartCount => cartCountNotifier.value;
@@ -436,6 +437,9 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
     _pendingFetches['init'] = completer;
     isLoadingNotifier.value = true;
 
+    // Invalidate totals cache so next totals request hits the CF for fresh data
+    _totalsCache.invalidateForUser(user.uid);
+
     _lastDocument = null;
     _hasMore = true;
 
@@ -538,18 +542,19 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
 
  void _handleUserChange(User? user) {
     if (user == null) {
+        _currentUserId = null;
         _clearAllData();
         return;
     }
 
     // Only clear if it's a DIFFERENT user, not same user re-emitting
-    final previousUserId = _auth.currentUser?.uid;
-    if (previousUserId != null && previousUserId == user.uid) {
+    if (_currentUserId != null && _currentUserId == user.uid) {
         // Same user, just re-populate IDs, don't wipe items
         _populateFromUserDoc();
         return;
     }
 
+    _currentUserId = user.uid;
     _clearAllData();
     _populateFromUserDoc();
 }

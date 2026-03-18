@@ -51,6 +51,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   // Firestore
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // Provider reference (wired once, like cart screen)
+  FavoriteProvider? _favoriteProvider;
+
   @override
   void initState() {
     super.initState();
@@ -58,9 +61,34 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     _setupAnimations();
     _setupScrollListener();
-    _setupAuthListener();    
-    _checkCacheAndInitialize();
+    _setupAuthListener();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final provider = Provider.of<FavoriteProvider>(context, listen: false);
+
+    if (_favoriteProvider == null) {
+      // First creation: wire up listener
+      _favoriteProvider = provider;
+      _favoriteProvider!.paginatedFavoritesNotifier.addListener(_handleFavoritesChanged);
+    }
+
+    // Always reload on every screen visit (widget creation OR tab revisit)
+    // loadFavorites() is safe to call repeatedly — it has its own pending-fetch
+    // dedup guard inside the provider
+    _isInitialLoading = true;
     _startLoadingTimeout();
+    _favoriteProvider!.loadFavorites().then((_) {
+      if (mounted) _loadNextPage();
+    });
+  }
+
+  void _handleFavoritesChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   // ========================================================================
@@ -128,80 +156,16 @@ void _setupAnimations() {
     });
   }
 
-  void _checkCacheAndInitialize() {
-    final favoriteProvider =
-        Provider.of<FavoriteProvider>(context, listen: false);
-    final currentBasketId = favoriteProvider.selectedBasketId;
-
-    final hasCachedData = favoriteProvider.paginatedFavorites.isNotEmpty;
-    final shouldReload =
-        favoriteProvider.shouldReloadFavorites(currentBasketId);
-
-    if (hasCachedData && !shouldReload) {
-      setState(() => _isInitialLoading = false);
-      _loadingTimeoutTimer?.cancel();
-      debugPrint(
-          '✅ Using cached data - ${favoriteProvider.paginatedFavorites.length} items');
-    } else {
-      // ✅ FIX: If cached data is empty and no more data, hide shimmer immediately
-      if (!hasCachedData && !favoriteProvider.hasMoreData && favoriteProvider.isInitialLoadComplete) {
-        setState(() => _isInitialLoading = false);
-        _loadingTimeoutTimer?.cancel();
-        debugPrint('✅ No cached data and no more to load - shimmer hidden');
-      } else {
-        debugPrint('🔄 Loading fresh data');
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _loadDataIfNeeded();
-        });
-      }
-    }
-  }
-
-  Future<void> _loadDataIfNeeded() async {
-    if (!mounted) return;
-
-    try {
-      final favoriteProvider =
-          Provider.of<FavoriteProvider>(context, listen: false);
-      final currentBasketId = favoriteProvider.selectedBasketId;
-
-      final hasCachedData = favoriteProvider.paginatedFavorites.isNotEmpty;
-      final shouldReload =
-          favoriteProvider.shouldReloadFavorites(currentBasketId);
-
-      if (hasCachedData && !shouldReload) {
-        debugPrint('✅ Using cached data - no reload needed');
-        if (mounted) setState(() => _isInitialLoading = false);
-        _loadingTimeoutTimer?.cancel();
-        return;
-      }
-
-      if (shouldReload) {
-        debugPrint('🔄 Loading favorites - basket changed or first load');
-        await _resetPaginationAndLoad();
-        if (mounted) setState(() => _isInitialLoading = false);
-      }
-    } catch (e) {
-      debugPrint('❌ Error in _loadDataIfNeeded: $e');
-      if (mounted) setState(() => _isInitialLoading = false);
-    } finally {
-      _loadingTimeoutTimer?.cancel();
-    }
-  }
-
 Future<void> _resetPaginationAndLoad() async {
   try {
-    final favoriteProvider =
-        Provider.of<FavoriteProvider>(context, listen: false);
-
     setState(() {
-      // ✅ REMOVED: _selectedProducts.clear() (no longer needed)
       _isInitialLoading = true;
     });
 
     _startLoadingTimeout();
-    favoriteProvider.resetPagination();
-    await _loadNextPage();
+    _favoriteProvider!.loadFavorites().then((_) {
+      if (mounted) _loadNextPage();
+    });
   } catch (e) {
     debugPrint('❌ Error in _resetPaginationAndLoad: $e');
     if (mounted) setState(() => _isInitialLoading = false);
@@ -1547,6 +1511,7 @@ Widget build(BuildContext context) {
 
   @override
   void dispose() {
+    _favoriteProvider?.paginatedFavoritesNotifier.removeListener(_handleFavoritesChanged);
     WidgetsBinding.instance.removeObserver(this);
     _authSubscription?.cancel();
     _scrollController.dispose();

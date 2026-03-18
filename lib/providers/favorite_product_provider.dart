@@ -841,33 +841,25 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
 
       final itemData = itemSnapshot.docs.first.data() as Map<String, dynamic>;
 
-      // Step 2: Add to target location
-      if (targetBasketId == null) {
-        // Transfer to default favorites
-        await _firestore
-            .collection('users')
-            .doc(user.uid)
-            .collection('favorites')
-            .add({
-          ...itemData,
-          'addedAt': FieldValue.serverTimestamp(),
-        });
-      } else {
-        // Transfer to basket
-        await _firestore
-            .collection('users')
-            .doc(user.uid)
-            .collection('favorite_baskets')
-            .doc(targetBasketId)
-            .collection('favorites')
-            .add({
-          ...itemData,
-          'addedAt': FieldValue.serverTimestamp(),
-        });
-      }
+      // Step 2: Atomic transfer — add to target + delete from source in one batch
+      final batch = _firestore.batch();
 
-      // Step 3: Remove from current location
-      await itemSnapshot.docs.first.reference.delete();
+      final targetCollection = targetBasketId == null
+          ? _firestore.collection('users').doc(user.uid).collection('favorites')
+          : _firestore
+              .collection('users')
+              .doc(user.uid)
+              .collection('favorite_baskets')
+              .doc(targetBasketId)
+              .collection('favorites');
+
+      batch.set(targetCollection.doc(), {
+        ...itemData,
+        'addedAt': FieldValue.serverTimestamp(),
+      });
+      batch.delete(itemSnapshot.docs.first.reference);
+
+      await batch.commit();
 
       // Step 4: Update cache
       removeItemFromPaginatedCache(productId);
@@ -995,6 +987,41 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
           .whereType<String>()
           .toSet(),
     };
+  }
+
+  /// Resets pagination and fetches the first page of favorites from server.
+  /// Safe to call repeatedly — has dedup guard to prevent concurrent loads.
+  /// Mirrors CartProvider.loadCart() pattern.
+  Future<void> loadFavorites() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    if (_pendingFetches.containsKey('init')) {
+      await _pendingFetches['init']!.future;
+      return;
+    }
+
+    final completer = Completer<void>();
+    _pendingFetches['init'] = completer;
+
+    try {
+      // Reset pagination state
+      _lastDocument = null;
+      hasMoreDataNotifier.value = true;
+      isLoadingMoreNotifier.value = false;
+      _paginatedFavoritesMap.clear();
+      paginatedFavoritesNotifier.value = [];
+      _isInitialLoadComplete = false;
+      _currentBasketId = selectedBasketNotifier.value;
+      notifyListeners();
+
+      completer.complete();
+    } catch (e) {
+      debugPrint('❌ loadFavorites error: $e');
+      completer.completeError(e);
+    } finally {
+      _pendingFetches.remove('init');
+    }
   }
 
   Future<Map<String, dynamic>> loadNextPage({int limit = 50}) async {
