@@ -53,29 +53,31 @@ class _MyCartScreenState extends State<MyCartScreen>
     _discountService.initialize();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
+@override
+void didChangeDependencies() {
+  super.didChangeDependencies();
 
-    if (_cartProvider == null) {
-      _cartProvider = Provider.of<CartProvider>(context, listen: false);
+  final provider = Provider.of<CartProvider>(context, listen: false);
 
-      // ✅ SIMPLE: Just initialize, listener is handled by provider
-      if (!_cartProvider!.isInitialized) {
-        _cartProvider!.initializeCartIfNeeded();
-      }
-
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (mounted && _cartProvider != null) {
-          _syncSelections(_cartProvider!.cartItems);
-          _updateTotalsForCurrentSelection();
-          setState(() {});
-        }
-      });
-
-      _cartProvider!.cartItemsNotifier.addListener(_handleCartItemsChanged);
-    }
+  if (_cartProvider == null) {
+    // First creation: wire up listener
+    _cartProvider = provider;
+    _cartProvider!.cartItemsNotifier.addListener(_handleCartItemsChanged);
   }
+
+  // Always reload on every screen visit (widget creation OR tab revisit)
+  // loadCart() is safe to call repeatedly — it has its own pending-fetch
+  // dedup guard inside the provider
+  _cartProvider!.loadCart();
+
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    if (mounted && _cartProvider != null) {
+      _syncSelections(_cartProvider!.cartItems);
+      _updateTotalsForCurrentSelection();
+      setState(() {});
+    }
+  });
+}
 
   void _handleCartItemsChanged() {
     if (!mounted) return;
@@ -90,13 +92,7 @@ class _MyCartScreenState extends State<MyCartScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
-    if (state == AppLifecycleState.paused) {
-      _cartProvider?.disableLiveUpdates();
-    } else if (state == AppLifecycleState.resumed) {
-      if (FirebaseAuth.instance.currentUser != null &&
-          _cartProvider?.isInitialized == true) {
-        _cartProvider?.enableLiveUpdates();
-      }
+    if (state == AppLifecycleState.resumed) {
       // Revalidate discount selections
       _discountService.revalidateSelections();
     }
@@ -148,7 +144,6 @@ class _MyCartScreenState extends State<MyCartScreen>
   @override
   void dispose() {
     _cartProvider?.cartItemsNotifier.removeListener(_handleCartItemsChanged);
-    _cartProvider?.disableLiveUpdates();
     WidgetsBinding.instance.removeObserver(this);
     _scrollController.dispose();
     super.dispose();

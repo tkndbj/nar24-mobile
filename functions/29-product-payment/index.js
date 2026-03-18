@@ -177,6 +177,10 @@ export const clearPurchasedCartItems = onRequest(
         await batch.commit();
       }
 
+      await db.collection('users').doc(buyerId).update({
+        cartItemIds: admin.firestore.FieldValue.arrayRemove(...purchasedProductIds),
+      });
+
       await db.collection('cart_clear_logs').add({
         buyerId, orderId, purchasedProductIds, deletedCount,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),

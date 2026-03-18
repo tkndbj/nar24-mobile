@@ -12,6 +12,8 @@ import '../services/cart_favorite_metrics_service.dart';
 import '../services/user_activity_service.dart';
 import '../services/lifecycle_aware.dart';
 import '../services/app_lifecycle_manager.dart';
+import '../services/firestore_read_tracker.dart';
+import '../user_provider.dart';
 
 // ============================================================================
 // SIMPLIFIED RATE LIMITER (Prevents spam)
@@ -79,10 +81,7 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
   // Optimistic updates cache (for instant UI feedback)
   final Map<String, Map<String, dynamic>> _optimisticCache = {};
   final Map<String, Timer> _optimisticTimeouts = {};
-  bool _isInitializing = false;
 
-  // Firestore listener
-  StreamSubscription<QuerySnapshot>? _cartSubscription;
   StreamSubscription<User?>? _authSubscription;
 
   // Concurrency control for quantity updates
@@ -102,7 +101,9 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
   List<Product> get relatedProducts => relatedProductsNotifier.value;
   bool get isLoadingRelated => isLoadingRelatedNotifier.value;
 
-  CartProvider(this._auth, this._firestore) {
+  final UserProvider _userProvider;
+
+  CartProvider(this._auth, this._firestore, this._userProvider) {
     _initializeProvider();
 
     // Register with lifecycle manager
@@ -133,9 +134,6 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
   Future<void> onPause() async {
     await super.onPause();
 
-    // Cancel real-time listener to save resources
-    disableLiveUpdates();
-
     // Pause cleanup timer
     _cleanupTimer?.cancel();
     _cleanupTimer = null;
@@ -157,19 +155,10 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
       _cleanupStaleOperations();
     });
 
-    // Re-enable real-time updates if initialized
-    if (isInitializedNotifier.value) {
-      enableLiveUpdates();
-
-      // If long pause, refresh cart data
-      if (shouldFullRefresh(pauseDuration)) {
-        if (kDebugMode) {
-          debugPrint('🔄 CartProvider: Long pause, refreshing cart...');
-        }
-        // Use unawaited to not block resume
-        unawaited(refresh());
-      }
-    }
+    // Re-populate IDs from user doc (0 reads)
+    final ids = _userProvider.cartItemIdsNotifier.value;
+    cartProductIdsNotifier.value = ids;
+    cartCountNotifier.value = ids.length;
 
     if (kDebugMode) {
       debugPrint('▶️ CartProvider: Listener and timer resumed');
@@ -253,63 +242,7 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
     });
   }
 
-  // ========================================================================
-  // SMART REAL-TIME LISTENER (Auto-manages connection)
-  // ========================================================================
 
-  void enableLiveUpdates() {
-    final user = _auth.currentUser;
-    if (user == null) return;
-
-    _cartSubscription?.cancel();
-    _cartSubscription = null;
-
-    debugPrint('🔴 Enabling real-time cart listener');
-
-    _cartSubscription = _firestore
-        .collection('users')
-        .doc(user.uid)
-        .collection('cart')
-        .snapshots(includeMetadataChanges: false)
-        .listen(
-          _handleRealtimeUpdate,
-          onError: (e) => debugPrint('❌ Listener error: $e'),
-        );
-  }
-
-  void disableLiveUpdates() {
-    debugPrint('🔴 Disabling cart listener');
-    _cartSubscription?.cancel();
-    _cartSubscription = null;
-  }
-
-  void _handleRealtimeUpdate(QuerySnapshot snapshot) {
-    debugPrint(
-        '📥 Snapshot: ${snapshot.docs.length} docs, isFromCache: ${snapshot.metadata.isFromCache}, changes: ${snapshot.docChanges.length}');
-
-    for (final change in snapshot.docChanges) {
-      debugPrint('  → ${change.type}: ${change.doc.id}');
-    }
-    if (_isInitializing) {
-      debugPrint('⏭️ Skipping listener (initializing)');
-      return;
-    }
-
-    if (snapshot.metadata.isFromCache) {
-      debugPrint('⏭️ Skipping cache event');
-      return;
-    }
-
-    debugPrint('🔥 Real-time update: ${snapshot.docChanges.length} changes');
-
-    _updateCartIds(snapshot.docs);
-
-    if (snapshot.docChanges.isNotEmpty) {
-      _processCartChanges(snapshot.docChanges);
-    } else if (snapshot.docs.isEmpty) {
-      cartItemsNotifier.value = [];
-    }
-  }
 
   void _updateCartIds(List<QueryDocumentSnapshot> docs) {
     final ids = docs.map((doc) => doc.id).toSet();
@@ -437,65 +370,6 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
     await updateTotalsForExcluded(excludedIds);
   }
 
-  Future<void> _processCartChanges(List<DocumentChange> changes) async {
-    final itemsMap = <String, Map<String, dynamic>>{};
-
-    for (final item in cartItemsNotifier.value) {
-      final productId = item['productId'] as String?;
-      if (productId != null && item['isOptimistic'] != true) {
-        itemsMap[productId] = item;
-      }
-    }
-
-    for (final change in changes) {
-      final productId = change.doc.id;
-      final cartData = change.doc.data() as Map<String, dynamic>?;
-
-      switch (change.type) {
-        case DocumentChangeType.added:
-        case DocumentChangeType.modified:
-          if (cartData != null && _hasRequiredFields(cartData)) {
-            try {
-              final product = _buildProductFromCartData(cartData);
-              itemsMap[productId] =
-                  _createCartItem(productId, cartData, product);
-              debugPrint(
-                  '✅ ${change.type == DocumentChangeType.added ? "Added" : "Updated"}: $productId');
-
-              _clearOptimisticUpdate(productId);
-            } catch (e) {
-              debugPrint('❌ Failed to process $productId: $e');
-            }
-          }
-          break;
-
-        case DocumentChangeType.removed:
-          itemsMap.remove(productId);
-          _clearOptimisticUpdate(productId);
-          debugPrint('➖ Removed: $productId');
-          break;
-      }
-    }
-
-    final uniqueItems = <String, Map<String, dynamic>>{};
-    for (final item in itemsMap.values) {
-      final productId = item['productId'] as String?;
-      if (productId != null) {
-        uniqueItems[productId] = item;
-      }
-    }
-
-    final items = uniqueItems.values.toList();
-    _sortCartItems(items);
-    cartItemsNotifier.value = items;
-
-    // ✅ Invalidate totals cache on cart changes
-    final user = _auth.currentUser;
-    if (user != null) {
-      _totalsCache.invalidateForUser(user.uid);
-    }
-  }
-
   void _sortCartItems(List<Map<String, dynamic>> items) {
     items.sort((a, b) {
       final sellerA = a['sellerId'] as String? ?? '';
@@ -547,12 +421,13 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
   // INITIALIZATION
   // ========================================================================
 
-  Future<void> initializeCartIfNeeded() async {
+  /// Load cart items from subcollection. Called every time cart screen opens.
+  Future<void> loadCart() async {
     final user = _auth.currentUser;
-    if (user == null || isInitializedNotifier.value) return;
+    debugPrint('🛒 loadCart called, user: ${user?.uid}, items before: ${cartItemsNotifier.value.length}');
+    if (user == null) return;
 
     if (_pendingFetches.containsKey('init')) {
-      debugPrint('⏳ Already initializing, waiting...');
       await _pendingFetches['init']!.future;
       return;
     }
@@ -560,11 +435,6 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
     final completer = Completer<void>();
     _pendingFetches['init'] = completer;
     isLoadingNotifier.value = true;
-    _isInitializing = true;
-
-    cartItemsNotifier.value = [];
-    cartProductIdsNotifier.value = {};
-    cartCountNotifier.value = 0;
 
     _lastDocument = null;
     _hasMore = true;
@@ -576,45 +446,74 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
           .collection('cart')
           .orderBy('addedAt', descending: true)
           .limit(20)
-          .get(const GetOptions(source: Source.cache));
+          .get(const GetOptions(source: Source.server));
 
-      if (snapshot.docs.isEmpty) {
-        final serverSnapshot = await _firestore
-            .collection('users')
-            .doc(user.uid)
-            .collection('cart')
-            .orderBy('addedAt', descending: true)
-            .limit(20)
-            .get(const GetOptions(source: Source.server));
+      await _buildCartItemsFromDocs(snapshot.docs);
 
-        await _buildCartItemsFromDocs(serverSnapshot.docs);
-
-        if (serverSnapshot.docs.isNotEmpty) {
-          _lastDocument = serverSnapshot.docs.last;
-          _hasMore = serverSnapshot.docs.length >= 20;
-        }
+      if (snapshot.docs.isNotEmpty) {
+        _lastDocument = snapshot.docs.last;
+        _hasMore = snapshot.docs.length >= 20;
       } else {
-        await _buildCartItemsFromDocs(snapshot.docs);
-
-        if (snapshot.docs.isNotEmpty) {
-          _lastDocument = snapshot.docs.last;
-          _hasMore = snapshot.docs.length >= 20;
-        }
+        _hasMore = false;
       }
 
       isInitializedNotifier.value = true;
 
-      enableLiveUpdates();
-
+      _reconcileCartIds();
       completer.complete();
     } catch (e) {
-      debugPrint('❌ Init error: $e');
+      debugPrint('❌ Cart load error: $e');
       completer.completeError(e);
     } finally {
       isLoadingNotifier.value = false;
-      _isInitializing = false;
       _pendingFetches.remove('init');
     }
+  }
+
+  /// Only runs a full reconciliation when ALL cart items have been loaded
+  /// (no more pages). Otherwise just logs a warning if counts mismatch.
+  /// 0 extra reads — uses data already in memory.
+  Future<void> _reconcileCartIds() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final loadedIds = cartProductIdsNotifier.value;
+      final userDocIds = _userProvider.cartItemIdsNotifier.value;
+
+      // If there are more pages to load, we don't have the full picture.
+      // Only do a safe count check.
+      if (_hasMore) {
+        if (loadedIds.length > userDocIds.length) {
+          // Loaded page has IDs not in the array — add them
+          debugPrint('🔧 Cart reconciliation: adding missing IDs to user doc');
+          await _firestore.collection('users').doc(user.uid).update({
+            'cartItemIds': FieldValue.arrayUnion(loadedIds.toList()),
+          });
+          _userProvider.updateLocalProfileField(
+            'cartItemIds',
+            {...userDocIds, ...loadedIds}.toList(),
+          );
+        }
+        return;
+      }
+
+      // All pages loaded — safe to do full reconciliation
+      if (!_setsEqual(loadedIds, userDocIds)) {
+        debugPrint('🔧 Cart reconciliation: fixing drift (loaded: ${loadedIds.length}, userDoc: ${userDocIds.length})');
+        await _firestore.collection('users').doc(user.uid).update({
+          'cartItemIds': loadedIds.toList(),
+        });
+        _userProvider.updateLocalProfileField('cartItemIds', loadedIds.toList());
+      }
+    } catch (e) {
+      debugPrint('⚠️ Cart reconciliation failed (non-critical): $e');
+    }
+  }
+
+  bool _setsEqual(Set<String> a, Set<String> b) {
+    if (a.length != b.length) return false;
+    return a.containsAll(b);
   }
 
   Future<void> _buildCartItemsFromDocs(List<QueryDocumentSnapshot> docs) async {
@@ -637,19 +536,47 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
     _updateCartIds(docs);
   }
 
-  void _handleUserChange(User? user) {
-    disableLiveUpdates();
-
+ void _handleUserChange(User? user) {
     if (user == null) {
-      _clearAllData();
-      return;
+        _clearAllData();
+        return;
+    }
+
+    // Only clear if it's a DIFFERENT user, not same user re-emitting
+    final previousUserId = _auth.currentUser?.uid;
+    if (previousUserId != null && previousUserId == user.uid) {
+        // Same user, just re-populate IDs, don't wipe items
+        _populateFromUserDoc();
+        return;
     }
 
     _clearAllData();
-    initializeCartIfNeeded();
+    _populateFromUserDoc();
+}
+
+  /// Populate cart IDs from the user document's denormalized array.
+  /// Only sets IDs/count (for badges). Does NOT mark as initialized —
+  /// that only happens after loadCart() fetches actual items.
+  void _populateFromUserDoc() {
+    // Listen for when user doc finishes loading (handles race condition)
+    _userProvider.cartItemIdsNotifier.addListener(_onUserDocCartIdsChanged);
+
+    // If user doc already has data, populate IDs immediately (for badge counts)
+    final ids = _userProvider.cartItemIdsNotifier.value;
+    if (ids.isNotEmpty || _userProvider.profileData != null) {
+      cartProductIdsNotifier.value = ids;
+      cartCountNotifier.value = ids.length;
+    }
+  }
+
+  void _onUserDocCartIdsChanged() {
+    final ids = _userProvider.cartItemIdsNotifier.value;
+    cartProductIdsNotifier.value = ids;
+    cartCountNotifier.value = ids.length;
   }
 
   void _clearAllData() {
+    debugPrint('🗑️ _clearAllData called');
     cartCountNotifier.value = 0;
     cartProductIdsNotifier.value = {};
     cartItemsNotifier.value = [];
@@ -796,32 +723,60 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
     }
   }
 
-  Future<String> addToCart({
-    required String productId,
-    required Map<String, dynamic> productData,
-    int quantity = 1,
-  }) async {
-    final user = _auth.currentUser;
-    if (user == null) return 'Please log in first';
+Future<String> addToCart({
+  required String productId,
+  required Map<String, dynamic> productData,
+  int quantity = 1,
+}) async {
+  final user = _auth.currentUser;
+  if (user == null) return 'Please log in first';
 
-    if (!_addToCartLimiter.canProceed('add_$productId')) {
-      return 'Please wait before adding again';
+   if (!_addToCartLimiter.canProceed('add_$productId')) {
+    return 'Please wait before adding again';
+  }
+
+  // ✅ Validate before writing — fail fast with clear error
+  final requiredFields = ['productId', 'productName', 'unitPrice', 'availableStock', 'sellerId', 'sellerName'];
+  for (final field in requiredFields) {
+    if (productData[field] == null || productData[field].toString().isEmpty) {
+      debugPrint('❌ Cannot add to cart: missing field "$field"');
+      return 'Product data incomplete, cannot add to cart';
     }
+  }
+  if (productData['sellerName'] == 'Unknown' || productData['sellerName'] == '') {
+    debugPrint('❌ Cannot add to cart: invalid sellerName');
+    return 'Product data incomplete, cannot add to cart';
+  }
 
     try {
       _applyOptimisticAdd(productId, productData, quantity);
 
-      await _firestore
+      // Batched write: cart subcollection + user doc array (atomic)
+      final batch = _firestore.batch();
+      final cartRef = _firestore
           .collection('users')
           .doc(user.uid)
           .collection('cart')
-          .doc(productId)
-          .set({
+          .doc(productId);
+      batch.set(cartRef, {
         ...productData,
         'quantity': quantity,
         'addedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      final userRef = _firestore.collection('users').doc(user.uid);
+      batch.update(userRef, {
+        'cartItemIds': FieldValue.arrayUnion([productId]),
+      });
+      await batch.commit();
+
+     _clearOptimisticUpdate(productId);
+
+      // Optimistic local sync
+      final currentIds = List<String>.from(
+          (_userProvider.profileData?['cartItemIds'] as List?) ?? []);
+      if (!currentIds.contains(productId)) currentIds.add(productId);
+      _userProvider.updateLocalProfileField('cartItemIds', currentIds);
 
       UserActivityService.instance.trackAddToCart(
         productId: productId,
@@ -929,6 +884,7 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
     try {
       _applyOptimisticRemove(productId);
 
+      // Read cart data for analytics before deleting
       final cartDoc = await _firestore
           .collection('users')
           .doc(user.uid)
@@ -939,14 +895,25 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
       final cartData = cartDoc.data();
       final shopId = cartData?['shopId'] as String?;
 
-      debugPrint('🔍 Removing from cart: productId=$productId, shopId=$shopId');
-
-      await _firestore
+      // Batched write: delete from subcollection + remove from user doc array (atomic)
+      final batch = _firestore.batch();
+      batch.delete(_firestore
           .collection('users')
           .doc(user.uid)
           .collection('cart')
-          .doc(productId)
-          .delete();
+          .doc(productId));
+      batch.update(_firestore.collection('users').doc(user.uid), {
+        'cartItemIds': FieldValue.arrayRemove([productId]),
+      });
+      await batch.commit();
+
+      // Optimistic local sync
+      _userProvider.updateLocalProfileField(
+        'cartItemIds',
+        ((_userProvider.profileData?['cartItemIds'] as List?) ?? [])
+            .where((id) => id != productId)
+            .toList(),
+      );
 
       UserActivityService.instance.trackRemoveFromCart(
         productId: productId,
@@ -1166,7 +1133,19 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
               .doc(productId),
         );
       }
+      // Sync user doc array
+      batch.update(_firestore.collection('users').doc(user.uid), {
+        'cartItemIds': FieldValue.arrayRemove(productIds),
+      });
       await batch.commit();
+
+      // Optimistic local sync
+      _userProvider.updateLocalProfileField(
+        'cartItemIds',
+        ((_userProvider.profileData?['cartItemIds'] as List?) ?? [])
+            .where((id) => !productIds.contains(id))
+            .toList(),
+      );
 
       _metricsService.logBatchCartRemovals(
         productIds: productIds,
@@ -1836,8 +1815,8 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
     _cleanupStaleOperations();
     _cleanupTimer?.cancel();
 
-    disableLiveUpdates();
     _authSubscription?.cancel();
+    _userProvider.cartItemIdsNotifier.removeListener(_onUserDocCartIdsChanged);
     for (final timer in _optimisticTimeouts.values) {
       timer.cancel();
     }

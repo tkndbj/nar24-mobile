@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'firestore_read_tracker.dart';
 
 class SalesConfig {
   final bool salesPaused;
@@ -63,8 +64,7 @@ class SalesConfigService {
         } else {
           configNotifier.value = SalesConfig.defaultConfig();
         }
-        debugPrint(
-            '📊 Sales config updated: paused=${configNotifier.value.salesPaused}');
+        FirestoreReadTracker.instance.trackRead('SalesConfigService', 'settings/salesConfig', 1);
       },
       onError: (error) {
         debugPrint('❌ Sales config listener error: $error');

@@ -7,6 +7,7 @@ import '../models/product.dart';
 import 'dart:async';
 import 'dart:collection';
 import '../services/analytics_service.dart';
+import '../services/firestore_read_tracker.dart';
 
 class SellerPanelProvider with ChangeNotifier {
   final FirebaseAuth _firebaseAuth;
@@ -532,6 +533,7 @@ class SellerPanelProvider with ChangeNotifier {
       final collection = isRestaurant ? 'restaurants' : 'shops';
       final doc =
           await _firestore.collection(collection).doc(targetShopId).get();
+      FirestoreReadTracker.instance.trackRead('SellerPanelProvider', '$collection/$targetShopId', 1);
       // Drop stale response if shop switched during fetch
       if (_selectedShop?.id != targetShopId) return;
       final data = doc.data() ?? {};
@@ -1215,6 +1217,7 @@ class SellerPanelProvider with ChangeNotifier {
         batchFetch('shops', memberOfShops.keys.toList()),
         batchFetch('restaurants', memberOfRestaurants.keys.toList()),
       ).wait;
+      FirestoreReadTracker.instance.trackRead('SellerPanelProvider', 'user doc + ${shopDocs.length} shops + ${restaurantDocs.length} restaurants', 1 + shopDocs.length + restaurantDocs.length);
 
       // ✅ Tag each doc with its business type
       _shopBusinessTypes.clear();

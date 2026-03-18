@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../models/dynamic_filter.dart';
 import '../models/product_summary.dart';
+import '../services/firestore_read_tracker.dart';
 
 class DynamicFilterProvider with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -237,6 +238,7 @@ class DynamicFilterProvider with ChangeNotifier {
 
       final snapshot = await query.get();
       final docs = snapshot.docs;
+      FirestoreReadTracker.instance.trackRead('DynamicFilterProvider', 'filter:$filterId page:$page', docs.length);
 
       // Store cursor
       if (docs.isNotEmpty) {
@@ -350,7 +352,7 @@ class DynamicFilterProvider with ChangeNotifier {
               _isLoading = false;
               _isInitialized = true;
 
-              debugPrint('✅ Dynamic filters loaded: ${_dynamicFilters.length}');
+              FirestoreReadTracker.instance.trackRead('DynamicFilterProvider', 'market_screen_filters (listener)', snapshot.docs.length);
               notifyListeners();
             } else if (_isLoading) {
               _isLoading = false;

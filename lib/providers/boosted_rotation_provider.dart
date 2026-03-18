@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../models/product.dart';
 import '../services/lifecycle_aware.dart';
 import '../services/app_lifecycle_manager.dart';
+import '../services/firestore_read_tracker.dart';
 
 /// Highly optimized provider for managing boosted product rotation
 /// Uses real-time listeners and caching for maximum performance
@@ -120,6 +121,9 @@ class BoostedRotationProvider extends ChangeNotifier with LifecycleAwareMixin {
   /// Handle real-time updates to slots document
   Future<void> _onSlotsUpdate(DocumentSnapshot snapshot) async {
     if (_isDisposed) return;
+    if (!snapshot.metadata.isFromCache) {
+      FirestoreReadTracker.instance.trackRead('BoostedRotationProvider', 'boosted_rotation/boosted_slots', 1);
+    }
 
     try {
       if (!snapshot.exists || snapshot.data() == null) {

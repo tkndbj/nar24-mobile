@@ -11,6 +11,8 @@ import '../services/cart_favorite_metrics_service.dart';
 import '../services/user_activity_service.dart';
 import '../services/lifecycle_aware.dart';
 import '../services/app_lifecycle_manager.dart';
+import '../services/firestore_read_tracker.dart';
+import '../user_provider.dart';
 
 // ============================================================================
 // RATE LIMITER (Prevents spam)
@@ -113,8 +115,6 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
   String? _currentBasketId;
   bool _isInitialLoadComplete = false;
 
-  // Firestore listeners
-  StreamSubscription<QuerySnapshot>? _favoriteSubscription;
   StreamSubscription<User?>? _authSubscription;
 
   // Timers
@@ -134,7 +134,9 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
   bool get isInitialLoadComplete => _isInitialLoadComplete;
   String? get selectedBasketId => selectedBasketNotifier.value;
 
-  FavoriteProvider(this._auth, this._firestore) {
+  final UserProvider _userProvider;
+
+  FavoriteProvider(this._auth, this._firestore, this._userProvider) {
     _initializeProvider();
 
     // Register with lifecycle manager
@@ -163,9 +165,6 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
   Future<void> onPause() async {
     await super.onPause();
 
-    // Cancel real-time listener to save resources
-    disableLiveUpdates();
-
     // Pause cleanup timer
     _cleanupTimer?.cancel();
     _cleanupTimer = null;
@@ -187,23 +186,12 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
       _cleanupStaleOperations();
     });
 
-    // Re-enable real-time updates
-    if (favoriteIdsNotifier.value.isNotEmpty || _isInitialLoadComplete) {
-      enableLiveUpdates();
-
-      // If long pause, reload favorite IDs
-      if (shouldFullRefresh(pauseDuration)) {
-        if (kDebugMode) {
-          debugPrint(
-              '🔄 FavoriteProvider: Long pause, refreshing favorites...');
-        }
-        // Background reload - don't block UI.
-        // _loadGlobalFavoriteIds also sets favoriteIdsNotifier when no basket is selected.
-        _loadGlobalFavoriteIds();
-        if (selectedBasketNotifier.value != null) {
-          _loadFavoriteIds();
-        }
-      }
+    // Re-populate IDs from user doc (0 reads)
+    final ids = _userProvider.favoriteItemIdsNotifier.value;
+    globalFavoriteIdsNotifier.value = ids;
+    if (selectedBasketNotifier.value == null) {
+      favoriteIdsNotifier.value = ids;
+      favoriteCountNotifier.value = ids.length;
     }
 
     if (kDebugMode) {
@@ -238,63 +226,6 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
   // SMART REAL-TIME LISTENER (Auto-manages connection)
   // ========================================================================
 
-  /// Enable real-time updates (Firestore snapshots)
-  void enableLiveUpdates() {
-    final user = _auth.currentUser;
-    if (user == null) return;
-
-    _favoriteSubscription?.cancel();
-    _favoriteSubscription = null;
-
-    debugPrint('🔴 Enabling real-time favorites listener');
-
-    final basketId = selectedBasketNotifier.value;
-    final collection =
-        basketId == null ? 'favorites' : 'favorite_baskets/$basketId/favorites';
-
-    _favoriteSubscription = _firestore
-        .collection('users')
-        .doc(user.uid)
-        .collection(collection)
-        .snapshots(includeMetadataChanges: false)
-        .listen(
-          _handleRealtimeUpdate,
-          onError: (e) => debugPrint('❌ Listener error: $e'),
-        );
-  }
-
-  /// Disable real-time updates (save battery/bandwidth)
-  void disableLiveUpdates() {
-    debugPrint('🔴 Disabling favorites listener');
-    _favoriteSubscription?.cancel();
-    _favoriteSubscription = null;
-  }
-
-  void _handleRealtimeUpdate(QuerySnapshot snapshot) {
-    if (snapshot.metadata.isFromCache) {
-      debugPrint('⏭️ Skipping cache event');
-      return;
-    }
-
-    debugPrint('🔥 Real-time update: ${snapshot.docChanges.length} changes');
-
-    final ids = snapshot.docs
-        .map((doc) =>
-            (doc.data() as Map<String, dynamic>)['productId'] as String?)
-        .whereType<String>()
-        .toSet();
-
-    favoriteIdsNotifier.value = ids;
-    favoriteCountNotifier.value = ids.length;
-
-    // Update individual notifiers
-    for (final id in ids) {
-      _updateProductFavoriteStatus(id, true);
-    }
-
-    notifyListeners();
-  }
-
   // ========================================================================
   // INITIALIZATION
   // ========================================================================
@@ -324,7 +255,9 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
         await _loadFavoriteIds();
       }
 
-      enableLiveUpdates();
+      // Self-healing: reconcile user doc array with actual subcollection
+      _reconcileFavoriteIds();
+
       completer.complete();
     } catch (e) {
       debugPrint('❌ Init error: $e');
@@ -332,6 +265,36 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
     } finally {
       _pendingFetches.remove('init');
     }
+  }
+
+  /// Reconcile user doc favoriteItemIds with actual favorites subcollections.
+  /// Runs silently in the background on every favorites page visit.
+  Future<void> _reconcileFavoriteIds() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    try {
+      // globalFavoriteIdsNotifier was just populated by _loadGlobalFavoriteIds
+      final subcollectionIds = globalFavoriteIdsNotifier.value;
+      final userDocIds = _userProvider.favoriteItemIdsNotifier.value;
+
+      if (!_setsEqual(subcollectionIds, userDocIds)) {
+        debugPrint('🔧 Favorites reconciliation: fixing drift (subcollection: ${subcollectionIds.length}, userDoc: ${userDocIds.length})');
+
+        await _firestore.collection('users').doc(user.uid).update({
+          'favoriteItemIds': subcollectionIds.toList(),
+        });
+
+        _userProvider.updateLocalProfileField('favoriteItemIds', subcollectionIds.toList());
+      }
+    } catch (e) {
+      debugPrint('⚠️ Favorites reconciliation failed (non-critical): $e');
+    }
+  }
+
+  bool _setsEqual(Set<String> a, Set<String> b) {
+    if (a.length != b.length) return false;
+    return a.containsAll(b);
   }
 
   /// Loads all favorite IDs across default + all baskets.
@@ -367,15 +330,19 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
           .collection('favorite_baskets')
           .get();
 
+      int readCount = defaultSnapshot.docs.length + 1; // +1 for the query itself
+
       for (final basketDoc in basketsSnapshot.docs) {
         final basketFavoritesSnapshot =
             await basketDoc.reference.collection('favorites').get();
+        readCount += basketFavoritesSnapshot.docs.length + 1; // +1 per sub-query
 
         for (final favDoc in basketFavoritesSnapshot.docs) {
           final productId = favDoc.data()['productId'] as String?;
           if (productId != null) allIds.add(productId);
         }
       }
+      readCount += basketsSnapshot.docs.length + 1; // baskets query itself
 
       globalFavoriteIdsNotifier.value = allIds;
 
@@ -387,7 +354,7 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
         notifyListeners();
       }
 
-      debugPrint('✅ Loaded ${allIds.length} global favorite IDs');
+      FirestoreReadTracker.instance.trackRead('FavoriteProvider', 'default: ${defaultSnapshot.docs.length}, baskets: ${basketsSnapshot.docs.length}, total IDs: ${allIds.length}', readCount);
     } catch (e) {
       debugPrint('❌ Error loading global favorites: $e');
     }
@@ -426,15 +393,36 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
   }
 
   void _handleUserChange(User? user) {
-    disableLiveUpdates();
-
     if (user == null) {
       _clearAllData();
       return;
     }
 
     _clearAllData();
-    initializeIfNeeded();
+    _populateFromUserDoc();
+  }
+
+  /// Populate favorite IDs from the user document's denormalized array.
+  void _populateFromUserDoc() {
+    _userProvider.favoriteItemIdsNotifier.addListener(_onUserDocFavIdsChanged);
+
+    // Populate IDs immediately (for heart icons)
+    // Don't set _isInitialLoadComplete — that tracks paginated data loading.
+    final ids = _userProvider.favoriteItemIdsNotifier.value;
+    if (ids.isNotEmpty || _userProvider.profileData != null) {
+      globalFavoriteIdsNotifier.value = ids;
+      favoriteIdsNotifier.value = ids;
+      favoriteCountNotifier.value = ids.length;
+    }
+  }
+
+  void _onUserDocFavIdsChanged() {
+    final ids = _userProvider.favoriteItemIdsNotifier.value;
+    globalFavoriteIdsNotifier.value = ids;
+    if (selectedBasketNotifier.value == null) {
+      favoriteIdsNotifier.value = ids;
+      favoriteCountNotifier.value = ids.length;
+    }
   }
 
   void _clearAllData() {
@@ -553,8 +541,21 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
         _updateProductFavoriteStatus(productId, false);
         removeItemFromPaginatedCache(productId);
 
-        // STEP 2: Delete from Firestore
-        await existingSnap.docs.first.reference.delete();
+        // STEP 2: Delete from Firestore + remove from user doc array (atomic)
+        final removeBatch = _firestore.batch();
+        removeBatch.delete(existingSnap.docs.first.reference);
+        removeBatch.update(_firestore.collection('users').doc(user.uid), {
+          'favoriteItemIds': FieldValue.arrayRemove([productId]),
+        });
+        await removeBatch.commit();
+
+        // Optimistic local sync
+        _userProvider.updateLocalProfileField(
+          'favoriteItemIds',
+          ((_userProvider.profileData?['favoriteItemIds'] as List?) ?? [])
+              .where((id) => id != productId)
+              .toList(),
+        );
 
         final newGlobalIds = Set<String>.from(globalFavoriteIdsNotifier.value)
           ..remove(productId);
@@ -609,7 +610,19 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
           });
         }
 
-        await collection.add(favoriteData);
+        // Batched write: add to subcollection + update user doc array (atomic)
+        final addBatch = _firestore.batch();
+        addBatch.set(collection.doc(), favoriteData);
+        addBatch.update(_firestore.collection('users').doc(user.uid), {
+          'favoriteItemIds': FieldValue.arrayUnion([productId]),
+        });
+        await addBatch.commit();
+
+        // Optimistic local sync
+        final currentFavIds = List<String>.from(
+            (_userProvider.profileData?['favoriteItemIds'] as List?) ?? []);
+        if (!currentFavIds.contains(productId)) currentFavIds.add(productId);
+        _userProvider.updateLocalProfileField('favoriteItemIds', currentFavIds);
 
         final newGlobalIds = Set<String>.from(globalFavoriteIdsNotifier.value)
           ..add(productId);
@@ -760,8 +773,20 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
       }
     }
 
-    // ✅ ONLY delete favorites - metrics handled by Cloud Functions
+    // Sync user doc array
+    batch.update(_firestore.collection('users').doc(user.uid), {
+      'favoriteItemIds': FieldValue.arrayRemove(productIds),
+    });
+
     await batch.commit();
+
+    // Optimistic local sync
+    _userProvider.updateLocalProfileField(
+      'favoriteItemIds',
+      ((_userProvider.profileData?['favoriteItemIds'] as List?) ?? [])
+          .where((id) => !productIds.contains(id))
+          .toList(),
+    );
   }
 
   // ========================================================================
@@ -931,6 +956,11 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
   }) async {
     final user = _auth.currentUser;
     if (user == null) return {'docs': <DocumentSnapshot>[], 'hasMore': false};
+
+    // If user doc array says no favorites, skip subcollection read entirely
+    if (_userProvider.favoriteItemIdsNotifier.value.isEmpty && startAfter == null) {
+      return {'docs': <DocumentSnapshot>[], 'hasMore': false, 'productIds': <String>{}};
+    }
 
     final basketId = selectedBasketNotifier.value;
     final collection =
@@ -1414,6 +1444,19 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
         }
       }
 
+      // Sync user doc array
+      await _firestore.collection('users').doc(user.uid).update({
+        'favoriteItemIds': FieldValue.arrayRemove([productId]),
+      });
+
+      // Optimistic local sync
+      _userProvider.updateLocalProfileField(
+        'favoriteItemIds',
+        ((_userProvider.profileData?['favoriteItemIds'] as List?) ?? [])
+            .where((id) => id != productId)
+            .toList(),
+      );
+
       _metricsService.logFavoriteRemoved(
         productId: productId,
         shopId: shopId,
@@ -1444,8 +1487,8 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
 
     _cleanupTimer?.cancel();
     _removeFavoriteTimer?.cancel();
-    disableLiveUpdates();
     _authSubscription?.cancel();
+    _userProvider.favoriteItemIdsNotifier.removeListener(_onUserDocFavIdsChanged);
 
     favoriteIdsNotifier.dispose();
     favoriteCountNotifier.dispose();

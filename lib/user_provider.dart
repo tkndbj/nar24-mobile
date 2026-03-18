@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/lifecycle_aware.dart';
 import 'services/app_lifecycle_manager.dart';
+import 'services/firestore_read_tracker.dart';
 
 class UserProvider with ChangeNotifier, LifecycleAwareMixin {
   User? _user;
@@ -28,6 +29,11 @@ class UserProvider with ChangeNotifier, LifecycleAwareMixin {
   // ✅ FIX: Add debounce for background fetches to prevent rapid overwrites
   Timer? _backgroundFetchDebounce;
   static const Duration _backgroundFetchDelay = Duration(milliseconds: 500);
+
+  // Denormalized cart/favorite IDs from user doc (0 extra reads)
+  final ValueNotifier<Set<String>> cartItemIdsNotifier = ValueNotifier({});
+  final ValueNotifier<Set<String>> favoriteItemIdsNotifier = ValueNotifier({});
+
 
   bool get needsNameCompletion {
     if (!isAppleUser) return false;
@@ -235,6 +241,8 @@ class UserProvider with ChangeNotifier, LifecycleAwareMixin {
     _nameComplete = null;
     _isLoading = false;
     _backgroundFetchDebounce?.cancel();
+    cartItemIdsNotifier.value = {};
+    favoriteItemIdsNotifier.value = {};
     _clearCachedProfileState();
     _clearCachedNameState();
     notifyListeners();
@@ -265,6 +273,8 @@ class UserProvider with ChangeNotifier, LifecycleAwareMixin {
     const maxRetries = 3;
     int retryCount = 0;
 
+    int readCount = 0;
+
     if (!forceServer) {
       try {
         final cacheDoc = await FirebaseFirestore.instance
@@ -276,6 +286,7 @@ class UserProvider with ChangeNotifier, LifecycleAwareMixin {
         if (_user?.uid != uid) return;
 
         if (cacheDoc.exists) {
+          readCount++; // cache read
           _updateUserDataFromDoc(cacheDoc);
           notifyListeners();
         }
@@ -294,6 +305,7 @@ class UserProvider with ChangeNotifier, LifecycleAwareMixin {
 
         if (_user?.uid != uid) return;
 
+        readCount++; // server read
         if (serverDoc.exists) {
           _updateUserDataFromDoc(serverDoc);
           _syncLanguageToFirestore(uid, serverDoc.data());
@@ -301,7 +313,7 @@ class UserProvider with ChangeNotifier, LifecycleAwareMixin {
           await _createDefaultUserDoc();
         }
 
-        if (kDebugMode) debugPrint('✅ fetchUserData: Completed successfully');
+        FirestoreReadTracker.instance.trackRead('UserProvider', 'users/{uid}', readCount);
         _isLoading = false;
         notifyListeners();
         return;
@@ -375,6 +387,18 @@ class UserProvider with ChangeNotifier, LifecycleAwareMixin {
     _isAdmin = data['isAdmin'] == true;
     _profileData = data;
 
+    // Parse denormalized cart/favorite ID arrays (migration-safe)
+    final cartIds = (data['cartItemIds'] as List<dynamic>?)
+            ?.map((e) => e as String)
+            .toSet() ??
+        <String>{};
+    final favIds = (data['favoriteItemIds'] as List<dynamic>?)
+            ?.map((e) => e as String)
+            .toSet() ??
+        <String>{};
+    cartItemIdsNotifier.value = cartIds;
+    favoriteItemIdsNotifier.value = favIds;
+
     final isComplete = data['gender'] != null && data['birthDate'] != null;
     if (_profileComplete != isComplete) {
       _profileComplete = isComplete;
@@ -423,6 +447,8 @@ class UserProvider with ChangeNotifier, LifecycleAwareMixin {
         'isAdmin': false,
         'isNew': true,
         'languageCode': currentLocale,
+        'cartItemIds': <String>[],
+        'favoriteItemIds': <String>[],
       };
       _isAdmin = false;
       _profileComplete ??= false;
@@ -629,6 +655,8 @@ class UserProvider with ChangeNotifier, LifecycleAwareMixin {
     _authSubscription?.cancel();
     _authSubscription = null;
     _backgroundFetchDebounce?.cancel();
+    cartItemIdsNotifier.dispose();
+    favoriteItemIdsNotifier.dispose();
     super.dispose();
   }
 }

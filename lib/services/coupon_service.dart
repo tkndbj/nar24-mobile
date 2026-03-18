@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../models/coupon.dart';
 import '../models/user_benefit.dart';
+import 'firestore_read_tracker.dart';
 
 /// Service for managing user coupons and benefits (free shipping, etc.)
 ///
@@ -165,7 +166,7 @@ bool isFreeShippingApplicable(double cartTotal) {
     couponsNotifier.value = coupons;
     isLoadingNotifier.value = false;
 
-    debugPrint('📦 Coupons updated: ${coupons.length} active');
+    FirestoreReadTracker.instance.trackRead('CouponService', 'users/{uid}/coupons', snapshot.docs.length);
   }
 
   void _handleBenefitsUpdate(QuerySnapshot snapshot) {
@@ -178,7 +179,7 @@ bool isFreeShippingApplicable(double cartTotal) {
     benefitsNotifier.value = benefits;
     isLoadingNotifier.value = false;
 
-    debugPrint('🎁 Benefits updated: ${benefits.length} active');
+    FirestoreReadTracker.instance.trackRead('CouponService', 'users/{uid}/benefits', snapshot.docs.length);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

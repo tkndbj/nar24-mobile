@@ -13,6 +13,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/notification.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import '../../services/firestore_read_tracker.dart';
 import '../PAYMENT-RECEIPT/dynamic_payment_screen.dart';
 
 class NotificationScreen extends StatefulWidget {
@@ -124,6 +125,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
       if (_lastDocument != null) q = q.startAfterDocument(_lastDocument!);
 
       final snap = await q.get();
+      FirestoreReadTracker.instance.trackRead('NotificationScreen', 'notifications (page, limit: $_limit)', snap.docs.length);
 
       if (!mounted) return;
 
@@ -738,6 +740,7 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
           try {
             final productSnapshot =
                 await _firestore.collection('products').doc(productId).get();
+            FirestoreReadTracker.instance.trackRead('NotificationScreen', 'product tap (product_review)', 1);
             if (!mounted) return;
             if (productSnapshot.exists) {
               final product = Product.fromDocument(productSnapshot);
@@ -999,6 +1002,7 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
           try {
             final productSnapshot =
                 await _firestore.collection('products').doc(productId).get();
+            FirestoreReadTracker.instance.trackRead('NotificationScreen', 'product tap (out_of_stock)', 1);
             if (!mounted) return;
             if (productSnapshot.exists) {
               final product = Product.fromDocument(productSnapshot);

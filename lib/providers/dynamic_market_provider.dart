@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../models/product_summary.dart';
 import '../utils/debouncer.dart';
 import '../services/typesense_service.dart';
+import '../services/firestore_read_tracker.dart';
 
 enum SearchBackend { firestore, TypeSense }
 
@@ -690,6 +691,7 @@ class ShopMarketProvider with ChangeNotifier {
 
     try {
       final snap = await q.get(const GetOptions(source: Source.serverAndCache));
+      FirestoreReadTracker.instance.trackRead('ShopMarketProvider', 'shop_products (page:$page)', snap.docs.length);
       if (seq != _filterSeq) return;
 
       final docs = snap.docs;

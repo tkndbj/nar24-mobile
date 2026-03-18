@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:Nar24/providers/product_repository.dart';
 import 'package:Nar24/services/related_products_service.dart';
 import 'dart:convert';
+import '../services/firestore_read_tracker.dart';
 
 class ProductDetailProvider with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -454,6 +455,7 @@ class ProductDetailProvider with ChangeNotifier {
           .get()
           .timeout(const Duration(seconds: 10));
 
+      int reads = 1;
       if (snap.exists) {
         _product = Product.fromDocument(snap);
       } else {
@@ -466,6 +468,7 @@ class ProductDetailProvider with ChangeNotifier {
             .doc(productId)
             .get()
             .timeout(const Duration(seconds: 10));
+        reads++;
 
         if (fallbackSnap.exists) {
           _productCollection = otherCollection;
@@ -474,6 +477,7 @@ class ProductDetailProvider with ChangeNotifier {
           throw Exception('Product not found in any collection');
         }
       }
+      FirestoreReadTracker.instance.trackRead('ProductDetailProvider', 'product doc ($productId)', reads);
     } else {
       // Collection unknown — fetch both in parallel (original behavior)
       final results = await Future.wait([
@@ -482,6 +486,7 @@ class ProductDetailProvider with ChangeNotifier {
         _firestore.collection('shop_products').doc(productId).get()
             .timeout(const Duration(seconds: 10)),
       ]);
+      FirestoreReadTracker.instance.trackRead('ProductDetailProvider', 'product doc parallel ($productId)', 2);
 
       final prodSnap = results[0];
       final shopSnap = results[1];
@@ -631,12 +636,12 @@ class ProductDetailProvider with ChangeNotifier {
     try {
       DocumentSnapshot sellerDoc =
           await _firestore.collection('users').doc(sellerId).get();
+      FirestoreReadTracker.instance.trackRead('ProductDetailProvider', 'seller doc ($sellerId)', 1);
 
       if (_isDisposed) return;
 
       if (sellerDoc.exists) {
         sellerTotalProductsSold = sellerDoc['totalProductsSold'] ?? 0;
-        print('Total Products Sold for $sellerId: $sellerTotalProductsSold');
       } else {
         sellerTotalProductsSold = 0;
       }

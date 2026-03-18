@@ -60,6 +60,7 @@ import 'services/coupon_service.dart';
 import 'services/search_config_service.dart';
 import 'services/cart_favorite_metrics_service.dart';
 import 'providers/food_cart_provider.dart';
+import 'services/firestore_read_tracker.dart';
 
 /// Background message handler for FCM.
 ///
@@ -98,6 +99,11 @@ Future<void> main() async {
   // Initialize the app lifecycle manager FIRST
   // This coordinates all provider lifecycles for smooth background/foreground transitions
   AppLifecycleManager.instance.initialize();
+
+  // Debug-only: track all Firestore reads/writes
+  if (kDebugMode) {
+    FirestoreReadTracker.instance.initialize();
+  }
 
   // 🔒 NOW add orientation lock AFTER binding initialization
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
@@ -328,6 +334,7 @@ Future<void> main() async {
                   create: (context) => CartProvider(
                     context.read<FirebaseAuth>(),
                     context.read<FirebaseFirestore>(),
+                    Provider.of<UserProvider>(context, listen: false),
                   ),
                 ),
                 ChangeNotifierProvider(
@@ -340,6 +347,7 @@ Future<void> main() async {
                   create: (context) => FavoriteProvider(
                     context.read<FirebaseAuth>(),
                     context.read<FirebaseFirestore>(),
+                    Provider.of<UserProvider>(context, listen: false),
                   ),
                 ),
                 ChangeNotifierProvider<TerasProvider>(

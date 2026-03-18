@@ -73,6 +73,7 @@ import '../../widgets/productdetail/other_sellers_widget.dart';
 import '../../widgets/productdetail/video_widget.dart';
 import '../../widgets/productdetail/product_detail_color_options.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/firestore_read_tracker.dart';
 import '../../widgets/productdetail/best_seller_label.dart';
 import '../../widgets/dynamicscreens/market_app_bar.dart';
 import 'dart:async';
@@ -211,6 +212,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
             .get(),
       ]);
 
+      FirestoreReadTracker.instance.trackRead('ProductDetailScreen', 'reviews existence check (${widget.productId})', 2);
       final hasReviews =
           results[0].docs.isNotEmpty || results[1].docs.isNotEmpty;
 

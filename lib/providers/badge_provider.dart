@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart'; // for ChangeNotifier and ValueNotifier
 import '../services/lifecycle_aware.dart';
 import '../services/app_lifecycle_manager.dart';
+import '../services/firestore_read_tracker.dart';
 
 class BadgeProvider extends ChangeNotifier with LifecycleAwareMixin {
   /// For controlling unread Notifications badge count
@@ -82,7 +83,9 @@ class BadgeProvider extends ChangeNotifier with LifecycleAwareMixin {
   void _setupFirestoreListeners(String userId) {
     _cancelSubscriptions();
 
-    // (B) Listen to the 'notifications' subcollection.
+    // Listen to unread notifications, capped at 11 docs max.
+    // If 11 returned → display "10+"; otherwise show exact count.
+    // This guarantees at most 11 reads per snapshot.
     _notificationsSubscription = _firestore
         .collection('users')
         .doc(userId)
@@ -90,9 +93,11 @@ class BadgeProvider extends ChangeNotifier with LifecycleAwareMixin {
         .where('isRead', isEqualTo: false)
         .orderBy('type')
         .where('type', isNotEqualTo: 'message')
+        .limit(11)
         .snapshots()
         .listen((QuerySnapshot querySnapshot) {
       unreadNotificationsCount.value = querySnapshot.docs.length;
+      FirestoreReadTracker.instance.trackRead('BadgeProvider', 'notifications (unread)', querySnapshot.docs.length);
     }, onError: (error) {
       debugPrint('Error listening to notifications subcollection: $error');
     });

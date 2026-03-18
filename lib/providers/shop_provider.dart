@@ -12,6 +12,7 @@ import 'package:Nar24/models/mock_document_snapshot.dart';
 import 'package:flutter/foundation.dart';
 import 'package:Nar24/constants/all_in_one_category_data.dart';
 import '../services/typesense_service_manager.dart';
+import '../services/firestore_read_tracker.dart';
 
 // Helper functions remain the same
 Map<String, dynamic> _decodeAndConvertShopData(String jsonString) {
@@ -313,6 +314,7 @@ class ShopProvider with ChangeNotifier {
           .collection('collections')
           .orderBy('createdAt', descending: true)
           .get();
+      FirestoreReadTracker.instance.trackRead('ShopProvider', 'shops/$shopId/collections', snapshot.docs.length);
 
       final collections = snapshot.docs
           .map((doc) => {
@@ -386,6 +388,7 @@ class ShopProvider with ChangeNotifier {
     try {
       final query = _getShopsQuery().limit(_limit);
       final snapshot = await query.get();
+      FirestoreReadTracker.instance.trackRead('ShopProvider', 'shops (initial)', snapshot.docs.length);
       _processShops(snapshot);
     } catch (e) {
       print('Error fetching initial shops: $e');
@@ -408,6 +411,7 @@ class ShopProvider with ChangeNotifier {
             const Duration(seconds: 10),
             onTimeout: () => throw TimeoutException('Pagination timeout'),
           );
+      FirestoreReadTracker.instance.trackRead('ShopProvider', 'shops (paginated)', snapshot.docs.length);
       _processShops(snapshot);
     } catch (e) {
       print('Error fetching more shops: $e');
@@ -656,6 +660,7 @@ class ShopProvider with ChangeNotifier {
               );
 
       if (doc.exists) {
+        FirestoreReadTracker.instance.trackRead('ShopProvider', 'shops/$shopId', 1);
         _shopDoc =
             MockDocumentSnapshot(shopId, doc.data() as Map<String, dynamic>);
         isLoadingShopDocNotifier.value = false;
@@ -878,6 +883,7 @@ class ShopProvider with ChangeNotifier {
     try {
       // 1. Direct lookup on user document
       final userDoc = await _firestore.collection('users').doc(uid).get();
+      FirestoreReadTracker.instance.trackRead('ShopProvider', 'users/$uid (membership check)', 1);
 
       if (!userDoc.exists) {
         _userOwnsShop = false;
@@ -1632,6 +1638,7 @@ class ShopProvider with ChangeNotifier {
       QuerySnapshot snapshot = await _retryWithBackoff(() async {
         return await query.get();
       });
+      FirestoreReadTracker.instance.trackRead('ShopProvider', 'shop products (paginated)', snapshot.docs.length);
       List<Product> newProducts =
           snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
 
@@ -2010,6 +2017,7 @@ class ShopProvider with ChangeNotifier {
             .orderBy('timestamp', descending: true)
             .get();
       });
+      FirestoreReadTracker.instance.trackRead('ShopProvider', 'shops/$shopId/reviews', snapshot.docs.length);
 
       _reviews = snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;

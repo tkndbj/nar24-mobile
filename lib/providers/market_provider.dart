@@ -20,6 +20,7 @@ import '../services/user_activity_service.dart';
 import '../services/lifecycle_aware.dart';
 import '../services/app_lifecycle_manager.dart';
 import '../services/search_config_service.dart';
+import '../services/firestore_read_tracker.dart';
 
 class _RequestDeduplicator {
   final Map<String, Future<List<ProductSummary>>> _pending = {};
@@ -681,6 +682,9 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
             .get(),
       ]).timeout(const Duration(seconds: 5));
 
+      final totalDocs = snapshots.fold<int>(0, (sum, s) => sum + s.docs.length);
+      FirestoreReadTracker.instance.trackRead('MarketProvider', 'suggestions FIRESTORE FALLBACK (4 queries)', totalDocs);
+
       final suggestions = <Suggestion>[];
       final seenIds = <String>{};
 
@@ -1085,8 +1089,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
 
       _setBuyerCategoryCache(buyerCategory, allProducts);
 
-      debugPrint(
-          'Total fetched ${allProducts.length} products for buyer category: $buyerCategory');
+      FirestoreReadTracker.instance.trackRead('MarketProvider', 'buyerCategory:$buyerCategory (Firestore)', allProducts.length);
       return allProducts;
     } catch (e) {
       debugPrint(

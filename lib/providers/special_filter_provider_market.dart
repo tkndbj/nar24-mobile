@@ -6,6 +6,7 @@ import '../models/dynamic_filter.dart';
 import '../services/typesense_service.dart';
 
 import 'package:flutter/foundation.dart';
+import '../services/firestore_read_tracker.dart';
 
 class SpecialFilterProviderMarket with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -96,6 +97,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
           .collection('shop_products')
           .where(FieldPath.documentId, whereIn: chunk)
           .get();
+      FirestoreReadTracker.instance.trackRead('SubcategoryProvider', 'shop_products batch (${chunk.length} IDs)', snapshot.docs.length);
 
       for (final doc in snapshot.docs) {
         if (doc.exists) {
@@ -666,6 +668,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
               onTimeout: () => throw TimeoutException(
                   'Query timeout', const Duration(seconds: 10)),
             );
+        FirestoreReadTracker.instance.trackRead('SubcategoryProvider', 'filtered products ($filterType, page:$page)', snapshot.docs.length);
 
         var newProducts = snapshot.docs
             .map((doc) {
@@ -940,6 +943,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     query = query.limit(limit);
 
     final snapshot = await query.get();
+    FirestoreReadTracker.instance.trackRead('SubcategoryProvider', 'subcategory products ($filterType)', snapshot.docs.length);
     var newProducts =
         snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
 
@@ -1089,6 +1093,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
             .limit(10); // Get up to 10 products per category
 
         final snapshot = await query.get();
+        FirestoreReadTracker.instance.trackRead('SubcategoryProvider', 'category:$productCategory ($filterType)', snapshot.docs.length);
 
         final products =
             snapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
@@ -1166,6 +1171,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     productsQuery = productsQuery.limit(fetchLimit);
 
     final productsSnapshot = await productsQuery.get();
+    FirestoreReadTracker.instance.trackRead('SubcategoryProvider', 'products fallback ($filterType)', productsSnapshot.docs.length);
     final allProducts =
         productsSnapshot.docs.map((doc) => ProductSummary.fromDocument(doc)).toList();
 
@@ -1550,6 +1556,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
 
       final genderSnapshot = results[0];
       final unisexSnapshot = results[1];
+      FirestoreReadTracker.instance.trackRead('SubcategoryProvider', 'subcategory dual-query (gender+unisex)', genderSnapshot.docs.length + unisexSnapshot.docs.length);
 
       // Update pagination cursors
       if (genderSnapshot.docs.isNotEmpty) {
@@ -1601,6 +1608,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       }
 
       final snapshot = await query.get();
+      FirestoreReadTracker.instance.trackRead('SubcategoryProvider', 'subcategory single-query', snapshot.docs.length);
 
       if (snapshot.docs.isNotEmpty) {
         _specificSubcategoryLastDocs[key] = snapshot.docs.last;

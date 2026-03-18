@@ -11,6 +11,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'firestore_read_tracker.dart';
 
 enum SearchBackend {
   typesense,
@@ -113,11 +114,7 @@ class SearchConfigService with ChangeNotifier {
         if (!_initialized) {
           _initialized = true;
           if (!completer.isCompleted) completer.complete();
-          if (kDebugMode) {
-            debugPrint(
-              '🔧 SearchConfig initialized: ${_config.provider.name}',
-            );
-          }
+          FirestoreReadTracker.instance.trackRead('SearchConfigService', 'config/search', 1);
         }
 
         if (changed) {

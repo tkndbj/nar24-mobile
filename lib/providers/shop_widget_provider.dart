@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../services/click_tracking_service.dart';
 import '../user_provider.dart';
+import '../services/firestore_read_tracker.dart';
 
 class ShopWidgetProvider with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -119,7 +120,7 @@ class ShopWidgetProvider with ChangeNotifier {
               ..addAll(shops);
             _isLoadingShops = false;
             notifyListeners();
-            debugPrint('✅ Loaded ${shops.length} configured featured shops');
+            FirestoreReadTracker.instance.trackRead('ShopWidgetProvider', 'app_config/featured_shops + ${shops.length} shop docs', shops.length + 1);
             return;
           }
         }
@@ -171,7 +172,7 @@ class ShopWidgetProvider with ChangeNotifier {
         ..clear()
         ..addAll(snap.docs);
 
-      debugPrint('✅ Loaded ${snap.docs.length} default featured shops');
+      FirestoreReadTracker.instance.trackRead('ShopWidgetProvider', 'shops (default fallback)', snap.docs.length);
     } catch (e) {
       debugPrint('❌ Error fetching default shops: $e');
     } finally {

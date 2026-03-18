@@ -109,16 +109,7 @@ void _setupAnimations() {
     final favoriteProvider =
         Provider.of<FavoriteProvider>(context, listen: false);
 
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
-      // App in background - disable real-time updates
-      favoriteProvider.disableLiveUpdates();
-      debugPrint('🔴 App paused - favorites listener disabled');
-    } else if (state == AppLifecycleState.resumed) {
-      // App resumed - enable real-time updates
-      favoriteProvider.enableLiveUpdates();
-      debugPrint('🟢 App resumed - favorites listener enabled');
-    }
+    // No real-time listener — pure pagination, no lifecycle management needed
   }
 
   // ========================================================================
@@ -1556,7 +1547,7 @@ Widget build(BuildContext context) {
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);    
+    WidgetsBinding.instance.removeObserver(this);
     _authSubscription?.cancel();
     _scrollController.dispose();
     _searchDebouncer?.cancel();
