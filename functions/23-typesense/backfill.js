@@ -300,8 +300,14 @@ async function main() {
     pickArr('cuisineTypes');
     pickArr('workingDays');
 
+    if (data.workingHours && typeof data.workingHours === 'object') {
+      d.workingHoursJson = JSON.stringify(data.workingHours);
+    }
+
     if (Array.isArray(data.minOrderPrices) && data.minOrderPrices.length > 0) {
-      const regions = [...new Set(data.minOrderPrices.map((e) => e.subregion).filter(Boolean))];
+      const regions = [...new Set(
+        data.minOrderPrices.map((e) => e.subregion).filter(Boolean),
+      )];
       if (regions.length > 0) d.deliveryRegions = regions;
       d.minOrderPricesJson = JSON.stringify(data.minOrderPrices);
     } else {

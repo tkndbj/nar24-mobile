@@ -13,8 +13,8 @@ class TypeSenseServiceManager {
 
   TypeSenseServiceManager._internal();
 
-  static const String _typesenseHost = 'o17xr5q8psytcabup-1.a2.typesense.net';
-  static const String _typesenseSearchKey = 'wYjR4e0aCTTy9GVCImW1U30xlBQTYK51';
+  static const String _typesenseHost = 'j0xs6ry9275tu4cop.a2.typesense.net';
+  static const String _typesenseSearchKey = 'z8Ii7rZ3MUlpxLvbPLu3WOqmsZemMjBZ';
 
   // ── Service instances (lazy) ──────────────────────────────────────────────
   TypeSenseService? _mainService;

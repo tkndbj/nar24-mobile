@@ -282,11 +282,12 @@ class RestaurantTypesenseService {
       'include_fields':
           'id,name,address,contactNo,profileImageUrl,ownerId,isActive,isBoosted,'
               'latitude,longitude,averageRating,reviewCount,clickCount,followerCount,'
-              'foodType,cuisineTypes,workingDays,workingHours,createdAt,minOrderPricesJson',
+              'foodType,cuisineTypes,workingDays,workingHoursJson,createdAt,minOrderPricesJson',
     };
 
     final filterBy = _buildFilterBy(filterParts);
     if (filterBy != null) params['filter_by'] = filterBy;
+    debugPrint('[RestaurantTypesense] searchRestaurants filter_by: $filterBy');
 
     try {
       final data = await _fetchTypesense('restaurants', params);

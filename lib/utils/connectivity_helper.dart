@@ -71,7 +71,7 @@ class ConnectivityHelper {
     if (!await isConnected()) return false;
 
     try {
-      final result = await InternetAddress.lookup('o17xr5q8psytcabup-1.a2.typesense.net')
+      final result = await InternetAddress.lookup('j0xs6ry9275tu4cop.a2.typesense.net')
           .timeout(const Duration(seconds: 5));
       return result.isNotEmpty;
     } catch (e) {

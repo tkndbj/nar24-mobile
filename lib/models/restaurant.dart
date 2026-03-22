@@ -119,12 +119,22 @@ class Restaurant {
       workingHours: map['workingHours'] != null
           ? WorkingHours.fromMap(
               Map<String, dynamic>.from(map['workingHours'] as Map))
-          : null,
+          : _parseWorkingHoursJson(map['workingHoursJson'] as String?),
       minOrderPrices: (map['minOrderPrices'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           _parseMinOrderPricesJson(map['minOrderPricesJson'] as String?),
     );
+  }
+
+  static WorkingHours? _parseWorkingHoursJson(String? json) {
+    if (json == null || json.isEmpty) return null;
+    try {
+      final map = jsonDecode(json) as Map;
+      return WorkingHours.fromMap(Map<String, dynamic>.from(map));
+    } catch (_) {
+      return null;
+    }
   }
 
   static List<Map<String, dynamic>>? _parseMinOrderPricesJson(String? json) {

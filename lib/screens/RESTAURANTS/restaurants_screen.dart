@@ -89,21 +89,25 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchRestaurants();
-    _fetchFacets();
     _searchController.addListener(_onSearchChanged);
     _scrollController.addListener(_onScroll);
 
-    // Auto-show food location picker if authenticated user has no foodAddress
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_hasShownPicker) return;
-      final userProvider = context.read<UserProvider>();
-      if (userProvider.user == null) return;
-      final foodAddress = userProvider.profileData?['foodAddress'];
-      if (foodAddress == null) {
-        _hasShownPicker = true;
-        showFoodLocationPicker(context, isDismissible: true);
+      // Auto-show food location picker if authenticated user has no foodAddress
+      if (!_hasShownPicker) {
+        final userProvider = context.read<UserProvider>();
+        if (userProvider.user != null) {
+          final foodAddress = userProvider.profileData?['foodAddress'];
+          if (foodAddress == null) {
+            _hasShownPicker = true;
+            showFoodLocationPicker(context, isDismissible: true);
+          }
+        }
       }
+
+      // Fetch after context is available so delivery region filter works
+      _fetchRestaurants();
+      _fetchFacets();
     });
   }
 
@@ -192,14 +196,15 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
 
   /// Returns [city, mainRegion] from the user's foodAddress for Typesense
   /// delivery-region filtering, or null if no address is set.
+  /// Returns the user's city (subregion) from foodAddress for Typesense
+  /// delivery-region filtering. Only the subregion matters — restaurants
+  /// list specific subregions they deliver to, not entire main regions.
   List<String>? _deliveryFilterRegions() {
     final raw = context.read<UserProvider>().profileData?['foodAddress'];
     if (raw is! Map<String, dynamic>) return null;
     final addr = FoodAddress.fromMap(raw);
-    final regions = <String>{};
-    if (addr.city.isNotEmpty) regions.add(addr.city);
-    if (addr.mainRegion.isNotEmpty) regions.add(addr.mainRegion);
-    return regions.isEmpty ? null : regions.toList();
+    if (addr.city.isEmpty) return null;
+    return [addr.city];
   }
 
   /// Fetch cuisine facets from Typesense for the filter pills.
