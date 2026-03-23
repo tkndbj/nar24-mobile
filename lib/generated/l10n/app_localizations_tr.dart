@@ -15516,4 +15516,32 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get unableToFindOrderDetails => 'Sipariş detayları bulunamadı';
+
+  @override
+  String get uploadOverlayUploading => 'Yükleniyor…';
+
+  @override
+  String get uploadOverlayFinalizing => 'İlanınız tamamlanıyor';
+
+  @override
+  String get uploadOverlaySendingFiles => 'Dosyalar gönderiliyor…';
+
+  @override
+  String uploadOverlayFilesUploaded(int uploadedFiles, int totalFiles) {
+    return '$totalFiles dosyadan $uploadedFiles tanesi yüklendi';
+  }
+
+  @override
+  String get uploadOverlayAlmostDone => 'Neredeyse bitti!';
+
+  @override
+  String uploadOverlayFilesProgress(int uploadedFiles, int totalFiles) {
+    return '$uploadedFiles / $totalFiles dosya';
+  }
+
+  @override
+  String get uploadOverlaySavingToDatabase => 'Veritabanına kaydediliyor…';
+
+  @override
+  String get uploadOverlayDoNotClose => 'Lütfen uygulamayı kapatmayın';
 }

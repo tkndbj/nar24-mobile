@@ -29573,6 +29573,54 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Sipariş detayları bulunamadı'**
   String get unableToFindOrderDetails;
+
+  /// No description provided for @uploadOverlayUploading.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yükleniyor…'**
+  String get uploadOverlayUploading;
+
+  /// No description provided for @uploadOverlayFinalizing.
+  ///
+  /// In tr, this message translates to:
+  /// **'İlanınız tamamlanıyor'**
+  String get uploadOverlayFinalizing;
+
+  /// No description provided for @uploadOverlaySendingFiles.
+  ///
+  /// In tr, this message translates to:
+  /// **'Dosyalar gönderiliyor…'**
+  String get uploadOverlaySendingFiles;
+
+  /// No description provided for @uploadOverlayFilesUploaded.
+  ///
+  /// In tr, this message translates to:
+  /// **'{totalFiles} dosyadan {uploadedFiles} tanesi yüklendi'**
+  String uploadOverlayFilesUploaded(int uploadedFiles, int totalFiles);
+
+  /// No description provided for @uploadOverlayAlmostDone.
+  ///
+  /// In tr, this message translates to:
+  /// **'Neredeyse bitti!'**
+  String get uploadOverlayAlmostDone;
+
+  /// No description provided for @uploadOverlayFilesProgress.
+  ///
+  /// In tr, this message translates to:
+  /// **'{uploadedFiles} / {totalFiles} dosya'**
+  String uploadOverlayFilesProgress(int uploadedFiles, int totalFiles);
+
+  /// No description provided for @uploadOverlaySavingToDatabase.
+  ///
+  /// In tr, this message translates to:
+  /// **'Veritabanına kaydediliyor…'**
+  String get uploadOverlaySavingToDatabase;
+
+  /// No description provided for @uploadOverlayDoNotClose.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lütfen uygulamayı kapatmayın'**
+  String get uploadOverlayDoNotClose;
 }
 
 class _AppLocalizationsDelegate

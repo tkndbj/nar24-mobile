@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../generated/l10n/app_localizations.dart';
 import 'upload_progress_state.dart';
 
 /// Full-screen, non-dismissible overlay shown during file upload + submission.
@@ -92,6 +93,7 @@ class _UploadProgressOverlayState extends State<UploadProgressOverlay>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
 
     return AbsorbPointer(
       // Swallow all taps so nothing behind can be interacted with.
@@ -119,15 +121,15 @@ class _UploadProgressOverlayState extends State<UploadProgressOverlay>
               children: [
                 _buildPhaseIcon(),
                 const SizedBox(height: 20),
-                _buildTitle(isDark),
+                _buildTitle(isDark, l10n),
                 const SizedBox(height: 6),
-                _buildSubtitle(isDark),
+                _buildSubtitle(isDark, l10n),
                 const SizedBox(height: 24),
                 _buildProgressBar(isDark),
                 const SizedBox(height: 10),
-                _buildProgressDetails(isDark),
+                _buildProgressDetails(isDark, l10n),
                 const SizedBox(height: 20),
-                _buildDoNotCloseWarning(isDark),
+                _buildDoNotCloseWarning(isDark, l10n),
               ],
             ),
           ),
@@ -206,10 +208,10 @@ Widget _buildPhaseIcon() {
   return container;
 }
 
-Widget _buildTitle(bool isDark) {
+Widget _buildTitle(bool isDark, AppLocalizations l10n) {
   final String text = widget.state.phase == UploadPhase.uploading
-      ? 'Uploading…'
-      : 'Finalizing your listing';
+      ? l10n.uploadOverlayUploading
+      : l10n.uploadOverlayFinalizing;
 
   return Text(
     text,
@@ -223,14 +225,14 @@ Widget _buildTitle(bool isDark) {
   );
 }
 
-Widget _buildSubtitle(bool isDark) {
+Widget _buildSubtitle(bool isDark, AppLocalizations l10n) {
   final String text;
   if (widget.state.phase == UploadPhase.uploading) {
     text = widget.state.totalFiles == 0
-        ? 'Sending files…'
-        : '${widget.state.uploadedFiles} of ${widget.state.totalFiles} files uploaded';
+        ? l10n.uploadOverlaySendingFiles
+        : l10n.uploadOverlayFilesUploaded(widget.state.uploadedFiles, widget.state.totalFiles);
   } else {
-    text = 'Almost done!';
+    text = l10n.uploadOverlayAlmostDone;
   }
 
   return Text(
@@ -243,7 +245,7 @@ Widget _buildSubtitle(bool isDark) {
   );
 }
 
-Widget _buildProgressDetails(bool isDark) {
+Widget _buildProgressDetails(bool isDark, AppLocalizations l10n) {
   final Color textColor = isDark ? Colors.white38 : Colors.grey.shade500;
 
   if (widget.state.phase == UploadPhase.uploading &&
@@ -252,7 +254,7 @@ Widget _buildProgressDetails(bool isDark) {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
-          '${widget.state.uploadedFiles} / ${widget.state.totalFiles} files',
+          l10n.uploadOverlayFilesProgress(widget.state.uploadedFiles, widget.state.totalFiles),
           style: TextStyle(fontSize: 12, color: textColor),
         ),
         Text(
@@ -269,7 +271,7 @@ Widget _buildProgressDetails(bool isDark) {
     child: widget.state.phase == UploadPhase.submitting
         ? Center(
             child: Text(
-              'Saving to database…',
+              l10n.uploadOverlaySavingToDatabase,
               style: TextStyle(fontSize: 12, color: textColor),
             ),
           )
@@ -279,7 +281,7 @@ Widget _buildProgressDetails(bool isDark) {
 
   // ── Do-not-close warning ──────────────────────────────────────────
 
-  Widget _buildDoNotCloseWarning(bool isDark) {
+  Widget _buildDoNotCloseWarning(bool isDark, AppLocalizations l10n) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -290,8 +292,7 @@ Widget _buildProgressDetails(bool isDark) {
         ),
         const SizedBox(width: 6),
         Text(
-          'Please don\'t close the app',
-          // l10n key: uploadOverlay.doNotClose
+          l10n.uploadOverlayDoNotClose,
           style: TextStyle(
             fontSize: 12,
             color: isDark ? Colors.white30 : Colors.grey.shade400,

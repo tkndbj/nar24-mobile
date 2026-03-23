@@ -6638,5 +6638,25 @@
   "retry": "Retry",
   "unnamed": "Unnamed",
   "unableToFindOrderDetails": "Unable to find order details",
-  "unknownSeller": "Unknown Seller"
+  "unknownSeller": "Unknown Seller",
+  "uploadOverlayUploading": "Uploading…",
+  "uploadOverlayFinalizing": "Finalizing your listing",
+  "uploadOverlaySendingFiles": "Sending files…",
+  "uploadOverlayFilesUploaded": "{uploadedFiles} of {totalFiles} files uploaded",
+  "@uploadOverlayFilesUploaded": {
+    "placeholders": {
+      "uploadedFiles": { "type": "int" },
+      "totalFiles": { "type": "int" }
+    }
+  },
+  "uploadOverlayAlmostDone": "Almost done!",
+  "uploadOverlayFilesProgress": "{uploadedFiles} / {totalFiles} files",
+  "@uploadOverlayFilesProgress": {
+    "placeholders": {
+      "uploadedFiles": { "type": "int" },
+      "totalFiles": { "type": "int" }
+    }
+  },
+  "uploadOverlaySavingToDatabase": "Saving to database…",
+  "uploadOverlayDoNotClose": "Please don't close the app"
 }

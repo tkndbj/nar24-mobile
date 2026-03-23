@@ -6634,5 +6634,25 @@
   "retry": "Tekrar Dene",
   "unnamed": "İsimsiz",
   "unableToFindOrderDetails": "Sipariş detayları bulunamadı",
-  "unknownSeller": "Bilinmeyen Satıcı"
+  "unknownSeller": "Bilinmeyen Satıcı",
+  "uploadOverlayUploading": "Yükleniyor…",
+  "uploadOverlayFinalizing": "İlanınız tamamlanıyor",
+  "uploadOverlaySendingFiles": "Dosyalar gönderiliyor…",
+  "uploadOverlayFilesUploaded": "{totalFiles} dosyadan {uploadedFiles} tanesi yüklendi",
+  "@uploadOverlayFilesUploaded": {
+    "placeholders": {
+      "uploadedFiles": { "type": "int" },
+      "totalFiles": { "type": "int" }
+    }
+  },
+  "uploadOverlayAlmostDone": "Neredeyse bitti!",
+  "uploadOverlayFilesProgress": "{uploadedFiles} / {totalFiles} dosya",
+  "@uploadOverlayFilesProgress": {
+    "placeholders": {
+      "uploadedFiles": { "type": "int" },
+      "totalFiles": { "type": "int" }
+    }
+  },
+  "uploadOverlaySavingToDatabase": "Veritabanına kaydediliyor…",
+  "uploadOverlayDoNotClose": "Lütfen uygulamayı kapatmayın"
 }

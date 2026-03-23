@@ -6273,5 +6273,25 @@
   "retry": "Повторить",
   "unnamed": "Без названия",
   "unableToFindOrderDetails": "Не удалось найти детали заказа",
-  "unknownSeller": "Неизвестный продавец"
+  "unknownSeller": "Неизвестный продавец",
+  "uploadOverlayUploading": "Загрузка…",
+  "uploadOverlayFinalizing": "Завершаем оформление объявления",
+  "uploadOverlaySendingFiles": "Отправка файлов…",
+  "uploadOverlayFilesUploaded": "{uploadedFiles} из {totalFiles} файлов загружено",
+  "@uploadOverlayFilesUploaded": {
+    "placeholders": {
+      "uploadedFiles": { "type": "int" },
+      "totalFiles": { "type": "int" }
+    }
+  },
+  "uploadOverlayAlmostDone": "Почти готово!",
+  "uploadOverlayFilesProgress": "{uploadedFiles} / {totalFiles} файлов",
+  "@uploadOverlayFilesProgress": {
+    "placeholders": {
+      "uploadedFiles": { "type": "int" },
+      "totalFiles": { "type": "int" }
+    }
+  },
+  "uploadOverlaySavingToDatabase": "Сохранение в базу данных…",
+  "uploadOverlayDoNotClose": "Пожалуйста, не закрывайте приложение"
 }

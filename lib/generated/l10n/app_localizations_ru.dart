@@ -15588,4 +15588,32 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get unableToFindOrderDetails => 'Не удалось найти детали заказа';
+
+  @override
+  String get uploadOverlayUploading => 'Загрузка…';
+
+  @override
+  String get uploadOverlayFinalizing => 'Завершаем оформление объявления';
+
+  @override
+  String get uploadOverlaySendingFiles => 'Отправка файлов…';
+
+  @override
+  String uploadOverlayFilesUploaded(int uploadedFiles, int totalFiles) {
+    return '$uploadedFiles из $totalFiles файлов загружено';
+  }
+
+  @override
+  String get uploadOverlayAlmostDone => 'Почти готово!';
+
+  @override
+  String uploadOverlayFilesProgress(int uploadedFiles, int totalFiles) {
+    return '$uploadedFiles / $totalFiles файлов';
+  }
+
+  @override
+  String get uploadOverlaySavingToDatabase => 'Сохранение в базу данных…';
+
+  @override
+  String get uploadOverlayDoNotClose => 'Пожалуйста, не закрывайте приложение';
 }

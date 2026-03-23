@@ -15488,4 +15488,32 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get unableToFindOrderDetails => 'Unable to find order details';
+
+  @override
+  String get uploadOverlayUploading => 'Uploading…';
+
+  @override
+  String get uploadOverlayFinalizing => 'Finalizing your listing';
+
+  @override
+  String get uploadOverlaySendingFiles => 'Sending files…';
+
+  @override
+  String uploadOverlayFilesUploaded(int uploadedFiles, int totalFiles) {
+    return '$uploadedFiles of $totalFiles files uploaded';
+  }
+
+  @override
+  String get uploadOverlayAlmostDone => 'Almost done!';
+
+  @override
+  String uploadOverlayFilesProgress(int uploadedFiles, int totalFiles) {
+    return '$uploadedFiles / $totalFiles files';
+  }
+
+  @override
+  String get uploadOverlaySavingToDatabase => 'Saving to database…';
+
+  @override
+  String get uploadOverlayDoNotClose => 'Please don\'t close the app';
 }
