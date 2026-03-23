@@ -949,11 +949,6 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
     final user = _auth.currentUser;
     if (user == null) return {'docs': <DocumentSnapshot>[], 'hasMore': false};
 
-    // If user doc array says no favorites, skip subcollection read entirely
-    if (_userProvider.favoriteItemIdsNotifier.value.isEmpty && startAfter == null) {
-      return {'docs': <DocumentSnapshot>[], 'hasMore': false, 'productIds': <String>{}};
-    }
-
     final basketId = selectedBasketNotifier.value;
     final collection =
         basketId == null ? 'favorites' : 'favorite_baskets/$basketId/favorites';
@@ -972,7 +967,7 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
       query = query.startAfterDocument(startAfter);
     }
 
-    final snapshot = await query.get();
+    final snapshot = await query.get(const GetOptions(source: Source.server));
     final hasMore = snapshot.docs.length > limit;
     final docs = hasMore ? snapshot.docs.take(limit).toList() : snapshot.docs;
 
@@ -991,45 +986,15 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
 
   /// Resets pagination and fetches the first page of favorites from server.
   /// Safe to call repeatedly — has dedup guard to prevent concurrent loads.
-  /// Mirrors CartProvider.loadCart() pattern.
-  Future<void> loadFavorites() async {
+  /// Mirrors CartProvider.loadCart() pattern: reset + fetch in one call.
+  Future<Map<String, dynamic>> loadFavorites({int limit = 50}) async {
     final user = _auth.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      return {'docs': <DocumentSnapshot>[], 'hasMore': false, 'error': null};
+    }
 
     if (_pendingFetches.containsKey('init')) {
       await _pendingFetches['init']!.future;
-      return;
-    }
-
-    final completer = Completer<void>();
-    _pendingFetches['init'] = completer;
-
-    try {
-      // Reset pagination state
-      _lastDocument = null;
-      hasMoreDataNotifier.value = true;
-      isLoadingMoreNotifier.value = false;
-      _paginatedFavoritesMap.clear();
-      paginatedFavoritesNotifier.value = [];
-      _isInitialLoadComplete = false;
-      _currentBasketId = selectedBasketNotifier.value;
-      notifyListeners();
-
-      completer.complete();
-    } catch (e) {
-      debugPrint('❌ loadFavorites error: $e');
-      completer.completeError(e);
-    } finally {
-      _pendingFetches.remove('init');
-    }
-  }
-
-  Future<Map<String, dynamic>> loadNextPage({int limit = 50}) async {
-    debugPrint(
-        '🔵 loadNextPage START: isLoading=${isLoadingMoreNotifier.value}, hasMore=${hasMoreDataNotifier.value}');
-
-    if (isLoadingMoreNotifier.value || !hasMoreDataNotifier.value) {
-      debugPrint('🔵 loadNextPage SKIP: Already loading or no more data');
       return {
         'docs': <DocumentSnapshot>[],
         'hasMore': false,
@@ -1037,9 +1002,67 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
       };
     }
 
+    final completer = Completer<void>();
+    _pendingFetches['init'] = completer;
     isLoadingMoreNotifier.value = true;
     notifyListeners();
-    debugPrint('🔵 loadNextPage: Set isLoading=true, called notifyListeners()');
+
+    try {
+      // Reset pagination state
+      _lastDocument = null;
+      hasMoreDataNotifier.value = true;
+      _paginatedFavoritesMap.clear();
+      paginatedFavoritesNotifier.value = [];
+      _isInitialLoadComplete = false;
+      _currentBasketId = selectedBasketNotifier.value;
+
+      // Fetch first page (like loadCart does)
+      final result = await fetchPaginatedFavorites(limit: limit);
+      final docs = result['docs'] as List<DocumentSnapshot>;
+      final hasMore = result['hasMore'] as bool;
+
+      if (docs.isNotEmpty) {
+        _lastDocument = docs.last;
+        hasMoreDataNotifier.value = hasMore;
+      } else {
+        hasMoreDataNotifier.value = false;
+      }
+
+      isLoadingMoreNotifier.value = false;
+      notifyListeners();
+      completer.complete();
+
+      return {
+        'docs': docs,
+        'hasMore': hasMore,
+        'productIds': result['productIds'],
+        'error': null,
+      };
+    } catch (e) {
+      debugPrint('❌ loadFavorites error: $e');
+      isLoadingMoreNotifier.value = false;
+      hasMoreDataNotifier.value = false;
+      notifyListeners();
+      completer.completeError(e);
+
+      return {
+        'docs': <DocumentSnapshot>[],
+        'hasMore': false,
+        'error': e.toString(),
+      };
+    } finally {
+      _pendingFetches.remove('init');
+    }
+  }
+
+  /// Fetches the next page of favorites (for scroll pagination).
+  Future<Map<String, dynamic>> loadNextPage({int limit = 50}) async {
+    if (isLoadingMoreNotifier.value || !hasMoreDataNotifier.value) {
+      return {'docs': <DocumentSnapshot>[], 'hasMore': false, 'error': null};
+    }
+
+    isLoadingMoreNotifier.value = true;
+    notifyListeners();
 
     try {
       final result = await fetchPaginatedFavorites(
@@ -1050,23 +1073,15 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
       final docs = result['docs'] as List<DocumentSnapshot>;
       final hasMore = result['hasMore'] as bool;
 
-      debugPrint(
-          '🔵 loadNextPage RESULT: docs=${docs.length}, hasMore=$hasMore, limit=$limit');
-
       if (docs.isNotEmpty) {
         _lastDocument = docs.last;
         hasMoreDataNotifier.value = hasMore;
-        debugPrint(
-            '🔵 loadNextPage: Set hasMoreData=$hasMore (docs not empty)');
       } else {
         hasMoreDataNotifier.value = false;
-        debugPrint('🔵 loadNextPage: Set hasMoreData=false (docs empty)');
       }
 
       isLoadingMoreNotifier.value = false;
       notifyListeners();
-      debugPrint(
-          '🔵 loadNextPage END: Set isLoading=false, hasMore=${hasMoreDataNotifier.value}, called notifyListeners()');
 
       return {
         'docs': docs,

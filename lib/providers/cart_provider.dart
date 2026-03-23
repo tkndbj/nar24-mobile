@@ -12,7 +12,6 @@ import '../services/cart_favorite_metrics_service.dart';
 import '../services/user_activity_service.dart';
 import '../services/lifecycle_aware.dart';
 import '../services/app_lifecycle_manager.dart';
-import '../services/firestore_read_tracker.dart';
 import '../user_provider.dart';
 
 // ============================================================================

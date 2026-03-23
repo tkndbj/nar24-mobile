@@ -119,6 +119,16 @@ class UserProvider with ChangeNotifier, LifecycleAwareMixin {
   void updateLocalProfileField(String key, dynamic value) {
     _profileData ??= {};
     _profileData![key] = value;
+
+    // Keep denormalized notifiers in sync with profileData
+    if (key == 'favoriteItemIds') {
+      favoriteItemIdsNotifier.value =
+          (value as List<dynamic>?)?.map((e) => e as String).toSet() ?? <String>{};
+    } else if (key == 'cartItemIds') {
+      cartItemIdsNotifier.value =
+          (value as List<dynamic>?)?.map((e) => e as String).toSet() ?? <String>{};
+    }
+
     notifyListeners();
   }
 

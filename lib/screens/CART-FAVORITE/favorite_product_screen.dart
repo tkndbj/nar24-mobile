@@ -77,13 +77,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     }
 
     // Always reload on every screen visit (widget creation OR tab revisit)
-    // loadFavorites() is safe to call repeatedly — it has its own pending-fetch
-    // dedup guard inside the provider
+    // loadFavorites() resets state + fetches first page in one call
     _isInitialLoading = true;
     _startLoadingTimeout();
-    _favoriteProvider!.loadFavorites().then((_) {
-      if (mounted) _loadNextPage();
-    });
+    _loadFirstPage();
   }
 
   void _handleFavoritesChanged() {
@@ -163,9 +160,7 @@ Future<void> _resetPaginationAndLoad() async {
     });
 
     _startLoadingTimeout();
-    _favoriteProvider!.loadFavorites().then((_) {
-      if (mounted) _loadNextPage();
-    });
+    _loadFirstPage();
   } catch (e) {
     debugPrint('❌ Error in _resetPaginationAndLoad: $e');
     if (mounted) setState(() => _isInitialLoading = false);
@@ -175,6 +170,55 @@ Future<void> _resetPaginationAndLoad() async {
   // ========================================================================
   // PAGINATION
   // ========================================================================
+
+  /// Resets pagination and fetches first page in one call.
+  Future<void> _loadFirstPage() async {
+    final favoriteProvider =
+        Provider.of<FavoriteProvider>(context, listen: false);
+
+    try {
+      final result = await favoriteProvider.loadFavorites(limit: _pageSize);
+      if (!mounted) return;
+
+      final docs = result['docs'] as List<DocumentSnapshot>?;
+      final productIds = result['productIds'] as Set<String>?;
+      final error = result['error'];
+
+      if (error != null) {
+        debugPrint('Error loading favorites: $error');
+        setState(() => _isInitialLoading = false);
+        _loadingTimeoutTimer?.cancel();
+        return;
+      }
+
+      if (docs == null || docs.isEmpty) {
+        setState(() => _isInitialLoading = false);
+        if (!favoriteProvider.isInitialLoadComplete) {
+          favoriteProvider.markInitialLoadComplete();
+        }
+        _loadingTimeoutTimer?.cancel();
+        return;
+      }
+
+      final newItems =
+          await _fetchProductDetailsForIds(productIds!.toList(), docs);
+
+      if (mounted) {
+        favoriteProvider.addPaginatedItems(newItems);
+        setState(() => _isInitialLoading = false);
+        _loadingTimeoutTimer?.cancel();
+
+        if (!favoriteProvider.isInitialLoadComplete) {
+          favoriteProvider.markInitialLoadComplete();
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Error loading first page: $e');
+      if (mounted) setState(() => _isInitialLoading = false);
+      _loadingTimeoutTimer?.cancel();
+      _showErrorRetrySnackbar();
+    }
+  }
 
   Future<void> _loadNextPage() async {
   final favoriteProvider =
