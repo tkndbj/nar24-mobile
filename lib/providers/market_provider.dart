@@ -11,7 +11,6 @@ import '../utils/debouncer.dart';
 import '../user_provider.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'package:retry/retry.dart';
-import '../models/suggestion.dart';
 import '../services/typesense_service_manager.dart';
 import 'package:flutter/foundation.dart';
 import '../services/analytics_service.dart';
@@ -93,14 +92,6 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
   static const Duration _buyerCategoryCacheTTL = Duration(minutes: 20);
   static const int _maxBuyerCategoryCacheSize = 10;
 
-  /// Cached suggestions keyed by query string
-  final Map<String, List<Suggestion>> _suggestionCache = {};
-
-  /// When each query was last cached
-  final Map<String, DateTime> _suggestionTimestamps = {};
-
-  /// How long we keep a suggestions list before dropping it
-  static const Duration _suggestionCacheTTL = Duration(minutes: 1);
 
   int _TypseSenseFailureCount = 0;
   DateTime? _lastTypseSenseFailure;
@@ -298,7 +289,6 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
         // ✅ Use class constant
         _productCache.remove(key);
         _searchCache.remove(key);
-        _suggestionCache.remove(key);
         removedCount++;
         return true;
       }
@@ -312,10 +302,6 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
 
     if (_searchCache.length > 50) {
       _enforceSearchCacheLimit();
-    }
-
-    if (_suggestionCache.length > 20) {
-      _enforceSuggestionCacheLimit();
     }
 
     // ✅ Calculate next cleanup time
@@ -369,27 +355,6 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     }
   }
 
-  void _enforceSuggestionCacheLimit() {
-    // Sort by timestamp (oldest first)
-    final sortedKeys = _suggestionTimestamps.entries
-        .map((e) => MapEntry(e.key, e.value))
-        .toList()
-      ..sort((a, b) => a.value.compareTo(b.value));
-
-    // Keep only 10 newest suggestions
-    final toRemove = sortedKeys.take(sortedKeys.length - 10).map((e) => e.key);
-
-    for (final key in toRemove) {
-      _suggestionCache.remove(key);
-      _suggestionTimestamps.remove(key);
-    }
-
-    if (kDebugMode) {
-      debugPrint(
-          '🧹 Suggestion cache trimmed to ${_suggestionCache.length} entries');
-    }
-  }
-
   @override
   void dispose() {
     debugPrint('🗑️ MarketProvider: Starting disposal...');
@@ -414,8 +379,6 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     _productCache.clear();
     _cacheTimestamps.clear();
     _searchCache.clear();
-    _suggestionCache.clear();
-    _suggestionTimestamps.clear();
 
     _buyerCategoryCache.clear();
     _buyerCategoryTimestamps.clear();
@@ -491,221 +454,6 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
       );
     } catch (e) {
       debugPrint('Error incrementing impression counts: $e');
-    }
-  }
-
-  /// ---------------------------------------------------------------------------
-  /// Autocomplete Suggestions via TypseSense
-  /// ---------------------------------------------------------------------------
-  Future<List<Suggestion>> fetchSuggestions(
-    String query, {
-    AppLocalizations? l10n,
-  }) async {
-    if (query.isEmpty) return [];
-
-    // ✅ ADD: If remote config says use Firestore, go directly to fallback
-    if (SearchConfigService.instance.useFirestore) {
-      return await _fetchSuggestionsFromFirestore(query, l10n: l10n);
-    }
-
-    // Check circuit breaker
-    if (_isTypseSenseCircuitOpen()) {
-      print('TypseSense circuit breaker is open, using Firestore fallback');
-      return await _fetchSuggestionsFromFirestore(query, l10n: l10n);
-    }
-
-    // Check cache first
-    final now = DateTime.now();
-    if (_suggestionCache.containsKey(query)) {
-      final ts = _suggestionTimestamps[query]!;
-      if (now.difference(ts) < _suggestionCacheTTL) {
-        return _suggestionCache[query]!;
-      } else {
-        _suggestionCache.remove(query);
-        _suggestionTimestamps.remove(query);
-      }
-    }
-
-    // Build filters for localized search
-    final locale = l10n?.localeName ?? 'en';
-    final catField = 'category_$locale';
-    final subField = 'subcategory_$locale';
-    final subsubField = 'subsubcategory_$locale';
-
-    String searchQuery = query;
-    final List<String> filters = [];
-    bool mapped = false;
-
-    if (l10n != null) {
-      final qLower = query.toLowerCase();
-
-      // Category mapping logic (same as before)
-      for (final rawCat
-          in AllInOneCategoryData.kCategories.map((m) => m['key']!)) {
-        final locCat = AllInOneCategoryData.localizeCategoryKey(rawCat, l10n);
-        if (qLower.contains(locCat.toLowerCase())) {
-          filters.add('$catField:"$locCat"');
-          mapped = true;
-          break;
-        }
-      }
-
-      // Subcategory mapping (same logic as before)
-      if (!mapped) {
-        for (final parent in AllInOneCategoryData.kSubcategories.entries) {
-          for (final rawSub in parent.value) {
-            final locSub = AllInOneCategoryData.localizeSubcategoryKey(
-                parent.key, rawSub, l10n);
-            if (qLower.contains(locSub.toLowerCase())) {
-              filters.add('$subField:"$locSub"');
-              mapped = true;
-              break;
-            }
-          }
-          if (mapped) break;
-        }
-      }
-
-      // Clear search query if mapped to use facet filtering only
-      if (mapped) searchQuery = '';
-    }
-
-    try {
-      // Execute dual TypseSense search with circuit breaker protection
-      final List<Future<List<ProductSummary>>> searchFutures = [
-        _safeTypseSenseSearch(typesenseService, searchQuery, filters),
-        _safeTypseSenseSearch(typesenseShopService, searchQuery, filters),
-      ];
-
-      final results = await Future.wait(
-        searchFutures,
-        eagerError: false,
-      );
-
-      // Process results
-      final combined = <Suggestion>[];
-      final seenIds = <String>{};
-
-      for (final productList in results) {
-        for (final p in productList) {
-          if (seenIds.add(p.id)) {
-            combined.add(
-              Suggestion(
-                id: p.id,
-                name: p.productName,
-                price: p.price,
-              ),
-            );
-          }
-        }
-      }
-
-      // If we got results, record success and cache
-      if (combined.isNotEmpty) {
-        _recordTypseSenseSuccess();
-        _suggestionCache[query] = combined;
-        _suggestionTimestamps[query] = now;
-        return combined;
-      } else {
-        // No results from TypseSense, try Firestore fallback
-        print('No TypseSense results, trying Firestore fallback');
-        return await _fetchSuggestionsFromFirestore(query, l10n: l10n);
-      }
-    } catch (e) {
-      print('TypseSense suggestions failed completely: $e');
-      _recordTypseSenseFailure();
-
-      // Fall back to Firestore
-      return await _fetchSuggestionsFromFirestore(query, l10n: l10n);
-    }
-  }
-
-  Future<List<ProductSummary>> _safeTypseSenseSearch(
-    TypeSenseService service,
-    String searchQuery,
-    List<String> filters,
-  ) async {
-    try {
-      return await service
-          .searchProducts(
-            query: searchQuery,
-            sortOption: 'alphabetical',
-            page: 0,
-            hitsPerPage: 5,
-            filters: filters.isNotEmpty ? filters : null,
-          )
-          .timeout(const Duration(seconds: 5));
-    } catch (e) {
-      print('Safe TypseSense search failed: $e');
-      return <ProductSummary>[];
-    }
-  }
-
-  /// Firestore fallback for suggestions
-  Future<List<Suggestion>> _fetchSuggestionsFromFirestore(
-    String query, {
-    AppLocalizations? l10n,
-  }) async {
-    try {
-      final lower = query.toLowerCase();
-      final capitalized = query.substring(0, 1).toUpperCase() +
-          query.substring(1).toLowerCase();
-
-      final snapshots = await Future.wait([
-        _firestore
-            .collection('products')
-            .orderBy('productName')
-            .startAt([lower])
-            .endAt(['$lower\uf8ff'])
-            .limit(5)
-            .get(),
-        _firestore
-            .collection('products')
-            .orderBy('productName')
-            .startAt([capitalized])
-            .endAt(['$capitalized\uf8ff'])
-            .limit(5)
-            .get(),
-        _firestore
-            .collection('shop_products')
-            .orderBy('productName')
-            .startAt([lower])
-            .endAt(['$lower\uf8ff'])
-            .limit(5)
-            .get(),
-        _firestore
-            .collection('shop_products')
-            .orderBy('productName')
-            .startAt([capitalized])
-            .endAt(['$capitalized\uf8ff'])
-            .limit(5)
-            .get(),
-      ]).timeout(const Duration(seconds: 5));
-
-      final totalDocs = snapshots.fold<int>(0, (sum, s) => sum + s.docs.length);
-      FirestoreReadTracker.instance.trackRead('MarketProvider', 'suggestions FIRESTORE FALLBACK (4 queries)', totalDocs);
-
-      final suggestions = <Suggestion>[];
-      final seenIds = <String>{};
-
-      for (final snapshot in snapshots) {
-        for (final doc in snapshot.docs) {
-          if (suggestions.length >= 10) break;
-          if (seenIds.add(doc.id)) {
-            final data = doc.data();
-            suggestions.add(Suggestion(
-              id: doc.id,
-              name: data['productName'] as String? ?? '',
-              price: (data['price'] as num?)?.toDouble() ?? 0.0,
-            ));
-          }
-        }
-      }
-
-      return suggestions;
-    } catch (e) {
-      debugPrint('Firestore suggestions fallback failed: $e');
-      return [];
     }
   }
 
