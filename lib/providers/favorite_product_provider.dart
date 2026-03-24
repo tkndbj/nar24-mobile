@@ -916,12 +916,80 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
     if (user == null) return 'pleaseLoginFirst';
 
     try {
-      await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('favorite_baskets')
-          .doc(basketId)
-          .delete();
+      final userRef = _firestore.collection('users').doc(user.uid);
+      final basketRef = userRef.collection('favorite_baskets').doc(basketId);
+
+      // STEP 1: Fetch all favorites inside the basket subcollection
+      final favoritesSnap = await basketRef.collection('favorites').get();
+
+      List<String> idsToRemoveFromUserDoc = [];
+
+      if (favoritesSnap.docs.isNotEmpty) {
+        final basketProductIds = favoritesSnap.docs
+            .map((doc) => doc.data()['productId'] as String?)
+            .where((id) => id != null)
+            .cast<String>()
+            .toList();
+
+        // STEP 2: Check which products also exist in general favorites
+        // so we don't incorrectly remove them from favoriteItemIds
+        final Set<String> idsInGeneral = {};
+        for (var i = 0; i < basketProductIds.length; i += 10) {
+          final chunk = basketProductIds.skip(i).take(10).toList();
+          final generalSnap = await userRef
+              .collection('favorites')
+              .where('productId', whereIn: chunk)
+              .get();
+          for (var doc in generalSnap.docs) {
+            final pid = doc.data()['productId'] as String?;
+            if (pid != null) idsInGeneral.add(pid);
+          }
+        }
+
+        idsToRemoveFromUserDoc = basketProductIds
+            .where((id) => !idsInGeneral.contains(id))
+            .toList();
+
+        // STEP 3: Delete subcollection docs in batches
+        for (var i = 0; i < favoritesSnap.docs.length; i += 500) {
+          final batch = _firestore.batch();
+          final chunk = favoritesSnap.docs.skip(i).take(500).toList();
+          for (var doc in chunk) {
+            batch.delete(doc.reference);
+          }
+          await batch.commit();
+        }
+      }
+
+      // STEP 4: Atomically remove from favoriteItemIds + delete basket doc
+      final finalBatch = _firestore.batch();
+      if (idsToRemoveFromUserDoc.isNotEmpty) {
+        finalBatch.update(userRef, {
+          'favoriteItemIds': FieldValue.arrayRemove(idsToRemoveFromUserDoc),
+        });
+      }
+      finalBatch.delete(basketRef);
+      await finalBatch.commit();
+
+      // STEP 5: Optimistic local sync
+      if (idsToRemoveFromUserDoc.isNotEmpty) {
+        final removeSet = idsToRemoveFromUserDoc.toSet();
+        _userProvider.updateLocalProfileField(
+          'favoriteItemIds',
+          ((_userProvider.profileData?['favoriteItemIds'] as List?) ?? [])
+              .where((id) => !removeSet.contains(id))
+              .toList(),
+        );
+
+        final newGlobalIds =
+            Set<String>.from(globalFavoriteIdsNotifier.value)
+              ..removeAll(removeSet);
+        globalFavoriteIdsNotifier.value = newGlobalIds;
+
+        for (final pid in idsToRemoveFromUserDoc) {
+          _updateProductFavoriteStatus(pid, false);
+        }
+      }
 
       if (selectedBasketNotifier.value == basketId) {
         setSelectedBasket(null);

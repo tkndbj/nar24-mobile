@@ -124,7 +124,7 @@ class _MarketThinBannerState extends State<MarketThinBanner>
       if (!_cachedUrls.contains(url)) {
         _cachedUrls.add(url);
         // Fixed height for thin banners - width scales proportionally
-        final provider = CachedNetworkImageProvider(url, maxHeight: 150);
+        final provider = CachedNetworkImageProvider(url, maxWidth: 800, maxHeight: 300);
         precacheImage(provider, context);
       }
 
@@ -259,8 +259,8 @@ class _MarketThinBannerState extends State<MarketThinBanner>
                         const Center(child: Icon(Icons.error)),
                     fadeInDuration: Duration.zero,
                     fadeOutDuration: Duration.zero,
-                    // Only constrain height - width scales proportionally
-                    memCacheHeight: 150,
+                    memCacheWidth: 800,
+                    memCacheHeight: 300,
                     useOldImageOnUrlChange: true,
                     filterQuality: FilterQuality.medium,
                   ),

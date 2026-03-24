@@ -6,7 +6,8 @@
         "appID": "7BY492QQ9Z.com.ects.nar24",
         "paths": [
           "/products/*",
-          "/shared-favorites/*"         
+          "/productdetail/*",
+          "/shared-favorites/*"
         ]
       }
     ]

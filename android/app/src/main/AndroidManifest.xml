@@ -79,17 +79,6 @@
             android:pathPrefix="/productdetail" />
     </intent-filter>
 
-    <!-- ✅ NEW: Main website without www -->
-    <intent-filter android:autoVerify="true" android:priority="940">
-        <action android:name="android.intent.action.VIEW" />
-        <category android:name="android.intent.category.DEFAULT" />
-        <category android:name="android.intent.category.BROWSABLE" />
-        <data 
-            android:scheme="https" 
-            android:host="nar24.com"
-            android:pathPrefix="/productdetail" />
-    </intent-filter>
-
             <!-- High priority: Subdomain for shared links -->
             <intent-filter android:autoVerify="true" android:priority="900">
                 <action android:name="android.intent.action.VIEW" />

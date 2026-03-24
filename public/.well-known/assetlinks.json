@@ -5,7 +5,9 @@
         "namespace": "android_app",
         "package_name": "com.cts.emlak",
         "sha256_cert_fingerprints": [
-          "36:3b:9f:11:db:7a:94:74:82:3a:1f:73:dd:ac:fa:3b:c5:64:25:1a:a1:52:d6:1c:70:d2:b6:de:a7:45:a4:e2"
+          "99:28:C1:5C:3B:F2:0E:B0:BD:52:9E:68:D7:17:14:11:66:2C:38:80:2C:34:DF:08:E9:38:71:87:9C:09:FB:68",
+          "36:3B:9F:11:DB:7A:94:74:82:3A:1F:73:DD:AC:FA:3B:C5:64:25:1A:A1:52:D6:1C:70:D2:B6:DE:A7:45:A4:E2",
+          "A3:78:DC:8F:2A:F4:5D:66:32:E8:7A:6D:66:E7:29:C5:23:5A:3B:27:33:F8:F3:9B:65:8F:13:27:2F:2A:ED:80"
         ]
       }
     }

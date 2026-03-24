@@ -50,8 +50,8 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
   bool _hasBeenVisible = false;
   bool _isProcessingBanners = false;
 
-  static const int _imageCacheWidth = 1200; // Covers most phones at 3x
-  static const int _imageCacheHeight = 600;
+  static const int _imageCacheWidth = 1600; // Extra room to avoid decode corruption
+  static const int _imageCacheHeight = 800;
 
   final Set<String> _prefetchedUrls = {};
 

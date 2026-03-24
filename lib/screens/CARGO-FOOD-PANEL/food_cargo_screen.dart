@@ -310,12 +310,6 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
               );
             },
           ),
-          // Legacy scanner (for My Deliveries tab)
-          IconButton(
-            icon: const Icon(Icons.document_scanner_rounded),
-            tooltip: 'Scan Receipt',
-            onPressed: _openScanner,
-          ),
           IconButton(
             icon: const Icon(Icons.history_rounded),
             tooltip: loc.pastFoodCargosTitle,
@@ -792,10 +786,12 @@ class _CourierCallCard extends StatefulWidget {
 
 class _CourierCallCardState extends State<_CourierCallCard> {
   bool _loading = false;
+  bool _acceptedLocally = false;
 
   bool get _isMyCall =>
-      widget.call.status == 'accepted' &&
-      widget.call.acceptedBy == widget.currentUser.uid;
+      _acceptedLocally ||
+      (widget.call.status == 'accepted' &&
+          widget.call.acceptedBy == widget.currentUser.uid);
 
   String _timeAgo() {
     final ts = widget.call.createdAt;
@@ -828,8 +824,9 @@ class _CourierCallCardState extends State<_CourierCallCard> {
           'acceptedAt': FieldValue.serverTimestamp(),
         });
       });
-      // Transaction succeeded — stream will update within ~200ms
-      // but we don't need to wait for it, loading reset is enough
+      // Optimistically mark as accepted so UI switches immediately,
+      // without waiting for the Firestore stream round-trip.
+      if (mounted) setState(() => _acceptedLocally = true);
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString().contains('already_accepted')

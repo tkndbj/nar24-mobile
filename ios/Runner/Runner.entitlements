@@ -11,7 +11,6 @@
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:www.nar24.com</string>
-		<string>applinks:nar24.com</string>
 		<string>applinks:app.nar24.com</string>
 		<string>applinks:emlak-mobile-app.web.app</string>
 	</array>

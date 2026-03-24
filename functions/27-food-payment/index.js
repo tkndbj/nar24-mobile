@@ -1804,24 +1804,27 @@ export const updateFoodOrderStatus = onCall(
         ...(newStatus === 'delivered' ? { needsReview: true } : {}),
       });
 
-      const notifRef = db
-        .collection('users')
-        .doc(order.buyerId)
-        .collection('notifications')
-        .doc();
+      // Only notify the buyer if one exists (scanned receipt orders have no buyerId)
+      if (order.buyerId) {
+        const notifRef = db
+          .collection('users')
+          .doc(order.buyerId)
+          .collection('notifications')
+          .doc();
 
-      tx.set(notifRef, {
-        type: newStatus === 'delivered' ? 'food_order_delivered_review' : 'food_order_status_update',
-        payload: {
-          orderId,
-          orderStatus: newStatus,
-          previousStatus: order.status,
-          restaurantId: order.restaurantId,
-          restaurantName: order.restaurantName,
-        },
-        isRead: false,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      });
+        tx.set(notifRef, {
+          type: newStatus === 'delivered' ? 'food_order_delivered_review' : 'food_order_status_update',
+          payload: {
+            orderId,
+            orderStatus: newStatus,
+            previousStatus: order.status,
+            restaurantId: order.restaurantId,
+            restaurantName: order.restaurantName,
+          },
+          isRead: false,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
     });
 
     return { success: true };
