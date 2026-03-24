@@ -159,7 +159,8 @@ class _RestaurantTopBannerState extends State<RestaurantTopBanner> {
 
             // ── Gradient overlay ─────────────────────────────────────────────
             Positioned.fill(
-              child: DecoratedBox(
+              child: IgnorePointer(
+                child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
@@ -171,6 +172,7 @@ class _RestaurantTopBannerState extends State<RestaurantTopBanner> {
                     stops: const [0.5, 1.0],
                   ),
                 ),
+              ),
               ),
             ),
 
