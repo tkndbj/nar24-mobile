@@ -427,7 +427,6 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
   bool _loading = true;
   bool _loadingMore = false;
   bool _hasMore = true;
-  int _currentLimit = _kPageSize;
 
   final Map<String, _OrderStatus> _updatingTo = {};
   // FIX 4: _informingIds removed — _InformCourierBtn now manages its own
@@ -435,14 +434,15 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
   final Set<String> _expandedIds = {};
 
   StreamSubscription<QuerySnapshot>? _sub;
+  DocumentSnapshot? _firstPageLastDoc;
 
   @override
-  bool get wantKeepAlive => true;
+  bool get wantKeepAlive => false;
 
   @override
   void initState() {
     super.initState();
-    _subscribe();
+    _subscribeFirstPage();
   }
 
   @override
@@ -450,9 +450,8 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
     super.didUpdateWidget(old);
     if (old.restaurantId != widget.restaurantId) {
       _activeTab = _TabStatus.pending;
-      _currentLimit = _kPageSize;
       _expandedIds.clear();
-      _subscribe();
+      _subscribeFirstPage();
     }
   }
 
@@ -464,24 +463,13 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
 
   // ── Firestore ─────────────────────────────────────────────────────────────
 
-  void _subscribe({bool isLoadMore = false}) {
-    _sub?.cancel();
-    if (mounted) {
-      setState(() {
-        if (!isLoadMore) {
-          _loading = true;
-          _orders = [];
-        }
-      });
-    }
-
+  Query _buildQuery() {
     final statuses = _kTabStatuses[_activeTab]!;
 
     Query query = FirebaseFirestore.instance
         .collection('orders-food')
         .where('restaurantId', isEqualTo: widget.restaurantId)
-        .orderBy('createdAt', descending: true)
-        .limit(_currentLimit);
+        .orderBy('createdAt', descending: true);
 
     if (statuses.length == 1) {
       query = query.where('status', isEqualTo: _statusToString(statuses.first));
@@ -490,12 +478,28 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
           whereIn: statuses.map(_statusToString).toList());
     }
 
-    _sub = query.snapshots().listen(
+    return query;
+  }
+
+  void _subscribeFirstPage() {
+    _sub?.cancel();
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _orders = [];
+        _firstPageLastDoc = null;
+        _hasMore = true;
+      });
+    }
+
+    _sub = _buildQuery().limit(_kPageSize).snapshots().listen(
       (snap) {
         if (!mounted) return;
         setState(() {
           _orders = snap.docs.map(_FoodOrder.fromDoc).toList();
-          _hasMore = snap.size >= _currentLimit;
+          _firstPageLastDoc =
+              snap.docs.isNotEmpty ? snap.docs.last : null;
+          _hasMore = snap.docs.length >= _kPageSize;
           _loading = false;
           _loadingMore = false;
         });
@@ -517,22 +521,48 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
     _sub?.cancel();
     setState(() {
       _activeTab = tab;
-      _currentLimit = _kPageSize;
       _hasMore = true;
       _loading = true;
       _orders = [];
+      _firstPageLastDoc = null;
       _expandedIds.clear();
     });
-    _subscribe();
+    _subscribeFirstPage();
   }
 
   void _loadMore() {
-    if (_loadingMore || !_hasMore) return;
-    setState(() {
-      _loadingMore = true;
-      _currentLimit += _kPageSize;
-    });
-    _subscribe(isLoadMore: true);
+    if (_loadingMore || !_hasMore || _firstPageLastDoc == null) return;
+    setState(() => _loadingMore = true);
+    _fetchNextPage();
+  }
+
+  Future<void> _fetchNextPage() async {
+    try {
+      final snap = await _buildQuery()
+          .startAfterDocument(_firstPageLastDoc!)
+          .limit(_kPageSize)
+          .get();
+
+      if (!mounted) return;
+
+      final existingIds = _orders.map((o) => o.id).toSet();
+      final newOrders = snap.docs
+          .map(_FoodOrder.fromDoc)
+          .where((o) => !existingIds.contains(o.id))
+          .toList();
+
+      setState(() {
+        _orders.addAll(newOrders);
+        if (snap.docs.isNotEmpty) {
+          _firstPageLastDoc = snap.docs.last;
+        }
+        _hasMore = snap.docs.length >= _kPageSize;
+        _loadingMore = false;
+      });
+    } catch (e) {
+      debugPrint('FoodOrdersTab._fetchNextPage error: $e');
+      if (mounted) setState(() => _loadingMore = false);
+    }
   }
 
   Future<void> _updateStatus(String orderId, _OrderStatus newStatus) async {
@@ -817,7 +847,7 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
   Widget _buildList(bool isDark, String locale) {
     return RefreshIndicator(
       color: const Color(0xFFEA580C),
-      onRefresh: () async => _subscribe(),
+      onRefresh: () async => _subscribeFirstPage(),
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
         itemCount: _orders.length + (_hasMore ? 1 : 0),
