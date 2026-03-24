@@ -27,7 +27,6 @@ import '../../utils/food_localization.dart';
 import '../../services/typesense_service_manager.dart';
 import '../../services/restaurant_typesense_service.dart';
 
-
 class RestaurantDetailScreen extends StatefulWidget {
   final String restaurantId;
   const RestaurantDetailScreen({required this.restaurantId, super.key});
@@ -43,8 +42,7 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
 
   /// Whether the user was unauthenticated when they entered this screen.
   /// Used to detect fresh logins that should redirect to /restaurants.
-  final bool _wasUnauthenticated =
-      FirebaseAuth.instance.currentUser == null;
+  final bool _wasUnauthenticated = FirebaseAuth.instance.currentUser == null;
   StreamSubscription<User?>? _authSubscription;
 
   @override
@@ -335,19 +333,19 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
           } else {
             // Post-extras conflict: clear cart and add item directly
             await cart.clearAndAddFromNewRestaurant(
-                  foodId: pending.food.id,
-                  foodName: pending.food.name,
-                  foodDescription: pending.food.description ?? '',
-                  price: pending.food.price,
-                  imageUrl: pending.food.imageUrl ?? '',
-                  foodCategory: pending.food.foodCategory,
-                  foodType: pending.food.foodType,
-                  preparationTime: pending.food.preparationTime,
-                  restaurant: pending.restaurant,
-                  quantity: pending.quantity,
-                  extras: pending.extras,
-                  specialNotes: pending.specialNotes,
-                );
+              foodId: pending.food.id,
+              foodName: pending.food.name,
+              foodDescription: pending.food.description ?? '',
+              price: pending.food.price,
+              imageUrl: pending.food.imageUrl ?? '',
+              foodCategory: pending.food.foodCategory,
+              foodType: pending.food.foodType,
+              preparationTime: pending.food.preparationTime,
+              restaurant: pending.restaurant,
+              quantity: pending.quantity,
+              extras: pending.extras,
+              specialNotes: pending.specialNotes,
+            );
           }
         },
         onCancel: () {
@@ -370,7 +368,8 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
     // Not found state — mirrors the !restaurant early return
     if (restaurant == null) {
       return Scaffold(
-        backgroundColor: isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
+        backgroundColor:
+            isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
@@ -419,9 +418,11 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
         final grouped = _groupedFoods();
 
         return Scaffold(
-          backgroundColor: isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
+          backgroundColor:
+              isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
           appBar: AppBar(
-            backgroundColor: isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
+            backgroundColor:
+                isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
             elevation: 0,
             scrolledUnderElevation: 0,
             leading: IconButton(
@@ -434,125 +435,127 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
             onTap: () => FocusScope.of(context).unfocus(),
             behavior: HitTestBehavior.translucent,
             child: CustomScrollView(
-            slivers: [
-              // ── Restaurant Header ─────────────────────────────────────
-              _RestaurantHeader(restaurant: restaurant, isDark: isDark),
+              slivers: [
+                // ── Restaurant Header ─────────────────────────────────────
+                _RestaurantHeader(restaurant: restaurant, isDark: isDark),
 
-              // ── Closed banner ─────────────────────────────────────────
-              if (!isOpen) _buildClosedBanner(isDark),
+                // ── Closed banner ─────────────────────────────────────────
+                if (!isOpen) _buildClosedBanner(isDark),
 
-              // ── No-delivery banner ──────────────────────────────────────
-              if (!deliversToUser) _buildNoDeliveryBanner(isDark),
+                // ── No-delivery banner ──────────────────────────────────────
+                if (!deliversToUser) _buildNoDeliveryBanner(isDark),
 
-              // ── Tab buttons + search row ──────────────────────────────
-              SliverToBoxAdapter(
-                child: Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.only(top: 10),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? const Color.fromARGB(255, 40, 38, 59)
-                        : Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.15),
-                        spreadRadius: 0,
-                        blurRadius: 2,
-                        offset: const Offset(0, 1),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _TabAndSearchRow(
-                        activeTab: _activeTab,
-                        foodCount: widget.foods.length,
-                        isDark: isDark,
-                        searchController: _searchController,
-                        onTabChange: (tab) => setState(() => _activeTab = tab),
-                      ),
-                      if (_activeTab == 'menu' && _restaurantFoodCategories.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        _FoodTypeIconRow(
-                          selected: _selectedIconCategory,
-                          isDark: isDark,
-                          categories: _restaurantFoodCategories,
-                          onSelect: (cat) {
-                            setState(() {
-                              _selectedIconCategory = cat;
-                              if (_searchQuery.trim().isNotEmpty) {
-                                _performSearch();
-                              } else {
-                                _typesenseResults = null;
-                              }
-                            });
-                          },
+                // ── Tab buttons + search row ──────────────────────────────
+                SliverToBoxAdapter(
+                  child: Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(top: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color.fromARGB(255, 40, 38, 59)
+                          : Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.15),
+                          spreadRadius: 0,
+                          blurRadius: 2,
+                          offset: const Offset(0, 1),
                         ),
                       ],
-                    ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _TabAndSearchRow(
+                          activeTab: _activeTab,
+                          foodCount: widget.foods.length,
+                          isDark: isDark,
+                          searchController: _searchController,
+                          onTabChange: (tab) =>
+                              setState(() => _activeTab = tab),
+                        ),
+                        if (_activeTab == 'menu' &&
+                            _restaurantFoodCategories.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          _FoodTypeIconRow(
+                            selected: _selectedIconCategory,
+                            isDark: isDark,
+                            categories: _restaurantFoodCategories,
+                            onSelect: (cat) {
+                              setState(() {
+                                _selectedIconCategory = cat;
+                                if (_searchQuery.trim().isNotEmpty) {
+                                  _performSearch();
+                                } else {
+                                  _typesenseResults = null;
+                                }
+                              });
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
 
-              // ── Menu tab content ──────────────────────────────────────
-              if (_activeTab == 'menu') ...[
+                // ── Menu tab content ──────────────────────────────────────
+                if (_activeTab == 'menu') ...[
+                  // Food list
+                  if (filtered.isNotEmpty)
+                    grouped != null
+                        ? _GroupedFoodList(
+                            grouped: grouped,
+                            restaurant: restaurant,
+                            isDark: isDark,
+                            isOpen: isOpen,
+                            deliversToUser: deliversToUser,
+                            cartQtyMap: cartQtyMap,
+                            onConflict: _handleConflict,
+                            onRemove: (id) =>
+                                _handleRemoveFromCart(id, cart.items),
+                          )
+                        : _FlatFoodList(
+                            foods: filtered,
+                            restaurant: restaurant,
+                            isDark: isDark,
+                            isOpen: isOpen,
+                            deliversToUser: deliversToUser,
+                            cartQtyMap: cartQtyMap,
+                            onConflict: _handleConflict,
+                            onRemove: (id) =>
+                                _handleRemoveFromCart(id, cart.items),
+                          )
+                  else if (widget.foods.isEmpty)
+                    SliverFillRemaining(child: _EmptyMenu(isDark: isDark))
+                  else
+                    SliverFillRemaining(
+                      child: _NoResults(
+                        isDark: isDark,
+                        hasActiveFilters: _hasActiveFilters,
+                        onClearAll: () {
+                          _searchController.clear();
+                          setState(() {
+                            _searchQuery = '';
+                            _selectedIconCategory = null;
+                            _typesenseResults = null;
+                          });
+                        },
+                      ),
+                    ),
+                ],
 
-                // Food list
-                if (filtered.isNotEmpty)
-                  grouped != null
-                      ? _GroupedFoodList(
-                          grouped: grouped,
-                          restaurant: restaurant,
-                          isDark: isDark,
-                          isOpen: isOpen,
-                          deliversToUser: deliversToUser,
-                          cartQtyMap: cartQtyMap,
-                          onConflict: _handleConflict,
-                          onRemove: (id) =>
-                              _handleRemoveFromCart(id, cart.items),
-                        )
-                      : _FlatFoodList(
-                          foods: filtered,
-                          restaurant: restaurant,
-                          isDark: isDark,
-                          isOpen: isOpen,
-                          deliversToUser: deliversToUser,
-                          cartQtyMap: cartQtyMap,
-                          onConflict: _handleConflict,
-                          onRemove: (id) =>
-                              _handleRemoveFromCart(id, cart.items),
-                        )
-                else if (widget.foods.isEmpty)
-                  SliverFillRemaining(child: _EmptyMenu(isDark: isDark))
-                else
+                // ── Reviews tab content ───────────────────────────────────
+                if (_activeTab == 'reviews')
                   SliverFillRemaining(
-                    child: _NoResults(
+                    child: _ReviewsTab(
+                      restaurantId: restaurant.id,
                       isDark: isDark,
-                      hasActiveFilters: _hasActiveFilters,
-                      onClearAll: () {
-                        _searchController.clear();
-                        setState(() {
-                          _searchQuery = '';
-                          _selectedIconCategory = null;
-                          _typesenseResults = null;
-                        });
-                      },
                     ),
                   ),
               ],
-
-              // ── Reviews tab content ───────────────────────────────────
-              if (_activeTab == 'reviews')
-                SliverFillRemaining(
-                  child: _ReviewsTab(
-                    restaurantId: restaurant.id,
-                    isDark: isDark,
-                  ),
-                ),
-            ],
-          ),
+            ),
           ),
 
           // Cart FAB — mirrors FoodCartSidebar mode="mobile"
@@ -620,9 +623,12 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
 
   // ── Delivery check helper ────────────────────────────────────────────
   bool _deliversToAddress(Restaurant r, FoodAddress? foodAddress) {
-    if (foodAddress == null || r.minOrderPrices == null || r.minOrderPrices!.isEmpty) return true;
+    if (foodAddress == null ||
+        r.minOrderPrices == null ||
+        r.minOrderPrices!.isEmpty) return true;
     for (final e in r.minOrderPrices!) {
-      if (e['subregion'] == foodAddress.city || e['subregion'] == foodAddress.mainRegion) return true;
+      if (e['subregion'] == foodAddress.city ||
+          e['subregion'] == foodAddress.mainRegion) return true;
     }
     return false;
   }
@@ -647,7 +653,8 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
         child: Row(
           children: [
             Icon(Icons.location_off_rounded,
-                size: 20, color: isDark ? Colors.orange[400] : Colors.orange[700]),
+                size: 20,
+                color: isDark ? Colors.orange[400] : Colors.orange[700]),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -720,9 +727,7 @@ class _RestaurantHeader extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
-          color: isDark
-              ? const Color.fromARGB(255, 40, 38, 59)
-              : Colors.white,
+          color: isDark ? const Color.fromARGB(255, 40, 38, 59) : Colors.white,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.15),
@@ -733,135 +738,131 @@ class _RestaurantHeader extends StatelessWidget {
           ],
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Profile image
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color:
+                        isDark ? Colors.white.withOpacity(0.1) : Colors.white,
+                    width: 2,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: restaurant.profileImageUrl != null
+                    ? Image.network(
+                        restaurant.profileImageUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                            _Placeholder(isDark: isDark),
+                      )
+                    : _Placeholder(isDark: isDark),
+              ),
+            ),
+            const SizedBox(width: 16),
+
+            // Info
+            Expanded(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Profile image
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: isDark ? Colors.white.withOpacity(0.1) : Colors.white,
-                          width: 2,
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: restaurant.profileImageUrl != null
-                          ? Image.network(
-                              restaurant.profileImageUrl!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) =>
-                                  _Placeholder(isDark: isDark),
-                            )
-                          : _Placeholder(isDark: isDark),
-                    ),
+                  Text(
+                    restaurant.name,
+                    style: theme.textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(width: 16),
-
-                  // Info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          restaurant.name,
-                          style: theme.textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (restaurant.categories?.isNotEmpty ?? false)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              restaurant.categories!.join(', '),
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  color: isDark
-                                      ? Colors.grey[400]
-                                      : Colors.grey[500]),
-                            ),
-                          ),
-                        const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 16,
-                          runSpacing: 6,
-                          crossAxisAlignment: WrapCrossAlignment.center,
+                  if (restaurant.categories?.isNotEmpty ?? false)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        restaurant.categories!.join(', '),
+                        style: TextStyle(
+                            fontSize: 13,
+                            color:
+                                isDark ? Colors.grey[400] : Colors.grey[500]),
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      // Rating
+                      if (restaurant.averageRating != null) ...[
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            // Rating
-                            if (restaurant.averageRating != null) ...[
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.star_rounded,
-                                      size: 16, color: Colors.amber),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    restaurant.averageRating!
-                                        .toStringAsFixed(1),
-                                    style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600),
-                                  ),
-                                  if (restaurant.reviewCount != null &&
-                                      restaurant.reviewCount! > 0)
-                                    Text(
-                                      ' (${restaurant.reviewCount} reviews)',
-                                      style: TextStyle(
-                                          fontSize: 13,
-                                          color: isDark
-                                              ? Colors.grey[400]
-                                              : Colors.grey[500]),
-                                    ),
-                                ],
-                              ),
-                            ],
-                            // Cuisine types
-                            if (restaurant.cuisineTypes?.isNotEmpty ?? false)
+                            const Icon(Icons.star_rounded,
+                                size: 16, color: Colors.amber),
+                            const SizedBox(width: 2),
+                            Text(
+                              restaurant.averageRating!.toStringAsFixed(1),
+                              style: const TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                            if (restaurant.reviewCount != null &&
+                                restaurant.reviewCount! > 0)
                               Text(
-                                localizeCuisines(restaurant.cuisineTypes!, loc),
+                                ' (${restaurant.reviewCount} ${AppLocalizations.of(context).reviews.toLowerCase()})',
                                 style: TextStyle(
                                     fontSize: 13,
                                     color: isDark
                                         ? Colors.grey[400]
                                         : Colors.grey[500]),
                               ),
-                            // Food type chips
-                            if (restaurant.foodType?.isNotEmpty ?? false)
-                              Wrap(
-                                spacing: 4,
-                                children: restaurant.foodType!
-                                    .map((ft) => Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 8, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: isDark
-                                                ? const Color(0xFF2D2B3F)
-                                                : Colors.grey[100],
-                                            borderRadius:
-                                                BorderRadius.circular(20),
-                                          ),
-                                          child: Text(
-                                            ft,
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              color: isDark
-                                                  ? Colors.grey[300]
-                                                  : Colors.grey[600],
-                                            ),
-                                          ),
-                                        ))
-                                    .toList(),
-                              ),
                           ],
                         ),
                       ],
-                    ),
+                      // Cuisine types
+                      if (restaurant.cuisineTypes?.isNotEmpty ?? false)
+                        Text(
+                          localizeCuisines(restaurant.cuisineTypes!, loc),
+                          style: TextStyle(
+                              fontSize: 13,
+                              color:
+                                  isDark ? Colors.grey[400] : Colors.grey[500]),
+                        ),
+                      // Food type chips
+                      if (restaurant.foodType?.isNotEmpty ?? false)
+                        Wrap(
+                          spacing: 4,
+                          children: restaurant.foodType!
+                              .map((ft) => Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? const Color(0xFF2D2B3F)
+                                          : Colors.grey[100],
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      ft,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: isDark
+                                            ? Colors.grey[300]
+                                            : Colors.grey[600],
+                                      ),
+                                    ),
+                                  ))
+                              .toList(),
+                        ),
+                    ],
                   ),
                 ],
               ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1151,8 +1152,7 @@ class _GroupedFoodList extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Spacer between groups (idx > 0)
-                if (idx > 0)
-                  const SizedBox(height: 20),
+                if (idx > 0) const SizedBox(height: 20),
 
                 // Category heading
                 Padding(
@@ -1271,7 +1271,8 @@ class _FoodCard extends StatelessWidget {
   /// TODO: replace with AppLocalizations lookup when i18n is wired up.
   String get _displayType => food.foodType;
 
-  void _openFullScreenImage(BuildContext context, String imageUrl, String title) {
+  void _openFullScreenImage(
+      BuildContext context, String imageUrl, String title) {
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: false,
@@ -1299,9 +1300,7 @@ class _FoodCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: isDark
-            ? const Color.fromARGB(255, 40, 38, 59)
-            : Colors.white,
+        color: isDark ? const Color.fromARGB(255, 40, 38, 59) : Colors.white,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.15),
@@ -1317,7 +1316,8 @@ class _FoodCard extends StatelessWidget {
           // Food image — only shown when available (mirrors conditional in TS)
           if (food.imageUrl != null) ...[
             GestureDetector(
-              onTap: () => _openFullScreenImage(context, food.imageUrl!, food.name),
+              onTap: () =>
+                  _openFullScreenImage(context, food.imageUrl!, food.name),
               child: Hero(
                 tag: 'food-image-${food.id}',
                 child: ClipRRect(
@@ -1329,9 +1329,11 @@ class _FoodCard extends StatelessWidget {
                       food.imageUrl!,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
-                        color: isDark ? const Color(0xFF2D2B3F) : Colors.grey[100],
+                        color:
+                            isDark ? const Color(0xFF2D2B3F) : Colors.grey[100],
                         alignment: Alignment.center,
-                        child: const Text('🍽️', style: TextStyle(fontSize: 24)),
+                        child:
+                            const Text('🍽️', style: TextStyle(fontSize: 24)),
                       ),
                     ),
                   ),
@@ -1402,7 +1404,8 @@ class _FoodCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        loc.foodPriceTL(food.originalPrice!.toStringAsFixed(food.originalPrice! % 1 == 0 ? 0 : 2)),
+                        loc.foodPriceTL(food.originalPrice!.toStringAsFixed(
+                            food.originalPrice! % 1 == 0 ? 0 : 2)),
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
@@ -1414,7 +1417,8 @@ class _FoodCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        loc.foodPriceTL(food.price.toStringAsFixed(food.price % 1 == 0 ? 0 : 2)),
+                        loc.foodPriceTL(food.price
+                            .toStringAsFixed(food.price % 1 == 0 ? 0 : 2)),
                         style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
@@ -1431,16 +1435,15 @@ class _FoodCard extends StatelessWidget {
                 // Price (normal) + prep time + add button row
                 Row(
                   children: [
-                    if (!(food.hasActiveDiscount &&
-                        food.originalPrice != null))
+                    if (!(food.hasActiveDiscount && food.originalPrice != null))
                       Text(
-                        loc.foodPriceTL(food.price.toStringAsFixed(food.price % 1 == 0 ? 0 : 2)),
+                        loc.foodPriceTL(food.price
+                            .toStringAsFixed(food.price % 1 == 0 ? 0 : 2)),
                         style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
-                          color: isDark
-                              ? Colors.orange[400]
-                              : Colors.orange[600],
+                          color:
+                              isDark ? Colors.orange[400] : Colors.orange[600],
                         ),
                       ),
 
@@ -1614,8 +1617,7 @@ class _CartButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(Icons.block_rounded,
-            size: 16,
-            color: isDark ? Colors.grey[500] : Colors.grey[400]),
+            size: 16, color: isDark ? Colors.grey[500] : Colors.grey[400]),
       );
     }
 
@@ -1710,11 +1712,11 @@ class _FoodExtrasSheetState extends State<_FoodExtrasSheet> {
 
   late final List<FoodExtra> _resolvedExtras;
 
- @override
-void initState() {
-  super.initState();
-  _resolvedExtras = widget.food.extras ?? [];
-}
+  @override
+  void initState() {
+    super.initState();
+    _resolvedExtras = widget.food.extras ?? [];
+  }
 
   @override
   void dispose() {
@@ -1726,13 +1728,12 @@ void initState() {
     if (_submitting) return;
     setState(() => _submitting = true);
 
-    final extras = _checked.entries
-        .where((e) => e.value)
-        .map((e) {
-          final foodExtra = _resolvedExtras.where((x) => x.name == e.key).firstOrNull;
-          return SelectedExtra(name: e.key, quantity: 1, price: foodExtra?.price ?? 0);
-        })
-        .toList();
+    final extras = _checked.entries.where((e) => e.value).map((e) {
+      final foodExtra =
+          _resolvedExtras.where((x) => x.name == e.key).firstOrNull;
+      return SelectedExtra(
+          name: e.key, quantity: 1, price: foodExtra?.price ?? 0);
+    }).toList();
 
     try {
       await widget.onConfirm(extras, _notesController.text.trim(), _quantity);
@@ -1770,7 +1771,8 @@ void initState() {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[300],
+                  color:
+                      isDark ? Colors.white.withOpacity(0.1) : Colors.grey[300],
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -1799,7 +1801,8 @@ void initState() {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            loc.foodDiscountPercent(food.discountPercentage ?? 0),
+                            loc.foodDiscountPercent(
+                                food.discountPercentage ?? 0),
                             style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
@@ -1809,16 +1812,15 @@ void initState() {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          loc.foodPriceTL(food.originalPrice!.toStringAsFixed(0)),
+                          loc.foodPriceTL(
+                              food.originalPrice!.toStringAsFixed(0)),
                           style: TextStyle(
                               fontSize: 13,
-                              color: isDark
-                                  ? Colors.grey[500]
-                                  : Colors.grey[400],
+                              color:
+                                  isDark ? Colors.grey[500] : Colors.grey[400],
                               decoration: TextDecoration.lineThrough,
-                              decorationColor: isDark
-                                  ? Colors.grey[500]
-                                  : Colors.grey[400]),
+                              decorationColor:
+                                  isDark ? Colors.grey[500] : Colors.grey[400]),
                         ),
                         const SizedBox(width: 6),
                         Text(
@@ -1873,7 +1875,8 @@ void initState() {
                     ..._resolvedExtras.map(
                       (extra) => CheckboxListTile(
                         value: _checked[extra.name] ?? false,
-                        onChanged: (v) => setState(() => _checked[extra.name] = v!),
+                        onChanged: (v) =>
+                            setState(() => _checked[extra.name] = v!),
                         title: Text(localizeExtra(extra.name, loc),
                             style: TextStyle(
                                 fontSize: 14,
@@ -1882,12 +1885,15 @@ void initState() {
                                     : Colors.grey[900])),
                         subtitle: Text(
                             extra.price > 0
-                                ? loc.foodExtraPriceTL(extra.price.toStringAsFixed(0))
+                                ? loc.foodExtraPriceTL(
+                                    extra.price.toStringAsFixed(0))
                                 : loc.foodFreeExtra,
                             style: TextStyle(
                                 fontSize: 12,
                                 color: extra.price > 0
-                                    ? (isDark ? Colors.orange[300] : Colors.orange[700])
+                                    ? (isDark
+                                        ? Colors.orange[300]
+                                        : Colors.orange[700])
                                     : Colors.grey)),
                         activeColor: Colors.orange,
                         contentPadding: EdgeInsets.zero,
@@ -1909,7 +1915,8 @@ void initState() {
                     decoration: InputDecoration(
                       hintText: loc.foodNotesHint,
                       filled: true,
-                      fillColor: isDark ? const Color(0xFF211F31) : Colors.white,
+                      fillColor:
+                          isDark ? const Color(0xFF211F31) : Colors.white,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
@@ -2123,7 +2130,9 @@ class _CartBottomSheetState extends State<_CartBottomSheet> {
                     width: 36,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[300],
+                      color: isDark
+                          ? Colors.white.withOpacity(0.1)
+                          : Colors.grey[300],
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -2152,18 +2161,18 @@ class _CartBottomSheetState extends State<_CartBottomSheet> {
                 Expanded(
                   child: ListView.builder(
                     controller: sc,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     itemCount: cart.items.length,
                     itemBuilder: (_, i) {
                       final item = cart.items[i];
                       return _CartItemRow(
                         item: item,
                         isDark: isDark,
-                        onIncrease: () => cart.updateQuantity(
-                            item.foodId, item.quantity + 1),
-                        onDecrease: () => cart.updateQuantity(
-                            item.foodId, item.quantity - 1),
+                        onIncrease: () =>
+                            cart.updateQuantity(item.foodId, item.quantity + 1),
+                        onDecrease: () =>
+                            cart.updateQuantity(item.foodId, item.quantity - 1),
                         onRemove: () => cart.removeItem(item.foodId),
                       );
                     },
@@ -2203,15 +2212,13 @@ class _CartBottomSheetState extends State<_CartBottomSheet> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.orange,
                               foregroundColor: Colors.white,
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 14),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14)),
                             ),
                             child: Text(loc.foodProceedToCheckout,
                                 style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold)),
+                                    fontSize: 15, fontWeight: FontWeight.bold)),
                           ),
                         ),
                       ],
@@ -2546,7 +2553,8 @@ class _LoadingSkeleton extends StatelessWidget {
     final bg = isDark ? const Color(0xFF2D2B3F) : Colors.grey[200]!;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
+      backgroundColor:
+          isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
       body: SafeArea(
         child: ListView(
           padding: EdgeInsets.zero,
@@ -2608,7 +2616,8 @@ class _LoadingSkeleton extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
                     color: isDark
                         ? const Color.fromARGB(255, 40, 38, 59)
@@ -2722,7 +2731,8 @@ class _FullScreenImageViewer extends StatefulWidget {
 }
 
 class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
-  final TransformationController _transformController = TransformationController();
+  final TransformationController _transformController =
+      TransformationController();
 
   @override
   void dispose() {
@@ -2792,11 +2802,13 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
               child: SafeArea(
                 bottom: false,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                        icon: const Icon(Icons.close,
+                            color: Colors.white, size: 28),
                         onPressed: () => Navigator.of(context).pop(),
                       ),
                       const SizedBox(width: 8),

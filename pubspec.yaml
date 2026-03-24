@@ -111,9 +111,6 @@ flutter:
     - lib/constants/categories.json
     - assets/images/foods/beverages.png
     - assets/images/foods/breakfast.png
-    - assets/images/1.png
-    - assets/images/2.png
-    - assets/images/3.png
     - assets/images/foods/chinese.png
     - assets/images/foods/foodsuccess.png
     - assets/images/foods/curry.png

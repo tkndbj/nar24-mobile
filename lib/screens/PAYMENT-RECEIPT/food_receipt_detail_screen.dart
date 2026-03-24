@@ -9,7 +9,6 @@ import 'package:flutter_feather_icons/flutter_feather_icons.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
 import '../../generated/l10n/app_localizations.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -348,16 +347,6 @@ class _FoodReceiptDetailScreenState extends State<FoodReceiptDetailScreen>
     }
   }
 
-  Future<void> _shareReceipt() async {
-    if (_receipt == null) return;
-    final l10n = AppLocalizations.of(context);
-    final r = _receipt!;
-    final text = '${l10n.foodReceipt} — ${r.restaurantName}\n'
-        '${l10n.orderNumber}: #${r.orderId.substring(0, r.orderId.length.clamp(0, 8)).toUpperCase()}\n'
-        '${l10n.total}: ${r.totalPrice.toStringAsFixed(0)} ${r.currency}\n'
-        '${DateFormat('dd/MM/yyyy HH:mm').format(r.timestamp)}';
-    await Share.share(text);
-  }
 
   void _copyOrderId() {
     if (_receipt == null) return;
@@ -527,19 +516,6 @@ class _FoodReceiptDetailScreenState extends State<FoodReceiptDetailScreen>
         ),
       ),
       actions: [
-        Container(
-          margin: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white.withOpacity(0.2)),
-          ),
-          child: IconButton(
-            onPressed: _shareReceipt,
-            icon:
-                const Icon(FeatherIcons.share2, size: 16, color: Colors.white),
-          ),
-        ),
         if (hasPdf)
           Container(
             margin: const EdgeInsets.only(right: 8, top: 8, bottom: 8),

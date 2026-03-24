@@ -20,19 +20,8 @@ import '../../services/restaurant_typesense_service.dart';
 import '../../auth_service.dart';
 import '../../widgets/login_modal.dart';
 import '../../widgets/restaurants/food_location_picker.dart';
+import '../../widgets/restaurants/restaurant_top_banner.dart';
 import '../../utils/food_localization.dart';
-
-// ─── Banner images ───────────────────────────────────────────────────────────
-// Add these to pubspec.yaml under flutter: assets:
-//   - assets/images/banner1.png
-//   - assets/images/banner2.png
-//   - assets/images/banner3.png
-const _kBannerAssets = [
-  'assets/images/1.png',
-  'assets/images/2.png',
-  'assets/images/3.png',
-];
-const _kBannerInterval = Duration(seconds: 5);
 
 // ============================================================================
 // SCREEN
@@ -401,7 +390,7 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               // Banner
-                              _BannerCarousel(assets: _kBannerAssets),
+                              const RestaurantTopBanner(),
                               const SizedBox(height: 20),
 
                               // Title row
@@ -738,138 +727,6 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
   }
 }
 
-// ============================================================================
-// BANNER CAROUSEL
-// ============================================================================
-
-class _BannerCarousel extends StatefulWidget {
-  final List<String> assets;
-
-  const _BannerCarousel({required this.assets});
-
-  @override
-  State<_BannerCarousel> createState() => _BannerCarouselState();
-}
-
-class _BannerCarouselState extends State<_BannerCarousel> {
-  late final PageController _controller;
-  int _current = 0;
-  Timer? _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = PageController();
-    if (widget.assets.length > 1) {
-      _timer = Timer.periodic(_kBannerInterval, (_) {
-        if (!mounted) return;
-        final next = (_current + 1) % widget.assets.length;
-        _controller.animateToPage(
-          next,
-          duration: const Duration(milliseconds: 600),
-          curve: Curves.easeInOut,
-        );
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.assets.isEmpty) {
-      return Container(
-        height: 180,
-        decoration: BoxDecoration(
-          color: Colors.orange.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        alignment: Alignment.center,
-        child: const Icon(Icons.restaurant, size: 48, color: Colors.orange),
-      );
-    }
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: AspectRatio(
-        aspectRatio: 16 / 7,
-        child: Stack(
-          children: [
-            // Pages
-            PageView.builder(
-              controller: _controller,
-              onPageChanged: (i) => setState(() => _current = i),
-              itemCount: widget.assets.length,
-              itemBuilder: (_, i) => Image.asset(
-                widget.assets[i],
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  color: Colors.orange.withOpacity(0.15),
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.restaurant,
-                      size: 48, color: Colors.orange),
-                ),
-              ),
-            ),
-
-            // Gradient overlay
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.5),
-                    ],
-                    stops: const [0.5, 1.0],
-                  ),
-                ),
-              ),
-            ),
-
-            // Dots
-            Positioned(
-              bottom: 12,
-              left: 0,
-              right: 0,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(widget.assets.length, (i) {
-                  return GestureDetector(
-                    onTap: () => _controller.animateToPage(
-                      i,
-                      duration: const Duration(milliseconds: 400),
-                      curve: Curves.easeInOut,
-                    ),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                      width: i == _current ? 28 : 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: i == _current
-                            ? Colors.white
-                            : Colors.white.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  );
-                }),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // ============================================================================
 // CUISINE PILL ROW
