@@ -326,30 +326,36 @@ class PersonalizedFeedService {
   }
 
   /// Check if user has a personalized feed
-  Future<bool> hasPersonalizedFeed() async {
-    try {
-      final user = _auth.currentUser;
-      if (user == null) return false;
+ Future<bool> hasPersonalizedFeed() async {
+  try {
+    final user = _auth.currentUser;
+    if (user == null) return false;
 
-      // Check cache first
-      if (_isCacheValid(true) && _cachedPersonalizedFeed != null) {
-        return true;
-      }
-
-      // Check Firestore
-      final feedDoc = await _firestore
-          .collection('user_profiles')
-          .doc(user.uid)
-          .collection('personalized_feed')
-          .doc('current')
-          .get();
-
-      return feedDoc.exists;
-    } catch (e) {
-      debugPrint('⚠️ Error checking personalized feed: $e');
-      return false;
+    // Check both memory AND disk cache before hitting Firestore
+    if (_isCacheValid(true) && _cachedPersonalizedFeed != null) {
+      return true;
     }
+
+    // Check disk cache
+    final diskCache = _prefs?.getStringList(_keyPersonalizedFeed);
+    final diskExpiry = _prefs?.getInt(_keyPersonalizedExpiry);
+    if (diskCache != null && diskExpiry != null) {
+      final expiry = DateTime.fromMillisecondsSinceEpoch(diskExpiry);
+      if (expiry.isAfter(DateTime.now())) return true;
+    }
+
+    final feedDoc = await _firestore
+        .collection('user_profiles')
+        .doc(user.uid)
+        .collection('personalized_feed')
+        .doc('current')
+        .get();
+
+    return feedDoc.exists;
+  } catch (e) {
+    return false;
   }
+}
 
   /// Get feed metadata (for debugging/analytics)
   Future<Map<String, dynamic>?> getFeedMetadata() async {

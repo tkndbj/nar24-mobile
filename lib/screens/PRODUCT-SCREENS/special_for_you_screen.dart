@@ -262,7 +262,7 @@ class _SpecialForYouScreenState extends State<SpecialForYouScreen>
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
-                    onPressed: _initialize,
+                    onPressed: _refresh,
                     icon: const Icon(Icons.refresh),
                     label: Text(l10n.retry ?? 'Retry'),
                   ),

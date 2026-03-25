@@ -344,17 +344,36 @@ async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
   
   batch.set(userProfileRef, profileUpdate, {merge: true});
 
+  
+  // Commit all writes atomically
+  await batch.commit();
+
   // Update recently viewed (limit to 20, sorted by timestamp)
   if (recentProducts.length > 0) {
-    const sortedRecent = recentProducts
-        .sort((a, b) => b.timestamp - a.timestamp)
-        .slice(0, 20)
-        .map((p) => ({
-          productId: p.productId,
-          timestamp: admin.firestore.Timestamp.fromMillis(p.timestamp),
-        }));
-
-    batch.set(userProfileRef, {recentlyViewed: sortedRecent}, {merge: true});
+    await db.runTransaction(async (tx) => {
+      const profileSnap = await tx.get(userProfileRef);
+      const existing = profileSnap.exists ?
+        (profileSnap.data().recentlyViewed || []) :
+        [];
+  
+      // Merge: keyed by productId so duplicates collapse, newer timestamp wins
+      const mergedMap = new Map(
+        existing.map((item) => [item.productId, item])
+      );
+  
+      for (const item of recentProducts) {
+        mergedMap.set(item.productId, {
+          productId: item.productId,
+          timestamp: admin.firestore.Timestamp.fromMillis(item.timestamp),
+        });
+      }
+  
+      const sorted = Array.from(mergedMap.values())
+        .sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())
+        .slice(0, 50); // increased from 20 — cheap to store, valuable for scoring
+  
+      tx.update(userProfileRef, {recentlyViewed: sorted});
+    });
   }
 
   // Update search analytics
@@ -364,25 +383,22 @@ async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
       date: today,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
-
+  
     for (const query of searchQueries) {
       const safeQuery = query
           .toLowerCase()
           .trim()
           .substring(0, 50)
           .replace(/[./]/g, '_');
-
+  
       if (safeQuery.length > 0) {
         searchUpdate[`terms.${safeQuery}`] =
           admin.firestore.FieldValue.increment(1);
       }
     }
-
-    batch.set(searchRef, searchUpdate, {merge: true});
+  
+    await searchRef.set(searchUpdate, {merge: true});
   }
-
-  // Commit all writes atomically
-  await batch.commit();
 }
 
 // ============================================================================
@@ -468,7 +484,7 @@ export const cleanupOldActivityEvents = onSchedule({
   schedule: 'every day 03:00',
   timeZone: 'UTC',
   timeoutSeconds: 540,
-  memory: '512MiB',
+  memory: '256MiB',
   region: 'europe-west3',
 }, async () => {
   const db = admin.firestore();
@@ -488,29 +504,12 @@ export const cleanupOldActivityEvents = onSchedule({
         .limit(90)
         .get();
 
-    for (const shardDoc of shardsSnapshot.docs) {
-      let hasMore = true;
-
-      while (hasMore) {
-        const eventsSnapshot = await shardDoc.ref
-            .collection('events')
-            .limit(500)
-            .get();
-
-        if (eventsSnapshot.empty) {
-          hasMore = false;
-          break;
+        for (const shardDoc of shardsSnapshot.docs) {
+          // recursiveDelete handles the entire subcollection server-side
+          // no streaming, no batching, no timeout risk
+          await admin.firestore().recursiveDelete(shardDoc.ref);
+          totalDeleted++;
         }
-
-        const batch = db.batch();
-        eventsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
-        await batch.commit();
-
-        totalDeleted += eventsSnapshot.size;
-      }
-
-      await shardDoc.ref.delete();
-    }
 
     // Delete old search analytics
     const searchSnapshot = await db
@@ -545,8 +544,7 @@ export const cleanupOldActivityEvents = onSchedule({
     console.log(JSON.stringify({
       level: 'INFO',
       event: 'cleanup_completed',
-      eventsDeleted: totalDeleted,
-      shardsDeleted: shardsSnapshot.size,
+      shardsDeleted: totalDeleted,
       searchDocsDeleted: searchSnapshot.size,
       dlqDeleted: dlqSnapshot.size,
     }));
@@ -564,7 +562,7 @@ export const cleanupOldActivityEvents = onSchedule({
 // ============================================================================
 
 export const computeUserPreferences = onSchedule({
-  schedule: 'every 6 hours',
+  schedule: '0 */6 * * *',
   timeZone: 'UTC',
   timeoutSeconds: 540,
   memory: '1GiB',

@@ -11,10 +11,10 @@ import admin from 'firebase-admin';
 const CONFIG = {
   TOP_PRODUCTS_COUNT: 200,
   LOOKBACK_DAYS: 7,
-  STREAM_CHUNK_SIZE: 500, // Process 500 products at a time
-  MIN_ENGAGEMENT_THRESHOLD: 5,
+  STREAM_CHUNK_SIZE: 500,
+  MIN_ENGAGEMENT_THRESHOLD: 1, // 5 was too aggressive — excludes real products on growing catalogs
   MAX_RETRIES: 3,
-  INCREMENTAL_UPDATE_HOURS: 6, // Only recompute changed products
+  INCREMENTAL_UPDATE_HOURS: 0.5, // 30 min — only skip recompute within a retry window, not between scheduled runs
 };
 
 // Scoring weights (must sum to 1.0)
@@ -70,7 +70,7 @@ class ProductStreamLoader {
       try {
         let query = this.db
           .collection(collection)          
-          .orderBy('clickCount', 'desc')
+          .orderBy('__name__')
           .limit(chunkSize);
 
         if (lastDoc) {
@@ -106,7 +106,7 @@ class ProductStreamLoader {
           hasMore = false;
         }
       } catch (error) {
-        console.error(`Error streaming ${collection}:`, error.message);
+        console.error(`Error streaming ${collection}:`, error);
         hasMore = false;
       }
     }
@@ -304,32 +304,34 @@ class TrendingCalculator {
       }
 
       // 3. Stream products in chunks and build candidate list
-      console.log('📊 Streaming products...');
-      const allProducts = [];
+      console.log('📊 Streaming products...');     
       let productCount = 0;
 
+      const allProductsRaw = [];
+
       for await (const chunk of this.loader.streamAllProducts()) {
-        // Enrich with purchase counts
         for (const product of chunk) {
           product.purchaseCount = purchases.get(product.id) || 0;
-
-          // Filter by minimum engagement
-          if (product.clicks >= CONFIG.MIN_ENGAGEMENT_THRESHOLD) {
-            allProducts.push(product);
-          }
+          allProductsRaw.push(product);
         }
-
         productCount += chunk.length;
-
         if (productCount % 1000 === 0) {
           console.log(`📦 Processed ${productCount} products...`);
         }
       }
-
+      
+      // Apply engagement threshold, but fall back to full catalog if it excludes everything
+      let allProducts = allProductsRaw.filter((p) => p.clicks >= CONFIG.MIN_ENGAGEMENT_THRESHOLD);
+      
+      if (allProducts.length === 0 && allProductsRaw.length > 0) {
+        console.warn(`⚠️ Threshold ${CONFIG.MIN_ENGAGEMENT_THRESHOLD} excluded all products — using full catalog of ${allProductsRaw.length}`);
+        allProducts = allProductsRaw;
+      }
+      
       console.log(`✅ Found ${allProducts.length} eligible products from ${productCount} total`);
-
+      
       if (allProducts.length === 0) {
-        throw new Error('No eligible products found');
+        throw new Error('No products found in catalog');
       }
 
       // 4. Calculate stats for normalization
@@ -422,7 +424,7 @@ class TrendingCalculator {
 
 export const computeTrendingProducts = onSchedule(
   {
-    schedule: 'every 6 hours',
+    schedule: '30 */6 * * *',
     timeZone: 'UTC',
     timeoutSeconds: 540,
     memory: '1GiB', // Reduced from 2GiB (streaming uses less memory)

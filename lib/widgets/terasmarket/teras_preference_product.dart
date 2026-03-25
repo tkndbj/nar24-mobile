@@ -25,7 +25,7 @@ class _TerasPreferenceProductState extends State<TerasPreferenceProduct> {
 
   static List<ProductSummary>? _cachedProducts;
   static DateTime? _productsCacheExpiry;
-  static const Duration _productsCacheDuration = Duration(hours: 1);
+  static const Duration _productsCacheDuration = Duration(hours: 6);
 
   List<ProductSummary> _products = [];
   bool _isLoading = true;
@@ -72,11 +72,10 @@ class _TerasPreferenceProductState extends State<TerasPreferenceProduct> {
         return;
       }
 
-      // ✅ RANDOM SAMPLING: Pick 30 random IDs from the 200
-      final randomProductIds = _getRandomSample(productIds, 30);
+      final topProductIds = productIds.take(30).toList();
 
       // Fetch product details (batch read - max 30 for this widget)
-      final products = await _fetchProductDetails(randomProductIds);
+      final products = await _fetchProductDetails(topProductIds);
 
       // ✅ CACHE THE PRODUCTS
       _cachedProducts = products;
@@ -116,24 +115,7 @@ class _TerasPreferenceProductState extends State<TerasPreferenceProduct> {
     debugPrint('🧹 Cleared preference products cache');
   }
 
-  /// ✅ Efficient random sampling without modifying original list
-  List<String> _getRandomSample(List<String> items, int sampleSize) {
-    if (items.length <= sampleSize) {
-      return List.from(items); // Return all if fewer than requested
-    }
-
-    final random = Random();
-    final indices = <int>{};
-
-    // Generate unique random indices
-    while (indices.length < sampleSize) {
-      indices.add(random.nextInt(items.length));
-    }
-
-    // Return items at those indices
-    return indices.map((i) => items[i]).toList();
-  }
-
+ 
   /// Fetch product details from Firestore in batches
   Future<List<ProductSummary>> _fetchProductDetails(List<String> productIds) async {
     if (productIds.isEmpty) return [];
