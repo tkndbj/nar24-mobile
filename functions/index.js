@@ -8624,3 +8624,5 @@ export { onFoodOrderStatusChange, informFoodCourier, cleanupExpiredCourierNotifi
 export { extractColorOnly, initializeIsbankAdPayment, isbankAdPaymentCallback, checkIsbankAdPaymentStatus, processAdColorExtraction, processAdExpiration, processAdAnalytics, trackAdClick, trackAdConversion, createDailyAdAnalyticsSnapshot, cleanupExpiredAds, recoverStuckAdPayments } from './31-homescreen-ads-payment/index.js';
 export { expireSingleBoost, initializeBoostPayment, boostPaymentCallback, checkBoostPaymentStatus, recoverStuckBoostPayments } from './32-product-boost-payment/index.js';
 export { cleanupPaymentCollections } from './33-payment-cleanup/index.js';
+export { setMasterCourierClaim } from './34-master-courier/index.js';
+export { onDeliveryCompleted, recalcCourierStats, getCourierStatsSummary } from './35-courier-stats/index.js';

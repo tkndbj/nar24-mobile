@@ -61,6 +61,7 @@ import 'services/search_config_service.dart';
 import 'services/cart_favorite_metrics_service.dart';
 import 'providers/food_cart_provider.dart';
 import 'services/firestore_read_tracker.dart';
+import 'services/courier_location_service.dart';
 
 /// Background message handler for FCM.
 ///
@@ -567,6 +568,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       UserActivityService.instance.forceFlush();
       ClickTrackingService.instance.flush();
       MetricsEventService.instance.flush();
+      CourierLocationService.instance.onAppPaused();
 
       // Clear static caches
       try {
@@ -600,6 +602,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         _safeInitializeDeepLinkHandler();
       }
       _versionCheckCompleted = false;
+      CourierLocationService.instance.onAppResumed();
     }
   }
 

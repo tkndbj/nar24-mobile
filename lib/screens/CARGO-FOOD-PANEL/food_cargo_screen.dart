@@ -13,6 +13,7 @@ import '../../auth_service.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'package:rxdart/rxdart.dart';
 import 'receipt_scanner.dart';
+import '../../services/courier_location_service.dart';
 
 const _kFcmTopic = 'food_couriers';
 
@@ -82,6 +83,7 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
     _tabController = TabController(length: 2, vsync: this);
     _setupFcm();
     _setupUnreadStream();
+    CourierLocationService.instance.startTracking(); // ← ADD THIS
   }
 
   // ── FCM ───────────────────────────────────────────────────────────────────
@@ -235,6 +237,7 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
 
   @override
   void dispose() {
+    CourierLocationService.instance.stopTracking(); // ← ADD THIS
     _tabController.dispose();
     _localReadController.close();
     super.dispose();
@@ -635,6 +638,7 @@ Future<void> _confirmLogout(BuildContext context, AppLocalizations loc) async {
   );
 
   try {
+    await CourierLocationService.instance.stopTracking(); // ← ADD THIS
     await AuthService().logout();
     if (context.mounted) context.go('/');
   } catch (_) {
@@ -1304,6 +1308,7 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
           'updatedAt': FieldValue.serverTimestamp(),
         });
       });
+      CourierLocationService.instance.updateCurrentOrder(widget.orderId);
     } catch (e) {
       if (!context.mounted) return;
       final loc = AppLocalizations.of(context);
@@ -1326,6 +1331,7 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
         'orderId': widget.orderId,
         'newStatus': 'delivered',
       });
+      CourierLocationService.instance.updateCurrentOrder(null);
       if (mounted) _showSnack(loc.foodCargoDeliveredSuccess);
     } catch (e) {
       if (mounted) {
