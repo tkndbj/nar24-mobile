@@ -6971,6 +6971,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sellOnVitrin => 'Sell on Vitrin';
 
   @override
+  String get vitrinProduct => 'Vitrin';
+
+  @override
   String get quantityForColor => 'Quantity for color option';
 
   @override

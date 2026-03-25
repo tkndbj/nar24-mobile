@@ -2979,6 +2979,7 @@
 "marketOrder": "Market Order",
   "myOrders": "Product Orders",
   "sellOnVitrin": "Sell on Vitrin",
+  "vitrinProduct": "Vitrin",
   "shopReceipts": "Shop receipts and payment history",
 "noReceipts": "No receipts yet",
 "noReceiptsDescription": "Your receipts will appear here",

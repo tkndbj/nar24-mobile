@@ -826,6 +826,32 @@ class _ImageSection extends StatelessWidget {
                 : _buildNoImageWidget(effectiveScaleFactor),
           ),
         ),
+        if (widget.extraLabel != null)
+          Positioned(
+            top: 6 * effectiveScaleFactor,
+            left: 6 * effectiveScaleFactor,
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: 6 * effectiveScaleFactor,
+                vertical: 2 * effectiveScaleFactor,
+              ),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: widget.extraLabelGradient ??
+                      const [Color(0xFF9C27B0), Color(0xFFE91E63)],
+                ),
+                borderRadius: BorderRadius.circular(20 * effectiveScaleFactor),
+              ),
+              child: Text(
+                widget.extraLabel!,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 9 * effectiveScaleFactor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
         Positioned(
           top: 6 * effectiveScaleFactor,
           right: 6 * effectiveScaleFactor,

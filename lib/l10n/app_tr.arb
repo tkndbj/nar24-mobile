@@ -2899,6 +2899,7 @@
   "newPaymentMethod": "Yeni ödeme yöntemi",
   "chooseLocation": "Haritada Konum Seç",
   "sellOnVitrin": "Vitrin'de Sat",
+  "vitrinProduct": "Vitrin",
   "myReviews": "Değerlendirmelerim",
   "quantityForColor": "Renk seçeneği miktarı",
   "searchFailedTryAgain": "Arama başarısız, tekrar deneyin.",

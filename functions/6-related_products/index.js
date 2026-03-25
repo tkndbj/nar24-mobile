@@ -175,6 +175,88 @@ export const rebuildRelatedProducts = onSchedule({
       lastDoc = snapshot.docs[snapshot.docs.length - 1];
     }
 
+    let lastDocProducts = null;
+let consecutiveErrorsProducts = 0;
+
+// eslint-disable-next-line no-constant-condition
+while (true) {
+  if (consecutiveErrorsProducts >= MAX_CONSECUTIVE_ERRORS) {
+    console.error('Circuit breaker triggered for products collection');
+    break;
+  }
+
+  let query = db.collection('products')
+    .orderBy('__name__')
+    .limit(batchSize);
+
+  if (lastDocProducts) query = query.startAfter(lastDocProducts);
+
+  const snapshot = await query.get();
+  if (snapshot.empty) break;
+
+  for (let i = 0; i < snapshot.docs.length; i += concurrency) {
+    const batch = snapshot.docs.slice(i, i + concurrency);
+
+    const promises = batch.map(async (doc) => {
+      const data = doc.data();
+
+      if (data.relatedLastUpdated) {
+        const lastUpdate = toJsDate(data.relatedLastUpdated);
+        if (lastUpdate) {
+          const daysSinceUpdate = (Date.now() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24);
+          if (daysSinceUpdate < 7) {
+            skipped++;
+            return {success: true, id: doc.id, skipped: true};
+          }
+        }
+      }
+
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const relatedData = await Promise.race([
+            buildRelatedForProductsColl(doc.id, data, client, db),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000)),
+          ]);
+          processed++;
+          consecutiveErrorsProducts = 0;
+          return {success: true, id: doc.id, skipped: false, data: relatedData};
+        } catch (err) {
+          if (attempt === 3) {
+            console.error(`Failed after 3 attempts ${doc.id}:`, err.message);
+            errors++;
+            consecutiveErrorsProducts++;
+            return {success: false, id: doc.id, skipped: false};
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
+        }
+      }
+    });
+
+    const results = await Promise.all(promises);
+    const updates = results.filter((r) => r && r.success && !r.skipped && r.data);
+
+    for (let i = 0; i < updates.length; i += 400) {
+      const chunk = updates.slice(i, i + 400);
+      const writeBatch = db.batch();
+      chunk.forEach(({data: updateData}) => {
+        writeBatch.update(db.collection('products').doc(updateData.productId), {
+          relatedProductIds: updateData.relatedProductIds,
+          relatedLastUpdated: FieldValue.serverTimestamp(),
+          relatedCount: updateData.relatedCount,
+        });
+      });
+      await writeBatch.commit();
+    }
+
+    for (const result of updates) {
+      lastDocProducts = snapshot.docs.find((d) => d.id === result.id);
+    }
+  }
+
+  console.log(`Products batch: ${processed} processed, ${skipped} skipped, ${errors} errors`);
+  lastDocProducts = snapshot.docs[snapshot.docs.length - 1];
+}
+
     // Check error rate only against actually processed products
     if (processed > 0 && errors > processed * 0.1) {
       throw new Error(`High error rate: ${errors}/${processed} failed (${skipped} skipped)`);
@@ -207,6 +289,84 @@ export const rebuildRelatedProducts = onSchedule({
     throw error;
   }
 });
+
+async function buildRelatedForProductsColl(productId, productData, client, db) {
+  const {category, subcategory, gender, price} = productData;
+
+  if (!category || !subcategory) {
+    console.warn(`Product ${productId} missing category/subcategory`);
+    return;
+  }
+  if (!price || price <= 0) {
+    console.warn(`Product ${productId} has invalid price`);
+    return;
+  }
+
+  const relatedProducts = new Map();
+
+  // Search shop_products via Typesense (same as before)
+  const primaryFilter = gender ?
+    `category:=${category} && subcategory:=${subcategory} && gender:=${gender}` :
+    `category:=${category} && subcategory:=${subcategory}`;
+
+  const primaryHits = await searchTypesense(client, productId, {
+    filterBy: primaryFilter,
+    perPage: 40,
+  });
+
+  primaryHits.forEach((hit) => {
+    const score = (gender && hit.gender === gender) ? 100 : 80;
+    // Prefix with sp: to mark as shop_products
+    relatedProducts.set(`sp:${hit.id}`, {baseScore: score, price: hit.price, matchCount: 1});
+  });
+
+  // Also search Firestore products collection directly
+  const productsQuery = db.collection('products')
+    .where('category', '==', category)
+    .where('subcategory', '==', subcategory)
+    .limit(20);
+
+  const productsSnapshot = await productsQuery.get();
+  productsSnapshot.docs.forEach((doc) => {
+    if (doc.id === productId) return;
+    const data = doc.data();
+    const key = `p:${doc.id}`;
+    const existing = relatedProducts.get(key);
+    if (!existing) {
+      relatedProducts.set(key, {baseScore: 80, price: data.price || 0, matchCount: 1});
+    } else {
+      existing.matchCount++;
+    }
+  });
+
+  // Price range fallback if needed
+  if (relatedProducts.size < 20) {
+    const priceMin = Math.floor(price * 0.7);
+    const priceMax = Math.ceil(price * 1.3);
+    const priceHits = await searchTypesense(client, productId, {
+      filterBy: `category:=${category} && price:[${priceMin}..${priceMax}]`,
+      perPage: 20,
+    });
+    priceHits.forEach((hit) => {
+      const key = `sp:${hit.id}`;
+      if (!relatedProducts.has(key)) {
+        relatedProducts.set(key, {baseScore: 40, price: hit.price, matchCount: 1});
+      }
+    });
+  }
+
+  const rankedProducts = Array.from(relatedProducts.entries())
+    .map(([id, data]) => ({id, score: calculateFinalScore(data, productData)}))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 20)
+    .map((item) => item.id); // IDs are already prefixed (sp: or p:)
+
+  return {
+    productId,
+    relatedProductIds: rankedProducts,
+    relatedCount: rankedProducts.length,
+  };
+}
 
 // Pass db as parameter now
 async function buildRelatedForProduct(productId, productData, client) {

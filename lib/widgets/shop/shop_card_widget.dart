@@ -460,8 +460,8 @@ class _ProfileAvatar extends StatelessWidget {
                   fadeInDuration: Duration.zero,
                   fadeOutDuration: Duration.zero,
                   placeholderFadeInDuration: Duration.zero,
-                  memCacheWidth: 132, // 44 * 3 for retina
-                  memCacheHeight: 132,
+                  memCacheWidth: 220, // 44 * 5 for crisp rendering
+                  memCacheHeight: 220,
                   useOldImageOnUrlChange: true,
                   placeholder: (context, url) =>
                       const _ShimmerAvatarPlaceholder(),

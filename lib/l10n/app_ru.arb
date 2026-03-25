@@ -2645,6 +2645,7 @@
   "newPaymentMethod": "Новый способ оплаты",
   "chooseLocation": "Выберите местоположение на карте",
   "sellOnVitrin": "Продавайте в витрине",
+  "vitrinProduct": "Витрина",
   "myReviews": "Мои оценки",
   "quantityForColor": "Количество для варианта цвета",
   "searchFailedTryAgain": "Поиск не удался, попробуйте снова.",

@@ -193,9 +193,11 @@ class _ProductDetailRelatedProductsState
                                     scaleFactor: cardScaleFactor,
                                     overrideInternalScaleFactor:
                                         internalScaleFactor,
-                                    // Pass portrait image height to constrain image size on tablets
                                     portraitImageHeight: isTablet
                                         ? actualImageHeight / effectiveScaleFactor
+                                        : null,
+                                    extraLabel: relatedProduct.sourceCollection == 'products'
+                                        ? AppLocalizations.of(context).vitrinProduct
                                         : null,
                                   ),
                                 ),

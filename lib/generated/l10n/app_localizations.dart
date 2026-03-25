@@ -13396,6 +13396,12 @@ abstract class AppLocalizations {
   /// **'Vitrin\'de Sat'**
   String get sellOnVitrin;
 
+  /// No description provided for @vitrinProduct.
+  ///
+  /// In tr, this message translates to:
+  /// **'Vitrin'**
+  String get vitrinProduct;
+
   /// No description provided for @quantityForColor.
   ///
   /// In tr, this message translates to:

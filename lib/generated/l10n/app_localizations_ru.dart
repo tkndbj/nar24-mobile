@@ -7011,6 +7011,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get sellOnVitrin => 'Продавайте в витрине';
 
   @override
+  String get vitrinProduct => 'Витрина';
+
+  @override
   String get quantityForColor => 'Количество для варианта цвета';
 
   @override

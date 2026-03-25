@@ -171,6 +171,9 @@ class ProductListSliver extends StatelessWidget {
                     product: product,
                     selectedColor: selectedColor,
                     portraitImageHeight: dimensions['imageHeight']!,
+                    extraLabel: product.sourceCollection == 'products'
+                        ? AppLocalizations.of(context).vitrinProduct
+                        : null,
                   ),
                 ),
               );
