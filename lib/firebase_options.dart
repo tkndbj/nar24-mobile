@@ -56,6 +56,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '373622886371',
     projectId: 'emlak-mobile-app',
     storageBucket: 'emlak-mobile-app.appspot.com',
+    databaseURL:
+        'https://emlak-mobile-app-default-rtdb.europe-west1.firebasedatabase.app', // ← ADD
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
@@ -65,6 +67,8 @@ class DefaultFirebaseOptions {
     projectId: 'emlak-mobile-app',
     storageBucket: 'emlak-mobile-app.appspot.com',
     iosBundleId: 'com.ects.nar24',
+    databaseURL:
+        'https://emlak-mobile-app-default-rtdb.europe-west1.firebasedatabase.app', // ← ADD
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -74,6 +78,8 @@ class DefaultFirebaseOptions {
     projectId: 'emlak-mobile-app',
     storageBucket: 'emlak-mobile-app.appspot.com',
     iosBundleId: 'com.ects.nar24',
+    databaseURL:
+        'https://emlak-mobile-app-default-rtdb.europe-west1.firebasedatabase.app', // ← ADD
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
@@ -85,5 +91,4 @@ class DefaultFirebaseOptions {
     storageBucket: 'emlak-mobile-app.appspot.com',
     measurementId: 'G-6ZYSPJ06C5',
   );
-
 }
