@@ -31,7 +31,6 @@ import 'theme.dart';
 import 'user_provider.dart';
 import 'generated/l10n/app_localizations.dart';
 import 'providers/market_provider.dart';
-import '/providers/stat_provider.dart';
 import '/providers/teras_provider.dart';
 import 'providers/badge_provider.dart';
 import 'package:cloud_functions/cloud_functions.dart';
