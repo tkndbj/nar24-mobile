@@ -25,8 +25,9 @@ class RelatedProductsProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      _relatedProducts =
-          await RelatedProductsService.getRelatedProducts(product);
+      _relatedProducts = await RelatedProductsService.getRelatedProducts(
+  List<String>.from(product.relatedProductIds ?? []),
+);
       _error = null;
     } catch (e) {
       _error = e.toString();

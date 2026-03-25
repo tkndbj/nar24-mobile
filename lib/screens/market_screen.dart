@@ -40,7 +40,6 @@ import '../providers/search_history_provider.dart';
 import '../widgets/dynamic_product_list_widget.dart';
 import '../services/market_layout_service.dart';
 import 'DYNAMIC-SCREENS/market_screen_dynamic_filters_screen.dart';
-import '../widgets/boosted_product_carousel.dart';
 import '../widgets/coupon_celebration_overlay.dart';
 
 class _HomeLayoutState {
@@ -1455,9 +1454,6 @@ Future<void> _initializeLayoutService() async {
 
       case 'preference_product':
         return const SliverToBoxAdapter(child: PreferenceProduct());
-
-      case 'boosted_product_carousel':
-        return const SliverToBoxAdapter(child: BoostedProductsCarousel());
 
       case 'dynamic_product_list':
         return const SliverToBoxAdapter(child: DynamicProductListsWidget());

@@ -898,45 +898,27 @@ class ProductDetailProvider with ChangeNotifier {
     }
   }
 
-  /// ✅ LAZY LOADING: Public method to load related products on-demand
-  /// Called by ProductDetailRelatedProducts widget when it becomes visible
   Future<void> loadRelatedProductsIfNeeded() async {
-    // Prevent duplicate loading if already initiated
-    if (_relatedLoadingInitiated || _product == null || _isDisposed) return;
+  if (_relatedLoadingInitiated || _product == null || _isDisposed) return;
+  _relatedLoadingInitiated = true;
+  if (_loadingRelated) return;
 
-    _relatedLoadingInitiated = true;
+  final relatedIds = List<String>.from(_product!.relatedProductIds ?? []);
+  if (relatedIds.isEmpty) return; // No IDs, nothing to show
 
-    // Prevent concurrent loading attempts
-    if (_loadingRelated) return;
+  _loadingRelated = true;
+  _safeNotifyListeners();
 
-    _loadingRelated = true;
-    _safeNotifyListeners();
-
-    try {
-      _related = await RelatedProductsService.getRelatedProducts(_product!);
-
-      // ✅ FIXED: Implement cache eviction to limit memory usage
-      final cacheKey = _product!.id;
-      if (!_relatedCacheKeys.contains(cacheKey)) {
-        _relatedCacheKeys.add(cacheKey);
-        _relatedCache[cacheKey] = _related;
-
-        // Evict oldest entry if cache is full
-        if (_relatedCacheKeys.length > _maxRelatedCacheSize) {
-          final oldestKey = _relatedCacheKeys.removeAt(0);
-          _relatedCache.remove(oldestKey);
-        }
-      }
-    } catch (e) {
-      debugPrint('Error computing related products: $e');
-      _related = [];
-    } finally {
-      _loadingRelated = false;
-      if (!_isDisposed) {
-        _safeNotifyListeners();
-      }
-    }
+  try {
+    _related = await RelatedProductsService.getRelatedProducts(relatedIds);
+  } catch (e) {
+    debugPrint('Error loading related products: $e');
+    _related = [];
+  } finally {
+    _loadingRelated = false;
+    if (!_isDisposed) _safeNotifyListeners();
   }
+}
 
   Future<List<Map<String, dynamic>>> getProductQuestions(
     String productId,

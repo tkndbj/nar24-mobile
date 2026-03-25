@@ -27,6 +27,18 @@ async function getTypesenseClient() {
   return typesenseClient;
 }
 
+function toJsDate(value) {
+  if (!value) return null;
+  if (typeof value.toDate === 'function') return value.toDate();
+  if (value instanceof Date) return value;
+  if (typeof value === 'number') return new Date(value);
+  if (typeof value === 'string') return new Date(value);
+  if (typeof value === 'object' && typeof value.seconds === 'number') {
+    return new Date(value.seconds * 1000);
+  }
+  return null;
+}
+
 export const rebuildRelatedProducts = onSchedule({
   schedule: '0 2 * * *',
   timeZone: 'Europe/Istanbul',
@@ -56,7 +68,7 @@ export const rebuildRelatedProducts = onSchedule({
     const concurrency = 20;
     let lastDoc = null;
     let consecutiveErrors = 0;
-    const MAX_CONSECUTIVE_ERRORS = 3;
+    const MAX_CONSECUTIVE_ERRORS = 10;
 
     // Resume from checkpoint
     if (lastProcessedId) {
@@ -93,25 +105,26 @@ export const rebuildRelatedProducts = onSchedule({
 
           // Skip recent updates
           if (data.relatedLastUpdated) {
-            const lastUpdate = data.relatedLastUpdated.toDate();
-            const daysSinceUpdate = (Date.now() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24);
-
-            if (daysSinceUpdate < 7) {
-              skipped++;
-              return {success: true, id: doc.id, skipped: true};
+            const lastUpdate = toJsDate(data.relatedLastUpdated);
+            if (lastUpdate) {
+              const daysSinceUpdate = (Date.now() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24);
+              if (daysSinceUpdate < 7) {
+                skipped++;
+                return {success: true, id: doc.id, skipped: true};
+              }
             }
           }
 
           // Retry logic
           for (let attempt = 1; attempt <= 3; attempt++) {
             try {
-              await Promise.race([
-                buildRelatedForProduct(doc.id, data, client, db),
+              const relatedData = await Promise.race([
+                buildRelatedForProduct(doc.id, data, client),
                 new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000)),
               ]);
               processed++;
               consecutiveErrors = 0;
-              return {success: true, id: doc.id, skipped: false};
+              return {success: true, id: doc.id, skipped: false, data: relatedData};
             } catch (err) {
               if (attempt === 3) {
                 console.error(`Failed after 3 attempts ${doc.id}:`, err.message);
@@ -127,11 +140,24 @@ export const rebuildRelatedProducts = onSchedule({
         const results = await Promise.all(promises);
 
         // Track last successfully processed (not skipped) document
-        for (const result of results) {
-          if (result.success && !result.skipped) {
-            batchProcessed++;
-            lastDoc = snapshot.docs.find((d) => d.id === result.id);
-          }
+        const updates = results.filter((r) => r && r.success && !r.skipped && r.data);
+
+        for (let i = 0; i < updates.length; i += 400) {
+          const chunk = updates.slice(i, i + 400);
+          const writeBatch = db.batch();
+          chunk.forEach(({data: updateData}) => {
+            writeBatch.update(db.collection('shop_products').doc(updateData.productId), {
+              relatedProductIds: updateData.relatedProductIds,
+              relatedLastUpdated: FieldValue.serverTimestamp(),
+              relatedCount: updateData.relatedCount,
+            });
+          });
+          await writeBatch.commit();
+        }
+        
+        for (const result of updates) {
+          batchProcessed++;
+          lastDoc = snapshot.docs.find((d) => d.id === result.id);
         }
       }
 
@@ -183,7 +209,7 @@ export const rebuildRelatedProducts = onSchedule({
 });
 
 // Pass db as parameter now
-async function buildRelatedForProduct(productId, productData, client, db) {
+async function buildRelatedForProduct(productId, productData, client) {
     const {category, subcategory, subsubcategory, gender, price} = productData;
 
     if (!category || !subcategory) {
@@ -252,11 +278,11 @@ async function buildRelatedForProduct(productId, productData, client, db) {
       return id;
     });
 
-    await db.collection('shop_products').doc(productId).update({
+    return {
+      productId,
       relatedProductIds: cleanedIds,
-      relatedLastUpdated: FieldValue.serverTimestamp(),
       relatedCount: cleanedIds.length,
-    });
+    };
   }
 
 async function searchTypesense(client, currentProductId, params) {

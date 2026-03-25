@@ -148,13 +148,6 @@ class MarketLayoutService extends ChangeNotifier {
           order: 3,
         ),
         MarketWidgetConfig(
-          id: 'boosted_product_carousel',
-          name: 'Boosted Products',
-          type: 'boosted_product_carousel',
-          isVisible: true,
-          order: 4,
-        ),
-        MarketWidgetConfig(
           id: 'dynamic_product_list',
           name: 'Dynamic Product Lists',
           type: 'dynamic_product_list',
