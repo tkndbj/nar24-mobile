@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 class CourierLocationService {
   CourierLocationService._();
@@ -28,7 +29,11 @@ class CourierLocationService {
   DateTime _lastWriteTime = DateTime(2000); // epoch sentinel
   bool _tracking = false;
   String? _currentOrderId; // kept in sync by FoodCargoScreen
-
+  FirebaseDatabase get _db => FirebaseDatabase.instanceFor(
+        app: Firebase.app(),
+        databaseURL:
+            'https://emlak-mobile-app-default-rtdb.europe-west1.firebasedatabase.app',
+      );
   // ── Public API ────────────────────────────────────────────────────────────
 
   bool get isTracking => _tracking;
@@ -36,6 +41,7 @@ class CourierLocationService {
   /// Call from FoodCargoScreen.initState().
   /// Requests permission if needed then starts the GPS stream.
   Future<void> startTracking() async {
+    debugPrint('[CourierLocation] startTracking() called, tracking=$_tracking');
     if (_tracking) return; // already running
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -50,8 +56,19 @@ class CourierLocationService {
     _tracking = true;
     debugPrint('[CourierLocation] Starting for uid=$uid');
 
+    // ── TEST WRITE — remove after confirming ──────────────────────────
+    try {
+      await _db
+          .ref('courier_locations/$uid/test')
+          .set('hello_${DateTime.now().millisecondsSinceEpoch}');
+      debugPrint('[CourierLocation] ✅ Test write succeeded');
+    } catch (e) {
+      debugPrint('[CourierLocation] ❌ Test write FAILED: $e');
+    }
+// ─────────────────────────────────────────────────────────────────
+
     // ── Set online presence + disconnect hook ─────────────────────────────
-    final locRef = FirebaseDatabase.instance.ref('courier_locations/$uid');
+    final locRef = _db.ref('courier_locations/$uid');
 
     // onDisconnect fires automatically when the connection drops
     // (app killed, network lost, etc.) — keeps the dashboard accurate.
@@ -101,7 +118,7 @@ class CourierLocationService {
 
     // Mark offline immediately (don't wait for onDisconnect)
     try {
-      await FirebaseDatabase.instance.ref('courier_locations/$uid').update({
+      await _db.ref('courier_locations/$uid').update({
         'isOnline': false,
         'isOnShift': false,
       });
@@ -133,7 +150,7 @@ class CourierLocationService {
     debugPrint('[CourierLocation] Resuming GPS stream.');
 
     // Re-mark as online (onDisconnect may have fired if connection dropped)
-    await FirebaseDatabase.instance.ref('courier_locations/$uid').update({
+    await _db.ref('courier_locations/$uid').update({
       'isOnline': true,
       'isOnShift': true,
     });
@@ -162,9 +179,7 @@ class CourierLocationService {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
     try {
-      await FirebaseDatabase.instance
-          .ref('courier_locations/$uid/currentOrderId')
-          .set(orderId);
+      await _db.ref('courier_locations/$uid/currentOrderId').set(orderId);
     } catch (e) {
       debugPrint('[CourierLocation] updateCurrentOrder failed: $e');
     }
@@ -197,7 +212,7 @@ class CourierLocationService {
 
   Future<void> _writePosition(String uid, Position pos) async {
     try {
-      await FirebaseDatabase.instance.ref('courier_locations/$uid').update({
+      await _db.ref('courier_locations/$uid').update({
         'lat': pos.latitude,
         'lng': pos.longitude,
         'heading': pos.heading, // degrees 0–360
@@ -215,7 +230,7 @@ class CourierLocationService {
   /// Writes only the timestamp + online flags — no GPS (courier hasn't moved).
   Future<void> _writeHeartbeat(String uid) async {
     try {
-      await FirebaseDatabase.instance.ref('courier_locations/$uid').update({
+      await _db.ref('courier_locations/$uid').update({
         'isOnline': true,
         'isOnShift': true,
         'updatedAt': ServerValue.timestamp,
