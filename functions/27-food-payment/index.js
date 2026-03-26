@@ -8,6 +8,8 @@ import PDFDocument from 'pdfkit';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
+import { scheduleRestaurantReceiptTask } from '../37-restaurant-receipt/index.js';
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -480,13 +482,16 @@ async function createFoodOrderCore(buyerId, requestData, paymentOrderId = null) 
 
   // ── 7. Clear user's food cart (fire-and-forget) ──────────────────
   if (orderResult && !orderResult.duplicate) {
-    clearFoodCartAsync(buyerId).catch((err) =>
-      console.error('[FoodOrder] Cart clear failed:', err)
-    );
-    scheduleFoodReceiptTask(orderDoc, orderResult.orderId).catch((err) =>  // ✅ moved here
-      console.error('[FoodOrder] Receipt task scheduling failed:', err)
-    );
-  }
+         clearFoodCartAsync(buyerId).catch((err) =>
+           console.error('[FoodOrder] Cart clear failed:', err)
+         );
+         scheduleFoodReceiptTask(orderDoc, orderResult.orderId).catch((err) =>
+           console.error('[FoodOrder] Buyer receipt task failed:', err)
+         );
+         scheduleRestaurantReceiptTask(orderDoc, orderResult.orderId).catch((err) =>
+           console.error('[FoodOrder] Restaurant receipt task failed:', err)
+         );
+       }
 
   return orderResult;
 }
@@ -1191,6 +1196,7 @@ export async function scheduleFoodReceiptTask(orderDoc, orderId) {
     status: 'pending',
     retryCount: 0,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    deleteAt: admin.firestore.Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000),
   });
 }
 
