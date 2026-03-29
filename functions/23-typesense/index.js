@@ -685,7 +685,9 @@ export const syncRestaurantsWithTypesense = onDocumentWritten(
     const afterData = event.data.after?.data() ?? null;
 
     if (beforeData && afterData) {
-      const searchFields = ['name', 'address', 'isActive', 'isBoosted', 'foodType', 'averageRating', 'profileImageUrl', 'cuisineTypes', 'minOrderPrices', 'workingHours'];
+      const searchFields = ['name', 'address', 'isActive', 'isBoosted', 'foodType',
+        'averageRating', 'profileImageUrl', 'cuisineTypes', 'minOrderPrices', 
+        'workingHours', 'workingDays'];
       const hasRelevantChanges = searchFields.some((f) => fieldChanged(beforeData[f], afterData[f]));
       if (!hasRelevantChanges) return;
     }

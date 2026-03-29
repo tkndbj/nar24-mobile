@@ -13330,6 +13330,24 @@ class AppLocalizationsRu extends AppLocalizations {
   String get foodProceedToCheckout => 'Перейти к оплате';
 
   @override
+  String get foodMinOrderNotMet => 'Минимальная сумма заказа не достигнута';
+
+  @override
+  String foodMinOrderMessage(String amount, String current) {
+    return 'Этот ресторан требует минимальный заказ на $amount TL для вашего района доставки. Ваш текущий заказ — $current TL.';
+  }
+
+  @override
+  String get foodMinOrderOk => 'ОК';
+
+  @override
+  String get foodRestaurantClosedTitle => 'Ресторан закрыт';
+
+  @override
+  String get foodRestaurantClosedMessage =>
+      'Этот ресторан сейчас не работает. Пожалуйста, попробуйте снова в рабочее время.';
+
+  @override
   String get foodNoMenuItems => 'Нет пунктов меню';
 
   @override

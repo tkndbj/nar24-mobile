@@ -60,6 +60,7 @@ class TypeSenseService {
   Map<String, String> get _headers => {
         'X-TYPESENSE-API-KEY': _searchKey,
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store',
       };
 
   /// Convert TypeSense sort option → Typesense sort_by string

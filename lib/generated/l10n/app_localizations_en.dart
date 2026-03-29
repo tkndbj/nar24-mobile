@@ -13234,6 +13234,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get foodProceedToCheckout => 'Proceed to Checkout';
 
   @override
+  String get foodMinOrderNotMet => 'Minimum Order Not Met';
+
+  @override
+  String foodMinOrderMessage(String amount, String current) {
+    return 'This restaurant requires a minimum order of $amount TL for your delivery area. Your current order is $current TL.';
+  }
+
+  @override
+  String get foodMinOrderOk => 'OK';
+
+  @override
+  String get foodRestaurantClosedTitle => 'Restaurant Closed';
+
+  @override
+  String get foodRestaurantClosedMessage =>
+      'This restaurant is currently outside of its working hours. Please try again when the restaurant is open.';
+
+  @override
   String get foodNoMenuItems => 'No menu items';
 
   @override

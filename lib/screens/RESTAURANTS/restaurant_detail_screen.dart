@@ -627,8 +627,7 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
         r.minOrderPrices == null ||
         r.minOrderPrices!.isEmpty) return true;
     for (final e in r.minOrderPrices!) {
-      if (e['subregion'] == foodAddress.city ||
-          e['subregion'] == foodAddress.mainRegion) return true;
+      if (e['subregion'] == foodAddress.city) return true;
     }
     return false;
   }
@@ -679,7 +678,7 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
       backgroundColor: Colors.transparent,
       builder: (_) => ChangeNotifierProvider<FoodCartProvider>.value(
         value: cart,
-        child: _CartBottomSheet(isDark: isDark),
+        child: _CartBottomSheet(isDark: isDark, restaurant: widget.restaurant),
       ),
     );
   }
@@ -2084,8 +2083,9 @@ class _CartFab extends StatelessWidget {
 
 class _CartBottomSheet extends StatefulWidget {
   final bool isDark;
+  final Restaurant? restaurant;
 
-  const _CartBottomSheet({required this.isDark});
+  const _CartBottomSheet({required this.isDark, this.restaurant});
 
   @override
   State<_CartBottomSheet> createState() => _CartBottomSheetState();
@@ -2206,6 +2206,29 @@ class _CartBottomSheetState extends State<_CartBottomSheet> {
                           width: double.infinity,
                           child: ElevatedButton(
                             onPressed: () {
+                              final r = widget.restaurant;
+                              if (r != null) {
+                                // 1. Check if restaurant is open
+                                if (!checkRestaurantOpenAndAlert(context,
+                                    restaurant: r)) {
+                                  return;
+                                }
+                                // 2. Check minimum order price
+                                final raw = context
+                                    .read<UserProvider>()
+                                    .profileData?['foodAddress'];
+                                final foodAddress = raw is Map<String, dynamic>
+                                    ? FoodAddress.fromMap(raw)
+                                    : null;
+                                final minOrder = getMinOrderPriceForAddress(
+                                    r.minOrderPrices, foodAddress);
+                                if (minOrder != null &&
+                                    !checkMinOrderAndAlert(context,
+                                        minOrderPrice: minOrder,
+                                        cartSubtotal: cart.totals.subtotal)) {
+                                  return;
+                                }
+                              }
                               Navigator.of(context).pop();
                               context.push('/food-checkout');
                             },

@@ -63,7 +63,7 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
   bool _hasShownPicker = false;
 
   // ── Track food address for re-fetching on change ────────────────────
-  FoodAddress? _lastFoodAddress;
+  String? _lastDeliveryCity;
 
   // ── Scroll controller for infinite scrolling ──────────────────────────
   final _scrollController = ScrollController();
@@ -108,6 +108,28 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final raw = context.read<UserProvider>().profileData?['foodAddress'];
+    final addr = raw is Map<String, dynamic> ? FoodAddress.fromMap(raw) : null;
+    final city = (addr == null || addr.city.isEmpty) ? null : addr.city;
+
+    if (city != _lastDeliveryCity) {
+      _lastDeliveryCity = city;
+      // Only refetch if initial load is already done
+      // (initState handles the first fetch via addPostFrameCallback)
+      if (!_isLoadingData) {
+        if (_selectedCuisine != null) {
+          setState(() => _selectedCuisine = null);
+        }
+        _fetchRestaurants();
+        _fetchFacets();
+      }
+    }
   }
 
   void _onScroll() {
@@ -205,8 +227,7 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
         deliveryRegions: _deliveryFilterRegions(),
       );
       if (mounted) {
-        setState(() =>
-            _cuisineFacets = facets.cuisineTypes ?? <FacetValue>[]);
+        setState(() => _cuisineFacets = facets.cuisineTypes ?? <FacetValue>[]);
       }
     } catch (e) {
       debugPrint('[RestaurantsScreen] Facets error: $e');
@@ -297,15 +318,8 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
   // ── Min order price helper ─────────────────────────────────────────────
   int? _getMinOrderPrice(Restaurant r, FoodAddress? foodAddress) {
     if (foodAddress == null || r.minOrderPrices == null) return null;
-    // Exact subregion match
     for (final e in r.minOrderPrices!) {
       if (e['subregion'] == foodAddress.city) {
-        return (e['minOrderPrice'] as num?)?.toInt();
-      }
-    }
-    // Fallback: mainRegion-level entry
-    for (final e in r.minOrderPrices!) {
-      if (e['subregion'] == foodAddress.mainRegion) {
         return (e['minOrderPrice'] as num?)?.toInt();
       }
     }
@@ -326,20 +340,6 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
     final foodAddress = rawFoodAddress is Map<String, dynamic>
         ? FoodAddress.fromMap(rawFoodAddress)
         : null;
-
-    // Re-fetch restaurants AND facets when the user's delivery address changes
-    if (foodAddress != _lastFoodAddress) {
-      _lastFoodAddress = foodAddress;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        // Clear stale cuisine filter that may not exist in the new region
-        if (_selectedCuisine != null) {
-          _selectedCuisine = null;
-        }
-        _fetchRestaurants();
-        _fetchFacets();
-      });
-    }
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
@@ -586,36 +586,36 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
                                 color: Colors.orange,
                               ),
                               child: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.location_on_rounded,
-                                      color: Colors.white,
-                                      size: 18,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Flexible(
-                                      child: Text(
-                                        foodAddress.displayLabel,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                children: [
+                                  const Icon(
+                                    Icons.location_on_rounded,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      foodAddress.displayLabel,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
                                       ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    const SizedBox(width: 6),
-                                    const Icon(
-                                      Icons.keyboard_arrow_down_rounded,
-                                      color: Colors.white70,
-                                      size: 20,
-                                    ),
-                                  ],
-                                ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    color: Colors.white70,
+                                    size: 20,
+                                  ),
+                                ],
                               ),
                             ),
                           ),
+                        ),
 
                       // ── Restaurant list ────────────────────────────────────
                       if (_isSearching)
@@ -726,7 +726,6 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
     );
   }
 }
-
 
 // ============================================================================
 // CUISINE PILL ROW
@@ -1007,9 +1006,7 @@ class _RestaurantCard extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: isDark
-              ? const Color.fromARGB(255, 40, 38, 59)
-              : Colors.white,
+          color: isDark ? const Color.fromARGB(255, 40, 38, 59) : Colors.white,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.15),
@@ -1383,9 +1380,7 @@ class _RestaurantCardSkeleton extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: isDark
-            ? const Color.fromARGB(255, 40, 38, 59)
-            : Colors.white,
+        color: isDark ? const Color.fromARGB(255, 40, 38, 59) : Colors.white,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.15),

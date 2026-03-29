@@ -25242,6 +25242,36 @@ abstract class AppLocalizations {
   /// **'Ödemeye Geç'**
   String get foodProceedToCheckout;
 
+  /// No description provided for @foodMinOrderNotMet.
+  ///
+  /// In tr, this message translates to:
+  /// **'Minimum Sipariş Tutarına Ulaşılmadı'**
+  String get foodMinOrderNotMet;
+
+  /// No description provided for @foodMinOrderMessage.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bu restoran, teslimat bölgeniz için minimum {amount} TL sipariş gerektirmektedir. Mevcut siparişiniz {current} TL.'**
+  String foodMinOrderMessage(String amount, String current);
+
+  /// No description provided for @foodMinOrderOk.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tamam'**
+  String get foodMinOrderOk;
+
+  /// No description provided for @foodRestaurantClosedTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoran Kapalı'**
+  String get foodRestaurantClosedTitle;
+
+  /// No description provided for @foodRestaurantClosedMessage.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bu restoran şu anda çalışma saatleri dışındadır. Lütfen restoran açıkken tekrar deneyin.'**
+  String get foodRestaurantClosedMessage;
+
   /// No description provided for @foodNoMenuItems.
   ///
   /// In tr, this message translates to:

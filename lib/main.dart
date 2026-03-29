@@ -61,6 +61,7 @@ import 'services/cart_favorite_metrics_service.dart';
 import 'providers/food_cart_provider.dart';
 import 'services/firestore_read_tracker.dart';
 import 'services/courier_location_service.dart';
+import 'package:timezone/data/latest.dart' as tz;
 
 /// Background message handler for FCM.
 ///
@@ -95,7 +96,7 @@ bool firebaseInitialized = false;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
+  tz.initializeTimeZones();
   // Initialize the app lifecycle manager FIRST
   // This coordinates all provider lifecycles for smooth background/foreground transitions
   AppLifecycleManager.instance.initialize();

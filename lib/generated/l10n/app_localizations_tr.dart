@@ -13257,6 +13257,24 @@ class AppLocalizationsTr extends AppLocalizations {
   String get foodProceedToCheckout => 'Ödemeye Geç';
 
   @override
+  String get foodMinOrderNotMet => 'Minimum Sipariş Tutarına Ulaşılmadı';
+
+  @override
+  String foodMinOrderMessage(String amount, String current) {
+    return 'Bu restoran, teslimat bölgeniz için minimum $amount TL sipariş gerektirmektedir. Mevcut siparişiniz $current TL.';
+  }
+
+  @override
+  String get foodMinOrderOk => 'Tamam';
+
+  @override
+  String get foodRestaurantClosedTitle => 'Restoran Kapalı';
+
+  @override
+  String get foodRestaurantClosedMessage =>
+      'Bu restoran şu anda çalışma saatleri dışındadır. Lütfen restoran açıkken tekrar deneyin.';
+
+  @override
   String get foodNoMenuItems => 'Menü öğesi yok';
 
   @override

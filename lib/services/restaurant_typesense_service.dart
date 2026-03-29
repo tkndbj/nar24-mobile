@@ -149,6 +149,7 @@ class RestaurantTypesenseService {
   Map<String, String> get _headers => {
         'X-TYPESENSE-API-KEY': _searchKey,
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store',
       };
 
   // ── Sort mappings ───────────────────────────────────────────────────────

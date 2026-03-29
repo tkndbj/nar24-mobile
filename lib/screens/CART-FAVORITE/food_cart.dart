@@ -2,6 +2,7 @@
 //
 // Mirrors: app/food-cart/page.tsx + FoodCartPageContent + FoodCartItemCard
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -10,9 +11,13 @@ import 'package:provider/provider.dart';
 import '../../constants/foodData.dart';
 import '../../constants/foodExtras.dart';
 import '../../models/food.dart';
+import '../../models/food_address.dart';
+import '../../models/restaurant.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../providers/food_cart_provider.dart';
+import '../../user_provider.dart';
 import '../../utils/food_localization.dart';
+import '../../utils/restaurant_utils.dart';
 
 // ─── Route ────────────────────────────────────────────────────────────────────
 // GoRoute(
@@ -64,10 +69,47 @@ class _FoodCartContentState extends State<_FoodCartContent> {
   }
 
   // ── handleCheckout — mirrors handleCheckout ───────────────────────────────
-  void _handleCheckout(BuildContext context, FoodCartProvider cart) {
+  Future<void> _handleCheckout(BuildContext context, FoodCartProvider cart) async {
     if (cart.items.isEmpty) return;
-    // Mirrors sessionStorage.setItem('foodCheckoutData', ...) then push('/food-checkout')
-    // In Flutter we pass cart state via GoRouter extra or read it from the provider.
+
+    final restaurantId = cart.currentRestaurant?.id;
+    if (restaurantId != null && restaurantId.isNotEmpty) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('restaurants')
+            .doc(restaurantId)
+            .get(const GetOptions(source: Source.server));
+        if (!context.mounted || doc.data() == null) return;
+
+        final restaurant = Restaurant.fromMap(doc.data()!, id: doc.id);
+
+        // 1. Check if restaurant is open
+        if (!checkRestaurantOpenAndAlert(context, restaurant: restaurant)) {
+          return;
+        }
+
+        // 2. Check minimum order price for the user's delivery area
+        final raw = context.read<UserProvider>().profileData?['foodAddress'];
+        final foodAddress = raw is Map<String, dynamic>
+            ? FoodAddress.fromMap(raw)
+            : null;
+        final minOrder = getMinOrderPriceForAddress(
+            restaurant.minOrderPrices, foodAddress);
+        if (minOrder != null) {
+          if (!checkMinOrderAndAlert(context,
+              minOrderPrice: minOrder,
+              cartSubtotal: cart.totals.subtotal)) {
+            return;
+          }
+        }
+      } catch (e) {
+        // On network error, allow checkout — the server-side function
+        // will enforce these checks as a final safeguard.
+        debugPrint('[FoodCart] Checkout validation failed: $e');
+      }
+    }
+
+    if (!context.mounted) return;
     context.push('/food-checkout');
   }
 
@@ -1343,7 +1385,7 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
                                 value: _checked[extra] ?? false,
                                 onChanged: (v) =>
                                     setState(() => _checked[extra] = v!),
-                                title: Text(extra,
+                                title: Text(localizeExtra(extra, loc),
                                     style: TextStyle(
                                         fontSize: 14,
                                         color: isDark
