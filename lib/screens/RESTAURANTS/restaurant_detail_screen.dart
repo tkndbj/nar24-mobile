@@ -549,9 +549,14 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
                 // ── Reviews tab content ───────────────────────────────────
                 if (_activeTab == 'reviews')
                   SliverFillRemaining(
-                    child: _ReviewsTab(
-                      restaurantId: restaurant.id,
-                      isDark: isDark,
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        bottom: cart.itemCount > 0 ? 80 : 0,
+                      ),
+                      child: _ReviewsTab(
+                        restaurantId: restaurant.id,
+                        isDark: isDark,
+                      ),
                     ),
                   ),
               ],

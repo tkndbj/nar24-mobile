@@ -11931,6 +11931,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get imageRejected => 'Image contains inappropriate content';
 
   @override
+  String imageRejectedWithNumber(String number) {
+    return 'Image $number was rejected: inappropriate content.';
+  }
+
+  @override
   String get imageUploadedSuccess => 'Image uploaded successfully';
 
   @override

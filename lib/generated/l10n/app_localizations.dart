@@ -22854,6 +22854,12 @@ abstract class AppLocalizations {
   /// **'Görsel uygunsuz içerik barındırıyor'**
   String get imageRejected;
 
+  /// No description provided for @imageRejectedWithNumber.
+  ///
+  /// In tr, this message translates to:
+  /// **'Görsel {number} reddedildi: uygunsuz içerik.'**
+  String imageRejectedWithNumber(String number);
+
   /// No description provided for @imageUploadedSuccess.
   ///
   /// In tr, this message translates to:

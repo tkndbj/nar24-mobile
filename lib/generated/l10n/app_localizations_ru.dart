@@ -12024,6 +12024,11 @@ class AppLocalizationsRu extends AppLocalizations {
   String get imageRejected => 'Изображение содержит неприемлемый контент';
 
   @override
+  String imageRejectedWithNumber(String number) {
+    return 'Изображение $number отклонено: неприемлемый контент.';
+  }
+
+  @override
   String get imageUploadedSuccess => 'Изображение успешно загружено';
 
   @override

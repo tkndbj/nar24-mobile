@@ -685,8 +685,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      l10n.restaurantReview ??
-                                          'Restaurant Review',
+                                      l10n.restaurantReview,
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
@@ -934,7 +933,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                                             );
                                           },
                                     child: Text(
-                                      l10n.submit ?? 'Submit',
+                                      l10n.submit,
                                       style: const TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w600,
@@ -1004,7 +1003,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
           Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content:
-                Text('Image ${i + 1} was rejected: inappropriate content.'),
+                Text(l10n.imageRejectedWithNumber('${i + 1}')),
             backgroundColor: Colors.red,
           ));
           return;
@@ -1043,14 +1042,14 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
       if (!mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(e.message ?? 'Error submitting review'),
+        content: Text(e.message ?? l10n.errorSubmittingReview),
         backgroundColor: Colors.red,
       ));
     } catch (e) {
       if (!mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Error: ${e.toString()}'),
+        content: Text(l10n.errorSubmittingReview),
         backgroundColor: Colors.red,
       ));
     }
@@ -1275,7 +1274,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
           chip(l10n.seller, ReviewFilter.seller, Colors.orange),
           const SizedBox(width: 8),
           chip(
-            l10n.food ?? 'Food',
+            l10n.food,
             ReviewFilter.food,
             const Color(0xFFF97316),
           ),
@@ -1619,7 +1618,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
               onPressed: () => _showFoodReviewBottomSheet(order),
               icon: const Icon(Icons.star_rounded, size: 18),
               label: Text(
-                l10n.writeRestaurantReview ?? 'Write Restaurant Review',
+                l10n.writeRestaurantReview,
                 style: const TextStyle(
                     fontSize: 13,
                     fontFamily: 'Figtree',
@@ -1777,7 +1776,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                             fontSize: 16),
                       ),
                       TextSpan(
-                        text: data['sellerName'] as String? ?? 'Unknown Seller',
+                        text: data['sellerName'] as String? ?? l10n.unknownSeller,
                         style: TextStyle(
                             fontWeight: FontWeight.normal,
                             color: isDark ? Colors.white : Colors.black,
@@ -1903,7 +1902,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                     children: [
                       Text(
                         review.restaurantName ??
-                            (l10n.restaurantReview ?? 'Restaurant Review'),
+                            l10n.restaurantReview,
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -2096,7 +2095,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                   if (mounted) {
                     Navigator.of(context).pop();
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text('Error: $error'),
+                      content: Text(l10n.errorSubmittingReview),
                       backgroundColor: Colors.red,
                     ));
                   }
@@ -2110,7 +2109,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
       debugPrint('Error showing review dialog: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error: ${e.toString()}'),
+          content: Text(l10n.errorSubmittingReview),
           backgroundColor: Colors.red,
         ));
       }

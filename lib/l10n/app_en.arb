@@ -2261,6 +2261,8 @@
   "linked": "Linked",
   "doYouWantToLinkToProduct": "Do you want to link to a product?",
   "imageRejected": "Image contains inappropriate content",
+"imageRejectedWithNumber": "Image {number} was rejected: inappropriate content.",
+"@imageRejectedWithNumber": { "placeholders": { "number": { "type": "String" } } },
 "adultContentError": "Image contains explicit adult content",
 "violentContentError": "Image contains violent content",
 "moderationError": "Failed to verify image content. Please try again.",

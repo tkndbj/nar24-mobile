@@ -11950,6 +11950,11 @@ class AppLocalizationsTr extends AppLocalizations {
   String get imageRejected => 'Görsel uygunsuz içerik barındırıyor';
 
   @override
+  String imageRejectedWithNumber(String number) {
+    return 'Görsel $number reddedildi: uygunsuz içerik.';
+  }
+
+  @override
   String get imageUploadedSuccess => 'Görsel başarıyla yüklendi';
 
   @override

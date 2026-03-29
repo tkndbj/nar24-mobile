@@ -5044,6 +5044,8 @@
   "receiptNotFound": "Квитанция не найдена",
   "invalidImageFormat": "Неверный формат изображения",
   "imageRejected": "Изображение содержит неприемлемый контент",
+"imageRejectedWithNumber": "Изображение {number} отклонено: неприемлемый контент.",
+"@imageRejectedWithNumber": { "placeholders": { "number": { "type": "String" } } },
   "imageUploadedSuccess": "Изображение успешно загружено",
 "adultContentError": "Изображение содержит откровенный контент для взрослых",
 "violentContentError": "Изображение содержит насильственный контент",
