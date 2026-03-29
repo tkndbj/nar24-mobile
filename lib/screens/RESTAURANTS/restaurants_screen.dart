@@ -159,7 +159,7 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
 
       if (mounted) {
         setState(() {
-          _restaurants = result.items;
+          _restaurants = _openFirst(result.items);
           _currentPage = 0;
           _hasMore = result.page < result.nbPages - 1;
           _isLoadingData = false;
@@ -193,7 +193,27 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
 
       if (mounted) {
         setState(() {
-          _restaurants = [..._restaurants, ...result.items];
+          // Insert new open items before the closed section,
+          // append new closed items at the end — avoids re-sorting
+          // the entire list and prevents visible shifts.
+          final firstClosedIdx = _restaurants.indexWhere(
+              (r) => !isRestaurantOpen(r));
+          final insertAt = firstClosedIdx == -1
+              ? _restaurants.length
+              : firstClosedIdx;
+
+          final newOpen = <Restaurant>[];
+          final newClosed = <Restaurant>[];
+          for (final r in result.items) {
+            (isRestaurantOpen(r) ? newOpen : newClosed).add(r);
+          }
+
+          _restaurants = [
+            ..._restaurants.sublist(0, insertAt),
+            ...newOpen,
+            ..._restaurants.sublist(insertAt),
+            ...newClosed,
+          ];
           _currentPage = nextPage;
           _hasMore = nextPage < result.nbPages - 1;
         });
@@ -203,6 +223,17 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
     } finally {
       if (mounted) setState(() => _isLoadingMore = false);
     }
+  }
+
+  /// Stable-partitions restaurants so open ones appear before closed ones,
+  /// preserving the original Typesense sort order within each group.
+  List<Restaurant> _openFirst(List<Restaurant> list) {
+    final open = <Restaurant>[];
+    final closed = <Restaurant>[];
+    for (final r in list) {
+      (isRestaurantOpen(r) ? open : closed).add(r);
+    }
+    return [...open, ...closed];
   }
 
   /// Returns [city, mainRegion] from the user's foodAddress for Typesense
@@ -286,7 +317,7 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
 
       if (mounted) {
         setState(() {
-          _restaurants = result.items;
+          _restaurants = _openFirst(result.items);
           _currentPage = 0;
           _hasMore = result.page < result.nbPages - 1;
           _isSearching = false;

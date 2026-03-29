@@ -595,7 +595,6 @@ export const syncOrdersWithTypesense = onDocumentWritten(
 const sanitizeForFoods = (data) => {
   const d = {};
   const pick = (key) => {if (data[key] != null) d[key] = data[key];};
-  const pickArr = (key) => {if (Array.isArray(data[key]) && data[key].length > 0) d[key] = data[key];};
 
   pick('name');
   pick('description');
@@ -606,7 +605,9 @@ const sanitizeForFoods = (data) => {
   pick('isAvailable');
   pick('preparationTime');
   pick('restaurantId');
-  pickArr('extras');
+  if (Array.isArray(data.extras) && data.extras.length > 0) {
+    d.extras = data.extras.map((e) => typeof e === 'string' ? e : e.name).filter(Boolean);
+  }
 
   const ts = toUnixSeconds(data.createdAt);
   if (ts != null) d.createdAt = ts;

@@ -23,6 +23,7 @@ class FoodReview {
   final int rating;
   final String comment;
   final Timestamp? timestamp;
+  final List<String> imageUrls;
 
   const FoodReview({
     required this.id,
@@ -34,6 +35,7 @@ class FoodReview {
     this.buyerName,
     this.restaurantName,
     this.timestamp,
+    this.imageUrls = const [],
   });
 
   factory FoodReview.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -48,6 +50,10 @@ class FoodReview {
       rating: (d['rating'] as num?)?.toInt() ?? 0,
       comment: (d['comment'] as String?) ?? '',
       timestamp: d['timestamp'] as Timestamp?,
+      imageUrls: (d['imageUrls'] as List<dynamic>?) // ← ADD
+              ?.whereType<String>()
+              .toList() ??
+          [],
     );
   }
 }
@@ -232,8 +238,9 @@ class _ReviewCard extends StatelessWidget {
         ? _maskName(review.buyerName!)
         : loc.anonymous;
 
-    final timeText =
-        review.timestamp != null ? _timeAgo(review.timestamp!, loc.foodReviewJustNow) : '';
+    final timeText = review.timestamp != null
+        ? _timeAgo(review.timestamp!, loc.foodReviewJustNow)
+        : '';
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -314,6 +321,7 @@ class _ReviewCard extends StatelessWidget {
           ),
 
           // ── Comment ────────────────────────────────────────────────────
+          // ── Comment ────────────────────────────────────────────────────
           if (review.comment.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
@@ -322,6 +330,50 @@ class _ReviewCard extends StatelessWidget {
                 fontSize: 13,
                 height: 1.5,
                 color: isDark ? Colors.grey[300] : Colors.grey[600],
+              ),
+            ),
+          ],
+
+// ── Images ─────────────────────────────────────────────────────
+          if (review.imageUrls.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 64,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: review.imageUrls.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, i) => GestureDetector(
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => Scaffold(
+                        backgroundColor: Colors.black,
+                        appBar: AppBar(
+                          backgroundColor: Colors.transparent,
+                          elevation: 0,
+                          leading: IconButton(
+                            icon: const Icon(Icons.close, color: Colors.white),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ),
+                        body: Center(
+                          child: InteractiveViewer(
+                            child: Image.network(review.imageUrls[i]),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      review.imageUrls[i],
+                      width: 64,
+                      height: 64,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
               ),
             ),
           ],

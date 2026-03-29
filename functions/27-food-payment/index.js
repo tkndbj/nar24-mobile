@@ -1900,16 +1900,17 @@ export const submitRestaurantReview = onCall(
 
       // 5. Create review document
       const reviewRef = db.collection('restaurants').doc(restaurantId).collection('food-reviews').doc();
-tx.set(reviewRef, {
-  orderId,
-  buyerId,
-  buyerName,
-  restaurantId,
-  restaurantName: restaurantData.name || '',  // ← add this
-  rating,
-  comment: typeof comment === 'string' ? comment.substring(0, 1000) : '',
-  timestamp: admin.firestore.FieldValue.serverTimestamp(),
-});
+      tx.set(reviewRef, {
+        orderId,
+        buyerId,
+        buyerName,
+        restaurantId,
+        restaurantName: restaurantData.name || '',
+        rating,
+        comment: typeof comment === 'string' ? comment.substring(0, 1000) : '',
+        imageUrls: Array.isArray(request.data.imageUrls) ? request.data.imageUrls.slice(0, 3).filter((u) => typeof u === 'string') : [],
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
 
       // 6. Update restaurant averageRating
       tx.update(restaurantRef, {

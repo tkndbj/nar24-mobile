@@ -13,6 +13,7 @@ class _ReviewData {
   final String comment;
   final String buyerName;
   final Timestamp? timestamp;
+  final List<String> imageUrls;
 
   const _ReviewData({
     required this.id,
@@ -20,6 +21,7 @@ class _ReviewData {
     required this.comment,
     required this.buyerName,
     this.timestamp,
+    this.imageUrls = const [],
   });
 
   factory _ReviewData.fromDoc(DocumentSnapshot doc) {
@@ -30,6 +32,10 @@ class _ReviewData {
       comment: d['comment'] as String? ?? '',
       buyerName: d['buyerName'] as String? ?? '',
       timestamp: d['timestamp'] as Timestamp?,
+      imageUrls: (d['imageUrls'] as List<dynamic>?) // ← ADD
+              ?.whereType<String>()
+              .toList() ??
+          [],
     );
   }
 }
@@ -208,6 +214,7 @@ class _RestaurantReviewsTabState extends State<RestaurantReviewsTab> {
                         child: _ReviewCard(
                           review: r,
                           formattedDate: _formatDate(r.timestamp),
+                          imageUrls: r.imageUrls,
                         ),
                       )),
 
@@ -425,8 +432,13 @@ class _SummaryCard extends StatelessWidget {
 class _ReviewCard extends StatelessWidget {
   final _ReviewData review;
   final String formattedDate;
+  final List<String> imageUrls; // ← ADD
 
-  const _ReviewCard({required this.review, required this.formattedDate});
+  const _ReviewCard({
+    required this.review,
+    required this.formattedDate,
+    this.imageUrls = const [], // ← ADD
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -502,6 +514,60 @@ class _ReviewCard extends StatelessWidget {
                 fontSize: 13,
                 height: 1.5,
                 color: isDark ? Colors.white70 : Colors.grey[700],
+              ),
+            ),
+          ],
+
+          // ── Images ──────────────────────────────────────────────────
+          if (imageUrls.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 64,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: imageUrls.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, i) => GestureDetector(
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => Scaffold(
+                        backgroundColor: Colors.black,
+                        appBar: AppBar(
+                          backgroundColor: Colors.transparent,
+                          elevation: 0,
+                          leading: IconButton(
+                            icon: const Icon(Icons.close, color: Colors.white),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ),
+                        body: Center(
+                          child: InteractiveViewer(
+                            child: Image.network(imageUrls[i]),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      imageUrls[i],
+                      width: 64,
+                      height: 64,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 64,
+                        height: 64,
+                        color:
+                            isDark ? const Color(0xFF2D2B3F) : Colors.grey[200],
+                        child: Icon(Icons.broken_image_rounded,
+                            size: 24,
+                            color:
+                                isDark ? Colors.grey[600] : Colors.grey[400]),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ],

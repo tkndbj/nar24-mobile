@@ -13,6 +13,22 @@ import '../../providers/review_provider.dart';
 import 'review_dialog.dart';
 import '../../models/review_dialog_view_model.dart';
 import 'package:go_router/go_router.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../utils/image_compression_utils.dart';
+
+const int _kMaxImages = 3;
+const int _kMaxFileSizeBytes = 5 * 1024 * 1024; // 5MB
+const List<String> _kValidExtensions = [
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.heic',
+  '.heif',
+  '.webp',
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Local models
@@ -80,6 +96,7 @@ class FoodReview {
   final double rating;
   final String comment;
   final Timestamp timestamp;
+  final List<String> imageUrls;
 
   const FoodReview({
     required this.id,
@@ -90,6 +107,7 @@ class FoodReview {
     required this.rating,
     required this.comment,
     required this.timestamp,
+    required this.imageUrls,
   });
 
   factory FoodReview.fromDoc(DocumentSnapshot doc) {
@@ -103,6 +121,10 @@ class FoodReview {
       rating: (d['rating'] as num?)?.toDouble() ?? 0,
       comment: d['comment'] as String? ?? '',
       timestamp: d['timestamp'] as Timestamp? ?? Timestamp.now(),
+      imageUrls: (d['imageUrls'] as List<dynamic>?) // ← ADD THIS
+              ?.whereType<String>()
+              .toList() ??
+          [],
     );
   }
 }
@@ -574,11 +596,41 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     double localRating = 0;
     final textController = TextEditingController();
+    final List<File> selectedImages = [];
+
+    String? _validateFile(File file) {
+      final size = file.lengthSync();
+      if (size > _kMaxFileSizeBytes) return 'Image must be under 5 MB.';
+      final name = file.path.toLowerCase();
+      final valid = _kValidExtensions.any((ext) => name.endsWith(ext));
+      if (!valid) return 'Only JPG, PNG, HEIC, or WEBP images are allowed.';
+      return null;
+    }
 
     await showCupertinoModalPopup<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) {
+          Future<void> pickImage() async {
+            if (selectedImages.length >= _kMaxImages) return;
+            final picked = await ImagePicker().pickImage(
+              source: ImageSource.gallery,
+              imageQuality: 85,
+            );
+            if (picked == null) return;
+            final file = File(picked.path);
+            final error = _validateFile(file);
+            if (error != null) {
+              if (ctx.mounted) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(content: Text(error), backgroundColor: Colors.red),
+                );
+              }
+              return;
+            }
+            setModalState(() => selectedImages.add(file));
+          }
+
           return GestureDetector(
             onTap: () => FocusScope.of(ctx).unfocus(),
             child: Padding(
@@ -591,7 +643,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                   child: Container(
                     margin: const EdgeInsets.all(16),
                     constraints: BoxConstraints(
-                      maxHeight: MediaQuery.of(ctx).size.height * 0.75,
+                      maxHeight: MediaQuery.of(ctx).size.height * 0.85,
                     ),
                     decoration: BoxDecoration(
                       color: isDark
@@ -661,86 +713,184 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                           ),
                         ),
 
-                        // Items preview
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? Colors.white.withOpacity(0.05)
-                                  : const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              order.itemsPreview,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDark
-                                    ? Colors.grey[400]
-                                    : Colors.grey[600],
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-
-                        // Stars
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: List.generate(
-                              5,
-                              (idx) => GestureDetector(
-                                onTap: () => setModalState(
-                                    () => localRating = (idx + 1).toDouble()),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(4),
-                                  child: Icon(
-                                    idx < localRating
-                                        ? Icons.star_rounded
-                                        : Icons.star_outline_rounded,
-                                    color: Colors.amber,
-                                    size: 32,
+                        Flexible(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Items preview
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? Colors.white.withOpacity(0.05)
+                                        : const Color(0xFFF8FAFC),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    order.itemsPreview,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: isDark
+                                          ? Colors.grey[400]
+                                          : Colors.grey[600],
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                              ),
-                            ),
-                          ),
-                        ),
+                                const SizedBox(height: 16),
 
-                        // Text input
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? const Color.fromARGB(255, 45, 43, 61)
-                                  : Colors.grey.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                  color: isDark
-                                      ? Colors.grey.shade600
-                                      : Colors.grey.shade300),
-                            ),
-                            child: CupertinoTextField(
-                              controller: textController,
-                              placeholder: l10n.pleaseEnterYourReview ??
-                                  'Write your review...',
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 8),
-                              style: TextStyle(
-                                color: isDark ? Colors.white : Colors.black87,
-                                fontSize: 14,
-                              ),
-                              cursorColor: isDark ? Colors.white : Colors.black,
-                              maxLines: 4,
-                              decoration: const BoxDecoration(border: Border()),
+                                // Stars
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: List.generate(
+                                    5,
+                                    (idx) => GestureDetector(
+                                      onTap: () => setModalState(() =>
+                                          localRating = (idx + 1).toDouble()),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(4),
+                                        child: Icon(
+                                          idx < localRating
+                                              ? Icons.star_rounded
+                                              : Icons.star_outline_rounded,
+                                          color: Colors.amber,
+                                          size: 32,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+
+                                // Text input
+                                Container(
+                                  width: double.infinity,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? const Color.fromARGB(255, 45, 43, 61)
+                                        : Colors.grey.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                        color: isDark
+                                            ? Colors.grey.shade600
+                                            : Colors.grey.shade300),
+                                  ),
+                                  child: CupertinoTextField(
+                                    controller: textController,
+                                    placeholder: l10n.pleaseEnterYourReview ??
+                                        'Write your review...',
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 8),
+                                    style: TextStyle(
+                                      color: isDark
+                                          ? Colors.white
+                                          : Colors.black87,
+                                      fontSize: 14,
+                                    ),
+                                    cursorColor:
+                                        isDark ? Colors.white : Colors.black,
+                                    maxLines: 4,
+                                    decoration:
+                                        const BoxDecoration(border: Border()),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+
+                                // Image section
+                                Text(
+                                  'Photos (optional, up to $_kMaxImages)',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark
+                                        ? Colors.grey[400]
+                                        : Colors.grey[600],
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    // Selected image thumbnails
+                                    ...selectedImages.map(
+                                      (file) => Padding(
+                                        padding:
+                                            const EdgeInsets.only(right: 8),
+                                        child: Stack(
+                                          children: [
+                                            ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              child: Image.file(
+                                                file,
+                                                width: 64,
+                                                height: 64,
+                                                fit: BoxFit.cover,
+                                              ),
+                                            ),
+                                            Positioned(
+                                              top: 2,
+                                              right: 2,
+                                              child: GestureDetector(
+                                                onTap: () => setModalState(() =>
+                                                    selectedImages
+                                                        .remove(file)),
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.all(3),
+                                                  decoration:
+                                                      const BoxDecoration(
+                                                    color: Colors.red,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: const Icon(Icons.close,
+                                                      color: Colors.white,
+                                                      size: 12),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+
+                                    // Add button
+                                    if (selectedImages.length < _kMaxImages)
+                                      GestureDetector(
+                                        onTap: pickImage,
+                                        child: Container(
+                                          width: 64,
+                                          height: 64,
+                                          decoration: BoxDecoration(
+                                            border: Border.all(
+                                              color: isDark
+                                                  ? Colors.grey.shade600
+                                                  : Colors.grey.shade300,
+                                              width: 1.5,
+                                            ),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            color: isDark
+                                                ? Colors.white.withOpacity(0.05)
+                                                : Colors.grey.shade50,
+                                          ),
+                                          child: Icon(
+                                            Icons.add_photo_alternate_rounded,
+                                            size: 28,
+                                            color: isDark
+                                                ? Colors.grey[400]
+                                                : Colors.grey[500],
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -780,6 +930,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                                               rating: localRating,
                                               comment:
                                                   textController.text.trim(),
+                                              images: List.from(selectedImages),
                                             );
                                           },
                                     child: Text(
@@ -814,11 +965,53 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
     required FoodPendingReview order,
     required double rating,
     required String comment,
+    List<File> images = const [],
   }) async {
     final l10n = AppLocalizations.of(context);
     _showLoadingModal(l10n);
 
     try {
+      // Upload and moderate images
+      final approvedUrls = <String>[];
+      final storage = FirebaseStorage.instance;
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+
+      for (int i = 0; i < images.length; i++) {
+        // Compress
+        final compressed =
+            await ImageCompressionUtils.ecommerceCompress(images[i]);
+        final fileToUpload = compressed ?? images[i];
+
+        // Upload
+        final path =
+            'restaurant_reviews/${order.restaurantId}/${uid}_${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
+        final ref = storage.ref().child(path);
+        await ref.putFile(fileToUpload);
+        final url = await ref.getDownloadURL();
+
+        // Moderate
+        final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+            .httpsCallable('moderateImage');
+        final result = await callable.call({'imageUrl': url});
+        final data = result.data as Map<String, dynamic>;
+
+        if (data['approved'] == true) {
+          approvedUrls.add(url);
+        } else {
+          // Delete rejected image from storage
+          await ref.delete();
+          if (!mounted) return;
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content:
+                Text('Image ${i + 1} was rejected: inappropriate content.'),
+            backgroundColor: Colors.red,
+          ));
+          return;
+        }
+      }
+
+      // Submit review
       final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
           .httpsCallable('submitRestaurantReview');
 
@@ -827,19 +1020,18 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
         'restaurantId': order.restaurantId,
         'rating': rating,
         'comment': comment,
+        'imageUrls': approvedUrls,
       });
 
       if (!mounted) return;
-      Navigator.of(context).pop(); // close loading modal
+      Navigator.of(context).pop();
 
-      // Optimistic removal from pending list
       setState(() {
         _foodPending.removeWhere((o) => o.id == order.id);
       });
 
       _showSuccessSnackbar(l10n);
 
-      // Reload food reviews in "My Reviews" tab
       setState(() {
         _myFoodReviews.clear();
         _myFoodLastDoc = null;
@@ -1760,6 +1952,45 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                 ),
                 child:
                     Text(review.comment, style: const TextStyle(fontSize: 14)),
+              ),
+            ],
+            if (review.imageUrls.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 80,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: review.imageUrls.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) => GestureDetector(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => Scaffold(
+                          backgroundColor: Colors.black,
+                          appBar: AppBar(
+                            backgroundColor: Colors.transparent,
+                            elevation: 0,
+                            leading: const BackButton(color: Colors.white),
+                          ),
+                          body: Center(
+                            child: InteractiveViewer(
+                              child: Image.network(review.imageUrls[i]),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        review.imageUrls[i],
+                        width: 80,
+                        height: 80,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ],
             const SizedBox(height: 8),

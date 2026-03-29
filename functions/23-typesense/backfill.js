@@ -191,6 +191,7 @@ async function backfillCollection(client, firestoreCollection, typesenseCollecti
       console.log(`  Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batchSuccess}/${batch.length} succeeded`);
     } catch (e) {
       console.error(`  Batch error:`, e.message);
+      if (e.importResults) console.error('  Import details:', JSON.stringify(e.importResults, null, 2));
       failed += batch.length;
     }
   }
@@ -312,6 +313,29 @@ async function main() {
       d.minOrderPricesJson = JSON.stringify(data.minOrderPrices);
     } else {
       d.deliveryRegions = ['__ALL__'];
+    }
+
+    const ts = toUnixSeconds(data.createdAt);
+    if (ts != null) d.createdAt = ts;
+
+    return d;
+  });
+
+  await backfillCollection(client, 'foods', 'foods', (id, data) => {
+    const d = {id: `foods_${id}`};
+    const pick = (key) => {if (data[key] != null) d[key] = data[key];};
+
+    pick('name');
+    pick('description');
+    pick('price');
+    pick('foodCategory');
+    pick('foodType');
+    pick('imageUrl');
+    pick('isAvailable');
+    pick('preparationTime');
+    pick('restaurantId');
+    if (Array.isArray(data.extras) && data.extras.length > 0) {
+      d.extras = data.extras.map((e) => typeof e === 'string' ? e : e.name).filter(Boolean);
     }
 
     const ts = toUnixSeconds(data.createdAt);
