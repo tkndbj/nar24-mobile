@@ -89,11 +89,15 @@ class TypeSenseServiceManager {
   // and doesn't need to be pre-warmed like the others.
 
   void resetServices() {
+    _mainService?.dispose();
+    _shopService?.dispose();
+    _ordersService?.dispose();
+    _shopsService?.dispose();
     _mainService = null;
     _shopService = null;
     _ordersService = null;
     _shopsService = null;
-    _restaurantService?.dispose(); // ← clean up debounce timer
+    _restaurantService?.dispose();
     _restaurantService = null;
   }
 

@@ -196,11 +196,10 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
           // Insert new open items before the closed section,
           // append new closed items at the end — avoids re-sorting
           // the entire list and prevents visible shifts.
-          final firstClosedIdx = _restaurants.indexWhere(
-              (r) => !isRestaurantOpen(r));
-          final insertAt = firstClosedIdx == -1
-              ? _restaurants.length
-              : firstClosedIdx;
+          final firstClosedIdx =
+              _restaurants.indexWhere((r) => !isRestaurantOpen(r));
+          final insertAt =
+              firstClosedIdx == -1 ? _restaurants.length : firstClosedIdx;
 
           final newOpen = <Restaurant>[];
           final newClosed = <Restaurant>[];

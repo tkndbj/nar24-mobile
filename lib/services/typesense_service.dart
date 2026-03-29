@@ -8,6 +8,7 @@ import '../models/product.dart';
 import '../models/product_summary.dart';
 import '../models/category_suggestion.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:http/io_client.dart';
 
 class TypeSensePage {
   final List<String> ids;
@@ -31,6 +32,7 @@ class TypeSenseService {
   // Typesense connection details – set in TypesenseServiceManager
   final String _host;
   final String _searchKey;
+  late final http.Client _client;
 
   TypeSenseService({
     required this.applicationId,
@@ -40,7 +42,15 @@ class TypeSenseService {
     required String typesenseHost,
     required String typesenseSearchKey,
   })  : _host = typesenseHost,
-        _searchKey = typesenseSearchKey;
+        _searchKey = typesenseSearchKey {
+    // Scoped SSL bypass for old Android devices that don't trust
+    // newer root CAs. Strictly limited to *.typesense.net.
+    final inner = HttpClient()
+      ..badCertificateCallback = (cert, host, port) {
+        return host.endsWith('.typesense.net');
+      };
+    _client = IOClient(inner);
+  }
 
   Timer? _productDebounceTimer;
   final Duration _debounceDuration = const Duration(milliseconds: 300);
@@ -132,7 +142,7 @@ class TypeSenseService {
     return await _retryOptions.retry(
       () async {
         try {
-          final response = await http
+          final response = await _client
               .get(uri.replace(queryParameters: params), headers: _headers)
               .timeout(const Duration(seconds: 5));
 
@@ -286,7 +296,7 @@ class TypeSenseService {
       };
 
       return await _retryOptions.retry(() async {
-        final response = await http
+        final response = await _client
             .get(uri.replace(queryParameters: params), headers: _headers)
             .timeout(const Duration(seconds: 5));
 
@@ -331,7 +341,7 @@ class TypeSenseService {
         'page': (page + 1).toString(),
       };
 
-      final response = await http
+      final response = await _client
           .get(uri.replace(queryParameters: params), headers: _headers)
           .timeout(const Duration(seconds: 10));
 
@@ -366,7 +376,7 @@ class TypeSenseService {
         'page': (page + 1).toString(),
       };
 
-      final response = await http
+      final response = await _client
           .get(uri.replace(queryParameters: params), headers: _headers)
           .timeout(const Duration(seconds: 10));
 
@@ -451,7 +461,8 @@ class TypeSenseService {
     if (includeFields != null) {
       params['include_fields'] = includeFields;
     } else {
-      params['include_fields'] = 'id,productName,price,originalPrice,discountPercentage,brandModel,'
+      params['include_fields'] =
+          'id,productName,price,originalPrice,discountPercentage,brandModel,'
           'category,subcategory,subsubcategory,gender,availableColors,colorImagesJson,colorQuantitiesJson,'
           'shopId,ownerId,userId,promotionScore,createdAt,imageUrls,'
           'sellerName,condition,currency,quantity,averageRating,reviewCount,'
@@ -469,7 +480,7 @@ class TypeSenseService {
     try {
       final resp = await _retryOptions.retry(
         () async {
-          final r = await http
+          final r = await _client
               .get(uri.replace(queryParameters: params), headers: _headers)
               .timeout(const Duration(seconds: 5));
           if (r.statusCode >= 500) {
@@ -539,19 +550,17 @@ class TypeSenseService {
       // those products belong to.
       final params = <String, String>{
         'q': query.trim(),
-        'query_by':
-            'category_$lang,subcategory_$lang,subsubcategory_$lang,'
-                'category_en,subcategory_en,subsubcategory_en,'
-                'productName',
+        'query_by': 'category_$lang,subcategory_$lang,subsubcategory_$lang,'
+            'category_en,subcategory_en,subsubcategory_en,'
+            'productName',
         'per_page': '50', // over-fetch to get diverse categories
-        'include_fields':
-            'category,subcategory,subsubcategory,'
-                'category_en,category_tr,category_ru,'
-                'subcategory_en,subcategory_tr,subcategory_ru,'
-                'subsubcategory_en,subsubcategory_tr,subsubcategory_ru',
+        'include_fields': 'category,subcategory,subsubcategory,'
+            'category_en,category_tr,category_ru,'
+            'subcategory_en,subcategory_tr,subcategory_ru,'
+            'subsubcategory_en,subsubcategory_tr,subsubcategory_ru',
       };
 
-      final response = await http
+      final response = await _client
           .get(uri.replace(queryParameters: params), headers: _headers)
           .timeout(const Duration(seconds: 3));
 
@@ -564,8 +573,8 @@ class TypeSenseService {
       final results = <CategorySuggestion>[];
 
       for (final h in hits) {
-        final doc = (h as Map<String, dynamic>)['document']
-            as Map<String, dynamic>?;
+        final doc =
+            (h as Map<String, dynamic>)['document'] as Map<String, dynamic>?;
         if (doc == null) continue;
 
         final category = doc['category']?.toString() ?? '';
@@ -767,7 +776,7 @@ class TypeSenseService {
     try {
       final resp = await _retryOptions.retry(
         () async {
-          final r = await http
+          final r = await _client
               .get(uri.replace(queryParameters: params), headers: _headers)
               .timeout(const Duration(seconds: 5));
           if (r.statusCode >= 500) {
@@ -819,7 +828,7 @@ class TypeSenseService {
   Future<bool> isServiceReachable() async {
     try {
       final uri = _searchUri(mainIndexName);
-      final response = await http
+      final response = await _client
           .get(
             uri.replace(
                 queryParameters: {'q': '*', 'query_by': 'id', 'per_page': '1'}),
@@ -831,5 +840,10 @@ class TypeSenseService {
       debugPrint('Typesense unreachable: $e');
       return false;
     }
+  }
+
+  void dispose() {
+    _productDebounceTimer?.cancel();
+    _client.close();
   }
 }

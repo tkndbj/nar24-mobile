@@ -2,9 +2,11 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io'; // ← keep only once
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:http/http.dart'
+    as http; // ← this was missing — needed for http.Client
+import 'package:http/io_client.dart'; // ← keep this
 import 'package:retry/retry.dart';
 import '../models/restaurant.dart';
 import '../models/food.dart';
@@ -152,6 +154,17 @@ class RestaurantTypesenseService {
         'Cache-Control': 'no-cache, no-store',
       };
 
+  // ── Custom HTTP client ───────────────────────────────────────────────────
+  // Old Android devices (pre-7.1) don't trust newer root CAs used by
+  // Typesense Cloud. We scope the bypass strictly to *.typesense.net.
+  http.Client _buildClient() {
+    final inner = HttpClient()
+      ..badCertificateCallback = (cert, host, port) {
+        return host.endsWith('.typesense.net');
+      };
+    return IOClient(inner);
+  }
+
   // ── Sort mappings ───────────────────────────────────────────────────────
 
   String _restaurantSortBy(RestaurantSortOption sort) {
@@ -202,30 +215,37 @@ class RestaurantTypesenseService {
     Map<String, String> params,
   ) async {
     final uri = _searchUri(collection).replace(queryParameters: params);
+    final client = _buildClient(); // ← use custom client
 
-    return _retryOptions.retry(
-      () async {
-        final response = await http
-            .get(uri, headers: _headers)
-            .timeout(const Duration(seconds: 5));
+    try {
+      return await _retryOptions.retry(
+        () async {
+          final response = await client
+              .get(uri, headers: _headers)
+              .timeout(const Duration(seconds: 5));
 
-        if (response.statusCode >= 500) {
-          throw HttpException('Typesense server error: ${response.statusCode}',
-              uri: uri);
-        }
-        if (response.statusCode != 200) {
-          debugPrint(
-              '[RestaurantTypesense] ${response.statusCode} on $collection: ${response.body}');
-          return <String, dynamic>{'hits': [], 'found': 0};
-        }
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      },
-      retryIf: (e) =>
-          e is SocketException ||
-          e is TimeoutException ||
-          e is HttpException ||
-          e.toString().contains('Failed host lookup'),
-    );
+          if (response.statusCode >= 500) {
+            throw HttpException(
+                'Typesense server error: ${response.statusCode}',
+                uri: uri);
+          }
+          if (response.statusCode != 200) {
+            debugPrint(
+                '[RestaurantTypesense] ${response.statusCode} on $collection: ${response.body}');
+            return <String, dynamic>{'hits': [], 'found': 0};
+          }
+          return jsonDecode(response.body) as Map<String, dynamic>;
+        },
+        retryIf: (e) =>
+            e is SocketException ||
+            e is TimeoutException ||
+            e is HttpException ||
+            e is HandshakeException || // ← also retry on TLS errors
+            e.toString().contains('Failed host lookup'),
+      );
+    } finally {
+      client.close(); // ← always clean up
+    }
   }
 
   // ── Filter builder ──────────────────────────────────────────────────────
@@ -269,7 +289,8 @@ class RestaurantTypesenseService {
     }
 
     if (deliveryRegions != null && deliveryRegions.isNotEmpty) {
-      final orParts = deliveryRegions.map((r) => 'deliveryRegions:=`$r`').toList();
+      final orParts =
+          deliveryRegions.map((r) => 'deliveryRegions:=`$r`').toList();
       orParts.add('deliveryRegions:=`__ALL__`');
       filterParts.add('(${orParts.join(' || ')})');
     }
@@ -625,19 +646,22 @@ class RestaurantTypesenseService {
   // ============================================================================
 
   Future<bool> isServiceReachable() async {
+    final client = _buildClient(); // ← use custom client
     try {
       final uri = _searchUri('restaurants').replace(queryParameters: {
         'q': '*',
         'query_by': 'name',
         'per_page': '1',
       });
-      final response = await http
+      final response = await client
           .get(uri, headers: _headers)
           .timeout(const Duration(seconds: 5));
       return response.statusCode < 500;
     } catch (e) {
       debugPrint('[RestaurantTypesense] unreachable: $e');
       return false;
+    } finally {
+      client.close();
     }
   }
 
