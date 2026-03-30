@@ -386,10 +386,12 @@ async function createFoodOrderCore(buyerId, requestData, paymentOrderId = null) 
 
       // Restaurant
       restaurantId,
-      restaurantName: restaurantData.name || '',
-      restaurantOwnerId: restaurantData.ownerId || '',
-      restaurantPhone: restaurantData.contactNo || '',
-      restaurantProfileImage: restaurantData.profileImageUrl || '',
+restaurantName: restaurantData.name || '',
+restaurantOwnerId: restaurantData.ownerId || '',
+restaurantPhone: restaurantData.contactNo || '',
+restaurantProfileImage: restaurantData.profileImageUrl || '',
+restaurantLat: restaurantData.latitude || null,
+restaurantLng: restaurantData.longitude || null,
 
       // Items (embedded array — food orders are typically small)
       items: validatedItems,
