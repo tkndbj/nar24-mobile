@@ -1113,6 +1113,7 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab> with AutomaticKeepAl
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _stream;
   final _scrollController = ScrollController();
   final Map<String, GlobalKey> _cardKeys = {};
+  final Set<String> _removedLocally = {};
 
     @override
   bool get wantKeepAlive => true;
@@ -1162,6 +1163,7 @@ if (snap.hasError) {
 }
 
 final docs = [...(snap.data?.docs ?? [])]
+  ..removeWhere((d) => _removedLocally.contains(d.id))
   ..sort((a, b) {
     final aTs = a.data()['assignedAt'] as Timestamp?;
     final bTs = b.data()['assignedAt'] as Timestamp?;
@@ -1203,13 +1205,14 @@ final docs = [...(snap.data?.docs ?? [])]
             return Padding(
               key: _cardKeys[docId],
               padding: const EdgeInsets.only(bottom: 16),
-              child: _CargoOrderCard(
+                   child: _CargoOrderCard(
                 orderId: docId,
                 data: docs[i].data(),
                 isDark: widget.isDark,
                 isPool: false,
                 currentUser: widget.currentUser,
                 isHighlighted: isHit,
+                onDeliveredLocally: () => setState(() => _removedLocally.add(docId)),
               ),
             );
           },
@@ -1230,6 +1233,7 @@ class _CargoOrderCard extends StatefulWidget {
   final bool isPool;
   final User currentUser;
   final bool isHighlighted;
+  final VoidCallback? onDeliveredLocally;
 
   const _CargoOrderCard({
     required this.orderId,
@@ -1238,6 +1242,7 @@ class _CargoOrderCard extends StatefulWidget {
     required this.isPool,
     required this.currentUser,
     this.isHighlighted = false,
+    this.onDeliveredLocally,
   });
 
   @override
@@ -1386,7 +1391,8 @@ Future<void> _markDelivered() async {
         .doc(widget.orderId)
         .update({'paymentReceivedMethod': paymentMethod});
 
-    CourierLocationService.instance.updateCurrentOrder(null);
+     CourierLocationService.instance.updateCurrentOrder(null);
+    widget.onDeliveredLocally?.call();
     if (mounted) _showSnack(loc.foodCargoDeliveredSuccess);
   } catch (e) {
     if (mounted) {
