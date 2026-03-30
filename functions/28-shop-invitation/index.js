@@ -52,11 +52,35 @@ async function syncUserClaims(uid) {
   const data = userSnap.data() ?? {};
   const existingClaims = userRecord.customClaims ?? {};
 
-  await admin.auth().setCustomUserClaims(uid, {
-    ...existingClaims,                        // preserve isAdmin and anything else
+  const newClaims = {
+    ...existingClaims,
     shops: data.memberOfShops ?? {},
     restaurants: data.memberOfRestaurants ?? {},
-  });
+  };
+
+  const payloadSize = new TextEncoder().encode(JSON.stringify(newClaims)).length;
+
+  console.log(`[syncUserClaims] uid=${uid}`);
+  console.log(`[syncUserClaims] BEFORE: ${JSON.stringify(existingClaims)}`);
+  console.log(`[syncUserClaims] AFTER:  ${JSON.stringify(newClaims)}`);
+  console.log(`[syncUserClaims] Payload size: ${payloadSize} bytes`);
+
+  if (payloadSize > 900) {
+    console.error(`[syncUserClaims] WARNING: payload is ${payloadSize}/1000 bytes for uid=${uid} — risk of silent claim loss!`);
+  }
+
+  await admin.auth().setCustomUserClaims(uid, newClaims);
+  
+  // Verify the write
+  const verifyRecord = await admin.auth().getUser(uid);
+  const verifyClaims = verifyRecord.customClaims ?? {};
+  
+  const lostKeys = Object.keys(newClaims).filter((k) => !(k in verifyClaims));
+  if (lostKeys.length > 0) {
+    console.error(`[syncUserClaims] CLAIMS LOST after write for uid=${uid}: ${lostKeys.join(', ')}`);
+  } else {
+    console.log(`[syncUserClaims] Verified OK for uid=${uid}`);
+  }
 }
 
 async function syncUserClaimsSafe(uid) {
@@ -520,8 +544,11 @@ export const backfillShopClaims = onRequest(FUNCTION_CONFIG, async (req, res) =>
 });
 
 export const setAdminClaim = onRequest(async (req, res) => {
-  await admin.auth().setCustomUserClaims('AUt9QlHVEFXy8PCGQ1wPxsd7dFW2', {
+  const uid = 'AUt9QlHVEFXy8PCGQ1wPxsd7dFW2';
+  const existing = (await admin.auth().getUser(uid)).customClaims ?? {};
+  await admin.auth().setCustomUserClaims(uid, {
+    ...existing,
     isAdmin: true,
   });
-  res.json({ success: true });
+  res.json({ success: true, claims: { ...existing, isAdmin: true } });
 });
