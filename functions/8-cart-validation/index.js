@@ -149,35 +149,44 @@ export const validateCartCheckout = onCall(
       currency: 'TL',
     };
 
-    const productIds = cartItems.map((item) => item.productId);
     const productMap = new Map();
 
-    const fetchBatch = async (batchIds) => {
-      if (batchIds.length === 0) return [];
-      
-      const snapshot = await admin.firestore()
-        .collection('shop_products')
-        .where(admin.firestore.FieldPath.documentId(), 'in', batchIds)
-        .get();
-      
-      return snapshot.docs.map((doc) => ({id: doc.id, ...doc.data()}));
-    };
-
-    const batches = [];
-    for (let i = 0; i < productIds.length; i += 10) {
-      batches.push(productIds.slice(i, i + 10));
+    const itemsBySource = { 'shop_products': [], 'products': [] };
+    for (const item of cartItems) {
+      const source = item.productSource || 'shop_products';
+      if (!itemsBySource[source]) itemsBySource[source] = [];
+      itemsBySource[source].push(item.productId);
     }
-
-    const fetchPromises = batches.map((batch) => fetchBatch(batch));
-    const results = await Promise.all(fetchPromises);
-
-    results.forEach((products) => {
-      products.forEach((product) => {
-        productMap.set(product.id, product);
-      });
+    
+    const fetchFromCollection = async (collection, ids) => {
+      if (ids.length === 0) return [];
+      const batches = [];
+      for (let i = 0; i < ids.length; i += 10) {
+        batches.push(ids.slice(i, i + 10));
+      }
+      const snapshots = await Promise.all(
+        batches.map((batch) =>
+          admin.firestore()
+            .collection(collection)
+            .where(admin.firestore.FieldPath.documentId(), 'in', batch)
+            .get()
+        )
+      );
+      return snapshots.flatMap((snap) =>
+        snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+      );
+    };
+    
+    const [shopProducts, userProducts] = await Promise.all([
+      fetchFromCollection('shop_products', itemsBySource['shop_products']),
+      fetchFromCollection('products', itemsBySource['products']),
+    ]);
+    
+    [...shopProducts, ...userProducts].forEach((product) => {
+      productMap.set(product.id, product);
     });
-
-    console.log(`📦 Fetched ${productMap.size} products (${batches.length} parallel batches)`);
+    
+    console.log(`📦 Fetched ${productMap.size} products (shop_products: ${itemsBySource['shop_products'].length}, products: ${itemsBySource['products'].length})`);
 
     // ============================================================
     // 4. VALIDATE EACH CART ITEM
@@ -417,8 +426,10 @@ if (cachedBundlePrice !== undefined && cachedBundlePrice !== null && cachedBundl
           const chunk = cartItems.slice(i, i + TRANSACTION_CHUNK_SIZE);
           
           await admin.firestore().runTransaction(async (transaction) => {
-            const productRefs = chunk.map((item) => 
-              admin.firestore().collection('shop_products').doc(item.productId),
+            const productRefs = chunk.map((item) =>
+              admin.firestore()
+                .collection(item.productSource || 'shop_products')
+                .doc(item.productId),
             );
             
             const productDocs = await Promise.all(

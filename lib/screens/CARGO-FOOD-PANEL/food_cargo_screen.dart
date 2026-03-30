@@ -74,6 +74,7 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
   bool _notifPanelOpen = false;
   final _localReadController = BehaviorSubject<DateTime?>.seeded(null);
   Stream<int>? _unreadCountStream;
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _courierNotifsStream;
   late final TabController _tabController;
   String? _highlightedOrderId;
 
@@ -81,8 +82,15 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _setupFcm();
-    _setupUnreadStream();
+  _courierNotifsStream = FirebaseFirestore.instance
+    .collection('food_courier_notifications')
+    .where('isActive', isEqualTo: true)
+    .orderBy('createdAt', descending: true)
+    .limit(30)
+    .snapshots()
+    .asBroadcastStream(); // allows multiple listeners on one connection
+_setupFcm();
+_setupUnreadStream();
     CourierLocationService.instance.startTracking(); // ← ADD THIS
   }
 
@@ -200,10 +208,7 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    final notifsStream = FirebaseFirestore.instance
-        .collection('food_courier_notifications')
-        .where('isActive', isEqualTo: true)
-        .snapshots();
+    final notifsStream = _courierNotifsStream;
 
     final readStream = FirebaseFirestore.instance
         .collection('courier_notification_reads')
@@ -356,11 +361,12 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
               ),
             ],
           ),
-          if (_notifPanelOpen)
-            _NotificationPanel(
-              isDark: isDark,
-              onClose: () => setState(() => _notifPanelOpen = false),
-            ),
+         if (_notifPanelOpen)
+  _NotificationPanel(
+    isDark: isDark,
+    onClose: () => setState(() => _notifPanelOpen = false),
+    notifsStream: _courierNotifsStream,
+  ),
         ],
       ),
     );
@@ -374,7 +380,12 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
 class _NotificationPanel extends StatelessWidget {
   final bool isDark;
   final VoidCallback onClose;
-  const _NotificationPanel({required this.isDark, required this.onClose});
+  final Stream<QuerySnapshot<Map<String, dynamic>>> notifsStream;
+  const _NotificationPanel({
+    required this.isDark,
+    required this.onClose,
+    required this.notifsStream,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -432,12 +443,7 @@ class _NotificationPanel extends StatelessWidget {
                   const Divider(height: 16),
                   Expanded(
                     child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: FirebaseFirestore.instance
-                          .collection('food_courier_notifications')
-                          .where('isActive', isEqualTo: true)
-                          .orderBy('createdAt', descending: true)
-                          .limit(30)
-                          .snapshots(),
+                     stream: notifsStream,
                       builder: (context, snap) {
                         if (snap.connectionState == ConnectionState.waiting) {
                           return const Center(
@@ -665,28 +671,31 @@ class _PoolTab extends StatefulWidget {
   State<_PoolTab> createState() => _PoolTabState();
 }
 
-class _PoolTabState extends State<_PoolTab> {
+class _PoolTabState extends State<_PoolTab> with AutomaticKeepAliveClientMixin {
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _ordersStream;
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _callsStream;
 
   @override
-  void initState() {
-    super.initState();
-    _ordersStream = FirebaseFirestore.instance
-        .collection('orders-food')
-        .where('status', isEqualTo: 'ready')
-        .orderBy('updatedAt', descending: false)
-        .snapshots();
+void initState() {
+  super.initState();
+  // Remove orderBy — avoids composite index requirement, sort client-side below
+  _ordersStream = FirebaseFirestore.instance
+      .collection('orders-food')
+      .where('status', isEqualTo: 'ready')
+      .snapshots();
 
-    _callsStream = FirebaseFirestore.instance
-        .collection('courier_calls')
-        .where('isActive', isEqualTo: true)
-        .orderBy('createdAt', descending: false)
-        .snapshots();
-  }
+  _callsStream = FirebaseFirestore.instance
+      .collection('courier_calls')
+      .where('isActive', isEqualTo: true)
+      .snapshots();
+}
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   Widget build(BuildContext context) {
+     super.build(context);
     final loc = AppLocalizations.of(context);
     final myUid = widget.currentUser.uid;
 
@@ -714,7 +723,14 @@ class _PoolTabState extends State<_PoolTab> {
               return _ErrorView(message: orderSnap.error.toString());
             }
 
-            final orderDocs = orderSnap.data?.docs ?? [];
+            final orderDocs = [...(orderSnap.data?.docs ?? [])]
+  ..sort((a, b) {
+    final aTs = a.data()['updatedAt'] as Timestamp?;
+    final bTs = b.data()['updatedAt'] as Timestamp?;
+    if (aTs == null) return 1;
+    if (bTs == null) return -1;
+    return aTs.compareTo(bTs); // oldest first
+  });
             final hasContent = visibleCalls.isNotEmpty || orderDocs.isNotEmpty;
 
             if (!hasContent) {
@@ -1093,21 +1109,35 @@ class _MyDeliveriesTab extends StatefulWidget {
   State<_MyDeliveriesTab> createState() => _MyDeliveriesTabState();
 }
 
-class _MyDeliveriesTabState extends State<_MyDeliveriesTab> {
+class _MyDeliveriesTabState extends State<_MyDeliveriesTab> with AutomaticKeepAliveClientMixin {
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _stream;
   final _scrollController = ScrollController();
   final Map<String, GlobalKey> _cardKeys = {};
 
+    @override
+  bool get wantKeepAlive => true;
+
   @override
   void initState() {
     super.initState();
+   _stream = FirebaseFirestore.instance
+    .collection('orders-food')
+    .where('cargoUserId', isEqualTo: widget.currentUser.uid)
+    .where('status', isEqualTo: 'out_for_delivery')
+    .snapshots();
+  }
+
+  @override
+void didUpdateWidget(_MyDeliveriesTab old) {
+  super.didUpdateWidget(old);
+  if (old.currentUser.uid != widget.currentUser.uid) {
     _stream = FirebaseFirestore.instance
         .collection('orders-food')
         .where('cargoUserId', isEqualTo: widget.currentUser.uid)
         .where('status', isEqualTo: 'out_for_delivery')
-        .orderBy('assignedAt', descending: false)
         .snapshots();
   }
+}
 
   @override
   void dispose() {
@@ -1117,16 +1147,28 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final loc = AppLocalizations.of(context);
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: _stream,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const _Loader();
-        }
+  return const _Loader();
+}
 
-        final docs = snap.data?.docs ?? [];
+if (snap.hasError) {
+  return _ErrorView(message: 'Teslimatlar yüklenemedi: ${snap.error}');
+}
+
+final docs = [...(snap.data?.docs ?? [])]
+  ..sort((a, b) {
+    final aTs = a.data()['assignedAt'] as Timestamp?;
+    final bTs = b.data()['assignedAt'] as Timestamp?;
+    if (aTs == null) return 1;
+    if (bTs == null) return -1;
+    return aTs.compareTo(bTs);
+  });
 
         if (docs.isEmpty) {
           return _EmptyState(
@@ -1321,27 +1363,116 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
     }
   }
 
-  Future<void> _markDelivered() async {
-    final loc = AppLocalizations.of(context);
-    setState(() => _loading = true);
-    try {
-      final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-          .httpsCallable('updateFoodOrderStatus');
-      await callable.call({
-        'orderId': widget.orderId,
-        'newStatus': 'delivered',
-      });
-      CourierLocationService.instance.updateCurrentOrder(null);
-      if (mounted) _showSnack(loc.foodCargoDeliveredSuccess);
-    } catch (e) {
-      if (mounted) {
-        _showSnack(AppLocalizations.of(context).foodCargoAssignError,
-            isError: true);
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
+Future<void> _markDelivered() async {
+  final loc = AppLocalizations.of(context);
+
+  // ── Step 1: Ask courier how customer paid ──────────────────────
+  final paymentMethod = await _showPaymentSheet();
+  if (paymentMethod == null || !mounted) return; // courier dismissed — do nothing
+
+  setState(() => _loading = true);
+  try {
+    // ── Step 2: Mark order as delivered via Cloud Function ─────────
+    final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+        .httpsCallable('updateFoodOrderStatus');
+    await callable.call({
+      'orderId': widget.orderId,
+      'newStatus': 'delivered',
+    });
+
+    // ── Step 3: Save the collected payment method ──────────────────
+    await FirebaseFirestore.instance
+        .collection('orders-food')
+        .doc(widget.orderId)
+        .update({'paymentReceivedMethod': paymentMethod});
+
+    CourierLocationService.instance.updateCurrentOrder(null);
+    if (mounted) _showSnack(loc.foodCargoDeliveredSuccess);
+  } catch (e) {
+    if (mounted) {
+      _showSnack(AppLocalizations.of(context).foodCargoAssignError, isError: true);
     }
+  } finally {
+    if (mounted) setState(() => _loading = false);
   }
+}
+
+// ── ADD this new helper method right below _markDelivered ──────────
+Future<String?> _showPaymentSheet() {
+  final isDark = widget.isDark;
+  return showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (_) => Container(
+      padding: EdgeInsets.fromLTRB(24, 20, 24, 32 + MediaQuery.of(context).padding.bottom),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF211F31) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Drag handle
+          Center(
+            child: Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.grey[700] : Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Müşteri Nasıl Ödedi?',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : Colors.grey[900],
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Ödeme yöntemini seçin',
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? Colors.grey[500] : Colors.grey[500],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              _PaymentOptionBtn(
+                emoji: '💳',
+                label: 'Kart',
+                color: Colors.blue,
+                isDark: isDark,
+                onTap: () => Navigator.of(context).pop('card'),
+              ),
+              const SizedBox(width: 12),
+              _PaymentOptionBtn(
+                emoji: '💵',
+                label: 'Nakit',
+                color: Colors.green,
+                isDark: isDark,
+                onTap: () => Navigator.of(context).pop('cash'),
+              ),
+              const SizedBox(width: 12),
+              _PaymentOptionBtn(
+                emoji: '🏦',
+                label: 'IBAN',
+                color: Colors.purple,
+                isDark: isDark,
+                onTap: () => Navigator.of(context).pop('iban'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
   Future<void> _callPhone() async {
     final phone = _customerPhone;
@@ -1788,6 +1919,54 @@ class _InfoRow extends StatelessWidget {
                       (isDark ? Colors.grey[200] : Colors.grey[800]))),
         ),
       ],
+    );
+  }
+}
+
+class _PaymentOptionBtn extends StatelessWidget {
+  final String emoji;
+  final String label;
+  final Color color;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _PaymentOptionBtn({
+    required this.emoji,
+    required this.label,
+    required this.color,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          decoration: BoxDecoration(
+            color: color.withOpacity(isDark ? 0.12 : 0.07),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 26)),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

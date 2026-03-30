@@ -107,6 +107,12 @@ function initAggregate(restaurantId, restaurantName) {
       card: { count: 0, amount: 0 },
       pay_at_door: { count: 0, amount: 0 },
     },
+    paymentReceivedBreakdown: {
+      card: { count: 0, amount: 0 },
+      cash: { count: 0, amount: 0 },
+      iban: { count: 0, amount: 0 },
+      unknown: { count: 0, amount: 0 }, // delivered orders where courier didn't record it
+    },
     deliveryTypeBreakdown: {
       delivery: { count: 0, amount: 0 },
       pickup: { count: 0, amount: 0 },
@@ -156,6 +162,18 @@ function accumulateOrder(agg, order) {
   const pKey = payment === 'card' ? 'card' : 'pay_at_door';
   agg.paymentBreakdown[pKey].count++;
   agg.paymentBreakdown[pKey].amount = round2(agg.paymentBreakdown[pKey].amount + total);
+
+  // ── Payment received breakdown (delivered orders only) ────────────────────
+if (status === COMPLETED_STATUS) {
+  const received = order.paymentReceivedMethod;
+  const rKey = (received === 'card' || received === 'cash' || received === 'iban') ?
+    received :
+    'unknown';
+  agg.paymentReceivedBreakdown[rKey].count++;
+  agg.paymentReceivedBreakdown[rKey].amount = round2(
+    agg.paymentReceivedBreakdown[rKey].amount + total
+  );
+}
 
   // ── Delivery type breakdown ───────────────────────────────────────────────
   const dKey = delType === 'pickup' ? 'pickup' : 'delivery';
@@ -215,6 +233,16 @@ function rollupToPlatform(platform, restaurant) {
     platform.statusBreakdown[sKey].count  += v.count;
     platform.statusBreakdown[sKey].amount  = round2(
       platform.statusBreakdown[sKey].amount + v.amount
+    );
+  }
+
+  for (const [rKey, v] of Object.entries(restaurant.paymentReceivedBreakdown)) {
+    if (!platform.paymentReceivedBreakdown[rKey]) {
+      platform.paymentReceivedBreakdown[rKey] = { count: 0, amount: 0 };
+    }
+    platform.paymentReceivedBreakdown[rKey].count  += v.count;
+    platform.paymentReceivedBreakdown[rKey].amount  = round2(
+      platform.paymentReceivedBreakdown[rKey].amount + v.amount
     );
   }
 

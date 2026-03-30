@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:intl/intl.dart';
 import '../../generated/l10n/app_localizations.dart';
+import '../../utils/food_localization.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DATA MODELS (screen-local, richer than the list model)
@@ -1067,7 +1068,7 @@ class _FoodOrderDetailScreenState extends State<FoodOrderDetailScreen>
                           ),
                           child: Text(
                             [
-                              ext.name,
+                              localizeExtra(ext.name, l10n),
                               if (ext.quantity > 1) '×${ext.quantity}',
                               if (ext.price > 0)
                                 '+${_formatCurrency(ext.price)} ${_order!.currency}',

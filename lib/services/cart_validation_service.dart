@@ -28,7 +28,7 @@ class CartValidationService {
           'productId': item['productId'],
           'quantity': item['quantity'] ?? 1,
           'selectedColor': cartData['selectedColor'],
-
+          'productSource': cartData['productSource'] ?? 'shop_products',
           // ✅ Extract cached values (null if not present)
           'cachedPrice': cartData['cachedPrice'],
           'cachedBundlePrice': cartData['cachedBundlePrice'],

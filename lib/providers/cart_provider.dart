@@ -370,27 +370,28 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
     await updateTotalsForExcluded(excludedIds);
   }
 
-  void _sortCartItems(List<Map<String, dynamic>> items) {
-    items.sort((a, b) {
-      final sellerA = a['sellerId'] as String? ?? '';
-      final sellerB = b['sellerId'] as String? ?? '';
-      if (sellerA != sellerB) return sellerA.compareTo(sellerB);
+void _sortCartItems(List<Map<String, dynamic>> items) {
+  items.sort((a, b) {
+    // Use shopId for shop items, sellerId for individual sellers
+    final sellerA = (a['cartData']?['shopId'] as String?) ?? (a['sellerId'] as String? ?? '');
+    final sellerB = (b['cartData']?['shopId'] as String?) ?? (b['sellerId'] as String? ?? '');
+    if (sellerA != sellerB) return sellerA.compareTo(sellerB);
 
-      final cartDataA = a['cartData'] as Map<String, dynamic>;
-      final cartDataB = b['cartData'] as Map<String, dynamic>;
-      final dateA = cartDataA['addedAt'] as Timestamp?;
-      final dateB = cartDataB['addedAt'] as Timestamp?;
-      if (dateA == null || dateB == null) return 0;
-      return dateB.compareTo(dateA);
-    });
+    final cartDataA = a['cartData'] as Map<String, dynamic>;
+    final cartDataB = b['cartData'] as Map<String, dynamic>;
+    final dateA = cartDataA['addedAt'] as Timestamp?;
+    final dateB = cartDataB['addedAt'] as Timestamp?;
+    if (dateA == null || dateB == null) return 0;
+    return dateB.compareTo(dateA);
+  });
 
-    String? lastSeller;
-    for (final item in items) {
-      final sellerId = item['sellerId'] as String? ?? '';
-      item['showSellerHeader'] = sellerId != lastSeller;
-      lastSeller = sellerId;
-    }
+  String? lastGroupKey;
+  for (final item in items) {
+    final groupKey = (item['cartData']?['shopId'] as String?) ?? (item['sellerId'] as String? ?? '');
+    item['showSellerHeader'] = groupKey != lastGroupKey;
+    lastGroupKey = groupKey;
   }
+}
 
   bool _hasRequiredFields(Map<String, dynamic> cartData) {
     final required = [
@@ -619,6 +620,7 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
     }
     return {
       'productId': product.id,
+      'productSource': product.shopId != null ? 'shop_products' : 'products',
       'productName': product.productName,
       'description': product.description,
       'unitPrice': product.price,
@@ -1274,12 +1276,19 @@ Future<String> addToCart({
             throw Exception('No auth token available');
           }
 
-          final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-              .httpsCallable('calculateCartTotals');
+         final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+    .httpsCallable('calculateCartTotals');
 
-          final result = await callable.call({
-            'excludedProductIds': excludedProductIds ?? <String>[],
-          });
+// Convert excluded IDs to selected IDs for direct lookup
+final selectedIds = excludedProductIds == null
+    ? cartProductIds.toList()
+    : cartProductIds
+        .where((id) => !excludedProductIds.contains(id))
+        .toList();
+
+final result = await callable.call({
+  'selectedProductIds': selectedIds,
+});
 
           final dynamic rawData = result.data;
           Map<String, dynamic> totalsData;

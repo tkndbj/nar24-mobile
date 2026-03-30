@@ -37,28 +37,7 @@ export const calculateCartTotals = onCall(
     const requestId = `${userId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     console.log(`📊 [${requestId}] Cart totals calculation started for user: ${userId}`);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // 2. INPUT VALIDATION & SANITIZATION
-    // ═══════════════════════════════════════════════════════════════════════
-    let excludedProductIds = [];
-
-    if (request.data?.excludedProductIds) {
-      if (!Array.isArray(request.data.excludedProductIds)) {
-        throw new HttpsError(
-          'invalid-argument',
-          'excludedProductIds must be an array'
-        );
-      }
-
-      excludedProductIds = request.data.excludedProductIds
-        .filter((id) => typeof id === 'string' && id.trim().length > 0)
-        .map((id) => id.trim())
-        .slice(0, 500);
-    }
-
     const db = admin.firestore();
-    const excludedSet = new Set(excludedProductIds);
 
     // ═══════════════════════════════════════════════════════════════════════
     // 3. RATE LIMITING (Sliding Window)
@@ -76,52 +55,62 @@ export const calculateCartTotals = onCall(
       console.warn(`⚠️ [${requestId}] Rate limit check failed, continuing: ${error.message}`);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 4. FETCH ALL CART ITEMS
-    // ═══════════════════════════════════════════════════════════════════════
-    const cartItems = [];
+   // ═══════════════════════════════════════════════════════════════════════════
+// 4. FETCH SELECTED CART ITEMS (Direct lookup — no collection scan)
+// ═══════════════════════════════════════════════════════════════════════════
+const cartItems = [];
 
-    try {
-      const cartRef = db.collection('users').doc(userId).collection('cart');
-      const snapshot = await cartRef.get();
+let selectedProductIds = [];
 
-      if (snapshot.empty) {
-        console.log(`📭 [${requestId}] Cart is empty`);
-        return createEmptyResponse(requestId, startTime);
-      }
+if (request.data?.selectedProductIds) {
+  if (!Array.isArray(request.data.selectedProductIds)) {
+    throw new HttpsError('invalid-argument', 'selectedProductIds must be an array');
+  }
+  selectedProductIds = request.data.selectedProductIds
+    .filter((id) => typeof id === 'string' && id.trim().length > 0)
+    .map((id) => id.trim())
+    .slice(0, 500);
+}
 
-      snapshot.forEach((doc) => {
-        const productId = doc.id;
+if (selectedProductIds.length === 0) {
+  console.log(`📭 [${requestId}] No selected items`);
+  return createEmptyResponse(requestId, startTime);
+}
 
-        if (excludedSet.has(productId)) {
-          return;
-        }
+try {
+  const cartRef = db.collection('users').doc(userId).collection('cart');
+  const docRefs = selectedProductIds.map((id) => cartRef.doc(id));
+  const docs = await db.getAll(...docRefs);
 
-        const data = doc.data();
-
-        if (!data || typeof data.unitPrice === 'undefined') {
-          console.warn(`⚠️ [${requestId}] Skipping invalid cart item: ${productId}`);
-          return;
-        }
-
-        cartItems.push({
-          productId,
-          ...data,
-        });
-      });
-
-      console.log(`📦 [${requestId}] Fetched ${cartItems.length} cart items (${excludedSet.size} excluded)`);
-
-      if (cartItems.length === 0) {
-        return createEmptyResponse(requestId, startTime);
-      }
-    } catch (error) {
-      console.error(`❌ [${requestId}] Failed to fetch cart items:`, error);
-      throw new HttpsError(
-        'internal',
-        'Failed to fetch cart items. Please try again.'
-      );
+  docs.forEach((doc) => {
+    if (!doc.exists) {
+      console.warn(`⚠️ [${requestId}] Cart item not found: ${doc.id}`);
+      return;
     }
+
+    const data = doc.data();
+
+    if (!data || typeof data.unitPrice === 'undefined') {
+      console.warn(`⚠️ [${requestId}] Skipping invalid cart item: ${doc.id} — unitPrice missing`);
+      return;
+    }
+
+    if (parseFloat(data.unitPrice) === 0) {
+      console.warn(`⚠️ [${requestId}] Zero price detected for item: ${doc.id}`);
+    }
+
+    cartItems.push({ productId: doc.id, ...data });
+  });
+
+  console.log(`📦 [${requestId}] Fetched ${cartItems.length}/${selectedProductIds.length} cart items`);
+
+  if (cartItems.length === 0) {
+    return createEmptyResponse(requestId, startTime);
+  }
+} catch (error) {
+  console.error(`❌ [${requestId}] Failed to fetch cart items:`, error);
+  throw new HttpsError('internal', 'Failed to fetch cart items. Please try again.');
+}
 
     // ═══════════════════════════════════════════════════════════════════════
     // 5. FETCH & EVALUATE BUNDLES
@@ -202,7 +191,8 @@ async function checkRateLimit(db, userId, requestId) {
   const WINDOW_MS = 10000;
   const MAX_CALLS = 5;
 
-  const rateLimitRef = db.collection('_rate_limits').doc(`cart_totals:${userId}`);
+  const shard = Math.floor(Math.random() * 5);
+const rateLimitRef = db.collection('_rate_limits').doc(`cart_totals:${userId}:${shard}`);
 
   return db.runTransaction(async (transaction) => {
     const doc = await transaction.get(rateLimitRef);
@@ -350,6 +340,7 @@ function calculateTotalsWithDiscounts(cartItems, selectedBundle, requestId) {
       Math.max(1, parseInt(item.quantity, 10) || 1)
     );
     const minQuantity = Math.min(...quantities);
+    selectedBundle._appliedQuantity = minQuantity;
 
     const bundlePrice = parseFloat(selectedBundle.totalBundlePrice) || 0;
     const bundleTotal = bundlePrice * minQuantity;
@@ -366,7 +357,7 @@ function calculateTotalsWithDiscounts(cartItems, selectedBundle, requestId) {
       isBundle: true,
       isBundleItem: true,
       productIds: selectedBundle.productIds,
-      savings: roundCurrency(selectedBundle.savings * minQuantity),
+      savings: roundCurrency(selectedBundle.savings * (selectedBundle._appliedQuantity || 1)),
     });
 
     for (const item of bundleItems) {
@@ -429,7 +420,7 @@ function calculateTotalsWithDiscounts(cartItems, selectedBundle, requestId) {
     appliedBundle: selectedBundle ? {
       bundleId: selectedBundle.bundleId,
       bundleName: selectedBundle.name,
-      savings: roundCurrency(selectedBundle.savings),
+      savings: roundCurrency(selectedBundle.savings * (selectedBundle._appliedQuantity || 1)),
       productCount: selectedBundle.productIds.length,
     } : null,
   };

@@ -30,11 +30,29 @@ export const onDeliveryCompleted = onDocumentUpdated(
     const courierId = after.cargoUserId;
     if (!courierId) return;
 
-    const orderId    = event.params.orderId;
-    const deliveredAt = after.updatedAt ?? admin.firestore.Timestamp.now();
-    const dateKey    = toDateKey(deliveredAt);
-    const revenue    = typeof after.totalPrice === 'number' ? after.totalPrice : 0;
-    const isCash     = after.isPaid === false;
+    // ── Wait for paymentReceivedMethod if not yet written ─────────────
+    let orderData = after;
+    if (!orderData.paymentReceivedMethod) {
+      await new Promise((resolve) => setTimeout(resolve, 3000)); // 3s grace
+      const freshSnap = await admin.firestore()
+        .collection('orders-food')
+        .doc(event.params.orderId)
+        .get();
+      if (freshSnap.exists) {
+        orderData = freshSnap.data();
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────
+
+    const orderId     = event.params.orderId;
+    const deliveredAt = orderData.updatedAt ?? admin.firestore.Timestamp.now();
+    const dateKey     = toDateKey(deliveredAt);
+    const revenue     = typeof orderData.totalPrice === 'number' ? orderData.totalPrice : 0;
+
+    const received = orderData.paymentReceivedMethod;
+    const isCash   = received === 'cash'  || (!received && orderData.isPaid === false);
+    const isIban   = received === 'iban';
+    const isCard   = received === 'card'  || (!received && orderData.isPaid === true);
     const ms         = durationMs(after, deliveredAt);
     const inc        = admin.firestore.FieldValue.increment;
     const now        = admin.firestore.FieldValue.serverTimestamp();
@@ -51,7 +69,8 @@ export const onDeliveryCompleted = onDocumentUpdated(
         deliveredCount: inc(1),
         totalRevenue: inc(revenue),
         cashRevenue: inc(isCash ? revenue : 0),
-        cardRevenue: inc(isCash ? 0 : revenue),
+cardRevenue: inc(isCard ? revenue : 0),
+ibanRevenue: inc(isIban ? revenue : 0),
         totalDeliveryTimeMs: inc(ms),
         orderIds: admin.firestore.FieldValue.arrayUnion(orderId),
         lastDeliveryAt: now,
@@ -68,7 +87,8 @@ export const onDeliveryCompleted = onDocumentUpdated(
         totalDeliveries: inc(1),
         totalRevenue: inc(revenue),
         cashRevenue: inc(isCash ? revenue : 0),
-        cardRevenue: inc(isCash ? 0 : revenue),
+        cardRevenue: inc(isCard ? revenue : 0),
+        ibanRevenue: inc(isIban ? revenue : 0),
         totalDeliveryTimeMs: inc(ms),
         lastDeliveryAt: now,
         updatedAt: now,
@@ -121,14 +141,17 @@ export const recalcCourierStats = onCall(
       const o = doc.data();
       if (!o.cargoUserId) continue;
       const revenue = typeof o.totalPrice === 'number' ? o.totalPrice : 0;
-      const isCash  = o.isPaid === false;
+      const received = o.paymentReceivedMethod;
+const isCash   = received === 'cash' || (!received && o.isPaid === false);
+const isIban   = received === 'iban';
+const isCard   = received === 'card' || (!received && o.isPaid === true);
       const ms      = durationMs(o, o.updatedAt);
 
       if (!map.has(o.cargoUserId)) {
         map.set(o.cargoUserId, {
           courierId: o.cargoUserId, courierName: o.cargoName || 'Courier',
           date: targetDate, deliveredCount: 0,
-          totalRevenue: 0, cashRevenue: 0, cardRevenue: 0,
+          totalRevenue: 0, cashRevenue: 0, cardRevenue: 0, ibanRevenue: 0,
           totalDeliveryTimeMs: 0, orderIds: [],
           firstDeliveryAt: o.updatedAt, lastDeliveryAt: o.updatedAt,
         });
@@ -137,8 +160,9 @@ export const recalcCourierStats = onCall(
       const e = map.get(o.cargoUserId);
       e.deliveredCount      += 1;
       e.totalRevenue        += revenue;
-      e.cashRevenue         += isCash ? revenue : 0;
-      e.cardRevenue         += isCash ? 0 : revenue;
+      e.cashRevenue += isCash ? revenue : 0;
+e.cardRevenue += isCard ? revenue : 0;
+e.ibanRevenue += isIban ? revenue : 0;
       e.totalDeliveryTimeMs += ms;
       e.orderIds.push(doc.id);
       e.lastDeliveryAt = o.updatedAt;
@@ -149,7 +173,7 @@ export const recalcCourierStats = onCall(
       Array.from(map.values()).map((s) =>
         db.collection('courier_daily_stats')
           .doc(`${s.courierId}_${targetDate}`)
-          .set({ ...s, totalRevenue: Math.round(s.totalRevenue * 100) / 100, updatedAt: now, recalculatedAt: now }, { merge: false })
+          .set({ ...s, totalRevenue: Math.round(s.totalRevenue * 100) / 100, cashRevenue: Math.round(s.cashRevenue * 100) / 100, cardRevenue: Math.round(s.cardRevenue * 100) / 100, ibanRevenue: Math.round(s.ibanRevenue * 100) / 100, updatedAt: now, recalculatedAt: now }, { merge: false })
       )
     );
 
@@ -159,7 +183,8 @@ export const recalcCourierStats = onCall(
       deliveredCount: s.deliveredCount,
       totalRevenue: Math.round(s.totalRevenue * 100) / 100,
       cashRevenue: Math.round(s.cashRevenue * 100) / 100,
-      cardRevenue: Math.round(s.cardRevenue * 100) / 100,
+cardRevenue: Math.round(s.cardRevenue * 100) / 100,
+ibanRevenue: Math.round(s.ibanRevenue * 100) / 100,
       avgDeliveryMinutes: s.deliveredCount > 0 && s.totalDeliveryTimeMs > 0 ? Math.round(s.totalDeliveryTimeMs / s.deliveredCount / 60000) : null,
     }));
 
@@ -195,7 +220,8 @@ export const getCourierStatsSummary = onCall(
         deliveredCount: d.deliveredCount ?? 0,
         totalRevenue: d.totalRevenue ?? 0,
         cashRevenue: d.cashRevenue ?? 0,
-        cardRevenue: d.cardRevenue ?? 0,
+cardRevenue: d.cardRevenue ?? 0,
+ibanRevenue: d.ibanRevenue ?? 0,
         avgDeliveryMinutes: avgMs > 0 ? Math.round(avgMs / 60000) : null,
       };
     });

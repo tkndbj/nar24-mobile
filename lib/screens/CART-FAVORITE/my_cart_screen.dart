@@ -681,12 +681,13 @@ void didChangeDependencies() {
                       (context, index) {
                         final item = items[index];
 
-                        // ✅ Calculate seller header dynamically for reliability
-                        final currentSellerId =
-                            item['sellerId'] as String? ?? '';
-                        final showSellerHeader = index == 0 ||
-                            currentSellerId !=
-                                (items[index - 1]['sellerId'] as String? ?? '');
+                       final cartData = item['cartData'] as Map<String, dynamic>?;
+final currentGroupKey = (cartData?['shopId'] as String?) ?? (item['sellerId'] as String? ?? '');
+final showSellerHeader = index == 0 || () {
+  final prevCartData = items[index - 1]['cartData'] as Map<String, dynamic>?;
+  final prevGroupKey = (prevCartData?['shopId'] as String?) ?? (items[index - 1]['sellerId'] as String? ?? '');
+  return currentGroupKey != prevGroupKey;
+}();
 
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,

@@ -10,6 +10,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../../generated/l10n/app_localizations.dart';
+import '../../utils/food_localization.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Local models
@@ -1219,7 +1220,7 @@ class _FoodReceiptDetailScreenState extends State<FoodReceiptDetailScreen>
                   ),
                   child: Text(
                     [
-                      ext.name,
+                      localizeExtra(ext.name, l10n),
                       if (ext.quantity > 1) '×${ext.quantity}',
                       if (ext.price > 0) '+${ext.price.toStringAsFixed(0)}',
                     ].join(' '),
