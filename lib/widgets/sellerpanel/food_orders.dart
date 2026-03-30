@@ -668,6 +668,73 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
     }
   }
 
+  Future<void> _printReceipt(String orderId) async {
+    final locale = Localizations.localeOf(context).languageCode;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('restaurants')
+          .doc(widget.restaurantId)
+          .collection('orderReceipts')
+          .where('orderId', isEqualTo: orderId)
+          .limit(1)
+          .get();
+
+      if (snap.docs.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+              locale == 'tr'
+                  ? 'Bu sipariş için fatura bulunamadı'
+                  : (locale == 'ru'
+                      ? 'Чек для этого заказа не найден'
+                      : 'No receipt found for this order'),
+            ),
+            backgroundColor: const Color(0xFFF59E0B),
+            behavior: SnackBarBehavior.floating,
+          ));
+        }
+        return;
+      }
+
+      final downloadUrl =
+          (snap.docs.first.data()['downloadUrl'] as String?) ?? '';
+      if (downloadUrl.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+              locale == 'tr'
+                  ? 'İndirme bağlantısı bulunamadı'
+                  : (locale == 'ru'
+                      ? 'Ссылка для скачивания не найдена'
+                      : 'Download URL not found'),
+            ),
+            backgroundColor: const Color(0xFFF59E0B),
+            behavior: SnackBarBehavior.floating,
+          ));
+        }
+        return;
+      }
+
+      await launchUrl(Uri.parse(downloadUrl),
+          mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint('Print receipt error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            locale == 'tr'
+                ? 'Fatura yazdırılamadı'
+                : (locale == 'ru'
+                    ? 'Не удалось распечатать чек'
+                    : 'Failed to print receipt'),
+          ),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    }
+  }
+
   void _toggleExpand(String orderId) {
     setState(() {
       if (_expandedIds.contains(orderId)) {
@@ -863,6 +930,7 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
             onTap: () => _toggleExpand(order.id),
             onUpdateStatus: _updateStatus,
             onInformCourier: _informCourier,
+            onPrintReceipt: _printReceipt,
           );
         },
       ),
@@ -924,6 +992,7 @@ class _OrderCard extends StatelessWidget {
   final VoidCallback onTap;
   final Future<void> Function(String, _OrderStatus) onUpdateStatus;
   final Future<void> Function(String) onInformCourier;
+  final Future<void> Function(String) onPrintReceipt;
 
   const _OrderCard({
     required this.order,
@@ -934,6 +1003,7 @@ class _OrderCard extends StatelessWidget {
     required this.onTap,
     required this.onUpdateStatus,
     required this.onInformCourier,
+    required this.onPrintReceipt,
   });
 
   bool get _isPending => order.status == _OrderStatus.pending;
@@ -1323,86 +1393,109 @@ class _OrderCard extends StatelessWidget {
   Widget _buildActions() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      child: Row(children: [
-        // ── PENDING: Accept + Reject ─────────────────────────────────────
-        if (_isPending) ...[
-          Expanded(
-              child: _ActionBtn(
-            label: locale == 'tr' ? 'Kabul Et' : 'Accept',
-            icon: Icons.check_rounded,
-            bg: const Color(0xFF22C55E),
-            fg: Colors.white,
-            loading: _isUpdating && updatingTo == _OrderStatus.accepted,
-            enabled: !_isUpdating,
-            onTap: () => onUpdateStatus(order.id, _OrderStatus.accepted),
-          )),
-          const SizedBox(width: 8),
-          Expanded(
-              child: _ActionBtn(
-            label: locale == 'tr' ? 'Reddet' : 'Reject',
-            icon: Icons.close_rounded,
-            bg: const Color(0xFFFEF2F2),
-            fg: const Color(0xFFDC2626),
-            loading: _isUpdating && updatingTo == _OrderStatus.rejected,
-            enabled: !_isUpdating,
-            onTap: () => onUpdateStatus(order.id, _OrderStatus.rejected),
-          )),
-        ],
+      child: Column(
+        children: [
+          Row(children: [
+            // ── PENDING: Accept + Reject ─────────────────────────────────────
+            if (_isPending) ...[
+              Expanded(
+                  child: _ActionBtn(
+                label: locale == 'tr' ? 'Kabul Et' : 'Accept',
+                icon: Icons.check_rounded,
+                bg: const Color(0xFF22C55E),
+                fg: Colors.white,
+                loading: _isUpdating && updatingTo == _OrderStatus.accepted,
+                enabled: !_isUpdating,
+                onTap: () => onUpdateStatus(order.id, _OrderStatus.accepted),
+              )),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: _ActionBtn(
+                label: locale == 'tr' ? 'Reddet' : 'Reject',
+                icon: Icons.close_rounded,
+                bg: const Color(0xFFFEF2F2),
+                fg: const Color(0xFFDC2626),
+                loading: _isUpdating && updatingTo == _OrderStatus.rejected,
+                enabled: !_isUpdating,
+                onTap: () => onUpdateStatus(order.id, _OrderStatus.rejected),
+              )),
+            ],
 
-        // ── ACCEPTED: Mark As Ready + Inform Courier (delivery only) + Reject
-        // FIX 9: primary action changed from "Mark Delivered" → "Mark Ready"
-        // to match Next.js (accepted → ready, not accepted → delivered).
-        if (_isAccepted) ...[
-          Expanded(
-              child: _ActionBtn(
-            label: locale == 'tr' ? 'Hazır İşaretle' : 'Mark As Ready',
-            icon: Icons.inventory_2_outlined,
-            bg: const Color(0xFF22C55E),
-            fg: Colors.white,
-            loading: _isUpdating && updatingTo == _OrderStatus.ready,
-            enabled: !_isUpdating,
-            onTap: () => onUpdateStatus(order.id, _OrderStatus.ready),
-          )),
-          if (order.deliveryType == 'delivery') ...[
-            const SizedBox(width: 8),
-            _InformCourierBtn(
-              lastInformedAt: order.lastInformedAt,
-              locale: locale,
-              onTap: () => onInformCourier(order.id),
-            ),
-          ],
-          const SizedBox(width: 8),
-          _ActionBtn(
-            label: locale == 'tr' ? 'Reddet' : 'Reject',
-            icon: Icons.close_rounded,
-            bg: const Color(0xFFFEF2F2),
-            fg: const Color(0xFFDC2626),
-            loading: _isUpdating && updatingTo == _OrderStatus.rejected,
-            enabled: !_isUpdating,
-            onTap: () => onUpdateStatus(order.id, _OrderStatus.rejected),
-          ),
-        ],
+            // ── ACCEPTED: Mark As Ready + Inform Courier (delivery only) + Reject
+            // FIX 9: primary action changed from "Mark Delivered" → "Mark Ready"
+            // to match Next.js (accepted → ready, not accepted → delivered).
+            if (_isAccepted) ...[
+              Expanded(
+                  child: _ActionBtn(
+                label: locale == 'tr' ? 'Hazır İşaretle' : 'Mark As Ready',
+                icon: Icons.inventory_2_outlined,
+                bg: const Color(0xFF22C55E),
+                fg: Colors.white,
+                loading: _isUpdating && updatingTo == _OrderStatus.ready,
+                enabled: !_isUpdating,
+                onTap: () => onUpdateStatus(order.id, _OrderStatus.ready),
+              )),
+              if (order.deliveryType == 'delivery') ...[
+                const SizedBox(width: 8),
+                _InformCourierBtn(
+                  lastInformedAt: order.lastInformedAt,
+                  locale: locale,
+                  onTap: () => onInformCourier(order.id),
+                ),
+              ],
+              const SizedBox(width: 8),
+              _ActionBtn(
+                label: locale == 'tr' ? 'Reddet' : 'Reject',
+                icon: Icons.close_rounded,
+                bg: const Color(0xFFFEF2F2),
+                fg: const Color(0xFFDC2626),
+                loading: _isUpdating && updatingTo == _OrderStatus.rejected,
+                enabled: !_isUpdating,
+                onTap: () => onUpdateStatus(order.id, _OrderStatus.rejected),
+              ),
+            ],
 
-        // ── READY: "Waiting for cargo" text only — no button.
-        // FIX 10: mirrors Next.js isReady block which shows text, not a button.
-        if (_isReady)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                locale == 'tr'
-                    ? 'Kargo bekleniyor'
-                    : (locale == 'ru'
-                        ? 'Ожидание курьера'
-                        : 'Waiting for cargo'),
-                style: GoogleFonts.figtree(
-                    fontSize: 12,
-                    color: isDark ? Colors.grey[500] : const Color(0xFF9CA3AF)),
-                textAlign: TextAlign.center,
+            // ── READY: "Waiting for cargo" text only — no button.
+            // FIX 10: mirrors Next.js isReady block which shows text, not a button.
+            if (_isReady)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    locale == 'tr'
+                        ? 'Kargo bekleniyor'
+                        : (locale == 'ru'
+                            ? 'Ожидание курьера'
+                            : 'Waiting for cargo'),
+                    style: GoogleFonts.figtree(
+                        fontSize: 12,
+                        color: isDark
+                            ? Colors.grey[500]
+                            : const Color(0xFF9CA3AF)),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ]),
+          if (_isAccepted) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: _ActionBtn(
+                label: locale == 'tr'
+                    ? 'Fatura Yazdır'
+                    : (locale == 'ru' ? 'Распечатать чек' : 'Print Receipt'),
+                icon: Icons.print_rounded,
+                bg: isDark ? const Color(0xFF2D2B42) : const Color(0xFFF3F4F6),
+                fg: isDark ? Colors.white70 : const Color(0xFF4B5563),
+                loading: false,
+                enabled: true,
+                onTap: () => onPrintReceipt(order.id),
               ),
             ),
-          ),
-      ]),
+          ],
+        ],
+      ),
     );
   }
 

@@ -12532,6 +12532,78 @@ abstract class AppLocalizations {
   /// **'Mağaza faturaları ve ödeme geçmişi'**
   String get shopReceipts;
 
+  /// No description provided for @restaurantReceipts.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoran faturaları ve ödeme geçmişi'**
+  String get restaurantReceipts;
+
+  /// No description provided for @restaurantReceiptsTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Faturalar'**
+  String get restaurantReceiptsTitle;
+
+  /// No description provided for @restaurantReceiptsDownloadUrlNotFound.
+  ///
+  /// In tr, this message translates to:
+  /// **'İndirme bağlantısı bulunamadı'**
+  String get restaurantReceiptsDownloadUrlNotFound;
+
+  /// No description provided for @restaurantReceiptsDownloadFailed.
+  ///
+  /// In tr, this message translates to:
+  /// **'İndirme başarısız oldu. Lütfen tekrar deneyin.'**
+  String get restaurantReceiptsDownloadFailed;
+
+  /// No description provided for @restaurantReceiptsShowingAll.
+  ///
+  /// In tr, this message translates to:
+  /// **'Toplam {count} fatura gösteriliyor'**
+  String restaurantReceiptsShowingAll(int count);
+
+  /// No description provided for @restaurantReceiptsLoadMore.
+  ///
+  /// In tr, this message translates to:
+  /// **'Daha fazla yükle'**
+  String get restaurantReceiptsLoadMore;
+
+  /// No description provided for @restaurantReceiptsEmptyTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Henüz fatura yok'**
+  String get restaurantReceiptsEmptyTitle;
+
+  /// No description provided for @restaurantReceiptsEmptyDescription.
+  ///
+  /// In tr, this message translates to:
+  /// **'Restoran faturalarınız burada görünecek'**
+  String get restaurantReceiptsEmptyDescription;
+
+  /// No description provided for @restaurantReceiptsPaymentCard.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kart'**
+  String get restaurantReceiptsPaymentCard;
+
+  /// No description provided for @restaurantReceiptsPaymentDoor.
+  ///
+  /// In tr, this message translates to:
+  /// **'Nakit'**
+  String get restaurantReceiptsPaymentDoor;
+
+  /// No description provided for @restaurantReceiptsDeliveryPickup.
+  ///
+  /// In tr, this message translates to:
+  /// **'Gel Al'**
+  String get restaurantReceiptsDeliveryPickup;
+
+  /// No description provided for @restaurantReceiptsDeliveryDelivery.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimat'**
+  String get restaurantReceiptsDeliveryDelivery;
+
   /// No description provided for @noReceipts.
   ///
   /// In tr, this message translates to:

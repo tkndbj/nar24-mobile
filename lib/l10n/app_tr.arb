@@ -2719,6 +2719,25 @@
   "twoFactorResendNotApplicableForTotp": "TOTP için yeniden gönderme yoktur.",
   "twoFactorResendIn": "Tekrar gönder",  
   "shopReceipts": "Mağaza faturaları ve ödeme geçmişi",
+  "restaurantReceipts": "Restoran faturaları ve ödeme geçmişi",
+  "restaurantReceiptsTitle": "Faturalar",
+  "restaurantReceiptsDownloadUrlNotFound": "İndirme bağlantısı bulunamadı",
+  "restaurantReceiptsDownloadFailed": "İndirme başarısız oldu. Lütfen tekrar deneyin.",
+  "restaurantReceiptsShowingAll": "Toplam {count} fatura gösteriliyor",
+  "@restaurantReceiptsShowingAll": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "restaurantReceiptsLoadMore": "Daha fazla yükle",
+  "restaurantReceiptsEmptyTitle": "Henüz fatura yok",
+  "restaurantReceiptsEmptyDescription": "Restoran faturalarınız burada görünecek",
+  "restaurantReceiptsPaymentCard": "Kart",
+  "restaurantReceiptsPaymentDoor": "Nakit",
+  "restaurantReceiptsDeliveryPickup": "Gel Al",
+  "restaurantReceiptsDeliveryDelivery": "Teslimat",
 "noReceipts": "Henüz fatura yok",
 "noReceiptsDescription": "Faturalarınız burada görünecek",
 "failedToSendReceipt": "Fatura gönderilemedi. Lütfen tekrar deneyin.",

@@ -6505,6 +6505,46 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shopReceipts => 'Shop receipts and payment history';
 
   @override
+  String get restaurantReceipts => 'Restaurant receipts and payment history';
+
+  @override
+  String get restaurantReceiptsTitle => 'Receipts';
+
+  @override
+  String get restaurantReceiptsDownloadUrlNotFound => 'Download URL not found';
+
+  @override
+  String get restaurantReceiptsDownloadFailed =>
+      'Download failed. Please try again.';
+
+  @override
+  String restaurantReceiptsShowingAll(int count) {
+    return 'Showing all $count receipts';
+  }
+
+  @override
+  String get restaurantReceiptsLoadMore => 'Load more';
+
+  @override
+  String get restaurantReceiptsEmptyTitle => 'No receipts yet';
+
+  @override
+  String get restaurantReceiptsEmptyDescription =>
+      'Your restaurant receipts will appear here';
+
+  @override
+  String get restaurantReceiptsPaymentCard => 'Card';
+
+  @override
+  String get restaurantReceiptsPaymentDoor => 'Cash';
+
+  @override
+  String get restaurantReceiptsDeliveryPickup => 'Pickup';
+
+  @override
+  String get restaurantReceiptsDeliveryDelivery => 'Delivery';
+
+  @override
   String get noReceipts => 'No receipts yet';
 
   @override

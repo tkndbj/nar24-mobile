@@ -6512,6 +6512,47 @@ class AppLocalizationsTr extends AppLocalizations {
   String get shopReceipts => 'Mağaza faturaları ve ödeme geçmişi';
 
   @override
+  String get restaurantReceipts => 'Restoran faturaları ve ödeme geçmişi';
+
+  @override
+  String get restaurantReceiptsTitle => 'Faturalar';
+
+  @override
+  String get restaurantReceiptsDownloadUrlNotFound =>
+      'İndirme bağlantısı bulunamadı';
+
+  @override
+  String get restaurantReceiptsDownloadFailed =>
+      'İndirme başarısız oldu. Lütfen tekrar deneyin.';
+
+  @override
+  String restaurantReceiptsShowingAll(int count) {
+    return 'Toplam $count fatura gösteriliyor';
+  }
+
+  @override
+  String get restaurantReceiptsLoadMore => 'Daha fazla yükle';
+
+  @override
+  String get restaurantReceiptsEmptyTitle => 'Henüz fatura yok';
+
+  @override
+  String get restaurantReceiptsEmptyDescription =>
+      'Restoran faturalarınız burada görünecek';
+
+  @override
+  String get restaurantReceiptsPaymentCard => 'Kart';
+
+  @override
+  String get restaurantReceiptsPaymentDoor => 'Nakit';
+
+  @override
+  String get restaurantReceiptsDeliveryPickup => 'Gel Al';
+
+  @override
+  String get restaurantReceiptsDeliveryDelivery => 'Teslimat';
+
+  @override
   String get noReceipts => 'Henüz fatura yok';
 
   @override

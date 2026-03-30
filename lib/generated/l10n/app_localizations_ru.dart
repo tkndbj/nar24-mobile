@@ -6542,6 +6542,47 @@ class AppLocalizationsRu extends AppLocalizations {
   String get shopReceipts => 'Чеки магазина и история платежей';
 
   @override
+  String get restaurantReceipts => 'Чеки ресторана и история платежей';
+
+  @override
+  String get restaurantReceiptsTitle => 'Чеки';
+
+  @override
+  String get restaurantReceiptsDownloadUrlNotFound =>
+      'Ссылка для скачивания не найдена';
+
+  @override
+  String get restaurantReceiptsDownloadFailed =>
+      'Не удалось скачать. Пожалуйста, попробуйте снова.';
+
+  @override
+  String restaurantReceiptsShowingAll(int count) {
+    return 'Показано все $count чеков';
+  }
+
+  @override
+  String get restaurantReceiptsLoadMore => 'Загрузить ещё';
+
+  @override
+  String get restaurantReceiptsEmptyTitle => 'Чеков пока нет';
+
+  @override
+  String get restaurantReceiptsEmptyDescription =>
+      'Чеки вашего ресторана появятся здесь';
+
+  @override
+  String get restaurantReceiptsPaymentCard => 'Карта';
+
+  @override
+  String get restaurantReceiptsPaymentDoor => 'Наличные';
+
+  @override
+  String get restaurantReceiptsDeliveryPickup => 'Самовывоз';
+
+  @override
+  String get restaurantReceiptsDeliveryDelivery => 'Доставка';
+
+  @override
   String get noReceipts => 'Пока нет чеков';
 
   @override

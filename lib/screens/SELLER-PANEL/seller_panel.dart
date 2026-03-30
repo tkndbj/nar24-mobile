@@ -492,6 +492,16 @@ class _SellerPanelState extends State<SellerPanel>
 );
                 },
               ),
+            if (isRestaurant)
+              _buildMenuOption(
+                icon: Icons.receipt_long_rounded,
+                title: AppLocalizations.of(context).restaurantReceipts,
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push(
+                      '/seller_panel_restaurant_receipts/${provider.selectedShop!.id}');
+                },
+              ),
             if (!isRestaurant)
               _buildMenuOption(
                 icon: Icons.help_outline_rounded,

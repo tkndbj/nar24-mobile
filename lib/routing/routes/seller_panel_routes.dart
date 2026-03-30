@@ -29,6 +29,7 @@ import '../../screens/SELLER-PANEL/seller_panel_collection_screen.dart';
 import '../../screens/SELLER-PANEL/seller_panel_product_detail.dart';
 import '../../screens/SELLER-PANEL/seller_panel_user_permission.dart';
 import '../../screens/SELLER-PANEL/seller_panel_receipts_screen.dart';
+import '../../screens/SELLER-PANEL/seller_panel_restaurant_receipt_screen.dart';
 import '../../screens/SELLER-PANEL/seller_panel_pending_product_applications.dart';
 
 class SellerPanelRoutes {
@@ -179,6 +180,20 @@ class SellerPanelRoutes {
               return CustomTransitionPage(
                 key: state.pageKey,
                 child: SellerPanelReceiptsScreen(shopId: shopId),
+                transitionsBuilder: _slideTransition,
+                transitionDuration: const Duration(milliseconds: 200),
+              );
+            },
+          ),
+
+          GoRoute(
+            path: '/seller_panel_restaurant_receipts/:restaurantId',
+            name: 'seller-restaurant-receipts',
+            pageBuilder: (context, state) {
+              final restaurantId = state.pathParameters['restaurantId']!;
+              return CustomTransitionPage(
+                key: state.pageKey,
+                child: SellerPanelRestaurantReceiptScreen(restaurantId: restaurantId),
                 transitionsBuilder: _slideTransition,
                 transitionDuration: const Duration(milliseconds: 200),
               );

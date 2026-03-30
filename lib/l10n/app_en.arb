@@ -2983,6 +2983,25 @@
   "sellOnVitrin": "Sell on Vitrin",
   "vitrinProduct": "Vitrin",
   "shopReceipts": "Shop receipts and payment history",
+  "restaurantReceipts": "Restaurant receipts and payment history",
+  "restaurantReceiptsTitle": "Receipts",
+  "restaurantReceiptsDownloadUrlNotFound": "Download URL not found",
+  "restaurantReceiptsDownloadFailed": "Download failed. Please try again.",
+  "restaurantReceiptsShowingAll": "Showing all {count} receipts",
+  "@restaurantReceiptsShowingAll": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "restaurantReceiptsLoadMore": "Load more",
+  "restaurantReceiptsEmptyTitle": "No receipts yet",
+  "restaurantReceiptsEmptyDescription": "Your restaurant receipts will appear here",
+  "restaurantReceiptsPaymentCard": "Card",
+  "restaurantReceiptsPaymentDoor": "Cash",
+  "restaurantReceiptsDeliveryPickup": "Pickup",
+  "restaurantReceiptsDeliveryDelivery": "Delivery",
 "noReceipts": "No receipts yet",
 "noReceiptsDescription": "Your receipts will appear here",
 "failedToSendReceipt": "Failed to send receipt. Please try again.",

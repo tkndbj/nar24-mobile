@@ -2146,6 +2146,25 @@
   "priceBreakdown": "Разбор цены",
   "adCost": "Стоимость объявления",
   "shopReceipts": "Чеки магазина и история платежей",
+  "restaurantReceipts": "Чеки ресторана и история платежей",
+  "restaurantReceiptsTitle": "Чеки",
+  "restaurantReceiptsDownloadUrlNotFound": "Ссылка для скачивания не найдена",
+  "restaurantReceiptsDownloadFailed": "Не удалось скачать. Пожалуйста, попробуйте снова.",
+  "restaurantReceiptsShowingAll": "Показано все {count} чеков",
+  "@restaurantReceiptsShowingAll": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "restaurantReceiptsLoadMore": "Загрузить ещё",
+  "restaurantReceiptsEmptyTitle": "Чеков пока нет",
+  "restaurantReceiptsEmptyDescription": "Чеки вашего ресторана появятся здесь",
+  "restaurantReceiptsPaymentCard": "Карта",
+  "restaurantReceiptsPaymentDoor": "Наличные",
+  "restaurantReceiptsDeliveryPickup": "Самовывоз",
+  "restaurantReceiptsDeliveryDelivery": "Доставка",
 "noReceipts": "Пока нет чеков",
 "noReceiptsDescription": "Ваши чеки появятся здесь",
 "failedToSendReceipt": "Не удалось отправить квитанцию. Пожалуйста, попробуйте еще раз.",
