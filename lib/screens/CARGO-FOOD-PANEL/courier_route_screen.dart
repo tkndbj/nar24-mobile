@@ -224,17 +224,23 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
     if (paymentMethod == null || !mounted) return;
 
     setState(() => _deliverBusyOrderId = orderId);
-    try {
-      final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-          .httpsCallable('updateFoodOrderStatus');
-      await callable.call({ 'orderId': orderId, 'newStatus': 'delivered' });
-
+     try {
+      // Write payment method FIRST while doc is still out_for_delivery locally
       await FirebaseFirestore.instance
           .collection('orders-food')
           .doc(orderId)
           .update({'paymentReceivedMethod': paymentMethod});
 
-      CourierLocationService.instance.updateCurrentOrder(null);
+      // Then mark delivered via Cloud Function — this changes status server-side
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+          .httpsCallable('updateFoodOrderStatus');
+      await callable.call({ 'orderId': orderId, 'newStatus': 'delivered' });
+
+       CourierLocationService.instance.updateCurrentOrder(null);
+
+      // Force route to recalculate — don't wait for stream
+      CourierRouteService.instance.clearCache();
+      _lastOrderSignature = '__force_refresh__';
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
