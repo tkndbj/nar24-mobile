@@ -8629,3 +8629,4 @@ export { onDeliveryCompleted, recalcCourierStats, getCourierStatsSummary } from 
 export { calculateDailyFoodAccounting, calculateWeeklyFoodAccounting, calculateMonthlyFoodAccounting } from './36-food-accounting/index.js';
 export { generateRestaurantReceiptBackground } from './37-restaurant-receipt/index.js';
 export { scheduleDiscountExpiry, restoreDiscountPrice } from './38-food-discount/index.js';
+export { createTestCouriers, deleteTestCouriers, listTestCouriers } from './39-fake-accounts/index.js';

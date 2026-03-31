@@ -14,6 +14,7 @@ import '../../generated/l10n/app_localizations.dart';
 import 'package:rxdart/rxdart.dart';
 import 'receipt_scanner.dart';
 import '../../services/courier_location_service.dart';
+import './courier_route_screen.dart';
 
 const _kFcmTopic = 'food_couriers';
 
@@ -1181,10 +1182,38 @@ final docs = [...(snap.data?.docs ?? [])]
           );
         }
 
-        return ListView.builder(
-          controller: _scrollController,
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-          itemCount: docs.length,
+        return Column(
+          children: [
+            // Route button
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const CourierRouteScreen()),
+                  ),
+                  icon: const Icon(Icons.route_rounded, size: 18),
+                  label: Text(
+                    '${docs.length} Teslimat · Rotamı Gör',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6366F1),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+            ),
+            // Order list
+            Expanded(
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+                itemCount: docs.length,
           itemBuilder: (_, i) {
             final docId = docs[i].id;
             _cardKeys[docId] ??= GlobalKey();
@@ -1215,7 +1244,9 @@ final docs = [...(snap.data?.docs ?? [])]
                 onDeliveredLocally: () => setState(() => _removedLocally.add(docId)),
               ),
             );
-          },
+         } ),
+            ),
+          ],
         );
       },
     );
