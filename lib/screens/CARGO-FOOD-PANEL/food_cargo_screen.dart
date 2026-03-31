@@ -1402,28 +1402,26 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
 Future<void> _markDelivered() async {
   final loc = AppLocalizations.of(context);
 
-  // ── Step 1: Ask courier how customer paid ──────────────────────
   final paymentMethod = await _showPaymentSheet();
-  if (paymentMethod == null || !mounted) return; // courier dismissed — do nothing
+  if (paymentMethod == null || !mounted) return;
 
   setState(() => _loading = true);
   try {
-    // ── Step 2: Mark order as delivered via Cloud Function ─────────
-    final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-        .httpsCallable('updateFoodOrderStatus');
-    await callable.call({
+    // Write action document — offline-safe, queues if no network
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final displayName = FirebaseAuth.instance.currentUser!.displayName ?? 'Courier';
+
+    await FirebaseFirestore.instance.collection('courier_actions').doc().set({
+      'type': 'deliver',
       'orderId': widget.orderId,
-      'newStatus': 'delivered',
+      'courierId': uid,
+      'courierName': displayName,
+      'paymentMethod': paymentMethod,
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
     });
 
-    // ── Step 3: Save the collected payment method ──────────────────
-    await FirebaseFirestore.instance
-        .collection('orders-food')
-        .doc(widget.orderId)
-        .update({'paymentReceivedMethod': paymentMethod});
-
      CourierLocationService.instance.updateCurrentOrder(null);
-    widget.onDeliveredLocally?.call();
     if (mounted) _showSnack(loc.foodCargoDeliveredSuccess);
   } catch (e) {
     if (mounted) {

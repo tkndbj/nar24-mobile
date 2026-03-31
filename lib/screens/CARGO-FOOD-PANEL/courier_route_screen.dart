@@ -2,7 +2,6 @@
 
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -31,6 +30,13 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
   String? _pickupBusyOrderId;
   String? _deliverBusyOrderId;
 
+  // Track locally acted-on orders for optimistic UI
+  final Set<String> _locallyPickedUp = {};
+  final Set<String> _locallyDelivered = {};
+
+  // Pending action listeners (to confirm sync)
+  final Map<String, StreamSubscription> _actionListeners = {};
+
   final Set<Marker> _markers = {};
   final Set<Polyline> _polylines = {};
 
@@ -53,6 +59,9 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
   void dispose() {
     _ordersSubscription?.cancel();
     _mapController?.dispose();
+    for (final sub in _actionListeners.values) {
+      sub.cancel();
+    }
     super.dispose();
   }
 
@@ -100,13 +109,25 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
         };
       }).toList();
 
-      // Signature includes pickup status
+      // Clean up locally tracked orders that are now confirmed server-side
+      orders.removeWhere((o) => _locallyDelivered.contains(o['orderId']));
+      for (final o in orders) {
+        if (o['pickedUpFromRestaurant'] == true) {
+          _locallyPickedUp.remove(o['orderId']);
+        }
+      }
+      // Apply local optimistic pickups
+      for (final o in orders) {
+        if (_locallyPickedUp.contains(o['orderId'])) {
+          o['pickedUpFromRestaurant'] = true;
+        }
+      }
+
       final sig = orders.map((o) {
         final id = o['orderId'];
         final p = o['pickedUpFromRestaurant'] == true ? '1' : '0';
         return '$id:$p';
-      }).toList()
-        ..sort();
+      }).toList()..sort();
       final sigStr = sig.join(',');
 
       if (sigStr == _lastOrderSignature && _route != null) return;
@@ -150,7 +171,79 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
     _fitBounds(result);
   }
 
-  // ── Mark pickup ───────────────────────────────────────────────────────────
+  // ── Write action document (offline-safe) ──────────────────────────────────
+
+  Future<String> _writeAction({
+    required String type,
+    required String orderId,
+    String? paymentMethod,
+  }) async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final displayName = FirebaseAuth.instance.currentUser!.displayName ?? 'Courier';
+
+    final docRef = FirebaseFirestore.instance.collection('courier_actions').doc();
+    await docRef.set({
+      'type': type,
+      'orderId': orderId,
+      'courierId': uid,
+      'courierName': displayName,
+      if (paymentMethod != null) 'paymentMethod': paymentMethod,
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    return docRef.id;
+  }
+
+  // ── Listen for action completion ──────────────────────────────────────────
+
+  void _listenForActionResult(String actionId, String orderId, bool isDelivery) {
+    final sub = FirebaseFirestore.instance
+        .collection('courier_actions')
+        .doc(actionId)
+        .snapshots()
+        .listen((snap) {
+      if (!snap.exists || !mounted) return;
+      final status = snap.data()?['status'] as String?;
+
+      if (status == 'completed') {
+        _actionListeners[actionId]?.cancel();
+        _actionListeners.remove(actionId);
+        // Server confirmed — local optimistic state will be cleaned by order stream
+      } else if (status == 'failed') {
+        _actionListeners[actionId]?.cancel();
+        _actionListeners.remove(actionId);
+
+        final error = snap.data()?['error'] as String? ?? 'Bilinmeyen hata';
+
+        // Revert optimistic UI
+        setState(() {
+          if (isDelivery) {
+            _locallyDelivered.remove(orderId);
+          } else {
+            _locallyPickedUp.remove(orderId);
+          }
+        });
+
+        // Force route recalculation with reverted state
+        CourierRouteService.instance.clearCache();
+        _lastOrderSignature = '__revert__';
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('İşlem başarısız: $error'),
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ));
+        }
+      }
+    });
+
+    _actionListeners[actionId] = sub;
+  }
+
+  // ── Mark pickup (offline-safe) ────────────────────────────────────────────
 
   Future<void> _markPickedUp(String orderId, String restaurantName) async {
     final confirmed = await showDialog<bool>(
@@ -158,23 +251,14 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Restorandan Alındı', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        content: Text(
-          '"$restaurantName" restoranından siparişi aldınız mı?',
-          style: const TextStyle(fontSize: 14),
-        ),
+        content: Text('"$restaurantName" restoranından siparişi aldınız mı?', style: const TextStyle(fontSize: 14)),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Hayır'),
-          ),
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Hayır')),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: _pickupColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              elevation: 0,
-            ),
+              backgroundColor: _pickupColor, foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), elevation: 0),
             child: const Text('Evet, Aldım', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
@@ -184,15 +268,20 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
     if (confirmed != true || !mounted) return;
 
     setState(() => _pickupBusyOrderId = orderId);
+
     try {
-      await FirebaseFirestore.instance
-          .collection('orders-food')
-          .doc(orderId)
-          .update({
-        'pickedUpFromRestaurant': true,
-        'pickedUpAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      // Optimistic UI — remove restaurant from route immediately
+      setState(() => _locallyPickedUp.add(orderId));
+
+      // Force route recalc with optimistic state
+      CourierRouteService.instance.clearCache();
+      _lastOrderSignature = '__pickup_$orderId';
+
+      // Write action document (queues offline)
+      final actionId = await _writeAction(type: 'pickup', orderId: orderId);
+
+      // Listen for server confirmation
+      _listenForActionResult(actionId, orderId, false);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -202,8 +291,8 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ));
       }
-      // Stream auto-updates → route recalculates
     } catch (e) {
+      setState(() => _locallyPickedUp.remove(orderId));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: const Text('İşlem başarısız, tekrar deneyin'),
@@ -217,30 +306,33 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
     }
   }
 
-  // ── Mark delivered (with payment sheet) ───────────────────────────────────
+  // ── Mark delivered (offline-safe) ─────────────────────────────────────────
 
   Future<void> _markDelivered(String orderId, String buyerName) async {
     final paymentMethod = await _showPaymentSheet();
     if (paymentMethod == null || !mounted) return;
 
     setState(() => _deliverBusyOrderId = orderId);
-     try {
-      // Write payment method FIRST while doc is still out_for_delivery locally
-      await FirebaseFirestore.instance
-          .collection('orders-food')
-          .doc(orderId)
-          .update({'paymentReceivedMethod': paymentMethod});
 
-      // Then mark delivered via Cloud Function — this changes status server-side
-      final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-          .httpsCallable('updateFoodOrderStatus');
-      await callable.call({ 'orderId': orderId, 'newStatus': 'delivered' });
+    try {
+      // Optimistic UI — remove order from route immediately
+      setState(() => _locallyDelivered.add(orderId));
 
-       CourierLocationService.instance.updateCurrentOrder(null);
-
-      // Force route to recalculate — don't wait for stream
+      // Force route recalc
       CourierRouteService.instance.clearCache();
-      _lastOrderSignature = '__force_refresh__';
+      _lastOrderSignature = '__deliver_$orderId';
+
+      CourierLocationService.instance.updateCurrentOrder(null);
+
+      // Write action document (queues offline)
+      final actionId = await _writeAction(
+        type: 'deliver',
+        orderId: orderId,
+        paymentMethod: paymentMethod,
+      );
+
+      // Listen for server confirmation
+      _listenForActionResult(actionId, orderId, true);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -250,11 +342,11 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ));
       }
-      // Stream auto-updates → order disappears → route recalculates
     } catch (e) {
+      setState(() => _locallyDelivered.remove(orderId));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('Teslimat işlemi başarısız, tekrar deneyin'),
+          content: const Text('Teslimat başarısız, tekrar deneyin'),
           backgroundColor: Colors.red[700],
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -282,41 +374,24 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 40, height: 4,
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.grey[700] : Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
+              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(
+                color: isDark ? Colors.grey[700] : Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
               const SizedBox(height: 20),
-              Text(
-                'Müşteri Nasıl Ödedi?',
-                style: TextStyle(
-                  fontSize: 17, fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.grey[900],
-                ),
-              ),
+              Text('Müşteri Nasıl Ödedi?', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.grey[900])),
               const SizedBox(height: 6),
-              Text(
-                'Ödeme yöntemini seçin',
-                style: TextStyle(fontSize: 13, color: Colors.grey[500]),
-              ),
+              Text('Ödeme yöntemini seçin', style: TextStyle(fontSize: 13, color: Colors.grey[500])),
               const SizedBox(height: 20),
-              Row(
-                children: [
-                  _PaymentBtn(emoji: '💳', label: 'Kart', color: Colors.blue, isDark: isDark,
-                      onTap: () => Navigator.of(context).pop('card')),
-                  const SizedBox(width: 12),
-                  _PaymentBtn(emoji: '💵', label: 'Nakit', color: Colors.green, isDark: isDark,
-                      onTap: () => Navigator.of(context).pop('cash')),
-                  const SizedBox(width: 12),
-                  _PaymentBtn(emoji: '🏦', label: 'IBAN', color: Colors.purple, isDark: isDark,
-                      onTap: () => Navigator.of(context).pop('iban')),
-                ],
-              ),
+              Row(children: [
+                _PaymentBtn(emoji: '💳', label: 'Kart', color: Colors.blue, isDark: isDark,
+                    onTap: () => Navigator.of(context).pop('card')),
+                const SizedBox(width: 12),
+                _PaymentBtn(emoji: '💵', label: 'Nakit', color: Colors.green, isDark: isDark,
+                    onTap: () => Navigator.of(context).pop('cash')),
+                const SizedBox(width: 12),
+                _PaymentBtn(emoji: '🏦', label: 'IBAN', color: Colors.purple, isDark: isDark,
+                    onTap: () => Navigator.of(context).pop('iban')),
+              ]),
             ],
           ),
         ),
@@ -345,7 +420,7 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
   Future<void> _refreshRoute() async {
     setState(() => _loading = true);
     CourierRouteService.instance.clearCache();
-    _lastOrderSignature = '';
+    _lastOrderSignature = '__force_refresh__';
   }
 
   // ── Build map elements ────────────────────────────────────────────────────
@@ -386,8 +461,7 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
         markerId: MarkerId('stop_$i'),
         position: LatLng(stop.lat, stop.lng),
         icon: BitmapDescriptor.defaultMarkerWithHue(
-          isPickup ? BitmapDescriptor.hueViolet : BitmapDescriptor.hueOrange,
-        ),
+          isPickup ? BitmapDescriptor.hueViolet : BitmapDescriptor.hueOrange),
         infoWindow: InfoWindow(title: '${i + 1}. ${stop.label}', snippet: snippet),
         zIndex: 5,
       ));
@@ -397,8 +471,7 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
       _polylines.add(Polyline(
         polylineId: const PolylineId('route'),
         points: route.polylinePoints.map((p) => LatLng(p.lat, p.lng)).toList(),
-        color: _routeColor,
-        width: 4,
+        color: _routeColor, width: 4,
       ));
     }
   }
@@ -423,9 +496,7 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
       if (p.longitude > maxLng) maxLng = p.longitude;
     }
     _mapController!.animateCamera(CameraUpdate.newLatLngBounds(
-      LatLngBounds(southwest: LatLng(minLat, minLng), northeast: LatLng(maxLat, maxLng)),
-      64,
-    ));
+      LatLngBounds(southwest: LatLng(minLat, minLng), northeast: LatLng(maxLat, maxLng)), 64));
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -433,13 +504,34 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hasPending = _locallyPickedUp.isNotEmpty || _locallyDelivered.isNotEmpty;
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
       appBar: AppBar(
         backgroundColor: isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
         elevation: 0, scrolledUnderElevation: 0,
-        title: const Text('Teslimat Rotam', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+        title: Row(children: [
+          const Text('Teslimat Rotam', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+          if (hasPending) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                SizedBox(width: 8, height: 8,
+                  child: CircularProgressIndicator(color: Colors.orange, strokeWidth: 1.5)),
+                const SizedBox(width: 4),
+                Text('Senkronize ediliyor', style: TextStyle(fontSize: 8,
+                    fontWeight: FontWeight.bold, color: Colors.orange[700])),
+              ]),
+            ),
+          ],
+        ]),
         actions: [
           IconButton(
             icon: _loading
@@ -449,10 +541,8 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
             onPressed: _loading ? null : _refreshRoute,
           ),
           if (_route != null && _route!.orderedStops.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.navigation_rounded, color: Colors.blue),
-              onPressed: _openGoogleMapsNavigation,
-            ),
+            IconButton(icon: const Icon(Icons.navigation_rounded, color: Colors.blue),
+                onPressed: _openGoogleMapsNavigation),
         ],
       ),
       body: Column(
@@ -477,34 +567,28 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF211F31) : Colors.white,
         border: Border(bottom: BorderSide(
-          color: isDark ? const Color(0xFF2D2B3F) : const Color(0xFFE5E7EB),
-        )),
+          color: isDark ? const Color(0xFF2D2B3F) : const Color(0xFFE5E7EB))),
       ),
-      child: Row(
-        children: [
-          _SummaryChip(icon: Icons.timer_outlined, label: '~$totalMin dk', color: Colors.orange, isDark: isDark),
-          const SizedBox(width: 10),
-          _SummaryChip(icon: Icons.straighten_rounded, label: '$totalKm km', color: Colors.blue, isDark: isDark),
-          const SizedBox(width: 10),
-          _SummaryChip(icon: Icons.location_on_rounded, label: '$stopCount teslimat', color: Colors.green, isDark: isDark),
-          const Spacer(),
-          GestureDetector(
-            onTap: _openGoogleMapsNavigation,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(color: Colors.blue, borderRadius: BorderRadius.circular(10)),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.navigation_rounded, size: 14, color: Colors.white),
-                  SizedBox(width: 4),
-                  Text('Başla', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
-                ],
-              ),
-            ),
+      child: Row(children: [
+        _SummaryChip(icon: Icons.timer_outlined, label: '~$totalMin dk', color: Colors.orange, isDark: isDark),
+        const SizedBox(width: 10),
+        _SummaryChip(icon: Icons.straighten_rounded, label: '$totalKm km', color: Colors.blue, isDark: isDark),
+        const SizedBox(width: 10),
+        _SummaryChip(icon: Icons.location_on_rounded, label: '$stopCount teslimat', color: Colors.green, isDark: isDark),
+        const Spacer(),
+        GestureDetector(
+          onTap: _openGoogleMapsNavigation,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(color: Colors.blue, borderRadius: BorderRadius.circular(10)),
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.navigation_rounded, size: 14, color: Colors.white),
+              SizedBox(width: 4),
+              Text('Başla', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+            ]),
           ),
-        ],
-      ),
+        ),
+      ]),
     );
   }
 
@@ -522,13 +606,10 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
         const SizedBox(height: 12),
         Text(_error!, style: TextStyle(fontSize: 14, color: Colors.grey[600])),
         const SizedBox(height: 16),
-        ElevatedButton.icon(
-          onPressed: _refreshRoute,
-          icon: const Icon(Icons.refresh_rounded, size: 16),
-          label: const Text('Tekrar Dene'),
+        ElevatedButton.icon(onPressed: _refreshRoute,
+          icon: const Icon(Icons.refresh_rounded, size: 16), label: const Text('Tekrar Dene'),
           style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), elevation: 0),
-        ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), elevation: 0)),
       ]));
     }
     if (_route == null || _route!.orderedStops.isEmpty) {
@@ -559,8 +640,6 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
     );
   }
 
-  // ── Stop list with action buttons ─────────────────────────────────────────
-
   Widget _buildStopList(bool isDark) {
     final route = _route!;
     return SafeArea(
@@ -571,32 +650,28 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 10, offset: const Offset(0, -2))],
         ),
-        child: Column(
-          children: [
-            const SizedBox(height: 8),
-            Container(width: 36, height: 4, decoration: BoxDecoration(
-              color: isDark ? Colors.grey[700] : Colors.grey[300], borderRadius: BorderRadius.circular(2))),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: Row(children: [
-                Icon(Icons.route_rounded, size: 15, color: Colors.grey[500]),
-                const SizedBox(width: 6),
-                Text('Duraklar', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.grey[300] : Colors.grey[800])),
-                const Spacer(),
-                Text('${route.orderedStops.length} durak', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-              ]),
-            ),
-            const SizedBox(height: 4),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                itemCount: route.orderedStops.length,
-                itemBuilder: (_, i) => _buildStopCard(i, route, isDark),
-              ),
-            ),
-          ],
-        ),
+        child: Column(children: [
+          const SizedBox(height: 8),
+          Container(width: 36, height: 4, decoration: BoxDecoration(
+            color: isDark ? Colors.grey[700] : Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Row(children: [
+              Icon(Icons.route_rounded, size: 15, color: Colors.grey[500]),
+              const SizedBox(width: 6),
+              Text('Duraklar', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.grey[300] : Colors.grey[800])),
+              const Spacer(),
+              Text('${route.orderedStops.length} durak', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+            ]),
+          ),
+          const SizedBox(height: 4),
+          Expanded(child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            itemCount: route.orderedStops.length,
+            itemBuilder: (_, i) => _buildStopCard(i, route, isDark),
+          )),
+        ]),
       ),
     );
   }
@@ -609,12 +684,8 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
     final isLast = index == route.orderedStops.length - 1;
     final color = isPickup ? _pickupColor : _deliveryColor;
     final orderId = stop.orderId;
+    final isBusy = isPickup ? _pickupBusyOrderId == orderId : _deliverBusyOrderId == orderId;
 
-    final isBusy = isPickup
-        ? _pickupBusyOrderId == orderId
-        : _deliverBusyOrderId == orderId;
-
-    // Items summary for delivery
     String? itemsSummary;
     if (!isPickup) {
       final items = stop.orderData?['items'] as List? ?? [];
@@ -635,177 +706,119 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Timeline
-          SizedBox(width: 28, child: Column(children: [
-            Container(
-              width: 22, height: 22,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.15), shape: BoxShape.circle,
-                border: Border.all(color: color, width: 2),
-              ),
-              child: Center(child: Text('${index + 1}',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color))),
-            ),
-            if (!isLast) Container(width: 2, height: 52, color: isDark ? Colors.grey[800] : Colors.grey[200]),
-          ])),
-          const SizedBox(width: 10),
-          // Card
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 6),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: isDark ? color.withOpacity(0.06) : color.withOpacity(0.04),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: color.withOpacity(0.15)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header row
-                  Row(children: [
-                    Icon(isPickup ? Icons.restaurant_rounded : Icons.person_rounded, size: 13, color: color),
-                    const SizedBox(width: 5),
-                    Expanded(child: Text(stop.label,
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.grey[200] : Colors.grey[900]),
-                        maxLines: 1, overflow: TextOverflow.ellipsis)),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(6)),
-                      child: Text(isPickup ? 'AL' : 'TESLİM',
-                          style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: color)),
-                    ),
-                    const SizedBox(width: 6),
-                    Text('~$etaMin dk', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.orange[300] : Colors.orange[700])),
-                  ]),
-
-                  // Items for delivery
-                  if (!isPickup && itemsSummary != null) ...[
-                    const SizedBox(height: 4),
-                    Text(itemsSummary, style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                  ],
-
-                  // Price for delivery
-                  if (!isPickup && price != null && price > 0) ...[
-                    const SizedBox(height: 3),
-                    Row(children: [
-                      Text('${price.toStringAsFixed(0)} $currency',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                              color: isDark ? Colors.grey[300] : Colors.grey[800])),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: isPaid ? Colors.green.withOpacity(0.12) : Colors.orange.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(4)),
-                        child: Text(isPaid ? 'ÖDENDİ' : 'NAKİT',
-                            style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold,
-                                color: isPaid ? Colors.green : Colors.orange)),
-                      ),
-                    ]),
-                  ],
-
-                  // ── Action button ──────────────────────────────
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 36,
-                    child: ElevatedButton.icon(
-                      onPressed: isBusy
-                          ? null
-                          : isPickup
-                              ? () => _markPickedUp(orderId, stop.label)
-                              : () => _markDelivered(orderId, stop.label),
-                      icon: isBusy
-                          ? const SizedBox(width: 14, height: 14,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : Icon(isPickup ? Icons.check_circle_rounded : Icons.delivery_dining_rounded, size: 16),
-                      label: Text(
-                        isPickup ? 'Aldım' : 'Teslim Et',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isPickup ? _pickupColor : Colors.green,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: (isPickup ? _pickupColor : Colors.green).withOpacity(0.5),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                      ),
-                    ),
-                  ),
-                ],
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(width: 28, child: Column(children: [
+          Container(width: 22, height: 22, decoration: BoxDecoration(
+            color: color.withOpacity(0.15), shape: BoxShape.circle,
+            border: Border.all(color: color, width: 2)),
+            child: Center(child: Text('${index + 1}',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color)))),
+          if (!isLast) Container(width: 2, height: 52, color: isDark ? Colors.grey[800] : Colors.grey[200]),
+        ])),
+        const SizedBox(width: 10),
+        Expanded(child: Container(
+          margin: const EdgeInsets.only(bottom: 6),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: isDark ? color.withOpacity(0.06) : color.withOpacity(0.04),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withOpacity(0.15))),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Icon(isPickup ? Icons.restaurant_rounded : Icons.person_rounded, size: 13, color: color),
+              const SizedBox(width: 5),
+              Expanded(child: Text(stop.label,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.grey[200] : Colors.grey[900]),
+                  maxLines: 1, overflow: TextOverflow.ellipsis)),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(6)),
+                child: Text(isPickup ? 'AL' : 'TESLİM',
+                    style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: color))),
+              const SizedBox(width: 6),
+              Text('~$etaMin dk', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.orange[300] : Colors.orange[700])),
+            ]),
+            if (!isPickup && itemsSummary != null) ...[
+              const SizedBox(height: 4),
+              Text(itemsSummary, style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+            ],
+            if (!isPickup && price != null && price > 0) ...[
+              const SizedBox(height: 3),
+              Row(children: [
+                Text('${price.toStringAsFixed(0)} $currency',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.grey[300] : Colors.grey[800])),
+                const SizedBox(width: 6),
+                Container(padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: isPaid ? Colors.green.withOpacity(0.12) : Colors.orange.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(4)),
+                  child: Text(isPaid ? 'ÖDENDİ' : 'NAKİT',
+                      style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold,
+                          color: isPaid ? Colors.green : Colors.orange))),
+              ]),
+            ],
+            const SizedBox(height: 8),
+            SizedBox(width: double.infinity, height: 36,
+              child: ElevatedButton.icon(
+                onPressed: isBusy ? null
+                    : isPickup ? () => _markPickedUp(orderId, stop.label)
+                    : () => _markDelivered(orderId, stop.label),
+                icon: isBusy
+                    ? const SizedBox(width: 14, height: 14,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : Icon(isPickup ? Icons.check_circle_rounded : Icons.delivery_dining_rounded, size: 16),
+                label: Text(isPickup ? 'Aldım' : 'Teslim Et',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isPickup ? _pickupColor : Colors.green,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: (isPickup ? _pickupColor : Colors.green).withOpacity(0.5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 0, padding: const EdgeInsets.symmetric(horizontal: 12)),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// REUSABLE WIDGETS
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SummaryChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final bool isDark;
-  const _SummaryChip({required this.icon, required this.label, required this.color, required this.isDark});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withOpacity(isDark ? 0.12 : 0.08),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 12, color: color),
-        const SizedBox(width: 4),
-        Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+          ]),
+        )),
       ]),
     );
   }
 }
 
-class _PaymentBtn extends StatelessWidget {
-  final String emoji;
-  final String label;
-  final Color color;
-  final bool isDark;
-  final VoidCallback onTap;
-  const _PaymentBtn({required this.emoji, required this.label, required this.color, required this.isDark, required this.onTap});
-
+class _SummaryChip extends StatelessWidget {
+  final IconData icon; final String label; final Color color; final bool isDark;
+  const _SummaryChip({required this.icon, required this.label, required this.color, required this.isDark});
   @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          decoration: BoxDecoration(
-            color: color.withOpacity(isDark ? 0.12 : 0.07),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: color.withOpacity(0.3), width: 1.5),
-          ),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text(emoji, style: const TextStyle(fontSize: 26)),
-            const SizedBox(height: 6),
-            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color)),
-          ]),
-        ),
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(color: color.withOpacity(isDark ? 0.12 : 0.08),
+      borderRadius: BorderRadius.circular(8), border: Border.all(color: color.withOpacity(0.2))),
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(icon, size: 12, color: color), const SizedBox(width: 4),
+      Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+    ]),
+  );
+}
+
+class _PaymentBtn extends StatelessWidget {
+  final String emoji; final String label; final Color color; final bool isDark; final VoidCallback onTap;
+  const _PaymentBtn({required this.emoji, required this.label, required this.color, required this.isDark, required this.onTap});
+  @override
+  Widget build(BuildContext context) => Expanded(
+    child: GestureDetector(onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        decoration: BoxDecoration(color: color.withOpacity(isDark ? 0.12 : 0.07),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withOpacity(0.3), width: 1.5)),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(emoji, style: const TextStyle(fontSize: 26)),
+          const SizedBox(height: 6),
+          Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color)),
+        ]),
       ),
-    );
-  }
+    ),
+  );
 }

@@ -86,8 +86,8 @@ class CourierRouteService {
     }
 
     final elapsed = DateTime.now().difference(_lastFetchTime).inSeconds;
-    if (elapsed < _minRefetchIntervalSec && _cachedResult != null && _cachedResult!.signature == sig) {
-      debugPrint('[CourierRoute] Throttled (same signature)');
+    if (elapsed < _minRefetchIntervalSec && _cachedResult != null) {
+      debugPrint('[CourierRoute] Throttled');
       return _cachedResult;
     }
 

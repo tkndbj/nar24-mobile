@@ -56,16 +56,6 @@ class CourierLocationService {
     _tracking = true;
     debugPrint('[CourierLocation] Starting for uid=$uid');
 
-    // ── TEST WRITE — remove after confirming ──────────────────────────
-    try {
-      await _db
-          .ref('courier_locations/$uid/test')
-          .set('hello_${DateTime.now().millisecondsSinceEpoch}');
-      debugPrint('[CourierLocation] ✅ Test write succeeded');
-    } catch (e) {
-      debugPrint('[CourierLocation] ❌ Test write FAILED: $e');
-    }
-// ─────────────────────────────────────────────────────────────────
 
     // ── Set online presence + disconnect hook ─────────────────────────────
     final locRef = _db.ref('courier_locations/$uid');

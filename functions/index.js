@@ -8630,3 +8630,4 @@ export { calculateDailyFoodAccounting, calculateWeeklyFoodAccounting, calculateM
 export { generateRestaurantReceiptBackground } from './37-restaurant-receipt/index.js';
 export { scheduleDiscountExpiry, restoreDiscountPrice } from './38-food-discount/index.js';
 export { createTestCouriers, deleteTestCouriers, listTestCouriers } from './39-fake-accounts/index.js';
+export { processCourierAction } from './40-courier-actions/index.js';
