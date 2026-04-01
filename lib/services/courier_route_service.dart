@@ -231,7 +231,7 @@ class CourierRouteService {
     ].join(';');
 
     final url = Uri.parse(
-      'https://router.project-osrm.org/route/v1/driving/$coords'
+      'https://osrm.nar24panel.com/route/v1/driving/$coords'
       '?overview=full&geometries=geojson&steps=false',
     );
 

@@ -7,7 +7,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:intl/intl.dart';
 import '../../auth_service.dart';
 import '../../generated/l10n/app_localizations.dart';
@@ -15,6 +14,7 @@ import 'package:rxdart/rxdart.dart';
 import 'receipt_scanner.dart';
 import '../../services/courier_location_service.dart';
 import './courier_route_screen.dart';
+import 'dart:async';
 
 const _kFcmTopic = 'food_couriers';
 
@@ -77,7 +77,9 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
   Stream<int>? _unreadCountStream;
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _courierNotifsStream;
   late final TabController _tabController;
-  String? _highlightedOrderId;
+   String? _highlightedOrderId;
+  bool _isOnline = true;
+  StreamSubscription<bool>? _connSub;
 
   @override
   void initState() {
@@ -93,7 +95,10 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
     .asBroadcastStream(); // allows multiple listeners on one connection
 _setupFcm();
 _setupUnreadStream();
-    CourierLocationService.instance.startTracking(); // ← ADD THIS
+   CourierLocationService.instance.startTracking();
+    _connSub = CourierLocationService.instance.connectionStream.listen((connected) {
+      if (mounted && _isOnline != connected) setState(() => _isOnline = connected);
+    });
   }
 
   // ── FCM ───────────────────────────────────────────────────────────────────
@@ -254,7 +259,8 @@ _setupUnreadStream();
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    CourierLocationService.instance.stopTracking(); // ← ADD THIS
+    _connSub?.cancel();
+    CourierLocationService.instance.stopTracking();
     _tabController.dispose();
     _localReadController.close();
     super.dispose();
@@ -373,12 +379,48 @@ _setupUnreadStream();
               ),
             ],
           ),
-         if (_notifPanelOpen)
-  _NotificationPanel(
-    isDark: isDark,
-    onClose: () => setState(() => _notifPanelOpen = false),
-    notifsStream: _courierNotifsStream,
-  ),
+         // ── Offline banner ──────────────────────────────────────
+          if (!_isOnline)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Material(
+                elevation: 2,
+                color: Colors.red[700],
+                child: SafeArea(
+                  top: false,
+                  bottom: false,
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.cloud_off_rounded,
+                            size: 15, color: Colors.white),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Çevrimdışı — işlemler bağlantı kurulunca gönderilecek',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white.withOpacity(0.95),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          if (_notifPanelOpen)
+            _NotificationPanel(
+              isDark: isDark,
+              onClose: () => setState(() => _notifPanelOpen = false),
+              notifsStream: _courierNotifsStream,
+            ),
         ],
       ),
     );
@@ -684,108 +726,257 @@ class _PoolTab extends StatefulWidget {
 }
 
 class _PoolTabState extends State<_PoolTab> with AutomaticKeepAliveClientMixin {
-  late final Stream<QuerySnapshot<Map<String, dynamic>>> _ordersStream;
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _callsStream;
 
-  @override
-void initState() {
-  super.initState();
-  // Remove orderBy — avoids composite index requirement, sort client-side below
-  _ordersStream = FirebaseFirestore.instance
-      .collection('orders-food')
-      .where('status', isEqualTo: 'ready')
-      .snapshots();
+  // ── Paginated ready-orders state ──────────────────────────────────
+  //
+  // Page 1 is a live snapshot (real-time adds/removes as orders become
+  // ready or get taken).  Subsequent pages are fetched on-demand via
+  // one-time gets when the courier scrolls near the bottom.
+  //
+  // If a stale extra-page order was already taken, the existing
+  // transaction in _assignOrder handles it gracefully ("already taken").
 
-  _callsStream = FirebaseFirestore.instance
-      .collection('courier_calls')
-      .where('isActive', isEqualTo: true)
-      .snapshots();
-}
+  static const _kPageSize = 10;
+
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _livePageSub;
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _liveDocs = [];
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> _extraDocs = [];
+  bool _hasMore = true;
+  bool _loadingMore = false;
+  bool _initialLoading = true;
+  String? _ordersError;
+  final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+
+    _callsStream = FirebaseFirestore.instance
+        .collection('courier_calls')
+        .where('isActive', isEqualTo: true)
+        .snapshots();
+
+    _subscribeLivePage();
+    _scrollController.addListener(_onScroll);
+  }
+
+  // ── Live first page (real-time) ───────────────────────────────────
+
+  void _subscribeLivePage() {
+    _livePageSub = FirebaseFirestore.instance
+        .collection('orders-food')
+        .where('status', isEqualTo: 'ready')
+        .orderBy('updatedAt') // ← requires composite index
+        .limit(_kPageSize)
+        .snapshots()
+        .listen(
+      (snap) {
+        if (!mounted) return;
+        final liveIds = snap.docs.map((d) => d.id).toSet();
+        setState(() {
+          _liveDocs = snap.docs;
+          _initialLoading = false;
+          _ordersError = null;
+
+          // Drop extras that rotated back into the live page
+          _extraDocs.removeWhere((d) => liveIds.contains(d.id));
+
+          // If live page isn't full and no extras loaded → nothing left
+          if (snap.docs.length < _kPageSize && _extraDocs.isEmpty) {
+            _hasMore = false;
+          } else if (snap.docs.length >= _kPageSize) {
+            // Live page is full — there *might* be more beyond it
+            _hasMore = true;
+          }
+        });
+      },
+      onError: (e) {
+        if (!mounted) return;
+        setState(() {
+          _initialLoading = false;
+          _ordersError = e.toString();
+        });
+      },
+    );
+  }
+
+  // ── Infinite-scroll trigger ───────────────────────────────────────
+
+  void _onScroll() {
+    if (!_hasMore || _loadingMore) return;
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - 300) {
+      _loadMoreOrders();
+    }
+  }
+
+  // ── Next page (one-time fetch) ────────────────────────────────────
+
+  Future<void> _loadMoreOrders() async {
+    if (_loadingMore || !_hasMore) return;
+
+    // Cursor = last extra doc, or last live doc if no extras yet
+    final cursor =
+        _extraDocs.isNotEmpty ? _extraDocs.last : (_liveDocs.isNotEmpty ? _liveDocs.last : null);
+    if (cursor == null) return;
+
+    setState(() => _loadingMore = true);
+
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('orders-food')
+          .where('status', isEqualTo: 'ready')
+          .orderBy('updatedAt')
+          .startAfterDocument(cursor)
+          .limit(_kPageSize)
+          .get();
+
+      if (!mounted) return;
+
+      // Dedup against everything already displayed
+      final existingIds = {
+        ..._liveDocs.map((d) => d.id),
+        ..._extraDocs.map((d) => d.id),
+      };
+      final fresh = snap.docs.where((d) => !existingIds.contains(d.id)).toList();
+
+      setState(() {
+        _extraDocs.addAll(fresh);
+        _hasMore = snap.docs.length >= _kPageSize;
+        _loadingMore = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  // ── Merged, deduped, sorted list ──────────────────────────────────
+
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> get _allOrderDocs {
+    final seen = <String>{};
+    final all = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+    for (final d in _liveDocs) {
+      if (seen.add(d.id)) all.add(d);
+    }
+    for (final d in _extraDocs) {
+      if (seen.add(d.id)) all.add(d);
+    }
+    // Client-side sort keeps oldest-first (FIFO) regardless of merge order
+    all.sort((a, b) {
+      final aTs = a.data()['updatedAt'] as Timestamp?;
+      final bTs = b.data()['updatedAt'] as Timestamp?;
+      if (aTs == null) return 1;
+      if (bTs == null) return -1;
+      return aTs.compareTo(bTs);
+    });
+    return all;
+  }
 
   @override
   bool get wantKeepAlive => true;
 
   @override
+  void dispose() {
+    _livePageSub?.cancel();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────
+
+  @override
   Widget build(BuildContext context) {
-     super.build(context);
+    super.build(context);
     final loc = AppLocalizations.of(context);
     final myUid = widget.currentUser.uid;
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: _callsStream,
       builder: (context, callSnap) {
-        // Show calls that are:
-        // - waiting (any courier can accept)
-        // - accepted by ME (so I can scan)
-        final visibleCalls = (callSnap.data?.docs ?? []).map((d) {
-          return CourierCall.fromDoc(d);
-        }).where((c) {
-          return c.status == 'waiting' ||
-              (c.status == 'accepted' && c.acceptedBy == myUid);
-        }).toList();
+        final visibleCalls = (callSnap.data?.docs ?? [])
+            .map((d) => CourierCall.fromDoc(d))
+            .where((c) =>
+                c.status == 'waiting' ||
+                (c.status == 'accepted' && c.acceptedBy == myUid))
+            .toList();
 
-        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: _ordersStream,
-          builder: (context, orderSnap) {
-            if (orderSnap.connectionState == ConnectionState.waiting &&
-                callSnap.connectionState == ConnectionState.waiting) {
-              return const _Loader();
-            }
-            if (orderSnap.hasError) {
-              return _ErrorView(message: orderSnap.error.toString());
-            }
+        // Both still loading → show spinner
+        if (_initialLoading &&
+            callSnap.connectionState == ConnectionState.waiting) {
+          return const _Loader();
+        }
 
-            final orderDocs = [...(orderSnap.data?.docs ?? [])]
-  ..sort((a, b) {
-    final aTs = a.data()['updatedAt'] as Timestamp?;
-    final bTs = b.data()['updatedAt'] as Timestamp?;
-    if (aTs == null) return 1;
-    if (bTs == null) return -1;
-    return aTs.compareTo(bTs); // oldest first
-  });
-            final hasContent = visibleCalls.isNotEmpty || orderDocs.isNotEmpty;
+        // Firestore error on orders stream
+        if (_ordersError != null && _liveDocs.isEmpty && _extraDocs.isEmpty) {
+          return _ErrorView(message: _ordersError!);
+        }
 
-            if (!hasContent) {
-              return _EmptyState(
-                emoji: '📦',
-                title: loc.foodCargoPoolEmpty,
-                subtitle: loc.foodCargoPoolEmptySub,
-                isDark: widget.isDark,
+        final orderDocs = _allOrderDocs;
+        final hasContent = visibleCalls.isNotEmpty || orderDocs.isNotEmpty;
+
+        if (!hasContent) {
+          return _EmptyState(
+            emoji: '📦',
+            title: loc.foodCargoPoolEmpty,
+            subtitle: loc.foodCargoPoolEmptySub,
+            isDark: widget.isDark,
+          );
+        }
+
+        final totalItems = visibleCalls.length + orderDocs.length;
+
+        return ListView.builder(
+          controller: _scrollController,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+          itemCount: totalItems + (_hasMore ? 1 : 0),
+          itemBuilder: (_, i) {
+            // ── Courier-call cards first ─────────────────────────────
+            if (i < visibleCalls.length) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: _CourierCallCard(
+                  key: ValueKey(
+                      '${visibleCalls[i].id}_${visibleCalls[i].status}'),
+                  call: visibleCalls[i],
+                  currentUser: widget.currentUser,
+                  isDark: widget.isDark,
+                  onOrderCreated: widget.onScannedOrderCreated,
+                ),
               );
             }
 
-            return ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-              itemCount: visibleCalls.length + orderDocs.length,
-              itemBuilder: (_, i) {
-                // Call cards first
-                if (i < visibleCalls.length) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: _CourierCallCard(
-                      // Key changes when status changes → forces fresh widget state
-                      key: ValueKey(
-                          '${visibleCalls[i].id}_${visibleCalls[i].status}'),
-                      call: visibleCalls[i],
-                      currentUser: widget.currentUser,
-                      isDark: widget.isDark,
-                      onOrderCreated: widget.onScannedOrderCreated,
-                    ),
-                  );
-                }
-                // Then ready orders
-                final orderIdx = i - visibleCalls.length;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: _CargoOrderCard(
-                    orderId: orderDocs[orderIdx].id,
-                    data: orderDocs[orderIdx].data(),
-                    isDark: widget.isDark,
-                    isPool: true,
-                    currentUser: widget.currentUser,
-                  ),
-                );
-              },
+            // ── Ready-order cards ───────────────────────────────────
+            final orderIdx = i - visibleCalls.length;
+
+            // Sentinel item at the end → loading indicator
+            if (orderIdx >= orderDocs.length) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: _loadingMore
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.orange,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              );
+            }
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _CargoOrderCard(
+                orderId: orderDocs[orderIdx].id,
+                data: orderDocs[orderIdx].data(),
+                isDark: widget.isDark,
+                isPool: true,
+                currentUser: widget.currentUser,
+              ),
             );
           },
         );
@@ -1126,6 +1317,7 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab> with AutomaticKeepAl
   final _scrollController = ScrollController();
   final Map<String, GlobalKey> _cardKeys = {};
   final Set<String> _removedLocally = {};
+  final Map<String, StreamSubscription> _actionListeners = {};
 
     @override
   bool get wantKeepAlive => true;
@@ -1152,8 +1344,45 @@ void didUpdateWidget(_MyDeliveriesTab old) {
   }
 }
 
+ void _listenForActionResult(String actionId, String orderId) {
+    final sub = FirebaseFirestore.instance
+        .collection('courier_actions')
+        .doc(actionId)
+        .snapshots()
+        .listen((snap) {
+      if (!snap.exists || !mounted) return;
+      final status = snap.data()?['status'] as String?;
+
+      if (status == 'completed') {
+        _actionListeners[actionId]?.cancel();
+        _actionListeners.remove(actionId);
+      } else if (status == 'failed') {
+        _actionListeners[actionId]?.cancel();
+        _actionListeners.remove(actionId);
+
+        // Revert optimistic removal — order reappears via stream
+        setState(() => _removedLocally.remove(orderId));
+
+        final error = snap.data()?['error'] as String? ?? 'Bilinmeyen hata';
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Teslimat başarısız: $error'),
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+          ));
+        }
+      }
+    });
+    _actionListeners[actionId] = sub;
+  }
+
   @override
   void dispose() {
+    for (final sub in _actionListeners.values) {
+      sub.cancel();
+    }
     _scrollController.dispose();
     super.dispose();
   }
@@ -1252,7 +1481,10 @@ final docs = [...(snap.data?.docs ?? [])]
                 isPool: false,
                 currentUser: widget.currentUser,
                 isHighlighted: isHit,
-                onDeliveredLocally: () => setState(() => _removedLocally.add(docId)),
+                onDeliveredLocally: (actionId) {
+                  setState(() => _removedLocally.add(docId));
+                  _listenForActionResult(actionId, docId);
+                },
               ),
             );
          } ),
@@ -1274,8 +1506,8 @@ class _CargoOrderCard extends StatefulWidget {
   final bool isDark;
   final bool isPool;
   final User currentUser;
-  final bool isHighlighted;
-  final VoidCallback? onDeliveredLocally;
+   final bool isHighlighted;
+  final void Function(String actionDocId)? onDeliveredLocally;
 
   const _CargoOrderCard({
     required this.orderId,
@@ -1422,7 +1654,8 @@ Future<void> _markDelivered() async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     final displayName = FirebaseAuth.instance.currentUser!.displayName ?? 'Courier';
 
-    await FirebaseFirestore.instance.collection('courier_actions').doc().set({
+     final actionRef = FirebaseFirestore.instance.collection('courier_actions').doc();
+    await actionRef.set({
       'type': 'deliver',
       'orderId': widget.orderId,
       'courierId': uid,
@@ -1432,7 +1665,8 @@ Future<void> _markDelivered() async {
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-     CourierLocationService.instance.updateCurrentOrder(null);
+    CourierLocationService.instance.updateCurrentOrder(null);
+    widget.onDeliveredLocally?.call(actionRef.id);
     if (mounted) _showSnack(loc.foodCargoDeliveredSuccess);
   } catch (e) {
     if (mounted) {

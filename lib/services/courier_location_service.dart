@@ -26,7 +26,7 @@ class CourierLocationService {
   StreamSubscription<Position>? _positionSub;
   Timer? _heartbeatTimer;
   Position? _lastWrittenPosition;
-  DateTime _lastWriteTime = DateTime(2000); // epoch sentinel
+  DateTime _lastWriteTime = DateTime.now();
   bool _tracking = false;
   String? _currentOrderId; // kept in sync by FoodCargoScreen
   FirebaseDatabase get _db => FirebaseDatabase.instanceFor(
@@ -36,7 +36,14 @@ class CourierLocationService {
       );
   // ── Public API ────────────────────────────────────────────────────────────
 
-  bool get isTracking => _tracking;
+ bool get isTracking => _tracking;
+
+  /// RTDB connection state — true when the device has an active
+  /// connection to Firebase.  The screen uses this for an offline banner.
+  Stream<bool> get connectionStream => _db
+      .ref('.info/connected')
+      .onValue
+      .map((event) => event.snapshot.value as bool? ?? false);
 
   /// Call from FoodCargoScreen.initState().
   /// Requests permission if needed then starts the GPS stream.
@@ -154,8 +161,16 @@ class CourierLocationService {
 
     // Slower heartbeat in background
     _heartbeatTimer = Timer.periodic(
-      const Duration(seconds: 60),            // 60s instead of 30s
-      (_) => _writeHeartbeat(uid),
+      const Duration(seconds: 60),
+      (_) {
+        if (_currentOrderId == null &&
+            DateTime.now().difference(_lastWriteTime).inMinutes > 60) {
+          stopTracking();
+          debugPrint('[CourierLocation] Auto-stopped — idle in background.');
+          return;
+        }
+        _writeHeartbeat(uid);
+      },
     );
 
     debugPrint('[CourierLocation] Switched to background mode.');
