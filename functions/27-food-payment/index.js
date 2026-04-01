@@ -567,6 +567,35 @@ export const initializeFoodPayment = onCall(
       throw new HttpsError('unauthenticated', 'You must be signed in.');
     }
 
+     // Rate limit: max 5 food payment attempts per 10 minutes per user
+     const userId = request.auth.uid;
+     const db = admin.firestore();
+     const rateLimitRef = db.collection('_rate_limits').doc(`food_payment_init_${userId}`);
+     const windowMs = 10 * 60 * 1000;
+     const maxAttempts = 5;
+
+     await db.runTransaction(async (tx) => {
+       const snap = await tx.get(rateLimitRef);
+       const now = Date.now();
+
+       if (snap.exists) {
+         const data = snap.data();
+         const windowStart = data.windowStart?.toMillis?.() ?? 0;
+         const count = data.count ?? 0;
+
+         if (now - windowStart < windowMs) {
+           if (count >= maxAttempts) {
+             throw new HttpsError('resource-exhausted', 'Too many payment attempts. Try again later.');
+           }
+           tx.update(rateLimitRef, { count: count + 1 });
+         } else {
+           tx.set(rateLimitRef, { count: 1, windowStart: admin.firestore.Timestamp.fromMillis(now), expiresAt: admin.firestore.Timestamp.fromMillis(now + windowMs) });
+         }
+       } else {
+         tx.set(rateLimitRef, { count: 1, windowStart: admin.firestore.Timestamp.fromMillis(now), expiresAt: admin.firestore.Timestamp.fromMillis(now + windowMs) });
+       }
+     });
+
     const {
       restaurantId,
       items,
@@ -583,9 +612,6 @@ export const initializeFoodPayment = onCall(
     if (!orderNumber || !restaurantId || !items) {
       throw new HttpsError('invalid-argument', 'orderNumber, restaurantId, and items are required.');
     }
-
-    const db = admin.firestore();
-    const userId = request.auth.uid;
 
     // ── 1. Pre-validate restaurant open & items available ────────────
     // We do a non-transactional read here (payment init is not the final commit)
