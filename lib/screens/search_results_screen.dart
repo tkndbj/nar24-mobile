@@ -216,7 +216,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
           page: _currentPage,
           hitsPerPage: 50,
           l10n: l10n,
-          filterType: '',
         );
       }
 

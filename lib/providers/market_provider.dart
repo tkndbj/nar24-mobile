@@ -92,7 +92,6 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
   static const Duration _buyerCategoryCacheTTL = Duration(minutes: 20);
   static const int _maxBuyerCategoryCacheSize = 10;
 
-
   int _TypseSenseFailureCount = 0;
   DateTime? _lastTypseSenseFailure;
   bool _TypseSenseCircuitOpen = false;
@@ -837,7 +836,8 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
 
       _setBuyerCategoryCache(buyerCategory, allProducts);
 
-      FirestoreReadTracker.instance.trackRead('MarketProvider', 'buyerCategory:$buyerCategory (Firestore)', allProducts.length);
+      FirestoreReadTracker.instance.trackRead('MarketProvider',
+          'buyerCategory:$buyerCategory (Firestore)', allProducts.length);
       return allProducts;
     } catch (e) {
       debugPrint(
@@ -1177,14 +1177,13 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     int page = 0,
     int hitsPerPage = 50,
     AppLocalizations? l10n,
-    String filterType = '',
   }) async {
     if (query.isEmpty) return [];
 
-    final cacheKey = '$query|$filterType|$page|$_sortOption';
+    final cacheKey = '$query|$page|$_sortOption';
     final now = DateTime.now();
 
-    // 1) Return cache if fresh (unchanged)
+    // 1) Return cache if fresh
     if (_searchCache.containsKey(cacheKey)) {
       final ts = _cacheTimestamps[cacheKey]!;
       if (now.difference(ts) < _cacheTTL) {
@@ -1195,145 +1194,50 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     }
 
     return _searchDeduplicator.deduplicate(cacheKey, () async {
-      // ✅ ADD: Check remote config — if Firestore mode, skip TypseSense entirely
-      if (SearchConfigService.instance.useFirestore) {
-        final fallback = await _firestoreSearchFallback(query);
-        _searchCache[cacheKey] = fallback;
-        _cacheTimestamps[cacheKey] = now;
-        return fallback;
-      }
-      // 2) Build your facet filters as before…
-      List<String>? facetFilters;
-      switch (filterType) {
-        case 'deals':
-          facetFilters = ['discountPercentage>0'];
-          break;
-        case 'boosted':
-          facetFilters = ['isBoosted:true'];
-          break;
-        case 'trending':
-          break;
-        case 'fiveStar':
-          facetFilters = ['averageRating=5'];
-          break;
-        case 'bestSellers':
-          // use a replica index sorted by purchaseCount,
-          // so you just set sortOption to that
-          break;
-        default:
-          facetFilters = null;
-      }
-
-      // 3) Wrap each Typesense call in a retry + timeout
+      // Wrap each Typesense call in a retry + timeout
       final r = RetryOptions(
         maxAttempts: 3,
         delayFactor: const Duration(milliseconds: 200),
       );
 
-      try {
-        // 3a) Typesense main index
-        final mainResults = await r.retry(
-          () => typesenseService
-              .searchProducts(
-                query: query,
-                sortOption: '', // Empty string for main products search
-                page: page,
-                hitsPerPage: hitsPerPage,
-                filters: facetFilters,
-              )
-              .timeout(const Duration(seconds: 2)),
-        );
+      // Typesense main index
+      final mainResults = await r.retry(
+        () => typesenseService
+            .searchProducts(
+              query: query,
+              sortOption: '',
+              page: page,
+              hitsPerPage: hitsPerPage,
+            )
+            .timeout(const Duration(seconds: 2)),
+      );
 
-// Shop products can still use sorting if needed
-        final shopResults = await r.retry(
-          () => typesenseShopService
-              .searchProducts(
-                query: query,
-                sortOption: '', // Also use empty for consistency in search
-                page: page,
-                hitsPerPage: hitsPerPage,
-                filters: facetFilters,
-              )
-              .timeout(const Duration(seconds: 2)),
-        );
+      // Typesense shop products index
+      final shopResults = await r.retry(
+        () => typesenseShopService
+            .searchProducts(
+              query: query,
+              sortOption: '',
+              page: page,
+              hitsPerPage: hitsPerPage,
+            )
+            .timeout(const Duration(seconds: 2)),
+      );
 
-        // 4) Merge & dedupe
-        final merged = <ProductSummary>[];
-        final seen = <String>{};
-        for (final list in [mainResults, shopResults]) {
-          for (final p in list) {
-            if (seen.add(p.id)) merged.add(p);
-          }
+      // Merge & dedupe
+      final merged = <ProductSummary>[];
+      final seen = <String>{};
+      for (final list in [mainResults, shopResults]) {
+        for (final p in list) {
+          if (seen.add(p.id)) merged.add(p);
         }
-
-        // 5) Cache & return
-        _searchCache[cacheKey] = merged;
-        _cacheTimestamps[cacheKey] = now;
-        return merged;
-      } catch (e) {
-        debugPrint('Typesense indexes failed: $e — falling back to Firestore');
-
-        // 6) Firestore fallback
-        final fallback = await _firestoreSearchFallback(query);
-        _searchCache[cacheKey] = fallback;
-        _cacheTimestamps[cacheKey] = now;
-        return fallback;
       }
+
+      // Cache & return
+      _searchCache[cacheKey] = merged;
+      _cacheTimestamps[cacheKey] = now;
+      return merged;
     });
-  }
-
-  Future<List<ProductSummary>> _firestoreSearchFallback(String query) async {
-    if (query.isEmpty) return [];
-
-    final lower = query.toLowerCase();
-    final capitalized =
-        query.substring(0, 1).toUpperCase() + query.substring(1).toLowerCase();
-    const searchLimit = 50;
-
-    final snapshots = await Future.wait([
-      _firestore
-          .collection('products')
-          .orderBy('productName')
-          .startAt([lower])
-          .endAt(['$lower\uf8ff'])
-          .limit(searchLimit)
-          .get(),
-      _firestore
-          .collection('products')
-          .orderBy('productName')
-          .startAt([capitalized])
-          .endAt(['$capitalized\uf8ff'])
-          .limit(searchLimit)
-          .get(),
-      _firestore
-          .collection('shop_products')
-          .orderBy('productName')
-          .startAt([lower])
-          .endAt(['$lower\uf8ff'])
-          .limit(searchLimit)
-          .get(),
-      _firestore
-          .collection('shop_products')
-          .orderBy('productName')
-          .startAt([capitalized])
-          .endAt(['$capitalized\uf8ff'])
-          .limit(searchLimit)
-          .get(),
-    ]).timeout(const Duration(seconds: 8));
-
-    final combined = <ProductSummary>[];
-    final seen = <String>{};
-
-    for (final snapshot in snapshots) {
-      for (final doc in snapshot.docs) {
-        if (combined.length >= searchLimit) break;
-        if (seen.add(doc.id)) {
-          combined.add(ProductSummary.fromDocument(doc));
-        }
-      }
-    }
-
-    return combined;
   }
 
   void clearSearchCache() {

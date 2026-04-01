@@ -2929,105 +2929,6 @@ export const updateShipmentStatus = onCall(
   },
 );
 
-// === getCustomToken Function ===
-export const getCustomToken = onCall(
-  {
-    region: 'europe-west3',
-    timeoutSeconds: 60,
-    memory: '128MB',
-  },
-  async (request) => {
-    const {biometricToken} = request.data;
-
-    // 1. Input Validation
-    if (!biometricToken || typeof biometricToken !== 'string') {
-      console.error('Invalid or missing biometricToken.');
-      throw new HttpsError('invalid-argument', 'The function must be called with a valid biometricToken.');
-    }
-
-    try {
-      // 2. Query Firestore for user with this biometricToken
-      const userQuery = await admin
-        .firestore()
-        .collection('users')
-        .where('biometricToken', '==', biometricToken)
-        .limit(1)
-        .get();
-
-      if (userQuery.empty) {
-        console.error('No user with the provided biometricToken.');
-        throw new HttpsError('not-found', 'No user found with the provided biometricToken.');
-      }
-
-      const userDoc = userQuery.docs[0];
-      const userId = userDoc.id;
-
-      // 3. Generate a Firebase Custom Token
-      const customToken = await admin.auth().createCustomToken(userId);
-
-      return {customToken};
-    } catch (error) {
-      console.error('Error generating custom token:', error);
-      if (error instanceof HttpsError) {
-        throw error; // Re-throw known HttpsErrors
-      } else {
-        throw new HttpsError('internal', 'Unable to generate token for biometric authentication.');
-      }
-    }
-  },
-);
-
-export const setCustomToken = onCall(
-  {
-    region: 'europe-west3',
-    timeoutSeconds: 60,
-    memory: '128MB',
-  },
-  async (request) => {
-    console.log('setCustomToken function invoked.');
-
-    const {userId, biometricToken} = request.data;
-
-    // 1. Input Validation
-    if (!userId || typeof userId !== 'string') {
-      console.error('Invalid or missing userId.');
-      throw new HttpsError('invalid-argument', 'The function must be called with a valid userId.');
-    }
-
-    if (!biometricToken || typeof biometricToken !== 'string') {
-      console.error('Invalid or missing biometricToken.');
-      throw new HttpsError('invalid-argument', 'The function must be called with a valid biometricToken.');
-    }
-
-    try {
-      console.log(`Attempting to set biometricToken for userId: ${userId}`);
-
-      // 2. Reference to the user document
-      const userRef = admin.firestore().collection('users').doc(userId);
-
-      // 3. Check if user exists
-      const userDoc = await userRef.get();
-      if (!userDoc.exists) {
-        console.error(`User with ID ${userId} does not exist.`);
-        throw new HttpsError('not-found', 'No user found with the provided userId.');
-      }
-
-      await userRef.update({
-        biometricToken: biometricToken,
-        useBiometric: true, // Ensure useBiometric is set to true
-      });
-
-      console.log(`Biometric token set successfully for user ${userId}.`);
-
-      return {success: true};
-    } catch (error) {
-      console.error('Error setting biometricToken:', error);
-      throw new HttpsError('internal', 'Unable to set biometric token.');
-    }
-  },
-);
-
-
 // New Function: Delete User Account (with subcollections)
 export const deleteUserAccount = onCall(
   {
@@ -3171,124 +3072,6 @@ async function hasSubcollections(docRef) {
   return collections.length > 0;
 }
 
-// Near the bottom of index.js:
-
-export const registerUserWithReferral = onCall(
-  {region: 'europe-west3'}, // or your region
-  async (request) => {
-    console.log('registerUserWithReferral called with data:', request.data);
-
-    // 1) Parse input
-    const {email, password, name, surname, referralCode, gender, birthYear} = request.data;
-
-    // 2) Basic validation
-    if (!email || typeof email !== 'string') {
-      throw new HttpsError('invalid-argument', 'invalid email');
-    }
-    if (!password || typeof password !== 'string' || password.length < 6) {
-      throw new HttpsError('invalid-argument', 'invalid password min 6 chars');
-    }
-    if (!name || typeof name !== 'string') {
-      throw new HttpsError('invalid-argument', 'invalid name');
-    }
-    if (!surname || typeof surname !== 'string') {
-      throw new HttpsError('invalid-argument', 'invalid surname');
-    }
-
-    // 3) Create user in Firebase Auth (admin SDK)
-    let userRecord;
-    try {
-      userRecord = await admin.auth().createUser({
-        email,
-        password,
-        displayName: `${name.trim()} ${surname.trim()}`,
-      });
-    } catch (error) {
-      console.error('Error creating user in Auth:', error);
-      // Convert error to an HttpsError if you like
-      throw new HttpsError('internal', 'Failed to create user');
-    }
-
-    // 4) Build user doc data
-    const userData = {
-      displayName: `${name.trim()} ${surname.trim()}`,
-      email: userRecord.email ?? '',
-      isNew: true,
-      gender: gender || '',
-      birthYear: birthYear || 0,
-      referralCode: userRecord.uid,
-      verified: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
-
-    // If referral code was provided, store it
-    if (referralCode && typeof referralCode === 'string' && referralCode.trim() !== '') {
-      userData.referrerId = referralCode.trim();
-    }
-
-    // 5) Create user doc in Firestore
-    const userDocRef = admin.firestore().collection('users').doc(userRecord.uid);
-    try {
-      await userDocRef.set(userData);
-    } catch (error) {
-      console.error('Error creating user document:', error);
-      // Attempt to clean up the auth user if needed
-      await admin.auth().deleteUser(userRecord.uid);
-      throw new HttpsError('internal', 'Failed to create user doc');
-    }
-
-    // If referral code was provided, update the inviter's subcollection
-    if (referralCode && typeof referralCode === 'string' && referralCode.trim() !== '') {
-      const inviterDocRef = admin.firestore().collection('users').doc(referralCode.trim());
-      const referralDocRef = inviterDocRef.collection('referral').doc(userRecord.uid);
-
-      // Add extra fields if you like
-      const referralData = {
-        email: userRecord.email,
-        registeredAt: admin.firestore.FieldValue.serverTimestamp(),
-      };
-
-      try {
-        await referralDocRef.set(referralData);
-      } catch (error) {
-        console.warn('Failed to update inviter:', error);
-        // Not a fatal error, you can handle or ignore
-      }
-    }
-
-    // 7) (Optional) Send email verification link
-
-    try {
-      const actionCodeSettings = {
-        url: 'https://emlak-mobile-app.web.app/emailVerified',
-        // This is the deep link your user will open after verifying
-        handleCodeInApp: true,
-      };
-      const link = await admin.auth().generateEmailVerificationLink(userRecord.email, actionCodeSettings);
-      console.log('Email verification link generated:', link);
-      // Send the link to the user's email yourself or via sendGrid
-    } catch (error) {
-      console.error('Error sending email verification link:', error);
-      // Not necessarily fatal
-    }
-
-    // 8) Generate a custom token so the client can sign in
-    let customToken;
-    try {
-      customToken = await admin.auth().createCustomToken(userRecord.uid);
-      console.log('Custom token generated for user:', userRecord.uid);
-    } catch (error) {
-      console.error('Error generating custom token:', error);
-      // Clean up or handle as needed
-      await admin.auth().deleteUser(userRecord.uid);
-      throw new HttpsError('internal', 'Failed to generate custom token');
-    }
-
-    // Return the token to the client
-    return {customToken};
-  },
-);
-
 
 export const hasUserBoughtProduct = onCall({region: 'europe-west3'}, async (request) => {
   // 1. Authentication Check
@@ -3330,9 +3113,10 @@ export const createQrAuthSession = onCall(
   {
     region: 'europe-west3',
     cors: {
-      origin: [
-        'http://localhost:3000', // Dev origin
-        'https://adaexpress.co', // Production origin(s)
+      origin: [        
+        'https://nar24.com', // Production origin(s)
+        'https://www.nar24.com', // Production origin(s)
+        'https://www.nar24.com/en',
       ],
       methods: ['POST'], // Callable functions are typically POST
       allowedHeaders: [
@@ -3345,7 +3129,36 @@ export const createQrAuthSession = onCall(
   },
   async (request) => {
     try {
-      const db = admin.firestore();
+       // Rate limit: max 10 sessions per 10 minutes per IP
+       const callerIp = request.rawRequest?.ip || 'unknown';
+       const ipHash = callerIp.replace(/[^a-zA-Z0-9]/g, '_');
+       const db = admin.firestore();
+       const rateLimitRef = db.collection('_rate_limits').doc(`qr_session_${ipHash}`);
+       const windowMs = 10 * 60 * 1000;
+       const maxAttempts = 10;
+
+       await db.runTransaction(async (tx) => {
+         const snap = await tx.get(rateLimitRef);
+         const now = Date.now();
+
+         if (snap.exists) {
+           const data = snap.data();
+           const windowStart = data.windowStart?.toMillis?.() ?? 0;
+           const count = data.count ?? 0;
+
+           if (now - windowStart < windowMs) {
+             if (count >= maxAttempts) {
+               throw new HttpsError('resource-exhausted', 'Too many attempts. Try again later.');
+             }
+             tx.update(rateLimitRef, { count: count + 1 });
+           } else {
+             tx.set(rateLimitRef, { count: 1, windowStart: admin.firestore.Timestamp.fromMillis(now), expiresAt: admin.firestore.Timestamp.fromMillis(now + windowMs) });
+           }
+         } else {
+           tx.set(rateLimitRef, { count: 1, windowStart: admin.firestore.Timestamp.fromMillis(now), expiresAt: admin.firestore.Timestamp.fromMillis(now + windowMs) });
+         }
+       });
+
       const sessionRef = db.collection('qrSessions').doc();
       const sessionId = sessionRef.id;
 
@@ -3374,7 +3187,7 @@ export const confirmQrAuthSession = onCall(
   {
     region: 'europe-west3',
     cors: {
-      origin: ['http://localhost:3000', 'https://adaexpress.co'],
+      origin: ['https://nar24.com', 'https://www.nar24.com', 'https://www.nar24.com/en'],
       methods: ['POST'],
       allowedHeaders: ['Content-Type', 'Authorization'],
     },
@@ -3440,7 +3253,7 @@ export const createQrAuthSessionWebToPhone = onCall(
   {
     region: 'europe-west3',
     cors: {
-      origin: ['http://localhost:3000', 'https://adaexpress.co'],
+      origin: ['https://nar24.com', 'https://www.nar24.com', 'https://www.nar24.com/en'],
       methods: ['POST'],
       allowedHeaders: ['Content-Type', 'Authorization'],
     },
@@ -3912,6 +3725,33 @@ export const verifyEmailCode = onCall(
     }
 
     const uid = context.uid;
+
+      // Rate limit: max 10 attempts per 15 minutes per user 
+  const rateLimitRef = admin.firestore().collection('_rate_limits').doc(`email_verify_${uid}`);
+  const windowMs = 15 * 60 * 1000;
+  const maxAttempts = 10;
+
+  await admin.firestore().runTransaction(async (tx) => {
+    const snap = await tx.get(rateLimitRef);
+    const now = Date.now();
+
+    if (snap.exists) {
+      const data = snap.data();
+      const windowStart = data.windowStart?.toMillis?.() ?? 0;
+      const count = data.count ?? 0;
+
+      if (now - windowStart < windowMs) {
+        if (count >= maxAttempts) {
+          throw new HttpsError('resource-exhausted', 'Too many attempts. Try again later.');
+        }
+        tx.update(rateLimitRef, { count: count + 1 });
+      } else {
+        tx.set(rateLimitRef, { count: 1, windowStart: admin.firestore.Timestamp.fromMillis(now), expiresAt: admin.firestore.Timestamp.fromMillis(now + windowMs) });
+      }
+    } else {
+      tx.set(rateLimitRef, { count: 1, windowStart: admin.firestore.Timestamp.fromMillis(now), expiresAt: admin.firestore.Timestamp.fromMillis(now + windowMs) });
+    }
+  });
 
     if (!code || typeof code !== 'string' || code.length !== 6) {
       throw new HttpsError('invalid-argument', 'Valid 6-digit code is required');

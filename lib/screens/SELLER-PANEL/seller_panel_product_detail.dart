@@ -441,7 +441,7 @@ class _SellerPanelProductDetailState extends State<SellerPanelProductDetail> {
       final double basePrice =
           currentProduct.originalPrice ?? currentProduct.price;
       final double newPrice =
-          double.parse((basePrice * (1 - percentage / 100)).toStringAsFixed(2));
+          double.tryParse((basePrice * (1 - percentage / 100)).toStringAsFixed(2)) ?? basePrice;
 
       await widget.product.reference!.update({
         'originalPrice': basePrice,
@@ -648,7 +648,7 @@ class _SellerPanelProductDetailState extends State<SellerPanelProductDetail> {
       final currentProduct = _currentProduct;
       final double basePrice =
           currentProduct.originalPrice ?? currentProduct.price;
-      final double cleanPrice = double.parse(basePrice.toStringAsFixed(2));
+      final double cleanPrice = double.tryParse(basePrice.toStringAsFixed(2)) ?? basePrice;
 
       await widget.product.reference!.update({
         'price': cleanPrice,
@@ -802,7 +802,7 @@ class _SellerPanelProductDetailState extends State<SellerPanelProductDetail> {
       final currentProduct = _currentProduct;
       final double basePrice =
           currentProduct.originalPrice ?? currentProduct.price;
-      final double cleanPrice = double.parse(basePrice.toStringAsFixed(2));
+      final double cleanPrice = double.tryParse(basePrice.toStringAsFixed(2)) ?? basePrice;
 
       await widget.product.reference!.update({
         'price': cleanPrice,
@@ -1192,7 +1192,8 @@ class _SellerPanelProductDetailState extends State<SellerPanelProductDetail> {
                                 onPressed: _isValidDiscount(controller.text)
                                     ? () async {
                                         final input =
-                                            int.parse(controller.text);
+                                            int.tryParse(controller.text);
+                                        if (input == null) return;
                                         Navigator.pop(
                                             context); // Close modal first
                                         await _applyIndividualDiscount(input);
@@ -1403,7 +1404,7 @@ class _SellerPanelProductDetailState extends State<SellerPanelProductDetail> {
   }
 
   String formatPrice(num price) {
-    double rounded = double.parse(price.toStringAsFixed(2));
+    double rounded = double.tryParse(price.toStringAsFixed(2)) ?? price.toDouble();
 
     if (rounded == rounded.truncateToDouble()) {
       return rounded.toInt().toString();

@@ -2292,7 +2292,7 @@ class _ProductSelectorSheetState extends State<ProductSelectorSheet> {
   }
 
   String _formatPrice(num price) {
-    double rounded = double.parse(price.toStringAsFixed(2));
+    double rounded = double.tryParse(price.toStringAsFixed(2)) ?? price.toDouble();
     if (rounded == rounded.truncateToDouble()) {
       return rounded.toInt().toString();
     }

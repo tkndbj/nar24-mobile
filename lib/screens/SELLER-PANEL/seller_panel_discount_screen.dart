@@ -1461,7 +1461,8 @@ Widget _buildProductGrid(BuildContext context, List<Product> products,
                                   : CupertinoColors.inactiveGray,
                               onPressed: _isValidDiscount(controller.text)
                                   ? () async {
-                                      final input = int.parse(controller.text);
+                                      final input = int.tryParse(controller.text);
+                                      if (input == null) return;
                                       Navigator.pop(context);
                                       await _processBulkDiscount(input, l10n);
                                     }
@@ -1690,8 +1691,8 @@ void _clearSearch() {
 
         // Use current price as base price (should be clean price without discounts)
         final double basePrice = product.price;
-        final double newPrice = double.parse(
-            (basePrice * (1 - percentage / 100)).toStringAsFixed(2));
+        final double newPrice = double.tryParse(
+            (basePrice * (1 - percentage / 100)).toStringAsFixed(2)) ?? basePrice;
 
         batch.update(product.reference!, {
           'originalPrice': basePrice, // Store exact current price
@@ -1717,8 +1718,8 @@ void _clearSearch() {
       // Update local state only after successful Firestore commit
       for (var product in successfulUpdates) {
         final double basePrice = product.price;
-        final double newPrice = double.parse(
-            (basePrice * (1 - percentage / 100)).toStringAsFixed(2));
+        final double newPrice = double.tryParse(
+            (basePrice * (1 - percentage / 100)).toStringAsFixed(2)) ?? basePrice;
 
         provider.updateProduct(
           product.id,
@@ -2111,7 +2112,8 @@ void _clearSearch() {
                                   : CupertinoColors.inactiveGray,
                               onPressed: _isValidDiscount(controller.text)
                                   ? () async {
-                                      final input = int.parse(controller.text);
+                                      final input = int.tryParse(controller.text);
+                                      if (input == null) return;
                                       Navigator.pop(context);
                                       await _processCategoryDiscount(category, subcategory, input, l10n);
                                     }
@@ -2214,8 +2216,8 @@ void _clearSearch() {
 
       for (var product in productsToUpdate) {
         final double basePrice = product.price;
-        final double newPrice = double.parse(
-            (basePrice * (1 - percentage / 100)).toStringAsFixed(2));
+        final double newPrice = double.tryParse(
+            (basePrice * (1 - percentage / 100)).toStringAsFixed(2)) ?? basePrice;
 
         batch.update(product.reference!, {
           'originalPrice': basePrice,
@@ -2229,8 +2231,8 @@ void _clearSearch() {
       // Update local state only after successful Firestore commit
       for (var product in productsToUpdate) {
         final double basePrice = product.price;
-        final double newPrice = double.parse(
-            (basePrice * (1 - percentage / 100)).toStringAsFixed(2));
+        final double newPrice = double.tryParse(
+            (basePrice * (1 - percentage / 100)).toStringAsFixed(2)) ?? basePrice;
 
         provider.updateProduct(
           product.id,
@@ -2576,7 +2578,7 @@ void _clearSearch() {
                                             ),
                                           ),
                                           Text(
-                                            '${(product.price * (1 - int.parse(controller.text) / 100)).toStringAsFixed(2)} ${product.currency}',
+                                            '${(product.price * (1 - (int.tryParse(controller.text) ?? 0) / 100)).toStringAsFixed(2)} ${product.currency}',
                                             style: TextStyle(
                                               fontSize: 14,
                                               color: Colors.green,
@@ -2630,7 +2632,8 @@ void _clearSearch() {
                                   : CupertinoColors.inactiveGray,
                               onPressed: _isValidDiscount(controller.text)
                                   ? () async {
-                                      final input = int.parse(controller.text);
+                                      final input = int.tryParse(controller.text);
+                                      if (input == null) return;
                                       Navigator.pop(context);
                                       await _processIndividualDiscount(product, input, l10n);
                                     }
@@ -2708,7 +2711,7 @@ void _clearSearch() {
       // Use current price as base price (since discounts should be removed first)
       final double basePrice = product.price;
       final double newPrice =
-          double.parse((basePrice * (1 - percentage / 100)).toStringAsFixed(2));
+          double.tryParse((basePrice * (1 - percentage / 100)).toStringAsFixed(2)) ?? basePrice;
 
       // Update Firestore first
       await product.reference!.update({
@@ -3007,7 +3010,7 @@ Future<void> _processRemoveDiscountOnlyWithProvider(
     final provider = Provider.of<SellerPanelProvider>(context, listen: false);
     
     final double basePrice = product.originalPrice ?? product.price;
-    final double cleanPrice = double.parse(basePrice.toStringAsFixed(2));
+    final double cleanPrice = double.tryParse(basePrice.toStringAsFixed(2)) ?? basePrice;
 
     await product.reference!.update({
       'price': cleanPrice,
@@ -3138,7 +3141,7 @@ Future<void> _processRemoveFromCampaignAndDiscountWithProvider(
 
   try {
     final double basePrice = product.originalPrice ?? product.price;
-    final double cleanPrice = double.parse(basePrice.toStringAsFixed(2));
+    final double cleanPrice = double.tryParse(basePrice.toStringAsFixed(2)) ?? basePrice;
 
     await product.reference!.update({
       'price': cleanPrice,
@@ -3266,7 +3269,7 @@ Future<void> _processRemoveFromCampaignAndDiscountWithProvider(
 
         // Use originalPrice if available, otherwise use current price
         final double basePrice = product.originalPrice ?? product.price;
-        final double cleanPrice = double.parse(basePrice.toStringAsFixed(2));
+        final double cleanPrice = double.tryParse(basePrice.toStringAsFixed(2)) ?? basePrice;
 
         batch.update(product.reference!, {
           'price': cleanPrice,
@@ -3293,7 +3296,7 @@ Future<void> _processRemoveFromCampaignAndDiscountWithProvider(
       // Update local state only after successful Firestore commit
       for (var product in successfulUpdates) {
         final double basePrice = product.originalPrice ?? product.price;
-        final double cleanPrice = double.parse(basePrice.toStringAsFixed(2));
+        final double cleanPrice = double.tryParse(basePrice.toStringAsFixed(2)) ?? basePrice;
 
         // Use the fixed copyWith method with explicit null flags
         final updatedProduct = product.copyWith(

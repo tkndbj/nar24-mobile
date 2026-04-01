@@ -26,7 +26,12 @@
       "Bash(cd \"C:\\\\Users\\\\Digikey\\\\Desktop\\\\EE-CTS\\\\flutter_application_1\" && dart analyze lib/screens/SHOP-SCREENS/shop_detail_screen.dart 2>&1 | head -30)",
       "Bash(cd \"C:\\\\Users\\\\Digikey\\\\Desktop\\\\EE-CTS\\\\flutter_application_1\" && dart run intl_translation 2>&1; flutter gen-l10n 2>&1)",
       "Bash(find C:UsersDigikeyDesktopEE-CTSflutter_application_1 -type f \\\\\\(-name *.env -o -name .env* \\\\\\))",
-      "WebSearch"
+      "WebSearch",
+      "Bash(ls -la /c/Users/Digikey/Desktop/EE-CTS/flutter_application_1/functions/*/index.js)",
+      "Bash(xargs basename:*)",
+      "Bash(ls:*)",
+      "Bash(cat '/c/Users/Digikey/Desktop/EE-CTS/flutter_application_1/functions/10-cart&favorite-metrics/index.js')",
+      "Bash(sort -k5 -n)"
     ],
     "deny": [],
     "ask": []
