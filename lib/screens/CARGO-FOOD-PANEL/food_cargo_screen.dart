@@ -70,7 +70,7 @@ class FoodCargoScreen extends StatefulWidget {
 }
 
 class _FoodCargoScreenState extends State<FoodCargoScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final _messaging = FirebaseMessaging.instance;
   bool _notifPanelOpen = false;
   final _localReadController = BehaviorSubject<DateTime?>.seeded(null);
@@ -82,6 +82,7 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _tabController = TabController(length: 2, vsync: this);
   _courierNotifsStream = FirebaseFirestore.instance
     .collection('food_courier_notifications')
@@ -239,10 +240,20 @@ _setupUnreadStream();
     );
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      CourierLocationService.instance.onAppPaused();
+    } else if (state == AppLifecycleState.resumed) {
+      CourierLocationService.instance.onAppResumed();
+    }
+  }
+
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     CourierLocationService.instance.stopTracking(); // ← ADD THIS
     _tabController.dispose();
     _localReadController.close();

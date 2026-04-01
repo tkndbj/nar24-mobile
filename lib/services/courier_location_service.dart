@@ -121,13 +121,44 @@ class CourierLocationService {
 
   /// Call when the app goes to background (AppLifecycleState.paused).
   /// Keeps presence alive but suspends the GPS stream to save battery.
-  Future<void> onAppPaused() async {
+ Future<void> onAppPaused() async {
     if (!_tracking) return;
+
+     // Auto stop if no active order for 30+ min
+    if (_currentOrderId == null && 
+        DateTime.now().difference(_lastWriteTime).inMinutes > 60) {
+      await stopTracking();
+      debugPrint('[CourierLocation] Auto-stopped — idle too long.');
+      return;
+    }
+
+    // Switch to battery-saving background mode instead of stopping
     await _positionSub?.cancel();
     _positionSub = null;
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
-    debugPrint('[CourierLocation] Paused (app backgrounded).');
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    // Start a low-frequency stream for background
+    _positionSub = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.low,       // saves battery
+        distanceFilter: 50,                    // only fire every 50m
+      ),
+    ).listen(
+      (pos) => _writePosition(uid, pos),
+      onError: (e) => debugPrint('[CourierLocation] Background error: $e'),
+    );
+
+    // Slower heartbeat in background
+    _heartbeatTimer = Timer.periodic(
+      const Duration(seconds: 60),            // 60s instead of 30s
+      (_) => _writeHeartbeat(uid),
+    );
+
+    debugPrint('[CourierLocation] Switched to background mode.');
   }
 
   /// Call when the app returns to foreground (AppLifecycleState.resumed).
@@ -145,7 +176,8 @@ class CourierLocationService {
       'isOnShift': true,
     });
 
-    _positionSub ??= Geolocator.getPositionStream(
+     await _positionSub?.cancel();
+    _positionSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 10,
@@ -155,7 +187,8 @@ class CourierLocationService {
       onError: (e) => debugPrint('[CourierLocation] Stream error: $e'),
     );
 
-    _heartbeatTimer ??= Timer.periodic(
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(
       const Duration(seconds: _heartbeatSeconds),
       (_) => _writeHeartbeat(uid),
     );
@@ -234,10 +267,7 @@ class CourierLocationService {
 
   Future<bool> _requestPermission() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      debugPrint('[CourierLocation] Location services disabled on device.');
-      return false;
-    }
+    if (!serviceEnabled) return false;
 
     LocationPermission permission = await Geolocator.checkPermission();
 
@@ -246,9 +276,12 @@ class CourierLocationService {
       if (permission == LocationPermission.denied) return false;
     }
 
-    if (permission == LocationPermission.deniedForever) {
-      debugPrint('[CourierLocation] Permission permanently denied.');
-      return false;
+    if (permission == LocationPermission.deniedForever) return false;
+
+    // Request "always" for background tracking
+    if (permission == LocationPermission.whileInUse) {
+      permission = await Geolocator.requestPermission();
+      // whileInUse is still usable, just less reliable in background
     }
 
     return true;
