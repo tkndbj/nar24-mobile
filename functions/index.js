@@ -3019,6 +3019,80 @@ export const deleteUserAccount = onCall(
 
     const userDocRef = admin.firestore().collection('users').doc(targetUid);
 
+    // === 3.5) Remove user from all shops/restaurants they belong to ===
+    try {
+      const userSnap = await userDocRef.get();
+      if (userSnap.exists) {
+        const userData = userSnap.data();
+        const roleToField = {
+          'co-owner': 'coOwners',
+          'editor': 'editors',
+          'viewer': 'viewers',
+        };
+
+        const removalPromises = [];
+
+        // Remove from shops
+        const memberOfShops = userData.memberOfShops ?? {};
+        for (const [shopId, role] of Object.entries(memberOfShops)) {
+          const field = roleToField[role];
+          if (field) {
+            removalPromises.push(
+              admin.firestore().collection('shops').doc(shopId).update({
+                [field]: admin.firestore.FieldValue.arrayRemove(targetUid),
+              }).catch((err) => {
+                console.warn(`Could not remove user from shop ${shopId}:`, err.message);
+              }),
+            );
+          }
+        }
+
+        // Remove from restaurants
+        const memberOfRestaurants = userData.memberOfRestaurants ?? {};
+        for (const [restId, role] of Object.entries(memberOfRestaurants)) {
+          const field = roleToField[role];
+          if (field) {
+            removalPromises.push(
+              admin.firestore().collection('restaurants').doc(restId).update({
+                [field]: admin.firestore.FieldValue.arrayRemove(targetUid),
+              }).catch((err) => {
+                console.warn(`Could not remove user from restaurant ${restId}:`, err.message);
+              }),
+            );
+          }
+        }
+
+        // Cancel pending invitations sent TO this user
+        const invCollections = ['shopInvitations', 'restaurantInvitations'];
+        const invQueryResults = await Promise.all(
+          invCollections.map((coll) =>
+            admin.firestore()
+              .collection(coll)
+              .where('userId', '==', targetUid)
+              .where('status', '==', 'pending')
+              .get(),
+          ),
+        );
+        for (const snapshot of invQueryResults) {
+          for (const doc of snapshot.docs) {
+            removalPromises.push(
+              doc.ref.update({ status: 'cancelled' }).catch((err) => {
+                console.warn(`Could not cancel invitation ${doc.id}:`, err.message);
+              }),
+            );
+          }
+        }
+
+        if (removalPromises.length > 0) {
+          await Promise.all(removalPromises);
+          console.log(`✓ Removed user ${targetUid} from ${removalPromises.length} shop/restaurant/invitation references`);
+        }
+      }
+    } catch (err) {
+      // Log but don't block deletion — the user doc cleanup is best-effort
+      console.error('Warning: Failed to clean up shop/restaurant memberships:', err);
+    }
+
     // === 4) Delete Firestore data with recursiveDelete ===
     // This automatically deletes all subcollections
     try {
