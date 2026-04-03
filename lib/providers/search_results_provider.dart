@@ -235,7 +235,7 @@ class SearchResultsProvider with ChangeNotifier {
 
       // Update facet counts from search response
       if (res.facets.isNotEmpty) {
-        _specFacets = res.facets;
+        _specFacets = TypeSensePage.mergeFacets(_specFacets, res.facets);
       }
 
       return res.hits.map((hit) => ProductSummary.fromTypeSense(hit)).toList();

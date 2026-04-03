@@ -42,6 +42,12 @@ class SpecialFilterProviderMarket with ChangeNotifier {
   double? _minRating;
   double? get minRating => _minRating;
 
+  // ── Price filter ───────────────────────────────────────────────────────
+  double? _minPrice;
+  double? _maxPrice;
+  double? get minPrice => _minPrice;
+  double? get maxPrice => _maxPrice;
+
   // ── Spec filters (Typesense-powered) ───────────────────────────────────
   final Map<String, List<String>> _dynamicSpecFilters = {};
   Map<String, List<String>> get dynamicSpecFilters =>
@@ -187,6 +193,8 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     String? subsubcategory,
     Map<String, List<String>>? specFilters,
     double? minRating,
+    double? minPrice,
+    double? maxPrice,
   }) {
     bool hasChanges = false;
 
@@ -226,6 +234,15 @@ class SpecialFilterProviderMarket with ChangeNotifier {
 
     if (minRating != _minRating) {
       _minRating = minRating;
+      hasChanges = true;
+    }
+
+    if (minPrice != _minPrice) {
+      _minPrice = minPrice;
+      hasChanges = true;
+    }
+    if (maxPrice != _maxPrice) {
+      _maxPrice = maxPrice;
       hasChanges = true;
     }
 
@@ -323,6 +340,8 @@ class SpecialFilterProviderMarket with ChangeNotifier {
 
     final numericFilters = <String>[];
     if (_minRating != null) numericFilters.add('averageRating>=${_minRating!}');
+    if (_minPrice != null) numericFilters.add('price>=${_minPrice!.toInt()}');
+    if (_maxPrice != null) numericFilters.add('price<=${_maxPrice!.toInt()}');
 
     try {
       final res = await _searchService!.searchIdsWithFacets(
@@ -338,7 +357,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
 
       // Update facet counts from search response
       if (res.facets.isNotEmpty) {
-        _specFacets = res.facets;
+        _specFacets = TypeSensePage.mergeFacets(_specFacets, res.facets);
       }
 
       _typesenseHasMore = res.page < (res.nbPages - 1);
@@ -1684,13 +1703,15 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     final isCacheValid =
         cachedTime != null && now.difference(cachedTime) < _cacheTTL;
 
-    // ✅ FIX: Skip cache when any filters are applied (brand, colors, subsubcategory, specFilters, rating)
+    // ✅ FIX: Skip cache when any filters are applied (brand, colors, subsubcategory, specFilters, rating, price)
     final hasFilters = selectedFilter != null ||
         (dynamicBrand != null && dynamicBrand!.isNotEmpty) ||
         dynamicColors.isNotEmpty ||
         (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty) ||
         hasDynamicSpecFilters ||
-        _minRating != null;
+        _minRating != null ||
+        _minPrice != null ||
+        _maxPrice != null;
 
     // Cache is only valid for unfiltered, default-sorted results.
     // Skip cache when sort is non-default to prevent returning default-sorted
@@ -1719,7 +1740,9 @@ class SpecialFilterProviderMarket with ChangeNotifier {
           dynamicColors.isNotEmpty ||
           (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty) ||
           hasDynamicSpecFilters ||
-          _minRating != null;
+          _minRating != null ||
+          _minPrice != null ||
+          _maxPrice != null;
       final useTypesense = _searchService != null &&
           (hasDynamicFilters || _subcategorySortOption != 'date');
 
@@ -1826,7 +1849,9 @@ class SpecialFilterProviderMarket with ChangeNotifier {
           dynamicColors.isNotEmpty ||
           (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty) ||
           hasDynamicSpecFilters ||
-          _minRating != null;
+          _minRating != null ||
+          _minPrice != null ||
+          _maxPrice != null;
       final useTypesense = _searchService != null &&
           (hasDynamicFilters || _subcategorySortOption != 'date');
 

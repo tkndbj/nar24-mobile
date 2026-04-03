@@ -1551,7 +1551,7 @@ class ShopProvider with ChangeNotifier {
 
       // Update facet counts from Typesense response so filter screen shows accurate counts
       if (result.facets.isNotEmpty) {
-        _specFacets = result.facets;
+        _specFacets = TypeSensePage.mergeFacets(_specFacets, result.facets);
       }
       totalFoundNotifier.value = result.totalFound;
       dealProductsNotifier.value = _allFetchedProducts
@@ -1920,7 +1920,7 @@ class ShopProvider with ChangeNotifier {
 
         // Update facet counts
         if (result.facets.isNotEmpty) {
-          _specFacets = result.facets;
+          _specFacets = TypeSensePage.mergeFacets(_specFacets, result.facets);
         }
       } else {
         debugPrint('Stale search result discarded (token mismatch)');

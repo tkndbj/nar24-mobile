@@ -25,6 +25,60 @@ class TypeSensePage {
     this.totalFound = 0,
     this.facets = const {},
   });
+
+  /// Merge new facets into existing ones: keeps all previously known values
+  /// (so options never disappear), updates counts from the new response,
+  /// and adds any newly discovered values.
+  static Map<String, List<Map<String, dynamic>>> mergeFacets(
+    Map<String, List<Map<String, dynamic>>> existing,
+    Map<String, List<Map<String, dynamic>>> incoming,
+  ) {
+    if (incoming.isEmpty) return existing;
+    if (existing.isEmpty) return incoming;
+
+    final merged = Map<String, List<Map<String, dynamic>>>.from(existing);
+
+    for (final entry in incoming.entries) {
+      final field = entry.key;
+      final newValues = entry.value;
+      final old = merged[field];
+
+      if (old == null) {
+        merged[field] = newValues;
+        continue;
+      }
+
+      // Build a lookup of new counts
+      final newCounts = <String, int>{};
+      for (final nv in newValues) {
+        newCounts[nv['value'] as String] = nv['count'] as int;
+      }
+
+      final result = <Map<String, dynamic>>[];
+      final seen = <String>{};
+
+      // Keep every existing value, update its count
+      for (final ev in old) {
+        final value = ev['value'] as String;
+        seen.add(value);
+        result.add({
+          'value': value,
+          'count': newCounts[value] ?? 0,
+        });
+      }
+
+      // Append any brand-new values from the response
+      for (final nv in newValues) {
+        if (!seen.contains(nv['value'] as String)) {
+          result.add(nv);
+        }
+      }
+
+      merged[field] = result;
+    }
+
+    return merged;
+  }
 }
 
 class TypeSenseService {

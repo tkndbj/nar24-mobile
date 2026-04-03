@@ -358,7 +358,7 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
 
     // Update facet counts from search response
     if (res.facets.isNotEmpty && mounted) {
-      setState(() => _specFacets = res.facets);
+      setState(() => _specFacets = TypeSensePage.mergeFacets(_specFacets, res.facets));
     }
 
     _typesenseHasMore = res.page < (res.nbPages - 1);

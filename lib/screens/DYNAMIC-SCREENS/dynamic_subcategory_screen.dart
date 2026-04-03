@@ -191,6 +191,8 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
       subsubcategory: subSubcategories.isNotEmpty ? subSubcategories.first : null,
       specFilters: specFilters,
       minRating: minRating,
+      minPrice: minPrice,
+      maxPrice: maxPrice,
     );
     await _specialFilterProvider.fetchSubcategoryProducts(
       widget.category,
@@ -238,6 +240,8 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
           : null,
       specFilters: _dynamicSpecFilters,
       minRating: _minRating,
+      minPrice: _minPrice,
+      maxPrice: _maxPrice,
     );
     if (specField != null) {
       _specialFilterProvider.removeDynamicSpecFilter(specField, specValue!);
@@ -268,6 +272,8 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
       subsubcategory: null,
       specFilters: {},
       minRating: null,
+      minPrice: null,
+      maxPrice: null,
     );
     _specialFilterProvider.clearDynamicSpecFilters();
     await _specialFilterProvider.fetchSubcategoryProducts(

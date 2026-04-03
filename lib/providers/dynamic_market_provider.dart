@@ -817,7 +817,7 @@ class ShopMarketProvider with ChangeNotifier {
 
       // Update facet counts from search response
       if (res.facets.isNotEmpty) {
-        _specFacets = res.facets;
+        _specFacets = TypeSensePage.mergeFacets(_specFacets, res.facets);
       }
 
       // ✅ Parse directly from TypeSense hits — no Firestore round-trip

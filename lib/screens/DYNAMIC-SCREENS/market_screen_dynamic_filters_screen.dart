@@ -136,7 +136,26 @@ class _MarketScreenDynamicFiltersScreenState
 
     try {
       _typesensePage = 0;
-      final products = await _fetchFromTypesense(page: 0);
+      List<ProductSummary> products;
+      try {
+        products = await _fetchFromTypesense(page: 0);
+      } catch (e) {
+        debugPrint('Typesense failed, falling back to Firestore: $e');
+        products = [];
+      }
+
+      // Fallback to Firestore via DynamicFilterProvider when Typesense
+      // returns empty on the initial unfiltered load.
+      if (products.isEmpty && !_hasActiveFilters && mounted) {
+        try {
+          final provider =
+              Provider.of<DynamicFilterProvider>(context, listen: false);
+          products = await provider.getFilterProducts(widget.dynamicFilter.id);
+        } catch (e) {
+          debugPrint('Firestore fallback also failed: $e');
+        }
+      }
+
       if (mounted) {
         final boosted = products.where((p) => p.isBoosted).toList();
         final normal = products.where((p) => !p.isBoosted).toList();
@@ -155,7 +174,7 @@ class _MarketScreenDynamicFiltersScreenState
           _isLoading = false;
         });
       }
-      debugPrint('Error loading products from Typesense: $e');
+      debugPrint('Error loading products: $e');
     }
   }
 
@@ -192,6 +211,28 @@ class _MarketScreenDynamicFiltersScreenState
             case 'array-contains':
               parts.add('$field:=$value');
               break;
+            case 'array-contains-any':
+            case 'in':
+              if (value is List) {
+                final orParts = value.map((v) => '$field:=$v').toList();
+                if (orParts.length == 1) {
+                  parts.add(orParts.first);
+                } else if (orParts.length > 1) {
+                  parts.add('(${orParts.join(' || ')})');
+                }
+              } else {
+                parts.add('$field:=$value');
+              }
+              break;
+            case 'not-in':
+              if (value is List) {
+                for (final v in value) {
+                  parts.add('$field:!=$v');
+                }
+              } else {
+                parts.add('$field:!=$value');
+              }
+              break;
             default:
               parts.add('$field:=$value');
           }
@@ -200,30 +241,54 @@ class _MarketScreenDynamicFiltersScreenState
       case FilterType.query:
         if (filter.queryConditions != null) {
           for (final cond in filter.queryConditions!) {
+            final field = cond.field;
+            final value = cond.value;
             switch (cond.operator) {
               case '==':
-                parts.add('${cond.field}:=${cond.value}');
+                parts.add('$field:=$value');
                 break;
               case '!=':
-                parts.add('${cond.field}:!=${cond.value}');
+                parts.add('$field:!=$value');
                 break;
               case '>':
-                parts.add('${cond.field}:>${cond.value}');
+                parts.add('$field:>$value');
                 break;
               case '>=':
-                parts.add('${cond.field}:>=${cond.value}');
+                parts.add('$field:>=$value');
                 break;
               case '<':
-                parts.add('${cond.field}:<${cond.value}');
+                parts.add('$field:<$value');
                 break;
               case '<=':
-                parts.add('${cond.field}:<=${cond.value}');
+                parts.add('$field:<=$value');
                 break;
               case 'array-contains':
-                parts.add('${cond.field}:=${cond.value}');
+                parts.add('$field:=$value');
+                break;
+              case 'array-contains-any':
+              case 'in':
+                if (value is List) {
+                  final orParts = value.map((v) => '$field:=$v').toList();
+                  if (orParts.length == 1) {
+                    parts.add(orParts.first);
+                  } else if (orParts.length > 1) {
+                    parts.add('(${orParts.join(' || ')})');
+                  }
+                } else {
+                  parts.add('$field:=$value');
+                }
+                break;
+              case 'not-in':
+                if (value is List) {
+                  for (final v in value) {
+                    parts.add('$field:!=$v');
+                  }
+                } else {
+                  parts.add('$field:!=$value');
+                }
                 break;
               default:
-                parts.add('${cond.field}:=${cond.value}');
+                parts.add('$field:=$value');
             }
           }
         }
@@ -328,7 +393,7 @@ class _MarketScreenDynamicFiltersScreenState
 
     // Update facet counts from search response
     if (res.facets.isNotEmpty && mounted) {
-      setState(() => _specFacets = res.facets);
+      setState(() => _specFacets = TypeSensePage.mergeFacets(_specFacets, res.facets));
     }
 
     return res.hits.map((hit) => ProductSummary.fromTypeSense(hit)).toList();
@@ -754,8 +819,7 @@ class _MarketScreenDynamicFiltersScreenState
 
     if (_allProducts.isEmpty &&
         _boostedProducts.isEmpty &&
-        !_isLoading &&
-        _hasActiveFilters) {
+        !_isLoading) {
       return _buildEmptyState(l10n);
     }
 
@@ -1066,28 +1130,40 @@ class _MarketScreenDynamicFiltersScreenState
   Widget _buildEmptyState(AppLocalizations l10n) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Image.asset(
-              'assets/images/empty-product.png',
-              width: 120,
-              height: 120,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              l10n.noProductsFound,
-              style: TextStyle(
-                fontSize: 16,
-                color: isDarkMode ? Colors.white70 : Colors.black54,
-                fontWeight: FontWeight.w500,
+    return RefreshIndicator(
+      onRefresh: () => _loadProducts(isRefresh: true),
+      color: Colors.orange,
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Image.asset(
+                      'assets/images/empty-product.png',
+                      width: 120,
+                      height: 120,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      l10n.noProductsFound,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: isDarkMode ? Colors.white70 : Colors.black54,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
-              textAlign: TextAlign.center,
             ),
-          ],
+          ),
         ),
       ),
     );
