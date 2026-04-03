@@ -762,12 +762,31 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
     );
   }
 
+  bool get _hasActiveFilters =>
+      _dynamicBrands.isNotEmpty ||
+      _dynamicColors.isNotEmpty ||
+      _dynamicSpecFilters.isNotEmpty ||
+      _minPrice != null ||
+      _maxPrice != null ||
+      _minRating != null;
+
   Widget _buildProductsList(SearchResultsProvider provider) {
+    final l10n = AppLocalizations.of(context);
     return RefreshIndicator(
       onRefresh: _resetAndFetch,
       child: CustomScrollView(
         controller: _mainScrollController,
         slivers: [
+          if (_hasActiveFilters && !_isLoading)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  '${provider.filteredProducts.length + provider.boostedProducts.length} ${l10n.productsFound}',
+                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                ),
+              ),
+            ),
           ProductListSliver(
             products: provider.filteredProducts,
             boostedProducts: provider.boostedProducts,

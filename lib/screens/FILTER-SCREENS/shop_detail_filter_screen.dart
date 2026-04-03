@@ -5,7 +5,6 @@ import '../../constants/all_in_one_category_data.dart';
 import '../../models/product.dart';
 import 'package:Nar24/models/mock_document_snapshot.dart';
 import '../../utils/attribute_localization_utils.dart';
-import '../../services/typesense_service_manager.dart';
 
 class ShopDetailFilterScreen extends StatefulWidget {
   final MockDocumentSnapshot shopDoc;
@@ -77,6 +76,7 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
 
   // Available options
   List<String> _availableBrands = [];
+  Map<String, int> _brandCounts = {};
 
   final List<Map<String, dynamic>> _availableColors = [
     {'name': 'Blue', 'color': Colors.blue},
@@ -151,31 +151,26 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
     }
   }
 
-  bool _isLoadingBrands = true;
-
   void _initializeAvailableOptions() {
-    _loadBrandsFromTypesense();
+    _loadBrandsFromFacets();
   }
 
-  void _loadBrandsFromTypesense() async {
-    try {
-      final svc = TypeSenseServiceManager.instance.shopService;
-      final facetBrands = await svc.fetchBrandFacets(
-        indexName: 'shop_products',
-      );
-      if (mounted) {
-        setState(() {
-          _availableBrands = facetBrands..sort();
-          _filteredBrands = List.from(_availableBrands);
-          _isLoadingBrands = false;
-        });
+  void _loadBrandsFromFacets() {
+    final brandFacet = widget.availableSpecFacets['brandModel'];
+    if (brandFacet != null && brandFacet.isNotEmpty) {
+      _brandCounts = {};
+      _availableBrands = [];
+      for (final entry in brandFacet) {
+        final value = entry['value'] as String? ?? '';
+        final count = (entry['count'] as int?) ?? 0;
+        if (value.isNotEmpty) {
+          _availableBrands.add(value);
+          _brandCounts[value] = count;
+        }
       }
-    } catch (e) {
-      debugPrint('Error fetching brands from Typesense: $e');
-      if (mounted) {
-        setState(() => _isLoadingBrands = false);
-      }
+      _availableBrands.sort();
     }
+    _filteredBrands = List.from(_availableBrands);
   }
 
   void _filterBrands(String query) {
@@ -304,17 +299,18 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
     );
   }
 
+  /// Counts how many filter categories are active (not individual values).
   int _getTotalSelectedFilters() {
     int count = 0;
     if (_selectedGender != null) count++;
-    count += _selectedBrands.length;
-    count += _selectedTypes.length;
-    count += _selectedFits.length;
-    count += _selectedSizes.length;
-    count += _selectedColors.length;
+    if (_selectedBrands.isNotEmpty) count++;
+    if (_selectedTypes.isNotEmpty) count++;
+    if (_selectedFits.isNotEmpty) count++;
+    if (_selectedSizes.isNotEmpty) count++;
+    if (_selectedColors.isNotEmpty) count++;
     if (_minPrice != null || _maxPrice != null) count++;
     for (final vals in _selectedSpecFilters.values) {
-      count += vals.length;
+      if (vals.isNotEmpty) count++;
     }
     return count;
   }
@@ -490,12 +486,7 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
                     ],
 
                     // Brand Filter
-                    if (_isLoadingBrands)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                      )
-                    else if (_availableBrands.isNotEmpty) ...[
+                    if (_availableBrands.isNotEmpty) ...[
                       ExpansionTile(
                         title: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -602,9 +593,10 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
                               itemCount: _filteredBrands.length,
                               itemBuilder: (context, index) {
                                 final brand = _filteredBrands[index];
+                                final count = _brandCounts[brand];
                                 return CheckboxListTile(
                                   title: Text(
-                                    brand,
+                                    count != null ? '$brand ($count)' : brand,
                                     style: TextStyle(
                                         color: isDark ? Colors.white : null),
                                   ),
@@ -1204,6 +1196,7 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
                     // Dynamic Spec Filter Sections (from Typesense facets)
                     ...widget.availableSpecFacets.entries.map((specEntry) {
                       final fieldName = specEntry.key;
+                      if (fieldName == 'brandModel') return const SizedBox.shrink();
                       final facetValues = specEntry.value;
                       if (facetValues.isEmpty) return const SizedBox.shrink();
 

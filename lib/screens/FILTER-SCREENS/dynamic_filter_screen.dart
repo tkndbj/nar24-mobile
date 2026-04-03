@@ -5,7 +5,6 @@ import '../../generated/l10n/app_localizations.dart';
 import '../../utils/color_localization.dart';
 import '../../utils/attribute_localization_utils.dart';
 import '../../constants/all_in_one_category_data.dart';
-import '../../services/typesense_service_manager.dart';
 
 class DynamicFilterScreen extends StatefulWidget {
   final String category;
@@ -44,6 +43,7 @@ class DynamicFilterScreen extends StatefulWidget {
 
 class _DynamicFilterScreenState extends State<DynamicFilterScreen> {
   List _brands = [];
+  Map<String, int> _brandCounts = {};
   List<String> _selectedBrands = [];
   List<String> _selectedColors = [];
   List<String> _selectedSubSubcategories =
@@ -101,13 +101,11 @@ class _DynamicFilterScreenState extends State<DynamicFilterScreen> {
     {'name': 'Silver', 'color': const Color(0xFFC0C0C0)},
   ];
 
-  bool _isLoadingBrands = true;
-
   @override
   void initState() {
     super.initState();
     _initializeFilters();
-    _loadBrandsFromTypesense();
+    _loadBrandsFromFacets();
   }
 
   void _filterBrands(String query) {
@@ -199,25 +197,22 @@ class _DynamicFilterScreenState extends State<DynamicFilterScreen> {
     }
   }
 
-  void _loadBrandsFromTypesense() async {
-    try {
-      final svc = TypeSenseServiceManager.instance.shopService;
-      final facetBrands = await svc.fetchBrandFacets(
-        indexName: 'shop_products',
-      );
-      if (mounted) {
-        setState(() {
-          _brands = facetBrands..sort();
-          _filteredBrands = List.from(_brands);
-          _isLoadingBrands = false;
-        });
+  void _loadBrandsFromFacets() {
+    final brandFacet = widget.availableSpecFacets['brandModel'];
+    if (brandFacet != null && brandFacet.isNotEmpty) {
+      _brandCounts = {};
+      _brands = [];
+      for (final entry in brandFacet) {
+        final value = entry['value'] as String? ?? '';
+        final count = (entry['count'] as int?) ?? 0;
+        if (value.isNotEmpty) {
+          (_brands as List).add(value);
+          _brandCounts[value] = count;
+        }
       }
-    } catch (e) {
-      debugPrint('Error fetching brands from Typesense: $e');
-      if (mounted) {
-        setState(() => _isLoadingBrands = false);
-      }
+      _brands.sort();
     }
+    _filteredBrands = List.from(_brands);
   }
 
   int _getTotalSelected() {
@@ -438,6 +433,7 @@ class _DynamicFilterScreenState extends State<DynamicFilterScreen> {
                   // One section per facet field that has data
                   ...availableSpecFacets.entries.map((specEntry) {
                     final fieldName = specEntry.key;
+                    if (fieldName == 'brandModel') return const SizedBox.shrink();
                     final facetValues = specEntry.value;
                     if (facetValues.isEmpty) return const SizedBox.shrink();
 
@@ -574,12 +570,7 @@ class _DynamicFilterScreenState extends State<DynamicFilterScreen> {
                   }),
 
                   // Brand Filter
-                  if (_isLoadingBrands)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                    )
-                  else if (_brands.isNotEmpty) ...[
+                  if (_brands.isNotEmpty) ...[
                     ExpansionTile(
                       title: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -675,8 +666,9 @@ class _DynamicFilterScreenState extends State<DynamicFilterScreen> {
                             itemCount: _filteredBrands.length,
                             itemBuilder: (context, index) {
                               final brand = _filteredBrands[index];
+                              final count = _brandCounts[brand];
                               return CheckboxListTile(
-                                title: Text(brand),
+                                title: Text(count != null ? '$brand ($count)' : brand),
                                 value: _selectedBrands.contains(brand),
                                 onChanged: (selected) {
                                   setState(() {

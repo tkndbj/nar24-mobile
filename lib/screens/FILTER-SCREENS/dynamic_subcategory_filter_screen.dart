@@ -33,6 +33,7 @@ class DynamicSubcategoryFilterScreen extends StatefulWidget {
 class _DynamicSubcategoryFilterScreenState
     extends State<DynamicSubcategoryFilterScreen> {
   List _brands = [];
+  Map<String, int> _brandCounts = {};
   String? _selectedBrand;
   List<String> _selectedColors = [];
   String? _selectedSubsubcategory;
@@ -95,12 +96,35 @@ class _DynamicSubcategoryFilterScreenState
   void _loadBrandsFromTypesense() async {
     try {
       final svc = TypeSenseServiceManager.instance.shopService;
-      final facetBrands = await svc.fetchBrandFacets(
+      // Build filter context from category/subcategory
+      final filterParts = <String>[];
+      filterParts.add('category_en:=${widget.category}');
+      if (widget.subcategoryId.isNotEmpty) {
+        filterParts.add('subcategory_en:=${widget.subcategoryId}');
+      }
+      if (widget.gender != null && widget.gender!.isNotEmpty) {
+        filterParts.add('(gender:=${widget.gender!} || gender:=Unisex)');
+      }
+      final facets = await svc.fetchSpecFacets(
         indexName: 'shop_products',
+        additionalFilterBy: filterParts.join(' && '),
       );
+      final brandFacet = facets['brandModel'];
       if (mounted) {
         setState(() {
-          _brands = facetBrands..sort();
+          if (brandFacet != null && brandFacet.isNotEmpty) {
+            _brandCounts = {};
+            _brands = [];
+            for (final entry in brandFacet) {
+              final value = entry['value'] as String? ?? '';
+              final count = (entry['count'] as int?) ?? 0;
+              if (value.isNotEmpty) {
+                (_brands as List).add(value);
+                _brandCounts[value] = count;
+              }
+            }
+            _brands.sort();
+          }
           _filteredBrands = List.from(_brands);
           _isLoadingBrands = false;
         });
@@ -431,8 +455,9 @@ class _DynamicSubcategoryFilterScreenState
                           itemCount: _filteredBrands.length,
                           itemBuilder: (context, index) {
                             final brand = _filteredBrands[index];
+                            final count = _brandCounts[brand];
                             return RadioListTile(
-                              title: Text(brand),
+                              title: Text(count != null ? '$brand ($count)' : brand),
                               value: brand,
                               groupValue: _selectedBrand,
                               onChanged: (value) {

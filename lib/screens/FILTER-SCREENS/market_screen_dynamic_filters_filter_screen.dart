@@ -5,7 +5,7 @@ import '../../utils/color_localization.dart';
 import '../../utils/attribute_localization_utils.dart';
 import '../../constants/all_in_one_category_data.dart';
 import '../../models/dynamic_filter.dart';
-import '../../services/typesense_service_manager.dart';
+
 
 // Server-side data manager for metadata only
 class ServerSideFilterDataManager {
@@ -178,6 +178,7 @@ class _MarketScreenDynamicFiltersFilterScreenState
 
   // Available options - loaded immediately
   List<String> _availableBrands = [];
+  Map<String, int> _brandCounts = {};
   List<String> _availableCategories = [];
   Map<String, List<String>> _availableSubcategories = {};
   Map<String, Map<String, List<String>>> _availableSubSubcategories = {};
@@ -187,7 +188,6 @@ class _MarketScreenDynamicFiltersFilterScreenState
   bool _isColorExpanded = false;
   bool _isPriceExpanded = false;
   bool _isCategoryExpanded = false;
-  bool _isEnhancing = false;
 
   // Controllers
   final TextEditingController _minPriceController = TextEditingController();
@@ -235,7 +235,7 @@ class _MarketScreenDynamicFiltersFilterScreenState
     super.initState();
     _initializeFilters();
     _loadAvailableDataImmediate();
-    _enhanceDataInBackground();
+    _loadBrandsFromFacets();
   }
 
   void _initializeFilters() {
@@ -275,32 +275,22 @@ class _MarketScreenDynamicFiltersFilterScreenState
     }
   }
 
-  void _enhanceDataInBackground() async {
-    setState(() {
-      _isEnhancing = true;
-    });
-
-    try {
-      final svc = TypeSenseServiceManager.instance.shopService;
-      final facetBrands = await svc.fetchBrandFacets(
-        indexName: widget.baseFilter.collection ?? 'shop_products',
-      );
-
-      if (mounted) {
-        setState(() {
-          _availableBrands = facetBrands..sort();
-          _filteredBrands = List.from(_availableBrands);
-          _isEnhancing = false;
-        });
+  void _loadBrandsFromFacets() {
+    final brandFacet = widget.availableSpecFacets['brandModel'];
+    if (brandFacet != null && brandFacet.isNotEmpty) {
+      _brandCounts = {};
+      _availableBrands = [];
+      for (final entry in brandFacet) {
+        final value = entry['value'] as String? ?? '';
+        final count = (entry['count'] as int?) ?? 0;
+        if (value.isNotEmpty) {
+          _availableBrands.add(value);
+          _brandCounts[value] = count;
+        }
       }
-    } catch (e) {
-      debugPrint('Error enhancing data: $e');
-      if (mounted) {
-        setState(() {
-          _isEnhancing = false;
-        });
-      }
+      _availableBrands.sort();
     }
+    _filteredBrands = List.from(_availableBrands);
   }
 
   String _getSafeLocalizedString(dynamic Function() getter, String fallback) {
@@ -423,18 +413,6 @@ class _MarketScreenDynamicFiltersFilterScreenState
           style: TextStyle(color: isDark ? Colors.white : null),
         ),
         actions: [
-          if (_isEnhancing)
-            Container(
-              margin: const EdgeInsets.only(right: 8),
-              child: const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
-                ),
-              ),
-            ),
           TextButton(
             onPressed: _clearAllFilters,
             child: Text(
@@ -454,17 +432,13 @@ class _MarketScreenDynamicFiltersFilterScreenState
               child: Column(
                 children: [
                   _buildCategoryFilter(l10n, isDark),
-                  if (_isEnhancing)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                    )
-                  else if (_availableBrands.isNotEmpty)
+                  if (_availableBrands.isNotEmpty)
                     _buildBrandFilter(l10n, isDark),
                   _buildColorFilter(l10n, isDark),
                   _buildPriceFilter(l10n, isDark),
                   ...widget.availableSpecFacets.entries.map((facetEntry) {
                     final field = facetEntry.key;
+                    if (field == 'brandModel') return const SizedBox.shrink();
                     final values = facetEntry.value;
                     if (values.isEmpty) return const SizedBox.shrink();
                     return _buildSpecFilterSection(
@@ -754,9 +728,10 @@ class _MarketScreenDynamicFiltersFilterScreenState
                 itemCount: _filteredBrands.length,
                 itemBuilder: (context, index) {
                   final brand = _filteredBrands[index];
+                  final count = _brandCounts[brand];
                   return CheckboxListTile(
                     title: Text(
-                      brand,
+                      count != null ? '$brand ($count)' : brand,
                       style: TextStyle(color: isDark ? Colors.white : null),
                     ),
                     value: _selectedBrands.contains(brand),

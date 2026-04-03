@@ -1137,6 +1137,7 @@ class _ProductsTabState extends State<_ProductsTab>
   Widget build(BuildContext context) {
     super.build(context);
     final provider = context.read<ShopProvider>();
+    final l10n = AppLocalizations.of(context);
 
     return Selector<ShopProvider, ({bool isSearching, String searchQuery, String? selectedColor})>(
       selector: (_, p) => (
@@ -1148,13 +1149,15 @@ class _ProductsTabState extends State<_ProductsTab>
         return ValueListenableBuilder<bool>(
           valueListenable: provider.isLoadingProductsNotifier,
           builder: (context, isLoading, _) {
-            if (isLoading || state.isSearching) {
+            if (isLoading) {
               return const _ProductShimmerGrid();
             }
 
             return ValueListenableBuilder<List<ProductSummary>>(
               valueListenable: provider.allProductSummariesNotifier,
               builder: (context, summaries, _) {
+                final hasFilters = provider.totalFiltersApplied > 0;
+
                 return _RefreshableList(
                   child: NotificationListener<ScrollNotification>(
                     onNotification: (scrollInfo) =>
@@ -1165,6 +1168,20 @@ class _ProductsTabState extends State<_ProductsTab>
                         if (state.searchQuery.isNotEmpty)
                           const SliverToBoxAdapter(
                               child: _SearchResultsHeader()),
+                        if (hasFilters)
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
+                              child: Text(
+                                '${summaries.length} ${l10n.productsFound}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ),
+                          ),
                         ProductListSliver(
                           products: summaries,
                           boostedProducts: const [],
@@ -1173,26 +1190,33 @@ class _ProductsTabState extends State<_ProductsTab>
                           screenName: 'shop_detail_screen',
                           selectedColor: state.selectedColor,
                         ),
+                        // Only show load-more spinner when actually loading AND there are more pages
                         ValueListenableBuilder<bool>(
                           valueListenable:
                               provider.isLoadingMoreProductsNotifier,
                           builder: (context, isLoadingMore, _) {
-                            if (!isLoadingMore) {
-                              return const SliverToBoxAdapter(
-                                  child: SizedBox.shrink());
-                            }
-                            return const SliverToBoxAdapter(
-                              child: Padding(
-                                padding: EdgeInsets.symmetric(vertical: 24),
-                                child: Center(
-                                  child: SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2.5),
+                            return ValueListenableBuilder<bool>(
+                              valueListenable:
+                                  provider.hasMoreProductsNotifier,
+                              builder: (context, hasMore, _) {
+                                if (!isLoadingMore || !hasMore) {
+                                  return const SliverToBoxAdapter(
+                                      child: SizedBox.shrink());
+                                }
+                                return const SliverToBoxAdapter(
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 24),
+                                    child: Center(
+                                      child: SizedBox(
+                                        width: 24,
+                                        height: 24,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2.5),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
+                                );
+                              },
                             );
                           },
                         ),
@@ -1212,7 +1236,7 @@ class _ProductsTabState extends State<_ProductsTab>
     if (!provider.isLoadingMoreProducts &&
         provider.hasMoreProducts &&
         provider.searchQuery.isEmpty &&
-        scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent * 0.8) {
+        scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent - 200) {
       provider.loadMoreProducts();
     }
     return false;

@@ -1221,6 +1221,18 @@ class _MarketScreenDynamicFiltersScreenState
           // Active filters display
           if (_hasActiveFilters) _buildActiveFiltersWidget(l10n, isDark),
 
+          // Product count when filters are active
+          if (_hasActiveFilters && !_isLoading)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  '${_allProducts.length + _boostedProducts.length} ${l10n.productsFound}',
+                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                ),
+              ),
+            ),
+
           // Enhanced ProductListSliver
           SliverPadding(
             padding: const EdgeInsets.symmetric(vertical: 16.0),

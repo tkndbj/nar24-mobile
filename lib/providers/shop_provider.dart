@@ -1430,6 +1430,13 @@ class ShopProvider with ChangeNotifier {
   bool _shouldUseTypesense() {
     if (_sortOption != 'date') return true;
     if (_dynamicSpecFilters.values.any((v) => v.isNotEmpty)) return true;
+    if (_selectedBrands.isNotEmpty) return true;
+    if (_selectedTypes.isNotEmpty) return true;
+    if (_selectedFits.isNotEmpty) return true;
+    if (_selectedSizes.isNotEmpty) return true;
+    if (_selectedColors.isNotEmpty) return true;
+    if (_selectedGender != null) return true;
+    if (_minPrice != null || _maxPrice != null) return true;
     return false;
   }
 
@@ -2083,12 +2090,7 @@ class ShopProvider with ChangeNotifier {
     _dynamicSpecFilters = Map.from(specFilters);
     _selectedColorForDisplay = colors.isNotEmpty ? colors.first : null;
 
-    // Count includes spec filter selections
-    int specCount = 0;
-    for (final vals in _dynamicSpecFilters.values) {
-      specCount += vals.length;
-    }
-    totalFiltersAppliedNotifier.value = totalFilters + specCount;
+    totalFiltersAppliedNotifier.value = totalFilters;
 
     // If there's an active search, re-run it with new filters
     if (_searchQuery.isNotEmpty) {
