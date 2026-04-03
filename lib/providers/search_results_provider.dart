@@ -69,6 +69,10 @@ class SearchResultsProvider with ChangeNotifier {
   Map<String, List<Map<String, dynamic>>> get specFacets =>
       Map.unmodifiable(_specFacets);
 
+  Map<String, List<Map<String, dynamic>>> _filteredSpecFacets = {};
+  Map<String, List<Map<String, dynamic>>> get filteredSpecFacets =>
+      Map.unmodifiable(_filteredSpecFacets);
+
   /// Fetch spec facets scoped to the given search query.
   Future<void> fetchSpecFacets(String query) async {
     try {
@@ -233,9 +237,8 @@ class SearchResultsProvider with ChangeNotifier {
             'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
       );
 
-      // Update facet counts from search response
       if (res.facets.isNotEmpty) {
-        _specFacets = TypeSensePage.mergeFacets(_specFacets, res.facets);
+        _filteredSpecFacets = res.facets;
       }
 
       return res.hits.map((hit) => ProductSummary.fromTypeSense(hit)).toList();

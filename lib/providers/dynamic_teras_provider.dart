@@ -94,6 +94,10 @@ class DynamicTerasProvider with ChangeNotifier {
   Map<String, List<Map<String, dynamic>>> get specFacets =>
       Map.unmodifiable(_specFacets);
 
+  Map<String, List<Map<String, dynamic>>> _filteredSpecFacets = {};
+  Map<String, List<Map<String, dynamic>>> get filteredSpecFacets =>
+      Map.unmodifiable(_filteredSpecFacets);
+
   final Map<String, Map<String, List<Map<String, dynamic>>>> _facetCache = {};
   final Map<String, DateTime> _facetCacheTs = {};
   static const Duration _facetCacheTtl = Duration(minutes: 5);
@@ -784,9 +788,8 @@ class DynamicTerasProvider with ChangeNotifier {
       );
       if (seq != _filterSeq) return;
 
-      // Update facet counts from search response
       if (res.facets.isNotEmpty) {
-        _specFacets = TypeSensePage.mergeFacets(_specFacets, res.facets);
+        _filteredSpecFacets = res.facets;
       }
 
       // ✅ Parse directly from TypeSense hits — no Firestore round-trip

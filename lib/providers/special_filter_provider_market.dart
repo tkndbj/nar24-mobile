@@ -58,6 +58,10 @@ class SpecialFilterProviderMarket with ChangeNotifier {
   Map<String, List<Map<String, dynamic>>> get specFacets =>
       Map.unmodifiable(_specFacets);
 
+  Map<String, List<Map<String, dynamic>>> _filteredSpecFacets = {};
+  Map<String, List<Map<String, dynamic>>> get filteredSpecFacets =>
+      Map.unmodifiable(_filteredSpecFacets);
+
   bool get hasDynamicSpecFilters => _dynamicSpecFilters.isNotEmpty;
 
   int get specFiltersCount {
@@ -355,9 +359,8 @@ class SpecialFilterProviderMarket with ChangeNotifier {
             'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
       );
 
-      // Update facet counts from search response
       if (res.facets.isNotEmpty) {
-        _specFacets = TypeSensePage.mergeFacets(_specFacets, res.facets);
+        _filteredSpecFacets = res.facets;
       }
 
       _typesenseHasMore = res.page < (res.nbPages - 1);

@@ -12,6 +12,7 @@ import 'package:Nar24/utils/attribute_localization_utils.dart';
 import 'package:Nar24/screens/FILTER-SCREENS/market_screen_dynamic_filters_filter_screen.dart';
 import 'package:Nar24/constants/all_in_one_category_data.dart';
 import 'package:Nar24/services/typesense_service_manager.dart';
+import 'package:Nar24/services/typesense_service.dart';
 import 'package:shimmer/shimmer.dart';
 
 // Enhanced debounced filter for server requests
@@ -88,6 +89,7 @@ class _MarketScreenDynamicFiltersScreenState
 
   // Spec facets from Typesense
   Map<String, List<Map<String, dynamic>>> _specFacets = {};
+  Map<String, List<Map<String, dynamic>>> _filteredSpecFacets = {};
 
   // Typesense pagination (used when spec filters are active)
   int _typesensePage = 0;
@@ -391,9 +393,8 @@ class _MarketScreenDynamicFiltersScreenState
 
     _typesenseHasMore = res.page < (res.nbPages - 1);
 
-    // Update facet counts from search response
     if (res.facets.isNotEmpty && mounted) {
-      setState(() => _specFacets = TypeSensePage.mergeFacets(_specFacets, res.facets));
+      setState(() => _filteredSpecFacets = res.facets);
     }
 
     return res.hits.map((hit) => ProductSummary.fromTypeSense(hit)).toList();
@@ -511,6 +512,10 @@ class _MarketScreenDynamicFiltersScreenState
 
   // Show filter screen
   Future<void> _showFilterScreen() async {
+    final activeFields = <String>{
+      if (_selectedBrands.isNotEmpty) 'brandModel',
+      ..._dynamicSpecFilters.keys,
+    };
     final result = await Navigator.of(context).push<Map<String, dynamic>>(
       MaterialPageRoute(
         builder: (context) => MarketScreenDynamicFiltersFilterScreen(
@@ -523,7 +528,11 @@ class _MarketScreenDynamicFiltersScreenState
           initialSubcategory: _selectedSubcategory,
           initialSubSubcategory: _selectedSubSubcategory,
           initialSpecFilters: _dynamicSpecFilters,
-          availableSpecFacets: _specFacets,
+          availableSpecFacets: TypeSensePage.combineFacets(
+            baseFacets: _specFacets,
+            filteredFacets: _filteredSpecFacets,
+            activeFilterFields: activeFields,
+          ),
         ),
       ),
     );

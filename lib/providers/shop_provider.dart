@@ -122,6 +122,7 @@ class ShopProvider with ChangeNotifier {
 
   // Dynamic spec filters (Typesense facets)
   Map<String, List<Map<String, dynamic>>> _specFacets = {};
+  Map<String, List<Map<String, dynamic>>> _filteredSpecFacets = {};
   Map<String, List<String>> _dynamicSpecFilters = {};
 
   // Shop Detail Screen state
@@ -205,6 +206,8 @@ class ShopProvider with ChangeNotifier {
   String? get selectedSubcategory => _selectedSubcategory;
   String? get selectedColorForDisplay => _selectedColorForDisplay;
   Map<String, List<Map<String, dynamic>>> get specFacets => _specFacets;
+  Map<String, List<Map<String, dynamic>>> get filteredSpecFacets =>
+      _filteredSpecFacets;
   Map<String, List<String>> get dynamicSpecFilters => _dynamicSpecFilters;
 
   List<QueryDocumentSnapshot> get shops => _shops;
@@ -1549,9 +1552,8 @@ class ShopProvider with ChangeNotifier {
       // No need for local _applyAllFilters — Typesense already filtered
       _setAllProducts(List.from(_allFetchedProducts));
 
-      // Update facet counts from Typesense response so filter screen shows accurate counts
       if (result.facets.isNotEmpty) {
-        _specFacets = TypeSensePage.mergeFacets(_specFacets, result.facets);
+        _filteredSpecFacets = result.facets;
       }
       totalFoundNotifier.value = result.totalFound;
       dealProductsNotifier.value = _allFetchedProducts
@@ -1918,9 +1920,8 @@ class ShopProvider with ChangeNotifier {
           ..sort(
               (a, b) => (b.purchaseCount ?? 0).compareTo(a.purchaseCount ?? 0));
 
-        // Update facet counts
         if (result.facets.isNotEmpty) {
-          _specFacets = TypeSensePage.mergeFacets(_specFacets, result.facets);
+          _filteredSpecFacets = result.facets;
         }
       } else {
         debugPrint('Stale search result discarded (token mismatch)');

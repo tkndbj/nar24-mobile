@@ -121,6 +121,11 @@ class ShopMarketProvider with ChangeNotifier {
   Map<String, List<Map<String, dynamic>>> get specFacets =>
       Map.unmodifiable(_specFacets);
 
+  /// Facets from the latest *filtered* search (narrowed by active filters).
+  Map<String, List<Map<String, dynamic>>> _filteredSpecFacets = {};
+  Map<String, List<Map<String, dynamic>>> get filteredSpecFacets =>
+      Map.unmodifiable(_filteredSpecFacets);
+
   /// Cache keyed by category context string
   final Map<String, Map<String, List<Map<String, dynamic>>>> _facetCache = {};
   final Map<String, DateTime> _facetCacheTs = {};
@@ -815,9 +820,9 @@ class ShopMarketProvider with ChangeNotifier {
       );
       if (seq != _filterSeq) return;
 
-      // Update facet counts from search response
+      // Save filtered facets for disjunctive faceting in the filter screen
       if (res.facets.isNotEmpty) {
-        _specFacets = TypeSensePage.mergeFacets(_specFacets, res.facets);
+        _filteredSpecFacets = res.facets;
       }
 
       // ✅ Parse directly from TypeSense hits — no Firestore round-trip

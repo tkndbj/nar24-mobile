@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../../services/typesense_service.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../providers/special_filter_provider_market.dart';
 import '../../providers/market_provider.dart';
@@ -675,6 +676,10 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
 
                           return GestureDetector(
                             onTap: () async {
+                              final activeFields = <String>{
+                                if (_dynamicBrands.isNotEmpty) 'brandModel',
+                                ..._dynamicSpecFilters.keys,
+                              };
                               final result = await context
                                   .push('/dynamic_filter', extra: {
                                 'category': widget.category,
@@ -684,7 +689,11 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                                 'initialColors': _dynamicColors,
                                 'initialSubSubcategories': _dynamicSubSubcategories,
                                 'initialSpecFilters': _dynamicSpecFilters,
-                                'availableSpecFacets': _specialFilterProvider.specFacets,
+                                'availableSpecFacets': TypeSensePage.combineFacets(
+                                  baseFacets: _specialFilterProvider.specFacets,
+                                  filteredFacets: _specialFilterProvider.filteredSpecFacets,
+                                  activeFilterFields: activeFields,
+                                ),
                                 'initialMinPrice': _minPrice,
                                 'initialMaxPrice': _maxPrice,
                                 'initialMinRating': _minRating,

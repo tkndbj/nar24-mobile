@@ -26,58 +26,39 @@ class TypeSensePage {
     this.facets = const {},
   });
 
-  /// Merge new facets into existing ones: updates counts from the new
-  /// response, adds newly discovered values, and drops any values whose
-  /// count has fallen to zero (they are no longer relevant).
-  static Map<String, List<Map<String, dynamic>>> mergeFacets(
-    Map<String, List<Map<String, dynamic>>> existing,
-    Map<String, List<Map<String, dynamic>>> incoming,
-  ) {
-    if (incoming.isEmpty) return existing;
-    if (existing.isEmpty) return incoming;
+  /// Build the facets to show in the filter screen (disjunctive faceting).
+  ///
+  /// * [baseFacets] – full, unfiltered facets (from the initial category fetch).
+  /// * [filteredFacets] – facets returned by the latest filtered search.
+  /// * [activeFilterFields] – field names that currently have an active filter
+  ///   (e.g. {'clothingTypes', 'brandModel'}).
+  ///
+  /// For actively-filtered fields we return [baseFacets] so every option stays
+  /// visible.  For the rest we return [filteredFacets] so the counts narrow
+  /// down based on the active selection.
+  static Map<String, List<Map<String, dynamic>>> combineFacets({
+    required Map<String, List<Map<String, dynamic>>> baseFacets,
+    required Map<String, List<Map<String, dynamic>>> filteredFacets,
+    required Set<String> activeFilterFields,
+  }) {
+    if (filteredFacets.isEmpty || activeFilterFields.isEmpty) return baseFacets;
 
-    final merged = Map<String, List<Map<String, dynamic>>>.from(existing);
+    final combined = <String, List<Map<String, dynamic>>>{};
 
-    for (final entry in incoming.entries) {
-      final field = entry.key;
-      final newValues = entry.value;
-      final old = merged[field];
-
-      if (old == null) {
-        merged[field] = newValues;
-        continue;
-      }
-
-      // Build a lookup of new counts
-      final newCounts = <String, int>{};
-      for (final nv in newValues) {
-        newCounts[nv['value'] as String] = nv['count'] as int;
-      }
-
-      final result = <Map<String, dynamic>>[];
-      final seen = <String>{};
-
-      // Keep existing values that still have a positive count
-      for (final ev in old) {
-        final value = ev['value'] as String;
-        final count = newCounts[value] ?? 0;
-        seen.add(value);
-        if (count > 0) {
-          result.add({'value': value, 'count': count});
+    for (final field in {...baseFacets.keys, ...filteredFacets.keys}) {
+      if (activeFilterFields.contains(field)) {
+        // Actively filtered → show all options from base
+        if (baseFacets.containsKey(field)) {
+          combined[field] = baseFacets[field]!;
         }
+      } else {
+        // Not filtered → show narrowed options from the filtered response
+        combined[field] =
+            filteredFacets[field] ?? baseFacets[field] ?? const [];
       }
-
-      // Append any brand-new values from the response
-      for (final nv in newValues) {
-        if (!seen.contains(nv['value'] as String)) {
-          result.add(nv);
-        }
-      }
-
-      merged[field] = result;
     }
 
-    return merged;
+    return combined;
   }
 }
 

@@ -6,6 +6,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../services/typesense_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/market_provider.dart';
@@ -418,12 +419,20 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
           // Filter button
           GestureDetector(
             onTap: () async {
+              final activeFields = <String>{
+                if (_dynamicBrands.isNotEmpty) 'brandModel',
+                ..._dynamicSpecFilters.keys,
+              };
               final result = await context.push('/dynamic_filter', extra: {
                 'category': '',
                 'initialBrands': _dynamicBrands,
                 'initialColors': _dynamicColors,
                 'initialSpecFilters': _dynamicSpecFilters,
-                'availableSpecFacets': provider.specFacets,
+                'availableSpecFacets': TypeSensePage.combineFacets(
+                  baseFacets: provider.specFacets,
+                  filteredFacets: provider.filteredSpecFacets,
+                  activeFilterFields: activeFields,
+                ),
                 'initialMinPrice': _minPrice,
                 'initialMaxPrice': _maxPrice,
                 'initialMinRating': _minRating,

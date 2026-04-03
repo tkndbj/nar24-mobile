@@ -7,6 +7,7 @@ import '../../generated/l10n/app_localizations.dart';
 import '../../models/product_summary.dart';
 import '../../widgets/product_list_sliver.dart';
 import '../../services/typesense_service_manager.dart';
+import '../../services/typesense_service.dart';
 import '../../utils/attribute_localization_utils.dart';
 import '../../utils/color_localization.dart';
 
@@ -52,6 +53,7 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
 
   // Spec facets from Typesense
   Map<String, List<Map<String, dynamic>>> _specFacets = {};
+  Map<String, List<Map<String, dynamic>>> _filteredSpecFacets = {};
 
   // Typesense pagination (used when spec filters are active)
   int _typesensePage = 0;
@@ -356,12 +358,12 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
           'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
     );
 
-    // Update facet counts from search response
+    _typesenseHasMore = res.page < (res.nbPages - 1);
+
     if (res.facets.isNotEmpty && mounted) {
-      setState(() => _specFacets = TypeSensePage.mergeFacets(_specFacets, res.facets));
+      setState(() => _filteredSpecFacets = res.facets);
     }
 
-    _typesenseHasMore = res.page < (res.nbPages - 1);
     return res.hits.map((hit) => ProductSummary.fromTypeSense(hit)).toList();
   }
 
@@ -392,6 +394,10 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
 
   Future<void> _openFilterScreen() async {
     try {
+      final activeFields = <String>{
+        if (_dynamicBrands.isNotEmpty) 'brandModel',
+        ..._dynamicSpecFilters.keys,
+      };
       final result = await context.push<Map<String, dynamic>?>(
         '/dynamic_filter',
         extra: {
@@ -401,7 +407,11 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
           'initialMinPrice': _minPrice,
           'initialMaxPrice': _maxPrice,
           'initialSpecFilters': _dynamicSpecFilters,
-          'availableSpecFacets': _specFacets,
+          'availableSpecFacets': TypeSensePage.combineFacets(
+            baseFacets: _specFacets,
+            filteredFacets: _filteredSpecFacets,
+            activeFilterFields: activeFields,
+          ),
         },
       );
 

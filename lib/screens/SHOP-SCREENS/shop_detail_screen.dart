@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import '../../services/typesense_service.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
 import '../../models/product_summary.dart';
@@ -973,6 +974,11 @@ class _FilterButtonWithBadge extends StatelessWidget {
     onDismissKeyboard();
     final provider = context.read<ShopProvider>();
 
+    final activeFields = <String>{
+      if (provider.selectedBrands.isNotEmpty) 'brandModel',
+      ...provider.dynamicSpecFilters.keys,
+    };
+
     Navigator.push(
       context,
       PageRouteBuilder(
@@ -986,7 +992,11 @@ class _FilterButtonWithBadge extends StatelessWidget {
           initialColors: provider.selectedColors,
           initialMinPrice: provider.minPrice,
           initialMaxPrice: provider.maxPrice,
-          availableSpecFacets: provider.specFacets,
+          availableSpecFacets: TypeSensePage.combineFacets(
+            baseFacets: provider.specFacets,
+            filteredFacets: provider.filteredSpecFacets,
+            activeFilterFields: activeFields,
+          ),
           initialSpecFilters: provider.dynamicSpecFilters,
         ),
         transitionsBuilder: (_, animation, __, child) {

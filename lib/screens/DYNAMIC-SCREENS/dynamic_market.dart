@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/market_provider.dart';
 import '../../providers/dynamic_market_provider.dart';
+import '../../services/typesense_service.dart';
 import '../../providers/search_provider.dart';
 import '../../widgets/product_list_sliver.dart';
 import '../../generated/l10n/app_localizations.dart';
@@ -543,6 +544,10 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
                     GestureDetector(
                       onTap: () async {
                         final shopProv = context.read<ShopMarketProvider>();
+                        final activeFields = <String>{
+                          if (_dynamicBrands.isNotEmpty) 'brandModel',
+                          ..._dynamicSpecFilters.keys,
+                        };
                         final result =
                             await context.push('/dynamic_filter', extra: {
                           'category': widget.category,
@@ -552,7 +557,11 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
                           'initialColors': _dynamicColors,
                           'initialSubSubcategories': _dynamicSubSubcategories,
                           'initialSpecFilters': _dynamicSpecFilters,
-                          'availableSpecFacets': shopProv.specFacets,
+                          'availableSpecFacets': TypeSensePage.combineFacets(
+                            baseFacets: shopProv.specFacets,
+                            filteredFacets: shopProv.filteredSpecFacets,
+                            activeFilterFields: activeFields,
+                          ),
                           'initialMinPrice': _minPrice,
                           'initialMaxPrice': _maxPrice,
                           'initialMinRating': _minRating,
