@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:Nar24/generated/l10n/app_localizations.dart';
 import 'package:Nar24/models/dynamic_filter.dart';
 import 'package:Nar24/models/product_summary.dart';
@@ -32,316 +31,8 @@ class ServerSideFilterDebouncer {
   }
 }
 
-// Server-side filter query builder
-class ServerSideFilterQueryBuilder {
-  static Query buildFilteredQuery({
-    required String collection,
-    required DynamicFilter baseFilter,
-    List<String> selectedBrands = const [],
-    List<String> selectedColors = const [],
-    String? selectedCategory,
-    String? selectedSubcategory,
-    String? selectedSubSubcategory,
-    double? minPrice,
-    double? maxPrice,
-    String? sortBy,
-    bool sortDescending = true,
-  }) {
-    Query query = FirebaseFirestore.instance.collection(collection);
-
-    // Apply base filter conditions first
-    query = _applyBaseFilterConditions(query, baseFilter);
-
-    // Apply brand filter
-    if (selectedBrands.isNotEmpty) {
-      // For single brand, use ==, for multiple use array-contains-any
-      if (selectedBrands.length == 1) {
-        query = query.where('brandModel', isEqualTo: selectedBrands.first);
-      } else {
-        query = query.where('brandModel', whereIn: selectedBrands);
-      }
-    }
-
-    // Apply color filter - using array-contains-any for colorImages keys
-    if (selectedColors.isNotEmpty) {
-      // Create a compound condition for colors
-      // Since colorImages is a map, we need to check if any of the keys match
-      if (selectedColors.isNotEmpty) {
-        if (selectedColors.length == 1) {
-          query = query.where('availableColors',
-              arrayContains: selectedColors.first);
-        } else {
-          query =
-              query.where('availableColors', arrayContainsAny: selectedColors);
-        }
-      }
-    }
-
-    // Apply category filters
-    if (selectedCategory != null) {
-      query = query.where('category', isEqualTo: selectedCategory);
-    }
-
-    if (selectedSubcategory != null) {
-      query = query.where('subcategory', isEqualTo: selectedSubcategory);
-    }
-
-    if (selectedSubSubcategory != null) {
-      query = query.where('subsubcategory', isEqualTo: selectedSubSubcategory);
-    }
-
-    // Apply price filters
-    if (minPrice != null) {
-      query = query.where('price', isGreaterThanOrEqualTo: minPrice);
-    }
-
-    if (maxPrice != null) {
-      query = query.where('price', isLessThanOrEqualTo: maxPrice);
-    }
-
-    // Apply sorting
-    if (sortBy != null) {
-      query = query.orderBy(sortBy, descending: sortDescending);
-    } else {
-      // Default sort by creation date
-      query = query.orderBy('createdAt', descending: true);
-    }
-
-    return query;
-  }
-
-  static Query _applyBaseFilterConditions(
-      Query query, DynamicFilter baseFilter) {
-    try {
-      switch (baseFilter.type) {
-        case FilterType.attribute:
-          if (baseFilter.attribute != null &&
-              baseFilter.operator != null &&
-              baseFilter.attributeValue != null) {
-            query = _applyAttributeFilter(query, baseFilter);
-          }
-          break;
-
-        case FilterType.query:
-          if (baseFilter.queryConditions != null &&
-              baseFilter.queryConditions!.isNotEmpty) {
-            query = _applyQueryConditions(query, baseFilter);
-          }
-          break;
-
-        case FilterType.collection:
-          break;
-      }
-    } catch (e) {
-      debugPrint('Error applying base filter conditions: $e');
-    }
-    return query;
-  }
-
-  static Query _applyAttributeFilter(Query query, DynamicFilter filter) {
-    final attribute = filter.attribute!;
-    final operator = filter.operator!;
-    final value = filter.attributeValue!;
-
-    try {
-      switch (operator) {
-        case '==':
-          return query.where(attribute, isEqualTo: value);
-        case '!=':
-          return query.where(attribute, isNotEqualTo: value);
-        case '>':
-          return query.where(attribute, isGreaterThan: value);
-        case '>=':
-          return query.where(attribute, isGreaterThanOrEqualTo: value);
-        case '<':
-          return query.where(attribute, isLessThan: value);
-        case '<=':
-          return query.where(attribute, isLessThanOrEqualTo: value);
-        case 'array-contains':
-          return query.where(attribute, arrayContains: value);
-        case 'array-contains-any':
-          return query.where(attribute, arrayContainsAny: value);
-        case 'in':
-          return query.where(attribute, whereIn: value);
-        case 'not-in':
-          return query.where(attribute, whereNotIn: value);
-        default:
-          return query.where(attribute, isEqualTo: value);
-      }
-    } catch (e) {
-      debugPrint('Error applying attribute filter: $e');
-      return query;
-    }
-  }
-
-  static Query _applyQueryConditions(Query query, DynamicFilter filter) {
-    try {
-      for (final condition in filter.queryConditions!) {
-        switch (condition.operator) {
-          case '==':
-            query = query.where(condition.field, isEqualTo: condition.value);
-            break;
-          case '!=':
-            query = query.where(condition.field, isNotEqualTo: condition.value);
-            break;
-          case '>':
-            query =
-                query.where(condition.field, isGreaterThan: condition.value);
-            break;
-          case '>=':
-            query = query.where(condition.field,
-                isGreaterThanOrEqualTo: condition.value);
-            break;
-          case '<':
-            query = query.where(condition.field, isLessThan: condition.value);
-            break;
-          case '<=':
-            query = query.where(condition.field,
-                isLessThanOrEqualTo: condition.value);
-            break;
-          case 'array-contains':
-            query =
-                query.where(condition.field, arrayContains: condition.value);
-            break;
-          case 'array-contains-any':
-            query =
-                query.where(condition.field, arrayContainsAny: condition.value);
-            break;
-          case 'in':
-            query = query.where(condition.field, whereIn: condition.value);
-            break;
-          case 'not-in':
-            query = query.where(condition.field, whereNotIn: condition.value);
-            break;
-          default:
-            query = query.where(condition.field, isEqualTo: condition.value);
-        }
-      }
-    } catch (e) {
-      debugPrint('Error applying query conditions: $e');
-    }
-    return query;
-  }
-}
-
-// Cache for server-side results
-class ServerSideResultCache {
-  static const int _maxCacheSize = 20;
-  static const Duration _cacheExpiry = Duration(minutes: 10);
-
-  final Map<String, _CacheEntry> _cache = {};
-
-  String _generateCacheKey({
-    required String collection,
-    required DynamicFilter baseFilter,
-    required List<String> selectedBrands,
-    required List<String> selectedColors,
-    required String? selectedCategory,
-    required String? selectedSubcategory,
-    required String? selectedSubSubcategory,
-    required double? minPrice,
-    required double? maxPrice,
-    required String? sortBy,
-    required bool sortDescending,
-    Map<String, List<String>>? specFilters,
-  }) {
-    final specPart = specFilters != null && specFilters.isNotEmpty
-        ? specFilters.entries
-            .map((e) => '${e.key}=${e.value.join("+")}')
-            .join(';')
-        : '';
-    return '${collection}_${baseFilter.id}_${selectedBrands.join(',')}_${selectedColors.join(',')}_${selectedCategory ?? ''}_${selectedSubcategory ?? ''}_${selectedSubSubcategory ?? ''}_${minPrice ?? ''}_${maxPrice ?? ''}_${sortBy ?? ''}_${sortDescending}_$specPart';
-  }
-
-  List<ProductSummary>? getCachedResults({
-    required String collection,
-    required DynamicFilter baseFilter,
-    required List<String> selectedBrands,
-    required List<String> selectedColors,
-    required String? selectedCategory,
-    required String? selectedSubcategory,
-    required String? selectedSubSubcategory,
-    required double? minPrice,
-    required double? maxPrice,
-    required String? sortBy,
-    required bool sortDescending,
-    Map<String, List<String>>? specFilters,
-  }) {
-    final key = _generateCacheKey(
-      collection: collection,
-      baseFilter: baseFilter,
-      selectedBrands: selectedBrands,
-      selectedColors: selectedColors,
-      selectedCategory: selectedCategory,
-      selectedSubcategory: selectedSubcategory,
-      selectedSubSubcategory: selectedSubSubcategory,
-      minPrice: minPrice,
-      maxPrice: maxPrice,
-      sortBy: sortBy,
-      sortDescending: sortDescending,
-      specFilters: specFilters,
-    );
-
-    final entry = _cache[key];
-    if (entry != null && !entry.isExpired) {
-      return entry.products;
-    }
-
-    return null;
-  }
-
-  void cacheResults({
-    required String collection,
-    required DynamicFilter baseFilter,
-    required List<String> selectedBrands,
-    required List<String> selectedColors,
-    required String? selectedCategory,
-    required String? selectedSubcategory,
-    required String? selectedSubSubcategory,
-    required double? minPrice,
-    required double? maxPrice,
-    required String? sortBy,
-    required bool sortDescending,
-    required List<ProductSummary> products,
-    Map<String, List<String>>? specFilters,
-  }) {
-    final key = _generateCacheKey(
-      collection: collection,
-      baseFilter: baseFilter,
-      selectedBrands: selectedBrands,
-      selectedColors: selectedColors,
-      selectedCategory: selectedCategory,
-      selectedSubcategory: selectedSubcategory,
-      selectedSubSubcategory: selectedSubSubcategory,
-      minPrice: minPrice,
-      maxPrice: maxPrice,
-      sortBy: sortBy,
-      sortDescending: sortDescending,
-      specFilters: specFilters,
-    );
-
-    // Remove oldest entry if cache is full
-    if (_cache.length >= _maxCacheSize) {
-      final oldestKey = _cache.keys.first;
-      _cache.remove(oldestKey);
-    }
-
-    _cache[key] = _CacheEntry(products, DateTime.now().add(_cacheExpiry));
-  }
-
-  void clearCache() {
-    _cache.clear();
-  }
-}
-
-class _CacheEntry {
-  final List<ProductSummary> products;
-  final DateTime expiresAt;
-
-  _CacheEntry(this.products, this.expiresAt);
-
-  bool get isExpired => DateTime.now().isAfter(expiresAt);
-}
+// NOTE: ServerSideFilterQueryBuilder (Firestore) removed — all filtering now uses Typesense.
+// NOTE: ServerSideResultCache removed — Typesense responses are fast enough without client-side caching.
 
 class MarketScreenDynamicFiltersScreen extends StatefulWidget {
   final DynamicFilter dynamicFilter;
@@ -362,7 +53,6 @@ class _MarketScreenDynamicFiltersScreenState
   @override
   bool get wantKeepAlive => true;
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final ScrollController _scrollController = ScrollController();
 
   // Server-side data
@@ -374,9 +64,7 @@ class _MarketScreenDynamicFiltersScreenState
   bool _hasMore = true;
   String? _error;
 
-  DocumentSnapshot? _lastDocument;
   late final ServerSideFilterDebouncer _serverDebouncer;
-  late final ServerSideResultCache _resultCache;
 
   // Sort state
   String _selectedSortOption = 'None';
@@ -407,7 +95,6 @@ class _MarketScreenDynamicFiltersScreenState
 
   // Performance constants
   static const int _limit = 25;
-  static const int _initialLimit = 50;
   static const double _scrollThreshold = 0.8;
 
   @override
@@ -416,11 +103,10 @@ class _MarketScreenDynamicFiltersScreenState
 
     _serverDebouncer =
         ServerSideFilterDebouncer(delay: const Duration(milliseconds: 300));
-    _resultCache = ServerSideResultCache();
 
     _setupScrollListener();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadProductsFromServer();
+      _loadProducts();
       _fetchSpecFacets();
     });
   }
@@ -437,127 +123,30 @@ class _MarketScreenDynamicFiltersScreenState
     });
   }
 
-  Future<void> _loadProductsFromServer({bool isRefresh = false}) async {
+  Future<void> _loadProducts({bool isRefresh = false}) async {
     if (isRefresh) {
       setState(() {
         _allProducts.clear();
         _boostedProducts.clear();
-        _lastDocument = null;
         _hasMore = true;
         _error = null;
         _isLoading = true;
       });
     }
 
-    // Use Typesense when spec filters or user sort are active
-    if (_useTypesense) {
-      try {
-        _typesensePage = 0;
-        final products = await _fetchFromTypesense(page: 0);
-        if (mounted) {
-          final boosted = products.where((p) => p.isBoosted).toList();
-          final normal = products.where((p) => !p.isBoosted).toList();
-          setState(() {
-            _allProducts = normal;
-            _boostedProducts = boosted;
-            _hasMore = _typesenseHasMore;
-            _isLoading = false;
-            _error = null;
-          });
-        }
-      } catch (e) {
-        if (mounted) {
-          setState(() {
-            _error = e.toString();
-            _isLoading = false;
-          });
-        }
-        debugPrint('Error loading products from Typesense: $e');
-      }
-      return;
-    }
-
     try {
-      // Check cache first
-      final cachedProducts = _resultCache.getCachedResults(
-        collection: widget.dynamicFilter.collection ?? 'shop_products',
-        baseFilter: widget.dynamicFilter,
-        selectedBrands: _selectedBrands,
-        selectedColors: _selectedColors,
-        selectedCategory: _selectedCategory,
-        selectedSubcategory: _selectedSubcategory,
-        selectedSubSubcategory: _selectedSubSubcategory,
-        minPrice: _minPrice,
-        maxPrice: _maxPrice,
-        sortBy: widget.dynamicFilter.sortBy,
-        sortDescending: widget.dynamicFilter.sortOrder == 'desc',
-        specFilters: _dynamicSpecFilters,
-      );
-
-      if (cachedProducts != null && !isRefresh) {
-        setState(() {
-          _allProducts = cachedProducts.where((p) => !p.isBoosted).toList();
-          _boostedProducts = cachedProducts.where((p) => p.isBoosted).toList();
-          _isLoading = false;
-        });
-        return;
-      }
-
-      // Build server-side filtered query
-      final query = ServerSideFilterQueryBuilder.buildFilteredQuery(
-        collection: widget.dynamicFilter.collection ?? 'shop_products',
-        baseFilter: widget.dynamicFilter,
-        selectedBrands: _selectedBrands,
-        selectedColors: _selectedColors,
-        selectedCategory: _selectedCategory,
-        selectedSubcategory: _selectedSubcategory,
-        selectedSubSubcategory: _selectedSubSubcategory,
-        minPrice: _minPrice,
-        maxPrice: _maxPrice,
-        sortBy: widget.dynamicFilter.sortBy,
-        sortDescending: widget.dynamicFilter.sortOrder == 'desc',
-      );
-
-      // Execute query
-      final snapshot =
-          await query.limit(isRefresh ? _initialLimit : _initialLimit).get();
-
+      _typesensePage = 0;
+      final products = await _fetchFromTypesense(page: 0);
       if (mounted) {
-        final products = snapshot.docs
-            .map((doc) => ProductSummary.fromDocument(doc))
-            .where((product) => product != null)
-            .cast<ProductSummary>()
-            .toList();
-
         final boosted = products.where((p) => p.isBoosted).toList();
         final normal = products.where((p) => !p.isBoosted).toList();
-
         setState(() {
           _allProducts = normal;
           _boostedProducts = boosted;
-          _lastDocument = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
-          _hasMore = snapshot.docs.length ==
-              (isRefresh ? _initialLimit : _initialLimit);
+          _hasMore = _typesenseHasMore;
           _isLoading = false;
           _error = null;
         });
-
-        // Cache results
-        _resultCache.cacheResults(
-          collection: widget.dynamicFilter.collection ?? 'shop_products',
-          baseFilter: widget.dynamicFilter,
-          selectedBrands: _selectedBrands,
-          selectedColors: _selectedColors,
-          selectedCategory: _selectedCategory,
-          selectedSubcategory: _selectedSubcategory,
-          selectedSubSubcategory: _selectedSubSubcategory,
-          minPrice: _minPrice,
-          maxPrice: _maxPrice,
-          sortBy: widget.dynamicFilter.sortBy,
-          sortDescending: widget.dynamicFilter.sortOrder == 'desc',
-          products: products,
-          specFilters: _dynamicSpecFilters,
-        );
       }
     } catch (e) {
       if (mounted) {
@@ -566,24 +155,93 @@ class _MarketScreenDynamicFiltersScreenState
           _isLoading = false;
         });
       }
-      debugPrint('Error loading products from server: $e');
+      debugPrint('Error loading products from Typesense: $e');
     }
+  }
+
+  /// Build the Typesense additionalFilterBy string from the base DynamicFilter.
+  String? _buildBaseFilterBy() {
+    final filter = widget.dynamicFilter;
+    final parts = <String>[];
+
+    switch (filter.type) {
+      case FilterType.attribute:
+        if (filter.attribute != null && filter.attributeValue != null) {
+          final op = filter.operator ?? '==';
+          final field = filter.attribute!;
+          final value = filter.attributeValue!;
+          switch (op) {
+            case '==':
+              parts.add('$field:=$value');
+              break;
+            case '!=':
+              parts.add('$field:!=$value');
+              break;
+            case '>':
+              parts.add('$field:>$value');
+              break;
+            case '>=':
+              parts.add('$field:>=$value');
+              break;
+            case '<':
+              parts.add('$field:<$value');
+              break;
+            case '<=':
+              parts.add('$field:<=$value');
+              break;
+            case 'array-contains':
+              parts.add('$field:=$value');
+              break;
+            default:
+              parts.add('$field:=$value');
+          }
+        }
+        break;
+      case FilterType.query:
+        if (filter.queryConditions != null) {
+          for (final cond in filter.queryConditions!) {
+            switch (cond.operator) {
+              case '==':
+                parts.add('${cond.field}:=${cond.value}');
+                break;
+              case '!=':
+                parts.add('${cond.field}:!=${cond.value}');
+                break;
+              case '>':
+                parts.add('${cond.field}:>${cond.value}');
+                break;
+              case '>=':
+                parts.add('${cond.field}:>=${cond.value}');
+                break;
+              case '<':
+                parts.add('${cond.field}:<${cond.value}');
+                break;
+              case '<=':
+                parts.add('${cond.field}:<=${cond.value}');
+                break;
+              case 'array-contains':
+                parts.add('${cond.field}:=${cond.value}');
+                break;
+              default:
+                parts.add('${cond.field}:=${cond.value}');
+            }
+          }
+        }
+        break;
+      case FilterType.collection:
+        // Collection type has no additional filter — the collection name is already the index
+        break;
+    }
+
+    return parts.isNotEmpty ? parts.join(' && ') : null;
   }
 
   Future<void> _fetchSpecFacets() async {
     try {
       final svc = TypeSenseServiceManager.instance.shopService;
-      // Build additionalFilterBy from the base filter's attribute
-      String? additionalFilter;
-      if (widget.dynamicFilter.type == FilterType.attribute &&
-          widget.dynamicFilter.attribute != null &&
-          widget.dynamicFilter.attributeValue != null) {
-        additionalFilter =
-            '${widget.dynamicFilter.attribute!}:=${widget.dynamicFilter.attributeValue!}';
-      }
       final result = await svc.fetchSpecFacets(
         indexName: widget.dynamicFilter.collection ?? 'shop_products',
-        additionalFilterBy: additionalFilter,
+        additionalFilterBy: _buildBaseFilterBy(),
       );
       if (mounted) {
         setState(() => _specFacets = result);
@@ -592,11 +250,6 @@ class _MarketScreenDynamicFiltersScreenState
       debugPrint('Error fetching spec facets: $e');
     }
   }
-
-  /// Whether to use Typesense instead of Firestore.
-  /// Typesense handles arbitrary filter+sort combos without composite indexes.
-  bool get _useTypesense =>
-      _dynamicSpecFilters.isNotEmpty || _selectedSortOption != 'None';
 
   /// Convert sort to a Typesense sort code.
   /// User-selected sort takes priority over the DynamicFilter's configured sort.
@@ -659,15 +312,6 @@ class _MarketScreenDynamicFiltersScreenState
     if (_minPrice != null) numericFilters.add('price:>=${_minPrice!.toInt()}');
     if (_maxPrice != null) numericFilters.add('price:<=${_maxPrice!.toInt()}');
 
-    // Build additionalFilterBy from base filter
-    String? additionalFilter;
-    if (widget.dynamicFilter.type == FilterType.attribute &&
-        widget.dynamicFilter.attribute != null &&
-        widget.dynamicFilter.attributeValue != null) {
-      additionalFilter =
-          '${widget.dynamicFilter.attribute!}:=${widget.dynamicFilter.attributeValue!}';
-    }
-
     final res = await svc.searchIdsWithFacets(
       indexName: widget.dynamicFilter.collection ?? 'shop_products',
       page: page,
@@ -675,94 +319,43 @@ class _MarketScreenDynamicFiltersScreenState
       facetFilters: facetFilters.isNotEmpty ? facetFilters : null,
       numericFilters: numericFilters.isNotEmpty ? numericFilters : null,
       sortOption: _typesenseSortCode(),
-      additionalFilterBy: additionalFilter,
+      additionalFilterBy: _buildBaseFilterBy(),
+      facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
+          'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
     );
 
     _typesenseHasMore = res.page < (res.nbPages - 1);
+
+    // Update facet counts from search response
+    if (res.facets.isNotEmpty && mounted) {
+      setState(() => _specFacets = res.facets);
+    }
+
     return res.hits.map((hit) => ProductSummary.fromTypeSense(hit)).toList();
   }
 
   Future<void> _loadMoreProducts() async {
     if (_isLoadingMore || !_hasMore) return;
 
-    // Typesense pagination
-    if (_useTypesense) {
-      setState(() => _isLoadingMore = true);
-      try {
-        _typesensePage++;
-        final newProducts = await _fetchFromTypesense(page: _typesensePage);
-        if (mounted) {
-          final existingIds = _allProducts.map((p) => p.id).toSet();
-          existingIds.addAll(_boostedProducts.map((p) => p.id));
-          final deduped =
-              newProducts.where((p) => !existingIds.contains(p.id)).toList();
-          setState(() {
-            _allProducts.addAll(deduped.where((p) => !p.isBoosted));
-            _boostedProducts.addAll(deduped.where((p) => p.isBoosted));
-            _hasMore = _typesenseHasMore;
-            _isLoadingMore = false;
-          });
-        }
-      } catch (e) {
-        debugPrint('Error loading more products (Typesense): $e');
-        if (mounted) setState(() => _isLoadingMore = false);
-      }
-      return;
-    }
-
-    // Firestore pagination
-    if (_lastDocument == null) return;
-
-    setState(() {
-      _isLoadingMore = true;
-    });
-
+    setState(() => _isLoadingMore = true);
     try {
-      // Build the same filtered query but with pagination
-      Query query = ServerSideFilterQueryBuilder.buildFilteredQuery(
-        collection: widget.dynamicFilter.collection ?? 'shop_products',
-        baseFilter: widget.dynamicFilter,
-        selectedBrands: _selectedBrands,
-        selectedColors: _selectedColors,
-        selectedCategory: _selectedCategory,
-        selectedSubcategory: _selectedSubcategory,
-        selectedSubSubcategory: _selectedSubSubcategory,
-        minPrice: _minPrice,
-        maxPrice: _maxPrice,
-        sortBy: widget.dynamicFilter.sortBy,
-        sortDescending: widget.dynamicFilter.sortOrder == 'desc',
-      );
-
-      // Add pagination
-      query = query.startAfterDocument(_lastDocument!).limit(_limit);
-
-      final snapshot = await query.get();
-
+      _typesensePage++;
+      final newProducts = await _fetchFromTypesense(page: _typesensePage);
       if (mounted) {
-        final products = snapshot.docs
-            .map((doc) => ProductSummary.fromDocument(doc))
-            .where((product) => product != null)
-            .cast<ProductSummary>()
-            .toList();
-
-        final boosted = products.where((p) => p.isBoosted).toList();
-        final normal = products.where((p) => !p.isBoosted).toList();
-
+        final existingIds = _allProducts.map((p) => p.id).toSet();
+        existingIds.addAll(_boostedProducts.map((p) => p.id));
+        final deduped =
+            newProducts.where((p) => !existingIds.contains(p.id)).toList();
         setState(() {
-          _allProducts.addAll(normal);
-          _boostedProducts.addAll(boosted);
-          _lastDocument = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
-          _hasMore = snapshot.docs.length == _limit;
+          _allProducts.addAll(deduped.where((p) => !p.isBoosted));
+          _boostedProducts.addAll(deduped.where((p) => p.isBoosted));
+          _hasMore = _typesenseHasMore;
           _isLoadingMore = false;
         });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoadingMore = false;
-        });
-      }
       debugPrint('Error loading more products: $e');
+      if (mounted) setState(() => _isLoadingMore = false);
     }
   }
 
@@ -770,7 +363,7 @@ class _MarketScreenDynamicFiltersScreenState
   void _applyFiltersWithServerQuery() {
     _serverDebouncer(() {
       if (!mounted) return;
-      _loadProductsFromServer(isRefresh: true);
+      _loadProducts(isRefresh: true);
     });
   }
 
@@ -848,7 +441,7 @@ class _MarketScreenDynamicFiltersScreenState
     if (!mounted) return;
 
     setState(() => _selectedSortOption = option);
-    _loadProductsFromServer(isRefresh: true);
+    _loadProducts(isRefresh: true);
   }
 
   // Show filter screen
@@ -984,7 +577,6 @@ class _MarketScreenDynamicFiltersScreenState
   void dispose() {
     _scrollController.dispose();
     _serverDebouncer.dispose();
-    _resultCache.clearCache();
     super.dispose();
   }
 
@@ -1168,7 +760,7 @@ class _MarketScreenDynamicFiltersScreenState
     }
 
     return RefreshIndicator(
-      onRefresh: () => _loadProductsFromServer(isRefresh: true),
+      onRefresh: () => _loadProducts(isRefresh: true),
       color: Colors.orange,
       child: CustomScrollView(
         controller: _scrollController,
@@ -1452,7 +1044,7 @@ class _MarketScreenDynamicFiltersScreenState
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
-              onPressed: () => _loadProductsFromServer(isRefresh: true),
+              onPressed: () => _loadProducts(isRefresh: true),
               icon: const Icon(Icons.refresh),
               label: Text(l10n.tryAgain ?? 'Try Again'),
               style: ElevatedButton.styleFrom(

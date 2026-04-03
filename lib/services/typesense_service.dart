@@ -15,11 +15,15 @@ class TypeSensePage {
   final List<Map<String, dynamic>> hits;
   final int page;
   final int nbPages;
+  final int totalFound;
+  final Map<String, List<Map<String, dynamic>>> facets;
   TypeSensePage({
     required this.ids,
     required this.hits,
     required this.page,
     required this.nbPages,
+    this.totalFound = 0,
+    this.facets = const {},
   });
 }
 
@@ -406,6 +410,8 @@ class TypeSenseService {
     String? additionalFilterBy,
     String? queryBy,
     String? includeFields,
+    String? facetBy,
+    int maxFacetValues = 50,
   }) async {
     final uri = _searchUri(indexName);
 
@@ -470,6 +476,11 @@ class TypeSenseService {
           'bundleIds,videoUrl,campaignName,discountThreshold,bulkDiscountPercentage';
     }
 
+    if (facetBy != null && facetBy.isNotEmpty) {
+      params['facet_by'] = facetBy;
+      params['max_facet_values'] = maxFacetValues.toString();
+    }
+
     if (filterParts.isNotEmpty) {
       params['filter_by'] = filterParts.join(' && ');
     }
@@ -525,8 +536,29 @@ class TypeSenseService {
       final perPage = hitsPerPage > 0 ? hitsPerPage : 1;
       final totalPages = (found / perPage).ceil().clamp(1, 9999);
 
+      // Parse facet counts if facet_by was requested
+      final parsedFacets = <String, List<Map<String, dynamic>>>{};
+      if (facetBy != null) {
+        final facetCounts = data['facet_counts'] as List? ?? [];
+        for (final facet in facetCounts) {
+          final fieldName = facet['field_name'] as String? ?? '';
+          final counts = (facet['counts'] as List? ?? [])
+              .map((c) => {
+                    'value': (c as Map)['value']?.toString() ?? '',
+                    'count': (c['count'] as num?)?.toInt() ?? 0,
+                  })
+              .where((c) =>
+                  c['value'].toString().isNotEmpty && (c['count'] as int) > 0)
+              .toList();
+          if (counts.isNotEmpty) {
+            parsedFacets[fieldName] = counts;
+          }
+        }
+      }
+
       return TypeSensePage(
-          ids: ids, hits: hitDocs, page: page, nbPages: totalPages);
+          ids: ids, hits: hitDocs, page: page, nbPages: totalPages,
+          totalFound: found, facets: parsedFacets);
     } catch (e) {
       debugPrint('Typesense exception: $e');
       return TypeSensePage(

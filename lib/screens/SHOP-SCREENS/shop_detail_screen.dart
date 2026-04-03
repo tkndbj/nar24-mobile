@@ -986,7 +986,6 @@ class _FilterButtonWithBadge extends StatelessWidget {
           initialColors: provider.selectedColors,
           initialMinPrice: provider.minPrice,
           initialMaxPrice: provider.maxPrice,
-          allProducts: provider.allProducts,
           availableSpecFacets: provider.specFacets,
           initialSpecFilters: provider.dynamicSpecFilters,
         ),
@@ -1173,12 +1172,20 @@ class _ProductsTabState extends State<_ProductsTab>
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 16, vertical: 8),
-                              child: Text(
-                                '${summaries.length} ${l10n.productsFound}',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.grey[600],
-                                ),
+                              child: ValueListenableBuilder<int>(
+                                valueListenable: provider.totalFoundNotifier,
+                                builder: (_, totalFound, __) {
+                                  final count = totalFound > 0
+                                      ? totalFound
+                                      : summaries.length;
+                                  return Text(
+                                    '$count ${l10n.productsFound}',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey[600],
+                                    ),
+                                  );
+                                },
                               ),
                             ),
                           ),

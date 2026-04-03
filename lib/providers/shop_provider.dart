@@ -68,6 +68,7 @@ class ShopProvider with ChangeNotifier {
   final ValueNotifier<List<Product>> bestSellersNotifier =
       ValueNotifier<List<Product>>([]);
   final ValueNotifier<int> totalFiltersAppliedNotifier = ValueNotifier<int>(0);
+  final ValueNotifier<int> totalFoundNotifier = ValueNotifier<int>(0);
   final ValueNotifier<bool> shopDocErrorNotifier = ValueNotifier<bool>(false);
   List<Map<String, dynamic>> _collections = [];
   final ValueNotifier<List<Map<String, dynamic>>> collectionsNotifier =
@@ -1526,6 +1527,8 @@ class ShopProvider with ChangeNotifier {
         numericFilters: numericFilters.isNotEmpty ? numericFilters : null,
         sortOption: _sortOption,
         additionalFilterBy: 'shopId:=$shopId',
+        facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
+            'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
       );
 
       final newProducts = result.hits
@@ -1545,6 +1548,12 @@ class ShopProvider with ChangeNotifier {
       _unfilteredProducts = List.from(_allFetchedProducts);
       // No need for local _applyAllFilters — Typesense already filtered
       _setAllProducts(List.from(_allFetchedProducts));
+
+      // Update facet counts from Typesense response so filter screen shows accurate counts
+      if (result.facets.isNotEmpty) {
+        _specFacets = result.facets;
+      }
+      totalFoundNotifier.value = result.totalFound;
       dealProductsNotifier.value = _allFetchedProducts
           .where((p) => (p.discountPercentage ?? 0) > 0)
           .toList();
@@ -1665,6 +1674,7 @@ class ShopProvider with ChangeNotifier {
 
       _unfilteredProducts = List.from(_allFetchedProducts);
       _applyAllFilters(List.from(_allFetchedProducts));
+      totalFoundNotifier.value = 0; // Reset — Firestore path doesn't have total count
 
       _lastProductsFetch = DateTime.now();
       await _saveCachedData(_shopDoc!.id);
@@ -1841,75 +1851,77 @@ class ShopProvider with ChangeNotifier {
     try {
       final shopId = _shopDoc!.id;
 
-      // Build filters for current shop
-      List<String> filters = [];
-
-      // Add existing filters
+      // Build facet filters (same format as _fetchProductsFromTypesense)
+      final facetFilters = <List<String>>[];
       if (_selectedGender != null) {
-        filters.add('gender:"$_selectedGender"');
+        facetFilters.add(['gender:$_selectedGender']);
       }
-
       if (_selectedSubcategory != null) {
-        filters.add('subcategory:"$_selectedSubcategory"');
+        facetFilters.add(['subcategory:$_selectedSubcategory']);
       }
-
       if (_selectedBrands.isNotEmpty) {
-        final brandFilters =
-            _selectedBrands.map((brand) => 'brandModel:"$brand"').join(' OR ');
-        filters.add('($brandFilters)');
+        facetFilters.add(
+            _selectedBrands.map((b) => 'brandModel:$b').toList());
       }
-
       if (_selectedTypes.isNotEmpty) {
-        final typeFilters = _selectedTypes
-            .map((type) => 'attributes.clothingType:"$type"')
-            .join(' OR ');
-        filters.add('($typeFilters)');
+        facetFilters.add(_selectedTypes
+            .map((t) => 'attributes.clothingType:$t')
+            .toList());
       }
-
       if (_selectedFits.isNotEmpty) {
-        final fitFilters = _selectedFits
-            .map((fit) => 'attributes.clothingFit:"$fit"')
-            .join(' OR ');
-        filters.add('($fitFilters)');
+        facetFilters.add(
+            _selectedFits.map((f) => 'attributes.clothingFit:$f').toList());
       }
-
       if (_selectedColors.isNotEmpty) {
-        final colorFilters =
-            _selectedColors.map((color) => 'colorImages.$color:*').join(' OR ');
-        filters.add('($colorFilters)');
+        facetFilters.add(
+            _selectedColors.map((c) => 'colorImages.$c:*').toList());
+      }
+      for (final entry in _dynamicSpecFilters.entries) {
+        if (entry.value.isNotEmpty) {
+          facetFilters.add(
+              entry.value.map((v) => '${entry.key}:$v').toList());
+        }
       }
 
-      if (_minPrice != null) {
-        filters.add('price >= $_minPrice');
-      }
+      final numericFilters = <String>[];
+      if (_minPrice != null) numericFilters.add('price >= $_minPrice');
+      if (_maxPrice != null) numericFilters.add('price <= $_maxPrice');
 
-      if (_maxPrice != null) {
-        filters.add('price <= $_maxPrice');
-      }
-
-      // Use the shop-specific search method with retry logic
-      final results = await _retryWithBackoff(() async {
+      final result = await _retryWithBackoff(() async {
         return await TypeSenseServiceManager.instance.shopService
-            .searchShopProducts(
-          shopId: shopId,
+            .searchIdsWithFacets(
+          indexName: 'shop_products',
           query: query,
-          sortOption: _sortOption,
-          additionalFilters: filters,
+          page: 0,
           hitsPerPage: 100,
+          facetFilters: facetFilters.isNotEmpty ? facetFilters : null,
+          numericFilters: numericFilters.isNotEmpty ? numericFilters : null,
+          sortOption: _sortOption,
+          additionalFilterBy: 'shopId:=$shopId',
+          facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
+              'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
         );
       });
 
       // Only update if this is still the latest search (race token check)
       if (currentToken == _searchRaceToken) {
-        _searchResults = results;
+        final products = result.hits
+            .map((hit) => Product.fromTypeSense(hit))
+            .toList();
+        _searchResults = products;
 
         // Update the main product lists with search results
-        _setAllProducts(results);
+        _setAllProducts(products);
         dealProductsNotifier.value =
-            results.where((p) => (p.discountPercentage ?? 0) > 0).toList();
-        bestSellersNotifier.value = List.from(results)
+            products.where((p) => (p.discountPercentage ?? 0) > 0).toList();
+        bestSellersNotifier.value = List.from(products)
           ..sort(
               (a, b) => (b.purchaseCount ?? 0).compareTo(a.purchaseCount ?? 0));
+
+        // Update facet counts
+        if (result.facets.isNotEmpty) {
+          _specFacets = result.facets;
+        }
       } else {
         debugPrint('Stale search result discarded (token mismatch)');
       }

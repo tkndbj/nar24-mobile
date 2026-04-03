@@ -810,8 +810,15 @@ class ShopMarketProvider with ChangeNotifier {
         facetFilters: facetFilters,
         numericFilters: numericFilters,
         sortOption: _sortOption,
+        facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
+            'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
       );
       if (seq != _filterSeq) return;
+
+      // Update facet counts from search response
+      if (res.facets.isNotEmpty) {
+        _specFacets = res.facets;
+      }
 
       // ✅ Parse directly from TypeSense hits — no Firestore round-trip
       final fetched = res.hits.map((hit) {

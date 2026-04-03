@@ -352,7 +352,14 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
       numericFilters: numericFilters.isNotEmpty ? numericFilters : null,
       sortOption: 'date',
       additionalFilterBy: 'shopId:=${widget.shopId}',
+      facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
+          'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
     );
+
+    // Update facet counts from search response
+    if (res.facets.isNotEmpty && mounted) {
+      setState(() => _specFacets = res.facets);
+    }
 
     _typesenseHasMore = res.page < (res.nbPages - 1);
     return res.hits.map((hit) => ProductSummary.fromTypeSense(hit)).toList();

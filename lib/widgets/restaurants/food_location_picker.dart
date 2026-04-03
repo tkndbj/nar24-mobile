@@ -354,13 +354,15 @@ class _FoodLocationPickerSheetState extends State<_FoodLocationPickerSheet> {
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final loc = AppLocalizations.of(context);
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.65,
-      minChildSize: 0.4,
-      maxChildSize: 0.92,
-      builder: (context, scrollController) {
-        return Container(
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.65,
+        minChildSize: 0.4,
+        maxChildSize: 0.92,
+        builder: (context, scrollController) {
+          return Container(
           decoration: BoxDecoration(
             color: isDarkMode
                 ? const Color(0xFF1C1A29)
@@ -498,8 +500,7 @@ class _FoodLocationPickerSheetState extends State<_FoodLocationPickerSheet> {
               SafeArea(
                 top: false,
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
                     border: Border(
                       top: BorderSide(
@@ -547,6 +548,7 @@ class _FoodLocationPickerSheetState extends State<_FoodLocationPickerSheet> {
           ),
         );
       },
+      ),
     );
   }
 

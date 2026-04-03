@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../constants/all_in_one_category_data.dart';
-import '../../models/product.dart';
 import 'package:Nar24/models/mock_document_snapshot.dart';
 import '../../utils/attribute_localization_utils.dart';
 
@@ -16,7 +15,6 @@ class ShopDetailFilterScreen extends StatefulWidget {
   final List<String> initialBrands;
   final double? initialMinPrice;
   final double? initialMaxPrice;
-  final List<Product> allProducts;
   final Map<String, List<Map<String, dynamic>>> availableSpecFacets;
   final Map<String, List<String>>? initialSpecFilters;
 
@@ -31,7 +29,6 @@ class ShopDetailFilterScreen extends StatefulWidget {
     this.initialBrands = const [],
     this.initialMinPrice,
     this.initialMaxPrice,
-    required this.allProducts,
     this.availableSpecFacets = const {},
     this.initialSpecFilters,
   }) : super(key: key);

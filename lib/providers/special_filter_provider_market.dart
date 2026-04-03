@@ -332,7 +332,14 @@ class SpecialFilterProviderMarket with ChangeNotifier {
         facetFilters: facetFilters,
         numericFilters: numericFilters,
         sortOption: _subcategorySortOption,
+        facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
+            'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
       );
+
+      // Update facet counts from search response
+      if (res.facets.isNotEmpty) {
+        _specFacets = res.facets;
+      }
 
       _typesenseHasMore = res.page < (res.nbPages - 1);
       return res.hits.map((hit) => ProductSummary.fromTypeSense(hit)).toList();

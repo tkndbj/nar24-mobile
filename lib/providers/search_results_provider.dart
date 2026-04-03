@@ -229,7 +229,14 @@ class SearchResultsProvider with ChangeNotifier {
         facetFilters: facetFilters,
         numericFilters: numericFilters,
         sortOption: _toSortCode(_sortOption),
+        facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
+            'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
       );
+
+      // Update facet counts from search response
+      if (res.facets.isNotEmpty) {
+        _specFacets = res.facets;
+      }
 
       return res.hits.map((hit) => ProductSummary.fromTypeSense(hit)).toList();
     } catch (e) {
