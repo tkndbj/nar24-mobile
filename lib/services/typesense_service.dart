@@ -26,9 +26,9 @@ class TypeSensePage {
     this.facets = const {},
   });
 
-  /// Merge new facets into existing ones: keeps all previously known values
-  /// (so options never disappear), updates counts from the new response,
-  /// and adds any newly discovered values.
+  /// Merge new facets into existing ones: updates counts from the new
+  /// response, adds newly discovered values, and drops any values whose
+  /// count has fallen to zero (they are no longer relevant).
   static Map<String, List<Map<String, dynamic>>> mergeFacets(
     Map<String, List<Map<String, dynamic>>> existing,
     Map<String, List<Map<String, dynamic>>> incoming,
@@ -57,14 +57,14 @@ class TypeSensePage {
       final result = <Map<String, dynamic>>[];
       final seen = <String>{};
 
-      // Keep every existing value, update its count
+      // Keep existing values that still have a positive count
       for (final ev in old) {
         final value = ev['value'] as String;
+        final count = newCounts[value] ?? 0;
         seen.add(value);
-        result.add({
-          'value': value,
-          'count': newCounts[value] ?? 0,
-        });
+        if (count > 0) {
+          result.add({'value': value, 'count': count});
+        }
       }
 
       // Append any brand-new values from the response
