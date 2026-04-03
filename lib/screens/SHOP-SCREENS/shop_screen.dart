@@ -6,7 +6,7 @@ import '../../providers/shop_provider.dart';
 import '../../widgets/shop/shop_card_widget.dart';
 import 'create_shop_screen.dart';
 import '../../generated/l10n/app_localizations.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import '../../providers/shop_widget_provider.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../widgets/shop/shop_search_bar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -187,10 +187,17 @@ class _ShopScreenState extends State<ShopScreen> {
               Padding(
                 padding: const EdgeInsets.only(right: 16.0),
                 child: GestureDetector(
-                  onTap: () {
-                    final String? userId =
-                        FirebaseAuth.instance.currentUser?.uid;
-                    if (userId != null) {
+                 onTap: () {
+                    final shopWidgetProv =
+                        Provider.of<ShopWidgetProvider>(context, listen: false);
+                    final shopId = shopWidgetProv.firstUserShopId;
+                    final restaurantId = shopWidgetProv.firstUserRestaurantId;
+
+                    if (shopId != null) {
+                      context.push('/seller-panel?shopId=$shopId');
+                    } else if (restaurantId != null) {
+                      context.push('/seller-panel?shopId=$restaurantId&businessType=restaurant');
+                    } else {
                       context.push('/seller-panel');
                     }
                   },

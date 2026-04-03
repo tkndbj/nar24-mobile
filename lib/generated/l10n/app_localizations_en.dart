@@ -13046,6 +13046,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notifFoodReviewTitle => 'Order Delivered! 🎉';
 
   @override
+  String get selectFromList => 'Select from List';
+
+  @override
+  String get enterManually => 'Enter Manually';
+
+  @override
+  String get brandNamePlaceholder => 'Type brand name here...';
+
+  @override
+  String get confirmBrand => 'Confirm Brand';
+
+  @override
+  String get noBrandsFound => 'No brands found';
+
+  @override
   String notifFoodReviewBody(String restaurantName) {
     return 'Your order from $restaurantName has arrived. Tap to leave a review!';
   }

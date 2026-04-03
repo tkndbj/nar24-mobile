@@ -24888,6 +24888,36 @@ abstract class AppLocalizations {
   /// **'Sipariş Teslim Edildi! 🎉'**
   String get notifFoodReviewTitle;
 
+  /// No description provided for @selectFromList.
+  ///
+  /// In tr, this message translates to:
+  /// **'Listeden Seç'**
+  String get selectFromList;
+
+  /// No description provided for @enterManually.
+  ///
+  /// In tr, this message translates to:
+  /// **'Manuel Giriş'**
+  String get enterManually;
+
+  /// No description provided for @brandNamePlaceholder.
+  ///
+  /// In tr, this message translates to:
+  /// **'Marka adını yazın...'**
+  String get brandNamePlaceholder;
+
+  /// No description provided for @confirmBrand.
+  ///
+  /// In tr, this message translates to:
+  /// **'Markayı Onayla'**
+  String get confirmBrand;
+
+  /// No description provided for @noBrandsFound.
+  ///
+  /// In tr, this message translates to:
+  /// **'Marka bulunamadı'**
+  String get noBrandsFound;
+
   /// No description provided for @notifFoodReviewBody.
   ///
   /// In tr, this message translates to:

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../generated/l10n/app_localizations.dart';
-import '../../constants/brands.dart';
 import '../../constants/all_in_one_category_data.dart';
+import '../../services/typesense_service_manager.dart';
 
 class DynamicSubcategoryFilterScreen extends StatefulWidget {
   final String category;
@@ -78,23 +78,39 @@ class _DynamicSubcategoryFilterScreenState
 
   List<String> _subsubcategories = [];
 
+  bool _isLoadingBrands = true;
+
   @override
   void initState() {
     super.initState();
-    _loadBrands();
     _loadSubsubcategories();
     _selectedBrand = widget.initialBrand;
     _selectedColors = widget.initialColors != null
         ? List.from(widget.initialColors!)
         : <String>[];
     _selectedSubsubcategory = widget.initialSubsubcategory;
-    _filteredBrands = List.from(_brands);
+    _loadBrandsFromTypesense();
   }
 
-  void _loadBrands() {
-    // Use the single global brands list for all categories
-    // This provides access to all 3000+ brands regardless of category
-    _brands = globalBrands;
+  void _loadBrandsFromTypesense() async {
+    try {
+      final svc = TypeSenseServiceManager.instance.shopService;
+      final facetBrands = await svc.fetchBrandFacets(
+        indexName: 'shop_products',
+      );
+      if (mounted) {
+        setState(() {
+          _brands = facetBrands..sort();
+          _filteredBrands = List.from(_brands);
+          _isLoadingBrands = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching brands from Typesense: $e');
+      if (mounted) {
+        setState(() => _isLoadingBrands = false);
+      }
+    }
   }
 
   void _filterBrands(String query) {
@@ -339,6 +355,12 @@ class _DynamicSubcategoryFilterScreenState
                     color: Colors.grey[300],
                   ),
                   // Brand Filter
+                  if (_isLoadingBrands)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                    )
+                  else if (_brands.isNotEmpty)
                   ExpansionTile(
                     title: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,

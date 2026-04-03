@@ -13143,6 +13143,21 @@ class AppLocalizationsRu extends AppLocalizations {
   String get notifFoodReviewTitle => 'Заказ доставлен! 🎉';
 
   @override
+  String get selectFromList => 'Выбрать из списка';
+
+  @override
+  String get enterManually => 'Ввести вручную';
+
+  @override
+  String get brandNamePlaceholder => 'Введите название бренда...';
+
+  @override
+  String get confirmBrand => 'Подтвердить бренд';
+
+  @override
+  String get noBrandsFound => 'Бренды не найдены';
+
+  @override
   String notifFoodReviewBody(String restaurantName) {
     return 'Ваш заказ из $restaurantName прибыл. Нажмите, чтобы оставить отзыв!';
   }

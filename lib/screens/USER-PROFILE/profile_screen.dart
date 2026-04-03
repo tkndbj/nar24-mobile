@@ -778,14 +778,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: (userOwnsShop && shopProvider.firstUserShopId != null)
-                            ? _buildSellerPanelButton(
-                                label: localization.sellerPanel,
-                                onTap: () => context.push(
-                                    '/seller-panel?shopId=${shopProvider.firstUserShopId}'),
-                                theme: theme,
-                              )
-                            : _buildRectButton(
+  child: (userOwnsShop && (shopProvider.firstUserShopId != null || shopProvider.firstUserRestaurantId != null))
+      ? _buildSellerPanelButton(
+          label: localization.sellerPanel,
+          onTap: () {
+            final shopId = shopProvider.firstUserShopId;
+            final restaurantId = shopProvider.firstUserRestaurantId;
+            if (shopId != null) {
+              context.push('/seller-panel?shopId=$shopId');
+            } else if (restaurantId != null) {
+              context.push('/seller-panel?shopId=$restaurantId&businessType=restaurant');
+            }
+          },
+          theme: theme,
+        )
+      : _buildRectButton(
                                 icon: FeatherIcons.package,
                                 label: localization.myOrders,
                                 onTap: isAuthenticated

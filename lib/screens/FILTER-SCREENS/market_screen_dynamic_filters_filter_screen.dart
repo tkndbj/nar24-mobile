@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../generated/l10n/app_localizations.dart';
-import '../../constants/brands.dart';
 import '../../utils/color_localization.dart';
 import '../../utils/attribute_localization_utils.dart';
 import '../../constants/all_in_one_category_data.dart';
 import '../../models/dynamic_filter.dart';
+import '../../services/typesense_service_manager.dart';
 
 // Server-side data manager for metadata only
 class ServerSideFilterDataManager {
@@ -16,25 +15,9 @@ class ServerSideFilterDataManager {
   ServerSideFilterDataManager._();
 
   // Cached static data
-  List<String>? _cachedBrands;
   List<String>? _cachedCategories;
   Map<String, List<String>>? _cachedSubcategories;
   Map<String, Map<String, List<String>>>? _cachedSubSubcategories;
-
-  // Get all brands from constants (static data)
-  List<String> getAllBrands() {
-    if (_cachedBrands != null) return _cachedBrands!;
-
-    final allBrands = <String>{};
-    try {
-      allBrands.addAll(globalBrands.cast<String>());
-    } catch (e) {
-      debugPrint('Error loading brands from constants: $e');
-    }
-
-    _cachedBrands = allBrands.toList()..sort();
-    return _cachedBrands!;
-  }
 
   // Get all categories from constants (static data)
   Map<String, dynamic> getAllCategoriesData() {
@@ -94,35 +77,7 @@ class ServerSideFilterDataManager {
     }
   }
 
-  // Optional: Get dynamic brands/categories from server for enhanced experience
-  Future<List<String>> getServerBrands(DynamicFilter baseFilter) async {
-    try {
-      final query = FirebaseFirestore.instance
-          .collection(baseFilter.collection ?? 'shop_products');
-
-      // Use aggregation query for better performance
-      final snapshot = await query.limit(1000).get();
-      final brands = <String>{};
-
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        final brand = data['brandModel'] as String?;
-        if (brand != null && brand.isNotEmpty) {
-          brands.add(brand);
-        }
-      }
-
-      // Merge with static brands
-      final allBrands = {...getAllBrands(), ...brands};
-      return allBrands.toList()..sort();
-    } catch (e) {
-      debugPrint('Error fetching server brands: $e');
-      return getAllBrands();
-    }
-  }
-
   void clearCache() {
-    _cachedBrands = null;
     _cachedCategories = null;
     _cachedSubcategories = null;
     _cachedSubSubcategories = null;
@@ -306,8 +261,6 @@ class _MarketScreenDynamicFiltersFilterScreenState
 
   void _loadAvailableDataImmediate() {
     try {
-      _availableBrands = ServerSideFilterDataManager.instance.getAllBrands();
-
       final categoriesData =
           ServerSideFilterDataManager.instance.getAllCategoriesData();
       _availableCategories = categoriesData['categories'] as List<String>;
@@ -315,8 +268,6 @@ class _MarketScreenDynamicFiltersFilterScreenState
           categoriesData['subcategories'] as Map<String, List<String>>;
       _availableSubSubcategories = categoriesData['subSubcategories']
           as Map<String, Map<String, List<String>>>;
-
-      _filteredBrands = List.from(_availableBrands);
 
       setState(() {});
     } catch (e) {
@@ -330,12 +281,14 @@ class _MarketScreenDynamicFiltersFilterScreenState
     });
 
     try {
-      final enhancedBrands = await ServerSideFilterDataManager.instance
-          .getServerBrands(widget.baseFilter);
+      final svc = TypeSenseServiceManager.instance.shopService;
+      final facetBrands = await svc.fetchBrandFacets(
+        indexName: widget.baseFilter.collection ?? 'shop_products',
+      );
 
       if (mounted) {
         setState(() {
-          _availableBrands = enhancedBrands;
+          _availableBrands = facetBrands..sort();
           _filteredBrands = List.from(_availableBrands);
           _isEnhancing = false;
         });
@@ -501,7 +454,12 @@ class _MarketScreenDynamicFiltersFilterScreenState
               child: Column(
                 children: [
                   _buildCategoryFilter(l10n, isDark),
-                  if (_availableBrands.isNotEmpty)
+                  if (_isEnhancing)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                    )
+                  else if (_availableBrands.isNotEmpty)
                     _buildBrandFilter(l10n, isDark),
                   _buildColorFilter(l10n, isDark),
                   _buildPriceFilter(l10n, isDark),

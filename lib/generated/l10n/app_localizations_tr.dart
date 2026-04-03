@@ -13069,6 +13069,21 @@ class AppLocalizationsTr extends AppLocalizations {
   String get notifFoodReviewTitle => 'Sipariş Teslim Edildi! 🎉';
 
   @override
+  String get selectFromList => 'Listeden Seç';
+
+  @override
+  String get enterManually => 'Manuel Giriş';
+
+  @override
+  String get brandNamePlaceholder => 'Marka adını yazın...';
+
+  @override
+  String get confirmBrand => 'Markayı Onayla';
+
+  @override
+  String get noBrandsFound => 'Marka bulunamadı';
+
+  @override
   String notifFoodReviewBody(String restaurantName) {
     return '$restaurantName siparişiniz geldi. Değerlendirmek için dokunun!';
   }

@@ -53,6 +53,17 @@ class _FilterSortRowState extends State<FilterSortRow> {
   List<FilterItem>? _cachedFilters;
   String? _lastCacheKey;
 
+  bool? _cachedIsLightBg;
+  Color? _lastBgColor;
+
+  bool get _isLightBg {
+    if (_lastBgColor != widget.backgroundColor) {
+      _lastBgColor = widget.backgroundColor;
+      _cachedIsLightBg = widget.backgroundColor.computeLuminance() > 0.7;
+    }
+    return _cachedIsLightBg!;
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -63,11 +74,10 @@ class _FilterSortRowState extends State<FilterSortRow> {
   }
 
   // OPTIMIZATION 3: Build cache key from provider states
-  // Include userShopId to invalidate cache when shop data becomes available
+  // 🔧 CHANGED: Added userRestaurantId to cache key
   String _buildCacheKey(bool userHasShop, bool isLoading, bool hasError,
-      List<DynamicFilter> activeFilters, {String? userShopId}) {
-    // Cache based on shop status, shop ID availability, and filter count
-    return '$userHasShop|${userShopId != null}|${activeFilters.length}';
+      List<DynamicFilter> activeFilters, {String? userShopId, String? userRestaurantId}) {
+    return '$userHasShop|${userShopId != null}|${userRestaurantId != null}|${activeFilters.length}';
   }
 
   bool _isLightColor(Color color) {
@@ -78,11 +88,13 @@ class _FilterSortRowState extends State<FilterSortRow> {
 }
 
   // OPTIMIZATION 4: Cached filter building
-  // Now takes shopId to ensure seller panel button has access to it
+  // 🔧 CHANGED: Added userRestaurantId parameter
   List<FilterItem> _buildFilters(bool userHasShop, String? userShopId,
+      String? userRestaurantId,
       List<DynamicFilter> activeFilters, DynamicFilterProvider dynamicProv) {
     final cacheKey = _buildCacheKey(
-      userHasShop, false, false, activeFilters, userShopId: userShopId);
+      userHasShop, false, false, activeFilters,
+      userShopId: userShopId, userRestaurantId: userRestaurantId);
 
     if (_cachedFilters != null && _lastCacheKey == cacheKey) {
       return _cachedFilters!;
@@ -91,8 +103,8 @@ class _FilterSortRowState extends State<FilterSortRow> {
     final l10n = _l10n!;
     final filters = <FilterItem>[];
 
-    // Add seller panel if user has shop AND we have the shop ID
-    if (userHasShop && userShopId != null) {
+    // 🔧 CHANGED: Show seller panel if user has ANY entity (shop OR restaurant)
+    if (userHasShop && (userShopId != null || userRestaurantId != null)) {
       filters.add(FilterItem(label: l10n.sellerPanel, type: 'SellerPanel'));
     }
 
@@ -139,11 +151,11 @@ class _FilterSortRowState extends State<FilterSortRow> {
       curve: Curves.easeInOut,
       color: widget.backgroundColor,
       padding: const EdgeInsets.only(bottom: 8.0),
-      // Listen to ShopWidgetProvider for seller panel button
-      child: Selector<ShopWidgetProvider, (bool, String?)>(
-        selector: (_, prov) => (prov.userOwnsShop, prov.firstUserShopId),
+      // 🔧 CHANGED: Selector now also includes firstUserRestaurantId
+      child: Selector<ShopWidgetProvider, (bool, String?, String?)>(
+        selector: (_, prov) => (prov.userOwnsShop, prov.firstUserShopId, prov.firstUserRestaurantId),
         builder: (context, shopState, _) {
-          final (userOwnsShop, firstUserShopId) = shopState;
+          final (userOwnsShop, firstUserShopId, firstUserRestaurantId) = shopState; // 🔧 CHANGED
 
           // Then listen to DynamicFilterProvider
           return Selector<DynamicFilterProvider, (bool, String?, int)>(
@@ -172,10 +184,11 @@ class _FilterSortRowState extends State<FilterSortRow> {
               final dynamicProv =
                   Provider.of<DynamicFilterProvider>(context, listen: false);
 
-              // Use cached filter building with user's shop ID
+              // 🔧 CHANGED: Pass restaurantId to _buildFilters
               final filters = _buildFilters(
                 userOwnsShop,
                 firstUserShopId,
+                firstUserRestaurantId,
                 dynamicProv.activeFilters,
                 dynamicProv,
               );
@@ -320,15 +333,18 @@ class _FilterSortRowState extends State<FilterSortRow> {
               borderRadius: BorderRadius.circular(15.5),
             ),
             child: TextButton(
+              // 🔧 CHANGED: Navigate to shop OR restaurant seller panel
               onPressed: () {
-                // Use firstUserShopId - the actual shop ID the user has access to
                 final shopProv =
                     Provider.of<ShopWidgetProvider>(context, listen: false);
                 final shopId = shopProv.firstUserShopId;
+                final restaurantId = shopProv.firstUserRestaurantId;
+
                 if (shopId != null) {
                   context.push('/seller-panel?shopId=$shopId');
+                } else if (restaurantId != null) {
+                  context.push('/seller-panel?shopId=$restaurantId&businessType=restaurant');
                 } else {
-                  // Fallback without shop ID (seller panel will auto-select)
                   context.push('/seller-panel');
                 }
               },
@@ -365,11 +381,8 @@ class _FilterSortRowState extends State<FilterSortRow> {
     FilterItem f, bool sel, SpecialFilterProviderMarket specialProv) {
   final filter = f.dynamicFilter!;
   
-  // ✅ ADD: Check if background is light
-  final isLightBg = _isLightColor(widget.backgroundColor);
-  // Determine text/border color based on background
-  final unselectedColor = isLightBg ? Colors.black : widget.textColor;
-  final unselectedBorderColor = isLightBg ? Colors.grey.shade400 : Colors.grey.shade300;
+  final unselectedColor = _isLightBg ? Colors.black : widget.textColor;
+  final unselectedBorderColor = _isLightBg ? Colors.grey.shade400 : Colors.grey.shade300;
 
   return GestureDetector(
     onTap: () {
@@ -400,7 +413,7 @@ class _FilterSortRowState extends State<FilterSortRow> {
               ? (filter.color != null
                   ? _parseColor(filter.color!)
                   : Colors.orange)
-              : unselectedBorderColor,  // ✅ UPDATED
+              : unselectedBorderColor,
           width: 1,
         ),
         borderRadius: BorderRadius.circular(30),
@@ -418,7 +431,7 @@ class _FilterSortRowState extends State<FilterSortRow> {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: sel ? Colors.white : unselectedColor,  // ✅ UPDATED
+                color: sel ? Colors.white : unselectedColor,
               ),
             ),
           ],
@@ -453,10 +466,8 @@ class _FilterSortRowState extends State<FilterSortRow> {
   }
 
   Widget _buildShopsButton(FilterItem f, bool sel) {
-  // ✅ ADD: Check if background is light
-  final isLightBg = _isLightColor(widget.backgroundColor);
-  final unselectedColor = isLightBg ? Colors.black : widget.textColor;
-  final unselectedBorderColor = isLightBg ? Colors.grey.shade400 : Colors.grey.shade300;
+  final unselectedColor = _isLightBg ? Colors.black : widget.textColor;
+  final unselectedBorderColor = _isLightBg ? Colors.grey.shade400 : Colors.grey.shade300;
 
   return GestureDetector(
     onTap: () => context.push('/shop'),
@@ -465,7 +476,7 @@ class _FilterSortRowState extends State<FilterSortRow> {
       decoration: BoxDecoration(
         color: sel ? Colors.orange : Colors.transparent,
         border: Border.all(
-          color: sel ? Colors.orange : unselectedBorderColor,  // ✅ UPDATED
+          color: sel ? Colors.orange : unselectedBorderColor,
           width: 1,
         ),
         borderRadius: BorderRadius.circular(30),
@@ -477,7 +488,7 @@ class _FilterSortRowState extends State<FilterSortRow> {
             Icon(
               Icons.store,
               size: 16,
-              color: sel ? Colors.white : unselectedColor,  // ✅ UPDATED
+              color: sel ? Colors.white : unselectedColor,
             ),
             const SizedBox(width: 4),
             Text(
@@ -485,7 +496,7 @@ class _FilterSortRowState extends State<FilterSortRow> {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: sel ? Colors.white : unselectedColor,  // ✅ UPDATED
+                color: sel ? Colors.white : unselectedColor,
               ),
             ),
           ],
@@ -497,10 +508,8 @@ class _FilterSortRowState extends State<FilterSortRow> {
 
  Widget _buildRegularFilterButton(
     FilterItem f, bool sel, SpecialFilterProviderMarket specialProv) {
-  // ✅ ADD: Check if background is light
-  final isLightBg = _isLightColor(widget.backgroundColor);
-  final unselectedColor = isLightBg ? Colors.black : widget.textColor;
-  final unselectedBorderColor = isLightBg ? Colors.grey.shade400 : Colors.grey.shade300;
+  final unselectedColor = _isLightBg ? Colors.black : widget.textColor;
+  final unselectedBorderColor = _isLightBg ? Colors.grey.shade400 : Colors.grey.shade300;
 
   return GestureDetector(
     onTap: () {
@@ -512,7 +521,7 @@ class _FilterSortRowState extends State<FilterSortRow> {
       decoration: BoxDecoration(
         color: sel ? Colors.orange : Colors.transparent,
         border: Border.all(
-          color: sel ? Colors.orange : unselectedBorderColor,  // ✅ UPDATED
+          color: sel ? Colors.orange : unselectedBorderColor,
           width: 1,
         ),
         borderRadius: BorderRadius.circular(30),
@@ -523,7 +532,7 @@ class _FilterSortRowState extends State<FilterSortRow> {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: sel ? Colors.white : unselectedColor,  // ✅ UPDATED
+            color: sel ? Colors.white : unselectedColor,
           ),
         ),
       ),

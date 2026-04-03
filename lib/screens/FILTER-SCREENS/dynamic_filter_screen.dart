@@ -2,10 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../generated/l10n/app_localizations.dart';
-import '../../constants/brands.dart';
 import '../../utils/color_localization.dart';
 import '../../utils/attribute_localization_utils.dart';
-import '../../constants/all_in_one_category_data.dart'; // Add this import
+import '../../constants/all_in_one_category_data.dart';
+import '../../services/typesense_service_manager.dart';
 
 class DynamicFilterScreen extends StatefulWidget {
   final String category;
@@ -101,12 +101,13 @@ class _DynamicFilterScreenState extends State<DynamicFilterScreen> {
     {'name': 'Silver', 'color': const Color(0xFFC0C0C0)},
   ];
 
+  bool _isLoadingBrands = true;
+
   @override
   void initState() {
     super.initState();
-    _loadBrands();
     _initializeFilters();
-    _filteredBrands = List.from(_brands);
+    _loadBrandsFromTypesense();
   }
 
   void _filterBrands(String query) {
@@ -198,9 +199,25 @@ class _DynamicFilterScreenState extends State<DynamicFilterScreen> {
     }
   }
 
-  void _loadBrands() {
-    // Use the single global brands list for all categories
-    _brands = globalBrands;
+  void _loadBrandsFromTypesense() async {
+    try {
+      final svc = TypeSenseServiceManager.instance.shopService;
+      final facetBrands = await svc.fetchBrandFacets(
+        indexName: 'shop_products',
+      );
+      if (mounted) {
+        setState(() {
+          _brands = facetBrands..sort();
+          _filteredBrands = List.from(_brands);
+          _isLoadingBrands = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching brands from Typesense: $e');
+      if (mounted) {
+        setState(() => _isLoadingBrands = false);
+      }
+    }
   }
 
   int _getTotalSelected() {
@@ -557,7 +574,12 @@ class _DynamicFilterScreenState extends State<DynamicFilterScreen> {
                   }),
 
                   // Brand Filter
-                  if (_brands.isNotEmpty) ...[
+                  if (_isLoadingBrands)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                    )
+                  else if (_brands.isNotEmpty) ...[
                     ExpansionTile(
                       title: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,

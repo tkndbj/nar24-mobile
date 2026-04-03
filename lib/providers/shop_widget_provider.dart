@@ -23,6 +23,7 @@ class ShopWidgetProvider with ChangeNotifier {
   bool _userOwnsShop = false;
   bool _isCheckingMembership = false;
   List<String> _userShopIds = [];
+  List<String> _userRestaurantIds = []; // 🔧 ADDED
 
   // Track last checked uid to avoid re-checking when UserProvider notifies
   // for non-auth-related changes (e.g. profile field updates).
@@ -52,6 +53,7 @@ class ShopWidgetProvider with ChangeNotifier {
         _lastCheckedUid = null;
         _userOwnsShop = false;
         _userShopIds = [];
+        _userRestaurantIds = []; // 🔧 ADDED
         _isCheckingMembership = false;
         notifyListeners();
       }
@@ -63,11 +65,13 @@ class ShopWidgetProvider with ChangeNotifier {
     // 2. profileData just became available for the first time for this user
     final uid = user.uid;
     if (uid == _lastCheckedUid && !_isCheckingMembership) {
-      // Same user, already checked — check if memberOfShops field changed
+      // 🔧 CHANGED: Also watch memberOfRestaurants for changes
       final memberOfShops =
           profileData?['memberOfShops'] as Map<String, dynamic>? ?? {};
-      final currentIds = memberOfShops.keys.toSet();
-      final previousIds = _userShopIds.toSet();
+      final memberOfRestaurants =
+          profileData?['memberOfRestaurants'] as Map<String, dynamic>? ?? {};
+      final currentIds = {...memberOfShops.keys, ...memberOfRestaurants.keys};
+      final previousIds = {..._userShopIds, ..._userRestaurantIds};
       if (currentIds.length == previousIds.length &&
           currentIds.containsAll(previousIds)) {
         return; // No change
@@ -88,6 +92,11 @@ class ShopWidgetProvider with ChangeNotifier {
   List<String> get userShopIds => List.unmodifiable(_userShopIds);
   String? get firstUserShopId =>
       _userShopIds.isNotEmpty ? _userShopIds.first : null;
+
+  // 🔧 ADDED: Restaurant getters
+  List<String> get userRestaurantIds => List.unmodifiable(_userRestaurantIds);
+  String? get firstUserRestaurantId =>
+      _userRestaurantIds.isNotEmpty ? _userRestaurantIds.first : null;
 
   List<DocumentSnapshot> get shops => List.unmodifiable(_shops);
   bool get isLoadingMore => _isLoadingShops;
@@ -196,55 +205,71 @@ class ShopWidgetProvider with ChangeNotifier {
     try {
       final memberOfShops =
           profileData['memberOfShops'] as Map<String, dynamic>? ?? {};
+      // 🔧 ADDED: Read memberOfRestaurants too
+      final memberOfRestaurants =
+          profileData['memberOfRestaurants'] as Map<String, dynamic>? ?? {};
 
-      if (memberOfShops.isEmpty) {
+      // 🔧 CHANGED: Check both maps are empty
+      if (memberOfShops.isEmpty && memberOfRestaurants.isEmpty) {
         _userOwnsShop = false;
         _userShopIds = [];
+        _userRestaurantIds = [];
         notifyListeners();
         return;
       }
 
-      bool hasValidMembership = false;
-      List<String> validShopIds = [];
+    List<String> validShopIds = [];
+      List<String> validRestaurantIds = [];
       List<String> shopsToCleanup = [];
+      List<String> restaurantsToCleanup = [];
 
-      for (final entry in memberOfShops.entries) {
-        final shopId = entry.key;
-        final userRole = entry.value as String;
+      // Build a unified list: (entityId, role, collection)
+      final allEntries = [
+        ...memberOfShops.entries.map((e) => (e.key, e.value as String, 'shops')),
+        ...memberOfRestaurants.entries.map((e) => (e.key, e.value as String, 'restaurants')),
+      ];
+
+      // Fetch ALL docs in parallel instead of sequential awaits
+      final docs = await Future.wait(
+        allEntries.map((entry) =>
+          _firestore.collection(entry.$3).doc(entry.$1).get()),
+      );
+
+      for (int i = 0; i < allEntries.length; i++) {
+        final (entityId, userRole, collection) = allEntries[i];
+        final isShop = collection == 'shops';
 
         try {
-          final shopDoc =
-              await _firestore.collection('shops').doc(shopId).get();
-
-          if (!shopDoc.exists) {
-            shopsToCleanup.add(shopId);
+          final doc = docs[i];
+          if (!doc.exists) {
+            (isShop ? shopsToCleanup : restaurantsToCleanup).add(entityId);
             continue;
           }
-
-          final shopData = shopDoc.data() as Map<String, dynamic>;
-          final stillMember =
-              _verifyUserStillMemberOfShop(uid, userRole, shopData);
-
-          if (stillMember) {
-            hasValidMembership = true;
-            validShopIds.add(shopId);
+          final data = doc.data() as Map<String, dynamic>;
+          if (_verifyUserStillMemberOfShop(uid, userRole, data)) {
+            (isShop ? validShopIds : validRestaurantIds).add(entityId);
           } else {
-            shopsToCleanup.add(shopId);
+            (isShop ? shopsToCleanup : restaurantsToCleanup).add(entityId);
           }
         } catch (e) {
-          debugPrint('Error checking shop $shopId: $e');
-          hasValidMembership = true;
-          validShopIds.add(shopId);
+          debugPrint('Error checking $collection $entityId: $e');
+          (isShop ? validShopIds : validRestaurantIds).add(entityId);
         }
       }
 
       if (shopsToCleanup.isNotEmpty) {
-        _cleanupMultipleShopsFromUser(uid, shopsToCleanup);
+        _cleanupMembershipsFromUser(uid, shopsToCleanup, 'memberOfShops'); // 🔧 CHANGED
+      }
+      // 🔧 ADDED: Cleanup invalid restaurant memberships
+      if (restaurantsToCleanup.isNotEmpty) {
+        _cleanupMembershipsFromUser(uid, restaurantsToCleanup, 'memberOfRestaurants');
       }
 
       _userShopIds = validShopIds;
-      _userOwnsShop = hasValidMembership;
-      notifyListeners();
+      _userRestaurantIds = validRestaurantIds; // 🔧 ADDED
+      // 🔧 CHANGED: true if user has access to ANY shop or restaurant
+      _userOwnsShop = validShopIds.isNotEmpty || validRestaurantIds.isNotEmpty;
+      
     } catch (e) {
       debugPrint('Error checking shop membership: $e');
       await _checkUserMembershipFallback(uid);
@@ -254,18 +279,19 @@ class ShopWidgetProvider with ChangeNotifier {
     }
   }
 
-  Future<void> _cleanupMultipleShopsFromUser(
-      String uid, List<String> shopIds) async {
+  // 🔧 CHANGED: Renamed from _cleanupMultipleShopsFromUser → generalized
+  Future<void> _cleanupMembershipsFromUser(
+      String uid, List<String> entityIds, String fieldName) async {
     try {
       final Map<String, dynamic> updates = {};
-      for (final shopId in shopIds) {
-        updates['memberOfShops.$shopId'] = FieldValue.delete();
+      for (final id in entityIds) {
+        updates['$fieldName.$id'] = FieldValue.delete();
       }
 
       await _firestore.collection('users').doc(uid).update(updates);
-      debugPrint('Cleaned up ${shopIds.length} invalid shop memberships');
+      debugPrint('Cleaned up ${entityIds.length} invalid memberships from $fieldName');
     } catch (e) {
-      debugPrint('Error cleaning up multiple shops from user: $e');
+      debugPrint('Error cleaning up $fieldName: $e');
     }
   }
 
@@ -289,49 +315,36 @@ class ShopWidgetProvider with ChangeNotifier {
   }
 
   Future<void> _checkUserMembershipFallback(String uid) async {
-    try {
-      final futures = [
-        _firestore
-            .collection('shops')
-            .where('ownerId', isEqualTo: uid)
-            .limit(5)
-            .get(),
-        _firestore
-            .collection('shops')
-            .where('coOwners', arrayContains: uid)
-            .limit(5)
-            .get(),
-        _firestore
-            .collection('shops')
-            .where('editors', arrayContains: uid)
-            .limit(5)
-            .get(),
-        _firestore
-            .collection('shops')
-            .where('viewers', arrayContains: uid)
-            .limit(5)
-            .get(),
-      ];
-      final results = await Future.wait(futures);
+  try {
+    // Just read the user doc — 1 read instead of 8 queries
+    final userDoc = await _firestore.collection('users').doc(uid).get();
 
-      final shopIds = <String>{};
-      for (final result in results) {
-        for (final doc in result.docs) {
-          shopIds.add(doc.id);
-        }
-      }
-
-      final owns = shopIds.isNotEmpty;
-      _userShopIds = shopIds.toList();
-      _userOwnsShop = owns;
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Fallback membership check failed: $e');
+    if (!userDoc.exists) {
       _userOwnsShop = false;
       _userShopIds = [];
+      _userRestaurantIds = [];
       notifyListeners();
+      return;
     }
+
+    final data = userDoc.data() as Map<String, dynamic>;
+    final memberOfShops =
+        data['memberOfShops'] as Map<String, dynamic>? ?? {};
+    final memberOfRestaurants =
+        data['memberOfRestaurants'] as Map<String, dynamic>? ?? {};
+
+    _userShopIds = memberOfShops.keys.toList();
+    _userRestaurantIds = memberOfRestaurants.keys.toList();
+    _userOwnsShop = _userShopIds.isNotEmpty || _userRestaurantIds.isNotEmpty;
+    notifyListeners();
+  } catch (e) {
+    debugPrint('Fallback membership check failed: $e');
+    _userOwnsShop = false;
+    _userShopIds = [];
+    _userRestaurantIds = [];
+    notifyListeners();
   }
+}
 
   @override
   void dispose() {

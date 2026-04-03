@@ -4,8 +4,8 @@ import '../../generated/l10n/app_localizations.dart';
 import '../../constants/all_in_one_category_data.dart';
 import '../../models/product.dart';
 import 'package:Nar24/models/mock_document_snapshot.dart';
-import 'package:Nar24/constants/brands.dart';
 import '../../utils/attribute_localization_utils.dart';
+import '../../services/typesense_service_manager.dart';
 
 class ShopDetailFilterScreen extends StatefulWidget {
   final MockDocumentSnapshot shopDoc;
@@ -151,10 +151,31 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
     }
   }
 
+  bool _isLoadingBrands = true;
+
   void _initializeAvailableOptions() {
-    // Use the same approach as ServerSideFilterDataManager
-    _availableBrands = globalBrands;
-    _filteredBrands = List.from(_availableBrands);
+    _loadBrandsFromTypesense();
+  }
+
+  void _loadBrandsFromTypesense() async {
+    try {
+      final svc = TypeSenseServiceManager.instance.shopService;
+      final facetBrands = await svc.fetchBrandFacets(
+        indexName: 'shop_products',
+      );
+      if (mounted) {
+        setState(() {
+          _availableBrands = facetBrands..sort();
+          _filteredBrands = List.from(_availableBrands);
+          _isLoadingBrands = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching brands from Typesense: $e');
+      if (mounted) {
+        setState(() => _isLoadingBrands = false);
+      }
+    }
   }
 
   void _filterBrands(String query) {
@@ -468,8 +489,13 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
                       ),
                     ],
 
-                    // Brand Filter (always present)
-                    if (_availableBrands.isNotEmpty) ...[
+                    // Brand Filter
+                    if (_isLoadingBrands)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                      )
+                    else if (_availableBrands.isNotEmpty) ...[
                       ExpansionTile(
                         title: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,

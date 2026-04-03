@@ -727,11 +727,14 @@ class TypeSenseService {
       'productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
       'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes';
 
+  static const String _brandFacetField = 'brandModel';
+
   Future<Map<String, List<Map<String, dynamic>>>> fetchSpecFacets({
     required String indexName,
     String query = '*',
     List<List<String>>? facetFilters,
     String? additionalFilterBy,
+    String? facetFields,
   }) async {
     final uri = _searchUri(indexName);
 
@@ -766,7 +769,7 @@ class TypeSenseService {
       'query_by':
           'productName,brandModel,sellerName,category_en,category_tr,category_ru,subcategory_en,subcategory_tr,subcategory_ru,subsubcategory_en,subsubcategory_tr,subsubcategory_ru',
       'per_page': '0',
-      'facet_by': _specFacetFields,
+      'facet_by': facetFields ?? _specFacetFields,
       'max_facet_values': '50',
     };
     if (filterParts.isNotEmpty) {
@@ -821,6 +824,24 @@ class TypeSenseService {
       debugPrint('Typesense fetchSpecFacets error: $e');
       return {};
     }
+  }
+
+  /// Fetches brand facet values from Typesense (zero Firestore reads).
+  Future<List<String>> fetchBrandFacets({
+    required String indexName,
+    String? additionalFilterBy,
+  }) async {
+    final result = await fetchSpecFacets(
+      indexName: indexName,
+      additionalFilterBy: additionalFilterBy,
+      facetFields: _brandFacetField,
+    );
+    final brandFacet = result['brandModel'];
+    if (brandFacet == null) return [];
+    return brandFacet
+        .map((e) => e['value'] as String? ?? '')
+        .where((v) => v.isNotEmpty)
+        .toList();
   }
 
   // ── Health check ──────────────────────────────────────────────────────────
