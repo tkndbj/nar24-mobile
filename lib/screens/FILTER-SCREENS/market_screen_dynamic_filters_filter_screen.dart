@@ -144,6 +144,7 @@ class MarketScreenDynamicFiltersFilterScreen extends StatefulWidget {
   final String? initialSubSubcategory;
   final Map<String, List<String>>? initialSpecFilters;
   final Map<String, List<Map<String, dynamic>>> availableSpecFacets;
+  final double? initialMinRating;
 
   const MarketScreenDynamicFiltersFilterScreen({
     Key? key,
@@ -152,6 +153,7 @@ class MarketScreenDynamicFiltersFilterScreen extends StatefulWidget {
     this.initialColors,
     this.initialMinPrice,
     this.initialMaxPrice,
+    this.initialMinRating,
     this.initialCategory,
     this.initialSubcategory,
     this.initialSubSubcategory,
@@ -183,10 +185,13 @@ class _MarketScreenDynamicFiltersFilterScreenState
   Map<String, List<String>> _availableSubcategories = {};
   Map<String, Map<String, List<String>>> _availableSubSubcategories = {};
 
+  double? _selectedMinRating;
+
   // UI state
   bool _isBrandExpanded = false;
   bool _isColorExpanded = false;
   bool _isPriceExpanded = false;
+  bool _isRatingExpanded = false;
   bool _isCategoryExpanded = false;
 
   // Controllers
@@ -247,6 +252,7 @@ class _MarketScreenDynamicFiltersFilterScreenState
         : <String>[];
     _minPrice = widget.initialMinPrice;
     _maxPrice = widget.initialMaxPrice;
+    _selectedMinRating = widget.initialMinRating;
     _selectedCategory = widget.initialCategory;
     _selectedSubcategory = widget.initialSubcategory;
     _selectedSubSubcategory = widget.initialSubSubcategory;
@@ -311,6 +317,7 @@ class _MarketScreenDynamicFiltersFilterScreenState
     count += _selectedBrands.length;
     count += _selectedColors.length;
     if (_minPrice != null || _maxPrice != null) count++;
+    if (_selectedMinRating != null) count++;
     if (_selectedCategory != null) count++;
     if (_selectedSubcategory != null) count++;
     if (_selectedSubSubcategory != null) count++;
@@ -326,6 +333,7 @@ class _MarketScreenDynamicFiltersFilterScreenState
       _selectedColors.clear();
       _minPrice = null;
       _maxPrice = null;
+      _selectedMinRating = null;
       _selectedCategory = null;
       _selectedSubcategory = null;
       _selectedSubSubcategory = null;
@@ -436,6 +444,7 @@ class _MarketScreenDynamicFiltersFilterScreenState
                     _buildBrandFilter(l10n, isDark),
                   _buildColorFilter(l10n, isDark),
                   _buildPriceFilter(l10n, isDark),
+                  _buildRatingFilter(l10n, isDark),
                   ...widget.availableSpecFacets.entries.map((facetEntry) {
                     final field = facetEntry.key;
                     if (field == 'brandModel') return const SizedBox.shrink();
@@ -1294,6 +1303,7 @@ class _MarketScreenDynamicFiltersFilterScreenState
                 'colors': _selectedColors,
                 'minPrice': _minPrice,
                 'maxPrice': _maxPrice,
+                'minRating': _selectedMinRating,
                 'category': _selectedCategory,
                 'subcategory': _selectedSubcategory,
                 'subSubcategory': _selectedSubSubcategory,
@@ -1317,6 +1327,131 @@ class _MarketScreenDynamicFiltersFilterScreenState
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRatingFilter(AppLocalizations l10n, bool isDark) {
+    return ExpansionTile(
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            _getSafeLocalizedString(() => l10n.rating, 'Rating'),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white : null,
+            ),
+          ),
+          if (_selectedMinRating != null)
+            const Icon(Icons.check, color: Colors.orange, size: 20),
+        ],
+      ),
+      trailing: Icon(
+        _isRatingExpanded ? Icons.expand_less : Icons.expand_more,
+        color: Colors.orange,
+      ),
+      iconColor: isDark ? Colors.white : null,
+      collapsedIconColor: isDark ? Colors.white : null,
+      onExpansionChanged: (expanded) {
+        setState(() => _isRatingExpanded = expanded);
+      },
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_selectedMinRating != null)
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.star, color: Colors.orange, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${_selectedMinRating!.toInt()}+ ${_getSafeLocalizedString(() => l10n.rating, 'Rating')}',
+                          style: const TextStyle(
+                            color: Colors.orange,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => setState(() => _selectedMinRating = null),
+                        child: const Icon(Icons.close,
+                            color: Colors.orange, size: 16),
+                      ),
+                    ],
+                  ),
+                ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildRatingChip(4),
+                  _buildRatingChip(3),
+                  _buildRatingChip(2),
+                  _buildRatingChip(1),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRatingChip(int minStars) {
+    final isSelected = _selectedMinRating == minStars.toDouble();
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedMinRating = isSelected ? null : minStars.toDouble();
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.orange : Colors.grey[200],
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? Colors.orange : Colors.grey[300]!,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ...List.generate(
+              minStars,
+              (_) => Icon(Icons.star,
+                  size: 16,
+                  color: isSelected ? Colors.white : Colors.amber),
+            ),
+            ...List.generate(
+              5 - minStars,
+              (_) => Icon(Icons.star_border,
+                  size: 16,
+                  color: isSelected ? Colors.white70 : Colors.grey[400]),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '& up',
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.grey[700],
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ),
       ),
     );

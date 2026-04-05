@@ -211,6 +211,7 @@ class DynamicRoutes {
               initialColors: extra['initialColors'] as List<String>?,
               initialMinPrice: extra['initialMinPrice'] as double?,
               initialMaxPrice: extra['initialMaxPrice'] as double?,
+              initialMinRating: extra['initialMinRating'] as double?,
               initialCategory: extra['initialCategory'] as String?,
               initialSubcategory: extra['initialSubcategory'] as String?,
               initialSubSubcategory: extra['initialSubSubcategory'] as String?,

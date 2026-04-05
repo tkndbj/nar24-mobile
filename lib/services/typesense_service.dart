@@ -47,10 +47,11 @@ class TypeSensePage {
 
     for (final field in {...baseFacets.keys, ...filteredFacets.keys}) {
       if (activeFilterFields.contains(field)) {
-        // Actively filtered → show all options from base
-        if (baseFacets.containsKey(field)) {
-          combined[field] = baseFacets[field]!;
-        }
+        // Actively filtered → show all options from base so the selected value
+        // remains visible; fall back to filteredFacets if baseFacets hasn't
+        // loaded yet (race condition on screens without a provider).
+        combined[field] =
+            baseFacets[field] ?? filteredFacets[field] ?? const [];
       } else {
         // Not filtered → show narrowed options from the filtered response
         combined[field] =

@@ -82,6 +82,7 @@ class _MarketScreenDynamicFiltersScreenState
   List<String> _selectedColors = [];
   double? _minPrice;
   double? _maxPrice;
+  double? _minRating;
   String? _selectedCategory;
   String? _selectedSubcategory;
   String? _selectedSubSubcategory;
@@ -378,6 +379,7 @@ class _MarketScreenDynamicFiltersScreenState
     final numericFilters = <String>[];
     if (_minPrice != null) numericFilters.add('price:>=${_minPrice!.toInt()}');
     if (_maxPrice != null) numericFilters.add('price:<=${_maxPrice!.toInt()}');
+    if (_minRating != null) numericFilters.add('averageRating:>=${_minRating!}');
 
     final res = await svc.searchIdsWithFacets(
       indexName: widget.dynamicFilter.collection ?? 'shop_products',
@@ -524,6 +526,7 @@ class _MarketScreenDynamicFiltersScreenState
           initialColors: _selectedColors,
           initialMinPrice: _minPrice,
           initialMaxPrice: _maxPrice,
+          initialMinRating: _minRating,
           initialCategory: _selectedCategory,
           initialSubcategory: _selectedSubcategory,
           initialSubSubcategory: _selectedSubSubcategory,
@@ -549,6 +552,7 @@ class _MarketScreenDynamicFiltersScreenState
         _selectedColors = List<String>.from(result['colors'] ?? []);
         _minPrice = result['minPrice'];
         _maxPrice = result['maxPrice'];
+        _minRating = result['minRating'];
         _selectedCategory = result['category'];
         _selectedSubcategory = result['subcategory'];
         _selectedSubSubcategory = result['subSubcategory'];
@@ -566,6 +570,7 @@ class _MarketScreenDynamicFiltersScreenState
       _selectedColors.clear();
       _minPrice = null;
       _maxPrice = null;
+      _minRating = null;
       _selectedCategory = null;
       _selectedSubcategory = null;
       _selectedSubSubcategory = null;
@@ -580,6 +585,7 @@ class _MarketScreenDynamicFiltersScreenState
     String? brand,
     String? color,
     bool clearPrice = false,
+    bool clearRating = false,
     bool clearCategory = false,
     String? specField,
     String? specValue,
@@ -591,6 +597,7 @@ class _MarketScreenDynamicFiltersScreenState
         _minPrice = null;
         _maxPrice = null;
       }
+      if (clearRating) _minRating = null;
       if (clearCategory) {
         _selectedCategory = null;
         _selectedSubcategory = null;
@@ -614,6 +621,7 @@ class _MarketScreenDynamicFiltersScreenState
       _selectedColors.isNotEmpty ||
       _minPrice != null ||
       _maxPrice != null ||
+      _minRating != null ||
       _selectedCategory != null ||
       _selectedSubcategory != null ||
       _selectedSubSubcategory != null ||
@@ -624,6 +632,7 @@ class _MarketScreenDynamicFiltersScreenState
     count += _selectedBrands.length;
     count += _selectedColors.length;
     if (_minPrice != null || _maxPrice != null) count++;
+    if (_minRating != null) count++;
     if (_selectedCategory != null) count++;
     if (_selectedSubcategory != null) count++;
     if (_selectedSubSubcategory != null) count++;
@@ -1002,6 +1011,12 @@ class _MarketScreenDynamicFiltersScreenState
                   _buildFilterChip(
                     '${l10n.price ?? "Price"}: ${_minPrice?.toStringAsFixed(0) ?? '0'} - ${_maxPrice?.toStringAsFixed(0) ?? '∞'} TL',
                     () => _removeFilter(clearPrice: true),
+                  ),
+                // Rating chip
+                if (_minRating != null)
+                  _buildFilterChip(
+                    '${l10n.rating ?? "Rating"}: ${_minRating!.toInt()}+',
+                    () => _removeFilter(clearRating: true),
                   ),
                 // Category chip
                 if (_selectedCategory != null)
