@@ -128,6 +128,9 @@ class ShopProvider with ChangeNotifier {
   // Shop Detail Screen state
   MockDocumentSnapshot? _shopDoc;
   List<Map<String, dynamic>> _reviews = [];
+  DocumentSnapshot? _lastReviewDocument;
+  bool _hasMoreReviews = true;
+  bool _isLoadingMoreReviews = false;
   String _sortOption = 'date';
   String _searchQuery = '';
   DateTime? _lastShopFetch;
@@ -193,6 +196,8 @@ class ShopProvider with ChangeNotifier {
   List<Product> get dealProducts => dealProductsNotifier.value;
   List<Product> get bestSellers => bestSellersNotifier.value;
   List<Map<String, dynamic>> get reviews => _reviews;
+  bool get hasMoreReviews => _hasMoreReviews;
+  bool get isLoadingMoreReviews => _isLoadingMoreReviews;
   bool get isLoadingProducts => isLoadingProductsNotifier.value;
   bool get isLoadingReviews => isLoadingReviewsNotifier.value;
   int get totalFiltersApplied => totalFiltersAppliedNotifier.value;
@@ -580,6 +585,9 @@ class ShopProvider with ChangeNotifier {
     dealProductsNotifier.value = [];
     bestSellersNotifier.value = [];
     _reviews = [];
+    _lastReviewDocument = null;
+    _hasMoreReviews = true;
+    _isLoadingMoreReviews = false;
     _unfilteredProducts = [];
 
     shopDocErrorNotifier.value = false;
@@ -1604,6 +1612,9 @@ class ShopProvider with ChangeNotifier {
       hasMoreProductsNotifier.value = true;
       _allFetchedProducts = [];
       isLoadingProductsNotifier.value = true;
+      // Clear filtered facets so combineFacets falls back to baseFacets
+      // rather than showing stale narrowed counts when no filters are active.
+      _filteredSpecFacets = {};
       _safeNotifyListeners();
     }
 
@@ -2022,35 +2033,37 @@ class ShopProvider with ChangeNotifier {
 
   Future<void> fetchReviews() async {
     if (_shopDoc == null) return;
-    String shopId = _shopDoc!.id;
+    final shopId = _shopDoc!.id;
 
+    _lastReviewDocument = null;
+    _hasMoreReviews = true;
     isLoadingReviewsNotifier.value = true;
     _safeNotifyListeners();
 
     try {
-      // Apply retry logic with exponential backoff
       QuerySnapshot snapshot = await _retryWithBackoff(() async {
         return await _firestore
             .collection('shops')
             .doc(shopId)
             .collection('reviews')
             .orderBy('timestamp', descending: true)
+            .limit(10)
             .get();
       });
-      FirestoreReadTracker.instance.trackRead('ShopProvider', 'shops/$shopId/reviews', snapshot.docs.length);
+      FirestoreReadTracker.instance.trackRead('ShopProvider', 'shops/$shopId/reviews (page 1)', snapshot.docs.length);
 
       _reviews = snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
         data['id'] = doc.id;
-
-        // ✅ FIX: Convert Timestamp to milliseconds for serialization
         if (data['timestamp'] is Timestamp) {
           data['timestamp'] =
               (data['timestamp'] as Timestamp).millisecondsSinceEpoch;
         }
-
         return data;
       }).toList();
+
+      if (snapshot.docs.isNotEmpty) _lastReviewDocument = snapshot.docs.last;
+      _hasMoreReviews = snapshot.docs.length == 10;
 
       isLoadingReviewsNotifier.value = false;
       await _saveCachedData(shopId);
@@ -2058,6 +2071,57 @@ class ShopProvider with ChangeNotifier {
     } catch (e) {
       print('Error fetching reviews: $e');
       isLoadingReviewsNotifier.value = false;
+      _safeNotifyListeners();
+    }
+  }
+
+  Future<void> loadMoreReviews() async {
+    if (_shopDoc == null || _isLoadingMoreReviews || !_hasMoreReviews) return;
+    final shopId = _shopDoc!.id;
+
+    _isLoadingMoreReviews = true;
+    _safeNotifyListeners();
+
+    try {
+      var query = _firestore
+          .collection('shops')
+          .doc(shopId)
+          .collection('reviews')
+          .orderBy('timestamp', descending: true)
+          .limit(10);
+
+      if (_lastReviewDocument != null) {
+        query = query.startAfterDocument(_lastReviewDocument!);
+      } else if (_reviews.isNotEmpty) {
+        // Reviews came from cache; use timestamp of last review as cursor
+        final lastTs = _reviews.last['timestamp'];
+        if (lastTs is int) {
+          query = query.startAfter(
+              [Timestamp.fromMillisecondsSinceEpoch(lastTs)]);
+        }
+      }
+
+      final snapshot = await query.get();
+      FirestoreReadTracker.instance.trackRead('ShopProvider', 'shops/$shopId/reviews (load more)', snapshot.docs.length);
+
+      final newReviews = snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        data['id'] = doc.id;
+        if (data['timestamp'] is Timestamp) {
+          data['timestamp'] =
+              (data['timestamp'] as Timestamp).millisecondsSinceEpoch;
+        }
+        return data;
+      }).toList();
+
+      if (snapshot.docs.isNotEmpty) _lastReviewDocument = snapshot.docs.last;
+      _hasMoreReviews = snapshot.docs.length == 10;
+      _reviews = [..._reviews, ...newReviews];
+      _isLoadingMoreReviews = false;
+      _safeNotifyListeners();
+    } catch (e) {
+      print('Error loading more reviews: $e');
+      _isLoadingMoreReviews = false;
       _safeNotifyListeners();
     }
   }

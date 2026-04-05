@@ -41,7 +41,7 @@ class TypeSensePage {
     required Map<String, List<Map<String, dynamic>>> filteredFacets,
     required Set<String> activeFilterFields,
   }) {
-    if (filteredFacets.isEmpty || activeFilterFields.isEmpty) return baseFacets;
+    if (filteredFacets.isEmpty) return baseFacets;
 
     final combined = <String, List<Map<String, dynamic>>>{};
 

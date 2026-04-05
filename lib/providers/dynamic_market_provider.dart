@@ -686,6 +686,9 @@ class ShopMarketProvider with ChangeNotifier {
     required int page,
     required int seq,
   }) async {
+    // Clear filtered facets when using Firestore (no active filters) so
+    // combineFacets falls back to baseFacets rather than showing stale data.
+    if (page == 0) _filteredSpecFacets = {};
     Query q = _buildFirestoreQuery();
 
     if (page > 0 && _pageCursors.containsKey(page - 1)) {

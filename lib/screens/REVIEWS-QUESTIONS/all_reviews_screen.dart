@@ -10,63 +10,6 @@ import 'package:provider/provider.dart';
 import '../../services/translation_service.dart';
 import '../../providers/product_detail_provider.dart';
 
-/// Static cache for all reviews
-class _AllReviewsCache {
-  static final Map<String, List<Map<String, dynamic>>> _cache = {};
-  static final Map<String, DateTime> _cacheTimestamps = {};
-  static const int _maxCacheSize = 30;
-  static const Duration _cacheTTL = Duration(minutes: 5);
-
-  static Future<List<Map<String, dynamic>>> getAllReviews(
-    String productId,
-    String collectionName,
-  ) async {
-    final now = DateTime.now();
-
-    // Check cache
-    if (_cache.containsKey(productId) && _cacheTimestamps.containsKey(productId)) {
-      final cacheTime = _cacheTimestamps[productId]!;
-      if (now.difference(cacheTime) < _cacheTTL) {
-        return _cache[productId]!;
-      }
-      // Expired
-      _cache.remove(productId);
-      _cacheTimestamps.remove(productId);
-    }
-
-    // Fetch all reviews from Firestore
-    final snapshot = await FirebaseFirestore.instance
-        .collection(collectionName)
-        .doc(productId)
-        .collection('reviews')
-        .orderBy('timestamp', descending: true)
-        .get();
-
-    final reviews = snapshot.docs.map((doc) {
-      final data = Map<String, dynamic>.from(doc.data());
-      data['reviewId'] = doc.id;
-      return data;
-    }).toList();
-
-    // Store in cache
-    _cache[productId] = reviews;
-    _cacheTimestamps[productId] = now;
-
-    // Evict oldest if full
-    if (_cache.length > _maxCacheSize) {
-      final sortedEntries = _cacheTimestamps.entries.toList()
-        ..sort((a, b) => a.value.compareTo(b.value));
-      final toRemove = sortedEntries.take(_cache.length - _maxCacheSize);
-      for (final entry in toRemove) {
-        _cache.remove(entry.key);
-        _cacheTimestamps.remove(entry.key);
-      }
-    }
-
-    return reviews;
-  }
-}
-
 class AllReviewsScreen extends StatefulWidget {
   final String productId;
 
@@ -80,18 +23,42 @@ class AllReviewsScreen extends StatefulWidget {
 }
 
 class _AllReviewsScreenState extends State<AllReviewsScreen> {
-  Future<List<Map<String, dynamic>>>? _reviewsFuture;
+  static const int _pageSize = 10;
+
+  final List<Map<String, dynamic>> _reviews = [];
+  final ScrollController _scrollController = ScrollController();
+
+  DocumentSnapshot? _lastDocument;
+  bool _hasMore = true;
+  bool _isLoading = true;
+  bool _isLoadingMore = false;
+  String? _collectionName;
 
   @override
   void initState() {
     super.initState();
-    _loadReviews();
+    _scrollController.addListener(_onScroll);
+    _initAndFetch();
   }
 
-  Future<void> _loadReviews() async {
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 300 &&
+        !_isLoadingMore &&
+        _hasMore) {
+      _fetchNextPage();
+    }
+  }
+
+  Future<void> _initAndFetch() async {
     final provider = Provider.of<ProductDetailProvider>(context, listen: false);
 
-    // Wait for collection to be determined
     if (!provider.collectionDetermined) {
       int attempts = 0;
       while (!provider.collectionDetermined && attempts < 50 && mounted) {
@@ -102,15 +69,53 @@ class _AllReviewsScreenState extends State<AllReviewsScreen> {
 
     if (!mounted) return;
 
-    final collectionName = provider.productCollection;
-    if (collectionName == null) {
+    _collectionName = provider.productCollection;
+    if (_collectionName == null) {
       debugPrint('⚠️ Could not determine product collection for all reviews');
+      if (mounted) setState(() => _isLoading = false);
       return;
     }
 
-    setState(() {
-      _reviewsFuture = _AllReviewsCache.getAllReviews(widget.productId, collectionName);
-    });
+    await _fetchNextPage();
+  }
+
+  Future<void> _fetchNextPage() async {
+    if (_collectionName == null || _isLoadingMore || !_hasMore) return;
+
+    if (mounted) setState(() => _isLoadingMore = true);
+
+    try {
+      var query = FirebaseFirestore.instance
+          .collection(_collectionName!)
+          .doc(widget.productId)
+          .collection('reviews')
+          .orderBy('timestamp', descending: true)
+          .limit(_pageSize);
+
+      if (_lastDocument != null) {
+        query = query.startAfterDocument(_lastDocument!);
+      }
+
+      final snapshot = await query.get();
+      if (!mounted) return;
+
+      final newReviews = snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['reviewId'] = doc.id;
+        return data;
+      }).toList();
+
+      setState(() {
+        _reviews.addAll(newReviews);
+        if (snapshot.docs.isNotEmpty) _lastDocument = snapshot.docs.last;
+        _hasMore = snapshot.docs.length == _pageSize;
+        _isLoading = false;
+        _isLoadingMore = false;
+      });
+    } catch (e) {
+      debugPrint('Error fetching reviews: $e');
+      if (mounted) setState(() { _isLoading = false; _isLoadingMore = false; });
+    }
   }
 
   @override
@@ -130,52 +135,51 @@ class _AllReviewsScreenState extends State<AllReviewsScreen> {
         elevation: 0,
       ),
       body: SafeArea(
-        top: false, // AppBar already handles top safe area
+        top: false,
         child: MediaQuery(
           data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(1.0)),
-          child: FutureBuilder<List<Map<String, dynamic>>>(
-            future: _reviewsFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Center(
+          child: _isLoading
+              ? Center(
                   child: CircularProgressIndicator(
                     valueColor: AlwaysStoppedAnimation<Color>(
                       Theme.of(context).colorScheme.secondary,
                     ),
                   ),
-                );
-              }
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return Center(
-                  child: Text(
-                    l10n.noReviewsYet,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface,
+                )
+              : _reviews.isEmpty
+                  ? Center(
+                      child: Text(
+                        l10n.noReviewsYet,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: _scrollController,
+                      padding: EdgeInsets.only(
+                        left: 16.0,
+                        right: 16.0,
+                        top: 8.0,
+                        bottom: 8.0 + MediaQuery.of(context).padding.bottom,
+                      ),
+                      itemCount: _reviews.length + (_isLoadingMore ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (index == _reviews.length) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Center(child: CircularProgressIndicator()),
+                          );
+                        }
+                        final review = _reviews[index];
+                        return _ReviewTile(
+                          key: ValueKey(review['reviewId']),
+                          review: review,
+                          productId: widget.productId,
+                          reviewId: review['reviewId'],
+                        );
+                      },
                     ),
-                  ),
-                );
-              }
-              final reviews = snapshot.data!;
-              return ListView.builder(
-                padding: EdgeInsets.only(
-                  left: 16.0,
-                  right: 16.0,
-                  top: 8.0,
-                  bottom: 8.0 + MediaQuery.of(context).padding.bottom,
-                ),
-                itemCount: reviews.length,
-                itemBuilder: (context, index) {
-                  final review = reviews[index];
-                  return _ReviewTile(
-                    key: ValueKey(review['reviewId']),
-                    review: review,
-                    productId: widget.productId,
-                    reviewId: review['reviewId'],
-                  );
-                },
-              );
-            },
-          ),
         ),
       ),
     );

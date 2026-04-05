@@ -78,7 +78,6 @@ class UserProfileProvider with ChangeNotifier {
       // Fetch all initial data in parallel
       await Future.wait([
         _fetchUserData(userId),
-        _fetchReviews(userId),
         _fetchSellerTotalProductsSold(userId),
       ], eagerError: true);
 
@@ -112,6 +111,9 @@ class UserProfileProvider with ChangeNotifier {
         _userData = userDoc.data() as Map<String, dynamic>?;
         if (_userData != null) {
           _userData!['uid'] = userId;
+          // Read denormalized stats — no subcollection query needed
+          _reviewCount = _parseInt(_userData!['reviewCount']);
+          _averageRating = _parseDouble(_userData!['averageRating']);
         }
       } else {
         _error = 'User not found';
@@ -119,32 +121,6 @@ class UserProfileProvider with ChangeNotifier {
     } catch (e) {
       debugPrint('Error fetching user data: $e');
       throw Exception('Failed to fetch user data');
-    }
-  }
-
-  /// Fetch reviews with error handling
-  Future<void> _fetchReviews(String userId) async {
-    try {
-      QuerySnapshot reviewsSnapshot = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('reviews')
-          .get();
-
-      int count = reviewsSnapshot.docs.length;
-      double totalRating = 0.0;
-
-      for (var doc in reviewsSnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>?;
-        totalRating += _parseDouble(data?['rating']);
-      }
-
-      _reviewCount = count;
-      _averageRating = count > 0 ? totalRating / count : 0.0;
-    } catch (e) {
-      debugPrint('Error fetching reviews: $e');
-      _reviewCount = 0;
-      _averageRating = 0.0;
     }
   }
 

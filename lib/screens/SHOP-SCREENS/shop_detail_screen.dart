@@ -1419,7 +1419,36 @@ class _CollectionImage extends StatelessWidget {
 }
 
 /// Reviews tab
-class _ReviewsTab extends StatelessWidget {
+class _ReviewsTab extends StatefulWidget {
+  @override
+  State<_ReviewsTab> createState() => _ReviewsTabState();
+}
+
+class _ReviewsTabState extends State<_ReviewsTab> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    final provider = context.read<ShopProvider>();
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 300 &&
+        !provider.isLoadingMoreReviews &&
+        provider.hasMoreReviews) {
+      provider.loadMoreReviews();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -1443,12 +1472,20 @@ class _ReviewsTab extends StatelessWidget {
             }
 
             final shopId = provider.shopDoc?.id ?? '';
+            final isLoadingMore = provider.isLoadingMoreReviews;
 
             return _RefreshableList(
               child: ListView.builder(
+                controller: _scrollController,
                 padding: const EdgeInsets.all(16),
-                itemCount: reviews.length,
+                itemCount: reviews.length + (isLoadingMore ? 1 : 0),
                 itemBuilder: (context, index) {
+                  if (index == reviews.length) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
                   final review = reviews[index];
                   return _ReviewTile(
                     review: review,

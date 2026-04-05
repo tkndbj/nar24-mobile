@@ -16,65 +16,109 @@ class SellerReviewScreen extends StatefulWidget {
 }
 
 class _SellerReviewScreenState extends State<SellerReviewScreen> {
+  static const int _pageSize = 10;
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final ScrollController _scrollController = ScrollController();
 
   String _sellerName = '';
   List<Map<String, dynamic>> _reviews = [];
   double _averageRating = 0.0;
   int _totalReviews = 0;
 
+  DocumentSnapshot? _lastDocument;
+  bool _hasMore = true;
   bool isLoading = true;
+  bool _isLoadingMore = false;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _fetchSellerInfo();
-    _fetchSellerReviews();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 300 &&
+        !_isLoadingMore &&
+        _hasMore) {
+      _fetchNextPage();
+    }
   }
 
   Future<void> _fetchSellerInfo() async {
-    DocumentSnapshot userDoc =
-        await _firestore.collection('users').doc(widget.sellerId).get();
+    try {
+      final userDoc =
+          await _firestore.collection('users').doc(widget.sellerId).get();
 
-    if (userDoc.exists) {
-      String sellerName = userDoc['displayName'] ?? 'Seller';
-      setState(() {
-        _sellerName = sellerName;
-      });
-    } else {
-      setState(() {
-        _sellerName = 'Seller';
-      });
+      if (userDoc.exists) {
+        final data = userDoc.data() as Map<String, dynamic>;
+        setState(() {
+          _sellerName = data['displayName'] ?? 'Seller';
+          // Read denormalized stats from user document
+          _averageRating = (data['averageRating'] as num?)?.toDouble() ?? 0.0;
+          _totalReviews = (data['reviewCount'] as num?)?.toInt() ?? 0;
+        });
+      } else {
+        setState(() => _sellerName = 'Seller');
+      }
+    } catch (e) {
+      setState(() => _sellerName = 'Seller');
     }
+
+    await _fetchNextPage();
   }
 
-  Future<void> _fetchSellerReviews() async {
-    QuerySnapshot snapshot = await _firestore
-        .collection('users')
-        .doc(widget.sellerId)
-        .collection('reviews')
-        .get();
+  Future<void> _fetchNextPage() async {
+    if (_isLoadingMore || !_hasMore) return;
 
-    List<Map<String, dynamic>> reviews = [];
-    double totalRating = 0.0;
+    final isInitial = _reviews.isEmpty;
+    if (mounted) setState(() => _isLoadingMore = true);
 
-    for (var doc in snapshot.docs) {
-      var data = doc.data() as Map<String, dynamic>;
-      data['reviewId'] = doc.id;
-      reviews.add(data);
-      totalRating += (data['rating'] as num).toDouble();
+    try {
+      var query = _firestore
+          .collection('users')
+          .doc(widget.sellerId)
+          .collection('reviews')
+          .orderBy('timestamp', descending: true)
+          .limit(_pageSize);
+
+      if (_lastDocument != null) {
+        query = query.startAfterDocument(_lastDocument!);
+      }
+
+      final snapshot = await query.get();
+      if (!mounted) return;
+
+      final newReviews = snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        data['reviewId'] = doc.id;
+        return data;
+      }).toList();
+
+      setState(() {
+        _reviews.addAll(newReviews);
+        if (snapshot.docs.isNotEmpty) _lastDocument = snapshot.docs.last;
+        _hasMore = snapshot.docs.length == _pageSize;
+        if (isInitial) isLoading = false;
+        _isLoadingMore = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          if (isInitial) isLoading = false;
+          _isLoadingMore = false;
+        });
+      }
     }
-
-    int totalReviews = reviews.length;
-    double averageRating = totalReviews > 0 ? totalRating / totalReviews : 0.0;
-
-    setState(() {
-      _reviews = reviews;
-      _totalReviews = totalReviews;
-      _averageRating = averageRating;
-      isLoading = false;
-    });
   }
 
   void _showReportOptions() {
@@ -246,6 +290,7 @@ class _SellerReviewScreenState extends State<SellerReviewScreen> {
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : CustomScrollView(
+              controller: _scrollController,
               slivers: [
                 SliverAppBar(
                   expandedHeight: 200,
@@ -594,8 +639,13 @@ class _SellerReviewScreenState extends State<SellerReviewScreen> {
                       ),
                     ),
                   ),
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 32),
+                SliverToBoxAdapter(
+                  child: _isLoadingMore
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      : const SizedBox(height: 32),
                 ),
               ],
             ),
