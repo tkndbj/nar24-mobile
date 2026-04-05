@@ -42,6 +42,9 @@ class ShopMarketProvider with ChangeNotifier {
   final Map<String, bool> _filterHasMore = {};
   final Map<String, int> _filterCurrentPage = {};
   final Map<String, DateTime> _filterCacheTs = {};
+  // Facet snapshot cache — mirrors _filterPageCache so filteredSpecFacets is
+  // restored correctly when a filter is toggled back (cache hit path).
+  final Map<String, Map<String, List<Map<String, dynamic>>>> _filterFacetsSnapshotCache = {};
 
   Future<void> fetchPage(int page) => _fetchPage(page: page);
 
