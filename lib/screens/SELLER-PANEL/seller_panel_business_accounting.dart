@@ -181,44 +181,6 @@ class _SellerPanelBusinessAccountingState
     }
   }
 
- Future<void> _fetchAndShowReport(String periodKey) async {
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => const Center(
-      child: CircularProgressIndicator(color: Color(0xFF667EEA)),
-    ),
-  );
-
-  try {
-    final snap = await _firestore
-        .collection('business-reports')
-        .doc(widget.businessId)
-        .collection('reports')
-        .doc(periodKey)
-        .get();
-
-    if (!mounted) return;
-    Navigator.of(context).pop();
-
-    if (snap.exists) {
-      final data = snap.data()!;
-      // Convert Timestamps for display
-      final converted = Map<String, dynamic>.from(data);
-      converted['periodStart'] = (data['periodStart'] as Timestamp?)?.toDate().toIso8601String();
-      converted['periodEnd'] = (data['periodEnd'] as Timestamp?)?.toDate().toIso8601String();
-      converted['generatedAt'] = (data['generatedAt'] as Timestamp?)?.toDate().toIso8601String();
-      _showReportDetail(converted);
-    }
-  } catch (e) {
-    if (!mounted) return;
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(e.toString())),
-    );
-  }
-}
-
   // ── Build ──────────────────────────────────────────────────
 
   @override
@@ -661,7 +623,7 @@ class _SellerPanelBusinessAccountingState
     }
 
     return InkWell(
-      onTap: () => _fetchAndShowReport(periodKey),
+      onTap: () => _showReportDetail(report),
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.all(16),
