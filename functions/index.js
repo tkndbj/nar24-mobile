@@ -8545,4 +8545,4 @@ export { generateRestaurantReceiptBackground } from './37-restaurant-receipt/ind
 export { scheduleDiscountExpiry, restoreDiscountPrice } from './38-food-discount/index.js';
 export { createTestCouriers, deleteTestCouriers, listTestCouriers } from './39-fake-accounts/index.js';
 export { processCourierAction } from './40-courier-actions/index.js';
-export { generateBusinessReport, getBusinessReport, listBusinessReports, getMyBusinesses } from './41-business-client-side-accounting/index.js';
+export { generateBusinessReport } from './41-business-client-side-accounting/index.js';
