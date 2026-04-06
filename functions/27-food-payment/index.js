@@ -1784,7 +1784,7 @@ export const updateFoodOrderStatus = onCall(
       throw new HttpsError('unauthenticated', 'Must be signed in.');
     }
 
-    const { orderId, newStatus } = request.data;
+    const { orderId, newStatus, paymentReceivedMethod } = request.data;
     const ALLOWED_STATUSES = ['accepted', 'rejected', 'preparing', 'ready', 'out_for_delivery', 'delivered'];
 
     if (!orderId || !ALLOWED_STATUSES.includes(newStatus)) {
@@ -1836,6 +1836,10 @@ export const updateFoodOrderStatus = onCall(
         status: newStatus,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         ...(newStatus === 'delivered' ? { needsReview: true } : {}),
+        ...(newStatus === 'delivered' && paymentReceivedMethod &&
+            ['card', 'cash', 'iban'].includes(paymentReceivedMethod) ?
+              { paymentReceivedMethod } :
+              {}),
       });
 
       // Only notify the buyer if one exists (scanned receipt orders have no buyerId)

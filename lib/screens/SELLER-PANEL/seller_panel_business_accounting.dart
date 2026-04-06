@@ -707,16 +707,18 @@ class _SellerPanelBusinessAccountingState
         initialChildSize: 0.75,
         maxChildSize: 0.95,
         minChildSize: 0.4,
-        builder: (_, scrollCtrl) => Container(
-          decoration: BoxDecoration(
-            color: Theme.of(ctx).scaffoldBackgroundColor,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: ListView(
-            controller: scrollCtrl,
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-            children: [
+        builder: (_, scrollCtrl) => SafeArea(
+          top: false,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Theme.of(ctx).scaffoldBackgroundColor,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: ListView(
+              controller: scrollCtrl,
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+              children: [
               Center(
                 child: Container(
                   width: 40,
@@ -745,6 +747,7 @@ class _SellerPanelBusinessAccountingState
               else
                 ..._shopMetrics(data, l10n, isDark),
             ],
+          ),
           ),
         ),
       ),
