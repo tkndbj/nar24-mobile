@@ -412,7 +412,7 @@ class TypeSenseService {
     String? queryBy,
     String? includeFields,
     String? facetBy,
-    int maxFacetValues = 50,
+    int maxFacetValues = 100,
   }) async {
     final uri = _searchUri(indexName);
 
@@ -918,7 +918,7 @@ class TypeSenseService {
     String? queryBy,
     String? includeFields,
     String facetBy = _specFacetFields,
-    int maxFacetValues = 50,
+    int maxFacetValues = 100,
     Map<String, List<String>> disjunctiveFilters = const {},
     List<String> numericFilters = const [],
   }) async {
