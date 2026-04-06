@@ -31,6 +31,7 @@ import '../../screens/SELLER-PANEL/seller_panel_user_permission.dart';
 import '../../screens/SELLER-PANEL/seller_panel_receipts_screen.dart';
 import '../../screens/SELLER-PANEL/seller_panel_restaurant_receipt_screen.dart';
 import '../../screens/SELLER-PANEL/seller_panel_pending_product_applications.dart';
+import '../../screens/SELLER-PANEL/seller_panel_business_accounting.dart';
 
 class SellerPanelRoutes {
   // Custom transition builder to reuse
@@ -94,6 +95,25 @@ class SellerPanelRoutes {
               );
             },
           ),
+
+           GoRoute(
+        path: '/seller_panel_business_accounting/:businessId',
+        name: 'seller-business-accounting',
+        pageBuilder: (context, state) {
+          final businessId = state.pathParameters['businessId']!;
+          final businessType =
+              state.uri.queryParameters['businessType'] ?? 'shop';
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: SellerPanelBusinessAccounting(
+              businessId: businessId,
+              businessType: businessType,
+            ),
+            transitionsBuilder: _slideTransition,
+            transitionDuration: const Duration(milliseconds: 200),
+          );
+        },
+      ),
 
           // Campaign Screen
           GoRoute(

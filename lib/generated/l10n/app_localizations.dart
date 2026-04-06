@@ -15290,7 +15290,7 @@ abstract class AppLocalizations {
   /// No description provided for @generatingReport.
   ///
   /// In tr, this message translates to:
-  /// **'Rapor Oluşturuluyor...'**
+  /// **'Oluşturuluyor...'**
   String get generatingReport;
 
   /// No description provided for @pleaseWaitWhileWeGenerateYourReport.
@@ -24699,7 +24699,7 @@ abstract class AppLocalizations {
   /// No description provided for @payAtDoor.
   ///
   /// In tr, this message translates to:
-  /// **'Kapıda Öde'**
+  /// **'Kapıda Ödeme'**
   String get payAtDoor;
 
   /// No description provided for @foodOrderDetails.
@@ -24995,6 +24995,186 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Min. {amount} TL'**
   String minOrderBadge(String amount);
+
+  /// No description provided for @salesInformation.
+  ///
+  /// In tr, this message translates to:
+  /// **'Satış Bilgileri'**
+  String get salesInformation;
+
+  /// No description provided for @generatedReports.
+  ///
+  /// In tr, this message translates to:
+  /// **'Oluşturulan Raporlar'**
+  String get generatedReports;
+
+  /// No description provided for @noReportsYetDesc.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yukarıdan dönem ve tarih seçerek ilk raporunuzu oluşturun.'**
+  String get noReportsYetDesc;
+
+  /// No description provided for @selectPeriod.
+  ///
+  /// In tr, this message translates to:
+  /// **'Dönem Seçin'**
+  String get selectPeriod;
+
+  /// No description provided for @dailyReport.
+  ///
+  /// In tr, this message translates to:
+  /// **'Günlük'**
+  String get dailyReport;
+
+  /// No description provided for @weeklyReport.
+  ///
+  /// In tr, this message translates to:
+  /// **'Haftalık'**
+  String get weeklyReport;
+
+  /// No description provided for @monthlyReport.
+  ///
+  /// In tr, this message translates to:
+  /// **'Aylık'**
+  String get monthlyReport;
+
+  /// No description provided for @weekLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hafta {week}, {year}'**
+  String weekLabel(String week, String year);
+
+  /// No description provided for @reportDetails.
+  ///
+  /// In tr, this message translates to:
+  /// **'Rapor Detayları'**
+  String get reportDetails;
+
+  /// No description provided for @reportGenerationFailed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Rapor oluşturulamadı'**
+  String get reportGenerationFailed;
+
+  /// No description provided for @totalOrders.
+  ///
+  /// In tr, this message translates to:
+  /// **'Toplam Sipariş'**
+  String get totalOrders;
+
+  /// No description provided for @completedOrders.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tamamlanan'**
+  String get completedOrders;
+
+  /// No description provided for @activeOrders.
+  ///
+  /// In tr, this message translates to:
+  /// **'Aktif'**
+  String get activeOrders;
+
+  /// No description provided for @cancelledOrders.
+  ///
+  /// In tr, this message translates to:
+  /// **'İptal Edilen'**
+  String get cancelledOrders;
+
+  /// No description provided for @grossRevenue.
+  ///
+  /// In tr, this message translates to:
+  /// **'Brüt Gelir'**
+  String get grossRevenue;
+
+  /// No description provided for @deliveredRevenue.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslim Edilen Gelir'**
+  String get deliveredRevenue;
+
+  /// No description provided for @netRevenue.
+  ///
+  /// In tr, this message translates to:
+  /// **'Net Gelir'**
+  String get netRevenue;
+
+  /// No description provided for @totalRevenue.
+  ///
+  /// In tr, this message translates to:
+  /// **'Toplam Gelir'**
+  String get totalRevenue;
+
+  /// No description provided for @totalCommission.
+  ///
+  /// In tr, this message translates to:
+  /// **'Komisyon'**
+  String get totalCommission;
+
+  /// No description provided for @averageOrderValue.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ort. Sipariş'**
+  String get averageOrderValue;
+
+  /// No description provided for @totalItemsSold.
+  ///
+  /// In tr, this message translates to:
+  /// **'Satılan Ürün'**
+  String get totalItemsSold;
+
+  /// No description provided for @totalItemCount.
+  ///
+  /// In tr, this message translates to:
+  /// **'Toplam Ürün'**
+  String get totalItemCount;
+
+  /// No description provided for @orderCount.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş'**
+  String get orderCount;
+
+  /// No description provided for @ordersLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'sipariş'**
+  String get ordersLabel;
+
+  /// No description provided for @cardPayment.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kart'**
+  String get cardPayment;
+
+  /// No description provided for @deliveryTypes.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimat Türleri'**
+  String get deliveryTypes;
+
+  /// No description provided for @deliveryLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimat'**
+  String get deliveryLabel;
+
+  /// No description provided for @pickupLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Gel Al'**
+  String get pickupLabel;
+
+  /// No description provided for @topSellingItems.
+  ///
+  /// In tr, this message translates to:
+  /// **'En Çok Satılan Ürünler'**
+  String get topSellingItems;
+
+  /// No description provided for @categoryBreakdown.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kategoriler'**
+  String get categoryBreakdown;
 
   /// No description provided for @noDeliveryLabel.
   ///

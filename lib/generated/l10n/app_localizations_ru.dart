@@ -13203,6 +13203,99 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String get salesInformation => 'Информация о продажах';
+
+  @override
+  String get generatedReports => 'Созданные отчёты';
+
+  @override
+  String get noReportsYetDesc =>
+      'Создайте первый отчёт, выбрав период и дату выше.';
+
+  @override
+  String get selectPeriod => 'Выберите период';
+
+  @override
+  String get dailyReport => 'Дневной';
+
+  @override
+  String get weeklyReport => 'Недельный';
+
+  @override
+  String get monthlyReport => 'Месячный';
+
+  @override
+  String weekLabel(String week, String year) {
+    return 'Неделя $week, $year';
+  }
+
+  @override
+  String get reportDetails => 'Детали отчёта';
+
+  @override
+  String get reportGenerationFailed => 'Не удалось создать отчёт';
+
+  @override
+  String get totalOrders => 'Всего заказов';
+
+  @override
+  String get completedOrders => 'Завершённые';
+
+  @override
+  String get activeOrders => 'Активные';
+
+  @override
+  String get cancelledOrders => 'Отменённые';
+
+  @override
+  String get grossRevenue => 'Валовый доход';
+
+  @override
+  String get deliveredRevenue => 'Доставленный доход';
+
+  @override
+  String get netRevenue => 'Чистый доход';
+
+  @override
+  String get totalRevenue => 'Общий доход';
+
+  @override
+  String get totalCommission => 'Комиссия';
+
+  @override
+  String get averageOrderValue => 'Сред. заказ';
+
+  @override
+  String get totalItemsSold => 'Продано товаров';
+
+  @override
+  String get totalItemCount => 'Всего товаров';
+
+  @override
+  String get orderCount => 'Заказы';
+
+  @override
+  String get ordersLabel => 'заказов';
+
+  @override
+  String get cardPayment => 'Карта';
+
+  @override
+  String get deliveryTypes => 'Типы доставки';
+
+  @override
+  String get deliveryLabel => 'Доставка';
+
+  @override
+  String get pickupLabel => 'Самовывоз';
+
+  @override
+  String get topSellingItems => 'Самые продаваемые товары';
+
+  @override
+  String get categoryBreakdown => 'Категории';
+
+  @override
   String get noDeliveryLabel => 'Не доставляет в ваш район';
 
   @override

@@ -13107,6 +13107,99 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get salesInformation => 'Sales Information';
+
+  @override
+  String get generatedReports => 'Generated Reports';
+
+  @override
+  String get noReportsYetDesc =>
+      'Generate your first report by selecting a period and date above.';
+
+  @override
+  String get selectPeriod => 'Select Period';
+
+  @override
+  String get dailyReport => 'Daily';
+
+  @override
+  String get weeklyReport => 'Weekly';
+
+  @override
+  String get monthlyReport => 'Monthly';
+
+  @override
+  String weekLabel(String week, String year) {
+    return 'Week $week, $year';
+  }
+
+  @override
+  String get reportDetails => 'Report Details';
+
+  @override
+  String get reportGenerationFailed => 'Failed to generate report';
+
+  @override
+  String get totalOrders => 'Total Orders';
+
+  @override
+  String get completedOrders => 'Completed';
+
+  @override
+  String get activeOrders => 'Active';
+
+  @override
+  String get cancelledOrders => 'Cancelled';
+
+  @override
+  String get grossRevenue => 'Gross Revenue';
+
+  @override
+  String get deliveredRevenue => 'Delivered Revenue';
+
+  @override
+  String get netRevenue => 'Net Revenue';
+
+  @override
+  String get totalRevenue => 'Total Revenue';
+
+  @override
+  String get totalCommission => 'Commission';
+
+  @override
+  String get averageOrderValue => 'Avg. Order';
+
+  @override
+  String get totalItemsSold => 'Items Sold';
+
+  @override
+  String get totalItemCount => 'Total Items';
+
+  @override
+  String get orderCount => 'Orders';
+
+  @override
+  String get ordersLabel => 'orders';
+
+  @override
+  String get cardPayment => 'Card';
+
+  @override
+  String get deliveryTypes => 'Delivery Types';
+
+  @override
+  String get deliveryLabel => 'Delivery';
+
+  @override
+  String get pickupLabel => 'Pickup';
+
+  @override
+  String get topSellingItems => 'Top Selling Items';
+
+  @override
+  String get categoryBreakdown => 'Categories';
+
+  @override
   String get noDeliveryLabel => 'Does not deliver to your area';
 
   @override

@@ -8014,7 +8014,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get cartCount => 'Sepet';
 
   @override
-  String get generatingReport => 'Rapor Oluşturuluyor...';
+  String get generatingReport => 'Oluşturuluyor...';
 
   @override
   String get pleaseWaitWhileWeGenerateYourReport =>
@@ -12960,7 +12960,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get pickup => 'Gel Al';
 
   @override
-  String get payAtDoor => 'Kapıda Öde';
+  String get payAtDoor => 'Kapıda Ödeme';
 
   @override
   String get foodOrderDetails => 'Yemek Sipariş Detayı';
@@ -13128,6 +13128,99 @@ class AppLocalizationsTr extends AppLocalizations {
   String minOrderBadge(String amount) {
     return 'Min. $amount TL';
   }
+
+  @override
+  String get salesInformation => 'Satış Bilgileri';
+
+  @override
+  String get generatedReports => 'Oluşturulan Raporlar';
+
+  @override
+  String get noReportsYetDesc =>
+      'Yukarıdan dönem ve tarih seçerek ilk raporunuzu oluşturun.';
+
+  @override
+  String get selectPeriod => 'Dönem Seçin';
+
+  @override
+  String get dailyReport => 'Günlük';
+
+  @override
+  String get weeklyReport => 'Haftalık';
+
+  @override
+  String get monthlyReport => 'Aylık';
+
+  @override
+  String weekLabel(String week, String year) {
+    return 'Hafta $week, $year';
+  }
+
+  @override
+  String get reportDetails => 'Rapor Detayları';
+
+  @override
+  String get reportGenerationFailed => 'Rapor oluşturulamadı';
+
+  @override
+  String get totalOrders => 'Toplam Sipariş';
+
+  @override
+  String get completedOrders => 'Tamamlanan';
+
+  @override
+  String get activeOrders => 'Aktif';
+
+  @override
+  String get cancelledOrders => 'İptal Edilen';
+
+  @override
+  String get grossRevenue => 'Brüt Gelir';
+
+  @override
+  String get deliveredRevenue => 'Teslim Edilen Gelir';
+
+  @override
+  String get netRevenue => 'Net Gelir';
+
+  @override
+  String get totalRevenue => 'Toplam Gelir';
+
+  @override
+  String get totalCommission => 'Komisyon';
+
+  @override
+  String get averageOrderValue => 'Ort. Sipariş';
+
+  @override
+  String get totalItemsSold => 'Satılan Ürün';
+
+  @override
+  String get totalItemCount => 'Toplam Ürün';
+
+  @override
+  String get orderCount => 'Sipariş';
+
+  @override
+  String get ordersLabel => 'sipariş';
+
+  @override
+  String get cardPayment => 'Kart';
+
+  @override
+  String get deliveryTypes => 'Teslimat Türleri';
+
+  @override
+  String get deliveryLabel => 'Teslimat';
+
+  @override
+  String get pickupLabel => 'Gel Al';
+
+  @override
+  String get topSellingItems => 'En Çok Satılan Ürünler';
+
+  @override
+  String get categoryBreakdown => 'Kategoriler';
 
   @override
   String get noDeliveryLabel => 'Bölgenize teslimat yapılmıyor';
