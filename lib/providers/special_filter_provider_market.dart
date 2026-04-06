@@ -54,13 +54,9 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       Map.unmodifiable(_dynamicSpecFilters.map(
           (k, v) => MapEntry(k, List<String>.unmodifiable(v))));
 
-  Map<String, List<Map<String, dynamic>>> _specFacets = {};
-  Map<String, List<Map<String, dynamic>>> get specFacets =>
-      Map.unmodifiable(_specFacets);
-
-  Map<String, List<Map<String, dynamic>>> _filteredSpecFacets = {};
-  Map<String, List<Map<String, dynamic>>> get filteredSpecFacets =>
-      Map.unmodifiable(_filteredSpecFacets);
+  Map<String, List<Map<String, dynamic>>> _facets = {};
+  Map<String, List<Map<String, dynamic>>> get facets =>
+      Map.unmodifiable(_facets);
 
   bool get hasDynamicSpecFilters => _dynamicSpecFilters.isNotEmpty;
 
@@ -273,37 +269,86 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Stored context for facet refreshes after filter changes.
+  String? _facetCategory;
+  String? _facetSubcategoryId;
+  String? _facetGender;
+
   Future<void> fetchSpecFacets({
     required String category,
     required String subcategoryId,
     String? gender,
   }) async {
-    if (_searchService == null) return;
+    // Store context for later refreshes
+    _facetCategory = category;
+    _facetSubcategoryId = subcategoryId;
+    _facetGender = gender;
+
+    await refreshFacets();
+  }
+
+  /// Facet-only disjunctive search that matches the CURRENT filter state.
+  Future<void> refreshFacets() async {
+    if (_searchService == null || _facetCategory == null) return;
 
     try {
-      final facetFilters = <List<String>>[];
-      facetFilters.add(['category_en:$category']);
-      if (subcategoryId.isNotEmpty) {
-        facetFilters.add(['subcategory_en:$subcategoryId']);
+      // Base context filters
+      final baseParts = <String>[];
+      baseParts.add('category_en:=`${_facetCategory!}`');
+      if (_facetSubcategoryId != null && _facetSubcategoryId!.isNotEmpty) {
+        baseParts.add('subcategory_en:=`${_facetSubcategoryId!}`');
       }
-      if (gender == 'Women' || gender == 'Men') {
-        facetFilters.add(['gender:$gender', 'gender:Unisex']);
+      if (_facetGender == 'Women' || _facetGender == 'Men') {
+        baseParts.add('(gender:=`${_facetGender!}` || gender:=`Unisex`)');
       }
 
-      final result = await _searchService!.fetchSpecFacets(
+      // Disjunctive filters matching current selection
+      final disjunctiveFilters = <String, List<String>>{};
+      if (dynamicBrand != null && dynamicBrand!.isNotEmpty) {
+        disjunctiveFilters['brandModel'] = [dynamicBrand!];
+      }
+      if (dynamicColors.isNotEmpty) {
+        disjunctiveFilters['availableColors'] = dynamicColors;
+      }
+      if (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty) {
+        if (_facetSubcategoryId == null || _facetSubcategoryId!.isEmpty) {
+          disjunctiveFilters['subcategory_en'] = [dynamicSubsubcategory!];
+        } else {
+          disjunctiveFilters['subsubcategory_en'] = [dynamicSubsubcategory!];
+        }
+      }
+      for (final entry in _dynamicSpecFilters.entries) {
+        if (entry.value.isNotEmpty) {
+          disjunctiveFilters[entry.key] = entry.value;
+        }
+      }
+
+      final numericFilters = <String>[];
+      if (_minRating != null) numericFilters.add('averageRating>=${_minRating!}');
+      if (_minPrice != null) numericFilters.add('price>=${_minPrice!.toInt()}');
+      if (_maxPrice != null) numericFilters.add('price<=${_maxPrice!.toInt()}');
+
+      final res = await _searchService!.searchWithDisjunctiveFacets(
         indexName: 'shop_products',
-        facetFilters: facetFilters,
+        hitsPerPage: 0, // facets only
+        additionalFilterBy: baseParts.join(' && '),
+        disjunctiveFilters: disjunctiveFilters,
+        numericFilters: numericFilters,
+        sortOption: _subcategorySortOption,
+        facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
+            'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
       );
 
-      _specFacets = result;
+      _facets = res.facets;
       notifyListeners();
     } catch (e) {
       debugPrint('Error fetching subcategory spec facets: $e');
-      _specFacets = {};
+      _facets = {};
     }
   }
 
   /// Typesense-based product fetch when spec filters are active.
+  /// Uses multi-search disjunctive faceting for correct facet counts.
   Future<List<ProductSummary>> _fetchFromTypesense({
     required String category,
     required String subcategoryId,
@@ -313,32 +358,34 @@ class SpecialFilterProviderMarket with ChangeNotifier {
   }) async {
     if (_searchService == null) return [];
 
-    final facetFilters = <List<String>>[];
-    facetFilters.add(['category_en:$category']);
+    // Base context filters (always applied, not disjunctive)
+    final baseParts = <String>[];
+    baseParts.add('category_en:=`$category`');
     if (subcategoryId.isNotEmpty) {
-      facetFilters.add(['subcategory_en:$subcategoryId']);
+      baseParts.add('subcategory_en:=`$subcategoryId`');
     }
     if (gender == 'Women' || gender == 'Men') {
-      facetFilters.add(['gender:$gender', 'gender:Unisex']);
+      baseParts.add('(gender:=`$gender` || gender:=`Unisex`)');
     }
+
+    // Disjunctive filters (field → selected values)
+    final disjunctiveFilters = <String, List<String>>{};
     if (dynamicBrand != null && dynamicBrand!.isNotEmpty) {
-      facetFilters.add(['brandModel:${dynamicBrand!}']);
+      disjunctiveFilters['brandModel'] = [dynamicBrand!];
     }
     if (dynamicColors.isNotEmpty) {
-      facetFilters.add(dynamicColors.map((c) => 'availableColors:$c').toList());
+      disjunctiveFilters['availableColors'] = dynamicColors;
     }
     if (dynamicSubsubcategory != null && dynamicSubsubcategory!.isNotEmpty) {
       if (subcategoryId.isEmpty) {
-        // Top-level category view (e.g. Women > Accessories "View All"):
-        // the selected value is a subcategory, not a subsubcategory
-        facetFilters.add(['subcategory_en:${dynamicSubsubcategory!}']);
+        disjunctiveFilters['subcategory_en'] = [dynamicSubsubcategory!];
       } else {
-        facetFilters.add(['subsubcategory_en:${dynamicSubsubcategory!}']);
+        disjunctiveFilters['subsubcategory_en'] = [dynamicSubsubcategory!];
       }
     }
     for (final entry in _dynamicSpecFilters.entries) {
       if (entry.value.isNotEmpty) {
-        facetFilters.add(entry.value.map((v) => '${entry.key}:$v').toList());
+        disjunctiveFilters[entry.key] = entry.value;
       }
     }
 
@@ -348,20 +395,19 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     if (_maxPrice != null) numericFilters.add('price<=${_maxPrice!.toInt()}');
 
     try {
-      final res = await _searchService!.searchIdsWithFacets(
+      final res = await _searchService!.searchWithDisjunctiveFacets(
         indexName: 'shop_products',
         page: page,
         hitsPerPage: hitsPerPage,
-        facetFilters: facetFilters,
+        additionalFilterBy: baseParts.join(' && '),
+        disjunctiveFilters: disjunctiveFilters,
         numericFilters: numericFilters,
         sortOption: _subcategorySortOption,
         facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
             'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
       );
 
-      if (res.facets.isNotEmpty) {
-        _filteredSpecFacets = res.facets;
-      }
+      _facets = res.facets;
 
       _typesenseHasMore = res.page < (res.nbPages - 1);
       return res.hits.map((hit) => ProductSummary.fromTypeSense(hit)).toList();
@@ -1729,6 +1775,8 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       _updateSubcategoryHasMoreState(key, cachedProducts.length >= 20);
       _updateSubcategoryLoadingState(key, false);
       notifyListeners();
+      // Cache doesn't store facets — refresh them
+      refreshFacets();
       return;
     }
 
@@ -1783,6 +1831,9 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       }
       _updateSubcategoryHasMoreState(key,
           useTypesense ? _typesenseHasMore : _computeHasMore(key, products.length, 20));
+
+      // Firestore/cache paths don't update facets — refresh them
+      if (!useTypesense) await refreshFacets();
     } catch (e) {
       debugPrint('❌ fetchSubcategoryProducts error [$key]: $e');
       _updateSubcategoryHasMoreState(key, false);

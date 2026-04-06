@@ -974,11 +974,6 @@ class _FilterButtonWithBadge extends StatelessWidget {
     onDismissKeyboard();
     final provider = context.read<ShopProvider>();
 
-    final activeFields = <String>{
-      if (provider.selectedBrands.isNotEmpty) 'brandModel',
-      ...provider.dynamicSpecFilters.keys,
-    };
-
     Navigator.push(
       context,
       PageRouteBuilder(
@@ -992,11 +987,8 @@ class _FilterButtonWithBadge extends StatelessWidget {
           initialColors: provider.selectedColors,
           initialMinPrice: provider.minPrice,
           initialMaxPrice: provider.maxPrice,
-          availableSpecFacets: TypeSensePage.combineFacets(
-            baseFacets: provider.specFacets,
-            filteredFacets: provider.filteredSpecFacets,
-            activeFilterFields: activeFields,
-          ),
+          initialMinRating: provider.minRating,
+          availableSpecFacets: provider.facets,
           initialSpecFilters: provider.dynamicSpecFilters,
         ),
         transitionsBuilder: (_, animation, __, child) {
@@ -1030,6 +1022,7 @@ class _FilterButtonWithBadge extends StatelessWidget {
           colors: List<String>.from(result['colors'] ?? []),
           minPrice: result['minPrice'],
           maxPrice: result['maxPrice'],
+          minRating: result['minRating'] as double?,
           totalFilters: result['totalFilters'] ?? 0,
           specFilters: specFilters,
         );

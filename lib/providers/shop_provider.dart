@@ -120,10 +120,10 @@ class ShopProvider with ChangeNotifier {
   String? _selectedSubcategory;
   String? _selectedColorForDisplay;
 
-  // Dynamic spec filters (Typesense facets)
-  Map<String, List<Map<String, dynamic>>> _specFacets = {};
-  Map<String, List<Map<String, dynamic>>> _filteredSpecFacets = {};
+  // Dynamic spec filters (Typesense facets — unified via disjunctive multi-search)
+  Map<String, List<Map<String, dynamic>>> _facets = {};
   Map<String, List<String>> _dynamicSpecFilters = {};
+  double? _minRating;
 
   // Shop Detail Screen state
   MockDocumentSnapshot? _shopDoc;
@@ -210,10 +210,9 @@ class ShopProvider with ChangeNotifier {
   List<String> get selectedColors => _selectedColors;
   String? get selectedSubcategory => _selectedSubcategory;
   String? get selectedColorForDisplay => _selectedColorForDisplay;
-  Map<String, List<Map<String, dynamic>>> get specFacets => _specFacets;
-  Map<String, List<Map<String, dynamic>>> get filteredSpecFacets =>
-      _filteredSpecFacets;
+  Map<String, List<Map<String, dynamic>>> get facets => _facets;
   Map<String, List<String>> get dynamicSpecFilters => _dynamicSpecFilters;
+  double? get minRating => _minRating;
 
   List<QueryDocumentSnapshot> get shops => _shops;
   bool get hasMore => _hasMore;
@@ -611,7 +610,8 @@ class ShopProvider with ChangeNotifier {
     _selectedBrands = [];
     _minPrice = null;
     _maxPrice = null;
-    _specFacets = {};
+    _minRating = null;
+    _facets = {};
     _dynamicSpecFilters = {};
 
     _lastProductDocument = null;
@@ -1449,6 +1449,7 @@ class ShopProvider with ChangeNotifier {
     if (_selectedColors.isNotEmpty) return true;
     if (_selectedGender != null) return true;
     if (_minPrice != null || _maxPrice != null) return true;
+    if (_minRating != null) return true;
     return false;
   }
 
@@ -1461,10 +1462,65 @@ class ShopProvider with ChangeNotifier {
         indexName: 'shop_products',
         additionalFilterBy: 'shopId:=$shopId',
       );
-      _specFacets = facets;
+      _facets = facets;
       _safeNotifyListeners();
     } catch (e) {
       debugPrint('Error fetching spec facets for shop: $e');
+    }
+  }
+
+  /// Facet-only disjunctive search that matches the CURRENT filter state.
+  Future<void> _refreshFacets() async {
+    if (_shopDoc == null) return;
+    try {
+      final shopId = _shopDoc!.id;
+      final baseParts = <String>['shopId:=$shopId'];
+      if (_selectedGender != null) {
+        baseParts.add('gender:=`$_selectedGender`');
+      }
+      if (_selectedSubcategory != null) {
+        baseParts.add('subcategory:=`$_selectedSubcategory`');
+      }
+
+      final disjunctiveFilters = <String, List<String>>{};
+      if (_selectedBrands.isNotEmpty) {
+        disjunctiveFilters['brandModel'] = _selectedBrands;
+      }
+      if (_selectedTypes.isNotEmpty) {
+        disjunctiveFilters['attributes.clothingType'] = _selectedTypes;
+      }
+      if (_selectedFits.isNotEmpty) {
+        disjunctiveFilters['attributes.clothingFit'] = _selectedFits;
+      }
+      if (_selectedColors.isNotEmpty) {
+        disjunctiveFilters['availableColors'] = _selectedColors;
+      }
+      for (final entry in _dynamicSpecFilters.entries) {
+        if (entry.value.isNotEmpty) {
+          disjunctiveFilters[entry.key] = entry.value;
+        }
+      }
+
+      final numericFilters = <String>[];
+      if (_minPrice != null) numericFilters.add('price >= $_minPrice');
+      if (_maxPrice != null) numericFilters.add('price <= $_maxPrice');
+      if (_minRating != null) numericFilters.add('averageRating >= $_minRating');
+
+      final res = await TypeSenseServiceManager.instance.shopService
+          .searchWithDisjunctiveFacets(
+        indexName: 'shop_products',
+        hitsPerPage: 0,
+        additionalFilterBy: baseParts.join(' && '),
+        disjunctiveFilters: disjunctiveFilters,
+        numericFilters: numericFilters,
+        sortOption: _sortOption,
+        facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
+            'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
+      );
+      _facets = res.facets;
+      _safeNotifyListeners();
+    } catch (e) {
+      debugPrint('Facet refresh error: $e');
     }
   }
 
@@ -1485,37 +1541,32 @@ class ShopProvider with ChangeNotifier {
     try {
       final shopId = _shopDoc!.id;
 
-      // Build facet filters
-      final facetFilters = <List<String>>[];
+      // Base context filter (always applied)
+      final baseParts = <String>['shopId:=$shopId'];
       if (_selectedGender != null) {
-        facetFilters.add(['gender:$_selectedGender']);
+        baseParts.add('gender:=`$_selectedGender`');
       }
       if (_selectedSubcategory != null) {
-        facetFilters.add(['subcategory:$_selectedSubcategory']);
-      }
-      if (_selectedBrands.isNotEmpty) {
-        facetFilters.add(
-            _selectedBrands.map((b) => 'brandModel:$b').toList());
-      }
-      if (_selectedTypes.isNotEmpty) {
-        facetFilters.add(_selectedTypes
-            .map((t) => 'attributes.clothingType:$t')
-            .toList());
-      }
-      if (_selectedFits.isNotEmpty) {
-        facetFilters.add(
-            _selectedFits.map((f) => 'attributes.clothingFit:$f').toList());
-      }
-      if (_selectedColors.isNotEmpty) {
-        facetFilters.add(
-            _selectedColors.map((c) => 'colorImages.$c:*').toList());
+        baseParts.add('subcategory:=`$_selectedSubcategory`');
       }
 
-      // Dynamic spec filters
+      // Disjunctive filters (field → selected values)
+      final disjunctiveFilters = <String, List<String>>{};
+      if (_selectedBrands.isNotEmpty) {
+        disjunctiveFilters['brandModel'] = _selectedBrands;
+      }
+      if (_selectedTypes.isNotEmpty) {
+        disjunctiveFilters['attributes.clothingType'] = _selectedTypes;
+      }
+      if (_selectedFits.isNotEmpty) {
+        disjunctiveFilters['attributes.clothingFit'] = _selectedFits;
+      }
+      if (_selectedColors.isNotEmpty) {
+        disjunctiveFilters['availableColors'] = _selectedColors;
+      }
       for (final entry in _dynamicSpecFilters.entries) {
         if (entry.value.isNotEmpty) {
-          facetFilters.add(
-              entry.value.map((v) => '${entry.key}:$v').toList());
+          disjunctiveFilters[entry.key] = entry.value;
         }
       }
 
@@ -1523,21 +1574,22 @@ class ShopProvider with ChangeNotifier {
       final numericFilters = <String>[];
       if (_minPrice != null) numericFilters.add('price >= $_minPrice');
       if (_maxPrice != null) numericFilters.add('price <= $_maxPrice');
+      if (_minRating != null) numericFilters.add('averageRating >= $_minRating');
 
       final page = loadMore
           ? (_allFetchedProducts.length / _productsLimit).floor()
           : 0;
 
       final result = await TypeSenseServiceManager.instance.shopService
-          .searchIdsWithFacets(
+          .searchWithDisjunctiveFacets(
         indexName: 'shop_products',
         query: _searchQuery.isNotEmpty ? _searchQuery : '',
         page: page,
         hitsPerPage: _productsLimit,
-        facetFilters: facetFilters.isNotEmpty ? facetFilters : null,
-        numericFilters: numericFilters.isNotEmpty ? numericFilters : null,
+        additionalFilterBy: baseParts.join(' && '),
+        disjunctiveFilters: disjunctiveFilters,
+        numericFilters: numericFilters,
         sortOption: _sortOption,
-        additionalFilterBy: 'shopId:=$shopId',
         facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
             'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
       );
@@ -1557,12 +1609,9 @@ class ShopProvider with ChangeNotifier {
       }
 
       _unfilteredProducts = List.from(_allFetchedProducts);
-      // No need for local _applyAllFilters — Typesense already filtered
       _setAllProducts(List.from(_allFetchedProducts));
 
-      if (result.facets.isNotEmpty) {
-        _filteredSpecFacets = result.facets;
-      }
+      _facets = result.facets;
       totalFoundNotifier.value = result.totalFound;
       dealProductsNotifier.value = _allFetchedProducts
           .where((p) => (p.discountPercentage ?? 0) > 0)
@@ -1612,9 +1661,6 @@ class ShopProvider with ChangeNotifier {
       hasMoreProductsNotifier.value = true;
       _allFetchedProducts = [];
       isLoadingProductsNotifier.value = true;
-      // Clear filtered facets so combineFacets falls back to baseFacets
-      // rather than showing stale narrowed counts when no filters are active.
-      _filteredSpecFacets = {};
       _safeNotifyListeners();
     }
 
@@ -1691,6 +1737,9 @@ class ShopProvider with ChangeNotifier {
 
       _lastProductsFetch = DateTime.now();
       await _saveCachedData(_shopDoc!.id);
+
+      // Firestore doesn't return facets — refresh them for the current filter state
+      if (!loadMore) await _refreshFacets();
     } catch (e) {
       print('Error fetching products: $e');
       if (!loadMore) {
@@ -1899,6 +1948,7 @@ class ShopProvider with ChangeNotifier {
       final numericFilters = <String>[];
       if (_minPrice != null) numericFilters.add('price >= $_minPrice');
       if (_maxPrice != null) numericFilters.add('price <= $_maxPrice');
+      if (_minRating != null) numericFilters.add('averageRating >= $_minRating');
 
       final result = await _retryWithBackoff(() async {
         return await TypeSenseServiceManager.instance.shopService
@@ -1932,7 +1982,7 @@ class ShopProvider with ChangeNotifier {
               (a, b) => (b.purchaseCount ?? 0).compareTo(a.purchaseCount ?? 0));
 
         if (result.facets.isNotEmpty) {
-          _filteredSpecFacets = result.facets;
+          _facets = result.facets;
         }
       } else {
         debugPrint('Stale search result discarded (token mismatch)');
@@ -1971,6 +2021,7 @@ class ShopProvider with ChangeNotifier {
     _selectedColors = [];
     _minPrice = null;
     _maxPrice = null;
+    _minRating = null;
     _selectedSubcategory = null;
     _selectedColorForDisplay = null;
     _dynamicSpecFilters = {};
@@ -2153,6 +2204,7 @@ class ShopProvider with ChangeNotifier {
     List<String> colors = const [],
     double? minPrice,
     double? maxPrice,
+    double? minRating,
     int totalFilters = 0,
     Map<String, List<String>> specFilters = const {},
   }) {
@@ -2164,6 +2216,7 @@ class ShopProvider with ChangeNotifier {
     _selectedColors = colors;
     _minPrice = minPrice;
     _maxPrice = maxPrice;
+    _minRating = minRating;
     _dynamicSpecFilters = Map.from(specFilters);
     _selectedColorForDisplay = colors.isNotEmpty ? colors.first : null;
 

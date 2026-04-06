@@ -51,9 +51,8 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
   double? _maxPrice;
   int _filterCount = 0;
 
-  // Spec facets from Typesense
-  Map<String, List<Map<String, dynamic>>> _specFacets = {};
-  Map<String, List<Map<String, dynamic>>> _filteredSpecFacets = {};
+  // Spec facets (unified — populated by disjunctive multi-search)
+  Map<String, List<Map<String, dynamic>>> _facets = {};
 
   // Typesense pagination (used when spec filters are active)
   int _typesensePage = 0;
@@ -161,12 +160,36 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
   Future<void> _fetchSpecFacets() async {
     try {
       final svc = TypeSenseServiceManager.instance.shopService;
-      final result = await svc.fetchSpecFacets(
+
+      final disjunctiveFilters = <String, List<String>>{};
+      if (_dynamicBrands.isNotEmpty) {
+        disjunctiveFilters['brandModel'] = _dynamicBrands;
+      }
+      if (_dynamicColors.isNotEmpty) {
+        disjunctiveFilters['availableColors'] = _dynamicColors;
+      }
+      for (final entry in _dynamicSpecFilters.entries) {
+        if (entry.value.isNotEmpty) {
+          disjunctiveFilters[entry.key] = entry.value;
+        }
+      }
+
+      final numericFilters = <String>[];
+      if (_minPrice != null) numericFilters.add('price>=${_minPrice!.toInt()}');
+      if (_maxPrice != null) numericFilters.add('price<=${_maxPrice!.toInt()}');
+
+      final res = await svc.searchWithDisjunctiveFacets(
         indexName: 'shop_products',
+        hitsPerPage: 0, // facets only
         additionalFilterBy: 'shopId:=${widget.shopId}',
+        disjunctiveFilters: disjunctiveFilters,
+        numericFilters: numericFilters,
+        sortOption: 'date',
+        facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
+            'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
       );
       if (mounted) {
-        setState(() => _specFacets = result);
+        setState(() => _facets = res.facets);
       }
     } catch (e) {
       debugPrint('Error fetching spec facets: $e');
@@ -276,6 +299,8 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
 
     _separateBoostedProducts();
     _updateFilterCount();
+    // Client-side path doesn't update facets — refresh them
+    _fetchSpecFacets();
   }
 
   bool _matchesClientFilters(ProductSummary product) {
@@ -329,39 +354,39 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
   Future<List<ProductSummary>> _fetchFromTypesense({required int page}) async {
     final svc = TypeSenseServiceManager.instance.shopService;
 
-    final facetFilters = <List<String>>[];
+    final disjunctiveFilters = <String, List<String>>{};
     if (_dynamicBrands.isNotEmpty) {
-      facetFilters.add(_dynamicBrands.map((b) => 'brandModel:$b').toList());
+      disjunctiveFilters['brandModel'] = _dynamicBrands;
     }
     if (_dynamicColors.isNotEmpty) {
-      facetFilters.add(_dynamicColors.map((c) => 'availableColors:$c').toList());
+      disjunctiveFilters['availableColors'] = _dynamicColors;
     }
     for (final entry in _dynamicSpecFilters.entries) {
       if (entry.value.isNotEmpty) {
-        facetFilters.add(entry.value.map((v) => '${entry.key}:$v').toList());
+        disjunctiveFilters[entry.key] = entry.value;
       }
     }
 
     final numericFilters = <String>[];
-    if (_minPrice != null) numericFilters.add('price:>=${_minPrice!.toInt()}');
-    if (_maxPrice != null) numericFilters.add('price:<=${_maxPrice!.toInt()}');
+    if (_minPrice != null) numericFilters.add('price>=${_minPrice!.toInt()}');
+    if (_maxPrice != null) numericFilters.add('price<=${_maxPrice!.toInt()}');
 
-    final res = await svc.searchIdsWithFacets(
+    final res = await svc.searchWithDisjunctiveFacets(
       indexName: 'shop_products',
       page: page,
       hitsPerPage: 20,
-      facetFilters: facetFilters.isNotEmpty ? facetFilters : null,
-      numericFilters: numericFilters.isNotEmpty ? numericFilters : null,
-      sortOption: 'date',
       additionalFilterBy: 'shopId:=${widget.shopId}',
+      disjunctiveFilters: disjunctiveFilters,
+      numericFilters: numericFilters,
+      sortOption: 'date',
       facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
           'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
     );
 
     _typesenseHasMore = res.page < (res.nbPages - 1);
 
-    if (res.facets.isNotEmpty && mounted) {
-      setState(() => _filteredSpecFacets = res.facets);
+    if (mounted) {
+      setState(() => _facets = res.facets);
     }
 
     return res.hits.map((hit) => ProductSummary.fromTypeSense(hit)).toList();
@@ -394,10 +419,6 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
 
   Future<void> _openFilterScreen() async {
     try {
-      final activeFields = <String>{
-        if (_dynamicBrands.isNotEmpty) 'brandModel',
-        ..._dynamicSpecFilters.keys,
-      };
       final result = await context.push<Map<String, dynamic>?>(
         '/dynamic_filter',
         extra: {
@@ -407,11 +428,7 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
           'initialMinPrice': _minPrice,
           'initialMaxPrice': _maxPrice,
           'initialSpecFilters': _dynamicSpecFilters,
-          'availableSpecFacets': TypeSensePage.combineFacets(
-            baseFacets: _specFacets,
-            filteredFacets: _filteredSpecFacets,
-            activeFilterFields: activeFields,
-          ),
+          'availableSpecFacets': _facets,
         },
       );
 

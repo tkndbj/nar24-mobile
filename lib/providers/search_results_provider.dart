@@ -63,30 +63,11 @@ class SearchResultsProvider with ChangeNotifier {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // SPEC FACETS
+  // SPEC FACETS (unified — populated by disjunctive multi-search)
   // ──────────────────────────────────────────────────────────────────────────
-  Map<String, List<Map<String, dynamic>>> _specFacets = {};
-  Map<String, List<Map<String, dynamic>>> get specFacets =>
-      Map.unmodifiable(_specFacets);
-
-  Map<String, List<Map<String, dynamic>>> _filteredSpecFacets = {};
-  Map<String, List<Map<String, dynamic>>> get filteredSpecFacets =>
-      Map.unmodifiable(_filteredSpecFacets);
-
-  /// Fetch spec facets scoped to the given search query.
-  Future<void> fetchSpecFacets(String query) async {
-    try {
-      final result = await _searchService.fetchSpecFacets(
-        indexName: 'shop_products',
-        query: query,
-      );
-      _specFacets = result;
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Error fetching search spec facets: $e');
-      _specFacets = {};
-    }
-  }
+  Map<String, List<Map<String, dynamic>>> _facets = {};
+  Map<String, List<Map<String, dynamic>>> get facets =>
+      Map.unmodifiable(_facets);
 
   // ──────────────────────────────────────────────────────────────────────────
   // UNFILTERED PATH (existing)
@@ -187,23 +168,21 @@ class SearchResultsProvider with ChangeNotifier {
     }
   }
 
-  /// Build facet filter groups from current dynamic filter state.
-  List<List<String>> _buildFacetFilters() {
-    final groups = <List<String>>[];
-
+  /// Build disjunctive filter map: field name → selected values.
+  Map<String, List<String>> _buildDisjunctiveFilters() {
+    final filters = <String, List<String>>{};
     if (_dynamicBrands.isNotEmpty) {
-      groups.add(_dynamicBrands.map((b) => 'brandModel:$b').toList());
+      filters['brandModel'] = _dynamicBrands;
     }
     if (_dynamicColors.isNotEmpty) {
-      groups.add(_dynamicColors.map((c) => 'availableColors:$c').toList());
+      filters['availableColors'] = _dynamicColors;
     }
     for (final entry in _dynamicSpecFilters.entries) {
       if (entry.value.isNotEmpty) {
-        groups.add(entry.value.map((v) => '${entry.key}:$v').toList());
+        filters[entry.key] = entry.value;
       }
     }
-
-    return groups;
+    return filters;
   }
 
   /// Build numeric filter strings for price range and rating.
@@ -216,35 +195,58 @@ class SearchResultsProvider with ChangeNotifier {
   }
 
   /// Fetch a page of filtered results from Typesense (shop_products only).
+  /// Uses multi-search disjunctive faceting so facet counts are always correct.
   Future<List<ProductSummary>> fetchFilteredPage({
     required String query,
     required int page,
     int hitsPerPage = 50,
   }) async {
-    final facetFilters = _buildFacetFilters();
+    final disjunctiveFilters = _buildDisjunctiveFilters();
     final numericFilters = _buildNumericFilters();
 
     try {
-      final res = await _searchService.searchIdsWithFacets(
+      final res = await _searchService.searchWithDisjunctiveFacets(
         indexName: 'shop_products',
         query: query,
         page: page,
         hitsPerPage: hitsPerPage,
-        facetFilters: facetFilters,
+        disjunctiveFilters: disjunctiveFilters,
         numericFilters: numericFilters,
         sortOption: _toSortCode(_sortOption),
         facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
             'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
       );
 
-      if (res.facets.isNotEmpty) {
-        _filteredSpecFacets = res.facets;
-      }
+      _facets = res.facets;
 
       return res.hits.map((hit) => ProductSummary.fromTypeSense(hit)).toList();
     } catch (e) {
       debugPrint('Filtered search error: $e');
       return [];
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // INITIAL FACET FETCH (no filters — baseline facets for the query)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /// Fetches baseline facets for [query] so the filter screen has data
+  /// before the user applies any filters. Uses the fast single-search path
+  /// (no disjunctive filters → no multi-search overhead).
+  Future<void> fetchSpecFacets(String query) async {
+    try {
+      final res = await _searchService.searchWithDisjunctiveFacets(
+        indexName: 'shop_products',
+        query: query,
+        page: 0,
+        hitsPerPage: 0, // we only need facets, not hits
+        facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
+            'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
+      );
+      _facets = res.facets;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('fetchSpecFacets error: $e');
     }
   }
 
@@ -310,6 +312,7 @@ class SearchResultsProvider with ChangeNotifier {
     _minPrice = null;
     _maxPrice = null;
     _minRating = null;
+    _facets = {};
     notifyListeners();
   }
 }

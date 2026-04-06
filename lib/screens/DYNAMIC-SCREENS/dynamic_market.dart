@@ -544,10 +544,6 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
                     GestureDetector(
                       onTap: () async {
                         final shopProv = context.read<ShopMarketProvider>();
-                        final activeFields = <String>{
-                          if (_dynamicBrands.isNotEmpty) 'brandModel',
-                          ..._dynamicSpecFilters.keys,
-                        };
                         final result =
                             await context.push('/dynamic_filter', extra: {
                           'category': widget.category,
@@ -557,11 +553,7 @@ class _DynamicMarketScreenState extends State<DynamicMarketScreen>
                           'initialColors': _dynamicColors,
                           'initialSubSubcategories': _dynamicSubSubcategories,
                           'initialSpecFilters': _dynamicSpecFilters,
-                          'availableSpecFacets': TypeSensePage.combineFacets(
-                            baseFacets: shopProv.specFacets,
-                            filteredFacets: shopProv.filteredSpecFacets,
-                            activeFilterFields: activeFields,
-                          ),
+                          'availableSpecFacets': shopProv.facets,
                           'initialMinPrice': _minPrice,
                           'initialMaxPrice': _maxPrice,
                           'initialMinRating': _minRating,

@@ -15,6 +15,7 @@ class ShopDetailFilterScreen extends StatefulWidget {
   final List<String> initialBrands;
   final double? initialMinPrice;
   final double? initialMaxPrice;
+  final double? initialMinRating;
   final Map<String, List<Map<String, dynamic>>> availableSpecFacets;
   final Map<String, List<String>>? initialSpecFilters;
 
@@ -29,6 +30,7 @@ class ShopDetailFilterScreen extends StatefulWidget {
     this.initialBrands = const [],
     this.initialMinPrice,
     this.initialMaxPrice,
+    this.initialMinRating,
     this.availableSpecFacets = const {},
     this.initialSpecFilters,
   }) : super(key: key);
@@ -47,6 +49,7 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
   List<String> _selectedColors = [];
   double? _minPrice;
   double? _maxPrice;
+  double? _selectedMinRating;
 
   // Dynamic spec filters
   Map<String, List<String>> _selectedSpecFilters = {};
@@ -59,6 +62,7 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
   bool _isSizeExpanded = false;
   bool _isColorExpanded = false;
   bool _isPriceExpanded = false;
+  bool _isRatingExpanded = false;
   final Map<String, bool> _specFieldExpanded = {};
 
   // Shop categories
@@ -137,6 +141,7 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
     _selectedColors = List.from(widget.initialColors);
     _minPrice = widget.initialMinPrice;
     _maxPrice = widget.initialMaxPrice;
+    _selectedMinRating = widget.initialMinRating;
 
     _minPriceController.text = _minPrice?.toString() ?? '';
     _maxPriceController.text = _maxPrice?.toString() ?? '';
@@ -306,6 +311,7 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
     if (_selectedSizes.isNotEmpty) count++;
     if (_selectedColors.isNotEmpty) count++;
     if (_minPrice != null || _maxPrice != null) count++;
+    if (_selectedMinRating != null) count++;
     for (final vals in _selectedSpecFilters.values) {
       if (vals.isNotEmpty) count++;
     }
@@ -323,6 +329,7 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
       _selectedSpecFilters.clear();
       _minPrice = null;
       _maxPrice = null;
+      _selectedMinRating = null;
       _minPriceController.clear();
       _maxPriceController.clear();
     });
@@ -1190,6 +1197,85 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
                       ],
                     ),
 
+                    // Rating Filter
+                    Divider(color: Colors.grey[300], thickness: 1, height: 1),
+                    ExpansionTile(
+                      title: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(l10n.rating),
+                          if (_selectedMinRating != null)
+                            const Icon(Icons.check,
+                                color: Colors.orange, size: 20),
+                        ],
+                      ),
+                      trailing: Icon(
+                        _isRatingExpanded
+                            ? Icons.expand_less
+                            : Icons.expand_more,
+                        color: Colors.orange,
+                      ),
+                      onExpansionChanged: (expanded) {
+                        setState(() {
+                          _isRatingExpanded = expanded;
+                        });
+                      },
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (_selectedMinRating != null)
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  margin: const EdgeInsets.only(bottom: 16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.star,
+                                          color: Colors.orange, size: 16),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          '${_selectedMinRating!.toInt()}+ ${l10n.rating}',
+                                          style: const TextStyle(
+                                            color: Colors.orange,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                      GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            _selectedMinRating = null;
+                                          });
+                                        },
+                                        child: const Icon(Icons.close,
+                                            color: Colors.orange, size: 16),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  _buildRatingChip(4),
+                                  _buildRatingChip(3),
+                                  _buildRatingChip(2),
+                                  _buildRatingChip(1),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
                     // Dynamic Spec Filter Sections (from Typesense facets)
                     ...widget.availableSpecFacets.entries.map((specEntry) {
                       final fieldName = specEntry.key;
@@ -1345,6 +1431,7 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
                       'colors': _selectedColors,
                       'minPrice': _minPrice,
                       'maxPrice': _maxPrice,
+                      'minRating': _selectedMinRating,
                       'totalFilters': totalFilters,
                       'specFilters': _selectedSpecFilters,
                     });
@@ -1362,6 +1449,62 @@ class _ShopDetailFilterScreenState extends State<ShopDetailFilterScreen> {
                     style: const TextStyle(fontSize: 16),
                   ),
                 ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRatingChip(int minStars) {
+    final isSelected = _selectedMinRating == minStars.toDouble();
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          if (isSelected) {
+            _selectedMinRating = null;
+          } else {
+            _selectedMinRating = minStars.toDouble();
+          }
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.orange : Colors.grey[200],
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? Colors.orange : Colors.grey[300]!,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ...List.generate(
+              minStars,
+              (_) => Icon(
+                Icons.star,
+                size: 16,
+                color: isSelected ? Colors.white : Colors.amber,
+              ),
+            ),
+            ...List.generate(
+              5 - minStars,
+              (_) => Icon(
+                Icons.star_border,
+                size: 16,
+                color: isSelected ? Colors.white70 : Colors.grey[400],
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '& up',
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.grey[700],
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],

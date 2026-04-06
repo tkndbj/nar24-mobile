@@ -26,41 +26,6 @@ class TypeSensePage {
     this.facets = const {},
   });
 
-  /// Build the facets to show in the filter screen (disjunctive faceting).
-  ///
-  /// * [baseFacets] – full, unfiltered facets (from the initial category fetch).
-  /// * [filteredFacets] – facets returned by the latest filtered search.
-  /// * [activeFilterFields] – field names that currently have an active filter
-  ///   (e.g. {'clothingTypes', 'brandModel'}).
-  ///
-  /// For actively-filtered fields we return [baseFacets] so every option stays
-  /// visible.  For the rest we return [filteredFacets] so the counts narrow
-  /// down based on the active selection.
-  static Map<String, List<Map<String, dynamic>>> combineFacets({
-    required Map<String, List<Map<String, dynamic>>> baseFacets,
-    required Map<String, List<Map<String, dynamic>>> filteredFacets,
-    required Set<String> activeFilterFields,
-  }) {
-    if (filteredFacets.isEmpty) return baseFacets;
-
-    final combined = <String, List<Map<String, dynamic>>>{};
-
-    for (final field in {...baseFacets.keys, ...filteredFacets.keys}) {
-      if (activeFilterFields.contains(field)) {
-        // Actively filtered → show all options from base so the selected value
-        // remains visible; fall back to filteredFacets if baseFacets hasn't
-        // loaded yet (race condition on screens without a provider).
-        combined[field] =
-            baseFacets[field] ?? filteredFacets[field] ?? const [];
-      } else {
-        // Not filtered → show narrowed options from the filtered response
-        combined[field] =
-            filteredFacets[field] ?? baseFacets[field] ?? const [];
-      }
-    }
-
-    return combined;
-  }
 }
 
 class TypeSenseService {
@@ -907,6 +872,267 @@ class TypeSenseService {
     } catch (e) {
       debugPrint('Typesense unreachable: $e');
       return false;
+    }
+  }
+
+  // ── Multi-search disjunctive faceting ─────────────────────────────────────
+
+  Uri get _multiSearchUri => Uri.https(_host, '/multi_search');
+
+  /// Parse facet counts from a single facet_counts entry.
+  List<Map<String, dynamic>> _parseFacetCounts(dynamic facet) {
+    return ((facet as Map)['counts'] as List? ?? [])
+        .map((c) => {
+              'value': (c as Map)['value']?.toString() ?? '',
+              'count': (c['count'] as num?)?.toInt() ?? 0,
+            })
+        .where(
+            (c) => c['value'].toString().isNotEmpty && (c['count'] as int) > 0)
+        .toList();
+  }
+
+  /// Search with proper disjunctive faceting via Typesense multi-search.
+  ///
+  /// Sends N+1 queries in a single HTTP request:
+  ///   0. Main query — all filters applied → hits + facet counts for
+  ///      non-filtered fields.
+  ///   1‥N. One query per active disjunctive field — all filters EXCEPT
+  ///      that field → correct facet counts showing every available option.
+  ///
+  /// The returned [TypeSensePage.facets] already contains the properly
+  /// combined disjunctive counts — no manual merging needed.
+  ///
+  /// [disjunctiveFilters] — field → selected values, e.g.
+  ///   `{'brandModel': ['Nike','Adidas'], 'clothingTypes': ['T-shirt']}`.
+  /// [additionalFilterBy] — base context filters (category, shopId, gender)
+  ///   that are always applied and do not participate in disjunctive logic.
+  /// [numericFilters] — conjunctive numeric filters, e.g.
+  ///   `['price>=100', 'price<=500']`.
+  Future<TypeSensePage> searchWithDisjunctiveFacets({
+    required String indexName,
+    String query = '',
+    int page = 0,
+    int hitsPerPage = 20,
+    String sortOption = 'date',
+    String? additionalFilterBy,
+    String? queryBy,
+    String? includeFields,
+    String facetBy = _specFacetFields,
+    int maxFacetValues = 50,
+    Map<String, List<String>> disjunctiveFilters = const {},
+    List<String> numericFilters = const [],
+  }) async {
+    // ── Build filter components ────────────────────────────────────────
+
+    // Base filters: always applied, not disjunctive
+    final baseParts = <String>[];
+    if (additionalFilterBy != null && additionalFilterBy.isNotEmpty) {
+      baseParts.add(additionalFilterBy);
+    }
+    for (final nf in numericFilters) {
+      final converted = nf
+          .replaceAllMapped(
+            RegExp(r'(\w+)\s*(>=|<=|>|<|=)\s*(\S+)'),
+            (m) => '${m[1]}:${m[2]}${m[3]}',
+          )
+          .trim();
+      if (converted.isNotEmpty) baseParts.add(converted);
+    }
+
+    // Disjunctive filter parts keyed by field name
+    final disjunctiveParts = <String, String>{};
+    for (final entry in disjunctiveFilters.entries) {
+      if (entry.value.isEmpty) continue;
+      final field = entry.key;
+      final values = entry.value;
+      if (values.length == 1) {
+        disjunctiveParts[field] = '$field:=`${values.first}`';
+      } else {
+        disjunctiveParts[field] =
+            '(${values.map((v) => '$field:=`$v`').join(' || ')})';
+      }
+    }
+
+    // Helper: full filter_by, optionally excluding one disjunctive field
+    String? _buildFilterBy({String? excludeField}) {
+      final parts = [...baseParts];
+      for (final entry in disjunctiveParts.entries) {
+        if (entry.key != excludeField) parts.add(entry.value);
+      }
+      return parts.isNotEmpty ? parts.join(' && ') : null;
+    }
+
+    // ── Fast path: no active disjunctive filters → single search ──────
+    final activeFields = disjunctiveParts.keys.toList();
+    if (activeFields.isEmpty) {
+      return searchIdsWithFacets(
+        indexName: indexName,
+        query: query,
+        page: page,
+        hitsPerPage: hitsPerPage,
+        sortOption: sortOption,
+        additionalFilterBy:
+            baseParts.isNotEmpty ? baseParts.join(' && ') : null,
+        queryBy: queryBy,
+        includeFields: includeFields,
+        facetBy: facetBy,
+        maxFacetValues: maxFacetValues,
+      );
+    }
+
+    // ── Build multi-search request ────────────────────────────────────
+    final defaultQueryBy = queryBy ??
+        'productName,brandModel,sellerName,'
+            'category_en,category_tr,category_ru,'
+            'subcategory_en,subcategory_tr,subcategory_ru,'
+            'subsubcategory_en,subsubcategory_tr,subsubcategory_ru';
+
+    final defaultIncludeFields = includeFields ??
+        'id,productName,price,originalPrice,discountPercentage,brandModel,'
+        'category,subcategory,subsubcategory,gender,availableColors,'
+        'colorImagesJson,colorQuantitiesJson,'
+        'shopId,ownerId,userId,promotionScore,createdAt,imageUrls,'
+        'sellerName,condition,currency,quantity,averageRating,reviewCount,'
+        'isBoosted,isFeatured,purchaseCount,bestSellerRank,deliveryOption,'
+        'paused,bundleIds,videoUrl,campaignName,discountThreshold,'
+        'bulkDiscountPercentage';
+
+    // Remove actively-filtered fields from the main facet_by so we don't
+    // waste cycles computing counts we'll discard anyway.
+    final mainFacetFields = facetBy
+        .split(',')
+        .where((f) => !activeFields.contains(f.trim()))
+        .join(',');
+
+    final searches = <Map<String, dynamic>>[];
+
+    // Search #0 — main query: all filters, returns hits + non-filtered facets
+    final mainSearch = <String, dynamic>{
+      'q': query.isEmpty ? '*' : query,
+      'query_by': defaultQueryBy,
+      'sort_by': _sortBy(sortOption),
+      'per_page': hitsPerPage,
+      'page': page + 1,
+      'include_fields': defaultIncludeFields,
+      'max_facet_values': maxFacetValues,
+    };
+    if (mainFacetFields.isNotEmpty) mainSearch['facet_by'] = mainFacetFields;
+    final mainFilterBy = _buildFilterBy();
+    if (mainFilterBy != null) mainSearch['filter_by'] = mainFilterBy;
+    searches.add(mainSearch);
+
+    // Searches #1‥N — one per active disjunctive field (facets only)
+    for (final field in activeFields) {
+      final facetSearch = <String, dynamic>{
+        'q': query.isEmpty ? '*' : query,
+        'query_by': defaultQueryBy,
+        'per_page': 0,
+        'facet_by': field,
+        'max_facet_values': maxFacetValues,
+      };
+      final filterBy = _buildFilterBy(excludeField: field);
+      if (filterBy != null) facetSearch['filter_by'] = filterBy;
+      searches.add(facetSearch);
+    }
+
+    // ── Execute multi-search ──────────────────────────────────────────
+    try {
+      final resp = await _retryOptions.retry(
+        () async {
+          final r = await _client
+              .post(
+                _multiSearchUri
+                    .replace(queryParameters: {'collection': indexName}),
+                headers: _headers,
+                body: jsonEncode({'searches': searches}),
+              )
+              .timeout(const Duration(seconds: 8));
+          if (r.statusCode >= 500) {
+            throw HttpException('Typesense multi_search 5xx: ${r.statusCode}',
+                uri: _multiSearchUri);
+          }
+          return r;
+        },
+        retryIf: (e) =>
+            e is SocketException ||
+            e is TimeoutException ||
+            e is HttpException ||
+            e.toString().contains('Failed host lookup'),
+      );
+
+      if (resp.statusCode != 200) {
+        debugPrint(
+            'Typesense multi_search error ${resp.statusCode}: ${resp.body}');
+        return TypeSensePage(
+            ids: const [], hits: const [], page: page, nbPages: page + 1);
+      }
+
+      final body = jsonDecode(resp.body) as Map<String, dynamic>;
+      final results = (body['results'] as List?) ?? [];
+      if (results.isEmpty) {
+        return TypeSensePage(
+            ids: const [], hits: const [], page: page, nbPages: page + 1);
+      }
+
+      // ── Parse main result (index 0) ─────────────────────────────────
+      final mainResult = results[0] as Map<String, dynamic>;
+      final hits = (mainResult['hits'] as List?) ?? [];
+      final found = (mainResult['found'] as int?) ?? 0;
+
+      final ids = <String>[];
+      final hitDocs = <Map<String, dynamic>>[];
+      for (final h in hits) {
+        final doc = Map<String, dynamic>.from((h as Map)['document'] as Map);
+        doc['objectID'] = doc['id'];
+        hitDocs.add(doc);
+
+        final typesenseId = (doc['id'] ?? '').toString();
+        final firestoreId = _extractFirestoreId(typesenseId, indexName);
+        if (firestoreId.isNotEmpty) ids.add(firestoreId);
+      }
+
+      final perPage = hitsPerPage > 0 ? hitsPerPage : 1;
+      final totalPages = (found / perPage).ceil().clamp(1, 9999);
+
+      // ── Combine facets ──────────────────────────────────────────────
+      final combinedFacets = <String, List<Map<String, dynamic>>>{};
+
+      // Non-filtered field counts from the main query
+      for (final facet in (mainResult['facet_counts'] as List? ?? [])) {
+        final fieldName = (facet as Map)['field_name'] as String? ?? '';
+        final counts = _parseFacetCounts(facet);
+        if (counts.isNotEmpty) combinedFacets[fieldName] = counts;
+      }
+
+      // Disjunctive field counts from their dedicated sub-queries
+      for (var i = 0; i < activeFields.length; i++) {
+        final resultIndex = i + 1;
+        if (resultIndex >= results.length) break;
+
+        final disjResult = results[resultIndex] as Map<String, dynamic>;
+        for (final facet in (disjResult['facet_counts'] as List? ?? [])) {
+          final fieldName = (facet as Map)['field_name'] as String? ?? '';
+          final counts = _parseFacetCounts(facet);
+          if (counts.isNotEmpty) combinedFacets[fieldName] = counts;
+        }
+      }
+
+      debugPrint('Typesense disjunctive: ${hits.length} hits, '
+          '${combinedFacets.length} facet fields, '
+          '${searches.length} sub-queries');
+
+      return TypeSensePage(
+        ids: ids,
+        hits: hitDocs,
+        page: page,
+        nbPages: totalPages,
+        totalFound: found,
+        facets: combinedFacets,
+      );
+    } catch (e) {
+      debugPrint('Typesense multi_search exception: $e');
+      return TypeSensePage(
+          ids: const [], hits: const [], page: page, nbPages: page + 1);
     }
   }
 

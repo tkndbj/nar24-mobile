@@ -88,9 +88,8 @@ class _MarketScreenDynamicFiltersScreenState
   String? _selectedSubSubcategory;
   Map<String, List<String>> _dynamicSpecFilters = {};
 
-  // Spec facets from Typesense
-  Map<String, List<Map<String, dynamic>>> _specFacets = {};
-  Map<String, List<Map<String, dynamic>>> _filteredSpecFacets = {};
+  // Spec facets (unified — populated by disjunctive multi-search)
+  Map<String, List<Map<String, dynamic>>> _facets = {};
 
   // Typesense pagination (used when spec filters are active)
   int _typesensePage = 0;
@@ -307,12 +306,53 @@ class _MarketScreenDynamicFiltersScreenState
   Future<void> _fetchSpecFacets() async {
     try {
       final svc = TypeSenseServiceManager.instance.shopService;
-      final result = await svc.fetchSpecFacets(
+
+      // Build context filter
+      final baseFilterBy = _buildBaseFilterBy();
+      final contextParts = <String>[];
+      if (baseFilterBy != null) contextParts.add(baseFilterBy);
+      if (_selectedCategory != null) {
+        contextParts.add('category_en:=`$_selectedCategory`');
+      }
+      if (_selectedSubcategory != null) {
+        contextParts.add('subcategory_en:=`$_selectedSubcategory`');
+      }
+      if (_selectedSubSubcategory != null) {
+        contextParts.add('subsubcategory_en:=`$_selectedSubSubcategory`');
+      }
+
+      // Disjunctive filters matching current selection
+      final disjunctiveFilters = <String, List<String>>{};
+      if (_selectedBrands.isNotEmpty) {
+        disjunctiveFilters['brandModel'] = _selectedBrands;
+      }
+      if (_selectedColors.isNotEmpty) {
+        disjunctiveFilters['availableColors'] = _selectedColors;
+      }
+      for (final entry in _dynamicSpecFilters.entries) {
+        if (entry.value.isNotEmpty) {
+          disjunctiveFilters[entry.key] = entry.value;
+        }
+      }
+
+      final numericFilters = <String>[];
+      if (_minPrice != null) numericFilters.add('price>=${_minPrice!.toInt()}');
+      if (_maxPrice != null) numericFilters.add('price<=${_maxPrice!.toInt()}');
+      if (_minRating != null) numericFilters.add('averageRating>=${_minRating!}');
+
+      final res = await svc.searchWithDisjunctiveFacets(
         indexName: widget.dynamicFilter.collection ?? 'shop_products',
-        additionalFilterBy: _buildBaseFilterBy(),
+        hitsPerPage: 0, // facets only
+        additionalFilterBy:
+            contextParts.isNotEmpty ? contextParts.join(' && ') : null,
+        disjunctiveFilters: disjunctiveFilters,
+        numericFilters: numericFilters,
+        sortOption: _typesenseSortCode(),
+        facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
+            'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
       );
       if (mounted) {
-        setState(() => _specFacets = result);
+        setState(() => _facets = res.facets);
       }
     } catch (e) {
       debugPrint('Error fetching spec facets: $e');
@@ -353,50 +393,58 @@ class _MarketScreenDynamicFiltersScreenState
   Future<List<ProductSummary>> _fetchFromTypesense({required int page}) async {
     final svc = TypeSenseServiceManager.instance.shopService;
 
-    final facetFilters = <List<String>>[];
-    if (_selectedBrands.isNotEmpty) {
-      facetFilters.add(_selectedBrands.map((b) => 'brandModel:$b').toList());
-    }
-    if (_selectedColors.isNotEmpty) {
-      facetFilters
-          .add(_selectedColors.map((c) => 'availableColors:$c').toList());
-    }
+    // Base context filter from the DynamicFilter config
+    final baseFilterBy = _buildBaseFilterBy();
+
+    // Additional conjunctive context filters (category drill-down)
+    final contextParts = <String>[];
+    if (baseFilterBy != null) contextParts.add(baseFilterBy);
     if (_selectedCategory != null) {
-      facetFilters.add(['category_en:$_selectedCategory']);
+      contextParts.add('category_en:=`$_selectedCategory`');
     }
     if (_selectedSubcategory != null) {
-      facetFilters.add(['subcategory_en:$_selectedSubcategory']);
+      contextParts.add('subcategory_en:=`$_selectedSubcategory`');
     }
     if (_selectedSubSubcategory != null) {
-      facetFilters.add(['subsubcategory_en:$_selectedSubSubcategory']);
+      contextParts.add('subsubcategory_en:=`$_selectedSubSubcategory`');
+    }
+
+    // Disjunctive filters
+    final disjunctiveFilters = <String, List<String>>{};
+    if (_selectedBrands.isNotEmpty) {
+      disjunctiveFilters['brandModel'] = _selectedBrands;
+    }
+    if (_selectedColors.isNotEmpty) {
+      disjunctiveFilters['availableColors'] = _selectedColors;
     }
     for (final entry in _dynamicSpecFilters.entries) {
       if (entry.value.isNotEmpty) {
-        facetFilters.add(entry.value.map((v) => '${entry.key}:$v').toList());
+        disjunctiveFilters[entry.key] = entry.value;
       }
     }
 
     final numericFilters = <String>[];
-    if (_minPrice != null) numericFilters.add('price:>=${_minPrice!.toInt()}');
-    if (_maxPrice != null) numericFilters.add('price:<=${_maxPrice!.toInt()}');
-    if (_minRating != null) numericFilters.add('averageRating:>=${_minRating!}');
+    if (_minPrice != null) numericFilters.add('price>=${_minPrice!.toInt()}');
+    if (_maxPrice != null) numericFilters.add('price<=${_maxPrice!.toInt()}');
+    if (_minRating != null) numericFilters.add('averageRating>=${_minRating!}');
 
-    final res = await svc.searchIdsWithFacets(
+    final res = await svc.searchWithDisjunctiveFacets(
       indexName: widget.dynamicFilter.collection ?? 'shop_products',
       page: page,
       hitsPerPage: _limit,
-      facetFilters: facetFilters.isNotEmpty ? facetFilters : null,
-      numericFilters: numericFilters.isNotEmpty ? numericFilters : null,
+      additionalFilterBy:
+          contextParts.isNotEmpty ? contextParts.join(' && ') : null,
+      disjunctiveFilters: disjunctiveFilters,
+      numericFilters: numericFilters,
       sortOption: _typesenseSortCode(),
-      additionalFilterBy: _buildBaseFilterBy(),
       facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
           'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
     );
 
     _typesenseHasMore = res.page < (res.nbPages - 1);
 
-    if (res.facets.isNotEmpty && mounted) {
-      setState(() => _filteredSpecFacets = res.facets);
+    if (mounted) {
+      setState(() => _facets = res.facets);
     }
 
     return res.hits.map((hit) => ProductSummary.fromTypeSense(hit)).toList();
@@ -514,10 +562,6 @@ class _MarketScreenDynamicFiltersScreenState
 
   // Show filter screen
   Future<void> _showFilterScreen() async {
-    final activeFields = <String>{
-      if (_selectedBrands.isNotEmpty) 'brandModel',
-      ..._dynamicSpecFilters.keys,
-    };
     final result = await Navigator.of(context).push<Map<String, dynamic>>(
       MaterialPageRoute(
         builder: (context) => MarketScreenDynamicFiltersFilterScreen(
@@ -531,11 +575,7 @@ class _MarketScreenDynamicFiltersScreenState
           initialSubcategory: _selectedSubcategory,
           initialSubSubcategory: _selectedSubSubcategory,
           initialSpecFilters: _dynamicSpecFilters,
-          availableSpecFacets: TypeSensePage.combineFacets(
-            baseFacets: _specFacets,
-            filteredFacets: _filteredSpecFacets,
-            activeFilterFields: activeFields,
-          ),
+          availableSpecFacets: _facets,
         ),
       ),
     );

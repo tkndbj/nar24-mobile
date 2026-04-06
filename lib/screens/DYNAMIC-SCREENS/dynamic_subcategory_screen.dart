@@ -676,10 +676,6 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
 
                           return GestureDetector(
                             onTap: () async {
-                              final activeFields = <String>{
-                                if (_dynamicBrands.isNotEmpty) 'brandModel',
-                                ..._dynamicSpecFilters.keys,
-                              };
                               final result = await context
                                   .push('/dynamic_filter', extra: {
                                 'category': widget.category,
@@ -689,11 +685,7 @@ class DynamicSubcategoryScreenState extends State<DynamicSubcategoryScreen> {
                                 'initialColors': _dynamicColors,
                                 'initialSubSubcategories': _dynamicSubSubcategories,
                                 'initialSpecFilters': _dynamicSpecFilters,
-                                'availableSpecFacets': TypeSensePage.combineFacets(
-                                  baseFacets: _specialFilterProvider.specFacets,
-                                  filteredFacets: _specialFilterProvider.filteredSpecFacets,
-                                  activeFilterFields: activeFields,
-                                ),
+                                'availableSpecFacets': _specialFilterProvider.facets,
                                 'initialMinPrice': _minPrice,
                                 'initialMaxPrice': _maxPrice,
                                 'initialMinRating': _minRating,

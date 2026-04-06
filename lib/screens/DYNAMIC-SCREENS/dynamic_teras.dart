@@ -540,10 +540,6 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
                     GestureDetector(
                       onTap: () async {
                         final terasProv = context.read<DynamicTerasProvider>();
-                        final activeFields = <String>{
-                          if (_dynamicBrands.isNotEmpty) 'brandModel',
-                          ..._dynamicSpecFilters.keys,
-                        };
                         final result =
                             await context.push('/dynamic_filter', extra: {
                           'category': widget.category,
@@ -553,11 +549,7 @@ class _DynamicTerasScreenState extends State<DynamicTerasScreen>
                           'initialColors': _dynamicColors,
                           'initialSubSubcategories': _dynamicSubSubcategories,
                           'initialSpecFilters': _dynamicSpecFilters,
-                          'availableSpecFacets': TypeSensePage.combineFacets(
-                            baseFacets: terasProv.specFacets,
-                            filteredFacets: terasProv.filteredSpecFacets,
-                            activeFilterFields: activeFields,
-                          ),
+                          'availableSpecFacets': terasProv.facets,
                           'initialMinPrice': _minPrice,
                           'initialMaxPrice': _maxPrice,
                           'initialMinRating': _minRating,

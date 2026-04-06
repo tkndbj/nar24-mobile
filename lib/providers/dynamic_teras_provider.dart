@@ -89,14 +89,10 @@ class DynamicTerasProvider with ChangeNotifier {
       Map.unmodifiable(_dynamicSpecFilters.map(
           (k, v) => MapEntry(k, List<String>.unmodifiable(v))));
 
-  // ── Spec facets (fetched from Typesense, cached per category context) ──
-  Map<String, List<Map<String, dynamic>>> _specFacets = {};
-  Map<String, List<Map<String, dynamic>>> get specFacets =>
-      Map.unmodifiable(_specFacets);
-
-  Map<String, List<Map<String, dynamic>>> _filteredSpecFacets = {};
-  Map<String, List<Map<String, dynamic>>> get filteredSpecFacets =>
-      Map.unmodifiable(_filteredSpecFacets);
+  // ── Spec facets (unified — populated by disjunctive multi-search) ──
+  Map<String, List<Map<String, dynamic>>> _facets = {};
+  Map<String, List<Map<String, dynamic>>> get facets =>
+      Map.unmodifiable(_facets);
 
   final Map<String, Map<String, List<Map<String, dynamic>>>> _facetCache = {};
   final Map<String, DateTime> _facetCacheTs = {};
@@ -438,6 +434,7 @@ class DynamicTerasProvider with ChangeNotifier {
 
       _filterCacheTs[key] = now;
       notifyListeners();
+      await _refreshFacets();
     } else {
       if (cached != null) {
         _removeFilterCacheEntry(key);
@@ -553,6 +550,26 @@ class DynamicTerasProvider with ChangeNotifier {
     return 'facet|$_category|$_subcategory|$_subSubcategory|$_buyerCategory';
   }
 
+  /// Facet-only disjunctive search that matches the CURRENT filter state.
+  Future<void> _refreshFacets() async {
+    try {
+      final res = await _searchService.searchWithDisjunctiveFacets(
+        indexName: 'products',
+        hitsPerPage: 0,
+        additionalFilterBy: _buildBaseFilterBy(),
+        disjunctiveFilters: _buildDisjunctiveFilters(),
+        numericFilters: _buildNumericFilters(),
+        sortOption: _sortOption,
+        facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
+            'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
+      );
+      _facets = res.facets;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Facet refresh error: $e');
+    }
+  }
+
   Future<void> _fetchSpecFacets() async {
     final cacheKey = _buildFacetCacheKey();
     final now = DateTime.now();
@@ -560,7 +577,7 @@ class DynamicTerasProvider with ChangeNotifier {
     final cached = _facetCache[cacheKey];
     final ts = _facetCacheTs[cacheKey];
     if (cached != null && ts != null && now.difference(ts) < _facetCacheTtl) {
-      _specFacets = cached;
+      _facets = cached;
       return;
     }
 
@@ -584,7 +601,7 @@ class DynamicTerasProvider with ChangeNotifier {
         facetFilters: facetFilters,
       );
 
-      _specFacets = result;
+      _facets = result;
 
       _facetCache[cacheKey] = result;
       _facetCacheTs[cacheKey] = now;
@@ -599,7 +616,7 @@ class DynamicTerasProvider with ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Error fetching spec facets: $e');
-      _specFacets = {};
+      _facets = {};
     }
   }
 
@@ -642,6 +659,7 @@ class DynamicTerasProvider with ChangeNotifier {
 
     if (_lastBackend == SearchBackend.firestore) {
       await _fetchPageFromFirestore(page: page, seq: seq);
+      if (page == 0) await _refreshFacets();
     } else {
       await _fetchPageFromTypeSense(page: page, seq: seq);
     }
@@ -654,9 +672,6 @@ class DynamicTerasProvider with ChangeNotifier {
     required int page,
     required int seq,
   }) async {
-    // Clear filtered facets when using Firestore (no active filters) so
-    // combineFacets falls back to baseFacets rather than showing stale data.
-    if (page == 0) _filteredSpecFacets = {};
     Query q = _buildFirestoreQuery();
 
     if (page > 0 && _pageCursors.containsKey(page - 1)) {
@@ -763,8 +778,8 @@ class DynamicTerasProvider with ChangeNotifier {
     return parts.join('|');
   }
 
-  List<String> _buildTypeSenseNumericFilters() {
-    final List<String> filters = [];
+  List<String> _buildNumericFilters() {
+    final filters = <String>[];
     if (_minPrice != null) filters.add('price>=${_minPrice!.floor()}');
     if (_maxPrice != null) filters.add('price<=${_maxPrice!.ceil()}');
     if (_minRating != null) filters.add('averageRating>=${_minRating!}');
@@ -774,16 +789,17 @@ class DynamicTerasProvider with ChangeNotifier {
   Future<void> _fetchPageFromTypeSense(
       {required int page, required int seq}) async {
     final svc = _searchService;
-    final indexName = 'products'; // hardcoded
-    final facetFilters = _buildTypeSenseFacetFilters();
-    final numericFilters = _buildTypeSenseNumericFilters();
+    final additionalFilterBy = _buildBaseFilterBy();
+    final disjunctiveFilters = _buildDisjunctiveFilters();
+    final numericFilters = _buildNumericFilters();
 
     try {
-      final res = await svc.searchIdsWithFacets(
-        indexName: indexName,
+      final res = await svc.searchWithDisjunctiveFacets(
+        indexName: 'products',
         page: page,
         hitsPerPage: _limit,
-        facetFilters: facetFilters,
+        additionalFilterBy: additionalFilterBy,
+        disjunctiveFilters: disjunctiveFilters,
         numericFilters: numericFilters,
         sortOption: _sortOption,
         facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
@@ -791,11 +807,8 @@ class DynamicTerasProvider with ChangeNotifier {
       );
       if (seq != _filterSeq) return;
 
-      if (res.facets.isNotEmpty) {
-        _filteredSpecFacets = res.facets;
-      }
+      _facets = res.facets;
 
-      // ✅ Parse directly from TypeSense hits — no Firestore round-trip
       final fetched = res.hits.map((hit) {
         final summary = ProductSummary.fromTypeSense(hit);
         _docCachePut(summary.id, summary);
@@ -822,49 +835,34 @@ class DynamicTerasProvider with ChangeNotifier {
     }
   }
 
-  List<List<String>> _buildTypeSenseFacetFilters() {
-    final List<List<String>> groups = [];
-
-    debugPrint(
-        'Building filters: category=$_category, subcategory=$_subcategory, subSubcategory=$_subSubcategory, buyerCategory=$_buyerCategory');
-
-    if (_category != null) {
-      groups.add(['category_en:${_category!}']);
-    }
-    if (_subcategory != null) {
-      groups.add(['subcategory_en:${_subcategory!}']);
-    }
-
+  /// Base context filters (always applied, not disjunctive).
+  String? _buildBaseFilterBy() {
+    final parts = <String>[];
+    if (_category != null) parts.add('category_en:=`${_category!}`');
+    if (_subcategory != null) parts.add('subcategory_en:=`${_subcategory!}`');
     if (_subSubcategory != null) {
-      groups.add(['subsubcategory_en:${_subSubcategory!}']);
+      parts.add('subsubcategory_en:=`${_subSubcategory!}`');
     }
-
     if (_buyerCategory == 'Women' || _buyerCategory == 'Men') {
-      groups.add(['gender:${_buyerCategory!}', 'gender:Unisex']);
+      parts.add('(gender:=`${_buyerCategory!}` || gender:=`Unisex`)');
     }
+    return parts.isNotEmpty ? parts.join(' && ') : null;
+  }
 
-    if (_dynamicBrands.isNotEmpty) {
-      groups.add(_dynamicBrands.map((b) => 'brandModel:$b').toList());
-    }
-
+  /// Disjunctive filter groups: field → selected values.
+  Map<String, List<String>> _buildDisjunctiveFilters() {
+    final filters = <String, List<String>>{};
+    if (_dynamicBrands.isNotEmpty) filters['brandModel'] = _dynamicBrands;
     if (_dynamicColors.isNotEmpty) {
-      groups.add(_dynamicColors.map((c) => 'availableColors:$c').toList());
+      filters['availableColors'] = _dynamicColors;
     }
-
     if (_dynamicSubSubcategories.isNotEmpty) {
-      groups.add(
-          _dynamicSubSubcategories.map((s) => 'subsubcategory_en:$s').toList());
+      filters['subsubcategory_en'] = _dynamicSubSubcategories;
     }
-
-    // Generic spec filters — each field becomes its own filter group
     for (final entry in _dynamicSpecFilters.entries) {
-      if (entry.value.isNotEmpty) {
-        groups.add(entry.value.map((v) => '${entry.key}:$v').toList());
-      }
+      if (entry.value.isNotEmpty) filters[entry.key] = entry.value;
     }
-
-    debugPrint('Final facet filters: $groups');
-    return groups;
+    return filters;
   }
 
   // ──────────────────────────────────────────────────────────────────────────

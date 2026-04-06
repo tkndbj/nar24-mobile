@@ -42,9 +42,6 @@ class ShopMarketProvider with ChangeNotifier {
   final Map<String, bool> _filterHasMore = {};
   final Map<String, int> _filterCurrentPage = {};
   final Map<String, DateTime> _filterCacheTs = {};
-  // Facet snapshot cache — mirrors _filterPageCache so filteredSpecFacets is
-  // restored correctly when a filter is toggled back (cache hit path).
-  final Map<String, Map<String, List<Map<String, dynamic>>>> _filterFacetsSnapshotCache = {};
 
   Future<void> fetchPage(int page) => _fetchPage(page: page);
 
@@ -115,19 +112,11 @@ class ShopMarketProvider with ChangeNotifier {
   static const int _maxCachedPages = 5;
 
   // ──────────────────────────────────────────────────────────────────────────
-  // SPEC FACETS (fetched from Typesense, cached per category context)
+  // SPEC FACETS (unified — populated by disjunctive multi-search)
   // ──────────────────────────────────────────────────────────────────────────
-  /// Available spec facets for the current category context.
-  /// Key: field name (e.g. 'productType', 'clothingFit')
-  /// Value: list of {'value': 'CoffeeMachine', 'count': 24}
-  Map<String, List<Map<String, dynamic>>> _specFacets = {};
-  Map<String, List<Map<String, dynamic>>> get specFacets =>
-      Map.unmodifiable(_specFacets);
-
-  /// Facets from the latest *filtered* search (narrowed by active filters).
-  Map<String, List<Map<String, dynamic>>> _filteredSpecFacets = {};
-  Map<String, List<Map<String, dynamic>>> get filteredSpecFacets =>
-      Map.unmodifiable(_filteredSpecFacets);
+  Map<String, List<Map<String, dynamic>>> _facets = {};
+  Map<String, List<Map<String, dynamic>>> get facets =>
+      Map.unmodifiable(_facets);
 
   /// Cache keyed by category context string
   final Map<String, Map<String, List<Map<String, dynamic>>>> _facetCache = {};
@@ -501,6 +490,8 @@ class ShopMarketProvider with ChangeNotifier {
       // Touch timestamp so LRU eviction considers this recently used
       _filterCacheTs[key] = now;
       notifyListeners();
+      // Cache doesn't store facets — refresh them for the current filter state
+      await _refreshFacets();
     } else {
       // Cache miss or stale — clean up and fetch from server
       if (cached != null) {
@@ -583,6 +574,27 @@ class ShopMarketProvider with ChangeNotifier {
     return 'facet|$_category|$_subcategory|$_subSubcategory|$_buyerCategory';
   }
 
+  /// Facet-only disjunctive search that matches the CURRENT filter state.
+  /// Called when the product path (Firestore / cache hit) doesn't update facets.
+  Future<void> _refreshFacets() async {
+    try {
+      final res = await _searchService.searchWithDisjunctiveFacets(
+        indexName: 'shop_products',
+        hitsPerPage: 0, // facets only — no product hits
+        additionalFilterBy: _buildBaseFilterBy(),
+        disjunctiveFilters: _buildDisjunctiveFilters(),
+        numericFilters: _buildNumericFilters(),
+        sortOption: _sortOption,
+        facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
+            'jewelryType,jewelryMaterials,pantSizes,pantFabricTypes,footwearSizes',
+      );
+      _facets = res.facets;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Facet refresh error: $e');
+    }
+  }
+
   Future<void> _fetchSpecFacets() async {
     final cacheKey = _buildFacetCacheKey();
     final now = DateTime.now();
@@ -591,7 +603,7 @@ class ShopMarketProvider with ChangeNotifier {
     final cached = _facetCache[cacheKey];
     final ts = _facetCacheTs[cacheKey];
     if (cached != null && ts != null && now.difference(ts) < _facetCacheTtl) {
-      _specFacets = cached;
+      _facets = cached;
       return;
     }
 
@@ -617,7 +629,7 @@ class ShopMarketProvider with ChangeNotifier {
         facetFilters: facetFilters,
       );
 
-      _specFacets = result;
+      _facets = result;
 
       // Cache the result
       _facetCache[cacheKey] = result;
@@ -634,7 +646,7 @@ class ShopMarketProvider with ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Error fetching spec facets: $e');
-      _specFacets = {};
+      _facets = {};
     }
   }
 
@@ -677,6 +689,8 @@ class ShopMarketProvider with ChangeNotifier {
 
     if (_lastBackend == SearchBackend.firestore) {
       await _fetchPageFromFirestore(page: page, seq: seq);
+      // Firestore doesn't return facets — refresh them for the current filter state
+      if (page == 0) await _refreshFacets();
     } else {
       await _fetchPageFromTypeSense(page: page, seq: seq);
     }
@@ -689,9 +703,6 @@ class ShopMarketProvider with ChangeNotifier {
     required int page,
     required int seq,
   }) async {
-    // Clear filtered facets when using Firestore (no active filters) so
-    // combineFacets falls back to baseFacets rather than showing stale data.
-    if (page == 0) _filteredSpecFacets = {};
     Query q = _buildFirestoreQuery();
 
     if (page > 0 && _pageCursors.containsKey(page - 1)) {
@@ -808,17 +819,17 @@ class ShopMarketProvider with ChangeNotifier {
     required int seq,
   }) async {
     final svc = _searchService;
-
-    final indexName = _TypeSenseIndexForCurrentIndex();
-    final facetFilters = _buildTypeSenseFacetFilters();
-    final numericFilters = _buildTypeSenseNumericFilters();
+    final additionalFilterBy = _buildBaseFilterBy();
+    final disjunctiveFilters = _buildDisjunctiveFilters();
+    final numericFilters = _buildNumericFilters();
 
     try {
-      final res = await svc.searchIdsWithFacets(
-        indexName: indexName,
+      final res = await svc.searchWithDisjunctiveFacets(
+        indexName: 'shop_products',
         page: page,
         hitsPerPage: _limit,
-        facetFilters: facetFilters,
+        additionalFilterBy: additionalFilterBy,
+        disjunctiveFilters: disjunctiveFilters,
         numericFilters: numericFilters,
         sortOption: _sortOption,
         facetBy: 'brandModel,productType,consoleBrand,clothingFit,clothingTypes,clothingSizes,'
@@ -826,15 +837,11 @@ class ShopMarketProvider with ChangeNotifier {
       );
       if (seq != _filterSeq) return;
 
-      // Save filtered facets for disjunctive faceting in the filter screen
-      if (res.facets.isNotEmpty) {
-        _filteredSpecFacets = res.facets;
-      }
+      _facets = res.facets;
 
-      // ✅ Parse directly from TypeSense hits — no Firestore round-trip
       final fetched = res.hits.map((hit) {
         final summary = ProductSummary.fromTypeSense(hit);
-        _docCachePut(summary.id, summary); // still cache for other uses
+        _docCachePut(summary.id, summary);
         return summary;
       }).toList();
 
@@ -847,61 +854,46 @@ class ShopMarketProvider with ChangeNotifier {
     }
   }
 
-  String _TypeSenseIndexForCurrentIndex() {
-    return 'shop_products';
+  /// Base context filters (always applied, not disjunctive).
+  String? _buildBaseFilterBy() {
+    final parts = <String>[];
+    if (_category != null) parts.add('category_en:=`${_category!}`');
+    if (_subcategory != null) parts.add('subcategory_en:=`${_subcategory!}`');
+    if (_subSubcategory != null) {
+      parts.add('subsubcategory_en:=`${_subSubcategory!}`');
+    }
+    if (_buyerCategory == 'Women' || _buyerCategory == 'Men') {
+      parts.add('(gender:=`${_buyerCategory!}` || gender:=`Unisex`)');
+    }
+    return parts.isNotEmpty ? parts.join(' && ') : null;
   }
 
-  List<String> _buildTypeSenseNumericFilters() {
-    final List<String> filters = [];
+  /// Disjunctive filter groups: field → selected values.
+  Map<String, List<String>> _buildDisjunctiveFilters() {
+    final filters = <String, List<String>>{};
+    if (_dynamicBrands.isNotEmpty) {
+      filters['brandModel'] = _dynamicBrands;
+    }
+    if (_dynamicColors.isNotEmpty) {
+      filters['availableColors'] = _dynamicColors;
+    }
+    if (_dynamicSubSubcategories.isNotEmpty) {
+      filters['subsubcategory_en'] = _dynamicSubSubcategories;
+    }
+    for (final entry in _dynamicSpecFilters.entries) {
+      if (entry.value.isNotEmpty) {
+        filters[entry.key] = entry.value;
+      }
+    }
+    return filters;
+  }
+
+  List<String> _buildNumericFilters() {
+    final filters = <String>[];
     if (_minPrice != null) filters.add('price>=${_minPrice!.floor()}');
     if (_maxPrice != null) filters.add('price<=${_maxPrice!.ceil()}');
     if (_minRating != null) filters.add('averageRating>=${_minRating!}');
     return filters;
-  }
-
-  List<List<String>> _buildTypeSenseFacetFilters() {
-    final List<List<String>> groups = [];
-
-    debugPrint(
-        'Building filters: category=$_category, subcategory=$_subcategory, subSubcategory=$_subSubcategory, buyerCategory=$_buyerCategory');
-
-    if (_category != null) {
-      groups.add(['category_en:${_category!}']);
-    }
-    if (_subcategory != null) {
-      groups.add(['subcategory_en:${_subcategory!}']);
-    }
-
-    if (_subSubcategory != null) {
-      groups.add(['subsubcategory_en:${_subSubcategory!}']);
-    }
-
-    if (_buyerCategory == 'Women' || _buyerCategory == 'Men') {
-      groups.add(['gender:${_buyerCategory!}', 'gender:Unisex']);
-    }
-
-    if (_dynamicBrands.isNotEmpty) {
-      groups.add(_dynamicBrands.map((b) => 'brandModel:$b').toList());
-    }
-
-    if (_dynamicColors.isNotEmpty) {
-      groups.add(_dynamicColors.map((c) => 'availableColors:$c').toList());
-    }
-
-    if (_dynamicSubSubcategories.isNotEmpty) {
-      groups.add(
-          _dynamicSubSubcategories.map((s) => 'subsubcategory_en:$s').toList());
-    }
-
-    // Generic spec filters — each field becomes its own filter group
-    for (final entry in _dynamicSpecFilters.entries) {
-      if (entry.value.isNotEmpty) {
-        groups.add(entry.value.map((v) => '${entry.key}:$v').toList());
-      }
-    }
-
-    debugPrint('Final facet filters: $groups');
-    return groups;
   }
 
   // ──────────────────────────────────────────────────────────────────────────
