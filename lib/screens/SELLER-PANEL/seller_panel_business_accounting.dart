@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../generated/l10n/app_localizations.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SellerPanelBusinessAccounting extends StatefulWidget {
   final String businessId;
@@ -26,6 +27,8 @@ class _SellerPanelBusinessAccountingState
   // Period: 0 = daily, 1 = weekly, 2 = monthly
   int _periodIndex = 0;
   String get _periodType => const ['daily', 'weekly', 'monthly'][_periodIndex];
+
+  final _firestore = FirebaseFirestore.instance;
 
   // Date state
   DateTime _selectedDate = DateTime.now().subtract(const Duration(days: 1));
@@ -97,30 +100,41 @@ class _SellerPanelBusinessAccountingState
 
   // ── Cloud Function calls ───────────────────────────────────
 
-  Future<void> _loadReports() async {
-    setState(() => _isLoadingReports = true);
-    try {
-      final result =
-          await _functions.httpsCallable('listBusinessReports').call({
-        'businessId': widget.businessId,
-        'businessType': widget.businessType,
-        'period': _periodType,
-        'limit': 30,
-      });
-      final data = _deepCast(result.data) as Map<String, dynamic>;
-      if (!mounted) return;
-      setState(() {
-        _reports = (data['reports'] as List? ?? [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-        _isLoadingReports = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoadingReports = false);
-      debugPrint('Error loading reports: $e');
+ Future<void> _loadReports() async {
+  setState(() => _isLoadingReports = true);
+  try {
+    Query q = _firestore
+        .collection('business-reports')
+        .doc(widget.businessId)
+        .collection('reports')
+        .orderBy('periodStart', descending: true)
+        .limit(30);
+
+    if (_periodType != 'all') {
+      q = q.where('period', isEqualTo: _periodType);
     }
+
+    final snap = await q.get();
+    if (!mounted) return;
+    setState(() {
+      _reports = snap.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return {
+          ...data,
+          'periodKey': doc.id,
+          'periodStart': (data['periodStart'] as Timestamp?)?.toDate().toIso8601String(),
+          'periodEnd': (data['periodEnd'] as Timestamp?)?.toDate().toIso8601String(),
+          'generatedAt': (data['generatedAt'] as Timestamp?)?.toDate().toIso8601String(),
+        };
+      }).toList();
+      _isLoadingReports = false;
+    });
+  } catch (e) {
+    if (!mounted) return;
+    setState(() => _isLoadingReports = false);
+    debugPrint('Error loading reports: $e');
   }
+}
 
   Future<void> _generateReport() async {
     final l10n = AppLocalizations.of(context);
@@ -167,39 +181,43 @@ class _SellerPanelBusinessAccountingState
     }
   }
 
-  Future<void> _fetchAndShowReport(String periodKey) async {
-    // Show loading dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(
-        child: CircularProgressIndicator(color: Color(0xFF667EEA)),
-      ),
-    );
+ Future<void> _fetchAndShowReport(String periodKey) async {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const Center(
+      child: CircularProgressIndicator(color: Color(0xFF667EEA)),
+    ),
+  );
 
-    try {
-      final result =
-          await _functions.httpsCallable('getBusinessReport').call({
-        'businessId': widget.businessId,
-        'businessType': widget.businessType,
-        'periodKey': periodKey,
-      });
-      final data = _deepCast(result.data) as Map<String, dynamic>;
+  try {
+    final snap = await _firestore
+        .collection('business-reports')
+        .doc(widget.businessId)
+        .collection('reports')
+        .doc(periodKey)
+        .get();
 
-      if (!mounted) return;
-      Navigator.of(context).pop(); // close loading
+    if (!mounted) return;
+    Navigator.of(context).pop();
 
-      if (data['exists'] == true) {
-        _showReportDetail(data);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      Navigator.of(context).pop(); // close loading
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+    if (snap.exists) {
+      final data = snap.data()!;
+      // Convert Timestamps for display
+      final converted = Map<String, dynamic>.from(data);
+      converted['periodStart'] = (data['periodStart'] as Timestamp?)?.toDate().toIso8601String();
+      converted['periodEnd'] = (data['periodEnd'] as Timestamp?)?.toDate().toIso8601String();
+      converted['generatedAt'] = (data['generatedAt'] as Timestamp?)?.toDate().toIso8601String();
+      _showReportDetail(converted);
     }
+  } catch (e) {
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(e.toString())),
+    );
   }
+}
 
   // ── Build ──────────────────────────────────────────────────
 
