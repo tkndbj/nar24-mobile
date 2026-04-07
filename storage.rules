@@ -1,0 +1,294 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+  
+
+match /receipts/{fileName} {
+      // Allow authenticated users to read receipts
+      allow read: if request.auth != null;
+      
+      // Only Cloud Functions can write receipts
+      allow write: if false;
+      
+      // No deletion from client side
+      allow delete: if false;
+    }
+
+match /restaurant_banners/{fileName} {
+  // Anyone can read (mobile app + web app)
+  allow read: if true;
+
+  // Only admins can upload — images only, 20MB max
+  allow write: if request.auth != null
+               && request.auth.token.isAdmin == true
+               && request.resource.size < 20 * 1024 * 1024
+               && request.resource.contentType.matches('image/.*');
+
+  // Only admins can delete
+  allow delete: if request.auth != null
+                && request.auth.token.isAdmin == true;
+}
+
+match /restaurant_reviews/{restaurantId}/{fileName} {
+  allow read: if true;
+  allow write: if request.auth != null
+               && request.resource.size < 5 * 1024 * 1024
+               && request.resource.contentType.matches('image/.*');
+  allow delete: if request.auth != null;
+}
+
+match /reports/{shopId}/{fileName} {
+  // Simplified: Just check if user is authenticated
+  // Your app already verifies shop membership before showing download button
+  allow read: if request.auth != null;
+  
+  // Allow write only from backend/admin functions
+  allow write: if request.auth != null
+    && request.resource.size < 50 * 1024 * 1024 // 50MB limit for PDFs
+    && request.resource.contentType == 'application/pdf';
+    
+  allow delete: if request.auth != null;
+}
+
+match /food-receipts/{userId}/{orderId} {
+  allow read: if request.auth != null && request.auth.uid == userId;
+  allow write: if false; // Cloud Functions only
+}
+
+ match /foods/{userId}/{restaurantId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+match /ad_submissions/{shopId}/{fileName} {
+  // Allow everyone to read ad submission images
+  allow read: if true;
+  
+  // Allow shop members to upload images for their shop
+  // Max 20MB, images only
+  allow write: if request.auth != null
+               && request.resource.size < 20 * 1024 * 1024
+               && request.resource.contentType.matches('image/.*')
+               && firestore.exists(/databases/(default)/documents/shops/$(shopId))  // ✅ Changed
+               && (
+                 // Check if user is a shop member
+                 firestore.get(/databases/(default)/documents/shops/$(shopId)).data.ownerId == request.auth.uid  // ✅ Changed
+                 || (firestore.get(/databases/(default)/documents/shops/$(shopId)).data.keys().hasAny(['editors'])  // ✅ Changed
+                     && request.auth.uid in firestore.get(/databases/(default)/documents/shops/$(shopId)).data.editors)
+                 || (firestore.get(/databases/(default)/documents/shops/$(shopId)).data.keys().hasAny(['coOwners'])  // ✅ Changed
+                     && request.auth.uid in firestore.get(/databases/(default)/documents/shops/$(shopId)).data.coOwners)
+                 || (firestore.get(/databases/(default)/documents/shops/$(shopId)).data.keys().hasAny(['viewers'])  // ✅ Changed
+                     && request.auth.uid in firestore.get(/databases/(default)/documents/shops/$(shopId)).data.viewers)
+               );
+  
+  // Allow shop members to delete their shop's ad submission images
+  allow delete: if request.auth != null
+                && firestore.exists(/databases/(default)/documents/shops/$(shopId))  // ✅ Changed
+                && (
+                  firestore.get(/databases/(default)/documents/shops/$(shopId)).data.ownerId == request.auth.uid  // ✅ Changed
+                  || (firestore.get(/databases/(default)/documents/shops/$(shopId)).data.keys().hasAny(['editors'])  // ✅ Changed
+                      && request.auth.uid in firestore.get(/databases/(default)/documents/shops/$(shopId)).data.editors)
+                  || (firestore.get(/databases/(default)/documents/shops/$(shopId)).data.keys().hasAny(['coOwners'])  // ✅ Changed
+                      && request.auth.uid in firestore.get(/databases/(default)/documents/shops/$(shopId)).data.coOwners)
+                );
+}
+  
+  match /collections/{shopId}/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Market banners remain public for reads:
+    match /market_banners/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.resource.size < 100 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('image/.*') ||
+          request.resource.contentType == 'application/pdf'
+        );
+      allow delete: if request.auth != null;
+    }
+    
+    match /market_thin_banners/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.resource.size < 100 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('image/.*') ||
+          request.resource.contentType == 'application/pdf'
+        );
+      allow delete: if request.auth != null;
+    }
+
+    // --- Modified Rules for profileImages ---
+    // Allow read access to everyone; keep write and delete restricted.
+    match /profileImages/{userId} {
+      // Public read access regardless of authentication.
+      allow read: if true;
+      // Only the owner can write or delete their profile image.
+      allow write, delete: if request.auth != null && request.auth.uid == userId
+         && request.resource.size < 100 * 1024 * 1024
+         && request.resource.contentType.matches('image/.*');
+    }  
+    
+ 
+    
+
+    // Other rules remain unchanged…
+
+    match /shop_applications/{userId}/{fileName} {
+      allow write: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.resource.size < 100 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      allow read: if request.auth != null
+                  && (request.auth.uid == userId || isAdmin());
+      allow delete: if request.auth != null
+                    && (request.auth.uid == userId || isAdmin());
+    }
+    
+    match /restaurant_applications/{userId}/{fileName} {
+  allow write: if request.auth != null
+               && request.auth.uid == userId
+               && request.resource.size < 100 * 1024 * 1024
+               && request.resource.contentType.matches('image/.*');
+  allow read: if request.auth != null && request.auth.uid == userId;
+  allow delete: if request.auth != null && request.auth.uid == userId;
+}
+    
+       match /market_applications/{userId}/{fileName} {
+      allow write: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.resource.size < 100 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      allow read: if request.auth != null
+                  && (request.auth.uid == userId || isAdmin());
+      allow delete: if request.auth != null
+                    && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /products/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && (
+          (request.resource.contentType.matches('image/.*') && request.resource.size < 100 * 1024 * 1024) ||
+          (request.resource.contentType.matches('video/.*') && request.resource.size < 300 * 1024 * 1024)
+        );
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+  match /shops/{shopId}/{field}/{allPaths=**} {
+      // Anyone can read
+      allow read: if true;
+
+      // Any logged-in user can upload (or overwrite) or delete,
+      // so long as it’s an image under 100 MB.
+      allow write, delete: if request.auth != null
+        && request.resource.size < 20 * 1024 * 1024
+        && request.resource.contentType.matches("image/.*");
+    }
+    
+    match /shops/{shopId}/homeImageUrls/{allPaths=**} {
+      // 1) Anyone can read (so the shop’s home‐images will show up in the app).
+      allow read: if true;
+
+      // 2) Any logged‐in user may upload a new image, as long as
+      //    • it’s < 100 MB, and
+      //    • its contentType is “image/…”
+      allow write: if request.auth != null
+                   && request.resource.size < 20 * 1024 * 1024
+                   && request.resource.contentType.matches("image/.*");
+
+      // 3) Any logged‐in user may delete an existing home‐image (once
+      //    they’ve fetched its URL). We rely on `resource` (not request.resource).
+      allow delete: if request.auth != null;
+    }
+
+
+
+    match /reviews/{productId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && fileName.matches('^' + request.auth.uid + '_.*')
+        && request.resource.size < 100 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null
+        && fileName.matches('^' + request.auth.uid + '_.*');
+    }
+
+    match /review_images/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.resource.size < 100 * 1024 * 1024;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+    
+   match /market_top_ads_banners/{fileName} {
+      allow read: if true;
+       allow write: if request.auth != null
+        && request.resource.size < 20 * 1024 * 1024 // Limit to 10MB
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
+    }
+    
+    match /temp_moderation/{userId}/{fileName} {
+  // Allow authenticated users to upload images temporarily for moderation
+  allow write: if request.auth != null
+               && request.auth.uid == userId
+               && request.resource.size < 10 * 1024 * 1024  // 10MB limit
+               && request.resource.contentType.matches('image/.*');
+  
+  // Allow users to read and delete their own temp files
+  allow read, delete: if request.auth != null && request.auth.uid == userId;
+}
+
+// Temporary moderation for shop images
+match /temp_moderation/{shopId}/{fileName} {
+  // Allow authenticated users to upload
+  allow write: if request.auth != null
+               && request.resource.size < 10 * 1024 * 1024
+               && request.resource.contentType.matches('image/.*');
+  
+  // Allow users to read and delete temp files
+  allow read, delete: if request.auth != null;
+}
+
+// Temporary moderation for shop-specific paths (collections, profile, etc.)
+match /temp_moderation/{type}/{shopId}/{fileName} {
+  // Allow authenticated users to upload
+  allow write: if request.auth != null
+               && request.resource.size < 10 * 1024 * 1024
+               && request.resource.contentType.matches('image/.*');
+  
+  // Allow users to read and delete temp files
+  allow read, delete: if request.auth != null;
+}
+  
+match /restaurants/{restaurantId}/{fileName} {
+  // Anyone can read restaurant profile images (needed for public app display)
+  allow read: if true;
+
+  // Only admins can upload/overwrite — images only, 20MB max
+  allow write: if request.auth != null
+               && request.auth.token.isAdmin == true
+               && request.resource.size < 20 * 1024 * 1024
+               && request.resource.contentType.matches('image/.*');
+
+  // Only admins can delete
+  allow delete: if request.auth != null
+                && request.auth.token.isAdmin == true;
+}  
+  
+
+    // Deny all other access by default.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }  
+}
+

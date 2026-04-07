@@ -1,0 +1,2454 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {  	  
+
+  
+function isAdmin() {
+  return request.auth != null
+    && request.auth.token.isAdmin == true;
+}
+
+function isSemiAdmin() {
+  return request.auth != null
+    && request.auth.token.isSemiAdmin == true;
+}
+
+match /pendingPayments/{orderNumber} {
+  allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+  allow write: if false;
+}
+
+match /trending_products/{trendingId} {
+  allow read: if true; // Anyone can read (including unauthenticated)
+}
+
+match /restaurant_banners/{bannerId} {
+  // Anyone can read — mobile app + web app both use public reads
+  allow read: if true;
+
+  // Only admins can create, update, or delete
+  allow create, update, delete: if isAdmin() || isSemiAdmin();
+}
+
+// Trending by category (optional)
+match /trending_by_category/{categoryId} {
+  allow read: if true;
+}
+
+// User personalized feeds
+match /user_profiles/{userId} {
+  allow read: if request.auth != null && request.auth.uid == userId;
+  
+  match /personalized_feed/{feedId} {
+    allow read: if request.auth != null && request.auth.uid == userId;
+  }
+}
+
+match /shop_notifications/{notificationId} {
+  // Read: authenticated shop members
+  allow read: if request.auth != null 
+              && resource.data.shopId is string
+              && isShopMember(resource.data.shopId);
+  
+  // Update: shop members can update isRead field
+  allow update: if request.auth != null 
+                && resource.data.shopId is string
+                && isShopMember(resource.data.shopId);
+  
+  allow create: if false;
+  allow delete: if false;
+}
+
+match /ad_notification_dismissals/{dismissalId} {
+  // Users can only read their own dismissals
+  allow read: if request.auth != null 
+              && request.auth.uid == resource.data.userId;
+  
+  // Users can only create dismissals for themselves
+  // Document ID must follow format: {userId}_{shopId}_{adId}
+  allow create: if request.auth != null 
+                && request.auth.uid == request.resource.data.userId
+                && dismissalId == request.auth.uid + '_' + request.resource.data.shopId + '_' + request.resource.data.adId
+                && request.resource.data.keys().hasAll(['userId', 'shopId', 'adId', 'dismissedAt'])
+                && request.resource.data.userId is string
+                && request.resource.data.shopId is string
+                && request.resource.data.adId is string
+                && request.resource.data.dismissedAt is timestamp;
+  
+  // Prevent updates and deletes - dismissals are permanent
+  allow update, delete: if false;
+}
+
+ match /users/{userId}/shops/{shopId}/settings/dismissedNotifications {
+    allow read, write: if request.auth != null && request.auth.uid == userId;
+  }
+
+match /users/{userId}/settings/dismissedNotifications {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+ match /users/{userId}/shops/{shopId}/settings/viewedNotifications {
+    allow read, write: if request.auth != null && request.auth.uid == userId;
+  }
+
+match /ad_submissions/{submissionId} {
+  // Allow everyone to read ad submissions
+  allow read: if true;
+  
+  // Allow shop members to create ad submissions for their shop
+  allow create: if request.auth != null
+                && request.resource.data.userId == request.auth.uid
+                && request.resource.data.shopId is string
+                && request.resource.data.shopName is string
+                && isShopMember(request.resource.data.shopId)
+                && request.resource.data.adType in ['topBanner', 'thinBanner', 'marketBanner']
+                && request.resource.data.duration in ['oneWeek', 'twoWeeks', 'oneMonth']
+                && request.resource.data.price is number
+                && request.resource.data.imageUrl is string
+                && request.resource.data.status == 'pending'
+                && request.resource.data.createdAt == request.time;  // ✅ Fixed for serverTimestamp
+  
+  // Allow only admins to update/delete (for approval/rejection workflow)
+  allow update, delete: if isAdmin() || isSemiAdmin();
+}
+
+match /boosted_rotation/boosted_slots {
+      allow read: if true;
+      allow write: if false; // Only Cloud Functions can write
+    }
+
+match /help-forms/{formId} {
+  // Allow authenticated users to create their own help forms
+  allow create: if request.auth != null
+                && request.resource.data.userId == request.auth.uid
+                && request.resource.data.displayName is string
+                && request.resource.data.email is string
+                && request.resource.data.description is string
+                && request.resource.data.status == 'pending'
+                && request.resource.data.createdAt is timestamp;
+  
+  // Allow users to read their own help forms
+  allow read: if request.auth != null 
+              && (resource.data.userId == request.auth.uid || isAdmin() || isSemiAdmin());
+  
+  // Allow only admins to update help forms (for status changes)
+  allow update: if isAdmin() || isSemiAdmin()
+                && request.resource.data.status in ['pending', 'resolved', 'in-progress']
+                && (!('adminNote' in request.resource.data) 
+                    || request.resource.data.adminNote is string);
+  
+  // Allow only admins to delete help forms
+  allow delete: if isAdmin();
+}
+
+match /category_shops/{categoryKey} {
+  // Allow everyone (including unauthenticated users) to read category shops
+  allow read: if true;
+  
+  // Allow only admins to create, update, or delete category shop indexes
+  allow create, update, delete: if isAdmin() || isSemiAdmin();
+}
+
+match /refund-forms/{formId} {
+  // Allow authenticated users to create their own refund forms
+  allow create: if request.auth != null
+                && request.resource.data.userId == request.auth.uid
+                && request.resource.data.displayName is string
+                && request.resource.data.email is string
+                && request.resource.data.receiptNo is string
+                && request.resource.data.description is string
+                && request.resource.data.status == 'pending'
+                && request.resource.data.createdAt is timestamp;
+  
+  // Allow users to read their own refund forms
+  allow read: if request.auth != null 
+              && (resource.data.userId == request.auth.uid || isAdmin() || isSemiAdmin());
+  
+  // Allow only admins to update refund forms (for approval/rejection)
+  allow update: if isAdmin() || isSemiAdmin()
+                && request.resource.data.status in ['pending', 'approved', 'rejected']
+                && (!('adminNote' in request.resource.data) 
+                    || request.resource.data.adminNote is string);
+  
+  // Allow only admins to delete refund forms
+  allow delete: if isAdmin();
+}
+
+match /pickup_points/{pointId} {
+  allow read: if true; // Allow public read for mobile app
+  allow write: if request.auth != null && (isAdmin() || isSemiAdmin());
+}
+
+// Product flows - Admin read/write, users read only
+match /product_flows/{flowId} {
+  allow read, write: if true; // Temporarily allow all access
+}
+
+// Flow sessions - Users can read/write their own sessions
+match /flow_sessions/{sessionId} {
+  allow read, write: if request.auth != null && 
+    request.auth.uid == resource.data.userId;
+  allow create: if request.auth != null && 
+    request.auth.uid == request.resource.data.userId;
+}
+
+// Flow analytics - Admin only
+match /flow_analytics/{analyticsId} {
+  allow read, write: if request.auth != null && isAdmin();
+}
+
+// Flow versions - Admin only
+match /flow_versions/{versionId} {
+  allow read, write: if request.auth != null && isAdmin();
+}
+
+match /shared_favorites/{shareId} {
+  // Allow authenticated users to create shared favorites
+  allow create: if request.auth != null
+                && request.resource.data.senderUid == request.auth.uid
+                && request.resource.data.senderName is string
+                && request.resource.data.basketName is string
+                && request.resource.data.favorites is list
+                && request.resource.data.createdAt is timestamp
+                && request.resource.data.expiresAt is timestamp;
+
+  // Allow anyone to read shared favorites (for importing)
+  allow read: if true;
+
+  // Prevent updates and deletes (optional - you might want to allow sender to delete)
+  allow update: if false;
+  allow delete: if request.auth != null && resource.data.senderUid == request.auth.uid;
+}
+
+match /market_screen_filters/{document} {
+  allow read: if true;
+  allow write: if request.auth != null && 
+    exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+}
+
+match /dynamic_product_lists/{document} {
+  // Allow everyone (even unauthenticated users) to read dynamic product lists
+  allow read: if true;
+  
+  // Allow only admins to create, update, or delete lists
+  allow create, update, delete: if isAdmin();
+}
+
+match /campaigns/{campaignId} {
+  // Allow everyone to read active campaigns
+  allow read: if resource.data.isActive == true;
+  
+  // Allow admins to read all campaigns (active and inactive)
+  allow read: if isAdmin();
+  
+  // Allow only admins to create, update, or delete campaigns
+  allow create, update, delete: if isAdmin() || isSemiAdmin();
+}
+
+match /bundles/{bundleId} {
+  // Allow everyone to read active bundles
+  allow read: if resource.data.isActive == true;
+  
+  // Allow shop members to read all their shop's bundles (including inactive)
+  allow read: if request.auth != null && isShopMember(resource.data.shopId);
+  
+  // Allow shop members to create bundles for their shop
+  allow create: if request.auth != null
+                && request.resource.data.shopId is string
+                && isShopMember(request.resource.data.shopId)
+                && request.resource.data.products is list
+                && request.resource.data.products.size() >= 2
+                && request.resource.data.products.size() <= 6
+                && request.resource.data.totalBundlePrice is number
+                && request.resource.data.totalOriginalPrice is number
+                && request.resource.data.discountPercentage is number
+                && request.resource.data.currency is string
+                && request.resource.data.createdAt is timestamp
+                && request.resource.data.isActive is bool;
+  
+  // Allow shop members to update their shop's bundles
+  allow update: if request.auth != null
+                && isShopMember(resource.data.shopId)
+                && request.resource.data.shopId == resource.data.shopId // Can't change shop
+                && request.resource.data.products is list
+                && request.resource.data.totalBundlePrice is number
+                && request.resource.data.totalOriginalPrice is number
+                && request.resource.data.discountPercentage is number;
+  
+  // Allow shop members to delete (soft delete by setting isActive to false is preferred)
+  allow delete: if request.auth != null && isShopMember(resource.data.shopId);
+  
+  // Allow admins full access
+  allow read, write: if isAdmin() || isSemiAdmin();
+}
+
+match /paused_shop_products/{productId} {
+  // Allow everyone to read paused shop products (same as active shop_products)
+  allow read: if true;
+  
+  // Allow shop members to create paused products
+  allow create: if request.auth != null
+                && request.resource.data.shopId is string
+                && isShopMember(request.resource.data.shopId);
+  
+  // Allow shop members to update paused products (for metrics, etc.)
+  allow update: if request.auth != null
+                && resource.data.shopId is string
+                && isShopMember(resource.data.shopId);
+  
+  // Allow shop members to delete paused products
+  allow delete: if request.auth != null
+               && resource.data.shopId is string
+               && isShopMember(resource.data.shopId);
+  
+  // Allow admins full access
+  allow read, write: if isAdmin() || isSemiAdmin();
+  
+  // Rules for subcollections under paused_shop_products (if needed)
+  match /reviews/{reviewId} {
+    allow read: if true;
+    allow create: if request.auth != null
+                  && request.resource.data.userId == request.auth.uid;
+    allow update: if request.auth != null && (
+      (request.writeFields.hasOnly(['likes']) 
+       && request.resource.data.likes is list)
+      || (resource.data.userId == request.auth.uid 
+          && !request.writeFields.hasAny(['likes']))
+    );
+    allow delete: if request.auth != null
+                  && resource.data.userId == request.auth.uid;
+  }
+  
+  match /product_questions/{questionId} {
+    allow read: if true;
+    allow create: if request.auth != null
+                  && request.resource.data.askerId == request.auth.uid;
+    allow update, delete: if request.auth != null
+      && (resource.data.askerId == request.auth.uid
+          || isShopMember(resource.data.sellerId)
+          || isAdmin() || isSemiAdmin());
+  }  
+ 
+ 
+}
+
+match /{path=**}/items/{itemId} {
+  allow read: if request.auth != null && (
+    // Allow sellers to read items they sold (for individual users)
+    (resource.data.shopId == null && request.auth.uid == resource.data.sellerId)
+    // Allow shop members to read items sold by their shop
+    || (resource.data.shopId != null && isShopMember(resource.data.shopId))
+    // Allow buyers to read items they bought
+    || request.auth.uid == resource.data.buyerId
+    || request.auth.uid == resource.data.gatheredBy
+  );
+}
+
+match /orders/{orderId} {
+  // Allow reads for buyers, distributors, and admins
+  allow read: if request.auth != null && (
+    request.auth.uid == resource.data.buyerId 
+    || request.auth.uid == resource.data.distributedBy
+    || isAdmin()
+    || isSemiAdmin()
+  );
+  
+  // Allow list queries for distributors to see their assigned orders
+  allow list: if request.auth != null && (
+    request.auth.uid == resource.data.buyerId 
+    || request.auth.uid == resource.data.distributedBy
+    || isAdmin()
+    || isSemiAdmin()
+  );
+  
+  // Only cloud functions can create orders
+  allow create: if false;
+  
+  // Super simplified update rule
+  allow update: if request.auth != null && (
+    isAdmin()
+    || request.auth.uid == resource.data.distributedBy
+  );
+  
+  allow delete: if false;
+  
+  // Items subcollection
+  match /items/{itemId} {
+    // Allow reads
+    allow read: if request.auth != null && (
+      request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.buyerId 
+      || request.auth.uid == resource.data.sellerId
+      || request.auth.uid == resource.data.gatheredBy
+      || request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.distributedBy
+      || isAdmin()
+      || isSemiAdmin()
+    );
+    
+    allow create: if false;
+    
+    // Super simplified update rule - just check if user is authorized
+    allow update: if request.auth != null && (
+      isAdmin()
+      || request.auth.uid == resource.data.sellerId
+      || request.auth.uid == resource.data.gatheredBy
+      || request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.buyerId
+    );
+    
+    allow delete: if false;
+  }
+}
+    
+    
+ // Global helper function to check if the requester is a shop member.
+function isShopMember(shopId) {
+  return request.auth != null
+    && request.auth.token.shops != null
+    && shopId in request.auth.token.shops;
+}
+
+function isRestaurantMember(restaurantId) {
+  return request.auth != null
+    && request.auth.token.restaurants != null
+    && restaurantId in request.auth.token.restaurants;
+}
+    
+    match /recommendations/{productId} {
+    // anyone (even unauthenticated) can read
+    allow get, list: if true;
+    // disallow all client‐side writes
+    allow create, update, delete: if false;
+  }  
+
+match /{anyPath=**}/product_questions/{questionId} {
+  allow read: if true;
+  allow create: if request.auth != null && request.resource.data.askerId == request.auth.uid;
+  allow update, delete: if request.auth != null
+    && (
+         resource.data.askerId == request.auth.uid           // the asker
+      || isAdmin()                                           // admins
+      // NOTE: for shop_products you’ll still want isShopMember, but if you
+      // include that here it’ll also apply to user-products.  If you need
+      // different logic per parent, see option #2 below.
+    );
+}
+
+ match /products/{productId}/product_questions/{questionId} {
+      allow read:  if true;
+      allow create: if request.auth != null
+                   && request.resource.data.askerId == request.auth.uid;
+      allow update, delete: if request.auth != null
+        && (
+             // the asker
+             resource.data.askerId == request.auth.uid
+             // the product’s owner (a normal user)
+          || resource.data.sellerId == request.auth.uid
+             // or an admin
+          || isAdmin()
+        );
+    }
+    
+   match /shop_products/{productId}/product_questions/{questionId} {
+      allow read:  if true;
+      allow create: if request.auth != null
+                   && request.resource.data.askerId == request.auth.uid
+                   /* + any other create-time checks you already had */;
+      allow update, delete: if request.auth != null
+        && (
+             // the asker can always edit/delete their own question
+             resource.data.askerId == request.auth.uid
+             // any member of that shop can reply or delete
+          || isShopMember(resource.data.sellerId)
+             // site admins too
+          || isAdmin()
+          || isSemiAdmin()
+        );
+    }
+    
+
+
+match /shop_products/{productId} {
+  // Allow everyone to read shop products.
+  allow read: if true;
+  
+  allow create: if request.auth != null
+                && request.resource.data.shopId is string
+                && request.resource.data.ownerId == request.resource.data.shopId
+                && (isShopMember(request.resource.data.shopId) || isAdmin() || isSemiAdmin());
+                
+                
+  
+function isShopMemberProductUpdate() {
+    let allowed = [
+      'productName', 'description', 'price', 'condition', 'brandModel',
+      'imageUrls', 'originalPrice', 'discountPercentage', 'quantity',
+      'sold', 'returnEligibility', 'deliveryOption', 'category',
+      'subcategory', 'searchIndex', 'modifiedAt', 'tags', 'colorImages',
+      'videoUrl', 'phone', 'email','colorQuantities', 'currency', 'campaign', 'campaignName', 'bundleId', 'bundleIds', 'bundlePrice', 'bundleDiscount', 'bundleData', 'maxQuantity', 'discountThreshold', 'bulkDiscountPercentage'
+    ];
+    return request.auth != null
+        && isShopMember(resource.data.shopId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+  }
+  
+function isIncrementingClickCountAnyUser() {
+  return request.writeFields.hasOnly([
+    'clickCount',
+    'metricsUpdatedAt'
+  ]) &&
+  // clickCount +1
+  request.resource.data.clickCount == resource.data.clickCount + 1 &&
+  // metricsUpdatedAt must be a server timestamp
+  request.resource.data.metricsUpdatedAt is timestamp;
+}
+
+// (1b) + metricsUpdatedAt when you reset dailyClickCount
+function isIncrementingClickCountWithResetAnyUser() {
+  return request.writeFields.hasOnly([
+    'clickCount',
+    'dailyClickCount',
+    'lastClickDate',
+    'metricsUpdatedAt'
+  ]) &&
+  // clickCount +1, dailyClickCount → 1
+  request.resource.data.clickCount      == resource.data.clickCount + 1 &&
+  request.resource.data.dailyClickCount == 1 &&
+  // lastClickDate must be stamped
+  request.resource.data.lastClickDate   is timestamp &&
+  // metricsUpdatedAt must be stamped
+  request.resource.data.metricsUpdatedAt is timestamp;
+}
+
+// (1c) + metricsUpdatedAt when you bump both counters
+function isIncrementingClickCountAndDailyClickCountAnyUser() {
+  return request.writeFields.hasOnly([
+    'clickCount',
+    'dailyClickCount',
+    'lastClickDate',
+    'metricsUpdatedAt'
+  ]) &&
+  // clickCount +1, dailyClickCount +1
+  request.resource.data.clickCount      == resource.data.clickCount + 1 &&
+  request.resource.data.dailyClickCount == resource.data.dailyClickCount + 1 &&
+  // lastClickDate must be stamped
+  request.resource.data.lastClickDate   is timestamp &&
+  // metricsUpdatedAt must be stamped
+  request.resource.data.metricsUpdatedAt is timestamp;
+}
+
+  
+   function isIncrementingImpressionCountAnyUser() {
+    return request.writeFields.hasOnly(['impressionCount']) &&
+           request.resource.data.impressionCount == resource.data.impressionCount + 1;
+  }
+  // let anyone increment boosted impressions
+  function isIncrementingBoostedImpressionCountAnyUser() {
+    return request.writeFields.hasOnly(['boostedImpressionCount']) &&
+           request.resource.data.boostedImpressionCount == resource.data.boostedImpressionCount + 1;
+  }
+  
+  function isUpdatingReviewStats() {
+    return request.writeFields.hasOnly(['reviewCount','averageRating'])
+      // ensure they only ever increment the count by one:
+      && request.resource.data.reviewCount == resource.data.reviewCount + 1
+      // and supply a numeric averageRating
+      && request.resource.data.averageRating is number;
+  }
+  
+  // Allow update and delete if the user is a shop member or admin.
+ allow update: if resource.data.shopId is string &&
+  (
+    // (1) any user stamping metricsUpdatedAt on clicks:
+    isIncrementingClickCountAnyUser()
+ || isIncrementingClickCountWithResetAnyUser()
+ || isIncrementingClickCountAndDailyClickCountAnyUser()
+	|| isShopMemberProductUpdate() 
+    // (2) raw impressionCount +1
+ || isIncrementingImpressionCountAnyUser()
+
+    // (3) boostedImpressionCount +1
+ || isIncrementingBoostedImpressionCountAnyUser()
+
+    // (4) Cart / Favorites updates (authenticated only):
+ || (
+    request.auth != null
+    && request.resource.data.diff(resource.data).affectedKeys()
+         .hasOnly(['cartCount','metricsUpdatedAt'])
+    && (
+         request.resource.data.cartCount == resource.data.cartCount + 1
+      || request.resource.data.cartCount == resource.data.cartCount - 1
+       )
+    && request.resource.data.metricsUpdatedAt is timestamp
+  )
+|| (
+    request.auth != null
+    && request.resource.data.diff(resource.data).affectedKeys()
+         .hasOnly(['favoritesCount','metricsUpdatedAt'])
+    && (
+         request.resource.data.favoritesCount == resource.data.favoritesCount + 1
+      || request.resource.data.favoritesCount == resource.data.favoritesCount - 1
+       )
+    && request.resource.data.metricsUpdatedAt is timestamp
+  )
+|| (
+    request.auth != null
+    && request.resource.data.diff(resource.data).affectedKeys()
+         .hasOnly(['cartCount','favoritesCount','metricsUpdatedAt'])
+    && (
+         request.resource.data.cartCount      == resource.data.cartCount      + 1
+      || request.resource.data.cartCount      == resource.data.cartCount      - 1
+       )
+    && (
+         request.resource.data.favoritesCount == resource.data.favoritesCount + 1
+      || request.resource.data.favoritesCount == resource.data.favoritesCount - 1
+       )
+    && request.resource.data.metricsUpdatedAt is timestamp
+  )
+
+    // (5) review stats bump
+ || ( request.auth != null && isUpdatingReviewStats() )
+
+ 
+  );
+
+ 
+  match /detailViews/{viewId} {
+  // Allow any authenticated user to create a detail-page-view record,
+  // ensuring the recorded userId matches the authenticated user's UID.
+  allow create: if request.auth != null
+                && request.resource.data.userId == request.auth.uid;
+  
+  // Optionally restrict read access to admins.
+  allow read: if isAdmin();
+
+  // Prevent updates or deletions once a detail-view record is created.
+  allow update, delete: if false;
+}
+
+match /reviews/{reviewId} {
+    // Anyone can read reviews
+    allow read: if true;
+    
+    // Allow authenticated users to create reviews
+    allow create: if request.auth != null
+                  && request.resource.data.userId == request.auth.uid
+                  && request.resource.data.rating is number
+                  && request.resource.data.rating >= 1 
+                  && request.resource.data.rating <= 5
+                  && request.resource.data.review is string
+                  && request.resource.data.timestamp <= request.time;
+    
+    // Allow updates for likes OR owner editing their review
+    allow update: if request.auth != null && (
+      // Case 1: Any authenticated user can like/unlike (only 'likes' field)
+      (request.writeFields.hasOnly(['likes']) 
+       && request.resource.data.likes is list)
+      
+      // Case 2: Review author can update their own review content (but not likes)
+      || (resource.data.userId == request.auth.uid 
+          && !request.writeFields.hasAny(['likes'])
+          && request.resource.data.rating is number
+          && request.resource.data.rating >= 1 
+          && request.resource.data.rating <= 5
+          && request.resource.data.review is string)
+    );
+    
+    // Allow review author to delete their own review
+    allow delete: if request.auth != null
+                  && resource.data.userId == request.auth.uid;
+  }
+  }
+
+
+match /shopInvitations/{invitationId} {
+  allow create: if request.auth != null
+                && isShopMember(request.resource.data.shopId)
+                && request.resource.data.senderId == request.auth.uid
+                && (request.resource.data.role == 'co-owner' ||
+                    request.resource.data.role == 'editor' ||
+                    request.resource.data.role == 'viewer');
+                    
+  allow read: if request.auth != null &&
+            (isShopMember(resource.data.shopId) || 
+             request.auth.uid == resource.data.userId ||
+             isAdmin());
+              
+  // Modified: Allow update and delete if:
+  // • the user is an admin, or
+  // • the user is either the sender or the invitee (resource.data.userId)
+  // and the invitation status is 'pending'
+  allow update, delete: if isAdmin() ||
+                           (request.auth != null &&
+                           (request.auth.uid == resource.data.senderId ||
+                            request.auth.uid == resource.data.userId) &&
+                           resource.data.status == 'pending');
+}
+
+match /restaurantInvitations/{invitationId} {
+  allow create: if request.auth != null
+                && isRestaurantMember(request.resource.data.shopId)
+                && request.resource.data.senderId == request.auth.uid
+                && (request.resource.data.role == 'co-owner' ||
+                    request.resource.data.role == 'editor' ||
+                    request.resource.data.role == 'viewer');
+                    
+ allow read: if request.auth != null &&
+            (isRestaurantMember(resource.data.shopId) || 
+             request.auth.uid == resource.data.userId ||
+             isAdmin());
+              
+  // Modified: Allow update and delete if:
+  // • the user is an admin, or
+  // • the user is either the sender or the invitee (resource.data.userId)
+  // and the invitation status is 'pending'
+  allow update, delete: if isAdmin() ||
+                           (request.auth != null &&
+                           (request.auth.uid == resource.data.senderId ||
+                            request.auth.uid == resource.data.userId) &&
+                           resource.data.status == 'pending');
+}
+
+match /market_banners/{bannerId} {
+  // Anyone can read banners
+  allow read: if true;
+  
+  // Allow admins to write
+  allow write: if isAdmin() || isSemiAdmin();
+  
+  // Allow shop members to read their shop's ad analytics
+  allow get: if request.auth != null && (
+    isAdmin() 
+    || (get(/databases/$(database)/documents/market_banners/$(bannerId)).data.shopId != null
+        && isShopMember(get(/databases/$(database)/documents/market_banners/$(bannerId)).data.shopId))
+  );
+  
+  // Subcollections
+  match /clicks/{clickId} {
+    // Allow shop members to read clicks for their ads
+    allow read: if request.auth != null && (
+      isAdmin()
+      || (get(/databases/$(database)/documents/market_banners/$(bannerId)).data.shopId != null
+          && isShopMember(get(/databases/$(database)/documents/market_banners/$(bannerId)).data.shopId))
+    );
+    
+    // Only Cloud Functions can write
+    allow write: if false;
+  }
+  
+  match /daily_snapshots/{snapshotId} {
+    // Allow shop members to read snapshots for their ads
+    allow read: if request.auth != null && (
+      isAdmin()
+      || (get(/databases/$(database)/documents/market_banners/$(bannerId)).data.shopId != null
+          && isShopMember(get(/databases/$(database)/documents/market_banners/$(bannerId)).data.shopId))
+    );
+    
+    // Only Cloud Functions can write
+    allow write: if false;
+  }
+}
+
+match /market_top_ads_banners/{bannerId} {
+  // Anyone can read banners
+  allow read: if true;
+  
+  // Allow admins to write
+  allow write: if isAdmin() || isSemiAdmin();
+  
+  // Allow shop members to read their shop's ad analytics
+  allow get: if request.auth != null && (
+    isAdmin() 
+    || (get(/databases/$(database)/documents/market_top_ads_banners/$(bannerId)).data.shopId != null
+        && isShopMember(get(/databases/$(database)/documents/market_top_ads_banners/$(bannerId)).data.shopId))
+  );
+  
+  // Subcollections
+  match /clicks/{clickId} {
+    allow read: if request.auth != null && (
+      isAdmin()
+      || (get(/databases/$(database)/documents/market_top_ads_banners/$(bannerId)).data.shopId != null
+          && isShopMember(get(/databases/$(database)/documents/market_top_ads_banners/$(bannerId)).data.shopId))
+    );
+    allow write: if false;
+  }
+  
+  match /daily_snapshots/{snapshotId} {
+    allow read: if request.auth != null && (
+      isAdmin()
+      || (get(/databases/$(database)/documents/market_top_ads_banners/$(bannerId)).data.shopId != null
+          && isShopMember(get(/databases/$(database)/documents/market_top_ads_banners/$(bannerId)).data.shopId))
+    );
+    allow write: if false;
+  }
+}
+
+match /market_thin_banners/{bannerId} {
+  // Anyone can read banners
+  allow read: if true;
+  
+  // Allow admins to write
+  allow write: if isAdmin() || isSemiAdmin();
+  
+  // Allow shop members to read their shop's ad analytics
+  allow get: if request.auth != null && (
+    isAdmin() 
+    || (get(/databases/$(database)/documents/market_thin_banners/$(bannerId)).data.shopId != null
+        && isShopMember(get(/databases/$(database)/documents/market_thin_banners/$(bannerId)).data.shopId))
+  );
+  
+  // Subcollections
+  match /clicks/{clickId} {
+    allow read: if request.auth != null && (
+      isAdmin()
+      || (get(/databases/$(database)/documents/market_thin_banners/$(bannerId)).data.shopId != null
+          && isShopMember(get(/databases/$(database)/documents/market_thin_banners/$(bannerId)).data.shopId))
+    );
+    allow write: if false;
+  }
+  
+  match /daily_snapshots/{snapshotId} {
+    allow read: if request.auth != null && (
+      isAdmin()
+      || (get(/databases/$(database)/documents/market_thin_banners/$(bannerId)).data.shopId != null
+          && isShopMember(get(/databases/$(database)/documents/market_thin_banners/$(bannerId)).data.shopId))
+    );
+    allow write: if false;
+  }
+}
+   
+
+    // *** Rules for 'shopApplications' Collection ***
+ match /shopApplications/{applicationId} {
+  // Allow read access to admins only
+  allow read: if isAdmin() || isSemiAdmin();
+
+  // Allow authenticated users to create a shop application
+  allow create: if request.auth != null
+                && request.resource.data.ownerId == request.auth.uid
+                && isValidApplication(request.resource.data);
+
+  // Allow the application owner to read their own application
+  allow get: if isApplicationOwner(resource.data.ownerId);
+
+  // Allow the application owner to update their application if it's still pending
+  allow update: if isApplicationOwner(resource.data.ownerId)
+                && resource.data.status == 'pending'
+                && isValidApplicationUpdate(request.resource.data);
+
+  // Disallow deletion unless by admin
+  allow delete: if isAdmin();
+
+  // Function to validate application data on creation
+  function isValidApplication(data) {
+    return data.ownerId == request.auth.uid
+           && data.name is string
+           && data.contactNo is string
+           && data.address is string
+           && data.categories is list
+           && data.categories.size() > 0
+           && data.businessType is string
+           && data.coverImageUrl is string
+           && data.profileImageUrl is string
+           && data.taxPlateCertificateUrl is string
+           && data.createdAt <= request.time
+           && data.status == 'pending';
+  }
+
+  // Function to validate application data on update
+  function isValidApplicationUpdate(data) {
+    return data.ownerId == request.auth.uid
+           && data.name is string
+           && data.contactNo is string
+           && data.address is string
+           && data.categories is list
+           && data.categories.size() > 0
+           && data.businessType is string
+           && data.coverImageUrl is string
+           && data.profileImageUrl is string
+           && data.taxPlateCertificateUrl is string
+           && data.status == 'pending';
+  }
+
+  // Helper function to check if the requester is the application owner
+  function isApplicationOwner(ownerId) {
+    return request.auth != null && request.auth.uid == ownerId;
+  }
+}
+
+match /restaurantApplications/{applicationId} {
+  allow read: if isAdmin() || isSemiAdmin();
+  allow create: if request.auth != null
+                && request.resource.data.ownerId == request.auth.uid
+                && isValidRestaurantApplication(request.resource.data);
+  allow get: if isApplicationOwner(resource.data.ownerId);
+  allow update: if isApplicationOwner(resource.data.ownerId)
+                && resource.data.status == 'pending'
+                && isValidRestaurantApplicationUpdate(request.resource.data);
+  allow delete: if isAdmin();
+
+function isValidRestaurantApplication(data) {
+  return data.ownerId == request.auth.uid
+         && data.name is string
+         && data.contactNo is string
+         && data.address is string
+         && data.businessType == 'restaurant'
+         && data.foodType is list
+         && data.foodType.size() > 0
+         && data.cuisineTypes is list
+         && data.cuisineTypes.size() > 0
+         && data.workingDays is list
+         && data.workingDays.size() > 0
+         && data.workingHours is map
+         && data.workingHours.open is string
+         && data.workingHours.close is string
+         && data.minOrderPrices is list        // ← add
+         && data.minOrderPrices.size() > 0    // ← add
+         && data.profileImageUrl is string
+         && data.taxPlateCertificateUrl is string
+         && data.latitude is number
+         && data.longitude is number
+         && data.createdAt is timestamp        // ← was: data.createdAt <= request.time
+         && data.status == 'pending';
+}
+
+function isValidRestaurantApplicationUpdate(data) {
+  return data.ownerId == request.auth.uid
+         && data.name is string
+         && data.contactNo is string
+         && data.address is string
+         && data.businessType == 'restaurant'
+         && data.foodType is list
+         && data.foodType.size() > 0
+         && data.cuisineTypes is list
+         && data.cuisineTypes.size() > 0
+         && data.workingDays is list
+         && data.workingDays.size() > 0
+         && data.workingHours is map
+         && data.workingHours.open is string
+         && data.workingHours.close is string
+         && data.profileImageUrl is string
+         && data.taxPlateCertificateUrl is string
+         && data.status == 'pending';
+}
+
+  function isApplicationOwner(ownerId) {
+    return request.auth != null && request.auth.uid == ownerId;
+  }
+}
+
+ match /marketApplications/{applicationId} {
+  // Allow read access to admins only
+  allow read: if isAdmin() || isSemiAdmin();
+
+  // Allow authenticated users to create a shop application
+  allow create: if request.auth != null
+                && request.resource.data.ownerId == request.auth.uid
+                && isValidApplication(request.resource.data);
+
+  // Allow the application owner to read their own application
+  allow get: if isApplicationOwner(resource.data.ownerId);
+
+  // Allow the application owner to update their application if it's still pending
+  allow update: if isApplicationOwner(resource.data.ownerId)
+                && resource.data.status == 'pending'
+                && isValidApplicationUpdate(request.resource.data);
+
+  // Disallow deletion unless by admin
+  allow delete: if isAdmin();
+
+  // Function to validate application data on creation
+  function isValidApplication(data) {
+    return data.ownerId == request.auth.uid
+           && data.name is string
+           && data.contactNo is string
+           && data.address is string
+           && data.categories is list
+           && data.categories.size() > 0
+           && data.businessType is string
+           && data.coverImageUrl is string
+           && data.profileImageUrl is string
+           && data.taxPlateCertificateUrl is string
+           && data.createdAt <= request.time
+           && data.status == 'pending';
+  }
+
+  // Function to validate application data on update
+  function isValidApplicationUpdate(data) {
+    return data.ownerId == request.auth.uid
+           && data.name is string
+           && data.contactNo is string
+           && data.address is string
+           && data.categories is list
+           && data.categories.size() > 0
+           && data.businessType is string
+           && data.coverImageUrl is string
+           && data.profileImageUrl is string
+           && data.taxPlateCertificateUrl is string
+           && data.status == 'pending';
+  }
+
+  // Helper function to check if the requester is the application owner
+  function isApplicationOwner(ownerId) {
+    return request.auth != null && request.auth.uid == ownerId;
+  }
+}
+    
+match /product_applications/{applicationId} {
+  // Allow any authenticated user to create a product application if the userId matches
+  allow create: if request.auth != null 
+    && request.resource.data.userId == request.auth.uid;
+  
+  // Allow users to update ONLY upload-related fields on their own products
+  allow update: if request.auth != null 
+    && resource.data.userId == request.auth.uid
+    && onlyUpdatingUploadFields();
+  
+  // ✅ FIXED: Combined read rule - admins/semi-admins OR owners OR shop members
+  allow read: if request.auth != null 
+    && (
+      isAdmin() 
+      || isSemiAdmin()
+      || resource.data.userId == request.auth.uid 
+      || (resource.data.shopId != null && isShopMember(resource.data.shopId))
+    );
+  
+  // Allow admins and semi-admins to update any product application
+  allow update: if isAdmin() || isSemiAdmin();
+  
+  // Allow only full admins to delete
+  allow delete: if isAdmin();
+}
+
+match /vitrin_product_applications/{applicationId} {
+  // Allow any authenticated user to create a vitrin product application if the userId matches
+  // and shopId is null or not present (normal users only)
+  allow create: if request.auth != null 
+    && request.resource.data.userId == request.auth.uid
+    && (!('shopId' in request.resource.data) || request.resource.data.shopId == null);
+  
+  // Allow users to update ONLY upload-related fields on their own products
+  allow update: if request.auth != null 
+    && resource.data.userId == request.auth.uid
+    && onlyUpdatingUploadFields();
+  
+  // Allow users to read their own applications, admins can read all
+  allow read: if request.auth != null 
+    && (
+      isAdmin() 
+      || isSemiAdmin()
+      || resource.data.userId == request.auth.uid
+    );
+  
+  // Allow admins and semi-admins to update any application
+  allow update: if isAdmin() || isSemiAdmin();
+  
+  // Allow only full admins to delete
+  allow delete: if isAdmin();
+}
+
+match /vitrin_edit_product_applications/{editApplicationId} {
+  // Allow authenticated users to create edit applications for their own products
+  // and only if shopId is null or not present (normal users only)
+  allow create: if request.auth != null 
+    && request.resource.data.userId == request.auth.uid
+    && (!('shopId' in request.resource.data) || request.resource.data.shopId == null)
+    && request.resource.data.originalProductId is string
+    && request.resource.data.status == 'pending';
+  
+  // Allow users to read their own edit applications
+  allow read: if request.auth != null 
+    && (
+      isAdmin() 
+      || isSemiAdmin()
+      || resource.data.userId == request.auth.uid
+    );
+  
+  // Allow only admins to update and delete edit applications
+  allow update: if isAdmin() || isSemiAdmin();
+  allow delete: if isAdmin();
+}
+
+// ✅ NEW: Helper function to restrict which fields users can update
+function onlyUpdatingUploadFields() {
+  let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+  
+  // Only allow updating these specific fields during background upload
+  let allowedFields = [
+    'uploadStatus',      // Upload progress tracking
+    'imageUrls',         // Image URLs after upload
+    'videoUrl',          // Video URL after upload
+    'colorImages',       // Color variant images after upload
+    'status',            // Status change from 'processing' to 'pending'
+    'updatedAt'          // Timestamp
+  ].toSet();
+  
+  // Check that ONLY allowed fields are being updated
+  return affectedKeys.hasOnly(allowedFields);
+}
+
+match /product_edit_applications/{editApplicationId} {
+  // Allow authenticated users to create edit applications for their own products
+  allow create: if request.auth != null 
+                && request.resource.data.userId == request.auth.uid
+                && request.resource.data.originalProductId is string
+                && request.resource.data.editType in ['product_edit', 'archived_product_update']  // ✅ FIXED
+                && request.resource.data.status == 'pending';
+  
+  // Allow users to read their own edit applications OR shop members to read their shop's applications
+  allow read: if request.auth != null 
+              && (resource.data.userId == request.auth.uid 
+                  || isShopMember(resource.data.shopId)
+                  || isAdmin() || isSemiAdmin());
+  
+  // Allow only admins to update and delete edit applications
+  allow update: if isAdmin() || isSemiAdmin();
+  allow delete: if isAdmin();
+}
+      
+
+     // *** Rules for 'users' Collection ***
+    match /users/{userId} {
+      allow read: if true;
+      allow get, list: if true;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      
+    match /preferences/{preferenceId} {
+       allow read, write: if request.auth != null && request.auth.uid == userId;
+    }   
+    
+    match /foodReceipts/{receiptId} {
+  allow read: if request.auth != null && request.auth.uid == userId;
+  allow create: if false; // Cloud Functions only
+  allow update, delete: if false;
+}
+    
+    
+    match /referral/{referralDocId} {  
+  allow create, update: if request.auth != null && (    
+    (request.auth.uid == userId) ||
+    (request.auth.uid == referralDocId) ||    
+    isAdmin()
+  );
+
+  allow read: if request.auth != null && (
+    request.auth.uid == userId ||
+    isAdmin()
+  );
+
+}
+      
+      function isValidPreferences(preferences) {
+    return preferences is map;
+}
+
+ allow update: if request.auth != null && request.auth.uid == userId
+    && request.resource.data.diff(resource.data).affectedKeys()
+         .hasOnly(['agreementsAccepted', 'agreementAcceptedAt'])
+    && request.resource.data.agreementsAccepted is bool;
+
+allow update: if request.auth != null
+    && request.auth.uid == userId
+    && request.resource.data.diff(resource.data).affectedKeys()
+         .hasOnly(['gender', 'birthDate', 'languageCode', 'isNew'])
+    && (!('gender' in request.resource.data) || request.resource.data.gender is string)
+    && (!('birthDate' in request.resource.data) || request.resource.data.birthDate is timestamp)
+    && (!('languageCode' in request.resource.data) || request.resource.data.languageCode is string)
+    && (!('isNew' in request.resource.data) || request.resource.data.isNew is bool);
+
+// Rule 2: All other updatable fields with validations
+allow update: if request.auth != null 
+    && request.auth.uid == userId
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'sellerInfo',
+        'displayName',  
+        'email',
+        'phoneNumber',        
+        'preferences',
+        'fcmTokens',          
+        'isNew',          
+        'profileImage',
+        'coverImage',
+        'languageCode',
+        'recentlyShownProducts',
+        'lastRecommendationUpdate',
+        'gender',
+        'birthDate',
+        'twoFactorEnabled',
+        'twoFactorEnabledAt',
+        'twoFactorDisabledAt',
+        'lastTwoFactorVerification',
+        'updatedAt',
+        'foodAddress',
+        'cartItemIds',
+        'favoriteItemIds'
+    ])
+    // Validate sellerInfo
+    && (!('sellerInfo' in request.resource.data) 
+        || request.resource.data.sellerInfo == null 
+        || isValidSellerInfo(request.resource.data.sellerInfo))
+    // Validate other fields
+    && (!('languageCode' in request.resource.data) 
+        || (request.resource.data.languageCode is string 
+            && request.resource.data.languageCode in ['en','tr','ru']))
+    && (!('displayName' in request.resource.data) 
+        || request.resource.data.displayName is string)
+    && (!('email' in request.resource.data) 
+        || (request.resource.data.email is string 
+            && request.resource.data.email.matches('^[^@]+@[^@]+\\.[^@]+$')))
+   && (!('profileImage' in request.resource.data) 
+    || request.resource.data.profileImage == null
+    || (request.resource.data.profileImage is string 
+        && request.resource.data.profileImage.matches('^https?://.+')))
+    && (!('phoneNumber' in request.resource.data) 
+        || request.resource.data.phoneNumber == null 
+        || request.resource.data.phoneNumber is string)
+    && (!('twoFactorEnabled' in request.resource.data) 
+        || request.resource.data.twoFactorEnabled is bool)
+    && (!('twoFactorEnabledAt' in request.resource.data) 
+        || request.resource.data.twoFactorEnabledAt is timestamp)
+    && (!('twoFactorDisabledAt' in request.resource.data) 
+        || request.resource.data.twoFactorDisabledAt is timestamp)
+    && (!('lastTwoFactorVerification' in request.resource.data) 
+        || request.resource.data.lastTwoFactorVerification is timestamp)
+    && (!('updatedAt' in request.resource.data) 
+        || request.resource.data.updatedAt is timestamp)
+    && (!('preferences' in request.resource.data) 
+        || isValidPreferences(request.resource.data.preferences))
+    && (!('foodAddress' in request.resource.data)
+          || request.resource.data.foodAddress is map)
+    && (!('fcmTokens' in request.resource.data) 
+    || request.resource.data.fcmTokens is map)
+    && (!('coverImage' in request.resource.data) 
+    || request.resource.data.coverImage == null
+    || (request.resource.data.coverImage is string 
+        && request.resource.data.coverImage.matches('^https?://.+')))
+    && (!('isNew' in request.resource.data) 
+        || request.resource.data.isNew is bool)
+    && (!('referralCode' in request.resource.data) 
+        || request.resource.data.referralCode is string)
+    && (!('isVerified' in request.resource.data) 
+        || request.resource.data.isVerified is bool)
+    && (!('gender' in request.resource.data) 
+        || request.resource.data.gender is string)
+    && (!('birthDate' in request.resource.data) 
+        || request.resource.data.birthDate is timestamp)
+    && (!('referrerId' in request.resource.data) 
+        || request.resource.data.referrerId is string);
+        
+allow update: if request.auth != null 
+    && request.auth.uid == userId
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens'])
+    && request.resource.data.fcmTokens is map;
+    
+allow update: if request.auth != null
+    && request.auth.uid == userId
+    && request.resource.data.diff(resource.data).affectedKeys()
+         .hasOnly(['foodAddress'])
+    && request.resource.data.foodAddress is map;
+
+// Rule 3: Admin override
+allow update: if isAdmin();
+  
+
+  
+    // *** Rules for 'boostHistory' subcollection ***
+  match /boostHistory/{docId} {
+    // For example, allow read/write if user is the owner or admin
+    allow read, write: if request.auth != null
+      && (request.auth.uid == userId || isAdmin());
+  }  
+
+
+
+      // Allow delete by the user themselves or admin
+      allow delete: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      
+function isValidSellerInfo(sellerInfo) {
+  return sellerInfo is map
+         && sellerInfo.keys().hasOnly([
+              'phone',
+              'latitude',
+              'longitude',
+              'address',
+              'ibanOwnerName',
+              'ibanOwnerSurname',
+              'iban'
+            ])
+         && sellerInfo.phone is string
+         && sellerInfo.latitude is number
+         && sellerInfo.longitude is number
+         && sellerInfo.address is string
+         && sellerInfo.ibanOwnerName is string
+         && sellerInfo.ibanOwnerSurname is string
+         && sellerInfo.iban is string;
+}  
+
+      // *** Rules for 'notifications' subcollection under 'users' collection ***
+    match /notifications/{notificationId} {
+       allow read: if request.auth != null 
+                  && (request.auth.uid == userId || isAdmin());
+
+      allow create: if request.auth != null
+                    && (request.resource.data.userId == userId || isAdmin())
+                    
+
+      allow update: if request.auth != null 
+                    && (request.auth.uid == userId || isAdmin());
+
+      allow delete: if request.auth != null 
+                    && (request.auth.uid == userId || isAdmin());
+    } 
+    
+    // *** Rules for 'coupons' subcollection under 'users' collection ***
+match /coupons/{couponId} {
+  // Users can read their own coupons
+  allow read: if request.auth != null && request.auth.uid == userId;
+  
+  // Users can update their own coupons (for marking as used)
+ allow update: if request.auth != null 
+    && request.auth.uid == userId
+    && request.resource.data.diff(resource.data).affectedKeys()
+         .hasOnly(['isUsed', 'usedAt', 'orderId'])
+    && request.resource.data.isUsed == true
+    && request.resource.data.usedAt is timestamp
+    && request.resource.data.orderId is string;
+  
+  // Only Cloud Functions (admin) can create or delete coupons
+  allow create, delete: if false;
+}
+
+// *** Rules for 'benefits' subcollection under 'users' collection ***
+match /benefits/{benefitId} {
+  // Users can read their own benefits
+  allow read: if request.auth != null && request.auth.uid == userId;
+  
+  // Users can update their own benefits (for marking as used)
+  allow update: if request.auth != null 
+    && request.auth.uid == userId
+    && request.resource.data.diff(resource.data).affectedKeys()
+         .hasOnly(['isUsed', 'usedAt', 'orderId'])
+    && request.resource.data.isUsed == true
+    && request.resource.data.usedAt is timestamp
+    && request.resource.data.orderId is string;
+  
+  // Only Cloud Functions (admin) can create or delete benefits
+  allow create, delete: if false;
+}
+    
+     match /following/{followedUserId} {  
+   // 1) Anyone in “userId” may read their own following list:
+    allow read: if request.auth != null
+                 && request.auth.uid == userId;
+
+    allow create, update: if request.auth != null
+                         && request.auth.uid == userId
+                         && request.resource.data.followedUserId == followedUserId
+                         && request.resource.data.timestamp is timestamp;
+
+    allow delete: if request.auth != null
+                   && request.auth.uid == userId
+                   && resource.data.followedUserId == followedUserId;
+}
+    
+ 
+ // *** Rules for 'foodCart' Subcollection under 'users' collection ***
+      // Food cart items — completely independent from product cart
+      match /foodCart/{foodCartItemId} {
+        // Allow authenticated users to read their own food cart
+        allow read: if request.auth != null && request.auth.uid == userId;
+
+        // Allow authenticated users to create food cart items with validation
+        allow create: if request.auth != null
+                      && request.auth.uid == userId
+                      && request.resource.data.name is string
+                      && request.resource.data.name != ""
+                      && request.resource.data.price is number
+                      && request.resource.data.price >= 0
+                      && request.resource.data.quantity is number
+                      && request.resource.data.quantity >= 1
+                      && request.resource.data.restaurantId is string
+                      && request.resource.data.restaurantId != ""
+                      && request.resource.data.restaurantName is string
+                      && request.resource.data.foodCategory is string
+                      && request.resource.data.foodType is string
+                      && request.resource.data.extras is list
+                      && request.resource.data.addedAt == request.time;
+
+        // Allow authenticated users to update their own food cart items
+        // Only allow updating quantity, extras, and specialNotes (not price or restaurant)
+        allow update: if request.auth != null
+                      && request.auth.uid == userId
+                      && request.resource.data.restaurantId == resource.data.restaurantId
+                      && request.resource.data.price == resource.data.price
+                      && request.resource.data.name == resource.data.name
+                      && (
+                        // Case 1: Quantity-only update
+                        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['quantity'])
+                         && request.resource.data.quantity is number
+                         && request.resource.data.quantity >= 1)
+                        // Case 2: Extras-only update
+                        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['extras'])
+                            && request.resource.data.extras is list)
+                        // Case 3: Special notes-only update
+                        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['specialNotes'])
+                            && request.resource.data.specialNotes is string)
+                        // Case 4: Multiple fields at once (edit from extras sheet)
+                        || (request.resource.data.diff(resource.data).affectedKeys()
+                              .hasOnly(['quantity', 'extras', 'specialNotes'])
+                            && request.resource.data.quantity is number
+                            && request.resource.data.quantity >= 1
+                            && request.resource.data.extras is list
+                            && request.resource.data.specialNotes is string)
+                      );
+
+        // Allow authenticated users to delete their own food cart items
+        allow delete: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      // Food cart meta — stores current restaurant info for the food cart
+match /foodCartMeta/{metaDoc} {
+  allow read, write: if request.auth != null && request.auth.uid == userId;
+}
+
+      // *** Rules for 'followers' subcollection under 'users' collection ***
+     match /followers/{followerId} {
+  // Allow anyone to read followers
+  allow read: if true;
+
+  
+  allow create: if request.auth != null && (
+                    request.auth.uid == userId ||          // User being followed
+                    request.auth.uid == followerId ||      // User doing the following
+                    isAdmin()                              // Admin
+                  )
+                  && request.resource.data.userId == followerId
+                  && request.resource.data.timestamp is timestamp;
+
+  
+  allow delete: if request.auth != null && (
+                    request.auth.uid == userId ||          // User being followed
+                    request.auth.uid == followerId ||      // User doing the unfollowing
+                    isAdmin()                              // Admin
+                  )
+                  && resource.data.userId == followerId;
+}
+
+      // *** Rules for 'reports' subcollection under 'users' collection ***
+      match /reports/{reportId} {
+        // Allow authenticated users to create a report
+        allow create: if request.auth != null
+                      && request.resource.data.reporterId == request.auth.uid
+                      && request.resource.data.reportType is string
+                      && request.resource.data.timestamp == request.time;
+
+        // Allow admins to read reports
+        allow read: if isAdmin();
+
+        // Allow admins to update or delete reports
+        allow update, delete: if isAdmin();
+      }    
+
+      // *** Rules for 'cart' Subcollection under 'users' collection ***
+      match /cart/{cartItemId} {
+        // Allow authenticated users to read and write to their own 'cart' subcollection
+        allow read, write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      }    
+
+      // *** Rules for 'favoriteShops' subcollection under 'users' collection ***
+      match /favoriteShops/{shopId} {
+        allow read, write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      }
+
+      // *** Rules for 'reviews' subcollection under 'users' collection ***
+      match /reviews/{reviewId} {
+    // Anyone can read reviews
+    allow read: if true;
+
+    // Allow authenticated users to create reviews
+    allow create: if request.auth != null
+      && request.resource.data.userId == request.auth.uid
+      && request.resource.data.rating is number
+      && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+      && request.resource.data.review is string
+      && request.resource.data.timestamp <= request.time;
+
+    // ✅ FIXED: Allow likes + author updates (same as products)
+    allow update: if request.auth != null && (
+      // Case 1: Any authenticated user can like/unlike (only 'likes' field)
+      (request.writeFields.hasOnly(['likes']) 
+       && request.resource.data.likes is list)
+      
+      // Case 2: Review author can update their own review content (but not likes)
+      || (resource.data.userId == request.auth.uid 
+          && !request.writeFields.hasAny(['likes'])
+          && request.resource.data.rating is number
+          && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+          && request.resource.data.review is string)
+    );
+
+    // Allow review author to delete their own review
+    allow delete: if request.auth != null
+      && resource.data.userId == request.auth.uid;
+
+    // Allow admin to perform any operation
+    allow read, write: if isAdmin();
+  }
+
+       // Rules for 'paymentMethods' subcollection
+      match /paymentMethods/{paymentMethodId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      // Rules for 'addresses' subcollection
+      match /addresses/{addressId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      // Rules for 'receipts' subcollection
+      match /receipts/{receiptId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create: if false; // Disallow direct creation; handled via Cloud Functions
+        allow update, delete: if false; // Disallow updates and deletions
+      }
+      
+         match /favorites/{favoriteId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      // <<-- NEW: Favorite Baskets Rules (nested inside /users/{userId}) -->> 
+      match /favorite_baskets/{basketId} {
+        // Allow the authenticated user to read, create, update, and delete their own baskets.
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+        
+        // (Optional) Validate structure when creating a basket.
+        allow create: if request.resource.data.keys().hasOnly(['name', 'createdAt'])
+                         && request.resource.data.name is string
+                         && request.resource.data.createdAt is timestamp;
+        
+        // Nested favorites inside a basket.
+        match /favorites/{favoriteId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
+       }     
+     
+    }
+    
+
+match /verification_codes/{uid} {
+  allow read, write: if false;
+}
+
+// Eğer phone auth için ayrı oturumlar tutmuyorsan tamamen kapat:
+match /verification_sessions/{uid} {
+  allow read, write: if false;
+}
+
+// TOTP deneme sayaçları: client görmesin
+match /totp_attempts/{uid} {
+  allow read, write: if false;
+}
+
+// TOTP sırları: tamamen kapalı (users dışına taşıdık)
+match /user_secrets/{uid}/{path=**} {
+  allow read, write: if false;
+}
+
+// Mail pipeline’ı (Firestore Send Email extension vb.) sadece server kullanır
+match /mail/{docId} {
+  allow read, write: if false;
+} 
+ 
+
+    // *** Rules for 'products' Collection ***
+ match /products/{productId} {
+  // Allow read access to anyone
+  allow read: if true;
+
+  // Allow create if the user is authenticated and is listing their own product
+      allow create: if request.auth != null 
+                && (
+                  // User creating their own product
+                  (request.resource.data.userId == request.auth.uid
+                   && (request.resource.data.shopId == null || 
+                       exists(/databases/$(database)/documents/shops/$(request.resource.data.shopId))))
+                  // OR admin/semi-admin approving applications
+                  || isAdmin()
+                  || isSemiAdmin()
+                );
+                
+                  allow update: if request.auth != null
+    && resource.data.userId == request.auth.uid;
+                
+                function isValidDiscount() {
+  // Check *existing* doc final state:
+  let oldValid = (
+    !('discountPercentage' in resource.data)
+    || (
+      resource.data.discountPercentage is number
+      && resource.data.discountPercentage >= 0
+      && resource.data.discountPercentage <= 100
+    )
+  );
+
+  // Check *new* doc request:
+  let newValid = (
+    !('discountPercentage' in request.resource.data)
+    || (
+      request.resource.data.discountPercentage is number
+      && request.resource.data.discountPercentage >= 0
+      && request.resource.data.discountPercentage <= 100
+    )
+  );
+
+  return oldValid && newValid;
+}
+
+
+                
+                // Function to check allowed fields for product owner updates
+function isOwnerUpdatingAllowedFields() {
+  let allowedFields = [  	
+    'productName',
+    'description',
+    'price',
+    'condition',
+    'brandModel',
+    'imageUrls',
+    'originalPrice',
+    'discountPercentage',
+    'quantity',
+    'sold',
+    'returnEligibility',    
+    'deliveryOption',
+    'category',
+    'subcategory',
+    'searchIndex',
+    'modifiedAt',
+    'tags',
+    'colorImages',
+    'videoUrl',
+    'phone',
+    'email',
+    'iban',
+    'currency'
+  ];
+  // Ensure all fields being written are within the allowed fields
+  return allowedFields.hasAll(request.writeFields)
+   && isValidDiscount() // <= incorporate that check
+    
+    // Type check for 'price'
+    && (!('price' in request.resource.data) || request.resource.data.price is number)
+    // Type check for 'originalPrice'
+    && (!('originalPrice' in request.resource.data) || request.resource.data.originalPrice is number)  
+          
+}
+
+
+  // Function to check if the buyer is updating the product correctly
+  function isBuyerUpdatingProductCorrectly() {
+  return
+    request.writeFields.hasOnly([
+      'quantity', 'sold', 'purchaseCount'
+    ]) &&
+    (
+      resource.data.quantity != null ?
+        request.resource.data.quantity == resource.data.quantity - 1 &&
+        (request.resource.data.quantity == 0 ? request.resource.data.sold == true : true)
+      :
+        !('quantity' in request.resource.data) && !('sold' in request.resource.data)
+    ) &&
+    request.resource.data.purchaseCount == resource.data.purchaseCount + 1;
+}
+
+	function isIncrementingBoostedImpressionCountAnyUser() {
+  return request.writeFields.hasOnly(['boostedImpressionCount']) &&
+         request.resource.data.boostedImpressionCount == resource.data.boostedImpressionCount + 1;
+}
+  
+  function isIncrementingClickCountAnyUser() {
+  return request.writeFields.hasOnly(['clickCount','metricsUpdatedAt'])
+      && request.resource.data.clickCount      == resource.data.clickCount + 1
+      && request.resource.data.metricsUpdatedAt is timestamp;
+}
+function isIncrementingClickCountWithResetAnyUser() {
+  return request.writeFields.hasOnly(['clickCount','dailyClickCount','lastClickDate','metricsUpdatedAt'])
+      && request.resource.data.clickCount      == resource.data.clickCount + 1
+      && request.resource.data.dailyClickCount == 1
+      && request.resource.data.lastClickDate   is timestamp
+      && request.resource.data.metricsUpdatedAt is timestamp;
+}
+function isIncrementingClickCountAndDailyClickCountAnyUser() {
+  return request.writeFields.hasOnly(['clickCount','dailyClickCount','lastClickDate','metricsUpdatedAt'])
+      && request.resource.data.clickCount      == resource.data.clickCount + 1
+      && request.resource.data.dailyClickCount == resource.data.dailyClickCount + 1
+      && request.resource.data.lastClickDate   is timestamp
+      && request.resource.data.metricsUpdatedAt is timestamp;
+}
+
+  // Function to check if cart or favorites are updated correctly
+ function isUpdatingCartOrFavorites() {
+    return request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['cartCount','favoritesCount','metricsUpdatedAt'])
+      && request.resource.data.metricsUpdatedAt is timestamp &&
+           (request.resource.data.cartCount == resource.data.cartCount + 1 ||
+            request.resource.data.cartCount == resource.data.cartCount - 1 ||
+            request.resource.data.favoritesCount == resource.data.favoritesCount + 1 ||
+            request.resource.data.favoritesCount == resource.data.favoritesCount - 1);
+  }
+  
+  function isUpdatingReviewStats() {
+    return request.writeFields.hasOnly(['reviewCount','averageRating'])
+      // ensure they only ever increment the count by one:
+      && request.resource.data.reviewCount == resource.data.reviewCount + 1
+      // and supply a numeric averageRating
+      && request.resource.data.averageRating is number;
+  }
+
+    allow update: if (
+    
+    isIncrementingClickCountAnyUser()
+    || isIncrementingClickCountWithResetAnyUser()
+    || isIncrementingClickCountAndDailyClickCountAnyUser()    
+    || isIncrementingBoostedImpressionCountAnyUser()
+   
+    ||
+    
+    (request.auth != null && (
+    
+    (resource.data.userId == request.auth.uid && isOwnerUpdatingAllowedFields())    
+       
+    || isBuyerUpdatingProductCorrectly()    
+    || isAdmin()
+    || isSemiAdmin()
+    || isUpdatingCartOrFavorites()    
+    || isUpdatingReviewStats() 
+    ))
+  );
+   
+
+  // Allow delete if the user is authenticated and is the owner of the product
+  allow delete: if request.auth != null 
+                && resource.data.userId == request.auth.uid;
+  
+
+  // Function to validate shipping address
+  function isValidShippingAddress(address) {
+    return address is map &&
+      address.keys().hasOnly([
+        'addressLine1', 
+        'addressLine2', 
+        'city', 
+        'phoneNumber',
+        'country', 
+        'location'
+      ]) &&
+      address.addressLine1 is string &&
+      address.addressLine2 is string &&
+      address.city is string &&
+      address.phoneNumber is string &&
+      address.country is string &&
+      (!('location' in address) || address.location is latlng);
+  }
+
+match /detailViews/{viewId} {
+  // Allow any authenticated user to create a detail-page-view record,
+  // ensuring the recorded userId matches the authenticated user's UID.
+  allow create: if request.auth != null
+                && request.resource.data.userId == request.auth.uid;
+  
+  // Optionally restrict read access to admins.
+  allow read: if isAdmin();
+
+  // Prevent updates or deletions once a detail-view record is created.
+  allow update, delete: if false;
+}
+
+match /reviews/{reviewId} {
+    // Anyone can read reviews
+    allow read: if true;
+    
+    // Allow authenticated users to create reviews
+    allow create: if request.auth != null
+                  && request.resource.data.userId == request.auth.uid
+                  && request.resource.data.rating is number
+                  && request.resource.data.rating >= 1 
+                  && request.resource.data.rating <= 5
+                  && request.resource.data.review is string
+                  && request.resource.data.timestamp <= request.time;
+    
+    // Allow updates for likes OR owner editing their review
+    allow update: if request.auth != null && (
+      // Case 1: Any authenticated user can like/unlike (only 'likes' field)
+      (request.writeFields.hasOnly(['likes']) 
+       && request.resource.data.likes is list)
+      
+      // Case 2: Review author can update their own review content (but not likes)
+      || (resource.data.userId == request.auth.uid 
+          && !request.writeFields.hasAny(['likes'])
+          && request.resource.data.rating is number
+          && request.resource.data.rating >= 1 
+          && request.resource.data.rating <= 5
+          && request.resource.data.review is string)
+    );
+    
+    // Allow review author to delete their own review
+    allow delete: if request.auth != null
+                  && resource.data.userId == request.auth.uid;
+  }
+
+}
+
+                function isIncrementingFollowerCount() {
+  return request.auth != null
+      && request.writeFields.hasOnly(['followerCount'])
+      // only allow ±1
+      && (
+           request.resource.data.followerCount == resource.data.followerCount + 1
+        || request.resource.data.followerCount == resource.data.followerCount - 1
+         );
+}
+
+function isIncrementingClickCount() {
+  return request.auth != null
+      && request.writeFields.hasOnly(['clickCount'])
+      // only allow +1 (or if you want to allow resets: +1 or set to 0)
+      && request.resource.data.clickCount == resource.data.clickCount + 1;
+}
+
+function canIncrementReviewStats() {
+  return request.auth != null
+      && request.writeFields.hasOnly(['reviewCount','averageRating'])
+      // reviewCount must bump by +1
+      && request.resource.data.reviewCount == resource.data.reviewCount + 1
+      // averageRating must be a number (your transaction logic already computes the new average)
+      && request.resource.data.averageRating is number;
+}
+
+    // *** Rules for 'shops' Collection ***
+   match /shops/{shopId} {
+      // 1) Anyone can read a shop
+      allow read: if true;
+
+      // 2) Only the owner can create their shop doc
+      allow create: if request.auth != null
+                    && request.resource.data.ownerId == request.auth.uid;
+
+      // Replace BOTH allow update rules with this single combined rule:
+allow update: if request.auth != null && (
+  // Existing conditions
+  resource.data.ownerId == request.auth.uid
+  || isAdmin()
+  || canIncrementReviewStats()
+  || isIncrementingClickCount()
+ || (isShopMember(shopId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stockBadgeAcknowledged']))
+|| (isShopMember(shopId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['transactionsBadgeAcknowledged']))
+  || isIncrementingFollowerCount()
+  
+  // NEW: Allow any authenticated user to update metrics fields
+  || (
+    request.writeFields.hasAll(['metrics.totalCartAdditions', 'metrics.lastUpdated'])
+    && request.writeFields.size() == 2
+  )
+  || (
+    request.writeFields.hasAll(['metrics.totalFavoriteAdditions', 'metrics.lastUpdated']) 
+    && request.writeFields.size() == 2
+  )
+);
+      
+
+      
+      allow update: if request.auth != null
+        && isShopMember(shopId)
+        && request.writeFields.hasOnly([
+               'profileImageUrl',
+               'coverImageUrls',
+               'homeImageUrls'
+           ])
+        // Enforce correct types:
+        // • `profileImageUrl` (if present) must be a string
+        // • `coverImageUrls` (if present) must be a list of strings
+        // • `homeImageUrls`  (if present) must be a list of strings
+        && (
+             // If profileImageUrl is being updated, it must be a non‐empty string
+             (!('profileImageUrl' in request.resource.data)
+                || (request.resource.data.profileImageUrl is string))
+           )
+        && (
+             // If coverImageUrls is being updated, it must be a list of strings
+             (!('coverImageUrls' in request.resource.data)
+                || (request.resource.data.coverImageUrls is list
+                    && request.resource.data.coverImageUrls.size() > 0
+                    && request.resource.data.coverImageUrls[0] is string
+                  )
+               )
+           )
+        && (
+             // If homeImageUrls is being updated, it must be a list of strings
+             (!('homeImageUrls' in request.resource.data)
+  || (
+       request.resource.data.homeImageUrls is list
+       && request.resource.data.homeImageUrls.size() >= 0
+       && (
+            // if non-empty, at least check first element is a string
+            request.resource.data.homeImageUrls.size() == 0
+            || request.resource.data.homeImageUrls[0] is string
+          )
+     )
+)
+           );
+
+
+  allow delete: if request.auth != null
+                && resource.data.ownerId == request.auth.uid;
+
+  // Allow admin to perform any operation on shops
+  allow read: if isAdmin() || isSemiAdmin();   
+  allow write: if isAdmin();
+
+  match /seller_info/{infoId} {
+    // Allow reading the seller info if the user is a shop member.
+    allow read: if request.auth != null && isShopMember(shopId);
+
+    // Allow creation and updating if the user is a shop member and data is valid.
+    allow create, update: if request.auth != null 
+      && isShopMember(shopId)
+      && request.resource.data.keys().hasOnly([        'phone',         'region',         'address',         'ibanOwnerName',         'ibanOwnerSurname',         'iban'      ])
+      && request.resource.data.phone is string
+      && request.resource.data.region is string
+      && request.resource.data.address is string
+      && request.resource.data.ibanOwnerName is string
+      && request.resource.data.ibanOwnerSurname is string
+      && request.resource.data.iban is string;
+
+    // Allow deletion if the user is a shop member.
+    allow delete: if request.auth != null && isShopMember(shopId);
+  }
+
+  match /boostHistory/{docId} {
+    // Allow read access to shop members
+    allow read: if request.auth != null && isShopMember(shopId);
+    
+    // Allow write access to shop members
+    allow write: if request.auth != null && isShopMember(shopId);  
+    
+  } 
+  match /reviews/{reviewId} {
+    allow read: if true;
+
+    allow create: if request.auth != null
+                  && request.resource.data.userId == request.auth.uid
+                  && request.resource.data.rating is number
+                  && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+                  && request.resource.data.review is string
+                  && request.resource.data.timestamp <= request.time;
+
+    // ✅ FIXED: Allow likes + author updates
+    allow update: if request.auth != null && (
+      // Any user can like/unlike (only 'likes' field)
+      (request.writeFields.hasOnly(['likes']) 
+       && request.resource.data.likes is list)
+      
+      // Original author can update their own review content (but not likes)
+      || (resource.data.userId == request.auth.uid 
+          && !request.writeFields.hasAny(['likes'])
+          && request.resource.data.rating is number
+          && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+          && request.resource.data.review is string)
+    );
+
+    allow delete: if request.auth != null
+                  && resource.data.userId == request.auth.uid;
+
+    allow read: if isAdmin() || isSemiAdmin();
+    allow write: if isAdmin();
+  }
+  
+  match /collections/{collectionId} {
+  // Allow shop members (owner, co-owner, editor) to read collections
+  allow read: if true;
+  
+  // Allow shop members (owner, co-owner, editor) to create collections
+  allow create: if request.auth != null 
+                && isShopMember(shopId)
+                && request.resource.data.name is string
+                && request.resource.data.productIds is list
+                && request.resource.data.createdAt is timestamp
+                && request.resource.data.updatedAt is timestamp;
+  
+  // Allow shop members (owner, co-owner, editor) to update collections
+  allow update: if request.auth != null 
+                && isShopMember(shopId)
+                && request.resource.data.name is string
+                && request.resource.data.productIds is list
+                && request.resource.data.updatedAt is timestamp;
+  
+  // Allow shop members (owner, co-owner, editor) to delete collections
+  allow delete: if request.auth != null && isShopMember(shopId);
+  
+  // Allow admins to perform any operation on collections
+  allow read, write: if isAdmin() || isSemiAdmin();
+}
+
+match /reports/{reportId} {
+  // Allow shop members (owner, co-owner, editor) to read reports
+  allow read: if request.auth != null && (
+    isShopMember(shopId) || isAdmin() || isSemiAdmin()
+  );
+  
+  // Allow shop members (owner, co-owner, editor) to create reports
+  allow create: if request.auth != null && (
+    isShopMember(shopId) || isAdmin()
+  ) && isValidReportData();
+  
+  // Allow shop members (owner, co-owner, editor) to delete reports
+  allow delete: if request.auth != null && (
+    isShopMember(shopId) || isAdmin()
+  );
+  
+  // Optionally allow updates (if you want to support report editing later)
+  allow update: if request.auth != null && (
+    isShopMember(shopId) || isAdmin()
+  ) && isValidReportData();
+}
+
+// Add this helper function somewhere in your rules (outside of any match blocks):
+function isValidReportData() {
+  return request.resource.data.reportName is string
+         && request.resource.data.reportName != ""
+         && request.resource.data.createdAt is timestamp
+         && (
+           // At least one data type must be included
+           request.resource.data.includeProducts == true
+           || request.resource.data.includeOrders == true
+           || request.resource.data.includeBoostHistory == true
+         )
+         // Validate optional date range
+         && (
+           !('dateRange' in request.resource.data)
+           || request.resource.data.dateRange == null
+           || (
+             request.resource.data.dateRange is map
+             && request.resource.data.dateRange.start is timestamp
+             && request.resource.data.dateRange.end is timestamp
+             && request.resource.data.dateRange.start <= request.resource.data.dateRange.end
+           )
+         )
+         // Validate product filters (optional)
+         && (
+           !('productCategory' in request.resource.data)
+           || request.resource.data.productCategory == null
+           || request.resource.data.productCategory is string
+         )
+         && (
+           !('productSubcategory' in request.resource.data)
+           || request.resource.data.productSubcategory == null
+           || request.resource.data.productSubcategory is string
+         )
+         && (
+           !('productSubsubcategory' in request.resource.data)
+           || request.resource.data.productSubsubcategory == null
+           || request.resource.data.productSubsubcategory is string
+         )
+         // Validate report data (optional)
+         && (
+           !('reportData' in request.resource.data)
+           || request.resource.data.reportData is map
+         )
+         // Validate status (optional, defaults to 'completed' in your code)
+         && (
+           !('status' in request.resource.data)
+           || request.resource.data.status is string
+         );
+}
+
+match /receipts/{receiptId} {
+  // Allow shop members (owner, co-owner, editor) to read their shop's receipts
+  allow read: if request.auth != null && isShopMember(shopId);
+  
+  // Allow admins to read all receipts
+  allow read: if isAdmin() || isSemiAdmin();  
+  
+  // Receipts should generally not be updated or deleted by shop members
+  // Only allow these if absolutely necessary
+  allow update, delete: if false; // or restrict to admins only
+}
+
+}
+
+    // *** Rules for 'searches' Collection ***
+   match /searches/{searchId} {
+  // Allow creating your own search entries
+  allow create: if request.auth != null
+                && request.resource.data.userId == request.auth.uid
+                && request.resource.data.searchTerm is string
+                && request.resource.data.timestamp is timestamp;
+
+  // Allow each user to read only their own entries
+  allow read:   if request.auth != null
+                && resource.data.userId == request.auth.uid;
+
+  // Allow owners (and still admins) to delete their own history
+  allow delete: if request.auth != null
+                && (resource.data.userId == request.auth.uid || isAdmin());
+
+  // Keep update locked to admins only
+  allow update: if isAdmin();
+}
+    
+    // *** Rules for 'market_screen_active_users' Collection ***
+    match /market_screen_active_users/{presenceId} {
+      // Allow create and delete only through Cloud Functions (no direct client access)
+      allow create, delete: if false;
+
+      // Allow read access only to admins (optional)
+      allow read: if isAdmin();
+    } 
+
+match /{path=**}/reviews/{reviewId} {
+  // Allow anyone to read any review document
+  allow read: if true;
+  
+  // Allow authenticated users to like/unlike reviews OR update their own reviews
+  allow update: if request.auth != null && (
+    // Case 1: Any authenticated user can like/unlike (only 'likes' field)
+    (request.writeFields.hasOnly(['likes']) 
+     && request.resource.data.likes is list)
+    
+    // Case 2: Review author can update their own review content (but not likes)
+    || (resource.data.userId == request.auth.uid 
+        && !request.writeFields.hasAny(['likes'])
+        && request.resource.data.rating is number
+        && request.resource.data.rating >= 1 
+        && request.resource.data.rating <= 5
+        && request.resource.data.review is string)
+  );
+  
+  // Allow review author to delete their own review
+  allow delete: if request.auth != null
+               && resource.data.userId == request.auth.uid;
+}
+
+match /settings/{settingId} {
+  // Allow everyone to read settings (for delivery prices, app config, etc.)
+  allow read: if true;
+  
+  // Allow only admins to create, update, or delete settings
+  allow create, update, delete: if isAdmin() || isSemiAdmin();
+  
+  // Subcollection for history (if needed)
+  match /history/{historyId} {
+    allow read: if isAdmin() || isSemiAdmin();
+    allow write: if isAdmin() || isSemiAdmin();
+  }
+}
+
+match /app_config/{configId} {
+  // Allow everyone to read app configuration (including market layout)
+  allow read: if true;
+  
+  // Allow only admins to create, update, or delete app configuration
+  allow create, update, delete: if isAdmin();
+}
+
+match /config/{configId} {
+  // All authenticated users need to read search config
+  allow read: if request.auth != null;
+  
+  // Only admins can change search config
+  allow create, update, delete: if isAdmin();
+}
+
+match /_client_errors/{errorId} {
+  allow create: if request.auth != null;
+  allow read: if isAdmin() || isSemiAdmin();
+  allow update, delete: if false;
+}
+
+match /_payment_alerts/{alertId} {
+  allow read: if isAdmin() || isSemiAdmin();
+  allow write: if false;  // Only Cloud Functions write here
+}
+
+match /paused_products/{productId} {
+  // Allow anyone to read paused products
+  allow read: if true;
+  
+  // Allow product owner to create/update their own paused products
+  allow create: if request.auth != null 
+                && request.resource.data.userId == request.auth.uid;
+  
+  allow update: if request.auth != null
+                && resource.data.userId == request.auth.uid;
+  
+  // Allow product owner to delete (for unarchiving via client-side transaction)
+  allow delete: if request.auth != null 
+                && resource.data.userId == request.auth.uid;
+  
+  // Allow admins full access
+  allow read, write: if isAdmin() || isSemiAdmin();
+  
+  // Subcollections
+  match /reviews/{reviewId} {
+    allow read: if true;
+    allow create: if request.auth != null
+                  && request.resource.data.userId == request.auth.uid;
+    allow update: if request.auth != null && (
+      (request.writeFields.hasOnly(['likes']) 
+       && request.resource.data.likes is list)
+      || (resource.data.userId == request.auth.uid 
+          && !request.writeFields.hasAny(['likes']))
+    );
+    allow delete: if request.auth != null
+                  && resource.data.userId == request.auth.uid;
+  }
+  
+  match /product_questions/{questionId} {
+    allow read: if true;
+    allow create: if request.auth != null
+                  && request.resource.data.askerId == request.auth.uid;
+    allow update, delete: if request.auth != null
+      && (resource.data.askerId == request.auth.uid
+          || isAdmin() || isSemiAdmin());
+  }
+}
+
+match /foods/{foodId} {
+  // Anyone can read (for customer-facing app)
+  allow read: if true;
+
+  // Create: must be a member of the restaurant (via claims — zero reads)
+  allow create: if request.auth != null
+    && request.resource.data.restaurantId is string
+    && isRestaurantMember(request.resource.data.restaurantId);
+
+  // Update: must be a member, cannot change restaurantId
+  allow update: if request.auth != null
+    && isRestaurantMember(resource.data.restaurantId)
+    && request.resource.data.restaurantId == resource.data.restaurantId;
+
+  // Delete: must be a member
+  allow delete: if request.auth != null
+    && isRestaurantMember(resource.data.restaurantId);
+}
+  
+function isCargoCourier() {
+  return request.auth != null && request.auth.token.foodcargoguy == true;
+}
+
+function isValidCargoUpdate() {
+  let affected = request.resource.data.diff(resource.data).affectedKeys();
+
+  let isClaiming = resource.data.status == 'ready'
+    && request.resource.data.status == 'out_for_delivery'
+    && affected.hasOnly(['status', 'cargoUserId', 'cargoName', 'assignedAt', 'updatedAt'])
+    && request.resource.data.cargoUserId == request.auth.uid;
+
+  let isDelivering = resource.data.status == 'out_for_delivery'
+    && resource.data.cargoUserId == request.auth.uid
+    && request.resource.data.status == 'delivered'
+    && affected.hasOnly(['status', 'deliveredAt', 'updatedAt', 'needsReview']);
+
+    let isRecordingPayment = resource.data.status in ['out_for_delivery', 'delivered']
+    && resource.data.cargoUserId == request.auth.uid
+    && affected.hasOnly(['paymentReceivedMethod'])
+    && request.resource.data.paymentReceivedMethod in ['card', 'cash', 'iban'];
+
+  let isMarkingPickup = resource.data.status == 'out_for_delivery'
+    && resource.data.cargoUserId == request.auth.uid
+    && affected.hasOnly(['pickedUpFromRestaurant', 'pickedUpAt', 'updatedAt'])
+    && request.resource.data.pickedUpFromRestaurant == true
+    && request.resource.data.pickedUpAt is timestamp
+    && request.resource.data.updatedAt is timestamp;
+
+  return isClaiming || isDelivering || isRecordingPayment || isMarkingPickup;
+}
+
+match /orders-food/{orderId} {
+  allow read: if request.auth != null && (
+    isRestaurantMember(resource.data.restaurantId)
+    || request.auth.uid == resource.data.buyerId
+    || isCargoCourier()
+    || request.auth.token.masterCourier == true
+    || isAdmin() || isSemiAdmin()
+  );
+  allow update: if request.auth != null && (
+    isRestaurantMember(resource.data.restaurantId)
+    || request.auth.token.masterCourier == true
+    || isAdmin() || isSemiAdmin()
+    || (isCargoCourier() && isValidCargoUpdate())
+  );
+  allow create, delete: if request.auth != null && (
+    request.auth.token.masterCourier == true
+    || isAdmin()
+  );
+}
+match /restaurants/{restaurantId} {
+  allow read: if true;
+  allow create, delete: if false; // Cloud Functions only
+  
+  // ✅ Allow restaurant members to update settings
+  allow update: if request.auth != null
+    && isRestaurantMember(restaurantId)
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      'foodType',
+      'cuisineTypes',
+      'workingDays',
+      'workingHours',
+      'minOrderPrices',
+      'isActive'
+    ]);
+
+  // Admins can do anything
+  allow write: if isAdmin();
+
+  match /food-reviews/{reviewId} {
+    allow read: if true;
+    allow create, update, delete: if false; // Cloud Functions only
+  }
+    match /orderReceipts/{receiptId} {
+    allow read: if request.auth != null && (
+      isRestaurantMember(restaurantId)
+      || request.auth.token.masterCourier == true
+      || isAdmin()
+      || isSemiAdmin()
+    );
+    allow write: if false; // Cloud Functions only
+  }
+}
+
+
+
+// Restaurant notifications — restaurant owner can read + mark as read
+match /restaurant_notifications/{notifId} {
+  allow read: if request.auth != null && (
+    isRestaurantMember(resource.data.restaurantId)
+    || isAdmin() || isSemiAdmin()
+  );
+  allow update: if request.auth != null
+    && isRestaurantMember(resource.data.restaurantId)
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+}
+
+// Pending food payments — user can read their own, CF-only writes
+match /pendingFoodPayments/{paymentId} {
+  allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+  allow write: if false;
+}
+
+match /food_courier_notifications/{id} {
+  allow read: if request.auth != null && request.auth.token.foodcargoguy == true;
+  allow write: if false; // Cloud Functions only (admin SDK bypasses rules)
+}
+
+match /courier_notification_reads/{courierId} {
+  allow read, write: if request.auth != null 
+    && request.auth.uid == courierId
+    && request.auth.token.foodcargoguy == true;
+}
+
+match /courier_calls/{callId} {
+  // Couriers can read active calls
+  allow read: if request.auth != null 
+    && request.auth.token.foodcargoguy == true;
+  
+  // Couriers can update (to accept the call)
+  allow update: if request.auth != null 
+    && request.auth.token.foodcargoguy == true;
+  
+  // Cloud Functions only for create/delete
+  allow create, delete: if false;
+}
+
+match /courier_daily_stats/{docId} {
+  allow read: if request.auth != null && (
+    request.auth.token.masterCourier == true
+    || isAdmin()
+  );
+  allow write: if false;
+}
+
+match /courier_alltime_stats/{courierId} {
+  allow read: if request.auth != null && (
+    request.auth.token.masterCourier == true
+    || isAdmin()
+  );
+  allow write: if false;
+}
+
+match /food-accounting-daily/{docId} {
+  allow read: if request.auth != null && (
+    isAdmin() || isSemiAdmin()
+    || request.auth.token.masterCourier == true
+  );
+  allow write: if false; // Cloud Functions only
+}
+
+match /food-accounting-weekly/{docId} {
+  allow read: if request.auth != null && (
+    isAdmin() || isSemiAdmin()
+    || request.auth.token.masterCourier == true
+  );
+  allow write: if false; // Cloud Functions only
+}
+
+match /food-accounting-monthly/{docId} {
+  allow read: if request.auth != null && (
+    isAdmin() || isSemiAdmin()
+    || request.auth.token.masterCourier == true
+  );
+  allow write: if false; // Cloud Functions only
+}
+
+match /business-reports/{businessId} {
+  // Allow read if user is a member of this business (shop or restaurant)
+  allow read: if request.auth != null && (
+    isShopMember(businessId)
+    || isRestaurantMember(businessId)
+    || isAdmin()
+    || isSemiAdmin()
+  );
+  
+  // All writes go through Cloud Functions (Admin SDK)
+  allow write: if false;
+
+  match /reports/{reportId} {
+    allow read: if request.auth != null && (
+      isShopMember(businessId)
+      || isRestaurantMember(businessId)
+      || isAdmin()
+      || isSemiAdmin()
+    );
+    
+    allow write: if false;
+  }
+}
+
+match /{path=**}/food-reviews/{reviewId} {
+  allow read: if true;
+  allow write: if false; // Cloud Functions only
+}
+
+match /courier_actions/{actionId} {
+  // Couriers can create their own actions
+  allow create: if request.auth != null
+    && request.auth.token.foodcargoguy == true
+    && request.resource.data.courierId == request.auth.uid
+    && request.resource.data.type in ['pickup', 'deliver']
+    && request.resource.data.orderId is string
+    && request.resource.data.status == 'pending';
+
+  // Couriers can read their own actions (to listen for status updates)
+  allow read: if request.auth != null
+    && resource.data.courierId == request.auth.uid;
+
+  // Only Cloud Functions can update (to set completed/failed)
+  allow update, delete: if false;
+}
+
+
+    // Deny all other access by default
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
