@@ -13,6 +13,8 @@ import '../services/user_activity_service.dart';
 import '../services/lifecycle_aware.dart';
 import '../services/app_lifecycle_manager.dart';
 import '../user_provider.dart';
+import '../generated/l10n/app_localizations.dart';
+import '../main.dart';
 
 // ============================================================================
 // SIMPLIFIED RATE LIMITER (Prevents spam)
@@ -739,6 +741,18 @@ Future<String> addToCart({
 
    if (!_addToCartLimiter.canProceed('add_$productId')) {
     return 'Please wait before adding again';
+  }
+
+  // Cap check: block new items beyond 300, but allow updates to existing ones
+  if (!cartProductIdsNotifier.value.contains(productId) &&
+      cartProductIdsNotifier.value.length >= 300) {
+    debugPrint('⚠️ Cart limit reached (300). Blocking add for $productId');
+    final ctx = MyApp.navigatorKey.currentContext;
+    if (ctx != null) {
+      final l10n = AppLocalizations.of(ctx);
+      return l10n.cartLimitReached;
+    }
+    return 'Cart is full (max 300 items)';
   }
 
   // ✅ Validate before writing — fail fast with clear error

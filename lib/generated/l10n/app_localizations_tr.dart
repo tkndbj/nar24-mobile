@@ -15719,4 +15719,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get uploadOverlayDoNotClose => 'Lütfen uygulamayı kapatmayın';
+
+  @override
+  String get cartLimitReached =>
+      'Sepetiniz dolu (maksimum 300 ürün). Yeni ürün eklemek için bazı ürünleri kaldırın.';
+
+  @override
+  String get favoritesLimitReached =>
+      'Favori sınırına ulaştınız (maksimum 500). Yeni eklemek için bazılarını kaldırın.';
 }

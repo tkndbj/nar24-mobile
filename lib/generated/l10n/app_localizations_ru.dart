@@ -15791,4 +15791,12 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get uploadOverlayDoNotClose => 'Пожалуйста, не закрывайте приложение';
+
+  @override
+  String get cartLimitReached =>
+      'Корзина заполнена (максимум 300 товаров). Удалите некоторые товары, чтобы добавить новые.';
+
+  @override
+  String get favoritesLimitReached =>
+      'Достигнут лимит избранного (максимум 500). Удалите некоторые, чтобы добавить новые.';
 }

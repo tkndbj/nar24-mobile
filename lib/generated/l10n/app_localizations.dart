@@ -29945,6 +29945,18 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Lütfen uygulamayı kapatmayın'**
   String get uploadOverlayDoNotClose;
+
+  /// No description provided for @cartLimitReached.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sepetiniz dolu (maksimum 300 ürün). Yeni ürün eklemek için bazı ürünleri kaldırın.'**
+  String get cartLimitReached;
+
+  /// No description provided for @favoritesLimitReached.
+  ///
+  /// In tr, this message translates to:
+  /// **'Favori sınırına ulaştınız (maksimum 500). Yeni eklemek için bazılarını kaldırın.'**
+  String get favoritesLimitReached;
 }
 
 class _AppLocalizationsDelegate

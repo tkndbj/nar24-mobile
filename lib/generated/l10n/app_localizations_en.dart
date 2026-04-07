@@ -15690,4 +15690,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get uploadOverlayDoNotClose => 'Please don\'t close the app';
+
+  @override
+  String get cartLimitReached =>
+      'Your cart is full (max 300 items). Please remove some items before adding new ones.';
+
+  @override
+  String get favoritesLimitReached =>
+      'You\'ve reached the favorites limit (max 500). Please remove some before adding new ones.';
 }

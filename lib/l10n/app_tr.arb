@@ -6728,5 +6728,7 @@
     }
   },
   "uploadOverlaySavingToDatabase": "Veritabanına kaydediliyor…",
-  "uploadOverlayDoNotClose": "Lütfen uygulamayı kapatmayın"
+  "uploadOverlayDoNotClose": "Lütfen uygulamayı kapatmayın",
+  "cartLimitReached": "Sepetiniz dolu (maksimum 300 ürün). Yeni ürün eklemek için bazı ürünleri kaldırın.",
+  "favoritesLimitReached": "Favori sınırına ulaştınız (maksimum 500). Yeni eklemek için bazılarını kaldırın."
 }

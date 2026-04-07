@@ -512,6 +512,17 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
       return;
     }
 
+    // Cap check: block new favorites beyond 500, but allow removals
+    final alreadyFavorited = favoriteIdsNotifier.value.contains(productId);
+    if (!alreadyFavorited && favoriteIdsNotifier.value.length >= 500) {
+      debugPrint('⚠️ Favorites limit reached (500). Blocking add for $productId');
+      _favoriteLocks.remove(productId);
+      completer.complete();
+      final l10n = AppLocalizations.of(context);
+      _showWarningSnackbar(context, l10n.favoritesLimitReached);
+      return;
+    }
+
     final basketId = selectedBasketNotifier.value;
     final collection = basketId == null
         ? _firestore.collection('users').doc(user.uid).collection('favorites')
@@ -523,7 +534,7 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
             .collection('favorites');
 
     // Store previous state for rollback
-    final wasFavorited = favoriteIdsNotifier.value.contains(productId);
+    final wasFavorited = alreadyFavorited;
     bool isRemoving = false;
 
     try {
@@ -1395,6 +1406,26 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
     } catch (e) {
       debugPrint('Error showing success message: $e');
     }
+  }
+
+  void _showWarningSnackbar(BuildContext context, String message) {
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.orange,
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   void _showErrorSnackbar(BuildContext context, String message) {

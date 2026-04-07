@@ -117,48 +117,32 @@ for (let i = 0; i < productsWithCounts.length; i += CHUNK_SIZE) {
     // Worker function URL
     const functionUrl = `https://${location}-${project}.cloudfunctions.net/impressionqueueWorker`;
 
-    const enqueuedTasks = [];
+    const buildTask = (chunk) => ({
+      httpRequest: {
+        httpMethod: 'POST',
+        url: functionUrl,
+        headers: { 'Content-Type': 'application/json' },
+        body: Buffer.from(JSON.stringify({
+          data: { products: chunk, userGender, userAge, timestamp: Date.now() },
+        })).toString('base64'),
+        oidcToken: {
+          serviceAccountEmail: `${project}@appspot.gserviceaccount.com`,
+        },
+      },
+      dispatchDeadline: { seconds: 300 },
+    });
 
-    // Queue each chunk as a separate task
-    for (const chunk of chunks) {
-      try {
-        const payload = {
-          data: {
-            products: chunk,
-            userGender,
-            userAge,
-            timestamp: Date.now(),
-          },
-        };
+    const results = await Promise.allSettled(
+      chunks.map((chunk) => client.createTask({ parent: queuePath, task: buildTask(chunk) }))
+    );
 
-        const task = {
-          httpRequest: {
-            httpMethod: 'POST',
-            url: functionUrl,
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: Buffer.from(JSON.stringify(payload)).toString('base64'),
-            oidcToken: {
-              serviceAccountEmail: `${project}@appspot.gserviceaccount.com`,
-            },
-          },
-          dispatchDeadline: {
-            seconds: 300, // 5 minutes max execution (same as before)
-          },
-        };
-        
-        const [createdTask] = await client.createTask({
-          parent: queuePath,
-          task: task,
-        });
-        
-        enqueuedTasks.push(createdTask.name);
-      } catch (error) {
-        console.error('Failed to enqueue task:', error);
-        // Continue queuing other chunks even if one fails
-      }
-    }
+    const enqueuedTasks = results
+      .filter((r) => r.status === 'fulfilled')
+      .map((r) => r.value[0].name);
+
+    results
+      .filter((r) => r.status === 'rejected')
+      .forEach((r) => console.error('Failed to enqueue task:', r.reason));
 
     // Quick response to user
     return {
@@ -173,6 +157,11 @@ for (let i = 0; i < productsWithCounts.length; i += CHUNK_SIZE) {
 // ============================================================================
 // HTTP WORKER FUNCTION - Processes impressions in background
 // ============================================================================
+
+const chunkArray = (arr, size) =>
+  Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
+    arr.slice(i * size, i * size + size)
+  );
 
 export const impressionqueueWorker = onRequest(
   {
@@ -392,40 +381,41 @@ if (!Array.isArray(products) || products.length === 0) {
         // Update boost history
         const itemIds = userProducts.map((p) => p.itemId);
         const boostStartTimes = [...new Set(userProducts.map((p) => p.boostStartTime))];
-        
-        try {
-          const snapshot = await db
-            .collection('users')
-            .doc(userId)
-            .collection('boostHistory')
-            .where('itemId', 'in', itemIds.slice(0, 10))
-            .where('boostStartTime', 'in', boostStartTimes.slice(0, 10))
-            .get();
+        // O(1) lookup map — built once, used per doc
+        const userProductByItemId = new Map(userProducts.map((p) => [p.itemId, p]));
 
-            for (const doc of snapshot.docs) {
-              if (operationCount >= MAX_BATCH_SIZE) {
-                await commitBatch();
-              }
-            
-              const docData = doc.data();
-              const matchingProduct = userProducts.find((p) => p.itemId === docData.itemId);
-              
-              if (!matchingProduct) {
-                console.warn(`No matching product for boost history doc ${doc.id}`);
-                continue;
-              }
-            
-              batch.update(doc.ref, {
-                impressionsDuringBoost: admin.firestore.FieldValue.increment(matchingProduct.count),
-                totalImpressionCount: admin.firestore.FieldValue.increment(matchingProduct.count),
-                [`demographics.${gender}`]: admin.firestore.FieldValue.increment(matchingProduct.count),
-                [`viewerAgeGroups.${ageGroup}`]: admin.firestore.FieldValue.increment(matchingProduct.count),
-              });
-              operationCount++;
+        try {
+          const snapshots = await Promise.all(
+            chunkArray(itemIds, 30).flatMap((idChunk) =>
+              chunkArray(boostStartTimes, 30).map((timeChunk) =>
+                db.collection('users').doc(userId).collection('boostHistory')
+                  .where('itemId', 'in', idChunk)
+                  .where('boostStartTime', 'in', timeChunk)
+                  .get()
+              )
+            )
+          );
+          const allDocs = snapshots.flatMap((s) => s.docs);
+
+          for (const doc of allDocs) {
+            if (operationCount >= MAX_BATCH_SIZE) await commitBatch();
+
+            const matchingProduct = userProductByItemId.get(doc.data().itemId);
+            if (!matchingProduct) {
+              console.warn(`No matching product for boost history doc ${doc.id}`);
+              continue;
             }
+
+            batch.update(doc.ref, {
+              impressionsDuringBoost: admin.firestore.FieldValue.increment(matchingProduct.count),
+              totalImpressionCount: admin.firestore.FieldValue.increment(matchingProduct.count),
+              [`demographics.${gender}`]: admin.firestore.FieldValue.increment(matchingProduct.count),
+              [`viewerAgeGroups.${ageGroup}`]: admin.firestore.FieldValue.increment(matchingProduct.count),
+            });
+            operationCount++;
+          }
         } catch (error) {
           console.error(`Error updating user boost history for ${userId}:`, error);
-          // Continue processing other users
         }
       }
 
@@ -448,41 +438,42 @@ if (!Array.isArray(products) || products.length === 0) {
 
         // Update boost history
         const itemIds = shopProducts.map((p) => p.itemId);
-        const boostStartTimes = [...new Set(shopProducts.map((p) => p.boostStartTime))];        
+        const boostStartTimes = [...new Set(shopProducts.map((p) => p.boostStartTime))];
+        // O(1) lookup map — built once, used per doc
+        const shopProductByItemId = new Map(shopProducts.map((p) => [p.itemId, p]));
 
         try {
-          const snapshot = await db
-            .collection('shops')
-            .doc(shopId)
-            .collection('boostHistory')
-            .where('itemId', 'in', itemIds.slice(0, 10))
-            .where('boostStartTime', 'in', boostStartTimes.slice(0, 10))
-            .get();
+          const snapshots = await Promise.all(
+            chunkArray(itemIds, 30).flatMap((idChunk) =>
+              chunkArray(boostStartTimes, 30).map((timeChunk) =>
+                db.collection('shops').doc(shopId).collection('boostHistory')
+                  .where('itemId', 'in', idChunk)
+                  .where('boostStartTime', 'in', timeChunk)
+                  .get()
+              )
+            )
+          );
+          const allDocs = snapshots.flatMap((s) => s.docs);
 
-            for (const doc of snapshot.docs) {
-              if (operationCount >= MAX_BATCH_SIZE) {
-                await commitBatch();
-              }
-            
-              const docData = doc.data();
-              const matchingProduct = shopProducts.find((p) => p.itemId === docData.itemId);
-              
-              if (!matchingProduct) {
-                console.warn(`No matching product for boost history doc ${doc.id}`);
-                continue;
-              }
-            
-              batch.update(doc.ref, {
-                impressionsDuringBoost: admin.firestore.FieldValue.increment(matchingProduct.count),
-                totalImpressionCount: admin.firestore.FieldValue.increment(matchingProduct.count),
-                [`demographics.${gender}`]: admin.firestore.FieldValue.increment(matchingProduct.count),
-                [`viewerAgeGroups.${ageGroup}`]: admin.firestore.FieldValue.increment(matchingProduct.count),
-              });
-              operationCount++;
+          for (const doc of allDocs) {
+            if (operationCount >= MAX_BATCH_SIZE) await commitBatch();
+
+            const matchingProduct = shopProductByItemId.get(doc.data().itemId);
+            if (!matchingProduct) {
+              console.warn(`No matching product for boost history doc ${doc.id}`);
+              continue;
             }
+
+            batch.update(doc.ref, {
+              impressionsDuringBoost: admin.firestore.FieldValue.increment(matchingProduct.count),
+              totalImpressionCount: admin.firestore.FieldValue.increment(matchingProduct.count),
+              [`demographics.${gender}`]: admin.firestore.FieldValue.increment(matchingProduct.count),
+              [`viewerAgeGroups.${ageGroup}`]: admin.firestore.FieldValue.increment(matchingProduct.count),
+            });
+            operationCount++;
+          }
         } catch (error) {
           console.error(`Error updating shop boost history for ${shopId}:`, error);
-          // Continue processing other shops
         }
       }
 
@@ -5573,7 +5564,7 @@ function formatDateTime(date, lang = 'en') {
 
 // Sort functions
 function sortProducts(products, sortBy, descending) {
-  return products.sort((a, b) => {
+  return [...products].sort((a, b) => {
     let comparison = 0;
     switch (sortBy) {
     case 'date': {
@@ -5608,7 +5599,7 @@ function sortProducts(products, sortBy, descending) {
 }
 
 function sortOrders(orders, sortBy, descending) {
-  return orders.sort((a, b) => {
+  return [...orders].sort((a, b) => {
     let comparison = 0;
     switch (sortBy) {
     case 'date': {
@@ -5627,7 +5618,7 @@ function sortOrders(orders, sortBy, descending) {
 }
 
 function sortBoosts(boosts, sortBy, descending) {
-  return boosts.sort((a, b) => {
+  return [...boosts].sort((a, b) => {
     let comparison = 0;
     switch (sortBy) {
     case 'date': {
@@ -5711,13 +5702,12 @@ export const generatePDFReport = onCall(
         );
       }
 
-      // Get report configuration
-      const reportDoc = await admin.firestore()
-        .collection('shops')
-        .doc(shopId)
-        .collection('reports')
-        .doc(reportId)
-        .get();
+      // Get report config, user language, and shop info all in parallel
+      const [reportDoc, userDoc, shopDoc] = await Promise.all([
+        admin.firestore().collection('shops').doc(shopId).collection('reports').doc(reportId).get(),
+        admin.firestore().collection('users').doc(request.auth.uid).get(),
+        admin.firestore().collection('shops').doc(shopId).get(),
+      ]);
 
       if (!reportDoc.exists) {
         throw new functions.https.HttpsError(
@@ -5727,13 +5717,7 @@ export const generatePDFReport = onCall(
       }
 
       const config = reportDoc.data();
-
-      // Get user language preference
-      const userDoc = await admin.firestore().collection('users').doc(request.auth.uid).get();
       const userLang = userDoc.exists ? (userDoc.data().languageCode || 'en') : 'en';
-
-      // Get shop information
-      const shopDoc = await admin.firestore().collection('shops').doc(shopId).get();
       const shopName = shopDoc.exists ? (shopDoc.data().name || t(userLang, 'unknownShop')) : t(userLang, 'unknownShop');
 
       // Update report status to processing
@@ -5742,95 +5726,73 @@ export const generatePDFReport = onCall(
         processingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      // Collect data with pagination
-      const reportData = {};
+     // Collect data with pagination
+     const reportData = {};
 
-      // Collect products
-      if (config.includeProducts) {
-        let productsQuery = admin.firestore().collection('shop_products').where('shopId', '==', shopId);
+     // Helper: drain a batchQuery into a flat array
+     const collectAll = async (query) => {
+       const results = [];
+       for await (const batch of batchQuery(query)) {
+         results.push(...batch);
+       }
+       return results;
+     };
 
-        if (config.productCategory) {
-          productsQuery = productsQuery.where('category', '==', config.productCategory);
-        }
-        if (config.productSubcategory) {
-          productsQuery = productsQuery.where('subcategory', '==', config.productSubcategory);
-        }
-        if (config.productSubsubcategory) {
-          productsQuery = productsQuery.where('subsubcategory', '==', config.productSubsubcategory);
-        }
+     // Build queries only for requested sections
+     const buildProductsQuery = () => {
+       let q = admin.firestore().collection('shop_products').where('shopId', '==', shopId);
+       if (config.productCategory) q = q.where('category', '==', config.productCategory);
+       if (config.productSubcategory) q = q.where('subcategory', '==', config.productSubcategory);
+       if (config.productSubsubcategory) q = q.where('subsubcategory', '==', config.productSubsubcategory);
+       if (config.dateRange) {
+         q = q.where('createdAt', '>=', config.dateRange.start)
+              .where('createdAt', '<=', config.dateRange.end);
+       }
+       return q;
+     };
 
-        if (config.dateRange) {
-          productsQuery = productsQuery
-            .where('createdAt', '>=', config.dateRange.start)
-            .where('createdAt', '<=', config.dateRange.end);
-        }
+     const buildOrdersQuery = () => {
+       let q = admin.firestore().collectionGroup('items').where('shopId', '==', shopId);
+       if (config.dateRange) {
+         q = q.where('timestamp', '>=', config.dateRange.start)
+              .where('timestamp', '<=', config.dateRange.end);
+       }
+       return q;
+     };
 
-        const products = [];
-        for await (const batch of batchQuery(productsQuery)) {
-          products.push(...batch);
-        }
+     const buildBoostQuery = () => {
+       let q = admin.firestore().collection('shops').doc(shopId).collection('boostHistory');
+       if (config.dateRange) {
+         q = q.where('createdAt', '>=', config.dateRange.start)
+              .where('createdAt', '<=', config.dateRange.end);
+       }
+       return q;
+     };
 
-        reportData.products = sortProducts(
-          products,
-          config.productSortBy || 'date',
-          config.productSortDescending !== false,
-        );
-      }
+     // Fetch all requested sections in parallel
+     const [products, orders, boosts] = await Promise.all([
+       config.includeProducts     ? collectAll(buildProductsQuery()) : Promise.resolve(null),
+       config.includeOrders       ? collectAll(buildOrdersQuery())   : Promise.resolve(null),
+       config.includeBoostHistory ? collectAll(buildBoostQuery())    : Promise.resolve(null),
+     ]);
 
-      // Collect orders
-      if (config.includeOrders) {
-        let ordersQuery = admin.firestore().collectionGroup('items').where('shopId', '==', shopId);
+     if (products !== null) {
+       reportData.products = sortProducts(products, config.productSortBy || 'date', config.productSortDescending !== false);
+     }
+     if (orders !== null) {
+       reportData.orders = sortOrders(orders, config.orderSortBy || 'date', config.orderSortDescending !== false);
+     }
+     if (boosts !== null) {
+       reportData.boostHistory = sortBoosts(boosts, config.boostSortBy || 'date', config.boostSortDescending !== false);
+     }
 
-        if (config.dateRange) {
-          ordersQuery = ordersQuery
-            .where('timestamp', '>=', config.dateRange.start)
-            .where('timestamp', '<=', config.dateRange.end);
-        }
-
-        const orders = [];
-        for await (const batch of batchQuery(ordersQuery)) {
-          orders.push(...batch);
-        }
-
-        reportData.orders = sortOrders(
-          orders,
-          config.orderSortBy || 'date',
-          config.orderSortDescending !== false,
-        );
-      }
-
-      // Collect boost history
-      if (config.includeBoostHistory) {
-        let boostQuery = admin.firestore().collection('shops').doc(shopId).collection('boostHistory');
-
-        if (config.dateRange) {
-          boostQuery = boostQuery
-            .where('createdAt', '>=', config.dateRange.start)
-            .where('createdAt', '<=', config.dateRange.end);
-        }
-
-        const boosts = [];
-        for await (const batch of batchQuery(boostQuery)) {
-          boosts.push(...batch);
-        }
-
-        reportData.boostHistory = sortBoosts(
-          boosts,
-          config.boostSortBy || 'date',
-          config.boostSortDescending !== false,
-        );
-      }
-
-      // Generate PDF
-      const pdfBuffer = await generatePDF(config, reportData, shopName, userLang);
-
-      // Upload to Storage
+      // Set up GCS stream first — PDF pipes into it as it's generated
       const bucket = storage.bucket(`${process.env.GCLOUD_PROJECT}.appspot.com`);
       const timestamp = Date.now();
       const fileName = `reports/${shopId}/${reportId}_${timestamp}.pdf`;
       const file = bucket.file(fileName);
 
-      await file.save(pdfBuffer, {
+      const writeStream = file.createWriteStream({
         metadata: {
           contentType: 'application/pdf',
           metadata: {
@@ -5840,7 +5802,11 @@ export const generatePDFReport = onCall(
             userId: request.auth.uid,
           },
         },
+        resumable: true,
       });
+
+      // Generate PDF — streams directly into GCS, no in-memory buffer
+      await generatePDF(config, reportData, shopName, userLang, writeStream);
 
       // Get download URL
       const [url] = await file.getSignedUrl({
@@ -5852,7 +5818,7 @@ export const generatePDFReport = onCall(
       await reportDoc.ref.update({
         status: 'completed',
         pdfUrl: url,
-        pdfSize: pdfBuffer.length,
+        pdfSize: null, // Size no longer available without buffering — remove or compute separately if needed
         filePath: fileName,
         generationCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
         // Store summary data for quick access
@@ -5893,171 +5859,108 @@ export const generatePDFReport = onCall(
     }
   });
 
-// PDF Generation function
-async function generatePDF(config, reportData, shopName, lang) {
-  return new Promise((resolve, reject) => {
-    try {
-      const doc = new PDFDocument({
-        size: 'A4',
-        layout: 'landscape',
-        margin: 50,
-        bufferPages: true,
-      });
-
-      // Register custom fonts
-      doc.registerFont('Inter-Regular', regularFontPath);
-      doc.registerFont('Inter-Bold', boldFontPath);
-
-      const chunks = [];
-      doc.on('data', (chunk) => chunks.push(chunk));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
-
-      // Cover page with logo
-      const pageWidth = doc.page.width;
-
-
-      const logoPath = path.join(__dirname, 'siyahlogo.png');
-      const logoWidth = 350;
-      const logoX = (pageWidth - logoWidth) / 2;
-      const logoY = -100;
-
-      // Check if logo exists before trying to add it
-      const textStartY = 370; // Fixed position for text - same as before (80 + 250 + 40)
+  async function generatePDF(config, reportData, shopName, lang, writeStream) {
+    return new Promise((resolve, reject) => {
       try {
-        doc.image(logoPath, logoX, logoY, {
-          width: logoWidth,
+        const doc = new PDFDocument({
+          size: 'A4',
+          layout: 'landscape',
+          margin: 50,
+          bufferPages: false, // ← no longer need to buffer all pages in memory
         });
-      } catch (logoError) {
-        console.error('Error loading logo:', logoError);
+  
+        // Pipe directly to GCS write stream — no in-memory buffer
+        doc.pipe(writeStream);
+        writeStream.on('finish', resolve);
+        writeStream.on('error', reject);
+        doc.on('error', reject);
+  
+        // --- everything below this line is identical to before ---
+  
+        const pageWidth = doc.page.width;
+        const logoPath = path.join(__dirname, 'siyahlogo.png');
+        const logoWidth = 350;
+        const logoX = (pageWidth - logoWidth) / 2;
+        const logoY = -100;
+  
+        const textStartY = 370;
+        try {
+          doc.image(logoPath, logoX, logoY, { width: logoWidth });
+        } catch (logoError) {
+          console.error('Error loading logo:', logoError);
+        }
+  
+        doc.fontSize(36)
+          .font('Inter-Bold')
+          .fillColor('#000000')
+          .text(shopName, 50, textStartY, { align: 'center', width: pageWidth - 100 });
+  
+        const reportNameY = textStartY + 60;
+        doc.fontSize(24)
+          .font('Inter-Regular')
+          .text(config.reportName || 'Report', 50, reportNameY, { align: 'center', width: pageWidth - 100 });
+  
+        const dateY = reportNameY + 80;
+        doc.fontSize(12)
+          .fillColor('#666666')
+          .text(`${t(lang, 'generated')}: ${formatDateTime(new Date(), lang)}`, 50, dateY, { align: 'center', width: pageWidth - 100 });
+  
+        if (config.dateRange) {
+          const startDate = config.dateRange.start.toDate ? config.dateRange.start.toDate() : new Date(config.dateRange.start);
+          const endDate = config.dateRange.end.toDate ? config.dateRange.end.toDate() : new Date(config.dateRange.end);
+          const dateRangeY = dateY + 20;
+          doc.text(`${t(lang, 'dateRange')}: ${formatDate(startDate, lang)} - ${formatDate(endDate, lang)}`, 50, dateRangeY, { align: 'center', width: pageWidth - 100 });
+        }
+  
+        if (config.includeProducts && reportData.products) {
+          doc.addPage();
+          addSection(doc, t(lang, 'products'), reportData.products,
+            [t(lang, 'productName'), t(lang, 'price'), t(lang, 'quantity'), t(lang, 'views'), t(lang, 'sales'), t(lang, 'favorites'), t(lang, 'cartAdds')],
+            (item) => [
+              item.productName || t(lang, 'notSpecified'),
+              `${item.price || 0} ${item.currency || 'TL'}`,
+              String(item.quantity || 0),
+              String(item.clickCount || 0),
+              String(item.purchaseCount || 0),
+              String(item.favoritesCount || 0),
+              String(item.cartCount || 0),
+            ], lang);
+        }
+  
+        if (config.includeOrders && reportData.orders) {
+          doc.addPage();
+          addSection(doc, t(lang, 'orders'), reportData.orders,
+            [t(lang, 'product'), t(lang, 'buyer'), t(lang, 'quantity'), t(lang, 'price'), t(lang, 'status'), t(lang, 'date')],
+            (item) => [
+              item.productName || t(lang, 'notSpecified'),
+              item.buyerName || t(lang, 'notSpecified'),
+              String(item.quantity || 0),
+              `${item.price || 0} ${item.currency || 'TL'}`,
+              localizeShipmentStatus(item.shipmentStatus, lang),
+              item.timestamp ? formatDate(item.timestamp.toDate(), lang) : t(lang, 'notSpecified'),
+            ], lang);
+        }
+  
+        if (config.includeBoostHistory && reportData.boostHistory) {
+          doc.addPage();
+          addSection(doc, t(lang, 'boostHistory'), reportData.boostHistory,
+            [t(lang, 'item'), t(lang, 'durationMinutes'), t(lang, 'cost'), t(lang, 'impressions'), t(lang, 'clicks'), t(lang, 'date')],
+            (item) => [
+              item.itemName || t(lang, 'notSpecified'),
+              String(item.boostDuration || 0),
+              `${item.boostPrice || 0} ${item.currency || 'TL'}`,
+              String(item.impressionsDuringBoost || 0),
+              String(item.clicksDuringBoost || 0),
+              item.createdAt ? formatDate(item.createdAt.toDate(), lang) : t(lang, 'notSpecified'),
+            ], lang);
+        }
+  
+        doc.end();
+      } catch (error) {
+        reject(error);
       }
-
-      // Shop name - stays at same position
-      doc.fontSize(36)
-        .font('Inter-Bold')
-        .fillColor('#000000')
-        .text(shopName, 50, textStartY, {
-          align: 'center',
-          width: pageWidth - 100,
-        });
-
-      // Report name - position below shop name
-      const reportNameY = textStartY + 60; // 60px below shop name
-      doc.fontSize(24)
-        .font('Inter-Regular')
-        .text(config.reportName || 'Report', 50, reportNameY, {
-          align: 'center',
-          width: pageWidth - 100,
-        });
-
-      // Date information - position below report name
-      const dateY = reportNameY + 80; // 80px below report name
-      doc.fontSize(12)
-        .fillColor('#666666')
-        .text(`${t(lang, 'generated')}: ${formatDateTime(new Date(), lang)}`, 50, dateY, {
-          align: 'center',
-          width: pageWidth - 100,
-        });
-
-      if (config.dateRange) {
-        const startDate = config.dateRange.start.toDate ? config.dateRange.start.toDate() : new Date(config.dateRange.start);
-        const endDate = config.dateRange.end.toDate ? config.dateRange.end.toDate() : new Date(config.dateRange.end);
-        const dateRangeY = dateY + 20; // 20px below generation date
-        doc.text(`${t(lang, 'dateRange')}: ${formatDate(startDate, lang)} - ${formatDate(endDate, lang)}`, 50, dateRangeY, {
-          align: 'center',
-          width: pageWidth - 100,
-        });
-      }
-
-      // Products section
-      if (config.includeProducts && reportData.products) {
-        doc.addPage();
-        addSection(
-          doc,
-          t(lang, 'products'),
-          reportData.products,
-          [
-            t(lang, 'productName'),
-            t(lang, 'price'),
-            t(lang, 'quantity'),
-            t(lang, 'views'),
-            t(lang, 'sales'),
-            t(lang, 'favorites'),
-            t(lang, 'cartAdds'),
-          ],
-          (item) => [
-            item.productName || t(lang, 'notSpecified'),
-            `${item.price || 0} ${item.currency || 'TL'}`,
-            String(item.quantity || 0),
-            String(item.clickCount || 0),
-            String(item.purchaseCount || 0),
-            String(item.favoritesCount || 0),
-            String(item.cartCount || 0),
-          ],
-          lang,
-        );
-      }
-
-      // Orders section
-      if (config.includeOrders && reportData.orders) {
-        doc.addPage();
-        addSection(
-          doc,
-          t(lang, 'orders'),
-          reportData.orders,
-          [
-            t(lang, 'product'),
-            t(lang, 'buyer'),
-            t(lang, 'quantity'),
-            t(lang, 'price'),
-            t(lang, 'status'),
-            t(lang, 'date'),
-          ],
-          (item) => [
-            item.productName || t(lang, 'notSpecified'),
-            item.buyerName || t(lang, 'notSpecified'),
-            String(item.quantity || 0),
-            `${item.price || 0} ${item.currency || 'TL'}`,
-            localizeShipmentStatus(item.shipmentStatus, lang),
-            item.timestamp ? formatDate(item.timestamp.toDate(), lang) : t(lang, 'notSpecified'),
-          ],
-          lang,
-        );
-      }
-
-      // Boost history section
-      if (config.includeBoostHistory && reportData.boostHistory) {
-        doc.addPage();
-        addSection(
-          doc,
-          t(lang, 'boostHistory'),
-          reportData.boostHistory,
-          [
-            t(lang, 'item'),
-            t(lang, 'durationMinutes'),
-            t(lang, 'cost'),
-            t(lang, 'impressions'),
-            t(lang, 'clicks'),
-            t(lang, 'date'),
-          ],
-          (item) => [
-            item.itemName || t(lang, 'notSpecified'),
-            String(item.boostDuration || 0),
-            `${item.boostPrice || 0} ${item.currency || 'TL'}`,
-            String(item.impressionsDuringBoost || 0),
-            String(item.clicksDuringBoost || 0),
-            item.createdAt ? formatDate(item.createdAt.toDate(), lang) : t(lang, 'notSpecified'),
-          ],
-          lang,
-        );
-      }
-
-      doc.end();
-    } catch (error) {
-      reject(error);
-    }
-  });
-}
+    });
+  }
 
 // Helper function to add sections to PDF with light background for headers
 function addSection(doc, title, data, headers, rowBuilder, lang) {
@@ -6076,34 +5979,23 @@ function addSection(doc, title, data, headers, rowBuilder, lang) {
     return;
   }
 
-  // Create table
-  const itemsToShow = Math.min(data.length, 100); // Limit to 100 items per section for PDF size
-  const columnWidth = (doc.page.width - 100) / headers.length;
-  let y = doc.y;
+// Create table
+const itemsToShow = data.length;
+const columnWidth = (doc.page.width - 100) / headers.length;
 
-  // Draw light background for header row
-  doc.rect(50, y - 5, doc.page.width - 100, 25)
-    .fillColor('#f0f0f0')
-    .fill();
-
-  // Draw headers
-  doc.fontSize(10)
-    .font('Inter-Bold')
-    .fillColor('#000000');
-
+// Extracted: draws header row and returns the new y position
+const drawHeaders = (startY) => {
+  doc.rect(50, startY - 5, doc.page.width - 100, 25).fillColor('#f0f0f0').fill();
+  doc.fontSize(10).font('Inter-Bold').fillColor('#000000');
   headers.forEach((header, i) => {
-    doc.text(header, 50 + (i * columnWidth), y, {
-      width: columnWidth - 5,
-      ellipsis: true,
-    });
+    doc.text(header, 50 + (i * columnWidth), startY, { width: columnWidth - 5, ellipsis: true });
   });
+  const afterHeaders = startY + 20;
+  doc.moveTo(50, afterHeaders).lineTo(doc.page.width - 50, afterHeaders).strokeColor('#cccccc').stroke();
+  return afterHeaders + 10;
+};
 
-  y += 20;
-  doc.moveTo(50, y)
-    .lineTo(doc.page.width - 50, y)
-    .strokeColor('#cccccc')
-    .stroke();
-  y += 10;
+let y = drawHeaders(doc.y);
 
   // Draw rows
   doc.fontSize(9)
@@ -6113,39 +6005,12 @@ function addSection(doc, title, data, headers, rowBuilder, lang) {
   for (let i = 0; i < itemsToShow; i++) {
     const row = rowBuilder(data[i]);
 
-    // Check if we need a new page
-    if (y > doc.page.height - 100) {
-      doc.addPage();
-      y = 50;
-
-      // Draw light background for header row on new page
-      doc.rect(50, y - 5, doc.page.width - 100, 25)
-        .fillColor('#f0f0f0')
-        .fill();
-
-      // Redraw headers on new page
-      doc.fontSize(10)
-        .font('Inter-Bold')
-        .fillColor('#000000');
-
-      headers.forEach((header, j) => {
-        doc.text(header, 50 + (j * columnWidth), y, {
-          width: columnWidth - 5,
-          ellipsis: true,
-        });
-      });
-
-      y += 20;
-      doc.moveTo(50, y)
-        .lineTo(doc.page.width - 50, y)
-        .strokeColor('#cccccc')
-        .stroke();
-      y += 10;
-
-      doc.fontSize(9)
-        .font('Inter-Regular')
-        .fillColor('#333333');
-    }
+   // Check if we need a new page
+   if (y > doc.page.height - 100) {
+    doc.addPage();
+    y = drawHeaders(50);
+    doc.fontSize(9).font('Inter-Regular').fillColor('#333333');
+  }
 
     let maxRowHeight = 15; // minimum height
     const rowTexts = [];
@@ -6170,12 +6035,6 @@ function addSection(doc, title, data, headers, rowBuilder, lang) {
     y += maxRowHeight;
   }
 
-  if (data.length > itemsToShow) {
-    doc.moveDown()
-      .fontSize(10)
-      .fillColor('#666666')
-      .text(t(lang, 'showingFirstItemsOfTotal', itemsToShow, data.length));
-  }
 }
 
 // Helper function to localize shipment status

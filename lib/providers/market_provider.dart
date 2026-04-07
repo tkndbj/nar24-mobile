@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/product_summary.dart';
 import '../services/typesense_service.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import '../helpers/firestore_helper.dart';
 import '../constants/all_in_one_category_data.dart';
 import '../utils/debouncer.dart';
 import '../user_provider.dart';
@@ -63,7 +62,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
   StreamSubscription<User?>? _authSubscription;
   final FirebaseFunctions _functions =
       FirebaseFunctions.instanceFor(region: 'europe-west3');
-  final FirestoreHelper firestoreHelper = FirestoreHelper();
+
   TypeSenseServiceManager get _typesenseManager =>
       TypeSenseServiceManager.instance;
   TypeSenseService get typesenseService => _typesenseManager.mainService;

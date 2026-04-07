@@ -43,7 +43,6 @@ import 'services/deep_link_handler.dart';
 import 'services/market_layout_service.dart';
 import 'package:flutter/services.dart';
 import 'widgets/boostedVisibilityWrapper.dart';
-import 'providers/boosted_rotation_provider.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_performance/firebase_performance.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
@@ -305,11 +304,7 @@ Future<void> main() async {
                 ChangeNotifierProvider<MarketProvider>(
                   create: (_) => MarketProvider(
                       Provider.of<UserProvider>(_, listen: false)),
-                ),
-                ChangeNotifierProvider<BoostedRotationProvider>(
-                  create: (_) => BoostedRotationProvider()..initialize(),
-                  lazy: false, // Add this - critical!
-                ),
+                ),              
                 ChangeNotifierProvider(create: (_) => MarketBannerProvider()),
                 ChangeNotifierProvider(create: (_) => DynamicFilterProvider()),
                 ChangeNotifierProvider(
