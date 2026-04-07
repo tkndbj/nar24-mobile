@@ -17,11 +17,11 @@ const tasksClient = new CloudTasksClient();
 // ============================================================================
 
 const CONFIG = {
-  FEED_SIZE: 200,
+  FEED_SIZE: 150,
   BATCH_SIZE: 50,
-  MAX_CANDIDATES: 1000,
+  MAX_CANDIDATES: 300,
   REFRESH_INTERVAL_DAYS: 2,
-  MIN_ACTIVITY_THRESHOLD: 3,
+  MIN_ACTIVITY_THRESHOLD: 20,
   MAX_RETRIES: 3,
   CATEGORY_TRENDING_LIMIT: 50,
 };
@@ -127,45 +127,67 @@ class CandidateSelector {
   async getCandidatesForUser(userProfile) {
     const topCategories =
       userProfile.preferences?.topCategories?.slice(0, 3).map((c) => c.category) || [];
-
+  
     if (topCategories.length === 0) {
       const {productIds} = await this.loadTrendingProducts();
-      return productIds.slice(0, CONFIG.MAX_CANDIDATES);
+      return {
+        candidateIds: productIds.slice(0, CONFIG.MAX_CANDIDATES),
+        featuresMap: new Map(), // no features for trending fallback
+      };
     }
-
-    const categoryProducts = await this.loadCategoryTrending(topCategories);
-
-    if (categoryProducts.length > 0) {
-      return categoryProducts.slice(0, CONFIG.MAX_CANDIDATES);
+  
+    const {productIds, featuresMap} = await this.loadCategoryTrending(topCategories);
+  
+    if (productIds.length > 0) {
+      return {
+        candidateIds: productIds.slice(0, CONFIG.MAX_CANDIDATES),
+        featuresMap,
+      };
     }
-
-    return await this.queryProductsByCategories(topCategories);
+  
+    // Fallback: no features available from query
+    const fallbackIds = await this.queryProductsByCategories(topCategories);
+    return {
+      candidateIds: fallbackIds,
+      featuresMap: new Map(),
+    };
   }
 
   async loadCategoryTrending(categories) {
     try {
       const productSet = new Set();
-
+      const featuresMap = new Map(); // ✅ NEW
+  
       const promises = categories.map((category) =>
-        this.db
-          .collection('trending_by_category')
+        this.db.collection('trending_by_category')
           .doc(category.replace(/[./]/g, '_'))
           .get(),
       );
-
       const docs = await Promise.all(promises);
-
+  
       for (const doc of docs) {
         if (doc.exists) {
-          const products = doc.data().products || [];
+          const data = doc.data();
+          const products = data.products || [];
           products.forEach((id) => productSet.add(id));
+  
+          // ✅ NEW: extract features if available
+          const features = data.features || [];
+          for (const feature of features) {
+            if (!featuresMap.has(feature.id)) {
+              featuresMap.set(feature.id, feature);
+            }
+          }
         }
       }
-
-      return Array.from(productSet);
+  
+      return {
+        productIds: Array.from(productSet),
+        featuresMap,
+      };
     } catch (error) {
       console.error('⚠️ Failed to load category trending:', error.message);
-      return [];
+      return {productIds: [], featuresMap: new Map()};
     }
   }
 
@@ -454,7 +476,7 @@ class PersonalizedFeedGenerator {
     const userActivityCount = userProfile.stats?.totalEvents || 0;
     const feedActivityCount = existingFeed.stats?.userActivityCount || 0;
 
-    if (userActivityCount > feedActivityCount + 5) {
+    if (userActivityCount > feedActivityCount + 30) {
       return {shouldUpdate: true, reason: 'new_activity'};
     }
 
@@ -474,19 +496,42 @@ class PersonalizedFeedGenerator {
       // 1. Load trending scores (shared)
       const {scores} = await this.selector.loadTrendingProducts();
 
-      // 2. Get candidate product IDs (efficient)
-      const candidateIds = await this.selector.getCandidatesForUser(userProfile);
+      const {candidateIds, featuresMap} = await this.selector.getCandidatesForUser(userProfile);
 
-      if (candidateIds.length === 0) {
-        return {success: false, reason: 'no_candidates'};
-      }
+if (candidateIds.length === 0) {
+  return {success: false, reason: 'no_candidates'};
+}
 
-      // 3. Load product details in batches
-      const products = await this.selector.loadProductDetails(candidateIds);
+// ✅ Use embedded features when available, fall back to Firestore reads
+let products;
+if (featuresMap.size > 0) {
+  // Build product map directly from features — zero extra reads
+  products = new Map();
+  for (const id of candidateIds) {
+    const feature = featuresMap.get(id);
+    if (feature) {
+      products.set(id, {
+        id,
+        category: feature.category,
+        subcategory: feature.subcategory,
+        brand: feature.brand,
+        price: feature.price,
+        gender: feature.gender,
+        clicks: 0,        // not needed for scoring
+        cartCount: 0,     // not needed for scoring
+        favoritesCount: 0, // not needed for scoring
+      });
+    }
+  }
+  console.log(`⚡ Using embedded features for ${products.size} products (0 extra reads)`);
+} else {
+  // Fallback for users with no category preferences (trending-based candidates)
+  products = await this.selector.loadProductDetails(candidateIds);
+}
 
-      if (products.size === 0) {
-        return {success: false, reason: 'no_product_data'};
-      }
+if (products.size === 0) {
+  return {success: false, reason: 'no_product_data'};
+}
 
       // 4. Score products - ✅ UPDATED: Pass activityCount for progressive weights
       const scorer = new FeedScorer(scores, activityCount);
@@ -542,9 +587,7 @@ class PersonalizedFeedGenerator {
           await this.db
             .collection('user_profiles')
             .doc(userId)
-            .collection('personalized_feed')
-            .doc('current')
-            .set(feedData);
+            .update({ feed: feedData });
         },
         CONFIG.MAX_RETRIES,
         100,
@@ -563,32 +606,16 @@ class PersonalizedFeedGenerator {
     }
   }
 
-  async loadExistingFeeds(userIds) {
+  async loadExistingFeeds(users) {
     const feedMap = new Map();
-    const chunks = this.chunkArray(userIds, 100);
-
-    for (const chunk of chunks) {
-      try {
-        const refs = chunk.map((userId) =>
-          this.db
-            .collection('user_profiles')
-            .doc(userId)
-            .collection('personalized_feed')
-            .doc('current'),
-        );
-
-        const docs = await this.db.getAll(...refs);
-
-        docs.forEach((doc, idx) => {
-          if (doc.exists) {
-            feedMap.set(chunk[idx], doc.data());
-          }
-        });
-      } catch (error) {
-        console.error('⚠️ Error loading feed batch:', error.message);
+  
+    for (const userDoc of users) {
+      const feed = userDoc.data().feed;
+      if (feed) {
+        feedMap.set(userDoc.id, feed);
       }
     }
-
+  
     return feedMap;
   }
 
@@ -600,8 +627,7 @@ class PersonalizedFeedGenerator {
       reasons: {},
     };
 
-    const userIds = users.map((doc) => doc.id);
-    const existingFeeds = await this.loadExistingFeeds(userIds);
+    const existingFeeds = await this.loadExistingFeeds(users);
 
     await Promise.all(
       users.map(async (userDoc) => {
@@ -669,8 +695,8 @@ export const updatePersonalizedFeeds = onSchedule(
     try {
       console.log('Starting personalized feed dispatch...');
 
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const fiveDaysAgo = new Date();
+      fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
 
       const parent = tasksClient.queuePath(PROJECT, LOCATION, QUEUE);
       let lastDoc = null;
@@ -683,7 +709,7 @@ export const updatePersonalizedFeeds = onSchedule(
       while (totalFetched < MAX_USERS) {
         let query = db
           .collection('user_profiles')
-          .where('lastActivityAt', '>', thirtyDaysAgo)
+          .where('lastActivityAt', '>', fiveDaysAgo)
           .orderBy('lastActivityAt')
           .limit(PAGE_SIZE);
 
@@ -843,80 +869,3 @@ export const processPersonalizedFeedBatch = onRequest(
   },
 );
 
-export const cleanupOldFeeds = onSchedule(
-  {
-    schedule: 'every day 05:00',
-    timeZone: 'UTC',
-    timeoutSeconds: 300,
-    memory: '512MiB',
-    region: 'europe-west3',
-  },
-  async () => {
-    const db = admin.firestore();
-    const startTime = Date.now();
-
-    try {
-      let totalDeleted = 0;
-      let lastDoc = null;
-      const PAGE_SIZE = 500;
-      const CONCURRENT_CHECKS = 10;
-
-      let hasMore = true;
-      while (hasMore) {
-        if (Date.now() - startTime > 240000) {
-          console.warn('⏰ Approaching timeout, stopping cleanup early');
-          hasMore = false;
-          continue;
-        }
-      
-        let query = db
-          .collection('user_profiles')
-          .orderBy('__name__')
-          .limit(PAGE_SIZE);
-      
-        if (lastDoc) query = query.startAfter(lastDoc);
-      
-        const profilesSnapshot = await query.get();
-        if (profilesSnapshot.empty) break;
-      
-        lastDoc = profilesSnapshot.docs[profilesSnapshot.docs.length - 1];
-      
-        const chunks = [];
-        for (let i = 0; i < profilesSnapshot.docs.length; i += CONCURRENT_CHECKS) {
-          chunks.push(profilesSnapshot.docs.slice(i, i + CONCURRENT_CHECKS));
-        }
-      
-        for (const chunk of chunks) {
-          await Promise.all(
-            chunk.map(async (profileDoc) => {
-              try {
-                const feedsSnapshot = await profileDoc.ref
-                  .collection('personalized_feed')
-                  .where(admin.firestore.FieldPath.documentId(), '!=', 'current')
-                  .limit(100)
-                  .get();
-      
-                if (!feedsSnapshot.empty) {
-                  const batch = db.batch();
-                  feedsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
-                  await batch.commit();
-                  totalDeleted += feedsSnapshot.size;
-                }
-              } catch (error) {
-                console.error(`⚠️ Error cleaning ${profileDoc.id}:`, error.message);
-              }
-            }),
-          );
-        }
-      
-        if (profilesSnapshot.size < PAGE_SIZE) hasMore = false;
-      }
-
-      console.log(`✅ Cleaned up ${totalDeleted} old feeds`);
-      return {success: true, deleted: totalDeleted};
-    } catch (error) {
-      console.error('❌ Cleanup failed:', error.message);
-      return {success: false, error: error.message};
-    }
-  },
-);

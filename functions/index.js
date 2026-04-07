@@ -5868,6 +5868,9 @@ export const generatePDFReport = onCall(
           margin: 50,
           bufferPages: false, // ← no longer need to buffer all pages in memory
         });
+
+        doc.registerFont('Inter-Regular', regularFontPath);
+        doc.registerFont('Inter-Bold', boldFontPath);
   
         // Pipe directly to GCS write stream — no in-memory buffer
         doc.pipe(writeStream);
@@ -6034,7 +6037,6 @@ let y = drawHeaders(doc.y);
 
     y += maxRowHeight;
   }
-
 }
 
 // Helper function to localize shipment status
@@ -8354,7 +8356,7 @@ export {rebuildRelatedProducts} from './6-related_products/index.js';
 export {batchUpdateClicks, syncClickAnalytics} from './7-click-analytics/index.js';
 export {validateCartCheckout, updateCartCache} from './8-cart-validation/index.js';
 export {calculateCartTotals} from './9-cart-total-price/index.js';
-export {batchCartFavoriteEvents, syncCartFavoriteMetrics} from './10-cart&favorite-metrics/index.js';
+export {batchCartFavoriteEvents, syncCartFavoriteMetrics, clampNegativeMetrics} from './10-cart&favorite-metrics/index.js';
 export {
   batchUserActivity,
   cleanupOldActivityEvents,
@@ -8362,7 +8364,7 @@ export {
   processActivityDLQ,
 } from './11-user-activity/index.js';
 export {computeTrendingProducts, cleanupTrendingHistory} from './12-trending-products/index.js';
-export {updatePersonalizedFeeds, cleanupOldFeeds, processPersonalizedFeedBatch} from './13-personalized-feed/index.js';
+export {updatePersonalizedFeeds, processPersonalizedFeedBatch} from './13-personalized-feed/index.js';
 export {adminToggleProductArchiveStatus, approveArchivedProductEdit, approveProductApplication, rejectProductApplication, setCargoGuyClaim} from './14-admin-actions/index.js';
 export {translateText, translateBatch} from './15-openai-translation/index.js';
 export {processQRCodeGeneration, verifyQRCode, markQRScanned, retryQRGeneration} from './16-qr-for-orders/index.js';

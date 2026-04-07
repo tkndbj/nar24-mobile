@@ -185,19 +185,17 @@ class PersonalizedFeedService {
 
       debugPrint('📡 Fetching personalized feed from Firestore...');
 
-      final feedDoc = await _firestore
-          .collection('user_profiles')
-          .doc(userId)
-          .collection('personalized_feed')
-          .doc('current')
-          .get();
+      final profileDoc = await _firestore
+    .collection('user_profiles')
+    .doc(userId)
+    .get();
 
-      if (!feedDoc.exists) {
-        debugPrint('⚠️ Personalized feed not found, using trending');
-        return _getTrendingProducts();
-      }
+if (!profileDoc.exists || profileDoc.data()?['feed'] == null) {
+  debugPrint('⚠️ Personalized feed not found, using trending');
+  return _getTrendingProducts();
+}
 
-      final data = feedDoc.data()!;
+final data = profileDoc.data()!['feed'] as Map<String, dynamic>;
 
       // Check if feed is stale (>3 days old as buffer for 2-day refresh)
       final lastComputed = data['lastComputed'] as Timestamp?;
@@ -344,14 +342,12 @@ class PersonalizedFeedService {
       if (expiry.isAfter(DateTime.now())) return true;
     }
 
-    final feedDoc = await _firestore
-        .collection('user_profiles')
-        .doc(user.uid)
-        .collection('personalized_feed')
-        .doc('current')
-        .get();
+    final profileDoc = await _firestore
+    .collection('user_profiles')
+    .doc(user.uid)
+    .get();
 
-    return feedDoc.exists;
+return profileDoc.exists && profileDoc.data()?['feed'] != null;
   } catch (e) {
     return false;
   }
@@ -363,16 +359,14 @@ class PersonalizedFeedService {
       final user = _auth.currentUser;
       if (user == null) return null;
 
-      final feedDoc = await _firestore
-          .collection('user_profiles')
-          .doc(user.uid)
-          .collection('personalized_feed')
-          .doc('current')
-          .get();
+      final profileDoc = await _firestore
+    .collection('user_profiles')
+    .doc(user.uid)
+    .get();
 
-      if (!feedDoc.exists) return null;
+if (!profileDoc.exists || profileDoc.data()?['feed'] == null) return null;
 
-      final data = feedDoc.data()!;
+final data = profileDoc.data()!['feed'] as Map<String, dynamic>;
       return {
         'lastComputed': (data['lastComputed'] as Timestamp?)?.toDate(),
         'productsCount': (data['productIds'] as List?)?.length ?? 0,

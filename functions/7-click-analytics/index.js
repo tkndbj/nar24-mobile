@@ -178,7 +178,15 @@ await admin.firestore()
   .set({
     pendingCount: admin.firestore.FieldValue.increment(1),
     lastUpdate: admin.firestore.FieldValue.serverTimestamp(),
-  }, {merge: true});
+  }, { merge: true });
+
+await admin.firestore()
+  .collection('_system')
+  .doc('metrics_version')
+  .set({
+    lastMetricsUpdate: admin.firestore.FieldValue.serverTimestamp(),
+    version: admin.firestore.FieldValue.increment(1),
+  }, { merge: true });
 
 const duration = Date.now() - startTime;
 

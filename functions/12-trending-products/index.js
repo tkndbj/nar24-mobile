@@ -1,4 +1,4 @@
-// functions/14-trending-products/index.js
+// functions/12-trending-products/index.js
 // Production-grade trending products with streaming, parallelization, and self-healing
 
 import {onSchedule} from 'firebase-functions/v2/scheduler';
@@ -12,9 +12,8 @@ const CONFIG = {
   TOP_PRODUCTS_COUNT: 200,
   LOOKBACK_DAYS: 7,
   STREAM_CHUNK_SIZE: 500,
-  MIN_ENGAGEMENT_THRESHOLD: 1, // 5 was too aggressive — excludes real products on growing catalogs
+  MIN_ENGAGEMENT_THRESHOLD: 3,
   MAX_RETRIES: 3,
-  INCREMENTAL_UPDATE_HOURS: 0.5, // 30 min — only skip recompute within a retry window, not between scheduled runs
 };
 
 // Scoring weights (must sum to 1.0)
@@ -91,11 +90,14 @@ class ProductStreamLoader {
             clicks: data.clickCount || 0,
             cartCount: data.cartCount || 0,
             favoritesCount: data.favoritesCount || 0,
-            purchaseCount: 0, // Will be filled later
+            purchaseCount: 0,
             createdAt: data.createdAt?.toDate() || new Date(),
             price: data.price || 0,
             category: data.category || 'Other',
-            collection, // Track which collection this came from
+            subcategory: data.subcategory || null,  // ✅ NEW
+            brand: data.brandModel || null,          // ✅ NEW
+            gender: data.gender || null,             // ✅ NEW
+            collection,
           };
         });
 
@@ -247,68 +249,19 @@ class TrendingCalculator {
     };
   }
 
-  /**
-   * Incremental computation: Only recompute products that changed
-   */
-  async shouldUseIncrementalUpdate() {
-    try {
-      const existingDoc = await this.db
-        .collection('trending_products')
-        .doc('global')
-        .get();
-
-      if (!existingDoc.exists) return {useIncremental: false};
-
-      const lastComputed = existingDoc.data().lastComputed?.toMillis() || 0;
-      const hoursSinceUpdate = (Date.now() - lastComputed) / (1000 * 60 * 60);
-
-      // Only do full recomputation every 24 hours
-      if (hoursSinceUpdate < CONFIG.INCREMENTAL_UPDATE_HOURS) {
-        return {
-          useIncremental: true,
-          lastComputed: new Date(lastComputed),
-          existingData: existingDoc.data(),
-        };
-      }
-
-      return {useIncremental: false};
-    } catch (error) {
-      return {useIncremental: false};
-    }
-  }
-
+ 
   async computeTrendingProducts() {
     const startTime = Date.now();
-
+  
     try {
       // 1. Get purchase counts (parallel aggregation)
       const purchases = await this.aggregator.aggregatePurchases();
-
-      // 2. Check if we can do incremental update
-      const {useIncremental, existingData} = await this.shouldUseIncrementalUpdate();
-
-      if (useIncremental && existingData) {
-        console.log('⚡ Using cached trending data (< 6 hours old)');
-        return {
-          products: existingData.products.map((id, idx) => ({
-            id,
-            score: existingData.scores[idx],
-          })),
-          stats: {
-            ...existingData.stats,
-            avgScore: existingData.stats.avgTrendScore,
-            cached: true,
-            computationTimeMs: Date.now() - startTime,
-          },
-        };
-      }
-
-      // 3. Stream products in chunks and build candidate list
-      console.log('📊 Streaming products...');     
+  
+      // 2. Stream products in chunks and build candidate list
+      console.log('📊 Streaming products...');
       let productCount = 0;
-
       const allProductsRaw = [];
-
+  
       for await (const chunk of this.loader.streamAllProducts()) {
         for (const product of chunk) {
           product.purchaseCount = purchases.get(product.id) || 0;
@@ -319,25 +272,22 @@ class TrendingCalculator {
           console.log(`📦 Processed ${productCount} products...`);
         }
       }
-      
-      // Apply engagement threshold, but fall back to full catalog if it excludes everything
+  
       let allProducts = allProductsRaw.filter((p) => p.clicks >= CONFIG.MIN_ENGAGEMENT_THRESHOLD);
-      
+  
       if (allProducts.length === 0 && allProductsRaw.length > 0) {
-        console.warn(`⚠️ Threshold ${CONFIG.MIN_ENGAGEMENT_THRESHOLD} excluded all products — using full catalog of ${allProductsRaw.length}`);
+        console.warn(`⚠️ Threshold excluded all products — using full catalog of ${allProductsRaw.length}`);
         allProducts = allProductsRaw;
       }
-      
-      console.log(`✅ Found ${allProducts.length} eligible products from ${productCount} total`);
-      
+  
       if (allProducts.length === 0) {
         throw new Error('No products found in catalog');
       }
-
-      // 4. Calculate stats for normalization
+  
+      // 3. Calculate stats for normalization
       const stats = this.calculateStats(allProducts);
-
-      // 5. Score all products
+  
+      // 4. Score all products
       const scoredProducts = allProducts.map((product) => {
         const {score, breakdown} = this.calculateTrendingScore(product, stats);
         return {
@@ -350,24 +300,21 @@ class TrendingCalculator {
             favorites: product.favoritesCount,
             purchases: product.purchaseCount,
             category: product.category,
+            subcategory: product.subcategory,  // ✅ NEW
+            brand: product.brand,              // ✅ NEW
+            price: product.price,              // ✅ NEW
+            gender: product.gender,            // ✅ NEW
           },
         };
       });
-
-      // 6. Sort and take top N
+  
+      // 5. Sort and take top N
       scoredProducts.sort((a, b) => b.score - a.score);
       const topProducts = scoredProducts.slice(0, CONFIG.TOP_PRODUCTS_COUNT);
-
+  
       const duration = Date.now() - startTime;
-
       console.log(`✅ Computed trending in ${duration}ms`);
-      console.log(
-        `📊 Top 5 scores: ${topProducts
-          .slice(0, 5)
-          .map((p) => p.score.toFixed(3))
-          .join(', ')}`,
-      );
-
+  
       return {
         products: topProducts,
         stats: {
@@ -375,9 +322,7 @@ class TrendingCalculator {
           totalProcessed: productCount,
           topCount: topProducts.length,
           computationTimeMs: duration,
-          avgScore:
-            topProducts.reduce((sum, p) => sum + p.score, 0) / topProducts.length,
-          cached: false,
+          avgScore: topProducts.reduce((sum, p) => sum + p.score, 0) / topProducts.length,
         },
       };
     } catch (error) {
@@ -438,7 +383,21 @@ export const computeTrendingProducts = onSchedule(
 
     try {
       console.log('🚀 Starting trending computation...');
-
+    
+      // Skip if no metrics changed since last computation
+      const [versionDoc, trendingDoc] = await Promise.all([
+        db.collection('_system').doc('metrics_version').get(),
+        db.collection('trending_products').doc('global').get(),
+      ]);
+    
+      const currentVersion = versionDoc.exists ? (versionDoc.data()?.version || 0) : 0;
+      const lastComputedVersion = trendingDoc.exists ? (trendingDoc.data()?.computedAtVersion || 0) : 0;
+    
+      if (currentVersion > 0 && currentVersion === lastComputedVersion) {
+        console.log('⏭️ No metrics changes since last trending computation, skipping');
+        return { success: true, skipped: true };
+      }
+    
       const result = await retryWithBackoff(
         async () => await calculator.computeTrendingProducts(),
         CONFIG.MAX_RETRIES,
@@ -454,14 +413,14 @@ export const computeTrendingProducts = onSchedule(
         products: result.products.map((p) => p.id),
         scores: result.products.map((p) => p.score),
         lastComputed: admin.firestore.FieldValue.serverTimestamp(),
+        computedAtVersion: currentVersion,
         version: new Date().toISOString().split('T')[0],
         stats: {
           totalProducts: result.stats.topCount,
           totalProcessed: result.stats.totalProcessed || 0,
           totalCandidates: result.stats.totalCandidates,
           computationTimeMs: result.stats.computationTimeMs,
-          avgTrendScore: parseFloat(result.stats.avgScore.toFixed(3)),
-          cached: result.stats.cached || false,
+          avgTrendScore: parseFloat(result.stats.avgScore.toFixed(3)),          
         },
         topProductsDebug: result.products.slice(0, 10).map((p) => ({
           id: p.id,
@@ -490,9 +449,7 @@ export const computeTrendingProducts = onSchedule(
           level: 'INFO',
           event: 'trending_computed',
           productsCount: result.stats.topCount,
-          totalDuration,
-          avgScore: result.stats.avgScore.toFixed(3),
-          cached: result.stats.cached,
+          totalDuration,          
         }),
       );
 
@@ -501,7 +458,6 @@ export const computeTrendingProducts = onSchedule(
         productsCount: result.stats.topCount,
         duration: totalDuration,
         avgScore: result.stats.avgScore,
-        cached: result.stats.cached,
       };
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -529,59 +485,60 @@ export const computeTrendingProducts = onSchedule(
 
 async function createCategoryTrending(db, scoredProducts) {
   try {
-    console.log('📂 Creating category-specific trending...');
+  console.log('📂 Creating category-specific trending...');
+  const categoryCounts = new Map();
 
-    const categoryCounts = new Map();
-
-    // Group products by category (top 50 per category)
-    for (const product of scoredProducts) {
-      const category = product.metrics?.category || 'Other';
-
-      if (!categoryCounts.has(category)) {
-        categoryCounts.set(category, []);
-      }
-
-      if (categoryCounts.get(category).length < 50) {
-        categoryCounts.get(category).push(product.id);
-      }
+  for (const product of scoredProducts) {
+    const category = product.metrics?.category || 'Other';
+    if (!categoryCounts.has(category)) categoryCounts.set(category, []);
+    if (categoryCounts.get(category).length < 50) {
+      // ✅ Store feature object instead of just ID
+      categoryCounts.get(category).push({
+        id: product.id,
+        trendingScore: product.score,
+        category: product.metrics.category,
+        subcategory: product.metrics.subcategory || null,
+        brand: product.metrics.brand || null,
+        price: product.metrics.price || 0,
+        gender: product.metrics.gender || null,
+      });
     }
-
-    // Write category trending in batches
-    let batch = db.batch();
-    let batchCount = 0;
-
-    for (const [category, productIds] of categoryCounts.entries()) {
-      const safeCategory = category.replace(/[./]/g, '_');
-
-      batch.set(
-        db.collection('trending_by_category').doc(safeCategory),
-        {
-          category,
-          products: productIds,
-          lastComputed: admin.firestore.FieldValue.serverTimestamp(),
-          count: productIds.length,
-        },
-        {merge: true},
-      );
-
-      batchCount++;
-
-      if (batchCount >= 500) {
-        await batch.commit();
-        batch = db.batch();
-        batchCount = 0;
-      }
-    }
-
-    if (batchCount > 0) {
-      await batch.commit();
-    }
-
-    console.log(`✅ Created trending for ${categoryCounts.size} categories`);
-  } catch (error) {
-    console.error('⚠️ Failed to create category trending:', error.message);
-    // Non-critical, don't throw
   }
+
+  let batch = db.batch();
+  let batchCount = 0;
+
+  for (const [category, productFeatures] of categoryCounts.entries()) {
+    const safeCategory = category.replace(/[./]/g, '_');
+    batch.set(
+      db.collection('trending_by_category').doc(safeCategory),
+      {
+        category,
+        products: productFeatures.map((p) => p.id),   // ✅ Keep ID array for backward compat
+        features: productFeatures,                      // ✅ NEW: full feature objects
+        lastComputed: admin.firestore.FieldValue.serverTimestamp(),
+        count: productFeatures.length,
+      },
+      {merge: true},
+    );
+
+    batchCount++;
+    if (batchCount >= 500) {
+      await batch.commit();
+      batch = db.batch();
+      batchCount = 0;
+    }
+  }
+
+  if (batchCount > 0) {
+    await batch.commit();
+  }
+
+  console.log(`✅ Created trending for ${categoryCounts.size} categories`);
+} catch (error) {
+  console.error('⚠️ Failed to create category trending:', error.message);
+  // Non-critical, don't throw
+}
 }
 
 /**

@@ -382,6 +382,11 @@ async () => {
 
     await markBatchesProcessed(db, validBatchDocs);
 
+    await db.collection('_system').doc('metrics_version').set({
+      lastMetricsUpdate: admin.firestore.FieldValue.serverTimestamp(),
+      version: admin.firestore.FieldValue.increment(1),
+    }, { merge: true });
+
     // ── CHANGE 5: increment retryCount on failed batches ──────────────────────
     // (failed = processed successfully by this sync run but had item-level
     // failures; the batches themselves are marked processed above)
@@ -650,3 +655,33 @@ async function cleanupLegacyShards(db) {
 
   await Promise.allSettled(deletePromises);
 }
+
+export const clampNegativeMetrics = onSchedule({
+  schedule: 'every 6 hours',
+  timeZone: 'UTC',
+  timeoutSeconds: 120,
+  memory: '256MiB',
+  region: 'europe-west3',
+}, async () => {
+  const db = admin.firestore();
+  let totalClamped = 0;
+
+  for (const collection of ['products', 'shop_products']) {
+    for (const field of ['cartCount', 'favoritesCount']) {
+      const snapshot = await db.collection(collection)
+        .where(field, '<', 0)
+        .limit(500)
+        .get();
+
+      if (!snapshot.empty) {
+        const batch = db.batch();
+        snapshot.docs.forEach((doc) => batch.update(doc.ref, { [field]: 0 }));
+        await batch.commit();
+        totalClamped += snapshot.size;
+      }
+    }
+  }
+
+  console.log(`✅ Clamped ${totalClamped} negative counts`);
+  return { success: true, clamped: totalClamped };
+});

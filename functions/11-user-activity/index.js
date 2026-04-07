@@ -67,6 +67,9 @@ setInterval(() => {
       rateLimitMap.delete(key);
     }
   }
+  if (rateLimitMap.size > 50000) {
+    rateLimitMap.clear();
+  }
 }, 60000);
 
 // ============================================================================
@@ -399,6 +402,50 @@ async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
   
     await searchRef.set(searchUpdate, {merge: true});
   }
+  if (validEvents.length >= 3) {
+    try {
+      await db.runTransaction(async (tx) => {
+        const profileSnap = await tx.get(userProfileRef);
+        if (!profileSnap.exists) return;
+  
+        const profile = profileSnap.data();
+        const catScores = profile.categoryScores || {};
+        const brdScores = profile.brandScores || {};
+        const genScores = profile.genderScores || {};
+  
+        const topCategories = Object.entries(catScores)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 10)
+          .map(([category, score]) => ({ category, score }));
+  
+        const topBrands = Object.entries(brdScores)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 10)
+          .map(([brand, score]) => ({ brand, score }));
+  
+        const sortedGenders = Object.entries(genScores)
+          .sort((a, b) => b[1] - a[1])
+          .map(([gender, score]) => ({ gender, score }));
+  
+        const stats = profile.stats || {};
+        const avgPurchasePrice = stats.totalPurchases > 0 ?
+          stats.totalSpent / stats.totalPurchases :
+          null;
+  
+        tx.update(userProfileRef, {
+          'preferences.topCategories': topCategories,
+          'preferences.topBrands': topBrands,
+          'preferences.preferredGender': sortedGenders[0]?.gender || null,
+          'preferences.genderScores': sortedGenders,
+          'preferences.avgPurchasePrice': avgPurchasePrice,
+          'preferences.computedAt': admin.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+    } catch (err) {
+      console.warn('⚠️ Inline preferences update failed:', err.message);
+      // Non-critical, scheduled job will catch it
+    }
+  }
 }
 
 // ============================================================================
@@ -562,14 +609,14 @@ export const cleanupOldActivityEvents = onSchedule({
 // ============================================================================
 
 export const computeUserPreferences = onSchedule({
-  schedule: '0 */6 * * *',
+  schedule: 'every day 06:00',
   timeZone: 'UTC',
   timeoutSeconds: 540,
   memory: '1GiB',
   region: 'europe-west3',
 }, async () => {
   const db = admin.firestore();
-  const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const startTime = Date.now();
   console.log('🧮 Computing user preferences...');
 
@@ -583,7 +630,7 @@ const MAX_USERS = 30000; // Safety cap
 while (totalFetched < MAX_USERS) {
   let query = db
       .collection('user_profiles')
-      .where('lastActivityAt', '>=', sixHoursAgo)
+      .where('lastActivityAt', '>=', oneDayAgo)
       .orderBy('lastActivityAt')
       .limit(PAGE_SIZE);
 
