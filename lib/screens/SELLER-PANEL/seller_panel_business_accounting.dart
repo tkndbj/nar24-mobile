@@ -4,6 +4,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../generated/l10n/app_localizations.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:excel/excel.dart' hide Border;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:io';
+import 'package:provider/provider.dart';
+import '../../../user_provider.dart';
 
 class SellerPanelBusinessAccounting extends StatefulWidget {
   final String businessId;
@@ -693,6 +699,205 @@ class _SellerPanelBusinessAccountingState
     );
   }
 
+  Map<String, String> _xlsLabels(String lang) {
+  const tr = {
+    'period': 'Dönem', 'start': 'Başlangıç', 'end': 'Bitiş',
+    'orderSummary': 'Sipariş Özeti', 'totalOrders': 'Toplam Sipariş',
+    'completed': 'Tamamlanan', 'active': 'Aktif', 'cancelled': 'İptal',
+    'revenueSummary': 'Gelir Özeti (₺)', 'grossRevenue': 'Brüt Gelir',
+    'deliveredRevenue': 'Teslim Edilen Gelir', 'subtotal': 'Ara Toplam',
+    'deliveryFee': 'Teslimat Ücreti', 'avgOrder': 'Ortalama Sipariş',
+    'totalItemsSold': 'Toplam Satılan Ürün',
+    'paymentSheet': 'Ödeme Yöntemleri', 'method': 'Yöntem',
+    'count': 'Adet', 'amount': 'Tutar (₺)',
+    'card': 'Kredi/Banka Kartı', 'pay_at_door': 'Kapıda Ödeme',
+    'deliverySheet': 'Teslimat Türleri', 'type': 'Tür',
+    'delivery': 'Teslimat', 'pickup': 'Gel Al',
+    'topItemsSheet': 'En Çok Satılanlar', 'product': 'Ürün', 'revenue': 'Gelir (₺)',
+    'summary': 'Özet',
+    'totalRevenue': 'Toplam Gelir (₺)', 'commission': 'Komisyon (₺)',
+    'netRevenue': 'Net Gelir (₺)', 'avgOrderShop': 'Ortalama Sipariş (₺)',
+    'orderCount': 'Sipariş Sayısı', 'totalItemCount': 'Toplam Ürün Adedi',
+    'sellerCount': 'Satıcı Sayısı',
+    'categoriesSheet': 'Kategoriler', 'category': 'Kategori',
+    'productCount': 'Ürün Adedi', 'salesCount': 'Satış Adedi',
+  };
+  const en = {
+    'period': 'Period', 'start': 'Start', 'end': 'End',
+    'orderSummary': 'Order Summary', 'totalOrders': 'Total Orders',
+    'completed': 'Completed', 'active': 'Active', 'cancelled': 'Cancelled',
+    'revenueSummary': 'Revenue Summary (₺)', 'grossRevenue': 'Gross Revenue',
+    'deliveredRevenue': 'Delivered Revenue', 'subtotal': 'Subtotal',
+    'deliveryFee': 'Delivery Fee', 'avgOrder': 'Average Order',
+    'totalItemsSold': 'Total Items Sold',
+    'paymentSheet': 'Payment Methods', 'method': 'Method',
+    'count': 'Count', 'amount': 'Amount (₺)',
+    'card': 'Credit/Debit Card', 'pay_at_door': 'Pay at Door',
+    'deliverySheet': 'Delivery Types', 'type': 'Type',
+    'delivery': 'Delivery', 'pickup': 'Pickup',
+    'topItemsSheet': 'Top Selling Items', 'product': 'Product', 'revenue': 'Revenue (₺)',
+    'summary': 'Summary',
+    'totalRevenue': 'Total Revenue (₺)', 'commission': 'Commission (₺)',
+    'netRevenue': 'Net Revenue (₺)', 'avgOrderShop': 'Average Order (₺)',
+    'orderCount': 'Order Count', 'totalItemCount': 'Total Item Count',
+    'sellerCount': 'Seller Count',
+    'categoriesSheet': 'Categories', 'category': 'Category',
+    'productCount': 'Product Count', 'salesCount': 'Sales Count',
+  };
+  const ru = {
+    'period': 'Период', 'start': 'Начало', 'end': 'Конец',
+    'orderSummary': 'Сводка заказов', 'totalOrders': 'Всего заказов',
+    'completed': 'Выполнено', 'active': 'Активные', 'cancelled': 'Отменено',
+    'revenueSummary': 'Сводка выручки (₺)', 'grossRevenue': 'Валовая выручка',
+    'deliveredRevenue': 'Выручка с доставкой', 'subtotal': 'Подытог',
+    'deliveryFee': 'Стоимость доставки', 'avgOrder': 'Средний заказ',
+    'totalItemsSold': 'Всего продано товаров',
+    'paymentSheet': 'Способы оплаты', 'method': 'Метод',
+    'count': 'Кол-во', 'amount': 'Сумма (₺)',
+    'card': 'Карта', 'pay_at_door': 'Оплата при доставке',
+    'deliverySheet': 'Типы доставки', 'type': 'Тип',
+    'delivery': 'Доставка', 'pickup': 'Самовывоз',
+    'topItemsSheet': 'Топ товаров', 'product': 'Товар', 'revenue': 'Выручка (₺)',
+    'summary': 'Сводка',
+    'totalRevenue': 'Общая выручка (₺)', 'commission': 'Комиссия (₺)',
+    'netRevenue': 'Чистая выручка (₺)', 'avgOrderShop': 'Средний заказ (₺)',
+    'orderCount': 'Кол-во заказов', 'totalItemCount': 'Кол-во товаров',
+    'sellerCount': 'Кол-во продавцов',
+    'categoriesSheet': 'Категории', 'category': 'Категория',
+    'productCount': 'Кол-во единиц', 'salesCount': 'Кол-во продаж',
+  };
+  if (lang == 'en') return en;
+  if (lang == 'ru') return ru;
+  return tr;
+}
+
+  Future<void> _downloadExcel(Map<String, dynamic> data, String lang) async {
+  try {
+    final l = _xlsLabels(lang);
+    final ex = Excel.createExcel();
+
+    if (_isRestaurant) {
+      final summary = ex[l['summary']!];
+      ex.delete('Sheet1');
+      for (final row in [
+        [l['period'], data['periodLabel'] ?? ''],
+        [l['start'], data['periodStart'] ?? ''],
+        [l['end'], data['periodEnd'] ?? ''],
+        ['', ''],
+        [l['orderSummary'], ''],
+        [l['totalOrders'], data['totalOrders'] ?? 0],
+        [l['completed'], data['completedOrders'] ?? 0],
+        [l['active'], data['activeOrders'] ?? 0],
+        [l['cancelled'], data['cancelledOrders'] ?? 0],
+        ['', ''],
+        [l['revenueSummary'], ''],
+        [l['grossRevenue'], (data['grossRevenue'] as num?)?.toDouble() ?? 0],
+        [l['deliveredRevenue'], (data['deliveredRevenue'] as num?)?.toDouble() ?? 0],
+        [l['subtotal'], (data['subtotalRevenue'] as num?)?.toDouble() ?? 0],
+        [l['deliveryFee'], (data['deliveryFeeRevenue'] as num?)?.toDouble() ?? 0],
+        [l['avgOrder'], (data['averageOrderValue'] as num?)?.toDouble() ?? 0],
+        [l['totalItemsSold'], data['totalItemsSold'] ?? 0],
+      ]) {
+        summary.appendRow(row.map((e) => TextCellValue(e.toString())).toList());
+      }
+
+      if (data['paymentBreakdown'] != null) {
+        final sheet = ex[l['paymentSheet']!];
+        sheet.appendRow([l['method']!, l['count']!, l['amount']!]
+            .map(TextCellValue.new).toList());
+        (data['paymentBreakdown'] as Map<String, dynamic>).forEach((k, v) {
+          final m = v as Map<String, dynamic>;
+          sheet.appendRow([
+            TextCellValue(l[k] ?? k),
+            TextCellValue('${m['count'] ?? 0}'),
+            TextCellValue(_fmt(m['amount'])),
+          ]);
+        });
+      }
+
+      if (data['deliveryTypeBreakdown'] != null) {
+        final sheet = ex[l['deliverySheet']!];
+        sheet.appendRow([l['type']!, l['count']!, l['amount']!]
+            .map(TextCellValue.new).toList());
+        (data['deliveryTypeBreakdown'] as Map<String, dynamic>).forEach((k, v) {
+          final m = v as Map<String, dynamic>;
+          sheet.appendRow([
+            TextCellValue(l[k] ?? k),
+            TextCellValue('${m['count'] ?? 0}'),
+            TextCellValue(_fmt(m['amount'])),
+          ]);
+        });
+      }
+
+      if (data['topItems'] != null && (data['topItems'] as List).isNotEmpty) {
+        final sheet = ex[l['topItemsSheet']!];
+        sheet.appendRow([l['product']!, l['count']!, l['revenue']!]
+            .map(TextCellValue.new).toList());
+        for (final item in (data['topItems'] as List)) {
+          final i = item as Map<String, dynamic>;
+          sheet.appendRow([
+            TextCellValue(i['name'] as String? ?? ''),
+            TextCellValue('${i['quantity'] ?? 0}'),
+            TextCellValue(_fmt(i['revenue'])),
+          ]);
+        }
+      }
+    } else {
+      final summary = ex[l['summary']!];
+      ex.delete('Sheet1');
+      for (final row in [
+        [l['period'], data['periodLabel'] ?? ''],
+        ['', ''],
+        [l['totalRevenue'], (data['totalRevenue'] as num?)?.toDouble() ?? 0],
+        [l['commission'], (data['totalCommission'] as num?)?.toDouble() ?? 0],
+        [l['netRevenue'], (data['netRevenue'] as num?)?.toDouble() ?? 0],
+        [l['avgOrderShop'], (data['averageOrderValue'] as num?)?.toDouble() ?? 0],
+        [l['orderCount'], data['orderCount'] ?? 0],
+        [l['totalItemCount'], data['totalItemCount'] ?? 0],
+        [l['sellerCount'], data['sellerCount'] ?? 0],
+      ]) {
+        summary.appendRow(row.map((e) => TextCellValue(e.toString())).toList());
+      }
+
+      if (data['categories'] != null && (data['categories'] as Map).isNotEmpty) {
+        final sheet = ex[l['categoriesSheet']!];
+        sheet.appendRow([l['category']!, l['productCount']!, l['salesCount']!, l['revenue']!]
+            .map(TextCellValue.new).toList());
+        (data['categories'] as Map<String, dynamic>).forEach((name, v) {
+          final cat = v as Map<String, dynamic>;
+          sheet.appendRow([
+            TextCellValue(name),
+            TextCellValue('${cat['count'] ?? 0}'),
+            TextCellValue('${cat['quantity'] ?? 0}'),
+            TextCellValue(_fmt(cat['revenue'])),
+          ]);
+        });
+      }
+    }
+
+    final bytes = ex.save();
+    if (bytes == null) return;
+
+    final dir = await getTemporaryDirectory();
+    final label = (data['periodLabel'] as String? ?? 'rapor')
+        .replaceAll(RegExp(r'[^\w\-]'), '_');
+    final file = File('${dir.path}/Rapor_$label.xlsx');
+    await file.writeAsBytes(bytes);
+
+    await Share.shareXFiles(
+      [XFile(file.path, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')],
+      subject: '${l['summary']}: ${data['periodLabel'] ?? ''}',
+    );
+  } catch (e) {
+    debugPrint('Excel export error: $e');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Excel oluşturulamadı.')),
+      );
+    }
+  }
+}
+
   // ── Report detail bottom sheet ─────────────────────────────
 
   void _showReportDetail(Map<String, dynamic> data) {
@@ -720,28 +925,63 @@ class _SellerPanelBusinessAccountingState
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
               children: [
               Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              Text(l10n.reportDetails,
-                  style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w700, fontSize: 20)),
-              const SizedBox(height: 4),
-              Text(
-                data['periodLabel'] as String? ?? '',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  color: isDark ? Colors.white54 : Colors.grey[500],
-                ),
-              ),
-              const SizedBox(height: 20),
+  child: Container(
+    width: 40,
+    height: 4,
+    margin: const EdgeInsets.only(bottom: 16),
+    decoration: BoxDecoration(
+      color: Colors.grey.withOpacity(0.3),
+      borderRadius: BorderRadius.circular(2),
+    ),
+  ),
+),
+Row(
+  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
+    Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.reportDetails,
+              style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w700, fontSize: 20)),
+          const SizedBox(height: 4),
+          Text(
+            data['periodLabel'] as String? ?? '',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: isDark ? Colors.white54 : Colors.grey[500],
+            ),
+          ),
+        ],
+      ),
+    ),
+    // ← NEW: Excel download button
+    TextButton.icon(
+      onPressed: () {
+  final lang = context.read<UserProvider>()
+      .getProfileField<String>('languageCode') ?? 'tr';
+  _downloadExcel(data, lang);
+},
+      icon: const Icon(Icons.download_rounded, size: 18,
+          color: Color(0xFF4CAF50)),
+      label: Text('Excel',
+          style: GoogleFonts.inter(
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              color: const Color(0xFF4CAF50))),
+      style: TextButton.styleFrom(
+        backgroundColor: const Color(0xFF4CAF50).withOpacity(0.1),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10)),
+        padding: const EdgeInsets.symmetric(
+            horizontal: 12, vertical: 8),
+      ),
+    ),
+  ],
+),
+const SizedBox(height: 20),
               if (_isRestaurant)
                 ..._restaurantMetrics(data, l10n, isDark)
               else
