@@ -320,6 +320,15 @@ export const computeWeeklyAnalytics = onCall({
     .filter((doc) => doc.exists)
     .map((doc) => doc.data());
 
+  // DEBUG: Remove after fixing
+console.log('SUMMARIES:', JSON.stringify(summaries.map((s) => ({
+  dateStr: s.dateStr,
+  totals: s.totals,
+  hasCategoryEngagement: !!s.categoryEngagement,
+}))));
+
+console.log('RAW KEYS:', JSON.stringify(Object.keys(summaries[0])));
+console.log('RAW SAMPLE:', JSON.stringify(summaries[0]).substring(0, 500));
 
   if (summaries.length === 0) {
     return {success: true, status: 'no_data', message: 'No daily summaries found for this week'};

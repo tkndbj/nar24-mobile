@@ -15,6 +15,9 @@ export const deleteCampaign = onCall(
     async (request) => {
       const {campaignId} = request.data;
 
+      if (!request.auth?.token?.isAdmin) {                                                                                                                                                                        
+        throw new HttpsError('permission-denied', 'Only admins can delete campaigns');}
+
       if (!campaignId) {
         throw new HttpsError('invalid-argument', 'Campaign ID is required');
       }
@@ -461,6 +464,10 @@ campaignName: '',
     },
     async (request) => {
       const {queueId, campaignId} = request.data;
+
+      if (!request.auth?.token?.isAdmin) {
+        throw new HttpsError('permission-denied', 'Only admins can view deletion status');
+      }
   
       if (!queueId && !campaignId) {
         throw new HttpsError(

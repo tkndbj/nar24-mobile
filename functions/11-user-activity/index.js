@@ -504,8 +504,15 @@ async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
     }
   }
 
-  summaryRef.set(summaryUpdate, {merge: true}).catch((err) => {
-    console.warn('⚠️ Daily summary increment failed:', err.message);
+  summaryRef.update(summaryUpdate).catch(async (err) => {
+    if (err.code === 5 || err.code === 'not-found') {
+      await summaryRef.set({}).catch(() => {});
+      await summaryRef.update(summaryUpdate).catch((e) => {
+        console.warn('⚠️ Daily summary increment failed:', e.message);
+      });
+    } else {
+      console.warn('⚠️ Daily summary increment failed:', err.message);
+    }
   });
 }
 
@@ -954,8 +961,15 @@ await userProfileRef.set(profileUpdate, {merge: true});
         );
       }
 
-      summaryRef.set(summaryUpdate, {merge: true}).catch((err) => {
-        console.warn('⚠️ Daily summary increment failed:', err.message);
+      summaryRef.update(summaryUpdate).catch(async (err) => {
+        if (err.code === 5 || err.code === 'not-found') {
+          await summaryRef.set({}).catch(() => {});
+          await summaryRef.update(summaryUpdate).catch((e) => {
+            console.warn('⚠️ Daily summary increment failed:', e.message);
+          });
+        } else {
+          console.warn('⚠️ Daily summary increment failed:', err.message);
+        }
       });
 
     console.log(`✅ Tracked ${items.length} purchases for order ${orderId}`);

@@ -87,7 +87,7 @@ async function checkRateLimit(userId) {
     return result;
   } catch (error) {
     console.error('Rate limit check failed:', error);
-    return {allowed: true, dailyTokens: 0};
+    return {allowed: false, reason: 'rate_limit_error'};
   }
 }
 

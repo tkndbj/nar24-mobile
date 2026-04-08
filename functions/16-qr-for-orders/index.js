@@ -98,7 +98,10 @@ export async function createQRCodeTask(orderId, orderData) {
  * @return {string} Hash string
  */
 function generateVerificationHash(orderId, entityId, type) {
-  const secret = process.env.QR_VERIFICATION_SECRET || 'your-secret-key-here';
+  const secret = process.env.QR_VERIFICATION_SECRET;
+if (!secret) {
+  throw new Error('QR_VERIFICATION_SECRET environment variable is not set');
+}
   const data = `${orderId}:${entityId}:${type}:${secret}`;
   
   return crypto
@@ -134,7 +137,7 @@ async function generateAndUploadQR(storage, data, filePath) {
   await file.save(qrBuffer, {
     metadata: {
       contentType: 'image/png',
-      cacheControl: 'public, max-age=31536000',
+      cacheControl: 'private, max-age=86400',
       metadata: {
         orderId: data.orderId,
         type: data.type,
@@ -143,9 +146,13 @@ async function generateAndUploadQR(storage, data, filePath) {
     },
   });
 
-  await file.makePublic();
+  // Signed URL: expires in 7 days, re-generated if needed
+  const [signedUrl] = await file.getSignedUrl({
+    action: 'read',
+    expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
+  });
 
-  return `https://storage.googleapis.com/${storage.name}/${filePath}`;
+  return signedUrl;
 }
 
 /**
@@ -158,6 +165,7 @@ export const processQRCodeGeneration = onRequest(
     memory: '512MB',
     timeoutSeconds: 120,
     invoker: 'private',
+    secrets: ['QR_VERIFICATION_SECRET'],
   },
   async (request, response) => {
     const startTime = Date.now();
@@ -456,6 +464,7 @@ export const verifyQRCode = onCall(
     region: 'europe-west3',
     memory: '128MB',
     timeoutSeconds: 10,
+    secrets: ['QR_VERIFICATION_SECRET'],
   },
   async (request) => {
     try {
@@ -529,6 +538,7 @@ export const markQRScanned = onCall(
     region: 'europe-west3',
     memory: '256MB',
     timeoutSeconds: 30,
+    secrets: ['QR_VERIFICATION_SECRET'],
   },
   async (request) => {
     try {
@@ -574,19 +584,22 @@ export const markQRScanned = onCall(
         const sellerId = parsedData.sellerId;
         
         const result = await db.runTransaction(async (tx) => {
-          const itemsSnap = await tx.get(
-            orderRef.collection('items').where('sellerId', '==', sellerId)
+          // Read ALL items in one shot so the all_gathered check is atomic
+          const allItemsSnap = await tx.get(orderRef.collection('items'));
+          const sellerItems = allItemsSnap.docs.filter(
+            (doc) => doc.data().sellerId === sellerId,
           );
 
-          const alreadyGathered = itemsSnap.docs.every(
+          const alreadyGathered = sellerItems.every(
             (doc) => doc.data().gatheringStatus === 'gathered'
           );
 
           if (alreadyGathered) {
-            return { alreadyGathered: true, itemsCount: itemsSnap.docs.length };
+            return { alreadyGathered: true, itemsCount: sellerItems.length };
           }
 
-          itemsSnap.docs.forEach((doc) => {
+          // Mark this seller's items as gathered
+          sellerItems.forEach((doc) => {
             tx.update(doc.ref, {
               gatheringStatus: 'gathered',
               gatheredAt: timestamp,
@@ -597,7 +610,21 @@ export const markQRScanned = onCall(
             });
           });
 
-          return { updated: true, itemsCount: itemsSnap.docs.length };
+          // Check if ALL items across all sellers are now gathered (atomic)
+          const allGathered = allItemsSnap.docs.every((doc) => {
+            // Items we just updated count as gathered
+            if (sellerItems.some((s) => s.id === doc.id)) return true;
+            return doc.data().gatheringStatus === 'gathered';
+          });
+
+          if (allGathered) {
+            tx.update(orderRef, {
+              gatheringStatus: 'all_gathered',
+              allGatheredAt: timestamp,
+            });
+          }
+
+          return { updated: true, itemsCount: sellerItems.length, allGathered };
         });
 
         if (result.alreadyGathered) {
@@ -611,6 +638,7 @@ export const markQRScanned = onCall(
           };
         }
 
+        // Fire-and-forget: log scan outside transaction
         await db.collection('qr_scan_logs').add({
           type: 'GATHERING',
           orderId,
@@ -622,25 +650,13 @@ export const markQRScanned = onCall(
           timestamp,
         });
 
-        const allItemsSnap = await orderRef.collection('items').get();
-        const allGathered = allItemsSnap.docs.every(
-          (doc) => doc.data().gatheringStatus === 'gathered'
-        );
-
-        if (allGathered) {
-          await orderRef.update({
-            gatheringStatus: 'all_gathered',
-            allGatheredAt: timestamp,
-          });
-        }
-
         return {
           success: true,
           type: 'GATHERING',
           orderId,
           sellerId,
           itemsGathered: result.itemsCount,
-          allItemsGathered: allGathered,
+          allItemsGathered: result.allGathered,
         };
       } else if (type === 'DELIVERY') {
         const buyerId = parsedData.buyerId;
@@ -653,6 +669,9 @@ export const markQRScanned = onCall(
             return { alreadyDelivered: true };
           }
 
+          // Read all items inside transaction
+          const itemsSnap = await tx.get(orderRef.collection('items'));
+
           tx.update(orderRef, {
             deliveryStatus: 'delivered',
             deliveredAt: timestamp,
@@ -663,7 +682,16 @@ export const markQRScanned = onCall(
             distributionStatus: 'delivered',
           });
 
-          return { updated: true, orderData };
+          // Update all items atomically within the same transaction
+          itemsSnap.docs.forEach((doc) => {
+            tx.update(doc.ref, {
+              deliveryStatus: 'delivered',
+              deliveredAt: timestamp,
+              gatheringStatus: 'delivered',
+            });
+          });
+
+          return { updated: true, orderData, itemCount: itemsSnap.size };
         });
 
         if (result.alreadyDelivered) {
@@ -675,21 +703,7 @@ export const markQRScanned = onCall(
           };
         }
 
-        // Update all items
-        const itemsSnap = await orderRef.collection('items').get();
-        const batch = db.batch();
-        
-        itemsSnap.docs.forEach((doc) => {
-          batch.update(doc.ref, {
-            deliveryStatus: 'delivered',
-            deliveredAt: timestamp,
-            gatheringStatus: 'delivered',
-          });
-        });
-
-        await batch.commit();
-
-        // Log scan
+        // Fire-and-forget: log scan outside transaction
         await db.collection('qr_scan_logs').add({
           type: 'DELIVERY',
           orderId,
@@ -740,6 +754,7 @@ export const retryQRGeneration = onCall(
     region: 'europe-west3',
     memory: '256MB',
     timeoutSeconds: 30,
+    secrets: ['QR_VERIFICATION_SECRET'],
   },
   async (request) => {
     try {
