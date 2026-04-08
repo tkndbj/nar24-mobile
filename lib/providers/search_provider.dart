@@ -10,6 +10,7 @@ import '../../generated/l10n/app_localizations.dart';
 import '../utils/connectivity_helper.dart';
 import '../services/search_config_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/user_activity_service.dart';
 
 class SearchProvider extends ChangeNotifier {
   // ==================== CONFIGURATION ====================
@@ -230,6 +231,12 @@ class SearchProvider extends ChangeNotifier {
   Future<void> _performInitialSearch(
       String searchTerm, AppLocalizations? l10n) async {
     if (!mounted || searchTerm.isEmpty) return;
+
+    // Track search for user activity scoring
+    UserActivityService.instance.trackSearch(
+      query: searchTerm,
+      selectedCategory: null,
+    );
 
     _resetPagination();
     _lastSearchTerm = searchTerm;
