@@ -17,6 +17,7 @@ import '../providers/product_detail_provider.dart';
 import 'product_option_selector.dart';
 import 'dart:ui';
 import '../services/click_tracking_service.dart';
+import '../services/user_activity_service.dart';
 
 class ProductCard extends StatefulWidget {
   final ProductSummary product;
@@ -209,27 +210,41 @@ class _ProductCardState extends State<ProductCard> {
       }
     }
 
- ClickService.instance.trackClick(
-  productId: widget.product.id,
-  shopId: widget.product.shopId,
-  collection: widget.product.sourceCollection ?? 'shop_products',
-  productName: widget.product.productName,
-  category: widget.product.category,
-  subcategory: widget.product.subcategory,
-  subsubcategory: widget.product.subsubcategory,
-  brand: widget.product.brandModel,
-  gender: widget.product.gender,
-);
+    ClickService.instance.trackClick(
+      productId: widget.product.id,
+      shopId: widget.product.shopId,
+      collection: widget.product.sourceCollection ?? 'shop_products',
+      productName: widget.product.productName,
+      category: widget.product.category,
+      subcategory: widget.product.subcategory,
+      subsubcategory: widget.product.subsubcategory,
+      brand: widget.product.brandModel,
+      gender: widget.product.gender,
+    );
+
+// Track for user preference scoring
+    UserActivityService.instance.trackClick(
+      productId: widget.product.id,
+      shopId: widget.product.shopId,
+      productName: widget.product.productName,
+      category: widget.product.category,
+      subcategory: widget.product.subcategory,
+      subsubcategory: widget.product.subsubcategory,
+      gender: widget.product.gender,
+      brand: widget.product.brandModel,
+      price: widget.product.price.toDouble(),
+      source: 'list',
+    );
 
     // ✅ OPTIMIZATION: Use lighter curve for smoother animation on low-end devices
     final route = PageRouteBuilder(
       pageBuilder: (ctx, animation, secondaryAnimation) =>
           ChangeNotifierProvider(
         create: (_) => ProductDetailProvider(
-  productId: widget.product.id,
-  repository: repo,
-  sourceCollection: widget.product.sourceCollection,
-),
+          productId: widget.product.id,
+          repository: repo,
+          sourceCollection: widget.product.sourceCollection,
+        ),
         child: ProductDetailScreen(productId: widget.product.id),
       ),
       transitionDuration: const Duration(milliseconds: 250),
@@ -392,10 +407,10 @@ class _ProductCardContent extends StatelessWidget {
               children: [
                 _ProductName(text: productName, scaleFactor: textScaleFactor),
                 RotatingText(
-  duration: const Duration(milliseconds: 1500),
-  children: _buildRotatingChildren(
-    context: context,
-    brandModel: widget.product.brandModel ?? '',
+                  duration: const Duration(milliseconds: 1500),
+                  children: _buildRotatingChildren(
+                    context: context,
+                    brandModel: widget.product.brandModel ?? '',
                     condition: widget.product.condition,
                     quantity: widget.product.quantity,
                     textScaleFactor: textScaleFactor,
@@ -449,7 +464,7 @@ class _ProductCardContent extends StatelessWidget {
   }
 
   List<Widget> _buildRotatingChildren({
-    required BuildContext context,    
+    required BuildContext context,
     required String brandModel,
     required String condition,
     required int quantity,
@@ -667,9 +682,9 @@ class _PriceRow extends StatelessWidget {
         ),
         if (showCartIcon)
           _AddToCartIconButton(
-  productId: product.id,
-  scaleFactor: textScaleFactor,
-),
+            productId: product.id,
+            scaleFactor: textScaleFactor,
+          ),
       ],
     );
   }
@@ -1327,29 +1342,30 @@ class _AddToCartIconButtonState extends State<_AddToCartIconButton> {
 
         return GestureDetector(
           onTap: _isProcessing
-    ? null
-    : () async {
-        setState(() => _isProcessing = true);
-        try {
-          final cartProvider =
-              Provider.of<CartProvider>(context, listen: false);
+              ? null
+              : () async {
+                  setState(() => _isProcessing = true);
+                  try {
+                    final cartProvider =
+                        Provider.of<CartProvider>(context, listen: false);
 
-          if (isInCart) {
-            await cartProvider.removeFromCart(widget.productId);
-          } else {
-            // Fetch full product for option selector
-            final repo = context.read<ProductRepository>();
-            final fullProduct = await repo.fetchById(widget.productId);
-            if (!context.mounted) return;
+                    if (isInCart) {
+                      await cartProvider.removeFromCart(widget.productId);
+                    } else {
+                      // Fetch full product for option selector
+                      final repo = context.read<ProductRepository>();
+                      final fullProduct =
+                          await repo.fetchById(widget.productId);
+                      if (!context.mounted) return;
 
-            final selections =
-                await showCupertinoModalPopup<Map<String, dynamic>?>(
-              context: context,
-              builder: (_) => ProductOptionSelector(
-                product: fullProduct,
-                isBuyNow: false,
-              ),
-            );
+                      final selections =
+                          await showCupertinoModalPopup<Map<String, dynamic>?>(
+                        context: context,
+                        builder: (_) => ProductOptionSelector(
+                          product: fullProduct,
+                          isBuyNow: false,
+                        ),
+                      );
 
                       if (selections == null) {
                         setState(() => _isProcessing = false);
@@ -1365,12 +1381,12 @@ class _AddToCartIconButtonState extends State<_AddToCartIconButton> {
                         ..remove('quantity')
                         ..remove('selectedColor');
 
-                     await cartProvider.addProductToCart(
-  fullProduct,         // ← use the fetched full Product
-  quantity: qty,
-  selectedColor: selectedColor,
-  attributes: attrs.isNotEmpty ? attrs : null,
-);
+                      await cartProvider.addProductToCart(
+                        fullProduct, // ← use the fetched full Product
+                        quantity: qty,
+                        selectedColor: selectedColor,
+                        attributes: attrs.isNotEmpty ? attrs : null,
+                      );
                     }
                   } catch (e) {
                     if (kDebugMode) {

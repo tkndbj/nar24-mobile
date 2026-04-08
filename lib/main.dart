@@ -48,7 +48,6 @@ import 'package:firebase_performance/firebase_performance.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'routing/routes/app_router.dart';
 import 'dart:ui';
-import 'package:Nar24/services/click_tracking_service.dart';
 import 'services/user_activity_service.dart';
 import 'services/version_check_service.dart';
 import 'widgets/version_check_modal.dart';
@@ -56,7 +55,6 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 import 'services/sales_config_service.dart';
 import 'services/coupon_service.dart';
 import 'services/search_config_service.dart';
-import 'services/cart_favorite_metrics_service.dart';
 import 'providers/food_cart_provider.dart';
 import 'services/firestore_read_tracker.dart';
 import 'services/courier_location_service.dart';
@@ -171,28 +169,6 @@ Future<void> main() async {
       });
     }
 
-    CouponService().initialize();
-    if (kDebugMode) {
-      debugPrint('✅ CouponService initialized');
-    }
-
-    await UserActivityService.instance.initialize();
-    if (kDebugMode) {
-      debugPrint('✅ UserActivityService initialized');
-    }
-
-
-    SalesConfigService().initialize();
-    if (kDebugMode) {
-      debugPrint('✅ SalesConfigService initialized');
-    }
-
-    await SearchConfigService.instance.initialize();
-    if (kDebugMode) {
-      debugPrint(
-          '✅ SearchConfigService initialized: ${SearchConfigService.instance.config}');
-    }
-
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('ic_notification');
 
@@ -269,6 +245,26 @@ Future<void> main() async {
     }
   }
 
+  // ── Services that only need Firebase to be running (not freshly initialized) ──
+  try {
+    CouponService().initialize();
+    if (kDebugMode) debugPrint('✅ CouponService initialized');
+
+    await UserActivityService.instance.initialize();
+    if (kDebugMode) debugPrint('✅ UserActivityService initialized');
+
+    SalesConfigService().initialize();
+    if (kDebugMode) debugPrint('✅ SalesConfigService initialized');
+
+    await SearchConfigService.instance.initialize();
+    if (kDebugMode) {
+      debugPrint(
+          '✅ SearchConfigService initialized: ${SearchConfigService.instance.config}');
+    }
+  } catch (e) {
+    if (kDebugMode) debugPrint('⚠️ Service initialization error: $e');
+  }
+
   await SentryFlutter.init((options) {
     options.dsn =
         'https://a08336b4ac08df701c201cd4d7bac209@o4510244091985920.ingest.de.sentry.io/4510544590340177';
@@ -295,7 +291,7 @@ Future<void> main() async {
                 ChangeNotifierProvider<MarketProvider>(
                   create: (_) => MarketProvider(
                       Provider.of<UserProvider>(_, listen: false)),
-                ),              
+                ),
                 ChangeNotifierProvider(create: (_) => MarketBannerProvider()),
                 ChangeNotifierProvider(create: (_) => DynamicFilterProvider()),
                 ChangeNotifierProvider(
@@ -570,8 +566,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       }
     }
 
-    if (state == AppLifecycleState.detached) {   
-
+    if (state == AppLifecycleState.detached) {
       SearchConfigService.instance.shutdown();
     }
 

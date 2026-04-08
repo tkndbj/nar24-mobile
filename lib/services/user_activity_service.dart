@@ -12,22 +12,22 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 /// Event types for user activity tracking
 enum ActivityType {
   // Product interactions
-  click,        // Weight: 1 - Clicked from list
-  view,         // Weight: 2 - Viewed product detail (>3s)
-  
+  click, // Weight: 1 - Clicked from list
+  view, // Weight: 2 - Viewed product detail (>3s)
+
   // Purchase intent signals
-  addToCart,    // Weight: 5 - Strong purchase intent
+  addToCart, // Weight: 5 - Strong purchase intent
   removeFromCart, // Weight: -2 - Changed mind
-  
+
   // Engagement signals
-  favorite,     // Weight: 3 - Interest saved
-  unfavorite,   // Weight: -1 - Lost interest
-  
+  favorite, // Weight: 3 - Interest saved
+  unfavorite, // Weight: -1 - Lost interest
+
   // Conversion signals
-  purchase,     // Weight: 10 - Strongest signal
-  
+  purchase, // Weight: 10 - Strongest signal
+
   // Discovery signals
-  search,       // Weight: 1 - Intent indicator
+  search, // Weight: 1 - Intent indicator
 }
 
 /// Weights for scoring user preferences
@@ -57,7 +57,8 @@ class ActivityEvent {
   final String? brand;
   final double? price;
   final String? searchQuery;
-  final String? source; // 'search', 'category', 'recommendation', 'trending', 'direct'
+  final String?
+      source; // 'search', 'category', 'recommendation', 'trending', 'direct'
   final int? quantity;
   final double? totalValue;
   final Map<String, dynamic>? extra;
@@ -135,7 +136,7 @@ class ActivityEvent {
 }
 
 /// Production-ready User Activity Service
-/// 
+///
 /// Features:
 /// - Batched writes (reduces Firestore operations by 90%+)
 /// - Local persistence (survives app crashes/restarts)
@@ -175,7 +176,8 @@ class UserActivityService {
 
   // Firebase
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(region: 'europe-west3');
+  final FirebaseFunctions _functions =
+      FirebaseFunctions.instanceFor(region: 'europe-west3');
 
   /// Initialize the service (call once at app startup)
   Future<void> initialize() async {
@@ -187,7 +189,8 @@ class UserActivityService {
       _startFlushTimer();
       _setupConnectivityListener();
       _isInitialized = true;
-      debugPrint('✅ UserActivityService initialized with ${_queue.length} pending events');
+      debugPrint(
+          '✅ UserActivityService initialized with ${_queue.length} pending events');
     } catch (e) {
       debugPrint('❌ UserActivityService initialization error: $e');
     }
@@ -195,11 +198,12 @@ class UserActivityService {
 
   /// Setup connectivity listener for offline support
   void _setupConnectivityListener() {
-    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((result) {
+    _connectivitySubscription =
+        Connectivity().onConnectivityChanged.listen((results) {
       final wasOffline = !_isOnline;
-      _isOnline = result != ConnectivityResult.none;
-      
-      // Flush when coming back online
+      _isOnline =
+          results.isNotEmpty && !results.contains(ConnectivityResult.none);
+
       if (wasOffline && _isOnline && _queue.isNotEmpty) {
         debugPrint('📶 Back online, flushing ${_queue.length} pending events');
         _flushQueue();
@@ -216,11 +220,11 @@ class UserActivityService {
         final events = decoded
             .map((e) => ActivityEvent.fromJson(e as Map<String, dynamic>))
             .toList();
-        
+
         // Only load events from last 24 hours
         final cutoff = DateTime.now().subtract(const Duration(hours: 24));
         _queue.addAll(events.where((e) => e.timestamp.isAfter(cutoff)));
-        
+
         debugPrint('📥 Loaded ${_queue.length} persisted events');
       }
     } catch (e) {
@@ -259,7 +263,7 @@ class UserActivityService {
   bool get _isCircuitBreakerOpen {
     if (_consecutiveFailures < _maxRetries) return false;
     if (_lastFailureTime == null) return false;
-    
+
     final elapsed = DateTime.now().difference(_lastFailureTime!);
     if (elapsed > _circuitBreakerCooldown) {
       // Reset circuit breaker
@@ -281,22 +285,22 @@ class UserActivityService {
   bool _isDuplicate(ActivityType type, String? productId) {
     final key = '${type.name}_${productId ?? 'none'}';
     final lastTime = _recentEvents[key];
-    
+
     if (lastTime != null) {
       final elapsed = DateTime.now().difference(lastTime);
       if (elapsed < _dedupeWindow) {
         return true;
       }
     }
-    
+
     _recentEvents[key] = DateTime.now();
-    
+
     // Cleanup old entries
     if (_recentEvents.length > 100) {
       final cutoff = DateTime.now().subtract(_dedupeWindow);
       _recentEvents.removeWhere((_, time) => time.isBefore(cutoff));
     }
-    
+
     return false;
   }
 
@@ -360,7 +364,9 @@ class UserActivityService {
       gender: gender,
       price: price,
       source: source,
-      extra: viewDurationSeconds != null ? {'viewDuration': viewDurationSeconds} : null,
+      extra: viewDurationSeconds != null
+          ? {'viewDuration': viewDurationSeconds}
+          : null,
     ));
   }
 
@@ -503,7 +509,7 @@ class UserActivityService {
       totalValue: totalValue,
       extra: orderId != null ? {'orderId': orderId} : null,
     );
-    
+
     _queue.add(event);
     _checkFlushThreshold();
   }
@@ -515,7 +521,7 @@ class UserActivityService {
     String? selectedCategory,
   }) {
     if (query.trim().isEmpty) return;
-    
+
     _queueEvent(ActivityEvent(
       eventId: _generateEventId(ActivityType.search, query.hashCode.toString()),
       type: ActivityType.search,
@@ -544,7 +550,7 @@ class UserActivityService {
     }
 
     // Skip duplicates (except purchases)
-    if (event.type != ActivityType.purchase && 
+    if (event.type != ActivityType.purchase &&
         _isDuplicate(event.type, event.productId ?? event.searchQuery)) {
       debugPrint('⏭️ Skipping duplicate ${event.type.name} event');
       return;
@@ -572,6 +578,9 @@ class UserActivityService {
 
   /// Flush the queue to the server
   Future<void> _flushQueue() async {
+    debugPrint(
+        '🔄 _flushQueue called: isFlushing=$_isFlushing, queue=${_queue.length}, online=$_isOnline, circuitBreaker=$_isCircuitBreakerOpen');
+
     if (_isFlushing || _queue.isEmpty) return;
     if (!_isOnline) {
       debugPrint('📵 Offline, deferring flush');
@@ -584,7 +593,7 @@ class UserActivityService {
 
     _isFlushing = true;
     final user = _auth.currentUser;
-    
+
     if (user == null) {
       _isFlushing = false;
       return;
@@ -610,17 +619,17 @@ class UserActivityService {
       // Success - clear sent events
       _queue.removeWhere((e) => eventsToSend.contains(e));
       await _persistEvents();
-      
+
       _consecutiveFailures = 0;
       _lastFailureTime = null;
-      
+
       debugPrint('✅ Flushed $eventCount activity events');
     } catch (e) {
       debugPrint('❌ Failed to flush activity events: $e');
-      
+
       _consecutiveFailures++;
       _lastFailureTime = DateTime.now();
-      
+
       // Don't remove events on failure - they'll be retried
       await _persistEvents();
     } finally {
@@ -716,7 +725,7 @@ class UserActivityService {
 
   /// Get queue size (for debugging/monitoring)
   int get pendingEventCount => _queue.length;
-  
+
   /// Check if service is healthy
   bool get isHealthy => _isInitialized && !_isCircuitBreakerOpen;
 }

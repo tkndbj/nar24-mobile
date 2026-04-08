@@ -9,6 +9,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import { scheduleRestaurantReceiptTask } from '../37-restaurant-receipt/index.js';
+import {trackPurchaseActivity} from '../11-user-activity/index.js';
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -484,16 +485,28 @@ restaurantLng: restaurantData.longitude || null,
 
   // ── 7. Clear user's food cart (fire-and-forget) ──────────────────
   if (orderResult && !orderResult.duplicate) {
-         clearFoodCartAsync(buyerId).catch((err) =>
-           console.error('[FoodOrder] Cart clear failed:', err)
-         );
-         scheduleFoodReceiptTask(orderDoc, orderResult.orderId).catch((err) =>
-           console.error('[FoodOrder] Buyer receipt task failed:', err)
-         );
-         scheduleRestaurantReceiptTask(orderDoc, orderResult.orderId).catch((err) =>
-           console.error('[FoodOrder] Restaurant receipt task failed:', err)
-         );
-       }
+    clearFoodCartAsync(buyerId).catch((err) =>
+      console.error('[FoodOrder] Cart clear failed:', err)
+    );
+    scheduleFoodReceiptTask(orderDoc, orderResult.orderId).catch((err) =>
+      console.error('[FoodOrder] Buyer receipt task failed:', err)
+    );
+    scheduleRestaurantReceiptTask(orderDoc, orderResult.orderId).catch((err) =>
+      console.error('[FoodOrder] Restaurant receipt task failed:', err)
+    );
+
+    // Track food purchase in user activity system
+    const activityItems = orderDoc.items.map((item) => ({
+      productId: item.foodId,
+      category: item.foodCategory || 'Food',
+      brandModel: orderDoc.restaurantName || null,
+      price: item.price,
+      quantity: item.quantity,
+    }));
+    trackPurchaseActivity(buyerId, activityItems, orderResult.orderId).catch((err) =>
+      console.error('[FoodOrder] Activity tracking failed:', err)
+    );
+  }
 
   return orderResult;
 }

@@ -20,7 +20,7 @@ import 'dart:math';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'utils/network_utils.dart';
 import 'dart:convert' show base64, json, utf8;
-import 'package:crypto/crypto.dart' as crypto;
+import 'package:firebase_analytics/firebase_analytics.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -227,38 +227,38 @@ class AuthService {
   // ============================================================
 
   Future<void> _syncLanguageToFirestore(String userId) async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final localLanguage = prefs.getString('locale');
-    
-    if (localLanguage == null || localLanguage.isEmpty) return;
-    
-    final doc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .get(const GetOptions(source: Source.server))
-        .timeout(const Duration(seconds: 5));
-    
-    if (!doc.exists) return;
-    
-    final currentLanguage = doc.data()?['languageCode'] as String?;
-    
-    // Only write if different
-    if (currentLanguage != localLanguage) {
-      await FirebaseFirestore.instance
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final localLanguage = prefs.getString('locale');
+
+      if (localLanguage == null || localLanguage.isEmpty) return;
+
+      final doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
-          .update({'languageCode': localLanguage})
+          .get(const GetOptions(source: Source.server))
           .timeout(const Duration(seconds: 5));
-      
-      if (kDebugMode) {
-        debugPrint('🌍 Language synced: $currentLanguage → $localLanguage');
+
+      if (!doc.exists) return;
+
+      final currentLanguage = doc.data()?['languageCode'] as String?;
+
+      // Only write if different
+      if (currentLanguage != localLanguage) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .update({'languageCode': localLanguage}).timeout(
+                const Duration(seconds: 5));
+
+        if (kDebugMode) {
+          debugPrint('🌍 Language synced: $currentLanguage → $localLanguage');
+        }
       }
+    } catch (e) {
+      if (kDebugMode) debugPrint('⚠️ Language sync failed: $e');
     }
-  } catch (e) {
-    if (kDebugMode) debugPrint('⚠️ Language sync failed: $e');
   }
-}
 
   Future<void> _processBackgroundTasks() async {
     if (_isDisposed || _isProcessingBackground || _backgroundTasks.isEmpty) {
@@ -474,6 +474,9 @@ class AuthService {
       }
 
       _clearFailedAttempts(normalizedEmail);
+
+      // Set GA4 user ID for analytics
+      FirebaseAnalytics.instance.setUserId(id: user.uid);
 
       // Check email verification
       if (!user.emailVerified) {
@@ -698,6 +701,9 @@ class AuthService {
         };
       }
 
+      // Set GA4 user ID for analytics
+      FirebaseAnalytics.instance.setUserId(id: user.uid);
+
       final isNewUser = firebaseCred.additionalUserInfo?.isNewUser ?? false;
 
       if (isNewUser) {
@@ -824,6 +830,9 @@ class AuthService {
         };
       }
 
+      // Set GA4 user ID for analytics
+      FirebaseAnalytics.instance.setUserId(id: user.uid);
+
       final isNewUser = firebaseCred.additionalUserInfo?.isNewUser ?? false;
 
       // Capture Apple's data
@@ -903,7 +912,7 @@ class AuthService {
       }
 
       _queueBackgroundTask(() => _registerFcmToken(user.uid));
-      _queueBackgroundTask(() => _syncLanguageToFirestore(user.uid)); 
+      _queueBackgroundTask(() => _syncLanguageToFirestore(user.uid));
 
       return {
         'user': user,
@@ -1127,6 +1136,9 @@ class AuthService {
       await _auth.signOut();
       _currentGoogleUser = null;
 
+      // Clear GA4 user ID
+      FirebaseAnalytics.instance.setUserId(id: null);
+
       // Step 2: Clear local data and caches (fast, local-only).
       final prefs = await SharedPreferences.getInstance();
 
@@ -1152,7 +1164,8 @@ class AuthService {
             },
           ),
         _disconnectGoogleWithTimeout(),
-      ], eagerError: false).catchError((_) {}));
+      ], eagerError: false)
+          .catchError((_) {}));
 
       if (kDebugMode) debugPrint('User logged out successfully');
     } catch (e) {

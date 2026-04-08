@@ -228,6 +228,7 @@ async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
   const dayCategoryBreakdown = new Map();
   const dayBrandBreakdown = new Map();
   const dayGenderBreakdown = new Map();
+  const recentActivityEntries = [];
 
   for (const event of validEvents) {
     const weight = ACTIVITY_WEIGHTS[event.type] || 0;
@@ -337,6 +338,18 @@ async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
     if (type === 'search' && event.searchQuery) {
       searchQueries.push(event.searchQuery);
     }
+
+     // ── Recent activity log ──────────────────────────────────
+     recentActivityEntries.push({
+      t: type,
+      pid: event.productId || null,
+      pn: event.productName || null,
+      cat: event.category || null,
+      br: event.brand || null,
+      pr: event.price || null,
+      q: event.searchQuery || null,
+      ts: event.timestamp,
+    });
   }
 
   // ── Single transaction: user profile + recentlyViewed ─────────
@@ -396,6 +409,15 @@ async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
       profileUpdate.recentlyViewed = Array.from(mergedMap.values())
         .sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())
         .slice(0, CONFIG.MAX_RECENT_PRODUCTS);
+    }
+
+     // ── Recent activity feed (capped at 50) ─────────────────
+     if (recentActivityEntries.length > 0) {
+      const existingActivity = existing.recentActivity || [];
+      profileUpdate.recentActivity = [
+        ...recentActivityEntries,
+        ...existingActivity,
+      ].slice(0, 50);
     }
 
     if (profileSnap.exists) {
@@ -876,7 +898,24 @@ export async function trackPurchaseActivity(userId, items, orderId) {
           admin.firestore.FieldValue.increment(score);
       }
 
-      await userProfileRef.set(profileUpdate, {merge: true});
+      // Build recent activity entries for purchases
+const purchaseActivities = items.map((item) => ({
+  t: 'purchase',
+  pid: item.productId || null,
+  pn: null, // product name not available in items payload
+  cat: item.category || null,
+  br: item.brandModel || null,
+  pr: item.price || null,
+  q: null,
+  ts: Date.now(),
+}));
+
+// Merge with existing recentActivity
+const existingDoc = await userProfileRef.get();
+const existingActivity = existingDoc.exists ? (existingDoc.data().recentActivity || []) : [];
+profileUpdate.recentActivity = [...purchaseActivities, ...existingActivity].slice(0, 50);
+
+await userProfileRef.set(profileUpdate, {merge: true});
     }, 3, 100);
 
     // ── Daily engagement summary for purchases (outside retry) ──
