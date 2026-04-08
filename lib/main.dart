@@ -176,20 +176,11 @@ Future<void> main() async {
       debugPrint('✅ CouponService initialized');
     }
 
-    await ClickTrackingService.instance.initialize();
-    if (kDebugMode) {
-      debugPrint('✅ ClickTrackingService initialized');
-    }
-
     await UserActivityService.instance.initialize();
     if (kDebugMode) {
       debugPrint('✅ UserActivityService initialized');
     }
 
-    await MetricsEventService.instance.initialize();
-    if (kDebugMode) {
-      debugPrint('✅ MetricsEventService initialized');
-    }
 
     SalesConfigService().initialize();
     if (kDebugMode) {
@@ -560,8 +551,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         state == AppLifecycleState.detached) {
       // Flush pending data before going to background
       ImpressionBatcher().flush();
-      UserActivityService.instance.forceFlush();
-      ClickTrackingService.instance.flush();
+      UserActivityService.instance.forceFlush();    
       MetricsEventService.instance.flush();
       CourierLocationService.instance.onAppPaused();
 
@@ -580,8 +570,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       }
     }
 
-    if (state == AppLifecycleState.detached) {
-      ClickTrackingService.instance.dispose();
+    if (state == AppLifecycleState.detached) {   
       MetricsEventService.instance.dispose();
       SearchConfigService.instance.shutdown();
     }

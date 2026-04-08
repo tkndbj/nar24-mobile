@@ -16,6 +16,7 @@ import '../providers/product_repository.dart';
 import '../providers/product_detail_provider.dart';
 import 'product_option_selector.dart';
 import 'dart:ui';
+import '../services/click_tracking_service.dart';
 
 class ProductCard extends StatefulWidget {
   final ProductSummary product;
@@ -208,20 +209,17 @@ class _ProductCardState extends State<ProductCard> {
       }
     }
 
-    final bool isShopProduct =
-        widget.product.sourceCollection == 'shop_products';
-
-    market.incrementClickCount(
-      widget.product.id,
-      shopId: widget.product.shopId,
-      isShopProduct: isShopProduct,
-      productName: widget.product.productName,
-      category: widget.product.category,
-      subcategory: widget.product.subcategory,
-      subsubcategory: widget.product.subsubcategory,
-      brand: widget.product.brandModel,
-      gender: widget.product.gender,
-    );
+ ClickService.instance.trackClick(
+  productId: widget.product.id,
+  shopId: widget.product.shopId,
+  collection: widget.product.sourceCollection ?? 'shop_products',
+  productName: widget.product.productName,
+  category: widget.product.category,
+  subcategory: widget.product.subcategory,
+  subsubcategory: widget.product.subsubcategory,
+  brand: widget.product.brandModel,
+  gender: widget.product.gender,
+);
 
     // ✅ OPTIMIZATION: Use lighter curve for smoother animation on low-end devices
     final route = PageRouteBuilder(

@@ -8353,10 +8353,10 @@ export const createProductQuestionNotification = onCall(
 export {deleteCampaign, processCampaignDeletion, getCampaignDeletionStatus, cleanupCampaignDeletionQueue} from './4-campaigns/index.js';
 export {submitReview, updateProductMetrics, updateShopProductMetrics, updateShopMetrics, updateUserSellerMetrics, sendReviewNotifications} from './5-reviews/index.js';
 export {rebuildRelatedProducts} from './6-related_products/index.js';
-export {batchUpdateClicks, syncClickAnalytics} from './7-click-analytics/index.js';
+export {rollupClickCounts} from './7-click-analytics/index.js';
 export {validateCartCheckout, updateCartCache} from './8-cart-validation/index.js';
 export {calculateCartTotals} from './9-cart-total-price/index.js';
-export {batchCartFavoriteEvents, syncCartFavoriteMetrics, clampNegativeMetrics} from './10-cart&favorite-metrics/index.js';
+export {clampNegativeMetrics} from './10-cart&favorite-metrics/index.js';
 export {
   batchUserActivity,
   cleanupOldActivityEvents,

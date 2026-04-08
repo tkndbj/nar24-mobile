@@ -149,12 +149,9 @@ class _ShopCardWidgetState extends State<ShopCardWidget>
 
     _lastNavigationTime = now;
 
-    if (!isOwner) {
-      // Fire and forget - don't await
-      widgetProv.incrementClickCount(widget.shopId).catchError(
-            (e) => debugPrint('Click count error: $e'),
-          );
-    }
+    widgetProv.incrementClickCount(widget.shopId).catchError(
+      (e) => debugPrint('Click count error: $e'),
+    );
 
     if (context.mounted) {
       Navigator.of(context).push(_shopDetailRoute(widget.shopId));

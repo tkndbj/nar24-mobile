@@ -1,5 +1,5 @@
 // functions/11-user-activity/index.js
-// Production-ready user activity tracking with self-healing and efficient batching
+// Slimmed-down user activity tracking — aggregates only, no raw event storage
 
 import {onCall, HttpsError} from 'firebase-functions/v2/https';
 import {onSchedule} from 'firebase-functions/v2/scheduler';
@@ -27,6 +27,7 @@ const CONFIG = {
   MAX_EVENT_AGE_MS: 24 * 60 * 60 * 1000,
   RETENTION_DAYS: 90,
   DLQ_MAX_RETRIES: 5,
+  MAX_RECENT_PRODUCTS: 50,
 };
 
 // ============================================================================
@@ -59,7 +60,6 @@ function checkRateLimit(userId) {
   return true;
 }
 
-// Periodic cleanup of rate limit map (prevents memory leak)
 setInterval(() => {
   const now = Date.now();
   for (const [key, value] of rateLimitMap.entries()) {
@@ -85,7 +85,6 @@ async function retryWithBackoff(operation, maxRetries = 3, baseDelay = 100) {
     } catch (error) {
       lastError = error;
 
-      // Don't retry validation errors
       if (error.code === 'invalid-argument' ||
           error.code === 'permission-denied') {
         throw error;
@@ -117,7 +116,6 @@ async function saveToDeadLetterQueue(db, userId, events, error) {
     });
     console.warn(`📥 DLQ: Saved ${events.length} events for user ${userId}`);
   } catch (dlqError) {
-    // Critical failure - log for manual recovery
     console.error(JSON.stringify({
       level: 'CRITICAL',
       event: 'dlq_save_failed',
@@ -142,30 +140,29 @@ export const batchUserActivity = onCall({
 }, async (request) => {
   const startTime = Date.now();
 
-  // Auth check
   if (!request.auth?.uid) {
     throw new HttpsError('unauthenticated', 'Must be logged in');
   }
 
   const userId = request.auth.uid;
 
-  // Rate limiting
   if (!checkRateLimit(userId)) {
     return {success: true, processed: 0, rateLimited: true};
   }
 
   const {events} = request.data;
 
-  // Validate input
   if (!Array.isArray(events) || events.length === 0) {
     return {success: true, processed: 0};
   }
 
   if (events.length > CONFIG.MAX_EVENTS_PER_BATCH) {
-    throw new HttpsError('invalid-argument', `Maximum ${CONFIG.MAX_EVENTS_PER_BATCH} events per batch`);
+    throw new HttpsError(
+      'invalid-argument',
+      `Maximum ${CONFIG.MAX_EVENTS_PER_BATCH} events per batch`,
+    );
   }
 
-  // Filter valid events
   const now = Date.now();
   const validEvents = events.filter((event) => {
     if (!event.eventId || !event.type || !event.timestamp) return false;
@@ -204,274 +201,202 @@ export const batchUserActivity = onCall({
       error: error.message,
     }));
 
-    // Save to DLQ for later processing
     await saveToDeadLetterQueue(db, userId, validEvents, error);
 
-    // Return success to client - events are safely queued
     return {success: true, processed: 0, queued: validEvents.length};
   }
 });
 
 // ============================================================================
-// CORE PROCESSING LOGIC (Separated for reuse in DLQ)
+// CORE PROCESSING LOGIC
 // ============================================================================
 
 async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
-  const batch = db.batch();
-  const today = new Date().toISOString().split('T')[0];
+  const userProfileRef = db.collection('user_profiles').doc(userId);
 
-  // Aggregation maps
+  // ── Aggregate in memory ───────────────────────────────────────────────
   const categoryScores = new Map();
+  const subcategoryScores = new Map();
   const brandScores = new Map();
-  const genderScores = new Map(); // ✅ NEW: Gender tracking
+  const genderScores = new Map();
   const recentProducts = [];
   const searchQueries = [];
   let purchaseCount = 0;
   let totalPurchaseValue = 0;
 
-  // Process each event
   for (const event of validEvents) {
     const weight = ACTIVITY_WEIGHTS[event.type] || 0;
 
-    // Store raw event
-    const eventRef = db
-        .collection('activity_events')
-        .doc(today)
-        .collection('events')
-        .doc();
-
-    const eventData = {
-      userId,
-      ...event,
-      weight,
-      serverTimestamp: admin.firestore.FieldValue.serverTimestamp(),
-    };
-
-    if (fromDLQ) {
-      eventData.reprocessedFromDLQ = true;
-    }
-
-    batch.set(eventRef, eventData);
-
-    // Aggregate category scores (only positive weights)
     if (event.category && weight > 0) {
-      const current = categoryScores.get(event.category) || 0;
-      categoryScores.set(event.category, current + weight);
+      categoryScores.set(
+        event.category,
+        (categoryScores.get(event.category) || 0) + weight,
+      );
     }
-    
-    // Aggregate subcategory scores (only positive weights)
+
     if (event.subcategory && weight > 0) {
-      const current = categoryScores.get(event.subcategory) || 0;
-      categoryScores.set(event.subcategory, current + weight);
+      subcategoryScores.set(
+        event.subcategory,
+        (subcategoryScores.get(event.subcategory) || 0) + weight,
+      );
     }
 
-    // Aggregate brand scores (only positive weights)
     if (event.brand && weight > 0) {
-      const current = brandScores.get(event.brand) || 0;
-      brandScores.set(event.brand, current + weight);
+      brandScores.set(
+        event.brand,
+        (brandScores.get(event.brand) || 0) + weight,
+      );
     }
 
-    // ✅ NEW: Aggregate gender scores (only positive weights)
     if (event.gender && weight > 0) {
-      const current = genderScores.get(event.gender) || 0;
-      genderScores.set(event.gender, current + weight);
+      genderScores.set(
+        event.gender,
+        (genderScores.get(event.gender) || 0) + weight,
+      );
     }
 
-    // Track recently viewed products
-    if (event.productId &&
-        ['click', 'view', 'addToCart', 'favorite'].includes(event.type)) {
+    if (
+      event.productId &&
+      ['click', 'view', 'addToCart', 'favorite'].includes(event.type)
+    ) {
       recentProducts.push({
         productId: event.productId,
         timestamp: event.timestamp,
       });
     }
 
-    // Track purchases
     if (event.type === 'purchase') {
       purchaseCount++;
       totalPurchaseValue += event.totalValue || 0;
     }
 
-    // Track searches
     if (event.type === 'search' && event.searchQuery) {
       searchQueries.push(event.searchQuery);
     }
   }
 
-  // Build user profile update
-  const userProfileRef = db.collection('user_profiles').doc(userId);
-  const profileUpdate = {
-    lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
-    stats: {
-      totalEvents: admin.firestore.FieldValue.increment(validEvents.length),
-    },
-  };
-  
-  // Add purchase stats to nested stats object
-  if (purchaseCount > 0) {
-    profileUpdate.stats.totalPurchases =
-      admin.firestore.FieldValue.increment(purchaseCount);
-    profileUpdate.stats.totalSpent =
-      admin.firestore.FieldValue.increment(totalPurchaseValue);
-  }
-  
-  // ✅ FIXED: Build nested categoryScores object
-  if (categoryScores.size > 0) {
-    profileUpdate.categoryScores = {};
+  // ── Single transaction: profile + recentlyViewed ──────────────────────
+  await db.runTransaction(async (tx) => {
+    const profileSnap = await tx.get(userProfileRef);
+    const existing = profileSnap.exists ? profileSnap.data() : {};
+
+    // Build profile update with increments
+    const profileUpdate = {
+      'lastActivityAt': admin.firestore.FieldValue.serverTimestamp(),
+      'stats.totalEvents': admin.firestore.FieldValue.increment(
+        validEvents.length,
+      ),
+    };
+
+    if (purchaseCount > 0) {
+      profileUpdate['stats.totalPurchases'] =
+        admin.firestore.FieldValue.increment(purchaseCount);
+      profileUpdate['stats.totalSpent'] =
+        admin.firestore.FieldValue.increment(totalPurchaseValue);
+    }
+
+    // Category scores (separated from subcategory)
     for (const [category, score] of categoryScores.entries()) {
       const safeKey = category.replace(/[./]/g, '_');
-      profileUpdate.categoryScores[safeKey] =
+      profileUpdate[`categoryScores.${safeKey}`] =
         admin.firestore.FieldValue.increment(score);
     }
-  }
-  
-  // ✅ FIXED: Build nested brandScores object
-  if (brandScores.size > 0) {
-    profileUpdate.brandScores = {};
+
+    // Subcategory scores (separate map — no collision with categories)
+    for (const [subcategory, score] of subcategoryScores.entries()) {
+      const safeKey = subcategory.replace(/[./]/g, '_');
+      profileUpdate[`subcategoryScores.${safeKey}`] =
+        admin.firestore.FieldValue.increment(score);
+    }
+
     for (const [brand, score] of brandScores.entries()) {
       const safeKey = brand.replace(/[./]/g, '_');
-      profileUpdate.brandScores[safeKey] =
+      profileUpdate[`brandScores.${safeKey}`] =
         admin.firestore.FieldValue.increment(score);
     }
-  }
 
-  // ✅ NEW: Build nested genderScores object
-  if (genderScores.size > 0) {
-    profileUpdate.genderScores = {};
     for (const [gender, score] of genderScores.entries()) {
       const safeKey = gender.replace(/[./]/g, '_');
-      profileUpdate.genderScores[safeKey] =
+      profileUpdate[`genderScores.${safeKey}`] =
         admin.firestore.FieldValue.increment(score);
     }
-  }
-  
-  batch.set(userProfileRef, profileUpdate, {merge: true});
 
-  
-  // Commit all writes atomically
-  await batch.commit();
-
-  // Update recently viewed (limit to 20, sorted by timestamp)
-  if (recentProducts.length > 0) {
-    await db.runTransaction(async (tx) => {
-      const profileSnap = await tx.get(userProfileRef);
-      const existing = profileSnap.exists ?
-        (profileSnap.data().recentlyViewed || []) :
-        [];
-  
-      // Merge: keyed by productId so duplicates collapse, newer timestamp wins
+    // Merge recentlyViewed in the same transaction (no second read)
+    if (recentProducts.length > 0) {
+      const existingRecent = existing.recentlyViewed || [];
       const mergedMap = new Map(
-        existing.map((item) => [item.productId, item])
+        existingRecent.map((item) => [item.productId, item]),
       );
-  
+
       for (const item of recentProducts) {
         mergedMap.set(item.productId, {
           productId: item.productId,
           timestamp: admin.firestore.Timestamp.fromMillis(item.timestamp),
         });
       }
-  
-      const sorted = Array.from(mergedMap.values())
-        .sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())
-        .slice(0, 50); // increased from 20 — cheap to store, valuable for scoring
-  
-      tx.update(userProfileRef, {recentlyViewed: sorted});
-    });
-  }
 
-  // Update search analytics
+      profileUpdate.recentlyViewed = Array.from(mergedMap.values())
+        .sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())
+        .slice(0, CONFIG.MAX_RECENT_PRODUCTS);
+    }
+
+    if (profileSnap.exists) {
+      tx.update(userProfileRef, profileUpdate);
+    } else {
+      tx.set(userProfileRef, profileUpdate, {merge: true});
+    }
+  });
+
+  // ── Search analytics (fire-and-forget, non-critical) ──────────────────
   if (searchQueries.length > 0) {
+    const today = new Date().toISOString().split('T')[0];
     const searchRef = db.collection('search_analytics').doc(today);
     const searchUpdate = {
       date: today,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
-  
-    for (const query of searchQueries) {
-      const safeQuery = query
-          .toLowerCase()
-          .trim()
-          .substring(0, 50)
-          .replace(/[./]/g, '_');
-  
+
+    for (const q of searchQueries) {
+      const safeQuery = q
+        .toLowerCase()
+        .trim()
+        .substring(0, 50)
+        .replace(/[./]/g, '_');
+
       if (safeQuery.length > 0) {
         searchUpdate[`terms.${safeQuery}`] =
           admin.firestore.FieldValue.increment(1);
       }
     }
-  
-    await searchRef.set(searchUpdate, {merge: true});
-  }
-  if (validEvents.length >= 3) {
-    try {
-      await db.runTransaction(async (tx) => {
-        const profileSnap = await tx.get(userProfileRef);
-        if (!profileSnap.exists) return;
-  
-        const profile = profileSnap.data();
-        const catScores = profile.categoryScores || {};
-        const brdScores = profile.brandScores || {};
-        const genScores = profile.genderScores || {};
-  
-        const topCategories = Object.entries(catScores)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 10)
-          .map(([category, score]) => ({ category, score }));
-  
-        const topBrands = Object.entries(brdScores)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 10)
-          .map(([brand, score]) => ({ brand, score }));
-  
-        const sortedGenders = Object.entries(genScores)
-          .sort((a, b) => b[1] - a[1])
-          .map(([gender, score]) => ({ gender, score }));
-  
-        const stats = profile.stats || {};
-        const avgPurchasePrice = stats.totalPurchases > 0 ?
-          stats.totalSpent / stats.totalPurchases :
-          null;
-  
-        tx.update(userProfileRef, {
-          'preferences.topCategories': topCategories,
-          'preferences.topBrands': topBrands,
-          'preferences.preferredGender': sortedGenders[0]?.gender || null,
-          'preferences.genderScores': sortedGenders,
-          'preferences.avgPurchasePrice': avgPurchasePrice,
-          'preferences.computedAt': admin.firestore.FieldValue.serverTimestamp(),
-        });
-      });
-    } catch (err) {
-      console.warn('⚠️ Inline preferences update failed:', err.message);
-      // Non-critical, scheduled job will catch it
-    }
+
+    searchRef.set(searchUpdate, {merge: true}).catch((err) => {
+      console.warn('⚠️ Search analytics write failed:', err.message);
+    });
   }
 }
 
 // ============================================================================
-// DEAD LETTER QUEUE PROCESSOR (Every 15 minutes)
+// DEAD LETTER QUEUE PROCESSOR (Every 6 hours)
 // ============================================================================
 
 export const processActivityDLQ = onSchedule({
-  schedule: 'every 15 minutes',
+  schedule: 'every 6 hours',
   timeZone: 'UTC',
   timeoutSeconds: 300,
-  memory: '512MiB',
+  memory: '256MiB',
   region: 'europe-west3',
 }, async () => {
   const db = admin.firestore();
 
-  console.log('🔄 Processing activity DLQ...');
-
   try {
     const dlqSnapshot = await db
-        .collection('activity_dlq')
-        .where('status', '==', 'pending')
-        .where('retryCount', '<', CONFIG.DLQ_MAX_RETRIES)
-        .orderBy('retryCount')
-        .orderBy('createdAt')
-        .limit(50)
-        .get();
+      .collection('activity_dlq')
+      .where('status', '==', 'pending')
+      .where('retryCount', '<', CONFIG.DLQ_MAX_RETRIES)
+      .orderBy('retryCount')
+      .orderBy('createdAt')
+      .limit(50)
+      .get();
 
     if (dlqSnapshot.empty) {
       console.log('✅ DLQ empty');
@@ -500,7 +425,8 @@ export const processActivityDLQ = onSchedule({
           retryCount: newRetryCount,
           lastError: error.message,
           lastRetryAt: admin.firestore.FieldValue.serverTimestamp(),
-          status: newRetryCount >= CONFIG.DLQ_MAX_RETRIES ? 'failed' : 'pending',
+          status:
+            newRetryCount >= CONFIG.DLQ_MAX_RETRIES ? 'failed' : 'pending',
         });
 
         failed++;
@@ -524,7 +450,7 @@ export const processActivityDLQ = onSchedule({
 });
 
 // ============================================================================
-// CLEANUP OLD EVENTS (Daily at 03:00 UTC)
+// CLEANUP (Daily at 03:00 UTC)
 // ============================================================================
 
 export const cleanupOldActivityEvents = onSchedule({
@@ -539,59 +465,40 @@ export const cleanupOldActivityEvents = onSchedule({
   cutoffDate.setDate(cutoffDate.getDate() - CONFIG.RETENTION_DAYS);
   const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
 
-  console.log(`🧹 Cleaning up before ${cutoffDateStr}`);
-
   try {
-    let totalDeleted = 0;
-
-    // Delete old activity events
-    const shardsSnapshot = await db
-        .collection('activity_events')
-        .where(admin.firestore.FieldPath.documentId(), '<', cutoffDateStr)
-        .limit(90)
-        .get();
-
-        for (const shardDoc of shardsSnapshot.docs) {
-          // recursiveDelete handles the entire subcollection server-side
-          // no streaming, no batching, no timeout risk
-          await admin.firestore().recursiveDelete(shardDoc.ref);
-          totalDeleted++;
-        }
-
     // Delete old search analytics
     const searchSnapshot = await db
-        .collection('search_analytics')
-        .where(admin.firestore.FieldPath.documentId(), '<', cutoffDateStr)
-        .limit(90)
-        .get();
+      .collection('search_analytics')
+      .where(admin.firestore.FieldPath.documentId(), '<', cutoffDateStr)
+      .limit(90)
+      .get();
 
     if (!searchSnapshot.empty) {
       const batch = db.batch();
-      searchSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+      searchSnapshot.docs.forEach((d) => batch.delete(d.ref));
       await batch.commit();
     }
 
-    // Delete processed DLQ items older than 7 days
+    // Delete processed/failed DLQ items older than 7 days
     const dlqCutoff = new Date();
     dlqCutoff.setDate(dlqCutoff.getDate() - 7);
 
     const dlqSnapshot = await db
-        .collection('activity_dlq')
-        .where('status', 'in', ['processed', 'failed'])
-        .where('createdAt', '<', dlqCutoff)
-        .limit(500)
-        .get();
+      .collection('activity_dlq')
+      .where('status', 'in', ['processed', 'failed'])
+      .where('createdAt', '<', dlqCutoff)
+      .limit(500)
+      .get();
 
     if (!dlqSnapshot.empty) {
       const batch = db.batch();
-      dlqSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+      dlqSnapshot.docs.forEach((d) => batch.delete(d.ref));
       await batch.commit();
     }
 
     console.log(JSON.stringify({
       level: 'INFO',
       event: 'cleanup_completed',
-      shardsDeleted: totalDeleted,
       searchDocsDeleted: searchSnapshot.size,
       dlqDeleted: dlqSnapshot.size,
     }));
@@ -605,7 +512,7 @@ export const cleanupOldActivityEvents = onSchedule({
 });
 
 // ============================================================================
-// COMPUTE USER PREFERENCES (Every 6 hours)
+// COMPUTE USER PREFERENCES (Daily at 06:00 UTC)
 // ============================================================================
 
 export const computeUserPreferences = onSchedule({
@@ -618,134 +525,141 @@ export const computeUserPreferences = onSchedule({
   const db = admin.firestore();
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const startTime = Date.now();
-  console.log('🧮 Computing user preferences...');
 
   try {
     let processed = 0;
-let totalFetched = 0;
-let lastDoc = null;
-const PAGE_SIZE = 500;
-const MAX_USERS = 30000; // Safety cap
+    let totalFetched = 0;
+    let lastDoc = null;
+    const PAGE_SIZE = 500;
 
-while (totalFetched < MAX_USERS) {
-  let query = db
-      .collection('user_profiles')
-      .where('lastActivityAt', '>=', oneDayAgo)
-      .orderBy('lastActivityAt')
-      .limit(PAGE_SIZE);
+    while (true) {
+      let q = db
+        .collection('user_profiles')
+        .where('lastActivityAt', '>=', oneDayAgo)
+        .orderBy('lastActivityAt')
+        .limit(PAGE_SIZE);
 
-  if (lastDoc) {
-    query = query.startAfter(lastDoc);
-  }
-
-  const profilesSnapshot = await query.get();
-
-  if (profilesSnapshot.empty) {
-    if (totalFetched === 0) {
-      console.log('✅ No active users');
-    }
-    break;
-  }
-
-  totalFetched += profilesSnapshot.size;
-  lastDoc = profilesSnapshot.docs[profilesSnapshot.docs.length - 1];
-
-  const profileDocs = profilesSnapshot.docs;
-
-  for (let i = 0; i < profileDocs.length; i += 50) {
-      const batch = db.batch();
-      const chunk = profileDocs.slice(i, i + 50);
-
-      for (const profileDoc of chunk) {
-        try {
-          const profile = profileDoc.data();
-      
-          // ✅ PRUNING: Get top categories and prune the rest
-          const categoryScores = profile.categoryScores || {};
-          const topCategories = Object.entries(categoryScores)
-              .map(([category, score]) => ({category, score}))
-              .sort((a, b) => b.score - a.score)
-              .slice(0, 10);
-      
-          // Keep only top 100 categories (prune the rest)
-          const prunedCategoryScores = {};
-          Object.entries(categoryScores)
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 100)
-              .forEach(([category, score]) => {
-                if (score >= 5) { // Only keep meaningful scores
-                  prunedCategoryScores[category] = score;
-                }
-              });
-      
-          // ✅ PRUNING: Get top brands and prune the rest
-          const brandScores = profile.brandScores || {};
-          const topBrands = Object.entries(brandScores)
-              .map(([brand, score]) => ({brand, score}))
-              .sort((a, b) => b.score - a.score)
-              .slice(0, 10);
-      
-          // Keep only top 50 brands (prune the rest)
-          const prunedBrandScores = {};
-          Object.entries(brandScores)
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 50)
-              .forEach(([brand, score]) => {
-                if (score >= 5) { // Only keep meaningful scores
-                  prunedBrandScores[brand] = score;
-                }
-              });
-
-          // ✅ NEW: Compute gender preference
-          const genderScores = profile.genderScores || {};
-          const sortedGenders = Object.entries(genderScores)
-              .map(([gender, score]) => ({gender, score}))
-              .sort((a, b) => b.score - a.score);
-          const preferredGender = sortedGenders.length > 0 ?
-            sortedGenders[0].gender :
-            null;
-      
-          // Compute average purchase price
-          const stats = profile.stats || {};
-          const avgPurchasePrice = stats.totalPurchases > 0 ?
-            stats.totalSpent / stats.totalPurchases :
-            null;
-      
-          // ✅ Replace entire categoryScores and brandScores with pruned versions
-          batch.update(profileDoc.ref, {
-            'categoryScores': prunedCategoryScores,
-            'brandScores': prunedBrandScores,
-            'genderScores': genderScores, // ✅ NEW: Keep as-is (very few entries)
-            'preferences.topCategories': topCategories,
-            'preferences.topBrands': topBrands,
-            'preferences.preferredGender': preferredGender, // ✅ NEW
-            'preferences.genderScores': sortedGenders, // ✅ NEW
-            'preferences.avgPurchasePrice': avgPurchasePrice,
-            'preferences.computedAt': admin.firestore.FieldValue.serverTimestamp(),
-            'trendingInput.needsRecompute': true,
-          });
-
-          processed++;
-        } catch (err) {
-          console.error(`Error processing ${profileDoc.id}: ${err.message}`);
-        }
+      if (lastDoc) {
+        q = q.startAfter(lastDoc);
       }
 
-      await batch.commit();
-    }
+      const profilesSnapshot = await q.get();
 
-    // Check timeout (leave 60s buffer)
-    const elapsed = Date.now() - startTime;
-    if (elapsed > 480000) {
-      console.warn(`⏰ Approaching timeout after ${totalFetched} users, stopping`);
-      break;
-    }
+      if (profilesSnapshot.empty) break;
 
-    // If we got fewer than PAGE_SIZE, we've reached the end
-    if (profilesSnapshot.size < PAGE_SIZE) {
-      break;
+      totalFetched += profilesSnapshot.size;
+      lastDoc = profilesSnapshot.docs[profilesSnapshot.docs.length - 1];
+
+      // Process in batches of 50
+      for (let i = 0; i < profilesSnapshot.docs.length; i += 50) {
+        const batch = db.batch();
+        const chunk = profilesSnapshot.docs.slice(i, i + 50);
+
+        for (const profileDoc of chunk) {
+          try {
+            const profile = profileDoc.data();
+
+            // Prune + compute top categories
+            const categoryScores = profile.categoryScores || {};
+            const prunedCategoryScores = {};
+            const topCategories = [];
+
+            Object.entries(categoryScores)
+              .sort((a, b) => b[1] - a[1])
+              .forEach(([category, score], idx) => {
+                if (score >= 5 && idx < 100) {
+                  prunedCategoryScores[category] = score;
+                }
+                if (idx < 10) {
+                  topCategories.push({category, score});
+                }
+              });
+
+            // Prune + compute top subcategories
+            const subcategoryScores = profile.subcategoryScores || {};
+            const prunedSubcategoryScores = {};
+
+            Object.entries(subcategoryScores)
+              .sort((a, b) => b[1] - a[1])
+              .forEach(([subcategory, score], idx) => {
+                if (score >= 5 && idx < 100) {
+                  prunedSubcategoryScores[subcategory] = score;
+                }
+              });
+
+            // Prune + compute top brands
+            const brandScores = profile.brandScores || {};
+            const prunedBrandScores = {};
+            const topBrands = [];
+
+            Object.entries(brandScores)
+              .sort((a, b) => b[1] - a[1])
+              .forEach(([brand, score], idx) => {
+                if (score >= 5 && idx < 50) {
+                  prunedBrandScores[brand] = score;
+                }
+                if (idx < 10) {
+                  topBrands.push({brand, score});
+                }
+              });
+
+            // Gender preference
+            const genderScores = profile.genderScores || {};
+            const sortedGenders = Object.entries(genderScores)
+              .sort((a, b) => b[1] - a[1])
+              .map(([gender, score]) => ({gender, score}));
+
+            // Average purchase price
+            const stats = profile.stats || {};
+            const avgPurchasePrice =
+              stats.totalPurchases > 0 ?
+                stats.totalSpent / stats.totalPurchases :
+                null;
+
+            // Prune recentlyViewed to cap
+            const recentlyViewed = (profile.recentlyViewed || []).slice(
+              0,
+              CONFIG.MAX_RECENT_PRODUCTS,
+            );
+
+            batch.update(profileDoc.ref, {
+              'categoryScores': prunedCategoryScores,
+              'subcategoryScores': prunedSubcategoryScores,
+              'brandScores': prunedBrandScores,
+              'genderScores': genderScores,
+              'recentlyViewed': recentlyViewed,
+              'preferences.topCategories': topCategories,
+              'preferences.topBrands': topBrands,
+              'preferences.preferredGender':
+                sortedGenders[0]?.gender || null,
+              'preferences.genderScores': sortedGenders,
+              'preferences.avgPurchasePrice': avgPurchasePrice,
+              'preferences.computedAt':
+                admin.firestore.FieldValue.serverTimestamp(),
+              'trendingInput.needsRecompute': true,
+            });
+
+            processed++;
+          } catch (err) {
+            console.error(
+              `Error processing ${profileDoc.id}: ${err.message}`,
+            );
+          }
+        }
+
+        await batch.commit();
+      }
+
+      // Timeout guard (60s buffer)
+      if (Date.now() - startTime > 480000) {
+        console.warn(
+          `⏰ Approaching timeout after ${totalFetched} users, stopping`,
+        );
+        break;
+      }
+
+      if (profilesSnapshot.size < PAGE_SIZE) break;
     }
-  }
 
     console.log(JSON.stringify({
       level: 'INFO',
@@ -753,7 +667,7 @@ while (totalFetched < MAX_USERS) {
       processed,
       totalFetched,
     }));
-    } catch (error) {
+  } catch (error) {
     console.error(JSON.stringify({
       level: 'ERROR',
       event: 'preferences_failed',
@@ -763,117 +677,81 @@ while (totalFetched < MAX_USERS) {
 });
 
 // ============================================================================
-// TRACK PURCHASE (Called from order creation)
+// TRACK PURCHASE (Called from order creation CF)
 // ============================================================================
 
 export async function trackPurchaseActivity(userId, items, orderId) {
-  if (!userId || !items || items.length === 0) {
-    console.warn('trackPurchaseActivity: Missing required params');
-    return;
-  }
+  if (!userId || !items || items.length === 0) return;
 
   const db = admin.firestore();
 
   try {
     await retryWithBackoff(async () => {
-      const batch = db.batch();
-      const today = new Date().toISOString().split('T')[0];
+      const userProfileRef = db.collection('user_profiles').doc(userId);
 
       let totalValue = 0;
       const categoryScores = new Map();
       const brandScores = new Map();
-      const genderScores = new Map(); // ✅ NEW
+      const genderScores = new Map();
 
       for (const item of items) {
-        const eventRef = db
-            .collection('activity_events')
-            .doc(today)
-            .collection('events')
-            .doc();
-
         const itemTotal = (item.price || 0) * (item.quantity || 1);
         totalValue += itemTotal;
 
-        batch.set(eventRef, {
-          userId,
-          eventId: `purchase_${orderId}_${item.productId}`,
-          type: 'purchase',
-          timestamp: Date.now(),
-          weight: ACTIVITY_WEIGHTS.purchase,
-          productId: item.productId,
-          shopId: item.shopId || null,
-          category: item.category || null,
-          subcategory: item.subcategory || null,
-          subsubcategory: item.subsubcategory || null,
-          brand: item.brandModel || null,
-          gender: item.gender || null, // ✅ NEW: Store gender in raw event
-          price: item.price || 0,
-          quantity: item.quantity || 1,
-          totalValue: itemTotal,
-          orderId,
-          serverTimestamp: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
         if (item.category) {
-          const current = categoryScores.get(item.category) || 0;
-          categoryScores.set(item.category, current + ACTIVITY_WEIGHTS.purchase);
+          categoryScores.set(
+            item.category,
+            (categoryScores.get(item.category) || 0) +
+              ACTIVITY_WEIGHTS.purchase,
+          );
         }
 
         if (item.brandModel) {
-          const current = brandScores.get(item.brandModel) || 0;
-          brandScores.set(item.brandModel, current + ACTIVITY_WEIGHTS.purchase);
+          brandScores.set(
+            item.brandModel,
+            (brandScores.get(item.brandModel) || 0) +
+              ACTIVITY_WEIGHTS.purchase,
+          );
         }
 
-        // ✅ NEW: Track gender from purchased items
         if (item.gender) {
-          const current = genderScores.get(item.gender) || 0;
-          genderScores.set(item.gender, current + ACTIVITY_WEIGHTS.purchase);
+          genderScores.set(
+            item.gender,
+            (genderScores.get(item.gender) || 0) + ACTIVITY_WEIGHTS.purchase,
+          );
         }
       }
 
-      // Update user profile
       const profileUpdate = {
-        lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
-        stats: {
-          totalEvents: admin.firestore.FieldValue.increment(items.length),
-          totalPurchases: admin.firestore.FieldValue.increment(items.length),
-          totalSpent: admin.firestore.FieldValue.increment(totalValue),
-        },
+        'lastActivityAt': admin.firestore.FieldValue.serverTimestamp(),
+        'stats.totalEvents': admin.firestore.FieldValue.increment(
+          items.length,
+        ),
+        'stats.totalPurchases': admin.firestore.FieldValue.increment(
+          items.length,
+        ),
+        'stats.totalSpent': admin.firestore.FieldValue.increment(totalValue),
       };
 
-      if (categoryScores.size > 0) {
-        profileUpdate.categoryScores = {};
-        for (const [category, score] of categoryScores.entries()) {
-          const safeKey = category.replace(/[./]/g, '_');
-          profileUpdate.categoryScores[safeKey] =
-            admin.firestore.FieldValue.increment(score);
-        }
-      }
-      
-      // ✅ FIXED: Build nested brandScores object
-      if (brandScores.size > 0) {
-        profileUpdate.brandScores = {};
-        for (const [brand, score] of brandScores.entries()) {
-          const safeKey = brand.replace(/[./]/g, '_');
-          profileUpdate.brandScores[safeKey] =
-            admin.firestore.FieldValue.increment(score);
-        }
+      for (const [category, score] of categoryScores.entries()) {
+        const safeKey = category.replace(/[./]/g, '_');
+        profileUpdate[`categoryScores.${safeKey}`] =
+          admin.firestore.FieldValue.increment(score);
       }
 
-      // ✅ NEW: Build nested genderScores object
-      if (genderScores.size > 0) {
-        profileUpdate.genderScores = {};
-        for (const [gender, score] of genderScores.entries()) {
-          const safeKey = gender.replace(/[./]/g, '_');
-          profileUpdate.genderScores[safeKey] =
-            admin.firestore.FieldValue.increment(score);
-        }
+      for (const [brand, score] of brandScores.entries()) {
+        const safeKey = brand.replace(/[./]/g, '_');
+        profileUpdate[`brandScores.${safeKey}`] =
+          admin.firestore.FieldValue.increment(score);
       }
 
-      const userProfileRef = db.collection('user_profiles').doc(userId);
-      batch.set(userProfileRef, profileUpdate, {merge: true});
+      for (const [gender, score] of genderScores.entries()) {
+        const safeKey = gender.replace(/[./]/g, '_');
+        profileUpdate[`genderScores.${safeKey}`] =
+          admin.firestore.FieldValue.increment(score);
+      }
 
-      await batch.commit();
+      await userProfileRef.set(profileUpdate, {merge: true});
     }, 3, 100);
 
     console.log(`✅ Tracked ${items.length} purchases for order ${orderId}`);
@@ -885,6 +763,5 @@ export async function trackPurchaseActivity(userId, items, orderId) {
       orderId,
       error: error.message,
     }));
-    // Don't throw - purchase tracking failure shouldn't fail the order
   }
 }

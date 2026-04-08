@@ -23,6 +23,22 @@ match /trending_products/{trendingId} {
   allow read: if true; // Anyone can read (including unauthenticated)
 }
 
+match /{collection}/{docId}/click_shards/{shardId} {
+  allow read: if false;
+  allow create: if request.resource.data.keys().hasOnly(['count'])
+                && request.resource.data.count == 1;
+  allow update: if request.resource.data.keys().hasOnly(['count'])
+                && request.resource.data.count == resource.data.count + 1;
+  allow delete: if false;
+}
+
+// Dirty click markers
+match /_dirty_clicks/{docId} {
+  allow read: if false; // Only CF reads
+  allow create, update: if true; // Client marks dirty on click
+  allow delete: if false; // Only CF deletes after rollup
+}
+
 match /restaurant_banners/{bannerId} {
   // Anyone can read — mobile app + web app both use public reads
   allow read: if true;
@@ -490,51 +506,6 @@ function isShopMemberProductUpdate() {
         && isShopMember(resource.data.shopId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
   }
-  
-function isIncrementingClickCountAnyUser() {
-  return request.writeFields.hasOnly([
-    'clickCount',
-    'metricsUpdatedAt'
-  ]) &&
-  // clickCount +1
-  request.resource.data.clickCount == resource.data.clickCount + 1 &&
-  // metricsUpdatedAt must be a server timestamp
-  request.resource.data.metricsUpdatedAt is timestamp;
-}
-
-// (1b) + metricsUpdatedAt when you reset dailyClickCount
-function isIncrementingClickCountWithResetAnyUser() {
-  return request.writeFields.hasOnly([
-    'clickCount',
-    'dailyClickCount',
-    'lastClickDate',
-    'metricsUpdatedAt'
-  ]) &&
-  // clickCount +1, dailyClickCount → 1
-  request.resource.data.clickCount      == resource.data.clickCount + 1 &&
-  request.resource.data.dailyClickCount == 1 &&
-  // lastClickDate must be stamped
-  request.resource.data.lastClickDate   is timestamp &&
-  // metricsUpdatedAt must be stamped
-  request.resource.data.metricsUpdatedAt is timestamp;
-}
-
-// (1c) + metricsUpdatedAt when you bump both counters
-function isIncrementingClickCountAndDailyClickCountAnyUser() {
-  return request.writeFields.hasOnly([
-    'clickCount',
-    'dailyClickCount',
-    'lastClickDate',
-    'metricsUpdatedAt'
-  ]) &&
-  // clickCount +1, dailyClickCount +1
-  request.resource.data.clickCount      == resource.data.clickCount + 1 &&
-  request.resource.data.dailyClickCount == resource.data.dailyClickCount + 1 &&
-  // lastClickDate must be stamped
-  request.resource.data.lastClickDate   is timestamp &&
-  // metricsUpdatedAt must be stamped
-  request.resource.data.metricsUpdatedAt is timestamp;
-}
 
   
    function isIncrementingImpressionCountAnyUser() {
@@ -558,11 +529,7 @@ function isIncrementingClickCountAndDailyClickCountAnyUser() {
   // Allow update and delete if the user is a shop member or admin.
  allow update: if resource.data.shopId is string &&
   (
-    // (1) any user stamping metricsUpdatedAt on clicks:
-    isIncrementingClickCountAnyUser()
- || isIncrementingClickCountWithResetAnyUser()
- || isIncrementingClickCountAndDailyClickCountAnyUser()
-	|| isShopMemberProductUpdate() 
+ isShopMemberProductUpdate() 
     // (2) raw impressionCount +1
  || isIncrementingImpressionCountAnyUser()
 
@@ -1668,26 +1635,7 @@ function isOwnerUpdatingAllowedFields() {
   return request.writeFields.hasOnly(['boostedImpressionCount']) &&
          request.resource.data.boostedImpressionCount == resource.data.boostedImpressionCount + 1;
 }
-  
-  function isIncrementingClickCountAnyUser() {
-  return request.writeFields.hasOnly(['clickCount','metricsUpdatedAt'])
-      && request.resource.data.clickCount      == resource.data.clickCount + 1
-      && request.resource.data.metricsUpdatedAt is timestamp;
-}
-function isIncrementingClickCountWithResetAnyUser() {
-  return request.writeFields.hasOnly(['clickCount','dailyClickCount','lastClickDate','metricsUpdatedAt'])
-      && request.resource.data.clickCount      == resource.data.clickCount + 1
-      && request.resource.data.dailyClickCount == 1
-      && request.resource.data.lastClickDate   is timestamp
-      && request.resource.data.metricsUpdatedAt is timestamp;
-}
-function isIncrementingClickCountAndDailyClickCountAnyUser() {
-  return request.writeFields.hasOnly(['clickCount','dailyClickCount','lastClickDate','metricsUpdatedAt'])
-      && request.resource.data.clickCount      == resource.data.clickCount + 1
-      && request.resource.data.dailyClickCount == resource.data.dailyClickCount + 1
-      && request.resource.data.lastClickDate   is timestamp
-      && request.resource.data.metricsUpdatedAt is timestamp;
-}
+
 
   // Function to check if cart or favorites are updated correctly
  function isUpdatingCartOrFavorites() {
@@ -1709,11 +1657,7 @@ function isIncrementingClickCountAndDailyClickCountAnyUser() {
   }
 
     allow update: if (
-    
-    isIncrementingClickCountAnyUser()
-    || isIncrementingClickCountWithResetAnyUser()
-    || isIncrementingClickCountAndDailyClickCountAnyUser()    
-    || isIncrementingBoostedImpressionCountAnyUser()
+ isIncrementingBoostedImpressionCountAnyUser()
    
     ||
     
@@ -1812,12 +1756,6 @@ match /reviews/{reviewId} {
          );
 }
 
-function isIncrementingClickCount() {
-  return request.auth != null
-      && request.writeFields.hasOnly(['clickCount'])
-      // only allow +1 (or if you want to allow resets: +1 or set to 0)
-      && request.resource.data.clickCount == resource.data.clickCount + 1;
-}
 
 function canIncrementReviewStats() {
   return request.auth != null
@@ -1843,7 +1781,6 @@ allow update: if request.auth != null && (
   resource.data.ownerId == request.auth.uid
   || isAdmin()
   || canIncrementReviewStats()
-  || isIncrementingClickCount()
  || (isShopMember(shopId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stockBadgeAcknowledged']))
 || (isShopMember(shopId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['transactionsBadgeAcknowledged']))
   || isIncrementingFollowerCount()

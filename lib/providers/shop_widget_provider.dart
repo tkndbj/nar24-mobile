@@ -191,7 +191,7 @@ class ShopWidgetProvider with ChangeNotifier {
   }
 
   Future<void> incrementClickCount(String shopId) async {
-    await ClickTrackingService.instance.trackShopClick(shopId);
+    await ClickService.instance.trackShopClick(shopId);
   }
 
   /// Uses the already-loaded profileData from UserProvider instead of

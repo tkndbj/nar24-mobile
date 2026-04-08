@@ -619,31 +619,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     }
   }
 
-  Future<void> incrementClickCount(
-    String itemId, {
-    String? shopId,
-    bool isShopProduct = true,
-    String? productName,
-    String? category, // ✅ ADD
-    String? subcategory, // ✅ ADD
-    String? subsubcategory, // ✅ ADD
-    String? brand, // ✅ ADD
-    String? gender, // ✅ ADD
-  }) async {
-    await ClickTrackingService.instance.trackProductClick(
-      itemId,
-      shopId: shopId,
-      isShopProduct: isShopProduct,
-      productName: productName,
-      category: category,
-      subcategory: subcategory,
-      subsubcategory: subsubcategory,
-      brand: brand,
-      gender: gender,
-    );
-  }
-
-  Future<void> _searchProductsFirestore({
+   Future<void> _searchProductsFirestore({
     required String query,
     int page = 0,
     int hitsPerPage = 50,
