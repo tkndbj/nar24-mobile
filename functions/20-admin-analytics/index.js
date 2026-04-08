@@ -320,6 +320,7 @@ export const computeWeeklyAnalytics = onCall({
     .filter((doc) => doc.exists)
     .map((doc) => doc.data());
 
+
   if (summaries.length === 0) {
     return {success: true, status: 'no_data', message: 'No daily summaries found for this week'};
   }
