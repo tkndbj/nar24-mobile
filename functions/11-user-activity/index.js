@@ -207,14 +207,11 @@ export const batchUserActivity = onCall({
   }
 });
 
-// ============================================================================
-// CORE PROCESSING LOGIC
-// ============================================================================
 
 async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
   const userProfileRef = db.collection('user_profiles').doc(userId);
 
-  // ── Aggregate in memory ───────────────────────────────────────────────
+  // ── Aggregate in memory ───────────────────────────────────────
   const categoryScores = new Map();
   const subcategoryScores = new Map();
   const brandScores = new Map();
@@ -224,9 +221,29 @@ async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
   let purchaseCount = 0;
   let totalPurchaseValue = 0;
 
+  // ── Daily summary counters (single pass) ──────────────────────
+  let dayClicks = 0; let dayViews = 0; let dayCartAdds = 0;
+  let dayFavorites = 0; let dayPurchases = 0; let daySearches = 0;
+
+  const dayCategoryBreakdown = new Map();
+  const dayBrandBreakdown = new Map();
+  const dayGenderBreakdown = new Map();
+
   for (const event of validEvents) {
     const weight = ACTIVITY_WEIGHTS[event.type] || 0;
+    const type = event.type;
 
+    // ── Per-type counters ─────────────────────────────────────
+    switch (type) {
+      case 'click': dayClicks++; break;
+      case 'view': dayViews++; break;
+      case 'addToCart': dayCartAdds++; break;
+      case 'favorite': dayFavorites++; break;
+      case 'purchase': dayPurchases++; break;
+      case 'search': daySearches++; break;
+    }
+
+    // ── Category (user profile) ──────────────────────────────
     if (event.category && weight > 0) {
       categoryScores.set(
         event.category,
@@ -241,6 +258,22 @@ async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
       );
     }
 
+    // ── Category (daily summary) ─────────────────────────────
+    if (event.category && ['click', 'view', 'addToCart', 'favorite', 'purchase'].includes(type)) {
+      if (!dayCategoryBreakdown.has(event.category)) {
+        dayCategoryBreakdown.set(event.category, {
+          clicks: 0, views: 0, cartAdds: 0, favorites: 0, purchases: 0,
+        });
+      }
+      const cat = dayCategoryBreakdown.get(event.category);
+      if (type === 'click') cat.clicks++;
+      else if (type === 'view') cat.views++;
+      else if (type === 'addToCart') cat.cartAdds++;
+      else if (type === 'favorite') cat.favorites++;
+      else if (type === 'purchase') cat.purchases++;
+    }
+
+    // ── Brand (user profile) ─────────────────────────────────
     if (event.brand && weight > 0) {
       brandScores.set(
         event.brand,
@@ -248,6 +281,22 @@ async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
       );
     }
 
+    // ── Brand (daily summary) ────────────────────────────────
+    if (event.brand && ['click', 'view', 'addToCart', 'favorite', 'purchase'].includes(type)) {
+      if (!dayBrandBreakdown.has(event.brand)) {
+        dayBrandBreakdown.set(event.brand, {
+          clicks: 0, views: 0, cartAdds: 0, favorites: 0, purchases: 0,
+        });
+      }
+      const b = dayBrandBreakdown.get(event.brand);
+      if (type === 'click') b.clicks++;
+      else if (type === 'view') b.views++;
+      else if (type === 'addToCart') b.cartAdds++;
+      else if (type === 'favorite') b.favorites++;
+      else if (type === 'purchase') b.purchases++;
+    }
+
+    // ── Gender (user profile) ────────────────────────────────
     if (event.gender && weight > 0) {
       genderScores.set(
         event.gender,
@@ -255,37 +304,49 @@ async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
       );
     }
 
-    if (
-      event.productId &&
-      ['click', 'view', 'addToCart', 'favorite'].includes(event.type)
-    ) {
+    // ── Gender (daily summary) ───────────────────────────────
+    if (event.gender && ['click', 'view', 'addToCart', 'favorite', 'purchase'].includes(type)) {
+      if (!dayGenderBreakdown.has(event.gender)) {
+        dayGenderBreakdown.set(event.gender, {
+          clicks: 0, views: 0, cartAdds: 0, favorites: 0, purchases: 0,
+        });
+      }
+      const g = dayGenderBreakdown.get(event.gender);
+      if (type === 'click') g.clicks++;
+      else if (type === 'view') g.views++;
+      else if (type === 'addToCart') g.cartAdds++;
+      else if (type === 'favorite') g.favorites++;
+      else if (type === 'purchase') g.purchases++;
+    }
+
+    // ── Recently viewed ──────────────────────────────────────
+    if (event.productId && ['click', 'view', 'addToCart', 'favorite'].includes(type)) {
       recentProducts.push({
         productId: event.productId,
         timestamp: event.timestamp,
       });
     }
 
-    if (event.type === 'purchase') {
+    // ── Purchases ────────────────────────────────────────────
+    if (type === 'purchase') {
       purchaseCount++;
       totalPurchaseValue += event.totalValue || 0;
     }
 
-    if (event.type === 'search' && event.searchQuery) {
+    // ── Searches ─────────────────────────────────────────────
+    if (type === 'search' && event.searchQuery) {
       searchQueries.push(event.searchQuery);
     }
   }
 
-  // ── Single transaction: profile + recentlyViewed ──────────────────────
+  // ── Single transaction: user profile + recentlyViewed ─────────
   await db.runTransaction(async (tx) => {
     const profileSnap = await tx.get(userProfileRef);
     const existing = profileSnap.exists ? profileSnap.data() : {};
 
-    // Build profile update with increments
     const profileUpdate = {
       'lastActivityAt': admin.firestore.FieldValue.serverTimestamp(),
-      'stats.totalEvents': admin.firestore.FieldValue.increment(
-        validEvents.length,
-      ),
+      'stats.totalEvents': admin.firestore.FieldValue.increment(validEvents.length),
     };
 
     if (purchaseCount > 0) {
@@ -295,14 +356,12 @@ async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
         admin.firestore.FieldValue.increment(totalPurchaseValue);
     }
 
-    // Category scores (separated from subcategory)
     for (const [category, score] of categoryScores.entries()) {
       const safeKey = category.replace(/[./]/g, '_');
       profileUpdate[`categoryScores.${safeKey}`] =
         admin.firestore.FieldValue.increment(score);
     }
 
-    // Subcategory scores (separate map — no collision with categories)
     for (const [subcategory, score] of subcategoryScores.entries()) {
       const safeKey = subcategory.replace(/[./]/g, '_');
       profileUpdate[`subcategoryScores.${safeKey}`] =
@@ -321,7 +380,6 @@ async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
         admin.firestore.FieldValue.increment(score);
     }
 
-    // Merge recentlyViewed in the same transaction (no second read)
     if (recentProducts.length > 0) {
       const existingRecent = existing.recentlyViewed || [];
       const mergedMap = new Map(
@@ -347,7 +405,7 @@ async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
     }
   });
 
-  // ── Search analytics (fire-and-forget, non-critical) ──────────────────
+  // ── Search analytics (fire-and-forget) ────────────────────────
   if (searchQueries.length > 0) {
     const today = new Date().toISOString().split('T')[0];
     const searchRef = db.collection('search_analytics').doc(today);
@@ -357,12 +415,7 @@ async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
     };
 
     for (const q of searchQueries) {
-      const safeQuery = q
-        .toLowerCase()
-        .trim()
-        .substring(0, 50)
-        .replace(/[./]/g, '_');
-
+      const safeQuery = q.toLowerCase().trim().substring(0, 50).replace(/[./]/g, '_');
       if (safeQuery.length > 0) {
         searchUpdate[`terms.${safeQuery}`] =
           admin.firestore.FieldValue.increment(1);
@@ -373,6 +426,65 @@ async function processEventBatch(db, userId, validEvents, fromDLQ = false) {
       console.warn('⚠️ Search analytics write failed:', err.message);
     });
   }
+
+  // ── Daily engagement summary (fire-and-forget, 1 write) ───────
+  const today = new Date().toISOString().split('T')[0];
+  const summaryRef = db.collection('daily_engagement_summary').doc(today);
+
+  const summaryUpdate = {
+    'dateStr': today,
+    'status': 'live',
+    'updatedAt': admin.firestore.FieldValue.serverTimestamp(),
+    'totals.totalEvents': admin.firestore.FieldValue.increment(validEvents.length),
+  };
+
+  if (dayClicks > 0) summaryUpdate['totals.totalClicks'] = admin.firestore.FieldValue.increment(dayClicks);
+  if (dayViews > 0) summaryUpdate['totals.totalViews'] = admin.firestore.FieldValue.increment(dayViews);
+  if (dayCartAdds > 0) summaryUpdate['totals.totalCartAdds'] = admin.firestore.FieldValue.increment(dayCartAdds);
+  if (dayFavorites > 0) summaryUpdate['totals.totalFavorites'] = admin.firestore.FieldValue.increment(dayFavorites);
+  if (dayPurchases > 0) summaryUpdate['totals.totalPurchaseEvents'] = admin.firestore.FieldValue.increment(dayPurchases);
+  if (daySearches > 0) summaryUpdate['totals.totalSearches'] = admin.firestore.FieldValue.increment(daySearches);
+
+  for (const [category, counts] of dayCategoryBreakdown.entries()) {
+    const safeKey = category.replace(/[./|]/g, '_');
+    summaryUpdate[`categoryEngagement.${safeKey}.category`] = category;
+    if (counts.clicks > 0) summaryUpdate[`categoryEngagement.${safeKey}.clicks`] = admin.firestore.FieldValue.increment(counts.clicks);
+    if (counts.views > 0) summaryUpdate[`categoryEngagement.${safeKey}.views`] = admin.firestore.FieldValue.increment(counts.views);
+    if (counts.cartAdds > 0) summaryUpdate[`categoryEngagement.${safeKey}.cartAdds`] = admin.firestore.FieldValue.increment(counts.cartAdds);
+    if (counts.favorites > 0) summaryUpdate[`categoryEngagement.${safeKey}.favorites`] = admin.firestore.FieldValue.increment(counts.favorites);
+    if (counts.purchases > 0) summaryUpdate[`categoryEngagement.${safeKey}.purchases`] = admin.firestore.FieldValue.increment(counts.purchases);
+  }
+
+  for (const [brand, counts] of dayBrandBreakdown.entries()) {
+    const safeKey = brand.replace(/[./|]/g, '_');
+    summaryUpdate[`brandEngagement.${safeKey}.brand`] = brand;
+    if (counts.clicks > 0) summaryUpdate[`brandEngagement.${safeKey}.clicks`] = admin.firestore.FieldValue.increment(counts.clicks);
+    if (counts.views > 0) summaryUpdate[`brandEngagement.${safeKey}.views`] = admin.firestore.FieldValue.increment(counts.views);
+    if (counts.cartAdds > 0) summaryUpdate[`brandEngagement.${safeKey}.cartAdds`] = admin.firestore.FieldValue.increment(counts.cartAdds);
+    if (counts.favorites > 0) summaryUpdate[`brandEngagement.${safeKey}.favorites`] = admin.firestore.FieldValue.increment(counts.favorites);
+    if (counts.purchases > 0) summaryUpdate[`brandEngagement.${safeKey}.purchases`] = admin.firestore.FieldValue.increment(counts.purchases);
+  }
+
+  for (const [gender, counts] of dayGenderBreakdown.entries()) {
+    const safeKey = gender.replace(/[./|]/g, '_');
+    summaryUpdate[`genderEngagement.${safeKey}.gender`] = gender;
+    if (counts.clicks > 0) summaryUpdate[`genderEngagement.${safeKey}.clicks`] = admin.firestore.FieldValue.increment(counts.clicks);
+    if (counts.views > 0) summaryUpdate[`genderEngagement.${safeKey}.views`] = admin.firestore.FieldValue.increment(counts.views);
+    if (counts.cartAdds > 0) summaryUpdate[`genderEngagement.${safeKey}.cartAdds`] = admin.firestore.FieldValue.increment(counts.cartAdds);
+    if (counts.favorites > 0) summaryUpdate[`genderEngagement.${safeKey}.favorites`] = admin.firestore.FieldValue.increment(counts.favorites);
+    if (counts.purchases > 0) summaryUpdate[`genderEngagement.${safeKey}.purchases`] = admin.firestore.FieldValue.increment(counts.purchases);
+  }
+
+  for (const q of searchQueries) {
+    const safeQuery = q.toLowerCase().trim().substring(0, 50).replace(/[./|]/g, '_');
+    if (safeQuery.length > 0) {
+      summaryUpdate[`searchTerms.${safeQuery}`] = admin.firestore.FieldValue.increment(1);
+    }
+  }
+
+  summaryRef.set(summaryUpdate, {merge: true}).catch((err) => {
+    console.warn('⚠️ Daily summary increment failed:', err.message);
+  });
 }
 
 // ============================================================================
@@ -496,12 +608,26 @@ export const cleanupOldActivityEvents = onSchedule({
       await batch.commit();
     }
 
-    console.log(JSON.stringify({
-      level: 'INFO',
-      event: 'cleanup_completed',
-      searchDocsDeleted: searchSnapshot.size,
-      dlqDeleted: dlqSnapshot.size,
-    }));
+     // Delete old daily engagement summaries
+     const oldSummaries = await db
+     .collection('daily_engagement_summary')
+     .where(admin.firestore.FieldPath.documentId(), '<', cutoffDateStr)
+     .limit(90)
+     .get();
+
+   if (!oldSummaries.empty) {
+     const batch = db.batch();
+     oldSummaries.docs.forEach((d) => batch.delete(d.ref));
+     await batch.commit();
+   }
+
+   console.log(JSON.stringify({
+     level: 'INFO',
+     event: 'cleanup_completed',
+     searchDocsDeleted: searchSnapshot.size,
+     dlqDeleted: dlqSnapshot.size,
+     summariesDeleted: oldSummaries.size,
+   }));
   } catch (error) {
     console.error(JSON.stringify({
       level: 'ERROR',
@@ -687,41 +813,39 @@ export async function trackPurchaseActivity(userId, items, orderId) {
   const db = admin.firestore();
 
   try {
+    let totalValue = 0;
+    const categoryScores = new Map();
+    const brandScores = new Map();
+    const genderScores = new Map();
+
+    for (const item of items) {
+      const itemTotal = (item.price || 0) * (item.quantity || 1);
+      totalValue += itemTotal;
+
+      if (item.category) {
+        categoryScores.set(
+          item.category,
+          (categoryScores.get(item.category) || 0) + ACTIVITY_WEIGHTS.purchase,
+        );
+      }
+
+      if (item.brandModel) {
+        brandScores.set(
+          item.brandModel,
+          (brandScores.get(item.brandModel) || 0) + ACTIVITY_WEIGHTS.purchase,
+        );
+      }
+
+      if (item.gender) {
+        genderScores.set(
+          item.gender,
+          (genderScores.get(item.gender) || 0) + ACTIVITY_WEIGHTS.purchase,
+        );
+      }
+    }
+
     await retryWithBackoff(async () => {
       const userProfileRef = db.collection('user_profiles').doc(userId);
-
-      let totalValue = 0;
-      const categoryScores = new Map();
-      const brandScores = new Map();
-      const genderScores = new Map();
-
-      for (const item of items) {
-        const itemTotal = (item.price || 0) * (item.quantity || 1);
-        totalValue += itemTotal;
-
-        if (item.category) {
-          categoryScores.set(
-            item.category,
-            (categoryScores.get(item.category) || 0) +
-              ACTIVITY_WEIGHTS.purchase,
-          );
-        }
-
-        if (item.brandModel) {
-          brandScores.set(
-            item.brandModel,
-            (brandScores.get(item.brandModel) || 0) +
-              ACTIVITY_WEIGHTS.purchase,
-          );
-        }
-
-        if (item.gender) {
-          genderScores.set(
-            item.gender,
-            (genderScores.get(item.gender) || 0) + ACTIVITY_WEIGHTS.purchase,
-          );
-        }
-      }
 
       const profileUpdate = {
         'lastActivityAt': admin.firestore.FieldValue.serverTimestamp(),
@@ -754,6 +878,46 @@ export async function trackPurchaseActivity(userId, items, orderId) {
 
       await userProfileRef.set(profileUpdate, {merge: true});
     }, 3, 100);
+
+    // ── Daily engagement summary for purchases (outside retry) ──
+    const today = new Date().toISOString().split('T')[0];
+      const summaryRef = db.collection('daily_engagement_summary').doc(today);
+
+      const summaryUpdate = {
+        'dateStr': today,
+        'status': 'live',
+        'updatedAt': admin.firestore.FieldValue.serverTimestamp(),
+        'totals.totalEvents': admin.firestore.FieldValue.increment(items.length),
+        'totals.totalPurchaseEvents': admin.firestore.FieldValue.increment(items.length),
+      };
+
+      for (const [category] of categoryScores.entries()) {
+        const safeKey = category.replace(/[./|]/g, '_');
+        summaryUpdate[`categoryEngagement.${safeKey}.category`] = category;
+        summaryUpdate[`categoryEngagement.${safeKey}.purchases`] = admin.firestore.FieldValue.increment(
+          items.filter((i) => i.category === category).length,
+        );
+      }
+
+      for (const [brand] of brandScores.entries()) {
+        const safeKey = brand.replace(/[./|]/g, '_');
+        summaryUpdate[`brandEngagement.${safeKey}.brand`] = brand;
+        summaryUpdate[`brandEngagement.${safeKey}.purchases`] = admin.firestore.FieldValue.increment(
+          items.filter((i) => i.brandModel === brand).length,
+        );
+      }
+
+      for (const [gender] of genderScores.entries()) {
+        const safeKey = gender.replace(/[./|]/g, '_');
+        summaryUpdate[`genderEngagement.${safeKey}.gender`] = gender;
+        summaryUpdate[`genderEngagement.${safeKey}.purchases`] = admin.firestore.FieldValue.increment(
+          items.filter((i) => i.gender === gender).length,
+        );
+      }
+
+      summaryRef.set(summaryUpdate, {merge: true}).catch((err) => {
+        console.warn('⚠️ Daily summary increment failed:', err.message);
+      });
 
     console.log(`✅ Tracked ${items.length} purchases for order ${orderId}`);
   } catch (error) {
