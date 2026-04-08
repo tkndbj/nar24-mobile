@@ -34,43 +34,36 @@ const CONFIG = {
 // RATE LIMITING (In-memory, per-instance)
 // ============================================================================
 
-const rateLimitMap = new Map();
-
-function checkRateLimit(userId) {
+async function checkRateLimit(userId) {
   const now = Date.now();
-  const key = `activity_${userId}`;
+  const ref = admin.firestore().collection('rateLimits').doc(`activity_${userId}`);
 
-  if (!rateLimitMap.has(key)) {
-    rateLimitMap.set(key, {count: 1, windowStart: now});
-    return true;
+  try {
+    const allowed = await admin.firestore().runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      const data = doc.data() || {};
+      const windowStart = data.windowStart || 0;
+      const count = data.count || 0;
+
+      if (now - windowStart > CONFIG.RATE_LIMIT_WINDOW_MS) {
+        tx.set(ref, { windowStart: now, count: 1 });
+        return true;
+      }
+
+      if (count >= CONFIG.RATE_LIMIT_MAX_REQUESTS) {
+        return false;
+      }
+
+      tx.update(ref, { count: admin.firestore.FieldValue.increment(1) });
+      return true;
+    });
+
+    return allowed;
+  } catch (error) {
+    console.error('Rate limit check failed:', error);
+    return false; // fail closed
   }
-
-  const limit = rateLimitMap.get(key);
-
-  if (now - limit.windowStart > CONFIG.RATE_LIMIT_WINDOW_MS) {
-    rateLimitMap.set(key, {count: 1, windowStart: now});
-    return true;
-  }
-
-  if (limit.count >= CONFIG.RATE_LIMIT_MAX_REQUESTS) {
-    return false;
-  }
-
-  limit.count++;
-  return true;
 }
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, value] of rateLimitMap.entries()) {
-    if (now - value.windowStart > CONFIG.RATE_LIMIT_WINDOW_MS * 2) {
-      rateLimitMap.delete(key);
-    }
-  }
-  if (rateLimitMap.size > 50000) {
-    rateLimitMap.clear();
-  }
-}, 60000);
 
 // ============================================================================
 // RETRY HELPER
@@ -146,7 +139,7 @@ export const batchUserActivity = onCall({
 
   const userId = request.auth.uid;
 
-  if (!checkRateLimit(userId)) {
+  if (!(await checkRateLimit(userId))) {
     return {success: true, processed: 0, rateLimited: true};
   }
 
@@ -644,6 +637,19 @@ export const cleanupOldActivityEvents = onSchedule({
      .limit(90)
      .get();
 
+  // Delete stale rate limit docs
+const rateLimitSnapshot = await db
+.collection('rateLimits')
+.where('windowStart', '<', Date.now() - CONFIG.RATE_LIMIT_WINDOW_MS * 2)
+.limit(500)
+.get();
+
+if (!rateLimitSnapshot.empty) {
+const batch = db.batch();
+rateLimitSnapshot.docs.forEach((d) => batch.delete(d.ref));
+await batch.commit();
+}
+
    if (!oldSummaries.empty) {
      const batch = db.batch();
      oldSummaries.docs.forEach((d) => batch.delete(d.ref));
@@ -651,12 +657,13 @@ export const cleanupOldActivityEvents = onSchedule({
    }
 
    console.log(JSON.stringify({
-     level: 'INFO',
-     event: 'cleanup_completed',
-     searchDocsDeleted: searchSnapshot.size,
-     dlqDeleted: dlqSnapshot.size,
-     summariesDeleted: oldSummaries.size,
-   }));
+    level: 'INFO',
+    event: 'cleanup_completed',
+    searchDocsDeleted: searchSnapshot.size,
+    dlqDeleted: dlqSnapshot.size,
+    summariesDeleted: oldSummaries.size,
+    rateLimitsDeleted: rateLimitSnapshot.size,
+  }));
   } catch (error) {
     console.error(JSON.stringify({
       level: 'ERROR',
