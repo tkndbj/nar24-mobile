@@ -8363,7 +8363,7 @@ export {
   computeUserPreferences,
   processActivityDLQ,
 } from './11-user-activity/index.js';
-export {computeTrendingProducts, cleanupTrendingHistory} from './12-trending-products/index.js';
+export {computeTrendingProductsScheduled, cleanupTrendingHistory} from './12-trending-products/index.js';
 export {updatePersonalizedFeeds, processPersonalizedFeedBatch} from './13-personalized-feed/index.js';
 export {adminToggleProductArchiveStatus, approveArchivedProductEdit, approveProductApplication, rejectProductApplication, setCargoGuyClaim} from './14-admin-actions/index.js';
 export {translateText, translateBatch} from './15-openai-translation/index.js';

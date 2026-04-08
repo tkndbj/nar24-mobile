@@ -532,7 +532,8 @@ export const computeUserPreferences = onSchedule({
     let lastDoc = null;
     const PAGE_SIZE = 500;
 
-    while (true) {
+    const hasMore = true;
+while (hasMore) {
       let q = db
         .collection('user_profiles')
         .where('lastActivityAt', '>=', oneDayAgo)

@@ -551,8 +551,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         state == AppLifecycleState.detached) {
       // Flush pending data before going to background
       ImpressionBatcher().flush();
-      UserActivityService.instance.forceFlush();    
-      MetricsEventService.instance.flush();
+      UserActivityService.instance.forceFlush();
+
       CourierLocationService.instance.onAppPaused();
 
       // Clear static caches
@@ -571,7 +571,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
 
     if (state == AppLifecycleState.detached) {   
-      MetricsEventService.instance.dispose();
+
       SearchConfigService.instance.shutdown();
     }
 

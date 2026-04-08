@@ -363,8 +363,10 @@ class FeedScorer {
 
     // Subcategory bonus (adds up to 30% more to the category score)
     let subcategoryBonus = 0.0;
-    if (productSubcategory && categoryScores[productSubcategory]) {
-      const subcategoryMatch = categoryScores[productSubcategory] / maxScore;
+    const subcategoryScores = userProfile.subcategoryScores || {};
+    if (productSubcategory && subcategoryScores[productSubcategory]) {
+      const maxSubScore = Math.max(...Object.values(subcategoryScores), 1);
+      const subcategoryMatch = subcategoryScores[productSubcategory] / maxSubScore;
       subcategoryBonus = subcategoryMatch * PERSONALIZATION_CONFIG.SUBCATEGORY_BONUS_RATIO;
     }
 
@@ -629,39 +631,37 @@ if (products.size === 0) {
 
     const existingFeeds = await this.loadExistingFeeds(users);
 
-    await Promise.all(
-      users.map(async (userDoc) => {
-        try {
-          const userId = userDoc.id;
-          const userProfile = userDoc.data();
-          const existingFeed = existingFeeds.get(userId) || null;
+    for (const userDoc of users) {
+      try {
+        const userId = userDoc.id;
+        const userProfile = userDoc.data();
+        const existingFeed = existingFeeds.get(userId) || null;
 
-          const {shouldUpdate, reason} = this.shouldUpdateFeed(
-            userProfile,
-            existingFeed,
-          );
+        const {shouldUpdate, reason} = this.shouldUpdateFeed(
+          userProfile,
+          existingFeed,
+        );
 
-          if (!shouldUpdate) {
-            results.skipped++;
-            results.reasons[reason] = (results.reasons[reason] || 0) + 1;
-            return;
-          }
-
-          const result = await this.generateFeed(userId, userProfile);
-
-          if (result.success) {
-            results.updated++;
-            results.reasons[reason] = (results.reasons[reason] || 0) + 1;
-          } else {
-            results.skipped++;
-            results.reasons[result.reason] = (results.reasons[result.reason] || 0) + 1;
-          }
-        } catch (error) {
-          results.failed++;
-          console.error(`❌ Error processing ${userDoc.id}:`, error.message);
+        if (!shouldUpdate) {
+          results.skipped++;
+          results.reasons[reason] = (results.reasons[reason] || 0) + 1;
+          continue;
         }
-      }),
-    );
+
+        const result = await this.generateFeed(userId, userProfile);
+
+        if (result.success) {
+          results.updated++;
+          results.reasons[reason] = (results.reasons[reason] || 0) + 1;
+        } else {
+          results.skipped++;
+          results.reasons[result.reason] = (results.reasons[result.reason] || 0) + 1;
+        }
+      } catch (error) {
+        results.failed++;
+        console.error(`❌ Error processing ${userDoc.id}:`, error.message);
+      }
+    }
 
     return results;
   }
@@ -681,7 +681,7 @@ if (products.size === 0) {
 
 export const updatePersonalizedFeeds = onSchedule(
   {
-    schedule: 'every 48 hours',
+    schedule: '0 0 */2 * *',
     timeZone: 'UTC',
     timeoutSeconds: 300,
     memory: '512MiB',
@@ -704,9 +704,9 @@ export const updatePersonalizedFeeds = onSchedule(
       let tasksCreated = 0;
       const PAGE_SIZE = 2000;
       const BATCH_SIZE = 50;
-      const MAX_USERS = 50000;
 
-      while (totalFetched < MAX_USERS) {
+      const hasMore = true;
+while (hasMore) {
         let query = db
           .collection('user_profiles')
           .where('lastActivityAt', '>', fiveDaysAgo)
@@ -764,6 +764,12 @@ export const updatePersonalizedFeeds = onSchedule(
 
         console.log(`Page: ${usersSnapshot.size} users, ${results.filter(Boolean).length} tasks created (${totalFetched} total users)`);
 
+        // Timeout guard (60s buffer)
+        if (Date.now() - startTime > 240000) {
+          console.warn(`⏰ Approaching timeout after ${totalFetched} users dispatched`);
+          break;
+        }
+
         if (usersSnapshot.size < PAGE_SIZE) break;
       }
 
@@ -811,6 +817,13 @@ export const processPersonalizedFeedBatch = onRequest(
     maxInstances: 20,
   },
   async (req, res) => {
+    // Verify Cloud Tasks OIDC token
+    const authHeader = req.headers.authorization || '';
+    if (!authHeader.startsWith('Bearer ')) {
+      res.status(401).json({error: 'Unauthorized'});
+      return;
+    }
+
     const startTime = Date.now();
     const db = admin.firestore();
     const generator = new PersonalizedFeedGenerator(db);
