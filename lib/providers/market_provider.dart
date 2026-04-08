@@ -1121,6 +1121,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
   /// Unread counts, Search logging, and Sharing
   /// ---------------------------------------------------------------------------
   Future<void> recordSearchTerm(String searchTerm) async {
+    UserActivityService.instance.trackSearch(query: searchTerm);
     final User? user = _auth.currentUser;
     final String userId = user?.uid ?? 'anonymous';
 

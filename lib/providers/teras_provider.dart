@@ -7,6 +7,7 @@ import '../constants/all_in_one_category_data.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../utils/debouncer.dart';
+import '../services/user_activity_service.dart';
 
 /// -----------------------------------------------------------------------------
 /// A lightweight TerasProvider used only for display on the vitrin (teras_market)
@@ -195,6 +196,7 @@ class TerasProvider with ChangeNotifier {
   /// Records the search term in the Firestore "searches" collection.
   /// ---------------------------------------------------------------------------
   Future<void> recordSearchTerm(String searchTerm) async {
+    UserActivityService.instance.trackSearch(query: searchTerm);
     final User? user = _auth.currentUser;
     final String userId = user?.uid ?? 'anonymous';
 

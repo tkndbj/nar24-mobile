@@ -19,6 +19,7 @@ import '../utils/connectivity_helper.dart';
 import '../models/category_suggestion.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
+import '../services/user_activity_service.dart';
 
 class SearchScreen extends StatefulWidget {
   final MarketProvider marketProvider;
@@ -79,6 +80,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _saveSearchTerm(String searchTerm) async {
+    UserActivityService.instance.trackSearch(query: searchTerm);
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null || searchTerm.trim().isEmpty) return;
 

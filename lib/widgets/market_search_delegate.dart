@@ -22,6 +22,7 @@ import 'animated_filter_chip.dart';
 import '../utils/category_image_mapper.dart';
 import '../models/shop_suggestion.dart';
 import '../services/search_config_service.dart';
+import '../services/user_activity_service.dart';
 
 class MarketSearchDelegate extends SearchDelegate<String?> {
   final MarketProvider marketProv;
@@ -121,6 +122,7 @@ class MarketSearchDelegate extends SearchDelegate<String?> {
   void _saveSearchTerm(BuildContext context, String searchTerm) {
     if (searchTerm.trim().isEmpty) return;
 
+    UserActivityService.instance.trackSearch(query: searchTerm);
     try {
       historyProv.addSearch(searchTerm.trim());
     } catch (e) {
