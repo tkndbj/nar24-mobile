@@ -1,24 +1,41 @@
 // lib/services/click_service.dart
 
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
+/// Tracks product and shop clicks via Redis-backed cloud function.
+///
+/// Clicks are buffered locally and sent as a single batch to
+/// `trackProductClick`, which writes to Redis. A server-side scheduled
+/// flush drains Redis → Firestore every minute.
 class ClickService {
   static final ClickService instance = ClickService._();
   ClickService._();
 
   final _analytics = FirebaseAnalytics.instance;
-  final _firestore = FirebaseFirestore.instance;
+  final _callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+      .httpsCallable('trackProductClick');
 
-  // Cooldown to prevent spam
+  // ── Cooldown ────────────────────────────────────────────────────────────────
   final Map<String, DateTime> _lastClick = {};
   static const _cooldown = Duration(seconds: 1);
   static const _maxCooldownEntries = 500;
 
+  // ── Local buffer ────────────────────────────────────────────────────────────
+  final List<_ClickRecord> _buffer = [];
+  Timer? _batchTimer;
+  static const _batchInterval = Duration(seconds: 15);
+  static const _maxBatchSize = 30;
+  static const _maxRetries = 3;
+  int _retryCount = 0;
+  bool _isSending = false;
+
   Future<void> trackClick({
     required String productId,
     String? shopId,
-    required String collection, // 'products' or 'shop_products'
+    required String collection,
     String? productName,
     String? category,
     String? subcategory,
@@ -26,24 +43,14 @@ class ClickService {
     String? brand,
     String? gender,
   }) async {
-    // 1. Cooldown check
     final now = DateTime.now();
     if (_lastClick[productId] != null &&
         now.difference(_lastClick[productId]!) < _cooldown) {
       return;
     }
     _lastClick[productId] = now;
+    _cleanCooldownMap();
 
-    // Prevent unbounded memory growth
-    if (_lastClick.length > _maxCooldownEntries) {
-      final sorted = _lastClick.entries.toList()
-        ..sort((a, b) => a.value.compareTo(b.value));
-      for (final entry in sorted.take(_lastClick.length - _maxCooldownEntries)) {
-        _lastClick.remove(entry.key);
-      }
-    }
-
-    // 2. Firebase Analytics (the real tracking - free, scales infinitely)
     _analytics.logEvent(
       name: 'product_click',
       parameters: {
@@ -61,97 +68,116 @@ class ClickService {
       },
     );
 
-    // 3. Increment display counter (fire-and-forget, GA4 has the real data)
-    _incrementClickCount(productId, collection, shopId);
-  }
+    _buffer.add(_ClickRecord(
+      productId: productId,
+      collection: collection,
+      shopId: shopId,
+    ));
 
-  Future<void> trackShopClick(String shopId) async {
-  final now = DateTime.now();
-  if (_lastClick[shopId] != null &&
-      now.difference(_lastClick[shopId]!) < _cooldown) {
-    return;
-  }
-  _lastClick[shopId] = now;
+    _scheduleBatch();
 
-  if (_lastClick.length > _maxCooldownEntries) {
-    final sorted = _lastClick.entries.toList()
-      ..sort((a, b) => a.value.compareTo(b.value));
-    for (final entry in sorted.take(_lastClick.length - _maxCooldownEntries)) {
-      _lastClick.remove(entry.key);
+    if (_buffer.length >= _maxBatchSize) {
+      _sendBatch();
     }
   }
 
-  _analytics.logEvent(
-    name: 'shop_click',
-    parameters: {
-      'shop_id': shopId,
-    },
-  );
+  Future<void> trackShopClick(String shopId) async {
+    final now = DateTime.now();
+    if (_lastClick[shopId] != null &&
+        now.difference(_lastClick[shopId]!) < _cooldown) {
+      return;
+    }
+    _lastClick[shopId] = now;
+    _cleanCooldownMap();
 
-  await _incrementShopClickCount(shopId);
+    _analytics.logEvent(
+      name: 'shop_click',
+      parameters: {'shop_id': shopId},
+    );
+
+    _buffer.add(_ClickRecord(
+      productId: shopId,
+      collection: 'shops',
+      shopId: shopId,
+    ));
+
+    _scheduleBatch();
+  }
+
+  void _cleanCooldownMap() {
+    if (_lastClick.length > _maxCooldownEntries) {
+      final sorted = _lastClick.entries.toList()
+        ..sort((a, b) => a.value.compareTo(b.value));
+      for (final entry
+          in sorted.take(_lastClick.length - _maxCooldownEntries)) {
+        _lastClick.remove(entry.key);
+      }
+    }
+  }
+
+  void _scheduleBatch() {
+    _batchTimer?.cancel();
+    _batchTimer = Timer(_batchInterval, _sendBatch);
+  }
+
+  Future<void> _sendBatch() async {
+    if (_buffer.isEmpty || _isSending) return;
+    _isSending = true;
+
+    final toSend = List<_ClickRecord>.from(_buffer);
+    _buffer.clear();
+    _batchTimer?.cancel();
+
+    try {
+      // Single cloud function call for the entire batch
+      await _callable.call({
+        'clicks': toSend
+            .map((c) => <String, dynamic>{
+                  'productId': c.productId,
+                  'collection': c.collection,
+                  'shopId': c.shopId,
+                })
+            .toList(),
+      });
+
+      debugPrint(
+          '📊 ClickService: sent ${toSend.length} clicks in 1 batch call');
+      _retryCount = 0;
+    } catch (e) {
+      debugPrint('❌ ClickService: batch send failed — $e');
+
+      if (_retryCount < _maxRetries) {
+        _retryCount++;
+        _buffer.insertAll(0, toSend);
+        Future.delayed(
+          Duration(seconds: 2 * _retryCount),
+          _sendBatch,
+        );
+      } else {
+        debugPrint(
+            '❌ ClickService: max retries, dropping ${toSend.length} clicks');
+        _retryCount = 0;
+      }
+    } finally {
+      _isSending = false;
+    }
+  }
+
+  /// Flush pending clicks immediately (call on app pause/dispose).
+  Future<void> flush() async {
+    _batchTimer?.cancel();
+    await _sendBatch();
+  }
 }
 
-Future<void> _incrementShopClickCount(String shopId) async {
-  final shardIndex = shopId.hashCode.abs() % 10;
+class _ClickRecord {
+  final String productId;
+  final String collection;
+  final String? shopId;
 
-  try {
-    final batch = _firestore.batch();
-
-    batch.set(
-      _firestore
-          .collection('shops')
-          .doc(shopId)
-          .collection('click_shards')
-          .doc('shard_$shardIndex'),
-      {'count': FieldValue.increment(1)},
-      SetOptions(merge: true),
-    );
-
-    batch.set(
-      _firestore.collection('_dirty_clicks').doc(shopId),
-      {
-        'collection': 'shops',
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
-
-    await batch.commit();
-  } catch (_) {}
-}
-
- Future<void> _incrementClickCount(
-  String productId,
-  String collection,
-  String? shopId,
-) async {
-  final shardIndex = productId.hashCode.abs() % 10;
-
-  try {
-    final batch = _firestore.batch();
-
-    batch.set(
-      _firestore
-          .collection(collection)
-          .doc(productId)
-          .collection('click_shards')
-          .doc('shard_$shardIndex'),
-      {'count': FieldValue.increment(1)},
-      SetOptions(merge: true),
-    );
-
-    batch.set(
-      _firestore.collection('_dirty_clicks').doc(productId),
-      {
-        'collection': collection,
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
-
-    // REMOVED: shop-level tracking from product clicks
-
-    await batch.commit();
-  } catch (_) {}
-}
+  _ClickRecord({
+    required this.productId,
+    required this.collection,
+    this.shopId,
+  });
 }

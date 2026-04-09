@@ -19,7 +19,7 @@ function getRedisClient() {
       commandTimeout: 2000,
       enableOfflineQueue: true,
       retryStrategy(times) {
-        if (times > 3) return null; // Stop retrying after 3 attempts
+        if (times > 3) return null;
         return Math.min(times * 200, 1000);
       },
     });
@@ -36,9 +36,6 @@ function getRedisClient() {
 // RATE LIMITING
 // ============================================================================
 
-// Lua script: atomic INCR + EXPIRE in a single Redis call.
-// Eliminates the race condition where a crash between INCR and EXPIRE
-// could leave a key without a TTL, permanently rate-limiting a user.
 const RATE_LIMIT_SCRIPT = `
   local current = redis.call('INCR', KEYS[1])
   if current == 1 then
@@ -47,18 +44,6 @@ const RATE_LIMIT_SCRIPT = `
   return current
 `;
 
-/**
- * Check rate limit using an atomic Lua script (INCR + EXPIRE).
- * Falls back to allowing the request if Redis is unavailable.
- *
- * @param {string} key - Unique rate limit key (e.g. "validation_rate:{userId}")
- * @param {number} maxAttempts - Max allowed requests in the window
- * @param {number} windowSeconds - Time window in seconds
- * @return {Promise<boolean>} true if within limit, false if exceeded
- */
-// In-memory fallback when Redis is unavailable.
-// Not shared across instances, but still prevents a single instance
-// from processing unlimited requests during a Redis outage.
 const localRateLimits = new Map();
 const LOCAL_CLEANUP_INTERVAL = 60000;
 let lastCleanup = Date.now();
@@ -66,7 +51,6 @@ let lastCleanup = Date.now();
 function localRateLimit(key, maxAttempts, windowSeconds) {
   const now = Date.now();
 
-  // Periodic cleanup of expired entries to prevent memory leak
   if (now - lastCleanup > LOCAL_CLEANUP_INTERVAL) {
     for (const [k, v] of localRateLimits) {
       if (now > v.expiresAt) localRateLimits.delete(k);
@@ -84,11 +68,10 @@ function localRateLimit(key, maxAttempts, windowSeconds) {
   return entry.count <= maxAttempts;
 }
 
-export async function checkRateLimit(key, maxAttempts, windowSeconds, { failOpen = true } = {}) {
+export async function checkRateLimit(key, maxAttempts, windowSeconds, {failOpen = true} = {}) {
   try {
     const client = getRedisClient();
     const current = await client.eval(RATE_LIMIT_SCRIPT, 1, key, windowSeconds);
-
     return current <= maxAttempts;
   } catch (error) {
     console.warn('Redis rate limit failed, using in-memory fallback:', error.message);
@@ -105,11 +88,6 @@ export async function checkRateLimit(key, maxAttempts, windowSeconds, { failOpen
 // CACHING
 // ============================================================================
 
-/**
- * Get a value from Redis cache.
- * @param {string} key
- * @return {Promise<any|null>} Parsed JSON value or null
- */
 export async function cacheGet(key) {
   try {
     const client = getRedisClient();
@@ -121,12 +99,6 @@ export async function cacheGet(key) {
   }
 }
 
-/**
- * Set a value in Redis cache with TTL.
- * @param {string} key
- * @param {any} value - Will be JSON.stringify'd
- * @param {number} ttlSeconds - Time to live in seconds
- */
 export async function cacheSet(key, value, ttlSeconds) {
   try {
     const client = getRedisClient();
@@ -136,10 +108,6 @@ export async function cacheSet(key, value, ttlSeconds) {
   }
 }
 
-/**
- * Delete a cache key (for invalidation).
- * @param {string} key
- */
 export async function cacheDel(key) {
   try {
     const client = getRedisClient();
@@ -153,20 +121,12 @@ export async function cacheDel(key) {
 // DEDUPLICATION
 // ============================================================================
 
-/**
- * Atomic deduplication check using Redis SET NX (set if not exists).
- * @param {string} key - Dedup key
- * @param {number} windowSeconds - Dedup window in seconds
- * @return {Promise<boolean>} true if this is the first call (should process), false if duplicate
- */
 export async function dedup(key, windowSeconds) {
   try {
     const client = getRedisClient();
-    // SET key "1" EX windowSeconds NX — only sets if key doesn't exist
     const result = await client.set(key, '1', 'EX', windowSeconds, 'NX');
-    return result === 'OK'; // "OK" = first call, null = duplicate
+    return result === 'OK';
   } catch (error) {
-    // Redis down — allow processing (fail open)
     console.warn('Redis dedup check failed, allowing processing:', error.message);
     return true;
   }
@@ -179,21 +139,15 @@ export async function dedup(key, windowSeconds) {
 const IMP_COUNTS_KEY = 'imp:counts';
 const IMP_DEMO_KEY = 'imp:demo';
 
-/**
- * Buffer impression counts in Redis.
- * @param {Array<{productId: string, collection: string, count: number}>} products
- * @param {string|null} gender
- * @param {string|null} ageGroup
- */
 export async function bufferImpressions(products, gender, ageGroup) {
   const client = getRedisClient();
   const pipeline = client.pipeline();
- 
+
   for (const {productId, collection, count} of products) {
     const field = `${collection}:${productId}`;
     pipeline.hincrby(IMP_COUNTS_KEY, field, count);
   }
- 
+
   if (gender || ageGroup) {
     const g = (gender || 'unknown').toLowerCase();
     const a = ageGroup || 'unknown';
@@ -201,50 +155,100 @@ export async function bufferImpressions(products, gender, ageGroup) {
       pipeline.hincrby(IMP_DEMO_KEY, `${productId}:${g}:${a}`, count);
     }
   }
- 
+
   await pipeline.exec();
 }
- 
-/**
- * Atomically grab all buffered impressions and clear the buffer.
- * Uses RENAME so new writes during flush go to a fresh key.
- * Temp keys are NOT deleted here — caller must call deleteDrainKeys()
- * after Firestore writes succeed to prevent data loss on crash.
- */
+
 export async function drainImpressions() {
   const client = getRedisClient();
   const ts = Date.now();
   const tempCounts = `${IMP_COUNTS_KEY}:drain:${ts}`;
   const tempDemo = `${IMP_DEMO_KEY}:drain:${ts}`;
- 
+
   let counts = {};
   let demo = {};
- 
+
   try {
     await client.rename(IMP_COUNTS_KEY, tempCounts);
     counts = await client.hgetall(tempCounts);
   } catch (e) {
     if (!e.message.includes('no such key')) throw e;
   }
- 
+
   try {
     await client.rename(IMP_DEMO_KEY, tempDemo);
     demo = await client.hgetall(tempDemo);
   } catch (e) {
     if (!e.message.includes('no such key')) throw e;
   }
- 
+
   return {counts, demo, tempKeys: [tempCounts, tempDemo]};
 }
- 
+
+// ============================================================================
+// CLICK BUFFERING
+// ============================================================================
+
+const CLICK_COUNTS_KEY = 'click:counts';
+const CLICK_SHOPS_KEY = 'click:shops';
+
+export async function bufferClicks(clicks) {
+  const client = getRedisClient();
+  const pipeline = client.pipeline();
+
+  for (const {productId, collection, shopId, isShopClick} of clicks) {
+    // Product-level counts (skip for pure shop clicks)
+    if (!isShopClick) {
+      pipeline.hincrby(CLICK_COUNTS_KEY, `${collection}:${productId}`, 1);
+    }
+
+    // Shop-level counts
+    if (shopId) {
+      pipeline.hincrby(CLICK_SHOPS_KEY, shopId, 1);
+    }
+  }
+
+  await pipeline.exec();
+}
+
 /**
- * Delete drain temp keys after successful Firestore flush.
- * @param {string[]} keys
+ * Atomically grab all buffered clicks and clear the buffer.
+ * Same RENAME pattern as drainImpressions.
  */
+export async function drainClicks() {
+  const client = getRedisClient();
+  const ts = Date.now();
+  const tempCounts = `${CLICK_COUNTS_KEY}:drain:${ts}`;
+  const tempShops = `${CLICK_SHOPS_KEY}:drain:${ts}`;
+
+  let counts = {};
+  let shops = {};
+
+  try {
+    await client.rename(CLICK_COUNTS_KEY, tempCounts);
+    counts = await client.hgetall(tempCounts);
+  } catch (e) {
+    if (!e.message.includes('no such key')) throw e;
+  }
+
+  try {
+    await client.rename(CLICK_SHOPS_KEY, tempShops);
+    shops = await client.hgetall(tempShops);
+  } catch (e) {
+    if (!e.message.includes('no such key')) throw e;
+  }
+
+  return {counts, shops, tempKeys: [tempCounts, tempShops]};
+}
+
+// ============================================================================
+// SHARED: Delete drain temp keys after successful Firestore flush
+// ============================================================================
+
 export async function deleteDrainKeys(keys) {
   const client = getRedisClient();
   const existing = keys.filter(Boolean);
   if (existing.length > 0) await client.del(...existing);
 }
 
-export { getRedisClient };
+export {getRedisClient};

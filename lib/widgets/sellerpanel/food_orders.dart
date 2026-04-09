@@ -497,8 +497,7 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
         if (!mounted) return;
         setState(() {
           _orders = snap.docs.map(_FoodOrder.fromDoc).toList();
-          _firstPageLastDoc =
-              snap.docs.isNotEmpty ? snap.docs.last : null;
+          _firstPageLastDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
           _hasMore = snap.docs.length >= _kPageSize;
           _loading = false;
           _loadingMore = false;
@@ -1445,13 +1444,13 @@ class _OrderCard extends StatelessWidget {
               ],
               const SizedBox(width: 8),
               _ActionBtn(
-                label: locale == 'tr' ? 'Reddet' : 'Reject',
-                icon: Icons.close_rounded,
-                bg: const Color(0xFFFEF2F2),
-                fg: const Color(0xFFDC2626),
-                loading: _isUpdating && updatingTo == _OrderStatus.rejected,
+                label: locale == 'tr' ? 'Geri Al' : 'Undo',
+                icon: Icons.undo_rounded,
+                bg: const Color(0xFFFFFBEB),
+                fg: const Color(0xFFB45309),
+                loading: _isUpdating && updatingTo == _OrderStatus.pending,
                 enabled: !_isUpdating,
-                onTap: () => onUpdateStatus(order.id, _OrderStatus.rejected),
+                onTap: () => onUpdateStatus(order.id, _OrderStatus.pending),
               ),
             ],
 

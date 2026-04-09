@@ -1817,9 +1817,9 @@ export const updateFoodOrderStatus = onCall(
 
       const VALID_TRANSITIONS = {
         pending: ['accepted', 'rejected'],
-        accepted: ['ready', 'rejected'],
-        ready: ['out_for_delivery'],        // cargo claims it
-        out_for_delivery: ['delivered'],    // cargo marks delivered
+        accepted: ['ready', 'pending'],       // ← changed 'rejected' to 'pending'
+        ready: ['out_for_delivery'],
+        out_for_delivery: ['delivered'],
       };
 
       const allowed = VALID_TRANSITIONS[order.status] || [];
