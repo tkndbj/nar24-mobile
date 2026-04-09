@@ -27,6 +27,7 @@ class ReceiptScanResult {
   final String? detectedOrderId;
   final String? detectedPhone;
   final LatLng? detectedLatLng;
+  final List<Map<String, dynamic>> detectedItems;
   final double confidence;
 
   const ReceiptScanResult({
@@ -36,6 +37,7 @@ class ReceiptScanResult {
     this.detectedOrderId,
     this.detectedPhone,
     this.detectedLatLng,
+    this.detectedItems = const [],
     required this.confidence,
   });
 }
@@ -91,13 +93,17 @@ class ReceiptScannerService {
     // Haiku extracts the rest
     final extracted = await _extractWithHaiku(rawText);
 
+    final rawItems = extracted['items'] as List? ?? [];
+    final items = rawItems.whereType<Map<String, dynamic>>().toList();
+
     return ReceiptScanResult(
       rawText: rawText,
       detectedAddress: extracted['address'] as String?,
       detectedTotal: (extracted['total'] as num?)?.toDouble(),
       detectedOrderId: extracted['order_id'] as String?,
       detectedPhone: extracted['phone'] as String?,
-      detectedLatLng: coords, // new field
+      detectedLatLng: coords,
+      detectedItems: items,
       confidence: rawText.length > 100 ? 0.85 : 0.3,
     );
   }
@@ -213,7 +219,7 @@ class ReceiptScannerService {
             },
             body: jsonEncode({
               'model': 'claude-haiku-4-5-20251001',
-              'max_tokens': 300,
+              'max_tokens': 1024,
               'messages': [
                 {
                   'role': 'user',
@@ -282,6 +288,7 @@ ${rawText.length > 1500 ? rawText.substring(0, 1500) : rawText}'''
       'total': _regexTotal(text),
       'order_id': _regexOrderId(text),
       'phone': _regexPhone(text),
+      'items': [],
     };
   }
 
@@ -450,6 +457,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
       'detectedPhone': result.detectedPhone,
       'detectedLat': result.detectedLatLng?.lat,
       'detectedLng': result.detectedLatLng?.lng,
+      'detectedItems': result.detectedItems,
     });
 
     final orderId = response.data['orderId'] as String?;
@@ -510,155 +518,163 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Icon circle
-            Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(isDark ? 0.13 : 0.08),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.document_scanner_rounded,
-                  size: 48, color: Colors.orange),
-            ),
-            const SizedBox(height: 24),
-
-            // Restaurant name chip (call mode only)
-            if (_isRestaurantMode && widget.restaurantName != null) ...[
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: MediaQuery.of(context).size.height -
+                MediaQuery.of(context).padding.top -
+                kToolbarHeight -
+                48,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Icon circle
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                width: 100,
+                height: 100,
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                  color: Colors.orange.withOpacity(isDark ? 0.13 : 0.08),
+                  shape: BoxShape.circle,
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.storefront_rounded,
-                        size: 14, color: Colors.orange),
-                    const SizedBox(width: 6),
-                    Text(
-                      widget.restaurantName!,
-                      style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.orange),
-                    ),
-                  ],
-                ),
+                child: const Icon(Icons.document_scanner_rounded,
+                    size: 48, color: Colors.orange),
               ),
-              const SizedBox(height: 16),
-            ],
-
-            // Title
-            Text(
-              _isRestaurantMode ? 'Müşteri fişini tara' : 'Siparişi bul',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : Colors.grey[900],
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // Subtitle
-            Text(
-              _isRestaurantMode
-                  ? 'Harici fişi okuyarak sipariş kaydı oluşturulacak.'
-                  : 'Uygulama sipariş numarasını okuyarak sizi ilgili teslimat kartına yönlendirecek.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 40),
-
-            // Buttons or spinner
-            if (_scanning)
-              Column(
-                children: [
-                  const CircularProgressIndicator(color: Colors.orange),
-                  const SizedBox(height: 16),
-                  Text(
-                    _statusMessage ?? 'İşleniyor...',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
-                ],
-              )
-            else ...[
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => _scan(ImageSource.camera),
-                  icon: const Icon(Icons.camera_alt_rounded),
-                  label: const Text('Fotoğraf Çek',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    elevation: 0,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () => _scan(ImageSource.gallery),
-                  icon: const Icon(Icons.photo_library_rounded),
-                  label: const Text('Galeriden Seç',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.orange,
-                    side: const BorderSide(color: Colors.orange),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-              ),
-            ],
-
-            // Error box
-            if (_error != null) ...[
               const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.red.withOpacity(0.25)),
+
+              // Restaurant name chip (call mode only)
+              if (_isRestaurantMode && widget.restaurantName != null) ...[
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.storefront_rounded,
+                          size: 14, color: Colors.orange),
+                      const SizedBox(width: 6),
+                      Text(
+                        widget.restaurantName!,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.error_outline_rounded,
-                        color: Colors.red, size: 18),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(_error!,
-                          style:
-                              const TextStyle(color: Colors.red, fontSize: 13)),
-                    ),
-                  ],
+                const SizedBox(height: 16),
+              ],
+
+              // Title
+              Text(
+                _isRestaurantMode ? 'Müşteri fişini tara' : 'Siparişi bul',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.grey[900],
                 ),
               ),
+              const SizedBox(height: 8),
+
+              // Subtitle
+              Text(
+                _isRestaurantMode
+                    ? 'Harici fişi okuyarak sipariş kaydı oluşturulacak.'
+                    : 'Uygulama sipariş numarasını okuyarak sizi ilgili teslimat kartına yönlendirecek.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+              ),
+              const SizedBox(height: 40),
+
+              // Buttons or spinner
+              if (_scanning)
+                Column(
+                  children: [
+                    const CircularProgressIndicator(color: Colors.orange),
+                    const SizedBox(height: 16),
+                    Text(
+                      _statusMessage ?? 'İşleniyor...',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                )
+              else ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _scan(ImageSource.camera),
+                    icon: const Icon(Icons.camera_alt_rounded),
+                    label: const Text('Fotoğraf Çek',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _scan(ImageSource.gallery),
+                    icon: const Icon(Icons.photo_library_rounded),
+                    label: const Text('Galeriden Seç',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.orange,
+                      side: const BorderSide(color: Colors.orange),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
+
+              // Error box
+              if (_error != null) ...[
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.red.withOpacity(0.25)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.error_outline_rounded,
+                          color: Colors.red, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(_error!,
+                            style: const TextStyle(
+                                color: Colors.red, fontSize: 13)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

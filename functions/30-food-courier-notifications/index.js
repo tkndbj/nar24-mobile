@@ -178,6 +178,7 @@ export const createScannedRestaurantOrder = onCall(
       detectedPhone = null,
       detectedLat = null,
       detectedLng = null,
+      detectedItems = [],
     } = request.data;
 
     if (!restaurantId) throw new HttpsError('invalid-argument', 'restaurantId is required.');
@@ -221,8 +222,17 @@ export const createScannedRestaurantOrder = onCall(
       buyerName: 'External Customer',
       buyerPhone: detectedPhone || '',
 
-      items: [],
-      itemCount: 0,
+      // Items from OCR
+      items: Array.isArray(detectedItems) ? detectedItems.slice(0, 50).map((item, i) => ({
+        foodId: `scanned_${i}`,
+        name: typeof item.name === 'string' ? item.name.substring(0, 200) : 'Unknown item',
+        quantity: typeof item.quantity === 'number' && item.quantity > 0 ? Math.floor(item.quantity) : 1,
+        price: typeof item.price === 'number' ? item.price : 0,
+        extras: [],
+        specialNotes: '',
+        itemTotal: (typeof item.price === 'number' ? item.price : 0) * (typeof item.quantity === 'number' && item.quantity > 0 ? Math.floor(item.quantity) : 1),
+      })) : [],
+      itemCount: Array.isArray(detectedItems) ? detectedItems.reduce((sum, item) => sum + (typeof item.quantity === 'number' && item.quantity > 0 ? Math.floor(item.quantity) : 1), 0) : 0,
 
       subtotal: typeof detectedTotal === 'number' ? detectedTotal : 0,
       deliveryFee: 0,
