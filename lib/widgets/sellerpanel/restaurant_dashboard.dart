@@ -2,12 +2,11 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
-
+import '../../screens/CARGO-FOOD-PANEL/receipt_scanner.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../utils/food_localization.dart';
 
@@ -547,8 +546,8 @@ class _RestaurantDashboardTabState extends State<RestaurantDashboardTab>
       isDark: isDark,
       onRefresh: () => _loadRestaurant(widget.restaurantId),
       headerBuilder: () => _buildGreetingSection(isDark, l10n, locale),
-      sectionLabel: _sectionLabel(
-          l10n.restaurantDashboardPendingOrdersTitle, isDark),
+      sectionLabel:
+          _sectionLabel(l10n.restaurantDashboardPendingOrdersTitle, isDark),
       viewAllLabel: GestureDetector(
         onTap: () => context.push('/orders_food'),
         child: Text(
@@ -563,8 +562,20 @@ class _RestaurantDashboardTabState extends State<RestaurantDashboardTab>
     );
   }
 
+  void _openReceiptScanner(BuildContext context) {
+    Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => ReceiptScanScreen.forRestaurant(
+          restaurantId: _restaurantId!,
+          restaurantName: _restaurantName,
+        ),
+      ),
+    );
+  }
+
   // ── Greeting section ──────────────────────────────────────────────────────
 
+  // In _buildGreetingSection, fix the layout:
   Widget _buildGreetingSection(
       bool isDark, AppLocalizations l10n, String locale) {
     return Column(
@@ -596,6 +607,15 @@ class _RestaurantDashboardTabState extends State<RestaurantDashboardTab>
               const SizedBox(width: 8),
               _OpenStatusBadge(info: _restaurantInfo!, l10n: l10n),
             ],
+            const SizedBox(width: 4),
+            IconButton(
+              onPressed: () => _openReceiptScanner(context),
+              icon: const Icon(Icons.document_scanner_rounded, size: 22),
+              tooltip: 'Fiş Tara',
+              color: const Color(0xFFEA580C),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
           ],
         ),
         if (_restaurantInfo != null)
@@ -876,7 +896,8 @@ class _PendingOrdersSectionState extends State<_PendingOrdersSection> {
       final newOrders = snap.docs.map(_PendingOrder.fromDoc).toList();
       // Deduplicate (first-page stream may have shifted)
       final existingIds = _orders.map((o) => o.id).toSet();
-      final unique = newOrders.where((o) => !existingIds.contains(o.id)).toList();
+      final unique =
+          newOrders.where((o) => !existingIds.contains(o.id)).toList();
 
       setState(() {
         _orders.addAll(unique);
@@ -1324,7 +1345,10 @@ class _ItemChip extends StatelessWidget {
           if (item.extras.isNotEmpty) ...[
             const SizedBox(height: 2),
             Text(
-              item.extras.map((e) => '+${localizeExtra(e.name, AppLocalizations.of(context))}').join(', '),
+              item.extras
+                  .map((e) =>
+                      '+${localizeExtra(e.name, AppLocalizations.of(context))}')
+                  .join(', '),
               style: GoogleFonts.figtree(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,

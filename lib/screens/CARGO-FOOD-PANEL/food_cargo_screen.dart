@@ -11,7 +11,6 @@ import 'package:intl/intl.dart';
 import '../../auth_service.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'package:rxdart/rxdart.dart';
-import 'receipt_scanner.dart';
 import '../../services/courier_location_service.dart';
 import './courier_route_screen.dart';
 import 'dart:async';
@@ -77,7 +76,6 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
   Stream<int>? _unreadCountStream;
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _courierNotifsStream;
   late final TabController _tabController;
-   String? _highlightedOrderId;
   bool _isOnline = true;
   StreamSubscription<bool>? _connSub;
 
@@ -86,18 +84,20 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _tabController = TabController(length: 2, vsync: this);
-  _courierNotifsStream = FirebaseFirestore.instance
-    .collection('food_courier_notifications')
-    .where('isActive', isEqualTo: true)
-    .orderBy('createdAt', descending: true)
-    .limit(30)
-    .snapshots()
-    .asBroadcastStream(); // allows multiple listeners on one connection
-_setupFcm();
-_setupUnreadStream();
-   CourierLocationService.instance.startTracking();
-    _connSub = CourierLocationService.instance.connectionStream.listen((connected) {
-      if (mounted && _isOnline != connected) setState(() => _isOnline = connected);
+    _courierNotifsStream = FirebaseFirestore.instance
+        .collection('food_courier_notifications')
+        .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(30)
+        .snapshots()
+        .asBroadcastStream(); // allows multiple listeners on one connection
+    _setupFcm();
+    _setupUnreadStream();
+    CourierLocationService.instance.startTracking();
+    _connSub =
+        CourierLocationService.instance.connectionStream.listen((connected) {
+      if (mounted && _isOnline != connected)
+        setState(() => _isOnline = connected);
     });
   }
 
@@ -187,26 +187,6 @@ _setupUnreadStream();
     } else {
       setState(() => _notifPanelOpen = true);
     }
-  }
-
-  // ── Scanner (legacy — for My Deliveries tab) ──────────────────────────────
-
-  Future<void> _openScanner() async {
-    final scannedId = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => const ReceiptScanScreen()),
-    );
-    if (scannedId == null || !mounted) return;
-    _onScannedOrderCreated(scannedId);
-  }
-
-  // Called from both the legacy scanner and the call card scanner
-  void _onScannedOrderCreated(String orderId) {
-    if (!mounted) return;
-    _tabController.animateTo(1);
-    setState(() => _highlightedOrderId = orderId);
-    Future.delayed(const Duration(seconds: 5), () {
-      if (mounted) setState(() => _highlightedOrderId = null);
-    });
   }
 
   // ── Unread stream ─────────────────────────────────────────────────────────
@@ -370,16 +350,14 @@ _setupUnreadStream();
               _PoolTab(
                 currentUser: user,
                 isDark: isDark,
-                onScannedOrderCreated: _onScannedOrderCreated,
               ),
               _MyDeliveriesTab(
                 currentUser: user,
                 isDark: isDark,
-                highlightedOrderId: _highlightedOrderId,
               ),
             ],
           ),
-         // ── Offline banner ──────────────────────────────────────
+          // ── Offline banner ──────────────────────────────────────
           if (!_isOnline)
             Positioned(
               top: 0,
@@ -497,7 +475,7 @@ class _NotificationPanel extends StatelessWidget {
                   const Divider(height: 16),
                   Expanded(
                     child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                     stream: notifsStream,
+                      stream: notifsStream,
                       builder: (context, snap) {
                         if (snap.connectionState == ConnectionState.waiting) {
                           return const Center(
@@ -713,12 +691,10 @@ Future<void> _confirmLogout(BuildContext context, AppLocalizations loc) async {
 class _PoolTab extends StatefulWidget {
   final User currentUser;
   final bool isDark;
-  final void Function(String orderId) onScannedOrderCreated;
 
   const _PoolTab({
     required this.currentUser,
     required this.isDark,
-    required this.onScannedOrderCreated,
   });
 
   @override
@@ -817,8 +793,9 @@ class _PoolTabState extends State<_PoolTab> with AutomaticKeepAliveClientMixin {
     if (_loadingMore || !_hasMore) return;
 
     // Cursor = last extra doc, or last live doc if no extras yet
-    final cursor =
-        _extraDocs.isNotEmpty ? _extraDocs.last : (_liveDocs.isNotEmpty ? _liveDocs.last : null);
+    final cursor = _extraDocs.isNotEmpty
+        ? _extraDocs.last
+        : (_liveDocs.isNotEmpty ? _liveDocs.last : null);
     if (cursor == null) return;
 
     setState(() => _loadingMore = true);
@@ -839,7 +816,8 @@ class _PoolTabState extends State<_PoolTab> with AutomaticKeepAliveClientMixin {
         ..._liveDocs.map((d) => d.id),
         ..._extraDocs.map((d) => d.id),
       };
-      final fresh = snap.docs.where((d) => !existingIds.contains(d.id)).toList();
+      final fresh =
+          snap.docs.where((d) => !existingIds.contains(d.id)).toList();
 
       setState(() {
         _extraDocs.addAll(fresh);
@@ -941,7 +919,6 @@ class _PoolTabState extends State<_PoolTab> with AutomaticKeepAliveClientMixin {
                   call: visibleCalls[i],
                   currentUser: widget.currentUser,
                   isDark: widget.isDark,
-                  onOrderCreated: widget.onScannedOrderCreated,
                 ),
               );
             }
@@ -993,14 +970,12 @@ class _CourierCallCard extends StatefulWidget {
   final CourierCall call;
   final User currentUser;
   final bool isDark;
-  final void Function(String orderId) onOrderCreated;
 
   const _CourierCallCard({
     super.key,
     required this.call,
     required this.currentUser,
     required this.isDark,
-    required this.onOrderCreated,
   });
 
   @override
@@ -1064,17 +1039,6 @@ class _CourierCallCardState extends State<_CourierCallCard> {
     } finally {
       // Always reset loading — the ValueKey + stream update handles the UI switch
       if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _openScanForCall() async {
-    final orderId = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        builder: (_) => ReceiptScanScreen.forCall(courierCall: widget.call),
-      ),
-    );
-    if (orderId != null) {
-      widget.onOrderCreated(orderId);
     }
   }
 
@@ -1204,20 +1168,26 @@ class _CourierCallCardState extends State<_CourierCallCard> {
             child: SizedBox(
               width: double.infinity,
               child: _isMyCall
-                  ? ElevatedButton.icon(
-                      onPressed: _loading ? null : _openScanForCall,
-                      icon:
-                          const Icon(Icons.document_scanner_rounded, size: 18),
-                      label: const Text('Fişi Tara',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 14)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 13),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        elevation: 0,
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withOpacity(isDark ? 0.12 : 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border:
+                            Border.all(color: Colors.orange.withOpacity(0.3)),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.check_circle_rounded,
+                              size: 18, color: Colors.orange),
+                          SizedBox(width: 6),
+                          Text('Restorana Git',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: Colors.orange)),
+                        ],
                       ),
                     )
                   : ElevatedButton.icon(
@@ -1312,39 +1282,40 @@ class _MyDeliveriesTab extends StatefulWidget {
   State<_MyDeliveriesTab> createState() => _MyDeliveriesTabState();
 }
 
-class _MyDeliveriesTabState extends State<_MyDeliveriesTab> with AutomaticKeepAliveClientMixin {
+class _MyDeliveriesTabState extends State<_MyDeliveriesTab>
+    with AutomaticKeepAliveClientMixin {
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _stream;
   final _scrollController = ScrollController();
   final Map<String, GlobalKey> _cardKeys = {};
   final Set<String> _removedLocally = {};
   final Map<String, StreamSubscription> _actionListeners = {};
 
-    @override
+  @override
   bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
-   _stream = FirebaseFirestore.instance
-    .collection('orders-food')
-    .where('cargoUserId', isEqualTo: widget.currentUser.uid)
-    .where('status', isEqualTo: 'out_for_delivery')
-    .snapshots();
-  }
-
-  @override
-void didUpdateWidget(_MyDeliveriesTab old) {
-  super.didUpdateWidget(old);
-  if (old.currentUser.uid != widget.currentUser.uid) {
     _stream = FirebaseFirestore.instance
         .collection('orders-food')
         .where('cargoUserId', isEqualTo: widget.currentUser.uid)
         .where('status', isEqualTo: 'out_for_delivery')
         .snapshots();
   }
-}
 
- void _listenForActionResult(String actionId, String orderId) {
+  @override
+  void didUpdateWidget(_MyDeliveriesTab old) {
+    super.didUpdateWidget(old);
+    if (old.currentUser.uid != widget.currentUser.uid) {
+      _stream = FirebaseFirestore.instance
+          .collection('orders-food')
+          .where('cargoUserId', isEqualTo: widget.currentUser.uid)
+          .where('status', isEqualTo: 'out_for_delivery')
+          .snapshots();
+    }
+  }
+
+  void _listenForActionResult(String actionId, String orderId) {
     final sub = FirebaseFirestore.instance
         .collection('courier_actions')
         .doc(actionId)
@@ -1369,8 +1340,8 @@ void didUpdateWidget(_MyDeliveriesTab old) {
             content: Text('Teslimat başarısız: $error'),
             backgroundColor: Colors.red[700],
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ));
         }
       }
@@ -1396,22 +1367,22 @@ void didUpdateWidget(_MyDeliveriesTab old) {
       stream: _stream,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-  return const _Loader();
-}
+          return const _Loader();
+        }
 
-if (snap.hasError) {
-  return _ErrorView(message: 'Teslimatlar yüklenemedi: ${snap.error}');
-}
+        if (snap.hasError) {
+          return _ErrorView(message: 'Teslimatlar yüklenemedi: ${snap.error}');
+        }
 
-final docs = [...(snap.data?.docs ?? [])]
-  ..removeWhere((d) => _removedLocally.contains(d.id))
-  ..sort((a, b) {
-    final aTs = a.data()['assignedAt'] as Timestamp?;
-    final bTs = b.data()['assignedAt'] as Timestamp?;
-    if (aTs == null) return 1;
-    if (bTs == null) return -1;
-    return aTs.compareTo(bTs);
-  });
+        final docs = [...(snap.data?.docs ?? [])]
+          ..removeWhere((d) => _removedLocally.contains(d.id))
+          ..sort((a, b) {
+            final aTs = a.data()['assignedAt'] as Timestamp?;
+            final bTs = b.data()['assignedAt'] as Timestamp?;
+            if (aTs == null) return 1;
+            if (bTs == null) return -1;
+            return aTs.compareTo(bTs);
+          });
 
         if (docs.isEmpty) {
           return _EmptyState(
@@ -1431,18 +1402,21 @@ final docs = [...(snap.data?.docs ?? [])]
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const CourierRouteScreen()),
+                    MaterialPageRoute(
+                        builder: (_) => const CourierRouteScreen()),
                   ),
                   icon: const Icon(Icons.route_rounded, size: 18),
                   label: Text(
                     '${docs.length} Teslimat · Rotamı Gör',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF6366F1),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 13),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     elevation: 0,
                   ),
                 ),
@@ -1451,43 +1425,43 @@ final docs = [...(snap.data?.docs ?? [])]
             // Order list
             Expanded(
               child: ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
-                itemCount: docs.length,
-          itemBuilder: (_, i) {
-            final docId = docs[i].id;
-            _cardKeys[docId] ??= GlobalKey();
-            final isHit = docId == widget.highlightedOrderId;
+                  controller: _scrollController,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+                  itemCount: docs.length,
+                  itemBuilder: (_, i) {
+                    final docId = docs[i].id;
+                    _cardKeys[docId] ??= GlobalKey();
+                    final isHit = docId == widget.highlightedOrderId;
 
-            if (isHit) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                final ctx = _cardKeys[docId]?.currentContext;
-                if (ctx != null) {
-                  Scrollable.ensureVisible(ctx,
-                      duration: const Duration(milliseconds: 400),
-                      curve: Curves.easeInOut,
-                      alignment: 0.15);
-                }
-              });
-            }
+                    if (isHit) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        final ctx = _cardKeys[docId]?.currentContext;
+                        if (ctx != null) {
+                          Scrollable.ensureVisible(ctx,
+                              duration: const Duration(milliseconds: 400),
+                              curve: Curves.easeInOut,
+                              alignment: 0.15);
+                        }
+                      });
+                    }
 
-            return Padding(
-              key: _cardKeys[docId],
-              padding: const EdgeInsets.only(bottom: 16),
-                   child: _CargoOrderCard(
-                orderId: docId,
-                data: docs[i].data(),
-                isDark: widget.isDark,
-                isPool: false,
-                currentUser: widget.currentUser,
-                isHighlighted: isHit,
-                onDeliveredLocally: (actionId) {
-                  setState(() => _removedLocally.add(docId));
-                  _listenForActionResult(actionId, docId);
-                },
-              ),
-            );
-         } ),
+                    return Padding(
+                      key: _cardKeys[docId],
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: _CargoOrderCard(
+                        orderId: docId,
+                        data: docs[i].data(),
+                        isDark: widget.isDark,
+                        isPool: false,
+                        currentUser: widget.currentUser,
+                        isHighlighted: isHit,
+                        onDeliveredLocally: (actionId) {
+                          setState(() => _removedLocally.add(docId));
+                          _listenForActionResult(actionId, docId);
+                        },
+                      ),
+                    );
+                  }),
             ),
           ],
         );
@@ -1506,7 +1480,7 @@ class _CargoOrderCard extends StatefulWidget {
   final bool isDark;
   final bool isPool;
   final User currentUser;
-   final bool isHighlighted;
+  final bool isHighlighted;
   final void Function(String actionDocId)? onDeliveredLocally;
 
   const _CargoOrderCard({
@@ -1642,117 +1616,122 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
     }
   }
 
-Future<void> _markDelivered() async {
-  final loc = AppLocalizations.of(context);
+  Future<void> _markDelivered() async {
+    final loc = AppLocalizations.of(context);
 
-  final paymentMethod = await _showPaymentSheet();
-  if (paymentMethod == null || !mounted) return;
+    final paymentMethod = await _showPaymentSheet();
+    if (paymentMethod == null || !mounted) return;
 
-  setState(() => _loading = true);
-  try {
-    // Write action document — offline-safe, queues if no network
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-    final displayName = FirebaseAuth.instance.currentUser!.displayName ?? 'Courier';
+    setState(() => _loading = true);
+    try {
+      // Write action document — offline-safe, queues if no network
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final displayName =
+          FirebaseAuth.instance.currentUser!.displayName ?? 'Courier';
 
-     final actionRef = FirebaseFirestore.instance.collection('courier_actions').doc();
-    await actionRef.set({
-      'type': 'deliver',
-      'orderId': widget.orderId,
-      'courierId': uid,
-      'courierName': displayName,
-      'paymentMethod': paymentMethod,
-      'status': 'pending',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+      final actionRef =
+          FirebaseFirestore.instance.collection('courier_actions').doc();
+      await actionRef.set({
+        'type': 'deliver',
+        'orderId': widget.orderId,
+        'courierId': uid,
+        'courierName': displayName,
+        'paymentMethod': paymentMethod,
+        'status': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
 
-    CourierLocationService.instance.updateCurrentOrder(null);
-    widget.onDeliveredLocally?.call(actionRef.id);
-    if (mounted) _showSnack(loc.foodCargoDeliveredSuccess);
-  } catch (e) {
-    if (mounted) {
-      _showSnack(AppLocalizations.of(context).foodCargoAssignError, isError: true);
+      CourierLocationService.instance.updateCurrentOrder(null);
+      widget.onDeliveredLocally?.call(actionRef.id);
+      if (mounted) _showSnack(loc.foodCargoDeliveredSuccess);
+    } catch (e) {
+      if (mounted) {
+        _showSnack(AppLocalizations.of(context).foodCargoAssignError,
+            isError: true);
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-  } finally {
-    if (mounted) setState(() => _loading = false);
   }
-}
 
 // ── ADD this new helper method right below _markDelivered ──────────
-Future<String?> _showPaymentSheet() {
-  final isDark = widget.isDark;
-  return showModalBottomSheet<String>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    builder: (_) => Container(
-      padding: EdgeInsets.fromLTRB(24, 20, 24, 32 + MediaQuery.of(context).padding.bottom),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF211F31) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+  Future<String?> _showPaymentSheet() {
+    final isDark = widget.isDark;
+    return showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: EdgeInsets.fromLTRB(
+            24, 20, 24, 32 + MediaQuery.of(context).padding.bottom),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF211F31) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Drag handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.grey[700] : Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Müşteri Nasıl Ödedi?',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.grey[900],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Ödeme yöntemini seçin',
+              style: TextStyle(
+                fontSize: 13,
+                color: isDark ? Colors.grey[500] : Colors.grey[500],
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                _PaymentOptionBtn(
+                  emoji: '💳',
+                  label: 'Kart',
+                  color: Colors.blue,
+                  isDark: isDark,
+                  onTap: () => Navigator.of(context).pop('card'),
+                ),
+                const SizedBox(width: 12),
+                _PaymentOptionBtn(
+                  emoji: '💵',
+                  label: 'Nakit',
+                  color: Colors.green,
+                  isDark: isDark,
+                  onTap: () => Navigator.of(context).pop('cash'),
+                ),
+                const SizedBox(width: 12),
+                _PaymentOptionBtn(
+                  emoji: '🏦',
+                  label: 'IBAN',
+                  color: Colors.purple,
+                  isDark: isDark,
+                  onTap: () => Navigator.of(context).pop('iban'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Drag handle
-          Center(
-            child: Container(
-              width: 40, height: 4,
-              decoration: BoxDecoration(
-                color: isDark ? Colors.grey[700] : Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Müşteri Nasıl Ödedi?',
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : Colors.grey[900],
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Ödeme yöntemini seçin',
-            style: TextStyle(
-              fontSize: 13,
-              color: isDark ? Colors.grey[500] : Colors.grey[500],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              _PaymentOptionBtn(
-                emoji: '💳',
-                label: 'Kart',
-                color: Colors.blue,
-                isDark: isDark,
-                onTap: () => Navigator.of(context).pop('card'),
-              ),
-              const SizedBox(width: 12),
-              _PaymentOptionBtn(
-                emoji: '💵',
-                label: 'Nakit',
-                color: Colors.green,
-                isDark: isDark,
-                onTap: () => Navigator.of(context).pop('cash'),
-              ),
-              const SizedBox(width: 12),
-              _PaymentOptionBtn(
-                emoji: '🏦',
-                label: 'IBAN',
-                color: Colors.purple,
-                isDark: isDark,
-                onTap: () => Navigator.of(context).pop('iban'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    ),
-  );
-}
+    );
+  }
 
   Future<void> _callPhone() async {
     final phone = _customerPhone;

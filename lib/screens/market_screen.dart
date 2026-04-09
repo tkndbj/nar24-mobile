@@ -132,7 +132,7 @@ class _Debouncer {
 }
 
 class MarketScreenState extends State<MarketScreen>
-    with SingleTickerProviderStateMixin, RouteAware, WidgetsBindingObserver {
+    with RouteAware, WidgetsBindingObserver {
   // Core controllers - initialized immediately
   late final TextEditingController _searchController;
   late final FocusNode _searchFocusNode;
@@ -147,10 +147,6 @@ class MarketScreenState extends State<MarketScreen>
   SpecialFilterProviderMarket? _specialFilterProvider;
   DynamicFilterProvider? _dynamicFilterProvider;
 
-  // Batching mechanism to prevent cascade rebuilds
-  bool _isBatchUpdating = false;
-  int _pendingUpdates = 0;
-
   bool _showTerasCategories = false;
 
   // State management - optimized
@@ -160,7 +156,8 @@ class MarketScreenState extends State<MarketScreen>
   int _currentPage = 0;
   String? _lastKnownUserId;
   Timer? _cleanupTimer;
-  bool _isRouteActive = true; // Track if route is currently visible
+  final ValueNotifier<bool> _isRouteActive =
+      ValueNotifier(true); // Track if route is currently visible
 
   bool _isRebuilding = false;
   static const int _maxScrollDebouncers = 20;
@@ -411,18 +408,18 @@ class MarketScreenState extends State<MarketScreen>
     }
   }
 
-Future<void> _initializeLayoutService() async {
-  try {
-    final layoutService =
-        Provider.of<MarketLayoutService>(context, listen: false);
-    await layoutService.initialize();
-    // One-time fetch only, no listeners needed
-  } catch (e) {
-    if (kDebugMode) {
-      debugPrint('Layout service initialization error: $e');
+  Future<void> _initializeLayoutService() async {
+    try {
+      final layoutService =
+          Provider.of<MarketLayoutService>(context, listen: false);
+      await layoutService.initialize();
+      // One-time fetch only, no listeners needed
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Layout service initialization error: $e');
+      }
     }
   }
-}
 
   bool _shouldKeepAlive(int index) {
     final distance = (index - _currentPage).abs();
@@ -1329,34 +1326,6 @@ Future<void> _initializeLayoutService() async {
     );
   }
 
-  void _clearFilterCache(String filterType) {
-    _specialFilterProvider?.clearFilterCache(filterType);
-    if (_isDynamicFilter(filterType)) {
-      _dynamicFilterProvider?.clearFilterCache(filterType);
-    }
-    if (kDebugMode) {
-      debugPrint('🗑️ Cleared cache for filter: $filterType');
-    }
-  }
-
-  /// Force refresh a specific filter (bypasses cooldown)
-  Future<void> _forceRefreshFilter(String filterType) async {
-    _clearFilterCache(filterType);
-    _filterLastRefresh.remove(filterType);
-
-    final dynamicFilter =
-        _isDynamicFilter(filterType) ? _getDynamicFilterById(filterType) : null;
-
-    await _specialFilterProvider?.refreshProducts(
-      filterType,
-      dynamicFilter: dynamicFilter,
-    );
-
-    if (kDebugMode) {
-      debugPrint('🔄 Force refreshed filter: $filterType');
-    }
-  }
-
   /// Optimized dynamic slivers builder
   List<Widget> _buildDynamicSlivers(List<MarketWidgetConfig> visibleWidgets) {
     // ✅ OPTIMIZATION: Cache MediaQuery
@@ -1407,17 +1376,19 @@ Future<void> _initializeLayoutService() async {
     switch (type) {
       case 'ads_banner':
         return SliverToBoxAdapter(
-          child: ValueListenableBuilder<Color>(
-            valueListenable: _adsBannerBgColor,
-            child: AdsBannerWidget(
-              backgroundColorNotifier: _adsBannerBgColor,
-              shouldAutoPlay: _isRouteActive, // Pause when route is not active
-            ),
-            builder: (context, bg, child) => AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
-              color: bg,
-              child: child,
+          child: ValueListenableBuilder<bool>(
+            valueListenable: _isRouteActive,
+            builder: (_, isActive, __) => ValueListenableBuilder<Color>(
+              valueListenable: _adsBannerBgColor,
+              builder: (context, bg, __) => AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                color: bg,
+                child: AdsBannerWidget(
+                  backgroundColorNotifier: _adsBannerBgColor,
+                  shouldAutoPlay: isActive, // Pause when route is not active
+                ),
+              ),
             ),
           ),
         );
@@ -1429,26 +1400,29 @@ Future<void> _initializeLayoutService() async {
 
       case 'thin_banner':
         return SliverToBoxAdapter(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              // Determine if it's a tablet/larger screen
-              final isTablet = constraints.maxWidth >= 600;
+          child: ValueListenableBuilder<bool>(
+            valueListenable: _isRouteActive,
+            builder: (_, isActive, __) => LayoutBuilder(
+              builder: (context, constraints) {
+                // Determine if it's a tablet/larger screen
+                final isTablet = constraints.maxWidth >= 600;
 
-              if (!isTablet) {
-                // Mobile: use original widget as-is
-                return MarketThinBanner(shouldAutoPlay: _isRouteActive);
-              }
+                if (!isTablet) {
+                  // Mobile: use original widget as-is
+                  return MarketThinBanner(shouldAutoPlay: isActive);
+                }
 
-              // Tablet: center the banner with max width
-              final maxWidth = constraints.maxWidth > 1200 ? 800.0 : 600.0;
+                // Tablet: center the banner with max width
+                final maxWidth = constraints.maxWidth > 1200 ? 800.0 : 600.0;
 
-              return Center(
-                child: Container(
-                  width: maxWidth,
-                  child: MarketThinBanner(shouldAutoPlay: _isRouteActive),
-                ),
-              );
-            },
+                return Center(
+                  child: Container(
+                    width: maxWidth,
+                    child: MarketThinBanner(shouldAutoPlay: isActive),
+                  ),
+                );
+              },
+            ),
           ),
         );
 
@@ -1967,12 +1941,10 @@ Future<void> _initializeLayoutService() async {
   /// Build lightweight shimmer placeholder for loading state
   Widget _buildShimmerPlaceholder() {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final baseColor = isDarkMode
-        ? const Color.fromARGB(255, 30, 28, 44)
-        : Colors.grey[300]!;
-    final highlightColor = isDarkMode
-        ? const Color.fromARGB(255, 33, 31, 49)
-        : Colors.grey[100]!;
+    final baseColor =
+        isDarkMode ? const Color.fromARGB(255, 30, 28, 44) : Colors.grey[300]!;
+    final highlightColor =
+        isDarkMode ? const Color.fromARGB(255, 33, 31, 49) : Colors.grey[100]!;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 24.0),
@@ -2268,33 +2240,6 @@ Future<void> _initializeLayoutService() async {
     }
   }
 
-  /// Batch multiple setState calls into a single frame to prevent cascade rebuilds
-  void _batchedSetState(VoidCallback fn) {
-    if (_isBatchUpdating) {
-      // Already in a batch, just track pending updates
-      _pendingUpdates++;
-      fn();
-      return;
-    }
-
-    _isBatchUpdating = true;
-    _pendingUpdates = 1;
-    fn();
-
-    // Consolidate all updates into a single setState after the current event loop
-    scheduleMicrotask(() {
-      if (!mounted || !_isBatchUpdating) return;
-
-      setState(() {
-        // All state changes have been applied via fn() calls
-        // This setState just triggers the single consolidated rebuild
-      });
-
-      _isBatchUpdating = false;
-      _pendingUpdates = 0;
-    });
-  }
-
   @override
   void didPopNext() {
     super.didPopNext();
@@ -2313,9 +2258,9 @@ Future<void> _initializeLayoutService() async {
         _filterScrollController.jumpTo(0.0);
       }
 
+      _isRouteActive.value = true;
       setState(() {
         _currentPage = homeIndex;
-        _isRouteActive = true;
       });
       return;
     }
@@ -2323,7 +2268,7 @@ Future<void> _initializeLayoutService() async {
     // Defer animation resume to next frame to avoid jank during route transition
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      setState(() => _isRouteActive = true);
+      _isRouteActive.value = true;
     });
   }
 
@@ -2331,7 +2276,7 @@ Future<void> _initializeLayoutService() async {
   void didPush() {
     super.didPush();
     // Initial push - set immediately since there's no transition competing for resources
-    _isRouteActive = true;
+    _isRouteActive.value = true;
   }
 
   @override
@@ -2340,7 +2285,7 @@ Future<void> _initializeLayoutService() async {
     // Defer pause to next frame - low priority, doesn't need to block transition
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      setState(() => _isRouteActive = false);
+      _isRouteActive.value = false;
     });
   }
 
@@ -2394,7 +2339,6 @@ Future<void> _initializeLayoutService() async {
     }
 
     WidgetsBinding.instance.removeObserver(this);
-
 
     // 6. Clean up provider notifiers
     if (_specialFilterProvider != null) {
@@ -2453,6 +2397,14 @@ Future<void> _initializeLayoutService() async {
     }
 
     // 8. Dispose ValueNotifiers (with safety checks)
+    try {
+      _isRouteActive.dispose();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ Error disposing _isRouteActive: $e');
+      }
+    }
+
     try {
       _adsBannerBgColor.dispose();
     } catch (e) {
@@ -2574,10 +2526,9 @@ Future<void> _initializeLayoutService() async {
     final fallbackColor = isDarkMode ? const Color(0xFF1C1A29) : Colors.white;
 
     // AppBar color: use fallback when searching, otherwise use effective color
-    final effectiveColorNotifier =
-        (_isSearching || !onHomeFilter)
-            ? ValueNotifier<Color>(fallbackColor)
-            : bannerColorNotifier;
+    final effectiveColorNotifier = (_isSearching || !onHomeFilter)
+        ? ValueNotifier<Color>(fallbackColor)
+        : bannerColorNotifier;
 
     // Show AppBar when searching OR on tabs that need it
     final showAppBar = _isSearching ||
@@ -2615,16 +2566,13 @@ Future<void> _initializeLayoutService() async {
                 ],
                 child: Builder(
                   builder: (ctx) => Material(
-                    color: isDarkMode
-                        ? const Color(0xFF1C1A29)
-                        : Colors.white,
+                    color: isDarkMode ? const Color(0xFF1C1A29) : Colors.white,
                     // ValueListenableBuilder rebuilds on every keystroke,
                     // ensuring the delegate gets the latest query text
                     // and talks to the correct (overlay) SearchProvider.
                     child: ValueListenableBuilder<TextEditingValue>(
                       valueListenable: _searchController,
-                      builder: (_, __, ___) =>
-                          _buildSearchDelegateArea(ctx),
+                      builder: (_, __, ___) => _buildSearchDelegateArea(ctx),
                     ),
                   ),
                 ),

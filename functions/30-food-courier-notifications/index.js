@@ -165,142 +165,98 @@ export const callFoodCourier = onCall(
 // CALLABLE: createScannedFoodOrder — courier scans receipt, creates the order
 // ============================================================================
 
-export const createScannedFoodOrder = onCall(
+export const createScannedRestaurantOrder = onCall(
   { region: REGION, memory: '512MiB', timeoutSeconds: 30 },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'Must be signed in.');
-    }
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in.');
 
     const {
-      callId,
-      scannedRawText  = '',
+      restaurantId,
+      scannedRawText = '',
       detectedAddress = null,
-      detectedTotal   = null,
-      detectedPhone   = null,
-      detectedLat     = null,
-      detectedLng     = null,
+      detectedTotal = null,
+      detectedPhone = null,
+      detectedLat = null,
+      detectedLng = null,
     } = request.data;
+
+    if (!restaurantId) throw new HttpsError('invalid-argument', 'restaurantId is required.');
+
+    const db = admin.firestore();
+    const uid = request.auth.uid;
+
+    // Verify caller belongs to this restaurant
+    const userRecord = await admin.auth().getUser(uid);
+    const restaurantClaims = userRecord.customClaims?.restaurants || {};
+    if (!(restaurantId in restaurantClaims)) {
+      throw new HttpsError('permission-denied', 'Not authorised for this restaurant.');
+    }
+
+    const restaurantSnap = await db.collection('restaurants').doc(restaurantId).get();
+    if (!restaurantSnap.exists) throw new HttpsError('not-found', 'Restaurant not found.');
+    const restaurant = restaurantSnap.data();
 
     const locationGeoPoint = (
       typeof detectedLat === 'number' && typeof detectedLng === 'number'
     ) ? new admin.firestore.GeoPoint(detectedLat, detectedLng) : null;
 
-    if (!callId || typeof callId !== 'string') {
-      throw new HttpsError('invalid-argument', 'callId is required.');
-    }
+    const orderRef = db.collection('orders-food').doc();
+    const orderId = orderRef.id;
 
-    const db  = admin.firestore();
-    const uid = request.auth.uid;
+    await orderRef.set({
+      sourceType: 'scanned_receipt',
+      restaurantId,
+      restaurantName: restaurant.name || '',
+      restaurantProfileImage: restaurant.profileImageUrl || '',
+      restaurantOwnerId: restaurant.ownerId || '',
+      restaurantPhone: restaurant.contactNo || '',
+      restaurantLat: restaurant.latitude || null,
+      restaurantLng: restaurant.longitude || null,
 
-    // Verify courier custom claim
-    const userRecord = await admin.auth().getUser(uid);
-    if (!userRecord.customClaims?.foodcargoguy) {
-      throw new HttpsError('permission-denied', 'Not a registered courier.');
-    }
-    const courierName = userRecord.displayName || userRecord.email || 'Courier';
+      // No courier yet — assigned when courier takes from pool
+      cargoUserId: null,
+      cargoName: null,
 
-    let orderId;
+      buyerId: null,
+      buyerName: 'External Customer',
+      buyerPhone: detectedPhone || '',
 
-    await db.runTransaction(async (tx) => {
-      // ── 1. Fetch and validate the call ─────────────────────────────
-      const callRef  = db.collection('courier_calls').doc(callId);
-      const callSnap = await tx.get(callRef);
+      items: [],
+      itemCount: 0,
 
-      if (!callSnap.exists) {
-        throw new HttpsError('not-found', 'Courier call not found.');
-      }
+      subtotal: typeof detectedTotal === 'number' ? detectedTotal : 0,
+      deliveryFee: 0,
+      totalPrice: typeof detectedTotal === 'number' ? detectedTotal : 0,
+      currency: 'TL',
 
-      const call = callSnap.data();
+      paymentMethod: 'unknown',
+      isPaid: false,
 
-      if (!call.isActive) {
-        throw new HttpsError('failed-precondition', 'This call is no longer active.');
-      }
-      if (call.status === 'completed') {
-        throw new HttpsError('already-exists', 'This call has already been completed.');
-      }
-      if (call.status !== 'accepted' || call.acceptedBy !== uid) {
-        throw new HttpsError(
-          'permission-denied',
-          'You must accept this call before scanning.'
-        );
-      }
+      deliveryType: 'delivery',
+      deliveryAddress: detectedAddress ? {
+        addressLine1: detectedAddress,
+        city: '',
+        phoneNumber: detectedPhone || '',
+        location: locationGeoPoint,
+      } : null,
 
-      // ── 2. Build the scanned order ──────────────────────────────────
-      const orderRef = db.collection('orders-food').doc();
-      orderId = orderRef.id;
+      scannedReceipt: {
+        rawText: scannedRawText.substring(0, 2000),
+        detectedAddress: detectedAddress || null,
+        detectedTotal: typeof detectedTotal === 'number' ? detectedTotal : null,
+        scannedAt: new Date().toISOString(),
+      },
 
-      tx.set(orderRef, {
-        // Source tracking
-        sourceType: 'scanned_receipt',
-        courierCallId: callId,
-
-        // Restaurant (from the call — this is why the call is needed)
-        restaurantId: call.restaurantId,
-        restaurantName: call.restaurantName,
-        restaurantProfileImage: call.restaurantProfileImage || '',
-        restaurantOwnerId: call.restaurantOwnerId || '',
-
-        // Courier
-        cargoUserId: uid,
-        cargoName: courierName,
-
-        // Buyer — unknown from external receipt
-        buyerId: null,
-        buyerName: 'External Customer',
-        buyerPhone: detectedPhone || '',
-
-        // Items — unknown from external receipt
-        items: [],
-        itemCount: 0,
-
-        // Pricing — from OCR if detected, else 0
-        subtotal: typeof detectedTotal === 'number' ? detectedTotal : 0,
-        deliveryFee: 0,
-        totalPrice: typeof detectedTotal === 'number' ? detectedTotal : 0,
-        currency: 'TL',
-
-        // Payment — unknown for external orders
-        paymentMethod: 'unknown',
-        isPaid: false,
-
-        // Delivery — address from OCR if detected
-        deliveryType: 'delivery',
-        deliveryAddress: detectedAddress ? {
-          addressLine1: detectedAddress,
-          city: '',
-          phoneNumber: detectedPhone || '',
-          location: locationGeoPoint,   // ← matches your existing orders-food format
-        } : null,
-
-        // Scanned receipt raw data for audit
-        scannedReceipt: {
-          rawText: scannedRawText.substring(0, 2000),
-          detectedAddress: detectedAddress || null,
-          detectedTotal: typeof detectedTotal === 'number' ? detectedTotal : null,
-          scannedAt: new Date().toISOString(),
-        },
-
-        // Status — starts at out_for_delivery (no kitchen pipeline)
-        status: 'out_for_delivery',
-        assignedAt: admin.firestore.FieldValue.serverTimestamp(),
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        needsReview: false,
-        orderNotes: call.callNote || '',
-        estimatedPrepTime: 0,
-      });
-
-      // ── 3. Mark the call as completed ──────────────────────────────
-      tx.update(callRef, {
-        status: 'completed',
-        isActive: false,
-        orderId,
-        completedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      // Starts as accepted — restaurant will mark ready, then courier takes it
+      status: 'accepted',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      needsReview: false,
+      orderNotes: '',
+      estimatedPrepTime: 0,
     });
 
-    console.log(`[CourierCall] Scanned order ${orderId} created from call ${callId}`);
+    console.log(`[ScannedOrder] Restaurant ${restaurantId} created scanned order ${orderId}`);
     return { success: true, orderId };
   }
 );

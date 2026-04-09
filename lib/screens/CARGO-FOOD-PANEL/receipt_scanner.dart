@@ -8,7 +8,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:http/http.dart' as http;
-import 'food_cargo_screen.dart';
 import 'package:google_mlkit_barcode_scanning/google_mlkit_barcode_scanning.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -224,10 +223,13 @@ The text may contain OCR errors (garbled characters, broken numbers, etc).
 Reply ONLY with a valid JSON object — no explanation, no markdown fences.
 
 {
-  "total": <grand total as a number, fix OCR errors like 295,0( → 295.00, null if not found>,
-  "address": "<full delivery address as a single string, null if not found>",
-  "phone": "<customer phone number including country code if present, null if not found>",
-  "order_id": "<order or receipt number, null if not found>"
+  "total": <grand total as a number, null if not found>,
+  "address": "<full delivery address, null if not found>",
+  "phone": "<customer phone number, null if not found>",
+  "order_id": "<order or receipt number, null if not found>",
+  "items": [
+    {"name": "<item name>", "quantity": <number>, "price": <unit price as number>}
+  ]
 }
 
 Rules:
@@ -237,12 +239,13 @@ Rules:
   3. On YemekSepeti receipts the numbers appear in this order on one line: [ara toplam] [toplam] [kdv] — so if you see a sequence of numbers, the SECOND main amount is the final total, not the first.
   4. Fix garbled digits like 250,7: → 250.75, 295,0( → 295.00.
   Return as a plain number with no currency symbol.
-- address: look for street names, district, city, postal code. In North Cyprus receipts look for KKTC, Kuzey Kıbrıs, Lefkoşa, Gazimağusa, Girne, İskele, KYK, yurdu, üniversite. Return the full address on one line.
+- address: look for street names, district, city, postal code. In North Cyprus receipts look for KKTC, Kuzey Kıbrıs, Lefkoşa, Gazimağusa, Girne, İskele, KYK, yurdu, üniversite, DAÜ, GAÜ, NEU. Return the full address on one line.
 - phone: look for TEL, telefon, GSM patterns. Include + prefix if present.
 - order_id: look for sipariş no, order no, receipt no, # prefixed codes.
+- items: extract each food/drink item with its name, quantity, and unit price. Skip non-food lines like delivery fee, discount, tax, subtotal, total. If quantity is not shown, assume 1. Fix OCR errors in names. Return empty array if no items found.
 
 Receipt OCR text:
-${rawText.length > 1500 ? rawText.substring(0, 1500) : rawText}''',
+${rawText.length > 1500 ? rawText.substring(0, 1500) : rawText}'''
                 }
               ],
             }),
@@ -370,16 +373,21 @@ ${rawText.length > 1500 ? rawText.substring(0, 1500) : rawText}''',
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ReceiptScanScreen extends StatefulWidget {
-  final CourierCall? courierCall;
+  final String? restaurantId;
+  final String? restaurantName;
 
   /// Legacy mode — find an existing delivery by order ID
-  const ReceiptScanScreen({super.key}) : courierCall = null;
+  const ReceiptScanScreen({super.key})
+      : restaurantId = null,
+        restaurantName = null;
 
-  /// Call mode — create a new scanned order
-  const ReceiptScanScreen.forCall({
+  /// Restaurant mode — restaurant scans receipt, creates order as accepted
+  const ReceiptScanScreen.forRestaurant({
     super.key,
-    required CourierCall courierCall,
-  }) : courierCall = courierCall;
+    required String restaurantId,
+    String? restaurantName,
+  })  : restaurantId = restaurantId,
+        restaurantName = restaurantName;
 
   @override
   State<ReceiptScanScreen> createState() => _ReceiptScanScreenState();
@@ -391,7 +399,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
   String? _error;
   String? _statusMessage;
 
-  bool get _isCallMode => widget.courierCall != null;
+  bool get _isRestaurantMode => widget.restaurantId != null;
 
   @override
   void dispose() {
@@ -403,7 +411,8 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
     setState(() {
       _scanning = true;
       _error = null;
-      _statusMessage = _isCallMode ? 'Fiş okunuyor...' : 'Fiş taranıyor...';
+      _statusMessage =
+          _isRestaurantMode ? 'Fiş okunuyor...' : 'Fiş taranıyor...';
     });
 
     try {
@@ -413,9 +422,9 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
 
       if (result == null || !mounted) return;
 
-      if (_isCallMode) {
+      if (_isRestaurantMode) {
         setState(() => _statusMessage = 'Sipariş oluşturuluyor...');
-        await _handleCallModeScan(result);
+        await _handleRestaurantModeScan(result);
       } else {
         await _handleLegacyModeScan(result);
       }
@@ -429,14 +438,12 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
 
   // ── Call mode: create a new order via Cloud Function ──────────────────────
 
-  Future<void> _handleCallModeScan(ReceiptScanResult result) async {
-    final call = widget.courierCall!;
-
+  Future<void> _handleRestaurantModeScan(ReceiptScanResult result) async {
     final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-        .httpsCallable('createScannedFoodOrder');
+        .httpsCallable('createScannedRestaurantOrder');
 
     final response = await callable.call({
-      'callId': call.id,
+      'restaurantId': widget.restaurantId,
       'scannedRawText': result.rawText,
       'detectedAddress': result.detectedAddress,
       'detectedTotal': result.detectedTotal,
@@ -451,7 +458,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
       Navigator.of(context).pop(orderId);
     } else {
       setState(() => _error =
-          'Sipariş oluşturuldu fakat ID alınamadı. Teslimatlarım sekmesini kontrol edin.');
+          'Sipariş oluşturuldu fakat ID alınamadı. Siparişler sekmesini kontrol edin.');
     }
   }
 
@@ -499,7 +506,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
             isDark ? const Color(0xFF1C1A29) : const Color(0xFFE5E7EB),
         elevation: 0,
         title: Text(
-          _isCallMode ? 'Fişi Tara' : 'Scan Receipt',
+          _isRestaurantMode ? 'Fişi Tara' : 'Scan Receipt',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
@@ -522,7 +529,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
             const SizedBox(height: 24),
 
             // Restaurant name chip (call mode only)
-            if (_isCallMode) ...[
+            if (_isRestaurantMode && widget.restaurantName != null) ...[
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -538,7 +545,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
                         size: 14, color: Colors.orange),
                     const SizedBox(width: 6),
                     Text(
-                      widget.courierCall!.restaurantName,
+                      widget.restaurantName!,
                       style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -552,7 +559,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
 
             // Title
             Text(
-              _isCallMode ? 'Müşteri fişini tara' : 'Siparişi bul',
+              _isRestaurantMode ? 'Müşteri fişini tara' : 'Siparişi bul',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -563,8 +570,8 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
 
             // Subtitle
             Text(
-              _isCallMode
-                  ? '${widget.courierCall!.restaurantName} için harici fişi okuyarak teslimat kaydı oluşturulacak.'
+              _isRestaurantMode
+                  ? 'Harici fişi okuyarak sipariş kaydı oluşturulacak.'
                   : 'Uygulama sipariş numarasını okuyarak sizi ilgili teslimat kartına yönlendirecek.',
               textAlign: TextAlign.center,
               style: TextStyle(
