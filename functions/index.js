@@ -915,6 +915,7 @@ export const TEMPLATES = {
 export const sendNotificationOnCreation = onDocumentCreated({
   region: 'europe-west3',
   document: 'users/{userId}/notifications/{notificationId}',
+  maxInstances: 100,
 }, async (event) => {
   const snap = event.data;
   const notificationData = snap.data();
@@ -1158,10 +1159,11 @@ if (payload.orderId) {
   }
 });
 
-export const sendRestaurantNotificationOnCreation = onDocumentCreated({
+export const sendRestaurantNotificationOnCreation = onDocumentCreated({  
   region: 'europe-west3',
   document: 'restaurant_notifications/{notificationId}',
   memory: '512MiB',
+  maxInstances: 100,
   timeoutSeconds: 60,
 }, async (event) => {
   const snap = event.data;
@@ -1365,10 +1367,11 @@ function getWebRoute(type, shopId, orderId) {
   }
 }
 
-export const sendShopNotificationOnCreation = onDocumentCreated({
+export const sendShopNotificationOnCreation = onDocumentCreated({  
   region: 'europe-west3',
   document: 'shop_notifications/{notificationId}',
   memory: '256MiB',
+  maxInstances: 100,
   timeoutSeconds: 60,
 }, async (event) => {
   const snap = event.data;
@@ -6590,7 +6593,7 @@ export const sharedFavoritesRedirect = onRequest({region: 'europe-west3'}, async
             <a href="https://play.google.com/store/apps/details?id=com.cts.emlak" class="download-btn" target="_blank">
                 📲 Download for Android
             </a>
-            <a href="https://apps.apple.com/app/YOUR_APP_ID" class="download-btn" target="_blank">
+            <a href="https://apps.apple.com/app/id6752034508" class="download-btn" target="_blank">
                 🍎 Download for iOS
             </a>
         </div>
@@ -6611,7 +6614,7 @@ export const sharedFavoritesRedirect = onRequest({region: 'europe-west3'}, async
                 
                 // Fallback to App Store after a delay
                 setTimeout(() => {
-                    window.location.href = 'https://apps.apple.com/app/YOUR_APP_ID';
+                    window.location.href = 'https://apps.apple.com/app/id6752034508';
                 }, 2000);
             } else if (isAndroid) {
                 // Try to open Android app
@@ -6918,7 +6921,7 @@ export const productShareRedirect = onRequest({region: 'europe-west3'}, async (r
             <a href="https://play.google.com/store/apps/details?id=com.cts.emlak" class="download-btn" target="_blank">
                 📲 Android İçin İndir
             </a>
-            <a href="https://apps.apple.com/app/YOUR_APP_ID" class="download-btn" target="_blank">
+            <a href="https://apps.apple.com/app/id6752034508" class="download-btn" target="_blank">
                 🍎 iOS İçin İndir
             </a>
         </div>
@@ -6936,7 +6939,7 @@ export const productShareRedirect = onRequest({region: 'europe-west3'}, async (r
             if (isIOS) {
                 window.location.href = 'nar24app://product/${productId}?collection=${collection}';
                 setTimeout(() => {
-                    window.location.href = 'https://apps.apple.com/app/YOUR_APP_ID';
+                    window.location.href = 'https://apps.apple.com/app/id6752034508';
                 }, 2000);
             } else if (isAndroid) {
                 window.location.href = 'nar24app://product/${productId}?collection=${collection}';

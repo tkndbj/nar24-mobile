@@ -15,6 +15,7 @@ import {trackPurchaseActivity} from '../11-user-activity/index.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+
 const secretClient = new SecretManagerServiceClient();
 
 async function getSecret(secretName) {
@@ -22,19 +23,23 @@ async function getSecret(secretName) {
   return version.payload.data.toString('utf8');
 }
 
+let _isbankConfig = null;
+
 async function getIsbankConfig() {
+  if (_isbankConfig) return _isbankConfig;
   const [clientId, apiUser, apiPassword, storeKey] = await Promise.all([
     getSecret('projects/emlak-mobile-app/secrets/ISBANK_CLIENT_ID/versions/latest'),
     getSecret('projects/emlak-mobile-app/secrets/ISBANK_API_USER/versions/latest'),
     getSecret('projects/emlak-mobile-app/secrets/ISBANK_API_PASSWORD/versions/latest'),
     getSecret('projects/emlak-mobile-app/secrets/ISBANK_STORE_KEY/versions/latest'),
   ]);
-  return {
+  _isbankConfig = {
     clientId, apiUser, apiPassword, storeKey,
     gatewayUrl: 'https://sanalpos.isbank.com.tr/fim/est3Dgate',
     currency: '949',
     storeType: '3d_pay_hosting',
   };
+  return _isbankConfig;
 }
 
 async function generateHashVer3(params) {
@@ -818,10 +823,7 @@ export const foodPaymentCallback = onRequest(
         return;
       }
 
-      // ── Fetch storeKey BEFORE the transaction (async not allowed inside tx) ──
-      const storeKey = (await getSecret(
-        'projects/emlak-mobile-app/secrets/ISBANK_STORE_KEY/versions/latest'
-      )).trim();
+      const storeKey = (await getIsbankConfig()).storeKey.trim();
 
       // ── Compute expected hash from RESPONSE params ───────────────
       // Per İşbank Hash v3 docs: sort all response params alphabetically
