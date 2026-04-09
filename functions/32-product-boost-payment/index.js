@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { onRequest, onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import admin from 'firebase-admin';
+import { checkRateLimit } from '../shared/redis.js';
 import { transliterate } from 'transliteration';
 import {CloudTasksClient} from '@google-cloud/tasks';
 import { computeScores, DEFAULT_THRESHOLDS } from '../24-promotion-score/index.js';
@@ -62,44 +63,12 @@ function computeCallbackHashVer3(bodyFields, storeKey) {
   return crypto.createHash('sha512').update(plainText, 'utf8').digest('base64');
 }
 
+// Rate limit: 5 boost payment attempts per 10 minutes per user
 async function checkBoostPaymentRateLimit(db, userId) {
-  const windowMs = 10 * 60 * 1000; // 10 minutes
-  const maxAttempts = 5;
-  const rateLimitRef = db.collection('_rate_limits').doc(`boost_payment_init_${userId}`);
-
-  await db.runTransaction(async (tx) => {
-    const snap = await tx.get(rateLimitRef);
-    const now = Date.now();
-
-    if (!snap.exists) {
-      tx.set(rateLimitRef, {
-        count: 1,
-        windowStart: now,
-        expiresAt: admin.firestore.Timestamp.fromMillis(now + windowMs),
-      });
-      return;
-    }
-
-    const { count, windowStart } = snap.data();
-
-    if (now - windowStart > windowMs) {
-      // Window expired — reset
-      tx.set(rateLimitRef, {
-        count: 1,
-        windowStart: now,
-        expiresAt: admin.firestore.Timestamp.fromMillis(now + windowMs),
-      });
-      return;
-    }
-
-    if (count >= maxAttempts) {
-      throw new HttpsError('resource-exhausted', 'Too many payment attempts. Please try again later.');
-    }
-
-    tx.update(rateLimitRef, {
-      count: admin.firestore.FieldValue.increment(1),
-    });
-  });
+  const withinLimit = await checkRateLimit(`boost_payment_init:${userId}`, 5, 600, { failOpen: false });
+  if (!withinLimit) {
+    throw new HttpsError('resource-exhausted', 'Too many payment attempts. Please try again later.');
+  }
 }
 
 // ── Safe HTML redirect builder (prevents XSS from raw bank response values) ───
@@ -1006,9 +975,11 @@ async function processBatchBoost(db, batchItems, userId, boostDuration, isAdmin)
       region: 'europe-west3',
       memory: '256MiB',
       timeoutSeconds: 30,
+      vpcConnector: 'nar24-vpc',
+      vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
       secrets: [
         'ISBANK_CLIENT_ID',
-        'ISBANK_API_USER', 
+        'ISBANK_API_USER',
         'ISBANK_API_PASSWORD',
         'ISBANK_STORE_KEY',
       ],

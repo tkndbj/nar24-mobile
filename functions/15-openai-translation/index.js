@@ -4,6 +4,7 @@ import {onRequest} from 'firebase-functions/v2/https';
 import {defineSecret} from 'firebase-functions/params';
 import {FieldValue} from 'firebase-admin/firestore';
 import admin from 'firebase-admin';
+import {checkRateLimit as redisRateLimit} from '../shared/redis.js';
 
 // Define secret for OpenAI API key
 const openaiApiKey = defineSecret('OPENAI_API_KEY');
@@ -34,56 +35,45 @@ async function verifyAuth(req) {
   }
 }
 
-// Check and update rate limit
+// Check rate limit (Redis for request rate, Firestore for daily token budget)
 async function checkRateLimit(userId) {
-  const now = Date.now();
-  const rateLimitRef = admin.firestore().collection('rateLimits').doc(userId);
-  
   try {
-    const result = await admin.firestore().runTransaction(async (transaction) => {
-      const doc = await transaction.get(rateLimitRef);
+    // 1. Request rate limit via Redis (30 req / 60 sec)
+    const withinLimit = await redisRateLimit(
+      `translate:${userId}`,
+      RATE_LIMIT.maxRequests,
+      Math.ceil(RATE_LIMIT.windowMs / 1000),
+    );
+
+    if (!withinLimit) {
+      return {allowed: false, reason: 'rate_limit', retryAfter: 60};
+    }
+
+    // 2. Daily token budget via Firestore transaction (atomic read+write).
+    //    Without a transaction, concurrent requests can both pass the budget
+    //    check before either writes, causing overshoot.
+    const now = Date.now();
+    const rateLimitRef = admin.firestore().collection('rateLimits').doc(userId);
+
+    const result = await admin.firestore().runTransaction(async (tx) => {
+      const doc = await tx.get(rateLimitRef);
       const data = doc.data() || {};
-      
-      const windowStart = data.windowStart || 0;
-      let requestCount = data.requestCount || 0;
-      
-      if (now - windowStart > RATE_LIMIT.windowMs) {
-        requestCount = 1;
-        transaction.set(rateLimitRef, {
-          windowStart: now,
-          requestCount: 1,
-          dailyTokens: data.dailyTokens || 0,
-          dailyReset: data.dailyReset || now,
-        }, {merge: true});
-      } else if (requestCount >= RATE_LIMIT.maxRequests) {
-        return { 
-          allowed: false, 
-          reason: 'rate_limit', 
-          retryAfter: Math.ceil((RATE_LIMIT.windowMs - (now - windowStart)) / 1000), 
-        };
-      } else {
-        transaction.update(rateLimitRef, {
-          requestCount: FieldValue.increment(1),
-        });
-        requestCount++;
-      }
-      
+
       const dailyReset = data.dailyReset || 0;
-      let dailyTokens = data.dailyTokens || 0;
-      
+      const dailyTokens = data.dailyTokens || 0;
+
       if (now - dailyReset > 24 * 60 * 60 * 1000) {
-        transaction.set(rateLimitRef, {
-          dailyTokens: 0,
-          dailyReset: now,
-        }, {merge: true});
-        dailyTokens = 0;
-      } else if (dailyTokens >= RATE_LIMIT.maxTokensPerDay) {
+        tx.set(rateLimitRef, {dailyTokens: 0, dailyReset: now}, {merge: true});
+        return {allowed: true, dailyTokens: 0};
+      }
+
+      if (dailyTokens >= RATE_LIMIT.maxTokensPerDay) {
         return {allowed: false, reason: 'daily_limit'};
       }
-      
+
       return {allowed: true, dailyTokens};
     });
-    
+
     return result;
   } catch (error) {
     console.error('Rate limit check failed:', error);
@@ -91,7 +81,7 @@ async function checkRateLimit(userId) {
   }
 }
 
-// Update token usage
+// Update token usage (stays in Firestore — needs durability)
 async function updateTokenUsage(userId, tokensUsed) {
   try {
     await admin.firestore().collection('rateLimits').doc(userId).update({
@@ -181,6 +171,8 @@ export const translateText = onRequest(
     maxInstances: 10,
     timeoutSeconds: 30,
     memory: '256MiB',
+    vpcConnector: 'nar24-vpc',
+    vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
   },
   async (req, res) => {
     if (req.method !== 'POST') {
@@ -247,6 +239,8 @@ export const translateBatch = onRequest(
     maxInstances: 5,
     timeoutSeconds: 60,
     memory: '512MiB',
+    vpcConnector: 'nar24-vpc',
+    vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
   },
   async (req, res) => {
     if (req.method !== 'POST') {

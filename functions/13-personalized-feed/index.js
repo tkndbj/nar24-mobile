@@ -6,6 +6,7 @@ import {onSchedule} from 'firebase-functions/v2/scheduler';
 import {onRequest} from 'firebase-functions/v2/https';
 import admin from 'firebase-admin';
 import {CloudTasksClient} from '@google-cloud/tasks';
+import {cacheGet, cacheSet} from '../shared/redis.js';
 
 const PROJECT = 'emlak-mobile-app';
 const LOCATION = 'europe-west3';
@@ -95,6 +96,20 @@ class CandidateSelector {
     }
 
     try {
+      // Try Redis cache first
+      const cached = await cacheGet('trending:global');
+      if (cached && cached.productIds?.length > 0) {
+        const scores = new Map();
+        cached.productIds.forEach((id, idx) => {
+          scores.set(id, cached.scores?.[idx] || 0);
+        });
+        this.trendingCache = {productIds: cached.productIds, scores};
+        this.trendingScores = scores;
+        console.log(`⚡ Loaded ${cached.productIds.length} trending products from Redis`);
+        return this.trendingCache;
+      }
+
+      // Fallback to Firestore
       const trendingDoc = await this.db
         .collection('trending_products')
         .doc('global')
@@ -116,7 +131,7 @@ class CandidateSelector {
       this.trendingCache = {productIds, scores};
       this.trendingScores = scores;
 
-      console.log(`✅ Loaded ${productIds.length} trending products`);
+      console.log(`✅ Loaded ${productIds.length} trending products from Firestore`);
       return this.trendingCache;
     } catch (error) {
       console.error('⚠️ Failed to load trending:', error.message);
@@ -156,22 +171,49 @@ class CandidateSelector {
   async loadCategoryTrending(categories) {
     try {
       const productSet = new Set();
-      const featuresMap = new Map(); // ✅ NEW
-  
+      const featuresMap = new Map();
+
+      // Try Redis cache first for each category
+      const redisResults = await Promise.all(
+        categories.map((category) =>
+          cacheGet(`trending:category:${category.replace(/[./]/g, '_')}`),
+        ),
+      );
+
+      let allFromRedis = true;
+      for (const cached of redisResults) {
+        if (cached && cached.products?.length > 0) {
+          cached.products.forEach((id) => productSet.add(id));
+          const features = cached.features || [];
+          for (const feature of features) {
+            if (!featuresMap.has(feature.id)) {
+              featuresMap.set(feature.id, feature);
+            }
+          }
+        } else {
+          allFromRedis = false;
+        }
+      }
+
+      if (allFromRedis && productSet.size > 0) {
+        console.log(`⚡ Loaded ${productSet.size} category trending products from Redis`);
+        return {productIds: Array.from(productSet), featuresMap};
+      }
+
+      // Fallback to Firestore for any missing categories
       const promises = categories.map((category) =>
         this.db.collection('trending_by_category')
           .doc(category.replace(/[./]/g, '_'))
           .get(),
       );
       const docs = await Promise.all(promises);
-  
+
       for (const doc of docs) {
         if (doc.exists) {
           const data = doc.data();
           const products = data.products || [];
           products.forEach((id) => productSet.add(id));
-  
-          // ✅ NEW: extract features if available
+
           const features = data.features || [];
           for (const feature of features) {
             if (!featuresMap.has(feature.id)) {
@@ -180,7 +222,7 @@ class CandidateSelector {
           }
         }
       }
-  
+
       return {
         productIds: Array.from(productSet),
         featuresMap,
@@ -211,37 +253,66 @@ class CandidateSelector {
 
   async loadProductDetails(productIds) {
     if (productIds.length === 0) return new Map();
-  
+
     const productMap = new Map();
-    const chunks = this.chunkArray(productIds, 100);
-  
-    // Parallel fetching — 10x faster for 1000 candidates
-    await Promise.all(chunks.map(async (chunk) => {
-      try {
-        const shopRefs = chunk.map((id) => this.db.collection('shop_products').doc(id));
-        const shopDocs = await this.db.getAll(...shopRefs);
-  
-        shopDocs.forEach((doc) => {
-          if (doc.exists) {
-            const data = doc.data();
-            productMap.set(doc.id, {
-              id: doc.id,
-              category: data.category || null,
-              subcategory: data.subcategory || null,
-              brand: data.brandModel || null,
-              price: data.price || 0,
-              clicks: data.clickCount || 0,
-              cartCount: data.cartCount || 0,
-              favoritesCount: data.favoritesCount || 0,
-              gender: data.gender || null,
-            });
-          }
-        });
-      } catch (error) {
-        console.error('⚠️ Error loading product chunk:', error);
+    const missingIds = [];
+
+    // 1. Try Redis cache first (parallel lookups)
+    const cacheResults = await Promise.all(
+      productIds.map((id) => cacheGet(`product:feed:${id}`)),
+    );
+
+    for (let i = 0; i < productIds.length; i++) {
+      if (cacheResults[i]) {
+        productMap.set(productIds[i], cacheResults[i]);
+      } else {
+        missingIds.push(productIds[i]);
       }
-    }));
-  
+    }
+
+    if (missingIds.length > 0) {
+      console.log(`⚡ Feed product cache: ${productIds.length - missingIds.length} hits, ${missingIds.length} misses`);
+
+      // 2. Fetch misses from Firestore
+      const chunks = this.chunkArray(missingIds, 100);
+
+      await Promise.all(chunks.map(async (chunk) => {
+        try {
+          const shopRefs = chunk.map((id) => this.db.collection('shop_products').doc(id));
+          const shopDocs = await this.db.getAll(...shopRefs);
+
+          const cachePromises = [];
+
+          shopDocs.forEach((doc) => {
+            if (doc.exists) {
+              const data = doc.data();
+              const product = {
+                id: doc.id,
+                category: data.category || null,
+                subcategory: data.subcategory || null,
+                brand: data.brandModel || null,
+                price: data.price || 0,
+                clicks: data.clickCount || 0,
+                cartCount: data.cartCount || 0,
+                favoritesCount: data.favoritesCount || 0,
+                gender: data.gender || null,
+              };
+              productMap.set(doc.id, product);
+
+              // 3. Cache in Redis (30 min TTL — stale data is fine for feed scoring)
+              cachePromises.push(cacheSet(`product:feed:${doc.id}`, product, 1800));
+            }
+          });
+
+          await Promise.all(cachePromises);
+        } catch (error) {
+          console.error('⚠️ Error loading product chunk:', error);
+        }
+      }));
+    } else {
+      console.log(`⚡ Feed product cache: all ${productIds.length} from Redis (0 Firestore reads)`);
+    }
+
     return productMap;
   }
 
@@ -687,6 +758,8 @@ export const updatePersonalizedFeeds = onSchedule(
     memory: '512MiB',
     region: LOCATION,
     maxInstances: 1,
+    vpcConnector: 'nar24-vpc',
+    vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
   },
   async () => {
     const startTime = Date.now();
@@ -815,6 +888,8 @@ export const processPersonalizedFeedBatch = onRequest(
     memory: '1GiB',
     timeoutSeconds: 540,
     maxInstances: 20,
+    vpcConnector: 'nar24-vpc',
+    vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
   },
   async (req, res) => {
     // Verify Cloud Tasks OIDC token

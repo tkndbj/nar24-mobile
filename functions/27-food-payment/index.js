@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { onRequest, onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import admin from 'firebase-admin';
+import { checkRateLimit } from '../shared/redis.js';
 import { transliterate } from 'transliteration';
 import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
 import PDFDocument from 'pdfkit';
@@ -579,6 +580,8 @@ export const initializeFoodPayment = onCall(
     memory: '512MiB',
     concurrency: 80,
     timeoutSeconds: 30,
+    vpcConnector: 'nar24-vpc',
+    vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
   },
   async (request) => {
     if (!request.auth) {
@@ -588,31 +591,11 @@ export const initializeFoodPayment = onCall(
      // Rate limit: max 5 food payment attempts per 10 minutes per user
      const userId = request.auth.uid;
      const db = admin.firestore();
-     const rateLimitRef = db.collection('_rate_limits').doc(`food_payment_init_${userId}`);
-     const windowMs = 10 * 60 * 1000;
-     const maxAttempts = 5;
 
-     await db.runTransaction(async (tx) => {
-       const snap = await tx.get(rateLimitRef);
-       const now = Date.now();
-
-       if (snap.exists) {
-         const data = snap.data();
-         const windowStart = data.windowStart?.toMillis?.() ?? 0;
-         const count = data.count ?? 0;
-
-         if (now - windowStart < windowMs) {
-           if (count >= maxAttempts) {
-             throw new HttpsError('resource-exhausted', 'Too many payment attempts. Try again later.');
-           }
-           tx.update(rateLimitRef, { count: count + 1 });
-         } else {
-           tx.set(rateLimitRef, { count: 1, windowStart: admin.firestore.Timestamp.fromMillis(now), expiresAt: admin.firestore.Timestamp.fromMillis(now + windowMs) });
-         }
-       } else {
-         tx.set(rateLimitRef, { count: 1, windowStart: admin.firestore.Timestamp.fromMillis(now), expiresAt: admin.firestore.Timestamp.fromMillis(now + windowMs) });
-       }
-     });
+     const withinLimit = await checkRateLimit(`food_payment_init:${userId}`, 5, 600, { failOpen: false });
+     if (!withinLimit) {
+       throw new HttpsError('resource-exhausted', 'Too many payment attempts. Try again later.');
+     }
 
     const {
       restaurantId,

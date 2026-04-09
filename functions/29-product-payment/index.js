@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { onRequest, onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import admin from 'firebase-admin';
+import { checkRateLimit } from '../shared/redis.js';
 import { transliterate } from 'transliteration';
 import {trackPurchaseActivity} from '../11-user-activity/index.js';
 import {createQRCodeTask} from '../16-qr-for-orders/index.js';
@@ -31,44 +32,12 @@ function getAdCollectionName(adType) {
   }
 }
 
-async function checkPaymentRateLimit(db, userId) {
-  const windowMs = 10 * 60 * 1000; // 10 minutes
-  const maxAttempts = 5;
-  const rateLimitRef = db.collection('_rate_limits').doc(`payment_init_${userId}`);
-
-  await db.runTransaction(async (tx) => {
-    const snap = await tx.get(rateLimitRef);
-    const now = Date.now();
-
-    if (!snap.exists) {
-      tx.set(rateLimitRef, {
-        count: 1,
-        windowStart: now,
-        expiresAt: admin.firestore.Timestamp.fromMillis(now + windowMs),
-      });
-      return;
-    }
-
-    const { count, windowStart } = snap.data();
-
-    if (now - windowStart > windowMs) {
-      // Window expired — reset
-      tx.set(rateLimitRef, {
-        count: 1,
-        windowStart: now,
-        expiresAt: admin.firestore.Timestamp.fromMillis(now + windowMs),
-      });
-      return;
-    }
-
-    if (count >= maxAttempts) {
-      throw new HttpsError('resource-exhausted', 'Too many payment attempts. Please try again later.');
-    }
-
-    tx.update(rateLimitRef, {
-      count: admin.firestore.FieldValue.increment(1),
-    });
-  });
+// Rate limit: 5 payment attempts per 10 minutes per user
+async function checkPaymentRateLimit(userId) {
+  const withinLimit = await checkRateLimit(`payment_init:${userId}`, 5, 600, { failOpen: false });
+  if (!withinLimit) {
+    throw new HttpsError('resource-exhausted', 'Too many payment attempts. Please try again later.');
+  }
 }
 
 async function validateDiscounts(tx, db, userId, couponId, benefitId, cartTotal) {
@@ -1151,9 +1120,11 @@ export const initializeIsbankPayment = onCall(
     region: 'europe-west3',
     memory: '256MiB',
     timeoutSeconds: 30,
+    vpcConnector: 'nar24-vpc',
+    vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
     secrets: [
       'ISBANK_CLIENT_ID',
-      'ISBANK_API_USER', 
+      'ISBANK_API_USER',
       'ISBANK_API_PASSWORD',
       'ISBANK_STORE_KEY',
     ],

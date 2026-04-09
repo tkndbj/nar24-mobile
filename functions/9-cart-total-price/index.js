@@ -1,5 +1,6 @@
 import {onCall, HttpsError} from 'firebase-functions/v2/https';
 import admin from 'firebase-admin';
+import {checkRateLimit as redisRateLimit} from '../shared/redis.js';
 
 /**
  * Calculate cart totals for the authenticated user.
@@ -19,6 +20,8 @@ export const calculateCartTotals = onCall(
     timeoutSeconds: 60,
     maxInstances: 100,
     concurrency: 80,
+    vpcConnector: 'nar24-vpc',
+    vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
   },
   async (request) => {
     const startTime = Date.now();
@@ -40,19 +43,15 @@ export const calculateCartTotals = onCall(
     const db = admin.firestore();
 
     // ═══════════════════════════════════════════════════════════════════════
-    // 3. RATE LIMITING (Sliding Window)
+    // 3. RATE LIMITING (Redis)
     // ═══════════════════════════════════════════════════════════════════════
-    try {
-      const rateLimitPassed = await checkRateLimit(db, userId, requestId);
-      if (!rateLimitPassed) {
-        throw new HttpsError(
-          'resource-exhausted',
-          'Too many requests. Please wait a few seconds and try again.'
-        );
-      }
-    } catch (error) {
-      if (error instanceof HttpsError) throw error;
-      console.warn(`⚠️ [${requestId}] Rate limit check failed, continuing: ${error.message}`);
+    // 5 requests per 10 seconds per user (same as original sliding window)
+    const rateLimitPassed = await redisRateLimit(`cart_totals:${userId}`, 5, 10);
+    if (!rateLimitPassed) {
+      throw new HttpsError(
+        'resource-exhausted',
+        'Too many requests. Please wait a few seconds and try again.'
+      );
     }
 
    // ═══════════════════════════════════════════════════════════════════════════
@@ -180,45 +179,6 @@ try {
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Check rate limit using sliding window algorithm
- * @param {FirebaseFirestore.Firestore} db - Firestore database instance
- * @param {string} userId - The user ID to check rate limit for
- * @param {string} requestId - Unique request ID for logging
- * @return {Promise<boolean>} True if rate limit not exceeded, false otherwise
- */
-async function checkRateLimit(db, userId, requestId) {
-  const WINDOW_MS = 10000;
-  const MAX_CALLS = 5;
-
-  const shard = Math.floor(Math.random() * 5);
-const rateLimitRef = db.collection('_rate_limits').doc(`cart_totals:${userId}:${shard}`);
-
-  return db.runTransaction(async (transaction) => {
-    const doc = await transaction.get(rateLimitRef);
-    const now = Date.now();
-
-    let calls = [];
-    if (doc.exists) {
-      calls = doc.data()?.calls || [];
-    }
-
-    const recentCalls = calls.filter((timestamp) => now - timestamp < WINDOW_MS);
-
-    if (recentCalls.length >= MAX_CALLS) {
-      console.warn(`🚫 [${requestId}] Rate limit exceeded: ${recentCalls.length}/${MAX_CALLS}`);
-      return false;
-    }
-
-    recentCalls.push(now);
-    transaction.set(rateLimitRef, {
-      calls: recentCalls,
-      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    return true;
-  });
-}
 
 /**
  * Find the best applicable bundle with highest savings

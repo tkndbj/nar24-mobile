@@ -4,6 +4,7 @@
 import {onCall, HttpsError} from 'firebase-functions/v2/https';
 import {onSchedule} from 'firebase-functions/v2/scheduler';
 import admin from 'firebase-admin';
+import {checkRateLimit as redisRateLimit} from '../shared/redis.js';
 
 // ============================================================================
 // CONFIGURATION
@@ -31,37 +32,17 @@ const CONFIG = {
 };
 
 // ============================================================================
-// RATE LIMITING (In-memory, per-instance)
+// RATE LIMITING (Redis)
 // ============================================================================
 
 async function checkRateLimit(userId) {
-  const now = Date.now();
-  const ref = admin.firestore().collection('rateLimits').doc(`activity_${userId}`);
-
+  // 20 requests per 60 seconds per user (same as original)
+  // Fail closed (return false) if Redis is down, matching original behavior
   try {
-    const allowed = await admin.firestore().runTransaction(async (tx) => {
-      const doc = await tx.get(ref);
-      const data = doc.data() || {};
-      const windowStart = data.windowStart || 0;
-      const count = data.count || 0;
-
-      if (now - windowStart > CONFIG.RATE_LIMIT_WINDOW_MS) {
-        tx.set(ref, { windowStart: now, count: 1 });
-        return true;
-      }
-
-      if (count >= CONFIG.RATE_LIMIT_MAX_REQUESTS) {
-        return false;
-      }
-
-      tx.update(ref, { count: admin.firestore.FieldValue.increment(1) });
-      return true;
-    });
-
-    return allowed;
+    return await redisRateLimit(`activity:${userId}`, CONFIG.RATE_LIMIT_MAX_REQUESTS, Math.ceil(CONFIG.RATE_LIMIT_WINDOW_MS / 1000));
   } catch (error) {
     console.error('Rate limit check failed:', error);
-    return false; // fail closed
+    return false;
   }
 }
 
@@ -130,6 +111,8 @@ export const batchUserActivity = onCall({
   region: 'europe-west3',
   maxInstances: 50,
   concurrency: 80,
+  vpcConnector: 'nar24-vpc',
+  vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
 }, async (request) => {
   const startTime = Date.now();
 
@@ -637,18 +620,7 @@ export const cleanupOldActivityEvents = onSchedule({
      .limit(90)
      .get();
 
-  // Delete stale rate limit docs
-const rateLimitSnapshot = await db
-.collection('rateLimits')
-.where('windowStart', '<', Date.now() - CONFIG.RATE_LIMIT_WINDOW_MS * 2)
-.limit(500)
-.get();
-
-if (!rateLimitSnapshot.empty) {
-const batch = db.batch();
-rateLimitSnapshot.docs.forEach((d) => batch.delete(d.ref));
-await batch.commit();
-}
+  // Rate limit cleanup no longer needed — Redis keys auto-expire
 
    if (!oldSummaries.empty) {
      const batch = db.batch();
@@ -662,7 +634,6 @@ await batch.commit();
     searchDocsDeleted: searchSnapshot.size,
     dlqDeleted: dlqSnapshot.size,
     summariesDeleted: oldSummaries.size,
-    rateLimitsDeleted: rateLimitSnapshot.size,
   }));
   } catch (error) {
     console.error(JSON.stringify({

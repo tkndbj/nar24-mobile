@@ -1,5 +1,6 @@
 import {onSchedule} from 'firebase-functions/v2/scheduler';
 import admin from 'firebase-admin';
+import {cacheSet} from '../shared/redis.js';
 
 const CONFIG = {
   TOP_PRODUCTS_COUNT: 200,
@@ -283,6 +284,8 @@ export const computeTrendingProductsScheduled = onSchedule({
   memory: '1GiB',
   region: 'europe-west3',
   maxInstances: 1,
+  vpcConnector: 'nar24-vpc',
+  vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
 }, async () => {
   const startTime = Date.now();
   const db = admin.firestore();
@@ -324,6 +327,36 @@ export const computeTrendingProductsScheduled = onSchedule({
     );
 
     await createCategoryTrending(db, result.products);
+
+    // Cache trending in Redis (7h TTL — recomputes every 6h, 1h buffer)
+    await cacheSet('trending:global', {
+      productIds: result.products.map((p) => p.id),
+      scores: result.products.map((p) => p.score),
+    }, 25200);
+
+    // Cache category trending in Redis
+    const categoryMap = new Map();
+    for (const product of result.products) {
+      const category = product.metrics?.category || 'Other';
+      if (!categoryMap.has(category)) categoryMap.set(category, []);
+      categoryMap.get(category).push(product);
+    }
+    await Promise.all(
+      Array.from(categoryMap.entries()).map(([category, products]) => {
+        const safeCategory = category.replace(/[./]/g, '_');
+        return cacheSet(`trending:category:${safeCategory}`, {
+          products: products.map((p) => p.id),
+          features: products.map((p) => ({
+            id: p.id,
+            category: p.metrics.category,
+            subcategory: p.metrics.subcategory || null,
+            brand: p.metrics.brand || null,
+            price: p.metrics.price || 0,
+            gender: p.metrics.gender || null,
+          })),
+        }, 25200);
+      }),
+    );
 
     const totalDuration = Date.now() - startTime;
 

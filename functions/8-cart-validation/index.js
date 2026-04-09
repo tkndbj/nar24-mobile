@@ -2,6 +2,7 @@
 
 import admin from 'firebase-admin';
 import {onCall, HttpsError} from 'firebase-functions/v2/https';
+import {checkRateLimit} from '../shared/redis.js';
 
 // ============================================================================
 // HELPER FUNCTIONS - Define once, reuse everywhere
@@ -54,6 +55,8 @@ export const validateCartCheckout = onCall(
     memory: '1GiB',
     concurrency: 80,
     maxInstances: 200,
+    vpcConnector: 'nar24-vpc',
+    vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
   },
   async (request) => {
     const startTime = Date.now();
@@ -66,38 +69,14 @@ export const validateCartCheckout = onCall(
     }
 
     const userId = request.auth.uid;
-  
-    const rateLimitShard = Math.floor(Math.random() * 10);
-    const rateLimitKey = `validation_rate:${userId}:${rateLimitShard}`;
-    const rateLimitRef = admin.firestore().collection('_rate_limits').doc(rateLimitKey);
-    
-    try {
-      await admin.firestore().runTransaction(async (transaction) => {
-        const rateLimitDoc = await transaction.get(rateLimitRef);
-        const now = Date.now();
-        
-        if (rateLimitDoc.exists) {
-          const {count, windowStart} = rateLimitDoc.data();
-          
-          if (now - windowStart > 60000) {
-            transaction.set(rateLimitRef, {count: 1, windowStart: now});
-          } else if (count >= 30) {
-            throw new Error('RATE_LIMIT_EXCEEDED');
-          } else {
-            transaction.update(rateLimitRef, {count: count + 1});
-          }
-        } else {
-          transaction.set(rateLimitRef, {count: 1, windowStart: now});
-        }
-      });
-    } catch (error) {
-      if (error.message === 'RATE_LIMIT_EXCEEDED') {
-        throw new HttpsError(
-          'resource-exhausted',
-          'Too many validation requests. Please wait a moment.',
-        );
-      }
-      console.error('Rate limit check failed:', error);
+
+    // Rate limit: 30 requests per 60 seconds per user
+    const withinLimit = await checkRateLimit(`validation_rate:${userId}`, 30, 60);
+    if (!withinLimit) {
+      throw new HttpsError(
+        'resource-exhausted',
+        'Too many validation requests. Please wait a moment.',
+      );
     }
 
     // ============================================================
@@ -538,6 +517,8 @@ export const updateCartCache = onCall(
     memory: '512MiB',
     concurrency: 80,
     maxInstances: 100,
+    vpcConnector: 'nar24-vpc',
+    vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
   },
   async (request) => {
     const startTime = Date.now();
@@ -551,37 +532,13 @@ export const updateCartCache = onCall(
 
     const userId = request.auth.uid;
 
-    const rateLimitShard = Math.floor(Math.random() * 5);
-    const rateLimitKey = `cart_update_rate:${userId}:${rateLimitShard}`;
-    const rateLimitRef = admin.firestore().collection('_rate_limits').doc(rateLimitKey);
-
-    try {
-      await admin.firestore().runTransaction(async (transaction) => {
-        const rateLimitDoc = await transaction.get(rateLimitRef);
-        const now = Date.now();
-
-        if (rateLimitDoc.exists) {
-          const {count, windowStart} = rateLimitDoc.data();
-
-          if (now - windowStart > 60000) {
-            transaction.set(rateLimitRef, {count: 1, windowStart: now});
-          } else if (count >= 20) {
-            throw new Error('RATE_LIMIT_EXCEEDED');
-          } else {
-            transaction.update(rateLimitRef, {count: count + 1});
-          }
-        } else {
-          transaction.set(rateLimitRef, {count: 1, windowStart: now});
-        }
-      });
-    } catch (error) {
-      if (error.message === 'RATE_LIMIT_EXCEEDED') {
-        throw new HttpsError(
-          'resource-exhausted',
-          'Too many update requests. Please wait a moment.',
-        );
-      }
-      console.error('Rate limit check failed:', error);
+    // Rate limit: 20 requests per 60 seconds per user
+    const withinLimit = await checkRateLimit(`cart_update_rate:${userId}`, 20, 60);
+    if (!withinLimit) {
+      throw new HttpsError(
+        'resource-exhausted',
+        'Too many update requests. Please wait a moment.',
+      );
     }
 
     // ============================================================
