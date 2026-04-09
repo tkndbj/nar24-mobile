@@ -52,7 +52,7 @@ export const validateCartCheckout = onCall(
   {
     region: 'europe-west3',
     timeoutSeconds: 120,
-    memory: '1GiB',
+    memory: '256MiB',
     concurrency: 80,
     maxInstances: 200,
     vpcConnector: 'nar24-vpc',
@@ -514,7 +514,7 @@ export const updateCartCache = onCall(
   {
     region: 'europe-west3',
     timeoutSeconds: 60,
-    memory: '512MiB',
+    memory: '256MiB',
     concurrency: 80,
     maxInstances: 100,
     vpcConnector: 'nar24-vpc',

@@ -172,4 +172,79 @@ export async function dedup(key, windowSeconds) {
   }
 }
 
+// ============================================================================
+// IMPRESSION BUFFERING
+// ============================================================================
+
+const IMP_COUNTS_KEY = 'imp:counts';
+const IMP_DEMO_KEY = 'imp:demo';
+
+/**
+ * Buffer impression counts in Redis.
+ * @param {Array<{productId: string, collection: string, count: number}>} products
+ * @param {string|null} gender
+ * @param {string|null} ageGroup
+ */
+export async function bufferImpressions(products, gender, ageGroup) {
+  const client = getRedisClient();
+  const pipeline = client.pipeline();
+ 
+  for (const {productId, collection, count} of products) {
+    const field = `${collection}:${productId}`;
+    pipeline.hincrby(IMP_COUNTS_KEY, field, count);
+  }
+ 
+  if (gender || ageGroup) {
+    const g = (gender || 'unknown').toLowerCase();
+    const a = ageGroup || 'unknown';
+    for (const {productId, count} of products) {
+      pipeline.hincrby(IMP_DEMO_KEY, `${productId}:${g}:${a}`, count);
+    }
+  }
+ 
+  await pipeline.exec();
+}
+ 
+/**
+ * Atomically grab all buffered impressions and clear the buffer.
+ * Uses RENAME so new writes during flush go to a fresh key.
+ * Temp keys are NOT deleted here — caller must call deleteDrainKeys()
+ * after Firestore writes succeed to prevent data loss on crash.
+ */
+export async function drainImpressions() {
+  const client = getRedisClient();
+  const ts = Date.now();
+  const tempCounts = `${IMP_COUNTS_KEY}:drain:${ts}`;
+  const tempDemo = `${IMP_DEMO_KEY}:drain:${ts}`;
+ 
+  let counts = {};
+  let demo = {};
+ 
+  try {
+    await client.rename(IMP_COUNTS_KEY, tempCounts);
+    counts = await client.hgetall(tempCounts);
+  } catch (e) {
+    if (!e.message.includes('no such key')) throw e;
+  }
+ 
+  try {
+    await client.rename(IMP_DEMO_KEY, tempDemo);
+    demo = await client.hgetall(tempDemo);
+  } catch (e) {
+    if (!e.message.includes('no such key')) throw e;
+  }
+ 
+  return {counts, demo, tempKeys: [tempCounts, tempDemo]};
+}
+ 
+/**
+ * Delete drain temp keys after successful Firestore flush.
+ * @param {string[]} keys
+ */
+export async function deleteDrainKeys(keys) {
+  const client = getRedisClient();
+  const existing = keys.filter(Boolean);
+  if (existing.length > 0) await client.del(...existing);
+}
+
 export { getRedisClient };

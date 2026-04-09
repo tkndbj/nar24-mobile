@@ -1070,7 +1070,7 @@ function buildRedirectHtml(deepLink, title, subtitle = '') {
         <h2>${escapeHtml(title)}</h2>
         ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ''}
       </div>
-      <script>window.location.href = '${escapeHtml(deepLink)}';</script>
+      <script>window.location.href = ${JSON.stringify(deepLink)};</script>
     </body>
     </html>
   `;

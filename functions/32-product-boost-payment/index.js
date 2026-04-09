@@ -88,7 +88,7 @@ function buildRedirectHtml(deepLink, title, subtitle = '') {
     <h2>${esc(title)}</h2>
     ${subtitle ? `<p>${esc(subtitle)}</p>` : ''}
   </div>
-  <script>window.location.href = '${esc(deepLink)}';</script>
+  <script>window.location.href = ${JSON.stringify(deepLink)};</script>
 </body>
 </html>`;
 }
