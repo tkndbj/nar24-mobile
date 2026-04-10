@@ -6,7 +6,9 @@ import {onSchedule} from 'firebase-functions/v2/scheduler';
 import {onRequest} from 'firebase-functions/v2/https';
 import admin from 'firebase-admin';
 import {CloudTasksClient} from '@google-cloud/tasks';
-import {cacheGet, cacheSet} from '../shared/redis.js';
+import {cacheGet, getRedisClient} from '../shared/redis.js';
+import {OAuth2Client} from 'google-auth-library';
+const authClient = new OAuth2Client();
 
 const PROJECT = 'emlak-mobile-app';
 const LOCATION = 'europe-west3';
@@ -77,6 +79,14 @@ async function retryWithBackoff(operation, maxRetries = 3, baseDelay = 100) {
   }
 
   throw lastError;
+}
+
+function chunkArray(array, size) {
+  const chunks = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
 }
 
 // ============================================================================
@@ -257,14 +267,16 @@ class CandidateSelector {
     const productMap = new Map();
     const missingIds = [];
 
-    // 1. Try Redis cache first (parallel lookups)
-    const cacheResults = await Promise.all(
-      productIds.map((id) => cacheGet(`product:feed:${id}`)),
-    );
+    // 1. Try Redis cache first (single pipeline instead of N round trips)
+    const client = getRedisClient();
+    const pipeline = client.pipeline();
+    productIds.forEach((id) => pipeline.get(`product:feed:${id}`));
+    const pipelineResults = await pipeline.exec();
 
     for (let i = 0; i < productIds.length; i++) {
-      if (cacheResults[i]) {
-        productMap.set(productIds[i], cacheResults[i]);
+      const [err, val] = pipelineResults[i];
+      if (!err && val) {
+        productMap.set(productIds[i], JSON.parse(val));
       } else {
         missingIds.push(productIds[i]);
       }
@@ -274,14 +286,14 @@ class CandidateSelector {
       console.log(`⚡ Feed product cache: ${productIds.length - missingIds.length} hits, ${missingIds.length} misses`);
 
       // 2. Fetch misses from Firestore
-      const chunks = this.chunkArray(missingIds, 100);
+      const chunks = chunkArray(missingIds, 100);
 
       await Promise.all(chunks.map(async (chunk) => {
         try {
           const shopRefs = chunk.map((id) => this.db.collection('shop_products').doc(id));
           const shopDocs = await this.db.getAll(...shopRefs);
 
-          const cachePromises = [];
+          const cachePipeline = client.pipeline();
 
           shopDocs.forEach((doc) => {
             if (doc.exists) {
@@ -299,12 +311,12 @@ class CandidateSelector {
               };
               productMap.set(doc.id, product);
 
-              // 3. Cache in Redis (30 min TTL — stale data is fine for feed scoring)
-              cachePromises.push(cacheSet(`product:feed:${doc.id}`, product, 1800));
+              // 3. Cache in Redis (30 min TTL)
+              cachePipeline.setex(`product:feed:${doc.id}`, 1800, JSON.stringify(product));
             }
           });
 
-          await Promise.all(cachePromises);
+          await cachePipeline.exec();
         } catch (error) {
           console.error('⚠️ Error loading product chunk:', error);
         }
@@ -314,14 +326,6 @@ class CandidateSelector {
     }
 
     return productMap;
-  }
-
-  chunkArray(array, size) {
-    const chunks = [];
-    for (let i = 0; i < array.length; i += size) {
-      chunks.push(array.slice(i, i + size));
-    }
-    return chunks;
   }
 }
 
@@ -702,47 +706,43 @@ if (products.size === 0) {
 
     const existingFeeds = await this.loadExistingFeeds(users);
 
-    for (const userDoc of users) {
-      try {
-        const userId = userDoc.id;
-        const userProfile = userDoc.data();
-        const existingFeed = existingFeeds.get(userId) || null;
+    const CONCURRENCY = 5;
+    for (let i = 0; i < users.length; i += CONCURRENCY) {
+      const chunk = users.slice(i, i + CONCURRENCY);
+      await Promise.all(chunk.map(async (userDoc) => {
+        try {
+          const userId = userDoc.id;
+          const userProfile = userDoc.data();
+          const existingFeed = existingFeeds.get(userId) || null;
 
-        const {shouldUpdate, reason} = this.shouldUpdateFeed(
-          userProfile,
-          existingFeed,
-        );
+          const {shouldUpdate, reason} = this.shouldUpdateFeed(
+            userProfile,
+            existingFeed,
+          );
 
-        if (!shouldUpdate) {
-          results.skipped++;
-          results.reasons[reason] = (results.reasons[reason] || 0) + 1;
-          continue;
+          if (!shouldUpdate) {
+            results.skipped++;
+            results.reasons[reason] = (results.reasons[reason] || 0) + 1;
+            return;
+          }
+
+          const result = await this.generateFeed(userId, userProfile);
+
+          if (result.success) {
+            results.updated++;
+            results.reasons[reason] = (results.reasons[reason] || 0) + 1;
+          } else {
+            results.skipped++;
+            results.reasons[result.reason] = (results.reasons[result.reason] || 0) + 1;
+          }
+        } catch (error) {
+          results.failed++;
+          console.error(`❌ Error processing ${userDoc.id}:`, error.message);
         }
-
-        const result = await this.generateFeed(userId, userProfile);
-
-        if (result.success) {
-          results.updated++;
-          results.reasons[reason] = (results.reasons[reason] || 0) + 1;
-        } else {
-          results.skipped++;
-          results.reasons[result.reason] = (results.reasons[result.reason] || 0) + 1;
-        }
-      } catch (error) {
-        results.failed++;
-        console.error(`❌ Error processing ${userDoc.id}:`, error.message);
-      }
+      }));
     }
 
     return results;
-  }
-
-  chunkArray(array, size) {
-    const chunks = [];
-    for (let i = 0; i < array.length; i += size) {
-      chunks.push(array.slice(i, i + size));
-    }
-    return chunks;
   }
 }
 
@@ -778,8 +778,8 @@ export const updatePersonalizedFeeds = onSchedule(
       const PAGE_SIZE = 2000;
       const BATCH_SIZE = 50;
 
-      const hasMore = true;
-while (hasMore) {
+       // eslint-disable-next-line no-constant-condition
+      while (true) {
         let query = db
           .collection('user_profiles')
           .where('lastActivityAt', '>', fiveDaysAgo)
@@ -896,6 +896,16 @@ export const processPersonalizedFeedBatch = onRequest(
     const authHeader = req.headers.authorization || '';
     if (!authHeader.startsWith('Bearer ')) {
       res.status(401).json({error: 'Unauthorized'});
+      return;
+    }
+    try {
+      const token = authHeader.split('Bearer ')[1];
+      await authClient.verifyIdToken({
+        idToken: token,
+        audience: `https://${LOCATION}-${PROJECT}.cloudfunctions.net/processPersonalizedFeedBatch`,
+      });
+    } catch {
+      res.status(401).json({error: 'Invalid token'});
       return;
     }
 

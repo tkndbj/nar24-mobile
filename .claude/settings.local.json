@@ -31,7 +31,12 @@
       "Bash(xargs basename:*)",
       "Bash(ls:*)",
       "Bash(cat '/c/Users/Digikey/Desktop/EE-CTS/flutter_application_1/functions/10-cart&favorite-metrics/index.js')",
-      "Bash(sort -k5 -n)"
+      "Bash(sort -k5 -n)",
+      "Bash(mv 1-PAYMENT/18-payment-alerts .)",
+      "Bash(mv 1-PAYMENT/27-food-payment .)",
+      "Bash(mv 1-PAYMENT/29-product-payment .)",
+      "Bash(mv 1-PAYMENT/31-homescreen-ads-payment .)",
+      "Bash(mv 1-PAYMENT/32-product-boost-payment .)"
     ],
     "deny": [],
     "ask": []

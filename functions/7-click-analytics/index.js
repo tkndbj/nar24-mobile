@@ -1,7 +1,7 @@
 import {onCall} from 'firebase-functions/v2/https';
 import {onSchedule} from 'firebase-functions/v2/scheduler';
 import admin from 'firebase-admin';
-import {bufferClicks, drainClicks, deleteDrainKeys, dedup, getRedisClient} from '../shared/redis.js';
+import {bufferClicks, drainClicks, deleteDrainKeys, dedup, getRedisClient, checkRateLimit} from '../shared/redis.js';
 
 // ============================================================================
 // CLIENT-FACING: Buffer clicks in Redis (no Firestore writes)
@@ -17,6 +17,10 @@ export const trackProductClick = onCall(
     vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
   },
   async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new Error('Authentication required.');
+    const allowed = await checkRateLimit(`rl:click:${uid}`, 20, 60);
+    if (!allowed) throw new Error('Rate limit exceeded. Try again shortly.');
     const raw = request.data;
 
     // Support both single click and batch: { clicks: [...] }

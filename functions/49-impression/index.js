@@ -1,7 +1,7 @@
 import {onCall} from 'firebase-functions/v2/https';
 import {onSchedule} from 'firebase-functions/v2/scheduler';
 import admin from 'firebase-admin';
-import {bufferImpressions, drainImpressions, deleteDrainKeys, dedup, getRedisClient} from '../shared/redis.js';
+import {bufferImpressions, drainImpressions, deleteDrainKeys, dedup, getRedisClient, checkRateLimit} from '../shared/redis.js';
 
 // ============================================================================
 // CLIENT-FACING: Buffer impressions in Redis (no Firestore writes)
@@ -16,6 +16,10 @@ export const incrementImpressionCount = onCall(
     vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
   },
   async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new Error('Authentication required.');
+    const allowed = await checkRateLimit(`rl:imp:${uid}`, 30, 60);
+    if (!allowed) throw new Error('Rate limit exceeded. Try again shortly.');
     const {productIds, userGender, userAge} = request.data;
 
     if (!Array.isArray(productIds) || productIds.length === 0) {

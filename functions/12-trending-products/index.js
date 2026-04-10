@@ -46,9 +46,11 @@ async function* streamProducts(db, collection, chunkSize = CONFIG.STREAM_CHUNK_S
 
   while (true) {
     let query = db
-      .collection(collection)
-      .orderBy('__name__')
-      .limit(chunkSize);
+  .collection(collection)
+  .select('clickCount', 'cartCount', 'favoritesCount', 'purchaseCount',
+          'createdAt', 'price', 'category', 'subcategory', 'brandModel', 'gender')
+  .orderBy('__name__')
+  .limit(chunkSize);
 
     if (lastDoc) {
       query = query.startAfter(lastDoc);
