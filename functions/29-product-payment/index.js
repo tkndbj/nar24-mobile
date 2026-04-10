@@ -8,6 +8,7 @@ import {trackPurchaseActivity} from '../11-user-activity/index.js';
 import {createQRCodeTask} from '../16-qr-for-orders/index.js';
 import { CloudTasksClient } from '@google-cloud/tasks';
 import { setPaymentExpiresAt } from '../33-payment-cleanup/index.js';
+import { reversePayment } from '../shared/isbank-void.js';
 
 const tasksClient = new CloudTasksClient();
 
@@ -1136,7 +1137,7 @@ export const initializeIsbankPayment = onCall(
       const db = admin.firestore();
       const userId = request.auth.uid;
 
-      await checkPaymentRateLimit(db, userId);
+      await checkPaymentRateLimit(userId);
 
       const { amount, orderNumber, customerName, customerEmail, customerPhone, cartData } = request.data;
 
@@ -1170,28 +1171,24 @@ export const initializeIsbankPayment = onCall(
       let couponCode = null;
 
       if (couponId) {
-        try {
-          const couponDoc = await db.collection('users').doc(userId).collection('coupons').doc(couponId).get();
-          if (couponDoc.exists) {
-            const coupon = couponDoc.data();
-            if (!coupon.isUsed && (!coupon.expiresAt || coupon.expiresAt.toDate() >= new Date())) {
-              serverCouponDiscount = Math.min(coupon.amount || 0, cartCalculatedTotal);
-              couponCode = coupon.code || null;
-            }
+        const couponDoc = await db.collection('users').doc(userId).collection('coupons').doc(couponId).get();
+        if (couponDoc.exists) {
+          const coupon = couponDoc.data();
+          if (!coupon.isUsed && (!coupon.expiresAt || coupon.expiresAt.toDate() >= new Date())) {
+            serverCouponDiscount = Math.min(coupon.amount || 0, cartCalculatedTotal);
+            couponCode = coupon.code || null;
           }
-        } catch (e) {console.error('Coupon validation failed:', e);}
+        }
       }
 
       if (freeShippingBenefitId) {
-        try {
-          const benefitDoc = await db.collection('users').doc(userId).collection('benefits').doc(freeShippingBenefitId).get();
-          if (benefitDoc.exists) {
-            const benefit = benefitDoc.data();
-            if (!benefit.isUsed && (!benefit.expiresAt || benefit.expiresAt.toDate() >= new Date())) {
-              serverFreeShippingApplied = true;
-            }
+        const benefitDoc = await db.collection('users').doc(userId).collection('benefits').doc(freeShippingBenefitId).get();
+        if (benefitDoc.exists) {
+          const benefit = benefitDoc.data();
+          if (!benefit.isUsed && (!benefit.expiresAt || benefit.expiresAt.toDate() >= new Date())) {
+            serverFreeShippingApplied = true;
           }
-        } catch (e) {console.error('Benefit validation failed:', e);}
+        }
       }
 
       const serverDeliveryPrice = serverFreeShippingApplied ? 0 : serverDeliveryPriceRaw;
@@ -1586,20 +1583,89 @@ export const isbankPaymentCallback = onRequest(
         return;
       }
 
-      try {
-        const { pendingPayment } = txResult;
+      const pendingPayment = txResult.pendingPayment;
+      let orderResult;
 
-        const orderResult = await createOrderTransaction(pendingPayment.userId, {
+      try {
+        orderResult = await createOrderTransaction(pendingPayment.userId, {
           ...pendingPayment.cartData,
           paymentOrderId: oid,
           paymentMethod: 'isbank_3d',
           serverCalculation: pendingPayment.serverCalculation || null,
         });
-
-        if (orderResult.duplicate) {
-          console.log(`[Payment] Duplicate order for payment ${oid}: ${orderResult.orderId}`);
+      } catch (orderError) {
+        console.error('[Payment] Order creation failed after successful payment:', orderError);
+      
+        // ── AUTO-REVERSAL: Safe here — order was NOT created ──────────
+        let reversalResult = null;
+        try {
+          const paymentAmount = pendingPayment?.amount || pendingPayment?.serverCalculation?.finalTotal;
+          reversalResult = await reversePayment(oid, paymentAmount, '949');
+        } catch (reversalError) {
+          console.error('[Payment] Reversal attempt threw:', reversalError.message);
         }
+      
+        const reversalSucceeded = reversalResult?.success === true;
+      
+        await pendingPaymentRef.update({
+          status: reversalSucceeded ? 'payment_reversed' : 'payment_succeeded_order_failed',
+          orderError: orderError.message,
+          reversalAttempted: true,
+          reversalSuccess: reversalSucceeded,
+          reversalMethod: reversalResult?.method || null,
+          reversalResponse: reversalResult?.response || null,
+          reversalError: reversalResult?.error || null,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          ...setPaymentExpiresAt(reversalSucceeded ? 'payment_reversed' : 'payment_succeeded_order_failed'),
+        });
+      
+        await callbackLogRef.update({
+          processingFailed: admin.firestore.FieldValue.serverTimestamp(),
+          error: orderError.message,
+          reversalSuccess: reversalSucceeded,
+          success: false,
+        });
+      
+        try {
+          await db.collection('_payment_alerts').doc(`product_${oid}`).set({
+            type: reversalSucceeded ?
+              'order_failed_payment_reversed' :
+              'order_creation_failed_after_payment',
+            severity: reversalSucceeded ? 'medium' : 'critical',
+            paymentOrderId: oid,
+            userId: pendingPayment.userId,
+            amount: pendingPayment.amount,
+            errorMessage: orderError.message,
+            reversalSuccess: reversalSucceeded,
+            reversalMethod: reversalResult?.method || null,
+            isRead: false,
+            isResolved: false,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        } catch (_) {/* alerting must never throw */}
+      
+        if (reversalSucceeded) {
+          response.send(buildRedirectHtml(
+            'payment-failed://order-reversed',
+            'Sipariş Oluşturulamadı',
+            'Ödemeniz iptal edildi ve iade edilecektir. Lütfen tekrar deneyiniz.',
+          ));
+        } else {
+          response.send(buildRedirectHtml(
+            'payment-failed://order-creation-error',
+            'Sipariş Hatası',
+            `Ödeme alındı ancak sipariş oluşturulamadı. Lütfen destek ile iletişime geçin. Referans: ${oid}`,
+          ));
+        }
+        return;
+      }
 
+      // ── ORDER SUCCEEDED — post-order updates below are non-critical ──
+      if (orderResult.duplicate) {
+        console.log(`[Payment] Duplicate order for payment ${oid}: ${orderResult.orderId}`);
+      }
+
+      try {
         await pendingPaymentRef.update({
           status: 'completed',
           orderId: orderResult.orderId,
@@ -1607,51 +1673,23 @@ export const isbankPaymentCallback = onRequest(
           processingDuration: Date.now() - startTime,
           ...setPaymentExpiresAt('completed'),
         });
+      } catch (updateErr) {
+        console.error(`[Payment] Status update failed for ${oid} (order ${orderResult.orderId} exists):`, updateErr.message);
+        // Order exists — recovery scheduler will find it in 'processing' and
+        // the duplicate guard in createOrderTransaction will handle it safely
+      }
 
+      try {
         await callbackLogRef.update({
           processingCompleted: admin.firestore.FieldValue.serverTimestamp(),
           orderId: orderResult.orderId,
           success: true,
           processingDuration: Date.now() - startTime,
         });
+      } catch (_) {/* logging failure is non-critical */}
 
-        console.log(`[Payment] ${oid} → order ${orderResult.orderId} created`);
-        response.send(buildRedirectHtml(`payment-success://${orderResult.orderId}`, '✓ Ödeme Başarılı', 'Siparişiniz oluşturuldu.'));
-      } catch (orderError) {
-        console.error('[Payment] Order creation failed after successful payment:', orderError);
-
-        await pendingPaymentRef.update({
-          status: 'payment_succeeded_order_failed',
-          orderError: orderError.message,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          ...setPaymentExpiresAt('payment_succeeded_order_failed'),
-        });
-
-        await callbackLogRef.update({
-          processingFailed: admin.firestore.FieldValue.serverTimestamp(),
-          error: orderError.message,
-          success: false,
-        });
-
-        try {
-          await db.collection('_payment_alerts').doc(`product_${oid}`).set({
-            type: 'order_creation_failed_after_payment',
-            severity: 'high',
-            paymentOrderId: oid,
-            userId: txResult.pendingPayment?.userId,
-            errorMessage: orderError.message,
-            isRead: false,
-            isResolved: false,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-          });
-        } catch (_) {/* alerting must never throw */}
-
-        response.send(buildRedirectHtml(
-          'payment-failed://order-creation-error',
-          'Sipariş Hatası',
-          `Ödeme alındı ancak sipariş oluşturulamadı. Lütfen destek ile iletişime geçin. Referans: ${oid}`,
-        ));
-      }
+      console.log(`[Payment] ${oid} → order ${orderResult.orderId} created`);
+      response.send(buildRedirectHtml(`payment-success://${orderResult.orderId}`, '✓ Ödeme Başarılı', 'Siparişiniz oluşturuldu.'));
     } catch (error) {
       console.error('[Payment] Critical callback error:', error);
       try {
@@ -1724,6 +1762,18 @@ export const recoverStuckPayments = onSchedule(
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             ...setPaymentExpiresAt('payment_succeeded_order_failed'),
           });
+          try {
+            const paymentAmount = p.amount || p.serverCalculation?.finalTotal;
+            const reversalResult = await reversePayment(oid, paymentAmount, '949');
+            if (reversalResult.success) {
+              await doc.ref.update({
+                status: 'payment_reversed',
+                reversalSuccess: true,
+                reversalMethod: reversalResult.method,
+                ...setPaymentExpiresAt('payment_reversed'),
+              });
+            }
+          } catch (_) {/* reversal is best-effort here */}
           // Alert only on the give-up — not on every attempt
           try {
             await db.collection('_payment_alerts').add({

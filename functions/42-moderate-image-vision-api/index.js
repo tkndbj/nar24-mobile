@@ -58,7 +58,7 @@ export const moderateImage = onCall(
         };
       } catch (error) {
         console.error('Vision API error:', error);
-        return {approved: true, error: 'processing_error'};
+        throw new HttpsError('unavailable', 'Image moderation service is temporarily unavailable. Please try again.');
       }
     },
   );

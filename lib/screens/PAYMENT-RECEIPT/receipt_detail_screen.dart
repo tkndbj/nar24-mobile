@@ -6,6 +6,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../models/receipt.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../utils/attribute_localization_utils.dart';
@@ -30,8 +32,6 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
   Map<String, dynamic>? _orderData;
   List<Map<String, dynamic>> _orderItems = [];
   bool _isLoading = true;
-  final TextEditingController _emailController = TextEditingController();
-  bool _isSendingEmail = false;
 
   String? _deliveryQRUrl;
   bool _isQRLoading = false;
@@ -41,34 +41,6 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
   void initState() {
     super.initState();
     _fetchOrderDetails();
-    _loadUserEmail();
-  }
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadUserEmail() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        final userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
-
-        if (userDoc.exists) {
-          final userData = userDoc.data();
-          _emailController.text = userData?['email'] ?? user.email ?? '';
-        }
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Error loading user email: $e');
-      }
-    }
   }
 
   void _showQRCodeModal() {
@@ -675,427 +647,27 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
     }
   }
 
-  void _showEmailModal() {
-    final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setModalState) {
-            return SafeArea(
-              top: false,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color.fromARGB(255, 33, 31, 49)
-                      : Colors.white,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(24),
-                    topRight: Radius.circular(24),
-                  ),
-                ),
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(context).viewInsets.bottom,
-                ),
-                child: SingleChildScrollView(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Modal handle
-                        Center(
-                          child: Container(
-                            width: 40,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color:
-                                  isDark ? Colors.grey[600] : Colors.grey[300],
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Icon and title
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Colors.orange, Colors.pink],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(
-                                FeatherIcons.mail,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    l10n.sendReceiptByEmail ??
-                                        'Send Receipt by Email',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w600,
-                                      color:
-                                          isDark ? Colors.white : Colors.black,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    l10n.receiptWillBeSentToEmail ??
-                                        'Your receipt will be sent to the email below',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: isDark
-                                          ? Colors.grey[400]
-                                          : Colors.grey[600],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Email input field
-                        Text(
-                          l10n.emailAddress ?? 'Email Address',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: isDark ? Colors.white : Colors.black,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.grey[800] : Colors.grey[100],
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: TextField(
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            style: TextStyle(
-                              color: isDark ? Colors.white : Colors.black,
-                              fontSize: 15,
-                            ),
-                            decoration: InputDecoration(
-                              hintText: l10n.enterEmailAddress ??
-                                  'Enter email address',
-                              hintStyle: TextStyle(
-                                color: isDark
-                                    ? Colors.grey[500]
-                                    : Colors.grey[400],
-                              ),
-                              prefixIcon: Icon(
-                                FeatherIcons.mail,
-                                color: isDark
-                                    ? Colors.grey[400]
-                                    : Colors.grey[600],
-                                size: 18,
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 14,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Receipt preview
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.orange.withOpacity(0.1),
-                                Colors.pink.withOpacity(0.1),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.orange.withOpacity(0.3),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [Colors.orange, Colors.pink],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Icon(
-                                  FeatherIcons.fileText,
-                                  color: Colors.white,
-                                  size: 16,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '${l10n.receipt ?? "Receipt"} #${widget.receipt.receiptId.substring(0, 8).toUpperCase()}',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: isDark
-                                            ? Colors.white
-                                            : Colors.black,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      '${l10n.orders ?? "Order"} #${widget.receipt.orderId.substring(0, 8).toUpperCase()}',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: isDark
-                                            ? Colors.grey[400]
-                                            : Colors.grey[600],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Text(
-                                '${widget.receipt.totalPrice.toStringAsFixed(0)} ${widget.receipt.currency}',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.green,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Action buttons
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Container(
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  border: Border.all(
-                                    color: isDark
-                                        ? Colors.grey[600]!
-                                        : Colors.grey[300]!,
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(12),
-                                    onTap: _isSendingEmail
-                                        ? null
-                                        : () => Navigator.pop(context),
-                                    child: Center(
-                                      child: Text(
-                                        l10n.cancel ?? 'Cancel',
-                                        style: TextStyle(
-                                          color: isDark
-                                              ? Colors.grey[300]
-                                              : Colors.grey[700],
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Container(
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  gradient: _isSendingEmail
-                                      ? null
-                                      : const LinearGradient(
-                                          colors: [Colors.orange, Colors.pink],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        ),
-                                  color: _isSendingEmail ? Colors.grey : null,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(12),
-                                    onTap: _isSendingEmail
-                                        ? null
-                                        : () async {
-                                            if (_emailController.text.isEmpty) {
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(
-                                                SnackBar(
-                                                  content: Text(l10n
-                                                          .pleaseEnterEmail ??
-                                                      'Please enter an email address'),
-                                                  backgroundColor:
-                                                      Colors.orange,
-                                                  behavior:
-                                                      SnackBarBehavior.floating,
-                                                ),
-                                              );
-                                              return;
-                                            }
-
-                                            setModalState(() {
-                                              _isSendingEmail = true;
-                                            });
-
-                                            final success =
-                                                await _sendReceiptByEmail(
-                                                    _emailController.text);
-
-                                            setModalState(() {
-                                              _isSendingEmail = false;
-                                            });
-
-                                            if (success) {
-                                              Navigator.pop(context);
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(
-                                                SnackBar(
-                                                  content: Text(l10n
-                                                          .receiptSentSuccessfully ??
-                                                      'Receipt sent successfully!'),
-                                                  backgroundColor: Colors.green,
-                                                  behavior:
-                                                      SnackBarBehavior.floating,
-                                                ),
-                                              );
-                                            }
-                                          },
-                                    child: Center(
-                                      child: _isSendingEmail
-                                          ? Shimmer.fromColors(
-                                              baseColor:
-                                                  Colors.white.withOpacity(0.5),
-                                              highlightColor: Colors.white,
-                                              period: const Duration(
-                                                  milliseconds: 1200),
-                                              child: Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: [
-                                                  const Icon(
-                                                    FeatherIcons.send,
-                                                    color: Colors.white,
-                                                    size: 18,
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  Text(
-                                                    l10n.sending,
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            )
-                                          : Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: [
-                                                const Icon(
-                                                  FeatherIcons.send,
-                                                  color: Colors.white,
-                                                  size: 18,
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Text(
-                                                  l10n.sendEmail ??
-                                                      'Send Email',
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Future<bool> _sendReceiptByEmail(String email) async {
-    try {
-      final functions = FirebaseFunctions.instanceFor(region: 'europe-west3');
-      final callable = functions.httpsCallable('sendReceiptEmail');
-
-      final result = await callable.call({
-        'receiptId': widget.receipt.receiptId,
-        'orderId': widget.receipt.orderId,
-        'email': email,
-      });
-
-      if (result.data['success'] == true) {
-        return true;
-      } else {
-        throw Exception('Failed to send email');
+  Future<void> _downloadPdf() async {
+    final path = widget.receipt.filePath;
+    String? url;
+    if (path != null && path.isNotEmpty) {
+      try {
+        url = await FirebaseStorage.instance.ref(path).getDownloadURL();
+      } catch (_) {}
+    }
+    if (url != null && url.isNotEmpty) {
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
       }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Error sending receipt email: $e');
-      }
+    } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to send email. Please try again.'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
+          SnackBar(
+            content: Text(AppLocalizations.of(context).receiptPdfNotAvailable),
           ),
         );
       }
-      return false;
     }
   }
 
@@ -1150,11 +722,10 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
               ),
             IconButton(
               icon: Icon(
-                FeatherIcons.mail,
+                FeatherIcons.download,
                 color: theme.textTheme.bodyMedium?.color,
               ),
-              onPressed: _showEmailModal,
-              tooltip: l10n.sendByEmail ?? 'Send by Email',
+              onPressed: _downloadPdf,
             ),
           ],
         ),

@@ -82,7 +82,7 @@ export const validateCartCheckout = onCall(
     // ============================================================
     // 2. INPUT VALIDATION
     // ============================================================
-    const {cartItems, reserveStock = false} = request.data;
+    const {cartItems} = request.data;
     
     if (!Array.isArray(cartItems) || cartItems.length === 0) {
       throw new HttpsError(
@@ -390,98 +390,6 @@ if (cachedBundlePrice !== undefined && cachedBundlePrice !== null && cachedBundl
 
       validationResults.totalPrice += itemTotal;
       validationResults.currency = product.currency || 'TL';
-    }
-
-    // ============================================================
-    // 5. ATOMIC STOCK RESERVATION
-    // ============================================================
-    if (reserveStock && validationResults.isValid) {
-      console.log('🔒 Attempting atomic stock reservation...');
-      
-      try {
-        const TRANSACTION_CHUNK_SIZE = 100;
-        
-        for (let i = 0; i < cartItems.length; i += TRANSACTION_CHUNK_SIZE) {
-          const chunk = cartItems.slice(i, i + TRANSACTION_CHUNK_SIZE);
-          
-          await admin.firestore().runTransaction(async (transaction) => {
-            const productRefs = chunk.map((item) =>
-              admin.firestore()
-                .collection(item.productSource || 'shop_products')
-                .doc(item.productId),
-            );
-            
-            const productDocs = await Promise.all(
-              productRefs.map((ref) => transaction.get(ref)),
-            );
-
-            for (let j = 0; j < productDocs.length; j++) {
-              const doc = productDocs[j];
-              const cartItem = chunk[j];
-              
-              if (!doc.exists) {
-                throw new Error(`Product ${cartItem.productId} no longer exists`);
-              }
-
-              const product = doc.data();
-              const {quantity, selectedColor} = cartItem;
-
-              const availableStock = selectedColor && 
-                product.colorQuantities && 
-                product.colorQuantities[selectedColor] !== undefined ? 
-                safeNumber(product.colorQuantities[selectedColor]) : 
-                safeNumber(product.quantity);
-
-              if (quantity > availableStock) {
-                throw new Error(
-                  `Insufficient stock for ${product.productName}. Available: ${availableStock}, Requested: ${quantity}`,
-                );
-              }
-
-              if (selectedColor && product.colorQuantities && 
-                  product.colorQuantities[selectedColor] !== undefined) {
-                transaction.update(doc.ref, {
-                  [`colorQuantities.${selectedColor}`]: 
-                    admin.firestore.FieldValue.increment(-quantity),
-                });
-              } else {
-                transaction.update(doc.ref, {
-                  quantity: admin.firestore.FieldValue.increment(-quantity),
-                });
-              }
-            }
-
-            transaction.set(
-              admin.firestore().collection('_stock_reservations').doc(),
-              {
-                userId,
-                items: chunk.map((item) => ({
-                  productId: item.productId,
-                  quantity: item.quantity,
-                  selectedColor: item.selectedColor || null,
-                })),
-                chunkIndex: Math.floor(i / TRANSACTION_CHUNK_SIZE),
-                totalChunks: Math.ceil(cartItems.length / TRANSACTION_CHUNK_SIZE),
-                reservedAt: admin.firestore.FieldValue.serverTimestamp(),
-                expiresAt: admin.firestore.Timestamp.fromMillis(
-                  Date.now() + 10 * 60 * 1000,
-                ),
-                status: 'reserved',
-              },
-            );
-          });
-        }
-
-        console.log('✅ Stock reserved successfully');
-        validationResults.stockReserved = true;
-      } catch (error) {
-        console.error('❌ Stock reservation failed:', error);
-        validationResults.isValid = false;
-        validationResults.errors['_reservation'] = {
-          key: 'reservation_failed',
-          params: {},
-        };
-      }
     }
 
     // ============================================================

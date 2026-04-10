@@ -3,8 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../models/receipt.dart';
 import '../../generated/l10n/app_localizations.dart';
 
@@ -28,8 +29,6 @@ class _SellerPanelReceiptDetailScreenState
   Map<String, dynamic>? _boostData;
   List<Map<String, dynamic>> _boostedItems = [];
   bool _isLoading = true;
-  final TextEditingController _emailController = TextEditingController();
-  bool _isSendingEmail = false;
 
   bool get _isAd => widget.receipt.receiptType == 'ad';
 
@@ -40,30 +39,6 @@ class _SellerPanelReceiptDetailScreenState
       _fetchBoostDetails();
     } else {
       setState(() => _isLoading = false);
-    }
-    _loadShopEmail();
-  }
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadShopEmail() async {
-    try {
-      final shopDoc = await FirebaseFirestore.instance
-          .collection('shops')
-          .doc(widget.shopId)
-          .get();
-
-      if (shopDoc.exists) {
-        final shopData = shopDoc.data();
-        _emailController.text =
-            shopData?['email'] ?? shopData?['contactEmail'] ?? '';
-      }
-    } catch (e) {
-      print('Error loading shop email: $e');
     }
   }
 
@@ -180,292 +155,28 @@ class _SellerPanelReceiptDetailScreenState
     }
   }
 
-  // --- Email modal ---
-
-  void _showEmailModal() {
-    final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setModalState) {
-            return Container(
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color.fromARGB(255, 33, 31, 49)
-                    : Colors.white,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(24),
-                  topRight: Radius.circular(24),
-                ),
-              ),
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom +
-                    MediaQuery.of(context).padding.bottom,
-              ),
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Modal handle
-                      Center(
-                        child: Container(
-                          width: 40,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.grey[600] : Colors.grey[300],
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Icon and title
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Colors.orange, Colors.pink],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              FeatherIcons.mail,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  l10n.sendReceiptByEmail ??
-                                      'Send Receipt by Email',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                    color: isDark ? Colors.white : Colors.black,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  l10n.receiptWillBeSentToEmail ??
-                                      'Your receipt will be sent to the email below',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: isDark
-                                        ? Colors.grey[400]
-                                        : Colors.grey[600],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Email input field
-                      Text(
-                        l10n.emailAddress ?? 'Email Address',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white : Colors.black,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: isDark ? Colors.grey[800] : Colors.grey[100],
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: TextField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          style: TextStyle(
-                            color: isDark ? Colors.white : Colors.black,
-                            fontSize: 15,
-                          ),
-                          decoration: InputDecoration(
-                            hintText:
-                                l10n.enterEmailAddress ?? 'Enter email address',
-                            hintStyle: TextStyle(
-                              color:
-                                  isDark ? Colors.grey[500] : Colors.grey[400],
-                            ),
-                            prefixIcon: Icon(
-                              FeatherIcons.mail,
-                              color:
-                                  isDark ? Colors.grey[400] : Colors.grey[600],
-                              size: 20,
-                            ),
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 16,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Send button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: ElevatedButton(
-                          onPressed: _isSendingEmail
-                              ? null
-                              : () async {
-                                  if (_emailController.text.trim().isEmpty) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          l10n.pleaseEnterEmail ??
-                                              'Please enter an email address',
-                                        ),
-                                        backgroundColor: Colors.red,
-                                      ),
-                                    );
-                                    return;
-                                  }
-
-                                  setModalState(() {
-                                    _isSendingEmail = true;
-                                  });
-
-                                  try {
-                                    final functions =
-                                        FirebaseFunctions.instanceFor(
-                                            region: 'europe-west3');
-                                    final callable = functions
-                                        .httpsCallable('sendReceiptEmail');
-
-                                    await callable.call({
-                                      'receiptId': widget.receipt.receiptId,
-                                      'email': _emailController.text.trim(),
-                                      'orderId': widget.receipt.orderId,
-                                      'isShopReceipt': true,
-                                      'shopId': widget.shopId,
-                                    });
-
-                                    if (mounted) {
-                                      Navigator.pop(context);
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          content: Row(
-                                            children: [
-                                              const Icon(
-                                                FeatherIcons.checkCircle,
-                                                color: Colors.white,
-                                                size: 20,
-                                              ),
-                                              const SizedBox(width: 12),
-                                              Expanded(
-                                                child: Text(
-                                                  l10n.receiptSentSuccessfully ??
-                                                      'Receipt sent successfully!',
-                                                  style: const TextStyle(
-                                                    fontSize: 15,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          backgroundColor: Colors.green,
-                                          behavior: SnackBarBehavior.floating,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(12),
-                                          ),
-                                          duration: const Duration(seconds: 3),
-                                        ),
-                                      );
-                                    }
-                                  } catch (e) {
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            l10n.failedToSendReceipt ??
-                                                'Failed to send receipt. Please try again.',
-                                          ),
-                                          backgroundColor: Colors.red,
-                                        ),
-                                      );
-                                    }
-                                  } finally {
-                                    if (mounted) {
-                                      setModalState(() {
-                                        _isSendingEmail = false;
-                                      });
-                                    }
-                                  }
-                                },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: _isSendingEmail
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.white,
-                                    ),
-                                  ),
-                                )
-                              : Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(
-                                      FeatherIcons.send,
-                                      size: 18,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Text(
-                                      l10n.sendReceipt ?? 'Send Receipt',
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
+  Future<void> _downloadPdf() async {
+    final path = widget.receipt.filePath;
+    String? url;
+    if (path != null && path.isNotEmpty) {
+      try {
+        url = await FirebaseStorage.instance.ref(path).getDownloadURL();
+      } catch (_) {}
+    }
+    if (url != null && url.isNotEmpty) {
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).receiptPdfNotAvailable),
+          ),
         );
-      },
-    );
+      }
+    }
   }
 
   void _copyOrderId() {
@@ -532,8 +243,8 @@ class _SellerPanelReceiptDetailScreenState
           centerTitle: true,
           actions: [
             IconButton(
-              icon: const Icon(FeatherIcons.mail),
-              onPressed: _showEmailModal,
+              icon: const Icon(FeatherIcons.download),
+              onPressed: _downloadPdf,
               color: theme.textTheme.bodyMedium?.color,
             ),
           ],

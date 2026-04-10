@@ -101,51 +101,64 @@ export const flushClicks = onSchedule(
       }
     }
 
-    // ── Resolve unknown collections ──────────────────────────────────────────
-    if (unknownIds.length > 0) {
-      const resolved = await Promise.all(
-        unknownIds.map(async ({productId, count}) => {
-          const [pSnap, sSnap] = await Promise.all([
-            db.collection('products').doc(productId).get().catch(() => null),
-            db.collection('shop_products').doc(productId).get().catch(() => null),
-          ]);
-          if (sSnap?.exists) return {collection: 'shop_products', productId, count};
-          if (pSnap?.exists) return {collection: 'products', productId, count};
-          console.warn(`[FlushClicks] Dropping clicks for unresolvable product: ${productId}`);
-          return null;
-        }),
-      );
-      knownProducts.push(...resolved.filter(Boolean));
-    }
+   // ── Resolve unknown collections (cache snapshots for reuse) ──────────────
+   const snapMap = new Map(); // productId → DocumentSnapshot
 
-    if (knownProducts.length === 0 && Object.keys(shops).length === 0) {
-      await deleteDrainKeys(tempKeys);
-      return;
-    }
+   if (unknownIds.length > 0) {
+     const resolved = await Promise.all(
+       unknownIds.map(async ({productId, count}) => {
+         const [pSnap, sSnap] = await Promise.all([
+           db.collection('products').doc(productId).get().catch(() => null),
+           db.collection('shop_products').doc(productId).get().catch(() => null),
+         ]);
+         if (sSnap?.exists) {
+           snapMap.set(productId, sSnap);
+           return {collection: 'shop_products', productId, count};
+         }
+         if (pSnap?.exists) {
+           snapMap.set(productId, pSnap);
+           return {collection: 'products', productId, count};
+         }
+         console.warn(`[FlushClicks] Dropping clicks for unresolvable product: ${productId}`);
+         return null;
+       }),
+     );
+     knownProducts.push(...resolved.filter(Boolean));
+   }
 
-    // ── Fetch all product docs once (needed to verify existence + boost data) ─
-    const allSnaps = await Promise.all(
-      knownProducts.map((p) =>
-        db.collection(p.collection).doc(p.productId).get().catch(() => null),
-      ),
-    );
+   if (knownProducts.length === 0 && Object.keys(shops).length === 0) {
+     await deleteDrainKeys(tempKeys);
+     return;
+   }
 
-    // Only keep products whose docs actually exist
-    const liveProducts = [];
-    const boostedProducts = [];
+   // ── Fetch only products we haven't already read ──────────────────────────
+   const needFetch = knownProducts.filter((p) => !snapMap.has(p.productId));
+   if (needFetch.length > 0) {
+     const fetched = await Promise.all(
+       needFetch.map((p) =>
+         db.collection(p.collection).doc(p.productId).get().catch(() => null),
+       ),
+     );
+     fetched.forEach((snap, i) => {
+       if (snap?.exists) snapMap.set(needFetch[i].productId, snap);
+     });
+   }
 
-    for (let i = 0; i < knownProducts.length; i++) {
-      const snap = allSnaps[i];
-      if (!snap?.exists) continue;
+   // Only keep products whose docs actually exist
+   const liveProducts = [];
+   const boostedProducts = [];
 
-      const p = knownProducts[i];
-      liveProducts.push(p);
+   for (const p of knownProducts) {
+     const snap = snapMap.get(p.productId);
+     if (!snap?.exists) continue;
 
-      const data = snap.data();
-      if (data.isBoosted && data.boostStartTime) {
-        boostedProducts.push({...p, data});
-      }
-    }
+     liveProducts.push(p);
+
+     const data = snap.data();
+     if (data.isBoosted && data.boostStartTime) {
+       boostedProducts.push({...p, data});
+     }
+   }
 
     // ── Batch writer ─────────────────────────────────────────────────────────
     const BATCH_LIMIT = 450;

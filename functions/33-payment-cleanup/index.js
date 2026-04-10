@@ -30,6 +30,9 @@ const RETENTION = {
   // manual recovery and potential refund evidence
   payment_succeeded_order_failed: { days: 180 },
   payment_succeeded_boost_failed: { days: 180 },
+
+  // Payment was automatically reversed (void/refund) after order creation failed
+  payment_reversed: { days: 90 },
  
   // Intermediate states left behind by a crashed function instance.
   // The recovery scheduler re-processes these, but if it gives up
