@@ -320,6 +320,11 @@ void didChangeDependencies() {
         final totals = await _cartProvider!.calculateCartTotals(
           excludedProductIds: excludedIds.isNotEmpty ? excludedIds : null,
         );
+        // ✅ ADD: Guard against 0 total
+if (totals.total <= 0) {
+  _showSnackBar(l10n.validationFailed ?? 'Could not calculate total. Please try again.', isError: true);
+  return;
+}
         final rawItems =
             await _cartProvider!.fetchAllSelectedItems(selectedIds);
         final items = _prepareItemsForPayment(rawItems);
@@ -408,6 +413,13 @@ void didChangeDependencies() {
                     excludedProductIds:
                         excludedForTotals.isNotEmpty ? excludedForTotals : null,
                   );
+                  // ✅ ADD: Guard against 0 total
+if (totals.total <= 0) {
+  if (mounted) {
+    _showSnackBar(l10n.validationFailed ?? 'Could not calculate total. Please try again.', isError: true);
+  }
+  return;
+}
 
                   if (mounted) {
                     // ✅ FIX: Navigate to payment immediately

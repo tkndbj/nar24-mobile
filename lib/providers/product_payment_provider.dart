@@ -303,6 +303,20 @@ class ProductPaymentProvider with ChangeNotifier {
       return false;
     }
 
+    if (finalTotal <= 0) {
+  isProcessingPayment = false;
+  notifyListeners();
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Order total must be greater than zero.'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+  return false;
+}
+
     isProcessingPayment = true;
     notifyListeners();
 
