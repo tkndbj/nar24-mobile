@@ -389,7 +389,7 @@ const initTypesenseCollections = async (dropExisting = false) => {
 // ─── HTTP endpoint ────────────────────────────────────────────────────────────
 // Pass ?drop=true to drop and recreate all collections (re-schema).
 export const createTypesenseCollections = onRequest(
-  {region: 'europe-west3'},
+  { region: 'europe-west3', invoker: 'private' },
   async (req, res) => {
     try {
       const drop = req.query.drop === 'true';

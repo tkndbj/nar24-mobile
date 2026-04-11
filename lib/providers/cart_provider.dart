@@ -439,9 +439,6 @@ void _sortCartItems(List<Map<String, dynamic>> items) {
     _pendingFetches['init'] = completer;
     isLoadingNotifier.value = true;
 
-    // Invalidate totals cache so next totals request hits the CF for fresh data
-    _totalsCache.invalidateForUser(user.uid);
-
     _lastDocument = null;
     _hasMore = true;
 

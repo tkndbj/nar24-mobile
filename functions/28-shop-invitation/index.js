@@ -518,7 +518,9 @@ if (!requesterIsAdmin) {
 
 // ─── backfillShopClaims ───────────────────────────────────────────────────────
 
-export const backfillShopClaims = onRequest(FUNCTION_CONFIG, async (req, res) => {
+export const backfillShopClaims = onRequest(
+  { ...FUNCTION_CONFIG, invoker: 'private' },
+  async (req, res) => {
   const usersSnap = await db().collection('users').get();
 
   let synced = 0;
@@ -543,7 +545,7 @@ export const backfillShopClaims = onRequest(FUNCTION_CONFIG, async (req, res) =>
   res.json({ success: true, synced, skipped, errors });
 });
 
-export const setAdminClaim = onRequest(async (req, res) => {
+export const setAdminClaim = onRequest({ invoker: 'private' }, async (req, res) => {
   const uid = 'AUt9QlHVEFXy8PCGQ1wPxsd7dFW2';
   const existing = (await admin.auth().getUser(uid)).customClaims ?? {};
   await admin.auth().setCustomUserClaims(uid, {
