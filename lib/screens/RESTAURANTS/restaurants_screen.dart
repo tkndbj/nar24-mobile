@@ -792,7 +792,7 @@ class _CuisinePillRow extends StatelessWidget {
           ),
           ...facets.map(
             (f) => _CuisinePill(
-              label: localizeCategory(f.value, loc),
+              label: localizeCuisineType(f.value, loc),
               count: f.count,
               isActive: selected == f.value,
               isDark: isDark,

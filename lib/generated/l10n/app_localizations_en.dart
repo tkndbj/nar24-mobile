@@ -13355,6 +13355,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reviewsTab => 'Reviews';
 
   @override
+  String get infoTab => 'Info';
+
+  @override
   String get searchFoodHint => 'Search food…';
 
   @override

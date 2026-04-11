@@ -25470,6 +25470,12 @@ abstract class AppLocalizations {
   /// **'Yorumlar'**
   String get reviewsTab;
 
+  /// No description provided for @infoTab.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bilgi'**
+  String get infoTab;
+
   /// No description provided for @searchFoodHint.
   ///
   /// In tr, this message translates to:

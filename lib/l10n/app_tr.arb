@@ -5820,6 +5820,7 @@
 "browseMenuWhenReopen": "Menüye göz atın ve tekrar açıldığımızda sipariş verin.",
 "menuTab": "Menü",
 "reviewsTab": "Yorumlar",
+"infoTab": "Bilgi",
 "searchFoodHint": "Yemek ara…",
 "foodQuantityLabel": "Miktar",
 "foodExtrasLabel": "Ekstralar",

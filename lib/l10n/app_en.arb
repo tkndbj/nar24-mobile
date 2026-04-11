@@ -5871,6 +5871,7 @@
 "browseMenuWhenReopen": "Browse the menu and order when we reopen.",
 "menuTab": "Menu",
 "reviewsTab": "Reviews",
+"infoTab": "Info",
 "searchFoodHint": "Search food…",
 "foodQuantityLabel": "Quantity",
 "foodExtrasLabel": "Extras",

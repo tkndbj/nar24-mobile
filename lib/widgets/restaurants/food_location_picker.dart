@@ -519,7 +519,7 @@ class _FoodLocationPickerSheetState extends State<_FoodLocationPickerSheet> {
                           : (isDarkMode
                               ? Colors.white.withValues(alpha: 0.1)
                               : Colors.grey[300]!),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.zero,
                       onPressed: _canConfirm ? _confirmSelection : null,
                       child: _saving
                           ? const SizedBox(

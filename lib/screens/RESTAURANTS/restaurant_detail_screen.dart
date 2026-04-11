@@ -145,7 +145,7 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
 // Mirrors RestaurantDetail component
 // =============================================================================
 
-typedef _ActiveTab = String; // 'menu' | 'reviews'
+typedef _ActiveTab = String; // 'menu' | 'reviews' | 'info'
 
 class _RestaurantDetailBody extends StatefulWidget {
   final Restaurant? restaurant;
@@ -475,6 +475,7 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
                           searchController: _searchController,
                           onTabChange: (tab) =>
                               setState(() => _activeTab = tab),
+                          restaurant: restaurant,
                         ),
                         if (_activeTab == 'menu' &&
                             _restaurantFoodCategories.isNotEmpty) ...[
@@ -556,6 +557,21 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
                       child: _ReviewsTab(
                         restaurantId: restaurant.id,
                         isDark: isDark,
+                      ),
+                    ),
+                  ),
+
+                // ── Info tab content ──────────────────────────────────────
+                if (_activeTab == 'info')
+                  SliverFillRemaining(
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        bottom: cart.itemCount > 0 ? 80 : 0,
+                      ),
+                      child: _InfoTab(
+                        restaurant: restaurant,
+                        isDark: isDark,
+                        isOpen: isOpen,
                       ),
                     ),
                   ),
@@ -895,6 +911,7 @@ class _TabAndSearchRow extends StatelessWidget {
   final bool isDark;
   final TextEditingController searchController;
   final ValueChanged<String> onTabChange;
+  final Restaurant? restaurant;
 
   const _TabAndSearchRow({
     required this.activeTab,
@@ -902,6 +919,7 @@ class _TabAndSearchRow extends StatelessWidget {
     required this.isDark,
     required this.searchController,
     required this.onTabChange,
+    this.restaurant,
   });
 
   @override
@@ -924,6 +942,13 @@ class _TabAndSearchRow extends StatelessWidget {
               isActive: activeTab == 'reviews',
               isDark: isDark,
               onTap: () => onTabChange('reviews'),
+            ),
+            const SizedBox(width: 4),
+            _TabBtn(
+              label: loc.infoTab,
+              isActive: activeTab == 'info',
+              isDark: isDark,
+              onTap: () => onTabChange('info'),
             ),
           ],
         ),
@@ -2476,6 +2501,406 @@ class _ReviewsTab extends StatelessWidget {
         restaurantId: restaurantId,
         isDark: isDark,
       ),
+    );
+  }
+}
+
+// =============================================================================
+// INFO TAB  —  working days, hours, address, contact
+// =============================================================================
+
+class _InfoTab extends StatelessWidget {
+  final Restaurant restaurant;
+  final bool isDark;
+  final bool isOpen;
+
+  const _InfoTab({
+    required this.restaurant,
+    required this.isDark,
+    required this.isOpen,
+  });
+
+  /// Maps a Firestore day string (e.g. "Monday") to the localized string.
+  String _localizeDay(String day, AppLocalizations loc) {
+    switch (day.toLowerCase()) {
+      case 'monday':
+        return loc.dayMonday;
+      case 'tuesday':
+        return loc.dayTuesday;
+      case 'wednesday':
+        return loc.dayWednesday;
+      case 'thursday':
+        return loc.dayThursday;
+      case 'friday':
+        return loc.dayFriday;
+      case 'saturday':
+        return loc.daySaturday;
+      case 'sunday':
+        return loc.daySunday;
+      default:
+        return day;
+    }
+  }
+
+  /// Returns a compact, grouped day representation like "Mon – Fri, Sat, Sun".
+  /// Consecutive days are collapsed into a range.
+  List<String> _buildDayRanges(
+      List<String> workingDays, AppLocalizations loc) {
+    // Fixed ordering so we can detect consecutive runs
+    const order = [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday',
+    ];
+
+    final activeLower =
+        workingDays.map((d) => d.toLowerCase()).toSet();
+
+    // Build sorted indices of active days
+    final activeIndices = order
+        .asMap()
+        .entries
+        .where((e) => activeLower.contains(e.value))
+        .map((e) => e.key)
+        .toList();
+
+    if (activeIndices.isEmpty) return [];
+
+    // Group consecutive indices into runs
+    final runs = <List<int>>[];
+    var current = [activeIndices.first];
+    for (var i = 1; i < activeIndices.length; i++) {
+      if (activeIndices[i] == activeIndices[i - 1] + 1) {
+        current.add(activeIndices[i]);
+      } else {
+        runs.add(current);
+        current = [activeIndices[i]];
+      }
+    }
+    runs.add(current);
+
+    return runs.map((run) {
+      final first = _localizeDay(order[run.first], loc);
+      final last = _localizeDay(order[run.last], loc);
+      return run.length == 1
+          ? first
+          : run.length == 2
+              ? '$first, $last'
+              : '$first – $last';
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+    final labelColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+
+    final workingDays = restaurant.workingDays ?? [];
+    final workingHours = restaurant.workingHours;
+    final dayRanges = _buildDayRanges(workingDays, loc);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Open / Closed status pill ──────────────────────────────
+          _StatusPill(isOpen: isOpen, isDark: isDark),
+          const SizedBox(height: 20),
+
+          // ── Working hours card ─────────────────────────────────────
+          if (workingHours != null || workingDays.isNotEmpty)
+            _InfoCard(
+              isDark: isDark,
+              icon: Icons.access_time_rounded,
+              iconColor: Colors.orange,
+              title: loc.workingHours,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Hours row
+                  if (workingHours != null) ...[
+                    Row(
+                      children: [
+                        _InfoChip(
+                          label:
+                              '${workingHours.open}  –  ${workingHours.close}',
+                          isDark: isDark,
+                          highlight: true,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  // Working days
+                  if (workingDays.isNotEmpty) ...[
+                    Text(
+                      loc.workingDays,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: labelColor,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _WorkingDaysGrid(
+                      allDays: const [
+                        'Monday',
+                        'Tuesday',
+                        'Wednesday',
+                        'Thursday',
+                        'Friday',
+                        'Saturday',
+                        'Sunday',
+                      ],
+                      activeDays: workingDays,
+                      isDark: isDark,
+                      localizeDay: (d) => _localizeDay(d, loc),
+                    ),
+                    if (dayRanges.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        dayRanges.join(', '),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: labelColor,
+                        ),
+                      ),
+                    ],
+                  ],
+                ],
+              ),
+            ),
+
+        ],
+      ),
+    );
+  }
+}
+
+// ── Status pill ──────────────────────────────────────────────────────────────
+
+class _StatusPill extends StatelessWidget {
+  final bool isOpen;
+  final bool isDark;
+
+  const _StatusPill({required this.isOpen, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final MaterialColor color = isOpen ? Colors.green : Colors.red;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withOpacity(isDark ? 0.15 : 0.08),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: color.withOpacity(0.35), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            isOpen
+                ? AppLocalizations.of(context).restaurantDashboardStatusOpen
+                : AppLocalizations.of(context).currentlyClosed,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isDark ? color[200] : color[700],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Info card container ──────────────────────────────────────────────────────
+
+class _InfoCard extends StatelessWidget {
+  final bool isDark;
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final Widget child;
+
+  const _InfoCard({
+    required this.isDark,
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cardColor =
+        isDark ? const Color.fromARGB(255, 40, 38, 59) : Colors.white;
+    final labelColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.25 : 0.07),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 17, color: iconColor),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: labelColor,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+// ── Highlight chip (used for opening hours) ──────────────────────────────────
+
+class _InfoChip extends StatelessWidget {
+  final String label;
+  final bool isDark;
+  final bool highlight;
+
+  const _InfoChip({
+    required this.label,
+    required this.isDark,
+    this.highlight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: highlight
+            ? Colors.orange.withOpacity(isDark ? 0.15 : 0.10)
+            : (isDark ? const Color(0xFF2D2B3F) : Colors.grey[100]),
+        borderRadius: BorderRadius.circular(10),
+        border: highlight
+            ? Border.all(
+                color: Colors.orange.withOpacity(0.35), width: 1)
+            : null,
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+          color: highlight
+              ? (isDark ? Colors.orange[300] : Colors.orange[800])
+              : (isDark ? Colors.grey[200] : Colors.grey[800]),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Working days 7-cell grid ─────────────────────────────────────────────────
+
+class _WorkingDaysGrid extends StatelessWidget {
+  final List<String> allDays;
+  final List<String> activeDays;
+  final bool isDark;
+  final String Function(String) localizeDay;
+
+  const _WorkingDaysGrid({
+    required this.allDays,
+    required this.activeDays,
+    required this.isDark,
+    required this.localizeDay,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final activeLower = activeDays.map((d) => d.toLowerCase()).toSet();
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: allDays.map((day) {
+        final active = activeLower.contains(day.toLowerCase());
+        // Show only first 3 letters of the localized day
+        final label = localizeDay(day);
+        final short = label.length > 3 ? label.substring(0, 3) : label;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: active
+                ? Colors.orange
+                : (isDark
+                    ? const Color(0xFF2D2B3F)
+                    : Colors.grey[100]),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: active
+                  ? Colors.orange
+                  : (isDark
+                      ? Colors.white.withOpacity(0.08)
+                      : Colors.grey[300]!),
+              width: 1,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              short,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight:
+                    active ? FontWeight.w700 : FontWeight.w400,
+                color: active
+                    ? Colors.white
+                    : (isDark ? Colors.grey[500] : Colors.grey[400]),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

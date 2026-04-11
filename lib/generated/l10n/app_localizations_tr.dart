@@ -13379,6 +13379,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get reviewsTab => 'Yorumlar';
 
   @override
+  String get infoTab => 'Bilgi';
+
+  @override
   String get searchFoodHint => 'Yemek ara…';
 
   @override

@@ -13452,6 +13452,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get reviewsTab => 'Отзывы';
 
   @override
+  String get infoTab => 'Инфо';
+
+  @override
   String get searchFoodHint => 'Поиск блюд…';
 
   @override

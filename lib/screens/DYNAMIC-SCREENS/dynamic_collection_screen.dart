@@ -34,6 +34,7 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
 
   // Collection data
   Map<String, dynamic>? _collectionData;
+  List<String> _collectionProductIds = []; // IDs scoping Typesense queries
   List<ProductSummary> _products = [];
   List<ProductSummary> _filteredProducts = [];
   List<ProductSummary> _boostedProducts = [];
@@ -142,6 +143,9 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
         return;
       }
 
+      // Store IDs so Typesense queries are scoped to this collection
+      _collectionProductIds = productIds;
+
       // Load products and fetch spec facets in parallel
       await Future.wait([
         _loadProducts(productIds),
@@ -155,6 +159,17 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  /// Builds the base Typesense filterBy that constrains results to this
+  /// collection's products. Falls back to shopId-only when IDs aren't loaded
+  /// yet (shouldn't happen in practice but keeps things safe).
+  String _collectionFilterBy() {
+    if (_collectionProductIds.isEmpty) {
+      return 'shopId:=${widget.shopId}';
+    }
+    final ids = _collectionProductIds.join(',');
+    return 'shopId:=${widget.shopId} && id:=[$ids]';
   }
 
   Future<void> _fetchSpecFacets() async {
@@ -181,7 +196,7 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
       final res = await svc.searchWithDisjunctiveFacets(
         indexName: 'shop_products',
         hitsPerPage: 0, // facets only
-        additionalFilterBy: 'shopId:=${widget.shopId}',
+        additionalFilterBy: _collectionFilterBy(),
         disjunctiveFilters: disjunctiveFilters,
         numericFilters: numericFilters,
         sortOption: 'date',
@@ -375,7 +390,7 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
       indexName: 'shop_products',
       page: page,
       hitsPerPage: 20,
-      additionalFilterBy: 'shopId:=${widget.shopId}',
+      additionalFilterBy: _collectionFilterBy(),
       disjunctiveFilters: disjunctiveFilters,
       numericFilters: numericFilters,
       sortOption: 'date',

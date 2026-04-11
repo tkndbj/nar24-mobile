@@ -87,22 +87,6 @@ class _ProductPaymentScreenState extends State<ProductPaymentScreen> {
     });
   }
 
-  String _getFreeDeliveryText(
-    ProductPaymentProvider provider,
-    double cartTotal,
-    AppLocalizations l10n,
-    bool isDark,
-  ) {
-    final deliveryOption = provider.selectedDeliveryOption;
-    final deliveryPrice = provider.getDeliveryPrice();
-
-    if (deliveryPrice == 0.0) {
-      return '${l10n.cargoPrice}: ${l10n.free}';
-    }
-
-    return '${l10n.cargoPrice}: ${deliveryPrice.toStringAsFixed(2)} TL';
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -213,17 +197,16 @@ class _ProductPaymentScreenState extends State<ProductPaymentScreen> {
                               ],
                             )),
                       ),
-                      // Bottom Total and Payment Section
+                      // Bottom checkout section
                       Container(
-                        padding: const EdgeInsets.all(20),
+                        padding:
+                            const EdgeInsets.fromLTRB(16, 14, 16, 0),
                         decoration: BoxDecoration(
                           color: isDark
                               ? const Color.fromARGB(255, 33, 31, 49)
                               : Colors.white,
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(24),
-                            topRight: Radius.circular(24),
-                          ),
+                          borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(24)),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withOpacity(0.1),
@@ -235,230 +218,141 @@ class _ProductPaymentScreenState extends State<ProductPaymentScreen> {
                         child: SafeArea(
                           top: false,
                           child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                              // ── Subtotal ─────────────────────────────
+                              _CheckoutRow(
+                                label: l10n.subtotal,
+                                value:
+                                    '${widget.totalPrice.toStringAsFixed(2)} ${_items.first['product'].currency}',
+                                isDark: isDark,
+                              ),
+
+                              // ── Coupon discount ───────────────────────
+                              if (provider.appliedCoupon != null &&
+                                  provider.couponDiscount > 0) ...[
+                                const SizedBox(height: 5),
+                                _CheckoutRow(
+                                  label: l10n.coupon,
+                                  value:
+                                      '-${provider.couponDiscount.toStringAsFixed(2)} ${_items.first['product'].currency}',
+                                  isDark: isDark,
+                                  accent: Colors.green,
+                                  leadingIcon: Icons.local_offer_rounded,
+                                ),
+                              ],
+
+                              // ── Shipping ──────────────────────────────
+                              const SizedBox(height: 5),
+                              _ShippingRow(
+                                isFree: provider.getDeliveryPrice() == 0.0 &&
+                                    provider.selectedDeliveryOption != 'pickup',
+                                price: provider.getDeliveryPrice(),
+                                currency:
+                                    _items.first['product'].currency as String,
+                                isDark: isDark,
+                                l10n: l10n,
+                              ),
+
+                              // ── Divider ───────────────────────────────
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 10),
+                                child: Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  color: isDark
+                                      ? Colors.white.withOpacity(0.08)
+                                      : Colors.grey.shade200,
+                                ),
+                              ),
+
+                              // ── Total ─────────────────────────────────
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  // Subtotal
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        l10n.subtotal,
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: isDark
-                                              ? Colors.grey.shade400
-                                              : Colors.grey.shade600,
-                                        ),
-                                      ),
-                                      Text(
-                                        '${widget.totalPrice.toStringAsFixed(2)} ${_items.first['product'].currency}',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: isDark
-                                              ? Colors.grey.shade400
-                                              : Colors.grey.shade600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-
-                                  // Coupon discount (if applied)
-                                  if (provider.appliedCoupon != null &&
-                                      provider.couponDiscount > 0) ...[
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            const Icon(Icons.local_offer,
-                                                size: 16, color: Colors.green),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              l10n.coupon,
-                                              style: const TextStyle(
-                                                  fontSize: 14,
-                                                  color: Colors.green),
-                                            ),
-                                          ],
-                                        ),
-                                        Text(
-                                          '-${provider.couponDiscount.toStringAsFixed(2)} ${_items.first['product'].currency}',
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                            color: Colors.green,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                  ],
-
-                                  // Shipping
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Icon(
-                                            Icons.local_shipping_outlined,
-                                            size: 16,
-                                            color: provider.useFreeShipping
-                                                ? Colors.green
-                                                : (isDark
-                                                    ? Colors.grey.shade400
-                                                    : Colors.grey.shade600),
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            l10n.shipping,
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: provider.useFreeShipping
-                                                  ? Colors.green
-                                                  : (isDark
-                                                      ? Colors.grey.shade400
-                                                      : Colors.grey.shade600),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      Text(
-                                        provider.useFreeShipping
-                                            ? l10n.free
-                                            : '${provider.getDeliveryPrice().toStringAsFixed(2)} ${_items.first['product'].currency}',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: provider.useFreeShipping
-                                              ? Colors.green
-                                              : (isDark
-                                                  ? Colors.grey.shade400
-                                                  : Colors.grey.shade600),
-                                          fontWeight: provider.useFreeShipping
-                                              ? FontWeight.w600
-                                              : FontWeight.normal,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                    child: Divider(
-                                      height: 1,
+                                  Text(
+                                    l10n.total,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
                                       color: isDark
-                                          ? Colors.grey.shade700
-                                          : Colors.grey.shade300,
+                                          ? Colors.white
+                                          : Colors.black87,
                                     ),
                                   ),
-
-                                  // Final Total
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        l10n.total,
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color: isDark
-                                              ? Colors.white
-                                              : Colors.black87,
-                                        ),
-                                      ),
-                                      Text(
-                                        '${provider.finalTotal.toStringAsFixed(2)} ${_items.first['product'].currency}',
-                                        style: const TextStyle(
-                                          fontSize: 24,
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFF00A86B),
-                                        ),
-                                      ),
-                                    ],
+                                  Text(
+                                    '${provider.finalTotal.toStringAsFixed(2)} ${_items.first['product'].currency}',
+                                    style: const TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF00A86B),
+                                    ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 16),
-                              // Distance selling agreement checkbox
-                              Consumer<ProductPaymentProvider>(
-                                builder: (context, provider, _) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
-                                      children: [
-                                        SizedBox(
-                                          width: 24,
-                                          height: 24,
-                                          child: Checkbox(
-                                            value:
-                                                provider.hasAcceptedAgreement,
-                                            onChanged: (value) {
-                                              provider.setAgreementAccepted(
-                                                  value ?? false);
-                                            },
-                                            activeColor:
-                                                const Color(0xFF00A86B),
-                                            materialTapTargetSize:
-                                                MaterialTapTargetSize
-                                                    .shrinkWrap,
-                                          ),
+
+                              const SizedBox(height: 12),
+
+                              // ── Agreement ─────────────────────────────
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: Checkbox(
+                                      value: provider.hasAcceptedAgreement,
+                                      onChanged: (v) =>
+                                          provider.setAgreementAccepted(
+                                              v ?? false),
+                                      activeColor: const Color(0xFF00A86B),
+                                      materialTapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: GestureDetector(
+                                      onTap: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              const SalesContractScreen(),
                                         ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: GestureDetector(
-                                            onTap: () {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (context) =>
-                                                      const SalesContractScreen(),
-                                                ),
-                                              );
-                                            },
-                                            child: Text.rich(
-                                              TextSpan(
-                                                children: [
-                                                  TextSpan(
-                                                    text: l10n.iAccept,
-                                                    style: TextStyle(
-                                                      fontSize: 13,
-                                                      color: isDark
-                                                          ? Colors.white70
-                                                          : Colors.grey[700],
-                                                    ),
-                                                  ),
-                                                  TextSpan(
-                                                    text:
-                                                        ' ${l10n.distanceSellingAgreement}',
-                                                    style: const TextStyle(
-                                                      fontSize: 13,
-                                                      color: Color(0xFF00A86B),
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      decoration: TextDecoration
-                                                          .underline,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
+                                      ),
+                                      child: Text.rich(
+                                        TextSpan(children: [
+                                          TextSpan(
+                                            text: l10n.iAccept,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: isDark
+                                                  ? Colors.white70
+                                                  : Colors.grey[600],
                                             ),
                                           ),
-                                        ),
-                                      ],
+                                          TextSpan(
+                                            text:
+                                                ' ${l10n.distanceSellingAgreement}',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: Color(0xFF00A86B),
+                                              fontWeight: FontWeight.w600,
+                                              decoration:
+                                                  TextDecoration.underline,
+                                            ),
+                                          ),
+                                        ]),
+                                      ),
                                     ),
-                                  );
-                                },
+                                  ),
+                                ],
                               ),
+
+                              const SizedBox(height: 10),
                               const CompletePaymentButton(),
                             ],
                           ),
@@ -470,6 +364,121 @@ class _ProductPaymentScreenState extends State<ProductPaymentScreen> {
           );
         },
       ),
+    );
+  }
+}
+
+// ── Reusable compact price row ────────────────────────────────────────────────
+
+class _CheckoutRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool isDark;
+  final Color? accent;
+  final IconData? leadingIcon;
+
+  const _CheckoutRow({
+    required this.label,
+    required this.value,
+    required this.isDark,
+    this.accent,
+    this.leadingIcon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = accent ??
+        (isDark ? Colors.grey.shade400 : Colors.grey.shade600);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (leadingIcon != null) ...[
+              Icon(leadingIcon, size: 14, color: color),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(fontSize: 13, color: color),
+            ),
+          ],
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            color: color,
+            fontWeight:
+                accent != null ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Shipping row with optional "Free" pill ────────────────────────────────────
+
+class _ShippingRow extends StatelessWidget {
+  final bool isFree;
+  final double price;
+  final String currency;
+  final bool isDark;
+  final AppLocalizations l10n;
+
+  const _ShippingRow({
+    required this.isFree,
+    required this.price,
+    required this.currency,
+    required this.isDark,
+    required this.l10n,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final labelColor =
+        isDark ? Colors.grey.shade400 : Colors.grey.shade600;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.local_shipping_outlined,
+                size: 14, color: labelColor),
+            const SizedBox(width: 4),
+            Text(
+              l10n.shipping,
+              style: TextStyle(fontSize: 13, color: labelColor),
+            ),
+          ],
+        ),
+        if (isFree)
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFF00A86B),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              l10n.free,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+              ),
+            ),
+          )
+        else
+          Text(
+            '${price.toStringAsFixed(2)} $currency',
+            style: TextStyle(fontSize: 13, color: labelColor),
+          ),
+      ],
     );
   }
 }

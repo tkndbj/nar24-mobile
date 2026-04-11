@@ -21,9 +21,13 @@ String localizeFoodType(String raw, AppLocalizations loc) =>
 String localizeExtra(String raw, AppLocalizations loc) =>
     _extras[raw]?.call(loc) ?? raw;
 
+/// Localize a cuisine-type name stored in Firestore (e.g. "Turkish Cuisine").
+String localizeCuisineType(String raw, AppLocalizations loc) =>
+    _cuisineTypes[raw]?.call(loc) ?? raw;
+
 /// Localize a list of cuisine-type names and join with ", ".
 String localizeCuisines(List<String> list, AppLocalizations loc) =>
-    list.map((c) => localizeCategory(c, loc)).join(', ');
+    list.map((c) => localizeCuisineType(c, loc)).join(', ');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Category resolvers  (24 entries)
@@ -565,4 +569,20 @@ final _extras = <String, String Function(AppLocalizations)>{
   'Ice Cream Scoop': (l) => l.foodExtraIceCreamScoop,
   'Whipped Cream': (l) => l.foodExtraWhippedCream,
   'Ice': (l) => l.foodExtraIce,
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cuisine-type resolvers  (maps Firestore English value → localized string)
+// ─────────────────────────────────────────────────────────────────────────────
+
+final _cuisineTypes = <String, String Function(AppLocalizations)>{
+  'Turkish Cuisine': (l) => l.cuisineTypeTurkish,
+  'Japanese Cuisine': (l) => l.cuisineTypeJapanese,
+  'Chinese Cuisine': (l) => l.cuisineTypeChinese,
+  'Persian Cuisine': (l) => l.cuisineTypePersian,
+  'Arabic Cuisine': (l) => l.cuisineTypeArabic,
+  'Italian Cuisine': (l) => l.cuisineTypeItalian,
+  'Korean Cuisine': (l) => l.cuisineTypeKorean,
+  'Vietnamese Cuisine': (l) => l.cuisineTypeVietnamese,
+  'Vegan / Vegetarian': (l) => l.cuisineTypeVeganVegetarian,
 };
