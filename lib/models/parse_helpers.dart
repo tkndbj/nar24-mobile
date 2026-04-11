@@ -98,9 +98,18 @@ abstract final class Parse {
 
   // ── Timestamps ───────────────────────────────────────────────────────────
 
+  /// Converts a Unix epoch int to a Firestore Timestamp.
+  /// Typesense stores timestamps as seconds (10 digits); Firestore/JS uses
+  /// milliseconds (13 digits). Values < 10_000_000_000 are treated as seconds.
+  static Timestamp _intToTimestamp(int v) {
+    return v < 10000000000
+        ? Timestamp.fromMillisecondsSinceEpoch(v * 1000)
+        : Timestamp.fromMillisecondsSinceEpoch(v);
+  }
+
   static Timestamp toTimestamp(dynamic v) {
     if (v is Timestamp) return v;
-    if (v is int) return Timestamp.fromMillisecondsSinceEpoch(v);
+    if (v is int) return _intToTimestamp(v);
     if (v is String) {
       try {
         return Timestamp.fromDate(DateTime.parse(v));
@@ -112,7 +121,7 @@ abstract final class Parse {
   static Timestamp? toTimestampNullable(dynamic v) {
     if (v == null) return null;
     if (v is Timestamp) return v;
-    if (v is int) return Timestamp.fromMillisecondsSinceEpoch(v);
+    if (v is int) return _intToTimestamp(v);
     if (v is String) {
       try {
         return Timestamp.fromDate(DateTime.parse(v));
