@@ -32,13 +32,6 @@ match /{collection}/{docId}/click_shards/{shardId} {
   allow delete: if false;
 }
 
-// Dirty click markers
-match /_dirty_clicks/{docId} {
-  allow read: if false; // Only CF reads
-  allow create, update: if true; // Client marks dirty on click
-  allow delete: if false; // Only CF deletes after rollup
-}
-
 match /restaurant_banners/{bannerId} {
   // Anyone can read — mobile app + web app both use public reads
   allow read: if true;
@@ -198,7 +191,8 @@ match /pickup_points/{pointId} {
 
 // Product flows - Admin read/write, users read only
 match /product_flows/{flowId} {
-  allow read, write: if true; // Temporarily allow all access
+  allow read: if true;
+  allow write: if isAdmin() || isSemiAdmin();
 }
 
 // Flow sessions - Users can read/write their own sessions

@@ -228,31 +228,8 @@ class TerasProvider with ChangeNotifier {
   /// Fetches boosted products from the "products" collection.
   /// ---------------------------------------------------------------------------
   Future<void> fetchBoostedProducts() async {
-    try {
-      Query query =
-          _firestore.collection('products').where('isBoosted', isEqualTo: true);
-      if (_selectedCategory != null && _selectedCategory!.isNotEmpty) {
-        query = query.where('category', isEqualTo: _selectedCategory);
-      }
-      if (_selectedSubSubcategory != null &&
-          _selectedSubSubcategory!.isNotEmpty) {
-        query =
-            query.where('subsubcategory', isEqualTo: _selectedSubSubcategory);
-      }
-      query = query.orderBy('createdAt', descending: true).limit(100);
-
-      final snapshot = await query.get();
-
-      // ✅ All mutations after await - safe to notify
-      final fetchedBoosted =
-          snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
-      _boostedProducts
-        ..clear()
-        ..addAll(fetchedBoosted);
-      notifyListeners();
-    } catch (e) {
-      debugPrint("fetchBoostedProducts error: $e");
-    }
+    _boostedProducts.clear();
+    notifyListeners();
   }
 
   Future<void> recordScreenVisit(String screenType,

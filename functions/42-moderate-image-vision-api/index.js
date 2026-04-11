@@ -1,5 +1,6 @@
 import {onCall, HttpsError} from 'firebase-functions/v2/https';
 import vision from '@google-cloud/vision';
+import { checkRateLimit } from '../shared/redis.js';
 const visionClient = new vision.ImageAnnotatorClient();
 
 export const moderateImage = onCall(
@@ -9,6 +10,11 @@ export const moderateImage = onCall(
       if (!auth) {
         throw new HttpsError('unauthenticated', 'You must be signed in.');
       }
+
+      const withinLimit = await checkRateLimit(`moderate_image:${auth.uid}`, 10, 60, { failOpen: false });
+if (!withinLimit) {
+  throw new HttpsError('resource-exhausted', 'Too many moderation requests. Try again later.');
+}
   
       const {imageUrl} = req.data || {};
       

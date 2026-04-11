@@ -197,7 +197,6 @@ class SellerPanelProvider with ChangeNotifier {
   List<DocumentSnapshot> _transactions = [];
   List<DocumentSnapshot> get transactions =>
       _filteredTransactionsNotifier.value;
-  List<DocumentSnapshot> _pastBoostHistory = [];
   int _currentTransactionPage = 0;
   bool _hasMoreTransactions = true;
   String _transactionSearchQuery = '';
@@ -205,7 +204,6 @@ class SellerPanelProvider with ChangeNotifier {
 
   bool _isLoadingShops = false;
   bool _isLoadingProducts = false;
-  bool _isLoadingPastBoostHistory = false;
   String? _transactionError;
 
   String _searchQuery = '';
@@ -332,15 +330,12 @@ class SellerPanelProvider with ChangeNotifier {
   List<DocumentSnapshot> get shops => _shops;
   DocumentSnapshot? get selectedShop => _selectedShop;
 
-  List<DocumentSnapshot> get pastBoostHistory => _pastBoostHistory;
   Map<String, int>? get cachedMetrics => _cachedMetrics;
   Map<String, Product?>? get cachedTopProducts => _cachedTopProducts;
   String? get transactionError => _transactionError;
 
   bool get isLoadingShops => _isLoadingShops;
   bool get isLoadingProducts => _isLoadingProducts;
-  bool get isLoadingPastBoostHistory => _isLoadingPastBoostHistory;
-
   String get searchQuery => _searchQuery;
   String? get selectedCategory => _selectedCategory;
   String? get selectedSubcategory => _selectedSubcategory;
@@ -371,7 +366,6 @@ class SellerPanelProvider with ChangeNotifier {
     _filteredStockProductsNotifier.value = [];
     _transactions = [];
     _filteredTransactionsNotifier.value = [];
-    _pastBoostHistory = [];
     _cachedMetrics = null;
     _totalSoldPrice = 0.0;
     _cachedTopProducts = null;
@@ -987,17 +981,8 @@ class SellerPanelProvider with ChangeNotifier {
       query = query.where('shopId', isEqualTo: effectiveShopId);
 
       // Apply status filter if specified
-      if (statusFilter != null && statusFilter.isNotEmpty) {
-        if (statusFilter == 'delivered') {
-          query = query.where('deliveredInPartial', isEqualTo: true);
-        } else if (statusFilter == 'pending') {
-          query = query.where('gatheringStatus', isEqualTo: 'pending');
-        } else if (statusFilter == 'in_progress') {
-          query = query.where('gatheringStatus',
-              whereIn: ['assigned', 'gathered', 'at_warehouse']);
-        } else if (statusFilter == 'failed') {
-          query = query.where('gatheringStatus', isEqualTo: 'failed');
-        }
+      if (statusFilter == 'delivered') {
+        query = query.where('deliveredInPartial', isEqualTo: true);
       }
 
       query = query.orderBy('timestamp', descending: true).limit(limit);
@@ -2437,27 +2422,4 @@ class SellerPanelProvider with ChangeNotifier {
     }
   }
 
-  Future<void> fetchPastBoostHistory({String? shopId}) async {
-    if (shopId == null) return;
-
-    _isLoadingPastBoostHistory = true;
-    notifyListeners();
-
-    try {
-      final snapshot = await _firestore
-          .collection('shop_products')
-          .where('shopId', isEqualTo: shopId)
-          .where('boostEndTime', isLessThan: Timestamp.now())
-          .orderBy('boostEndTime', descending: true)
-          .get();
-
-      _pastBoostHistory = snapshot.docs;
-    } catch (e) {
-      debugPrint('Error fetching past boost history: $e');
-      _pastBoostHistory = [];
-    } finally {
-      _isLoadingPastBoostHistory = false;
-      notifyListeners();
-    }
-  }
 }

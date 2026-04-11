@@ -1529,24 +1529,11 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     // Apply selectedFilter (quick filters) or default sorting
     if (selectedFilter != null && selectedFilter.isNotEmpty) {
       switch (selectedFilter) {
-        case 'deals':
-          query = query
-              .where('discountPercentage', isGreaterThan: 0)
-              .orderBy('promotionScore', descending: true)
-              .orderBy('discountPercentage', descending: true);
-          break;
-        case 'boosted':
-          query = query
-              .where('isBoosted', isEqualTo: true)
-              .orderBy('promotionScore', descending: true)
-              .orderBy('createdAt', descending: true);
-          break;
         case 'trending':
-          break;
         case 'fiveStar':
-          break;
         case 'bestSellers':
-          break;
+        case 'deals':
+        case 'boosted':
         default:
           query = _applySubcategorySorting(query);
       }

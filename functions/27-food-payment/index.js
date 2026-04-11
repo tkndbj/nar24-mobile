@@ -182,7 +182,12 @@ async function validateAndPriceFoodItems(tx, db, items, restaurantId) {
   let subtotal = 0;
   let maxPrepTime = 0;
 
-  for (const item of items) {
+  // ✅ Parallel fetch all food docs at once
+  const foodRefs = items.map((item) => db.collection('foods').doc(item.foodId));
+  const foodSnaps = await Promise.all(foodRefs.map((ref) => tx.get(ref)));
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
     const { foodId, quantity = 1, extras = [], specialNotes = '' } = item;
 
     if (!foodId || typeof foodId !== 'string') {
@@ -192,9 +197,7 @@ async function validateAndPriceFoodItems(tx, db, items, restaurantId) {
       throw new HttpsError('invalid-argument', `Invalid quantity (${quantity}) for item ${foodId}.`);
     }
 
-    // Fetch the canonical food document
-    const foodRef = db.collection('foods').doc(foodId);
-    const foodSnap = await tx.get(foodRef);
+    const foodSnap = foodSnaps[i];
 
     if (!foodSnap.exists) {
       throw new HttpsError('not-found', `Food item "${foodId}" not found.`);
@@ -1080,7 +1083,7 @@ export const generateFoodReceiptBackground = onDocumentCreated(
   {
     document: 'foodReceiptTasks/{taskId}',
     region: REGION,
-    memory: '1GiB',
+    memory: '512MiB',
     timeoutSeconds: 120,
   },
   async (event) => {

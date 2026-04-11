@@ -817,47 +817,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     } catch (e) {
       debugPrint(
           'Error fetching products for buyer category $buyerCategory: $e');
-
-      try {
-        List<ProductSummary> fallbackProducts = [];
-
-        if (buyerCategory == 'Women' || buyerCategory == 'Men') {
-          Query fallbackQuery = _firestore
-              .collection('shop_products')
-              .where('gender', whereIn: [buyerCategory, 'Unisex'])
-              .orderBy('createdAt', descending: true)
-              .limit(20);
-
-          final snapshot = await fallbackQuery.get();
-          fallbackProducts = snapshot.docs
-              .map((doc) => ProductSummary.fromDocument(doc))
-              .toList();
-
-          debugPrint(
-              'Fallback: Single query returned ${fallbackProducts.length} products');
-        } else {
-          Query fallbackQuery = _firestore
-              .collection('shop_products')
-              .where('category', isEqualTo: buyerCategory)
-              .orderBy('createdAt', descending: true)
-              .limit(20);
-
-          final snapshot = await fallbackQuery.get();
-          fallbackProducts = snapshot.docs
-              .map((doc) => ProductSummary.fromDocument(doc))
-              .toList();
-        }
-
-        _setBuyerCategoryCache(buyerCategory, fallbackProducts);
-
-        debugPrint(
-            'Fallback: Fetched ${fallbackProducts.length} products for buyer category: $buyerCategory');
-        return fallbackProducts;
-      } catch (fallbackError) {
-        debugPrint(
-            'Fallback also failed for buyer category $buyerCategory: $fallbackError');
-        return [];
-      }
+      return [];
     }
   }
 
@@ -1017,51 +977,7 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
     } catch (e) {
       debugPrint(
           'Error fetching products for buyer category $buyerCategory: $e');
-
-      // ✅ OPTIMIZED: Simplified fallback with single query
-      try {
-        List<ProductSummary> fallbackProducts = [];
-
-        if (buyerCategory == 'Women' || buyerCategory == 'Men') {
-          // ✅ Single fallback query instead of 2
-          Query fallbackQuery = _firestore
-              .collection('products')
-              .where('gender', whereIn: [buyerCategory, 'Unisex']) // ✅ Combined
-              .orderBy('createdAt', descending: true)
-              .limit(20); // ✅ Direct limit
-
-          final snapshot = await fallbackQuery.get();
-          fallbackProducts = snapshot.docs
-              .map((doc) => ProductSummary.fromDocument(doc))
-              .toList();
-
-          debugPrint(
-              '✅ Fallback: Single query returned ${fallbackProducts.length} products');
-        } else {
-          // Fallback for other categories
-          Query fallbackQuery = _firestore
-              .collection('products')
-              .where('category', isEqualTo: buyerCategory)
-              .orderBy('createdAt', descending: true)
-              .limit(20);
-
-          final snapshot = await fallbackQuery.get();
-          fallbackProducts = snapshot.docs
-              .map((doc) => ProductSummary.fromDocument(doc))
-              .toList();
-        }
-
-        // Cache even the fallback results in TERAS cache
-        _setBuyerCategoryTerasCache(buyerCategory, fallbackProducts);
-
-        debugPrint(
-            'Fallback: Fetched ${fallbackProducts.length} products for buyer category: $buyerCategory');
-        return fallbackProducts;
-      } catch (fallbackError) {
-        debugPrint(
-            'Fallback also failed for buyer category $buyerCategory: $fallbackError');
-        return [];
-      }
+      return [];
     }
   }
 
