@@ -36,6 +36,7 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace "com.cts.emlak"
     compileSdkVersion 36
+    ndkVersion "28.2.13676358"
     defaultConfig {
         applicationId "com.cts.emlak"
         minSdkVersion 24
