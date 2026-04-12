@@ -3,7 +3,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
@@ -475,7 +474,7 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
             Text(
               _errorMessage ?? 'Something went wrong',
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 15,
                 color: isDark ? Colors.white70 : Colors.grey[700],
               ),
@@ -491,7 +490,7 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
               child: Text('Retry',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                       color: Colors.white, fontWeight: FontWeight.w600)),
             ),
           ],
@@ -515,7 +514,7 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
             Text(
               l10n.noOrdersFoundForSearch,
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: isDark ? Colors.white70 : Colors.grey[700],
@@ -525,7 +524,7 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
             Text(
               l10n.trySearchingWithDifferentKeywords,
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 13,
                 color: isDark ? Colors.white54 : Colors.grey[500],
               ),
@@ -597,7 +596,7 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
           const SizedBox(width: 4),
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
               color: color,
@@ -640,7 +639,7 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
             const SizedBox(width: 4),
             Text(
               l10n.repeatOrder,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
                 color: const Color(0xFF00A86B),
@@ -709,7 +708,7 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
                       children: [
                         Text(
                           order.restaurantName,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: isDark ? Colors.white : Colors.black87,
@@ -720,7 +719,7 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
                         const SizedBox(height: 3),
                         Text(
                           order.itemsPreview,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 12,
                             color: isDark ? Colors.grey[400] : Colors.grey[600],
                           ),
@@ -732,7 +731,7 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
                           children: [
                             Text(
                               '${order.totalPrice.toStringAsFixed(0)} ${order.currency}',
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
                                 color: isDark
@@ -762,7 +761,7 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
                       const SizedBox(height: 6),
                       Text(
                         dateStr,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 11,
                           color: isDark ? Colors.grey[500] : Colors.grey[400],
                         ),
@@ -816,7 +815,7 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
                       const SizedBox(width: 4),
                       Text(
                         order.isPaid ? l10n.paid : l10n.payAtDoor,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: order.isPaid

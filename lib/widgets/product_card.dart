@@ -1238,7 +1238,6 @@ class _FavoriteIconState extends State<_FavoriteIcon> {
                             AppLocalizations.of(context).cancel,
                             style: TextStyle(
                               fontSize: 16,
-                              fontFamily: 'Figtree',
                               color: Theme.of(context).brightness ==
                                       Brightness.dark
                                   ? Colors.white
@@ -1252,7 +1251,6 @@ class _FavoriteIconState extends State<_FavoriteIcon> {
                             AppLocalizations.of(context).confirm,
                             style: TextStyle(
                               fontSize: 16,
-                              fontFamily: 'Figtree',
                               color: Theme.of(context).brightness ==
                                       Brightness.dark
                                   ? Colors.white

@@ -444,7 +444,6 @@ final String currency = 'TL';
                               color: isDark
                                   ? Colors.grey[300]
                                   : Colors.grey[700],
-                              fontFamily: 'Figtree',
                             ),
                           ),
                           const Spacer(),
@@ -521,7 +520,6 @@ final String currency = 'TL';
         fontSize: 12,
         fontWeight: FontWeight.w600,
         color: isDark ? Colors.grey[400] : Colors.grey[600],
-        fontFamily: 'Figtree',
       ),
     );
   }
@@ -537,7 +535,6 @@ final String currency = 'TL';
         style: TextStyle(
           fontSize: 11,
           color: Colors.grey[500],
-          fontFamily: 'Figtree',
         ),
       );
     }
@@ -590,7 +587,6 @@ final String currency = 'TL';
                             color: isDark
                                 ? Colors.grey[300]
                                 : Colors.grey[700],
-                            fontFamily: 'Figtree',
                           ),
                         ),
                         Text(
@@ -599,7 +595,6 @@ final String currency = 'TL';
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                             color: genderColor,
-                            fontFamily: 'Figtree',
                           ),
                         ),
                       ],
@@ -635,7 +630,6 @@ final String currency = 'TL';
         style: TextStyle(
           fontSize: 11,
           color: Colors.grey[500],
-          fontFamily: 'Figtree',
         ),
       );
     }
@@ -692,7 +686,6 @@ final String currency = 'TL';
                             color: isDark
                                 ? Colors.grey[300]
                                 : Colors.grey[700],
-                            fontFamily: 'Figtree',
                           ),
                         ),
                         Text(
@@ -701,7 +694,6 @@ final String currency = 'TL';
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                             color: ageColor,
-                            fontFamily: 'Figtree',
                           ),
                         ),
                       ],

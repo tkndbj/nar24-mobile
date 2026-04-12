@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -138,7 +137,7 @@ class _SellerPanelState extends State<SellerPanel>
                                 as Map<String, dynamic>)['name'] ??
                             'Unnamed Shop'
                         : AppLocalizations.of(context).noShopSelected,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: const Color(0xFFFF6200),
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
@@ -197,7 +196,7 @@ class _SellerPanelState extends State<SellerPanel>
               padding: const EdgeInsets.all(16),
               child: Text(
                 AppLocalizations.of(context).selectShop,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                 ),
@@ -258,7 +257,7 @@ class _SellerPanelState extends State<SellerPanel>
                               children: [
                                 Text(
                                   shopData['name'] ?? 'Unnamed',
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     fontWeight: isSelected
                                         ? FontWeight.w600
                                         : FontWeight.w500,
@@ -278,7 +277,7 @@ class _SellerPanelState extends State<SellerPanel>
                                     ),
                                     child: Text(
                                       'Restaurant',
-                                      style: GoogleFonts.inter(
+                                      style: TextStyle(
                                         fontSize: 10,
                                         fontWeight: FontWeight.w600,
                                         color: Colors.orange[700],
@@ -371,7 +370,7 @@ class _SellerPanelState extends State<SellerPanel>
                           ),
                           child: Text(
                             unreadCount > 99 ? '99+' : unreadCount.toString(),
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: Colors.white,
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
@@ -464,7 +463,7 @@ class _SellerPanelState extends State<SellerPanel>
               padding: const EdgeInsets.all(16),
               child: Text(
                 AppLocalizations.of(context).shopOptions,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                 ),
@@ -601,7 +600,7 @@ class _SellerPanelState extends State<SellerPanel>
                 Expanded(
                   child: Text(
                     title,
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                    style: TextStyle(fontWeight: FontWeight.w500),
                   ),
                 ),
                 if (hasNotification)
@@ -665,11 +664,11 @@ class _SellerPanelState extends State<SellerPanel>
         unselectedLabelColor: Theme.of(context).brightness == Brightness.light
             ? Colors.grey[600]
             : Colors.grey[400],
-        labelStyle: GoogleFonts.inter(
+        labelStyle: TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 13,
         ),
-        unselectedLabelStyle: GoogleFonts.inter(
+        unselectedLabelStyle: TextStyle(
           fontWeight: FontWeight.w500,
           fontSize: 13,
         ),
@@ -1540,7 +1539,7 @@ class _ShopNotificationsBottomSheetState
                 Expanded(
                   child: Text(
                     AppLocalizations.of(context).shopNotifications,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                     ),
@@ -1645,7 +1644,7 @@ class _ShopNotificationsBottomSheetState
             const SizedBox(height: 16),
             Text(
               AppLocalizations.of(context).errorLoadingNotifications,
-              style: GoogleFonts.inter(fontSize: 14, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -1684,7 +1683,7 @@ class _ShopNotificationsBottomSheetState
             const SizedBox(height: 16),
             Text(
               AppLocalizations.of(context).noShopNotifications,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
                 color: isDark ? Colors.white70 : Colors.grey[700],
@@ -1693,7 +1692,7 @@ class _ShopNotificationsBottomSheetState
             const SizedBox(height: 8),
             Text(
               AppLocalizations.of(context).noShopNotificationsDesc,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 13,
                 color: isDark ? Colors.white54 : Colors.grey[500],
               ),
@@ -1862,7 +1861,7 @@ class _ShopNotificationsBottomSheetState
                     children: [
                       Text(
                         message,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 13,
                           fontWeight:
                               isRead ? FontWeight.w400 : FontWeight.w500,
@@ -1882,7 +1881,7 @@ class _ShopNotificationsBottomSheetState
                           const SizedBox(width: 4),
                           Text(
                             _formatTimestamp(timestamp),
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                                 fontSize: 11,
                                 color:
                                     isDark ? Colors.white38 : Colors.grey[500]),
@@ -1897,7 +1896,7 @@ class _ShopNotificationsBottomSheetState
                                   borderRadius: BorderRadius.circular(4)),
                               child: Text(
                                 AppLocalizations.of(context).newLabel,
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                     fontSize: 9,
                                     fontWeight: FontWeight.w600,
                                     color: Colors.white),

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
@@ -241,7 +240,7 @@ class _RestaurantReviewsTabState extends State<RestaurantReviewsTab> {
                     child: Center(
                       child: Text(
                         AppLocalizations.of(context).endOfReviews,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[400],
                         ),
@@ -296,7 +295,7 @@ class _RestaurantReviewsTabState extends State<RestaurantReviewsTab> {
             const SizedBox(height: 16),
             Text(
               AppLocalizations.of(context).errorLoadingReviews,
-              style: GoogleFonts.inter(fontSize: 14, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -335,7 +334,7 @@ class _RestaurantReviewsTabState extends State<RestaurantReviewsTab> {
             const SizedBox(height: 16),
             Text(
               AppLocalizations.of(context).noReviews,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: isDark ? Colors.white : Colors.grey[800],
@@ -344,7 +343,7 @@ class _RestaurantReviewsTabState extends State<RestaurantReviewsTab> {
             const SizedBox(height: 8),
             Text(
               AppLocalizations.of(context).noReviewsDescription,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                   fontSize: 13,
                   color: isDark ? Colors.white54 : Colors.grey[500]),
               textAlign: TextAlign.center,
@@ -401,7 +400,7 @@ class _SummaryCard extends StatelessWidget {
                 children: [
                   Text(
                     average.toStringAsFixed(1),
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 26,
                       fontWeight: FontWeight.w700,
                       color: isDark ? Colors.white : Colors.grey[900],
@@ -414,7 +413,7 @@ class _SummaryCard extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 AppLocalizations.of(context).basedOn(totalCount),
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 12,
                   color: isDark ? Colors.white38 : Colors.grey[400],
                 ),
@@ -483,7 +482,7 @@ class _ReviewCard extends StatelessWidget {
                       review.buyerName.isNotEmpty
                           ? review.buyerName
                           : l10n.anonymous,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: isDark ? Colors.white : Colors.grey[900],
@@ -497,7 +496,7 @@ class _ReviewCard extends StatelessWidget {
               ),
               Text(
                 formattedDate,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 11,
                   color: isDark ? Colors.white38 : Colors.grey[400],
                 ),
@@ -510,7 +509,7 @@ class _ReviewCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               review.comment,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 13,
                 height: 1.5,
                 color: isDark ? Colors.white70 : Colors.grey[700],

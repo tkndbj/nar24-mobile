@@ -363,7 +363,6 @@ void _showEmailModal(QueryDocumentSnapshot reportDoc) {
                                   fontSize: 18,
                                   fontWeight: FontWeight.w600,
                                   color: isDark ? Colors.white : Colors.black,
-                                  fontFamily: 'Figtree',
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -375,7 +374,6 @@ void _showEmailModal(QueryDocumentSnapshot reportDoc) {
                                   color: isDark
                                       ? Colors.grey[400]
                                       : Colors.grey[600],
-                                  fontFamily: 'Figtree',
                                 ),
                               ),
                             ],
@@ -392,7 +390,6 @@ void _showEmailModal(QueryDocumentSnapshot reportDoc) {
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                         color: isDark ? Colors.grey[300] : Colors.grey[700],
-                        fontFamily: 'Figtree',
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -413,7 +410,6 @@ void _showEmailModal(QueryDocumentSnapshot reportDoc) {
                         style: TextStyle(
                           color: isDark ? Colors.white : Colors.black,
                           fontSize: 15,
-                          fontFamily: 'Figtree',
                         ),
                         decoration: InputDecoration(
                           hintText:
@@ -421,7 +417,6 @@ void _showEmailModal(QueryDocumentSnapshot reportDoc) {
                           hintStyle: TextStyle(
                             color:
                                 isDark ? Colors.grey[500] : Colors.grey[400],
-                            fontFamily: 'Figtree',
                           ),
                           prefixIcon: Icon(
                             Icons.mail_outline,
@@ -470,7 +465,6 @@ void _showEmailModal(QueryDocumentSnapshot reportDoc) {
                                     fontWeight: FontWeight.w600,
                                     color:
                                         isDark ? Colors.white : Colors.black,
-                                    fontFamily: 'Figtree',
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -483,7 +477,6 @@ void _showEmailModal(QueryDocumentSnapshot reportDoc) {
                                     color: isDark
                                         ? Colors.grey[400]
                                         : Colors.grey[600],
-                                    fontFamily: 'Figtree',
                                   ),
                                 ),
                               ],
@@ -521,7 +514,6 @@ void _showEmailModal(QueryDocumentSnapshot reportDoc) {
                                     ? Colors.grey[300]
                                     : Colors.grey[700],
                                 fontWeight: FontWeight.w500,
-                                fontFamily: 'Figtree',
                               ),
                             ),
                           ),
@@ -589,7 +581,6 @@ void _showEmailModal(QueryDocumentSnapshot reportDoc) {
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.w600,
-                                      fontFamily: 'Figtree',
                                     ),
                                   ),
                           ),
@@ -712,7 +703,6 @@ Future<bool> _sendReportByEmail(String reportId, String email) async {
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  fontFamily: 'Figtree',
                 ),
               ),
               const SizedBox(height: 8),
@@ -722,7 +712,6 @@ Future<bool> _sendReportByEmail(String reportId, String email) async {
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey[600],
-                  fontFamily: 'Figtree',
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -733,7 +722,6 @@ Future<bool> _sendReportByEmail(String reportId, String email) async {
                 style: TextStyle(
                   fontSize: 12,
                   color: Colors.grey[500],
-                  fontFamily: 'Figtree',
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -927,7 +915,6 @@ String _getUserFriendlyError(dynamic error) {
             color: isDark ? Colors.white : Colors.grey[900],
             fontWeight: FontWeight.w600,
             fontSize: 20,
-            fontFamily: 'Figtree',
           ),
         ),
         iconTheme: IconThemeData(
@@ -1154,7 +1141,6 @@ String _getUserFriendlyError(dynamic error) {
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
                         color: isDark ? Colors.white : Colors.grey[900],
-                        fontFamily: 'Figtree',
                       ),
                     ),
                     Text(
@@ -1163,7 +1149,6 @@ String _getUserFriendlyError(dynamic error) {
                       style: TextStyle(
                         fontSize: 13,
                         color: isDark ? Colors.grey[400] : Colors.grey[600],
-                        fontFamily: 'Figtree',
                       ),
                     ),
                   ],
@@ -1196,7 +1181,6 @@ String _getUserFriendlyError(dynamic error) {
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: isDark ? Colors.white : Colors.grey[900],
-              fontFamily: 'Figtree',
             ),
           ),
 
@@ -1325,7 +1309,6 @@ String _getUserFriendlyError(dynamic error) {
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
-                                fontFamily: 'Figtree',
                               ),
                             ),
                           ],
@@ -1361,7 +1344,6 @@ String _getUserFriendlyError(dynamic error) {
               fontSize: 13,
               fontWeight: FontWeight.w600,
               color: isDark ? Colors.white : Colors.grey[900],
-              fontFamily: 'Figtree',
             ),
           ),
           const SizedBox(height: 12),
@@ -1419,7 +1401,6 @@ String _getUserFriendlyError(dynamic error) {
               fontSize: 13,
               fontWeight: FontWeight.w600,
               color: isDark ? Colors.white : Colors.grey[900],
-              fontFamily: 'Figtree',
             ),
           ),
           const SizedBox(height: 12),
@@ -1477,7 +1458,6 @@ String _getUserFriendlyError(dynamic error) {
               fontSize: 13,
               fontWeight: FontWeight.w600,
               color: isDark ? Colors.white : Colors.grey[900],
-              fontFamily: 'Figtree',
             ),
           ),
           const SizedBox(height: 12),
@@ -1530,7 +1510,6 @@ String _getUserFriendlyError(dynamic error) {
             fontSize: 12,
             fontWeight: FontWeight.w600,
             color: isDark ? Colors.grey[400] : Colors.grey[600],
-            fontFamily: 'Figtree',
           ),
         ),
         const SizedBox(height: 4),
@@ -1553,7 +1532,6 @@ String _getUserFriendlyError(dynamic error) {
                     getDisplayText(value),
                     style: TextStyle(
                       color: isDark ? Colors.white : Colors.grey[900],
-                      fontFamily: 'Figtree',
                     ),
                   ),
                 ),
@@ -1584,7 +1562,6 @@ String _getUserFriendlyError(dynamic error) {
             fontSize: 12,
             fontWeight: FontWeight.w600,
             color: isDark ? Colors.grey[400] : Colors.grey[600],
-            fontFamily: 'Figtree',
           ),
         ),
         const Spacer(),
@@ -1611,7 +1588,6 @@ String _getUserFriendlyError(dynamic error) {
                 color: isDescending
                     ? primaryAccent
                     : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                fontFamily: 'Figtree',
               ),
             ),
           ),
@@ -1640,7 +1616,6 @@ String _getUserFriendlyError(dynamic error) {
                 color: !isDescending
                     ? primaryAccent
                     : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                fontFamily: 'Figtree',
               ),
             ),
           ),
@@ -1667,7 +1642,6 @@ String _getUserFriendlyError(dynamic error) {
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
-            fontFamily: 'Figtree',
             color: textColor,
           ),
         ),
@@ -1676,7 +1650,6 @@ String _getUserFriendlyError(dynamic error) {
             child: Text(
               getDisplayText(option),
               style: TextStyle(
-                fontFamily: 'Figtree',
                 color: textColor,
               ),
             ),
@@ -1690,7 +1663,6 @@ String _getUserFriendlyError(dynamic error) {
           child: Text(
             l10n.cancel ?? 'Cancel',
             style: TextStyle(
-              fontFamily: 'Figtree',
               color: textColor,
             ),
           ),
@@ -1723,7 +1695,6 @@ String _getUserFriendlyError(dynamic error) {
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: isDark ? Colors.white : Colors.grey[900],
-                fontFamily: 'Figtree',
               ),
             ),
             const Spacer(),
@@ -1739,7 +1710,6 @@ String _getUserFriendlyError(dynamic error) {
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: isDark ? Colors.white : Colors.grey[700],
-                  fontFamily: 'Figtree',
                 ),
               ),
             ),
@@ -1782,7 +1752,6 @@ String _getUserFriendlyError(dynamic error) {
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: isDark ? Colors.white : Colors.grey[900],
-                    fontFamily: 'Figtree',
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -1792,7 +1761,6 @@ String _getUserFriendlyError(dynamic error) {
                   style: TextStyle(
                     fontSize: 14,
                     color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    fontFamily: 'Figtree',
                   ),
                 ),
               ],
@@ -1869,7 +1837,6 @@ String _getUserFriendlyError(dynamic error) {
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                                 color: isDark ? Colors.white : Colors.grey[900],
-                                fontFamily: 'Figtree',
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -1881,7 +1848,6 @@ String _getUserFriendlyError(dynamic error) {
                                 color: isDark
                                     ? Colors.grey[400]
                                     : Colors.grey[600],
-                                fontFamily: 'Figtree',
                               ),
                             ),
                           ],
@@ -1939,7 +1905,6 @@ String _getUserFriendlyError(dynamic error) {
                               fontWeight: FontWeight.w600,
                               color:
                                   isDark ? Colors.grey[300] : Colors.grey[700],
-                              fontFamily: 'Figtree',
                             ),
                           ),
                         ],
@@ -2008,7 +1973,6 @@ String _getUserFriendlyError(dynamic error) {
               fontSize: 10,
               fontWeight: FontWeight.w600,
               color: color,
-              fontFamily: 'Figtree',
             ),
           ),
         ],
@@ -2031,7 +1995,6 @@ String _getUserFriendlyError(dynamic error) {
           fontSize: 14,
           fontWeight: FontWeight.w600,
           color: isDark ? Colors.white : Colors.grey[900],
-          fontFamily: 'Figtree',
         ),
       ),
       const SizedBox(height: 6),
@@ -2047,13 +2010,11 @@ String _getUserFriendlyError(dynamic error) {
             controller: controller,
             style: TextStyle(
               color: isDark ? Colors.white : Colors.grey[900],
-              fontFamily: 'Figtree',
             ),
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: TextStyle(
                 color: isDark ? Colors.grey[400] : Colors.grey[500],
-                fontFamily: 'Figtree',
               ),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.all(16),
@@ -2076,7 +2037,6 @@ String _getUserFriendlyError(dynamic error) {
             fontSize: 14,
             fontWeight: FontWeight.w600,
             color: isDark ? Colors.white : Colors.grey[900],
-            fontFamily: 'Figtree',
           ),
         ),
         const SizedBox(height: 6),
@@ -2124,7 +2084,6 @@ String _getUserFriendlyError(dynamic error) {
                           color: _config.dateRange != null
                               ? (isDark ? Colors.white : Colors.grey[900])
                               : (isDark ? Colors.grey[400] : Colors.grey[500]),
-                          fontFamily: 'Figtree',
                         ),
                       ),
                     ),
@@ -2202,7 +2161,6 @@ String _getUserFriendlyError(dynamic error) {
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: isDark ? Colors.white : Colors.grey[900],
-                          fontFamily: 'Figtree',
                         ),
                       ),
                       Text(
@@ -2210,7 +2168,6 @@ String _getUserFriendlyError(dynamic error) {
                         style: TextStyle(
                           fontSize: 12,
                           color: isDark ? Colors.grey[400] : Colors.grey[600],
-                          fontFamily: 'Figtree',
                         ),
                       ),
                     ],
@@ -2251,7 +2208,6 @@ String _getUserFriendlyError(dynamic error) {
               fontSize: 13,
               fontWeight: FontWeight.w600,
               color: isDark ? Colors.white : Colors.grey[900],
-              fontFamily: 'Figtree',
             ),
           ),
           const SizedBox(height: 12),
@@ -2341,7 +2297,6 @@ String _getUserFriendlyError(dynamic error) {
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: errorColor,
-                        fontFamily: 'Figtree',
                       ),
                     ),
                   ],
@@ -2372,7 +2327,6 @@ String _getUserFriendlyError(dynamic error) {
             fontSize: 12,
             fontWeight: FontWeight.w600,
             color: isDark ? Colors.grey[400] : Colors.grey[600],
-            fontFamily: 'Figtree',
           ),
         ),
         const SizedBox(height: 4),
@@ -2398,7 +2352,6 @@ String _getUserFriendlyError(dynamic error) {
                       color: displayValue != null
                           ? (isDark ? Colors.white : Colors.grey[900])
                           : (isDark ? Colors.grey[400] : Colors.grey[500]),
-                      fontFamily: 'Figtree',
                     ),
                   ),
                 ),
@@ -2428,7 +2381,6 @@ String _getUserFriendlyError(dynamic error) {
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
-            fontFamily: 'Figtree',
             color: textColor,
           ),
         ),
@@ -2436,7 +2388,7 @@ String _getUserFriendlyError(dynamic error) {
           CupertinoActionSheetAction(
             child: Text(
               l10n.allCategories ?? 'All Categories',
-              style: TextStyle(fontFamily: 'Figtree', color: textColor),
+              style: TextStyle(color: textColor),
             ),
             onPressed: () {
               setState(() {
@@ -2458,7 +2410,7 @@ String _getUserFriendlyError(dynamic error) {
             return CupertinoActionSheetAction(
               child: Text(
                 localizedName,
-                style: TextStyle(fontFamily: 'Figtree', color: textColor),
+                style: TextStyle(color: textColor),
               ),
               onPressed: () {
                 setState(() {
@@ -2478,7 +2430,7 @@ String _getUserFriendlyError(dynamic error) {
         cancelButton: CupertinoActionSheetAction(
           child: Text(
             l10n.cancel ?? 'Cancel',
-            style: TextStyle(fontFamily: 'Figtree', color: textColor),
+            style: TextStyle(color: textColor),
           ),
           onPressed: () => Navigator.pop(context),
         ),
@@ -2506,7 +2458,6 @@ String _getUserFriendlyError(dynamic error) {
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
-            fontFamily: 'Figtree',
             color: textColor,
           ),
         ),
@@ -2514,7 +2465,6 @@ String _getUserFriendlyError(dynamic error) {
           '${l10n.category ?? 'Category'}: ${AllInOneCategoryData.localizeCategoryKey(_config.productCategory!, l10n)}',
           style: TextStyle(
             fontSize: 14,
-            fontFamily: 'Figtree',
             color: textColor,
           ),
         ),
@@ -2525,7 +2475,6 @@ String _getUserFriendlyError(dynamic error) {
               style: TextStyle(
                 color: CupertinoColors.systemBlue,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Figtree',
               ),
             ),
             onPressed: () {
@@ -2544,7 +2493,6 @@ String _getUserFriendlyError(dynamic error) {
               child: Text(
                 localizedName,
                 style: TextStyle(
-                  fontFamily: 'Figtree',
                   color: textColor,
                 ),
               ),
@@ -2566,7 +2514,6 @@ String _getUserFriendlyError(dynamic error) {
           child: Text(
             l10n.cancel ?? 'Cancel',
             style: TextStyle(
-              fontFamily: 'Figtree',
               color: textColor,
             ),
           ),
@@ -2601,7 +2548,6 @@ String _getUserFriendlyError(dynamic error) {
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
-            fontFamily: 'Figtree',
             color: textColor,
           ),
         ),
@@ -2609,7 +2555,6 @@ String _getUserFriendlyError(dynamic error) {
           '${AllInOneCategoryData.localizeCategoryKey(_config.productCategory!, l10n)} > ${AllInOneCategoryData.localizeSubcategoryKey(_config.productCategory!, _config.productSubcategory!, l10n)}',
           style: TextStyle(
             fontSize: 14,
-            fontFamily: 'Figtree',
             color: textColor,
           ),
         ),
@@ -2621,7 +2566,6 @@ String _getUserFriendlyError(dynamic error) {
               style: TextStyle(
                 color: CupertinoColors.systemBlue,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Figtree',
               ),
             ),
             onPressed: () {
@@ -2643,7 +2587,6 @@ String _getUserFriendlyError(dynamic error) {
               child: Text(
                 localizedName,
                 style: TextStyle(
-                  fontFamily: 'Figtree',
                   color: textColor,
                 ),
               ),
@@ -2660,7 +2603,6 @@ String _getUserFriendlyError(dynamic error) {
           child: Text(
             l10n.cancel ?? 'Cancel',
             style: TextStyle(
-              fontFamily: 'Figtree',
               color: textColor,
             ),
           ),

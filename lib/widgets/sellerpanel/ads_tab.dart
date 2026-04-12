@@ -11,7 +11,6 @@ import '../../constants/all_in_one_category_data.dart';
 import '../../providers/seller_panel_provider.dart';
 import '../../widgets/product_card_4.dart';
 import '../../models/product.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Checks if the current user is a viewer for the given shop.
 bool _isUserViewer(DocumentSnapshot? selectedShop) {
@@ -208,7 +207,7 @@ class _AdsTabState extends State<AdsTab> {
                   const SizedBox(width: 8),
                   Text(
                     l10n.searchResultsCount(searchResults.length.toString()),
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: isDark ? Colors.tealAccent : Colors.teal,
@@ -300,7 +299,7 @@ class _AdsTabState extends State<AdsTab> {
           const SizedBox(height: 16),
           Text(
             message,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w500,
               color: isDark ? Colors.white70 : Colors.grey[700],
@@ -351,7 +350,7 @@ class _AdsTabState extends State<AdsTab> {
                         SnackBar(
                           content: Text(
                             l10n.noShopSelected,
-                            style: const TextStyle(fontFamily: 'Figtree'),
+                            style: const TextStyle(),
                           ),
                         ),
                       );
@@ -375,7 +374,7 @@ class _AdsTabState extends State<AdsTab> {
                         SnackBar(
                           content: Text(
                             l10n.noShopSelected,
-                            style: const TextStyle(fontFamily: 'Figtree'),
+                            style: const TextStyle(),
                           ),
                         ),
                       );
@@ -439,7 +438,6 @@ class _AdsTabState extends State<AdsTab> {
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 14,
-                fontFamily: 'Figtree',
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -607,7 +605,7 @@ class _FilterSection extends StatelessWidget {
                   child: TextField(
                     focusNode: searchFocusNode,
                     controller: searchController,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                       color: isDark ? Colors.white : Colors.black87,
@@ -668,7 +666,7 @@ class _FilterSection extends StatelessWidget {
                               ),
                             ),
                       hintText: l10n.searchProducts,
-                      hintStyle: GoogleFonts.inter(
+                      hintStyle: TextStyle(
                         fontSize: 14,
                         color: isDark
                             ? Colors.grey.shade500
@@ -814,7 +812,7 @@ class _FilterSection extends StatelessWidget {
               Flexible(
                 child: Text(
                   label,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: isSecondary ? 12 : 13,
                     fontWeight: FontWeight.w600,
                     color: isSelected
@@ -851,7 +849,7 @@ class _FilterSection extends StatelessWidget {
               },
               child: Text(
                 l10n.none,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: isDarkMode ? Colors.white : Colors.black,
                   fontSize: 14,
                 ),
@@ -866,7 +864,7 @@ class _FilterSection extends StatelessWidget {
                 child: Text(
                   AllInOneCategoryData.localizeCategoryKey(
                       category['key']!, l10n),
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: isDarkMode ? Colors.white : Colors.black,
                     fontSize: 14,
                   ),
@@ -878,7 +876,7 @@ class _FilterSection extends StatelessWidget {
             onPressed: () => Navigator.pop(context),
             child: Text(
               l10n.cancel,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: isDarkMode ? Colors.white : Colors.black,
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
@@ -924,7 +922,7 @@ class _FilterSection extends StatelessWidget {
               },
               child: Text(
                 l10n.none,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: isDarkMode ? Colors.white : Colors.black,
                   fontSize: 14,
                 ),
@@ -939,7 +937,7 @@ class _FilterSection extends StatelessWidget {
                 child: Text(
                   AllInOneCategoryData.localizeSubcategoryKey(
                       provider.selectedCategory!, subcategory, l10n),
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: isDarkMode ? Colors.white : Colors.black,
                     fontSize: 14,
                   ),
@@ -951,7 +949,7 @@ class _FilterSection extends StatelessWidget {
             onPressed: () => Navigator.pop(context),
             child: Text(
               l10n.cancel,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: isDarkMode ? Colors.white : Colors.black,
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
@@ -1010,7 +1008,7 @@ class _ProductsList extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               l10n.noProductsFound,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
                 color: isDark ? Colors.white70 : Colors.grey[700],
@@ -1185,7 +1183,7 @@ class _ProductItemState extends State<_ProductItem> {
         SnackBar(
           content: Text(
             widget.l10n.noShopSelected ?? 'No shop selected',
-            style: const TextStyle(fontFamily: 'Figtree'),
+            style: const TextStyle(),
           ),
         ),
       );
@@ -1216,7 +1214,7 @@ class _ProductItemState extends State<_ProductItem> {
               content: Text(
                 widget.l10n.productAlreadyBoosted ??
                     'This product is already boosted',
-                style: const TextStyle(fontFamily: 'Figtree'),
+                style: const TextStyle(),
               ),
             ),
           );
@@ -1252,8 +1250,7 @@ class _ProductItemState extends State<_ProductItem> {
     : Text(
         widget.l10n.boostProduct,
         style: const TextStyle(
-          color: Colors.white, fontSize: 12,
-          fontFamily: 'Figtree', fontWeight: FontWeight.w600,
+          color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600,
         ),
       ),
               ),
@@ -1330,7 +1327,6 @@ class _BoostLabelState extends State<_BoostLabel> {
         '${widget.l10n.boosted}: $_formatted',
         style: const TextStyle(
           fontSize: 11,
-          fontFamily: 'Figtree',
           color: Color(0xFF00A86B),
         ),
       ),

@@ -7,7 +7,6 @@ import '../../providers/market_provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../route_observer.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../providers/search_provider.dart';
 
 class MarketAppBar extends StatefulWidget implements PreferredSizeWidget {
@@ -134,7 +133,7 @@ class _MarketAppBarState extends State<MarketAppBar>
                       ),
                       decoration: InputDecoration(
                         hintText: l10n.searchProducts,
-                        hintStyle: GoogleFonts.inter(
+                        hintStyle: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: isDark

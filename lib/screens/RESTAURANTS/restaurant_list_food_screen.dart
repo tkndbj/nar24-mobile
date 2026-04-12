@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -314,7 +313,7 @@ Future<void> _pickImage() async {
 
   void _showSnackBar(String message, {required bool isError}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message, style: GoogleFonts.inter(fontSize: 13)),
+      content: Text(message, style: TextStyle(fontSize: 13)),
       backgroundColor: isError ? Colors.red[600] : Colors.green[600],
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -362,14 +361,14 @@ Future<void> _pickImage() async {
           children: [
             Text(
               widget.isEditMode ? l10n.editFoodTitle : l10n.addFoodTitle,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
               ),
             ),
             Text(
               widget.isEditMode ? l10n.editFoodSubtitle : l10n.addFoodSubtitle,
-              style: GoogleFonts.inter(fontSize: 11, color: Colors.grey[400]),
+              style: TextStyle(fontSize: 11, color: Colors.grey[400]),
             ),
           ],
         ),
@@ -449,7 +448,7 @@ Future<void> _pickImage() async {
           if (_errors.containsKey('image')) ...[
             const SizedBox(height: 6),
             Text(_errors['image']!,
-                style: GoogleFonts.inter(fontSize: 11, color: Colors.red[500])),
+                style: TextStyle(fontSize: 11, color: Colors.red[500])),
           ],
         ],
       ),
@@ -523,7 +522,7 @@ Future<void> _pickImage() async {
                 ),
                 child: Text(
                   l10n.changeImage,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                     color: Colors.white,
@@ -548,7 +547,7 @@ Future<void> _pickImage() async {
           const SizedBox(height: 8),
           Text(
             l10n.imageHint,
-            style: GoogleFonts.inter(
+            style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
                 color: Colors.grey[400]),
@@ -606,7 +605,7 @@ Future<void> _pickImage() async {
           Row(
             children: [
               Text(l10n.description,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                       color: Colors.grey[500])),
@@ -665,11 +664,11 @@ Future<void> _pickImage() async {
           focusNode: focusNode,
           maxLines: maxLines,
           onChanged: onChanged,
-          style: GoogleFonts.inter(
+          style: TextStyle(
               fontSize: 13, color: isDark ? Colors.white : Colors.grey[800]),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: GoogleFonts.inter(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[400]),
+            hintStyle: TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[400]),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             border: OutlineInputBorder(
@@ -699,7 +698,7 @@ Future<void> _pickImage() async {
         if (hasError) ...[
           const SizedBox(height: 5),
           Text(_errors[errorKey]!,
-              style: GoogleFonts.inter(fontSize: 11, color: Colors.red[500])),
+              style: TextStyle(fontSize: 11, color: Colors.red[500])),
         ],
       ],
     );
@@ -718,15 +717,15 @@ Future<void> _pickImage() async {
             FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))
           ],
           onChanged: (_) => _clearError('price'),
-          style: GoogleFonts.inter(
+          style: TextStyle(
               fontSize: 13, color: isDark ? Colors.white : Colors.grey[800]),
           decoration: InputDecoration(
             hintText: l10n.pricePlaceholder,
-            hintStyle: GoogleFonts.inter(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[400]),
+            hintStyle: TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[400]),
             prefixIcon: Icon(Icons.attach_money_rounded,
                 size: 18, color: isDark ? const Color(0xFFD1D5DB) : Colors.grey[500]),
             suffixText: l10n.currency,
-            suffixStyle: GoogleFonts.inter(
+            suffixStyle: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: isDark ? Colors.grey[400] : Colors.grey[500]),
@@ -759,7 +758,7 @@ Future<void> _pickImage() async {
         if (hasError) ...[
           const SizedBox(height: 5),
           Text(_errors['price']!,
-              style: GoogleFonts.inter(fontSize: 11, color: Colors.red[500])),
+              style: TextStyle(fontSize: 11, color: Colors.red[500])),
         ],
       ],
     );
@@ -792,7 +791,7 @@ Future<void> _pickImage() async {
                 .map((c) => DropdownMenuItem(
                       value: c,
                       child: Text(_getCategoryName(c),
-                          style: GoogleFonts.inter(fontSize: 13)),
+                          style: TextStyle(fontSize: 13)),
                     ))
                 .toList(),
             isDark: isDark,
@@ -823,7 +822,7 @@ Future<void> _pickImage() async {
                 .map((t) => DropdownMenuItem(
                       value: t,
                       child: Text(_getFoodTypeName(t),
-                          style: GoogleFonts.inter(fontSize: 13)),
+                          style: TextStyle(fontSize: 13)),
                     ))
                 .toList(),
             isDark: isDark,
@@ -891,8 +890,8 @@ Future<void> _pickImage() async {
                 : (isDark ? Colors.white.withOpacity(0.05) : Colors.white),
           ),
           hint: Text(hint,
-              style: GoogleFonts.inter(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[500])),
-          style: GoogleFonts.inter(
+              style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[500])),
+          style: TextStyle(
               fontSize: 13, color: isDark ? Colors.white : Colors.grey[800]),
           dropdownColor: isDark ? const Color(0xFF1E1B2E) : Colors.white,
           items: enabled ? items : [],
@@ -901,7 +900,7 @@ Future<void> _pickImage() async {
         if (hasError && errorText != null) ...[
           const SizedBox(height: 5),
           Text(errorText,
-              style: GoogleFonts.inter(fontSize: 11, color: Colors.red[500])),
+              style: TextStyle(fontSize: 11, color: Colors.red[500])),
         ],
       ],
     );
@@ -938,7 +937,7 @@ Future<void> _pickImage() async {
                   ),
                   child: Text(
                     l10n.extrasSelected(selectedCount),
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
                       color: const Color(0xFFEA580C),
@@ -951,7 +950,7 @@ Future<void> _pickImage() async {
           const SizedBox(height: 6),
           Text(
             l10n.extrasHint,
-            style: GoogleFonts.inter(fontSize: 11, color: Colors.grey[400]),
+            style: TextStyle(fontSize: 11, color: Colors.grey[400]),
           ),
           const SizedBox(height: 14),
           Wrap(
@@ -999,7 +998,7 @@ Future<void> _pickImage() async {
                           children: [
                             Text(
                               isSelected ? '✓  ' : '+  ',
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 fontSize: 12,
                                 color: isSelected
                                     ? const Color(0xFFEA580C)
@@ -1009,7 +1008,7 @@ Future<void> _pickImage() async {
                             Expanded(
                               child: Text(
                                 _getExtraName(extra),
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
                                   color: isSelected
@@ -1053,13 +1052,13 @@ Future<void> _pickImage() async {
                           _extrasRawText[extra] = v;
                           _selectedExtras[extra] = double.tryParse(v) ?? 0;
                         },
-                        style: GoogleFonts.inter(fontSize: 11),
+                        style: TextStyle(fontSize: 11),
                         decoration: InputDecoration(
                           hintText: '0.00',
-                          hintStyle: GoogleFonts.inter(
+                          hintStyle: TextStyle(
                               fontSize: 11, color: isDark ? Colors.grey[500] : Colors.grey[400]),
                           suffixText: l10n.currency,
-                          suffixStyle: GoogleFonts.inter(
+                          suffixStyle: TextStyle(
                               fontSize: 10, color: Colors.grey[400]),
                           contentPadding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 8),
@@ -1118,16 +1117,16 @@ Future<void> _pickImage() async {
             controller: _prepTimeController,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            style: GoogleFonts.inter(
+            style: TextStyle(
                 fontSize: 13, color: isDark ? Colors.white : Colors.grey[800]),
             decoration: InputDecoration(
               hintText: l10n.preparationTimePlaceholder,
               hintStyle:
-                  GoogleFonts.inter(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                  TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[400]),
               prefixIcon: Icon(Icons.access_time_rounded,
                   size: 18, color: isDark ? const Color(0xFFD1D5DB) : Colors.grey[500]),
               suffixText: l10n.minutes,
-              suffixStyle: GoogleFonts.inter(
+              suffixStyle: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                   color: isDark ? Colors.grey[400] : Colors.grey[500]),
@@ -1181,7 +1180,7 @@ Future<void> _pickImage() async {
                 const SizedBox(width: 10),
                 Text(
                   widget.isEditMode ? l10n.updatingFood : l10n.savingFood,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                       fontSize: 14, fontWeight: FontWeight.w600),
                 ),
               ],
@@ -1193,7 +1192,7 @@ Future<void> _pickImage() async {
                 const SizedBox(width: 8),
                 Text(
                   widget.isEditMode ? l10n.updateFood : l10n.saveFood,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                       fontSize: 14, fontWeight: FontWeight.w600),
                 ),
               ],
@@ -1320,7 +1319,7 @@ class _SectionHeader extends StatelessWidget {
         const SizedBox(width: 10),
         Text(
           title,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             fontSize: compact ? 14 : 15,
             fontWeight: FontWeight.w600,
             color: isDark ? Colors.white : Colors.grey[900],
@@ -1349,7 +1348,7 @@ class _BadgeLabel extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: GoogleFonts.inter(
+        style: TextStyle(
             fontSize: 10, fontWeight: FontWeight.w500, color: Colors.grey[400]),
       ),
     );
@@ -1364,7 +1363,7 @@ class _FieldLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: GoogleFonts.inter(
+      style: TextStyle(
         fontSize: 12,
         fontWeight: FontWeight.w500,
         color: Colors.grey[500],

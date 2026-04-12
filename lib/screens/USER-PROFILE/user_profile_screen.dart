@@ -96,7 +96,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   title: Text(
                     AppLocalizations.of(context).inappropriateProfileImage,
                     style: TextStyle(
-                      fontFamily: 'Figtree',
                       color: Theme.of(context).brightness == Brightness.dark
                           ? Colors.white
                           : Colors.black,
@@ -117,7 +116,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   title: Text(
                     AppLocalizations.of(context).inappropriateListings,
                     style: TextStyle(
-                      fontFamily: 'Figtree',
                       color: Theme.of(context).brightness == Brightness.dark
                           ? Colors.white
                           : Colors.black,
@@ -144,7 +142,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           SnackBar(
             content: Text(
               AppLocalizations.of(context).pleaseLoginFirst,
-              style: const TextStyle(fontFamily: 'Figtree'),
+              style: const TextStyle(),
             ),
           ),
         );
@@ -165,7 +163,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         SnackBar(
           content: Text(
             AppLocalizations.of(context).reportSubmittedSuccessfully,
-            style: const TextStyle(fontFamily: 'Figtree'),
+            style: const TextStyle(),
           ),
         ),
       );
@@ -175,7 +173,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         SnackBar(
           content: Text(
             AppLocalizations.of(context).errorSubmittingReport,
-            style: const TextStyle(fontFamily: 'Figtree'),
+            style: const TextStyle(),
           ),
         ),
       );
@@ -199,7 +197,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 .setSearchQuery(value);
           });
         },
-        style: const TextStyle(fontSize: 14, fontFamily: 'Figtree'),
+        style: const TextStyle(fontSize: 14),
         decoration: InputDecoration(
           prefixIcon: const Icon(Icons.search, size: 18),
           hintText: hint,
@@ -262,7 +260,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       style: Theme.of(context)
                           .appBarTheme
                           .titleTextStyle
-                          ?.copyWith(fontFamily: 'Figtree'),
+                          ?.copyWith(),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -317,7 +315,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 style: Theme.of(context)
                     .appBarTheme
                     .titleTextStyle
-                    ?.copyWith(fontFamily: 'Figtree'),
+                    ?.copyWith(),
               ),
               actions: [
                 if (!profileProvider.isCurrentUser) ...[
@@ -332,7 +330,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               child: Text(
                 l10n.userNotFound,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    fontFamily: 'Figtree',
                     color: Theme.of(context).colorScheme.onSurface),
               ),
             ),
@@ -371,7 +368,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     style: Theme.of(context)
                         .appBarTheme
                         .titleTextStyle
-                        ?.copyWith(fontFamily: 'Figtree'),
+                        ?.copyWith(),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -433,7 +430,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               child: Text(
                                 AppLocalizations.of(context).noProductsFound,
                                 style: const TextStyle(
-                                    fontSize: 16, fontFamily: 'Figtree'),
+                                    fontSize: 16),
                               ),
                             ),
                           ),
@@ -542,7 +539,6 @@ class UserDetailCard extends StatelessWidget {
                               .textTheme
                               .bodyLarge
                               ?.copyWith(
-                                fontFamily: 'Figtree',
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
                                 color: Theme.of(context).colorScheme.onSurface,
@@ -648,14 +644,12 @@ class SellerInfoCard extends StatelessWidget {
 
     // Numeric values style (keep same size)
     final numericTextStyle = Theme.of(context).textTheme.bodyLarge?.copyWith(
-          fontFamily: 'Figtree',
           fontWeight: FontWeight.bold,
           fontSize: 14, // Keep same size for numbers
         );
 
     // Label style (smaller font size)
     final labelTextStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-          fontFamily: 'Figtree',
           fontSize: 12, // Smaller font size for labels
           color: isDarkMode ? Colors.white : null, // White labels in dark mode
         );

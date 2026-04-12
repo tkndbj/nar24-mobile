@@ -3,7 +3,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../constants/region.dart';
 import '../../generated/l10n/app_localizations.dart';
@@ -279,7 +278,7 @@ class _DashboardTabState extends State<DashboardTab>
                   children: [
                     Text(
                       l10n.pendingPayment,
-                      style: GoogleFonts.figtree(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -288,7 +287,7 @@ class _DashboardTabState extends State<DashboardTab>
                     const SizedBox(height: 2),
                     Text(
                       '${adTypeLabels[ad.adType] ?? ''} · ${ad.price?.toStringAsFixed(0) ?? '0'} TL',
-                      style: GoogleFonts.figtree(
+                      style: TextStyle(
                         fontSize: 12,
                         color: isDark
                             ? const Color(0xFF94A3B8)
@@ -328,7 +327,7 @@ class _DashboardTabState extends State<DashboardTab>
                 ),
                 child: Text(
                   l10n.proceedToPayment,
-                  style: GoogleFonts.figtree(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -470,7 +469,7 @@ class _DashboardTabState extends State<DashboardTab>
             SizedBox(height: iconSpacing),
             Text(
               value.toString(),
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: valueSize,
                 color: Colors.white,
@@ -479,7 +478,7 @@ class _DashboardTabState extends State<DashboardTab>
             const SizedBox(height: 2),
             Text(
               title,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: titleSize,
                 color: Colors.white.withOpacity(0.9),
                 fontWeight: FontWeight.w500,
@@ -521,7 +520,6 @@ class _DashboardTabState extends State<DashboardTab>
           style: TextStyle(
             color: isLight ? Colors.black : Colors.white,
             fontWeight: FontWeight.w600,
-            fontFamily: 'Figtree',
             fontSize: 16,
           ),
         ),
@@ -536,7 +534,6 @@ class _DashboardTabState extends State<DashboardTab>
               style: TextStyle(
                 color: isLight ? Colors.black : Colors.white,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Figtree',
                 fontSize: 16,
               ),
             ),
@@ -549,7 +546,6 @@ class _DashboardTabState extends State<DashboardTab>
             style: TextStyle(
               color: isLight ? Colors.black : Colors.white,
               fontWeight: FontWeight.w600,
-              fontFamily: 'Figtree',
             ),
           ),
         ),
@@ -574,7 +570,6 @@ class _DashboardTabState extends State<DashboardTab>
               style: TextStyle(
                 color: isLight ? Colors.black : Colors.white,
                 fontWeight: FontWeight.w700,
-                fontFamily: 'Figtree',
                 fontSize: 18,
               ),
             ),
@@ -584,7 +579,6 @@ class _DashboardTabState extends State<DashboardTab>
               style: TextStyle(
                 color: isLight ? Colors.black54 : Colors.white70,
                 fontWeight: FontWeight.w500,
-                fontFamily: 'Figtree',
                 fontSize: 14,
               ),
             ),
@@ -614,7 +608,6 @@ class _DashboardTabState extends State<DashboardTab>
                   style: TextStyle(
                     color: const Color(0xFF00A86B),
                     fontWeight: FontWeight.w600,
-                    fontFamily: 'Figtree',
                     fontSize: 16,
                   ),
                 ),
@@ -643,7 +636,6 @@ class _DashboardTabState extends State<DashboardTab>
                 style: TextStyle(
                   color: isLight ? Colors.black : Colors.white,
                   fontWeight: FontWeight.w600,
-                  fontFamily: 'Figtree',
                   fontSize: 16,
                 ),
               ),
@@ -661,7 +653,6 @@ class _DashboardTabState extends State<DashboardTab>
             style: TextStyle(
               color: isLight ? Colors.black : Colors.white,
               fontWeight: FontWeight.w600,
-              fontFamily: 'Figtree',
             ),
           ),
         ),
@@ -753,7 +744,6 @@ class _DashboardTabState extends State<DashboardTab>
                           l10n.cannotDeleteSellerInfo ?? 'Cannot Delete',
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
-                            fontFamily: 'Figtree',
                           ),
                         ),
                         content: Padding(
@@ -762,7 +752,6 @@ class _DashboardTabState extends State<DashboardTab>
                             l10n.cannotDeleteSellerInfoWithProducts ??
                                 'You cannot delete your seller information while you have listed products. Please delete all your products first.',
                             style: const TextStyle(
-                              fontFamily: 'Figtree',
                               height: 1.4,
                             ),
                           ),
@@ -860,7 +849,7 @@ class _DashboardTabState extends State<DashboardTab>
           const SizedBox(height: 16),
           Text(
             l10n.noSellerInfo,
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: isDark ? Colors.white : const Color(0xFF2D3748),
@@ -869,7 +858,7 @@ class _DashboardTabState extends State<DashboardTab>
           const SizedBox(height: 8),
           Text(
             l10n.createSellerProfile,
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               fontSize: 14,
               color: isDark ? Colors.grey[400] : Colors.grey[600],
             ),
@@ -891,7 +880,7 @@ class _DashboardTabState extends State<DashboardTab>
               ),
               child: Text(
                 l10n.create,
-                style: GoogleFonts.figtree(
+                style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 16,
                 ),
@@ -917,7 +906,7 @@ class _DashboardTabState extends State<DashboardTab>
             children: [
               Text(
                 l10n.sellerInfo,
-                style: GoogleFonts.figtree(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: isDark ? Colors.white : const Color(0xFF2D3748),
@@ -978,7 +967,7 @@ class _DashboardTabState extends State<DashboardTab>
               children: [
                 Text(
                   label,
-                  style: GoogleFonts.figtree(
+                  style: TextStyle(
                     fontSize: 12,
                     color: isDark ? Colors.grey[400] : Colors.grey[600],
                     fontWeight: FontWeight.w500,
@@ -987,7 +976,7 @@ class _DashboardTabState extends State<DashboardTab>
                 const SizedBox(height: 2),
                 Text(
                   value.isEmpty ? '-' : value,
-                  style: GoogleFonts.figtree(
+                  style: TextStyle(
                     fontSize: 14,
                     color: isDark ? Colors.white : const Color(0xFF2D3748),
                     fontWeight: FontWeight.w600,
@@ -1020,7 +1009,7 @@ class _DashboardTabState extends State<DashboardTab>
             child: Center(
               child: Text(
                 l10n.noShopSelected,
-                style: GoogleFonts.figtree(
+                style: TextStyle(
                   color: isDark ? Colors.grey[400] : Colors.grey[600],
                 ),
               ),
@@ -1080,7 +1069,7 @@ class _DashboardTabState extends State<DashboardTab>
                       children: [
                         Text(
                           shopData['name'] ?? l10n.noShopSelected,
-                          style: GoogleFonts.figtree(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                             color:
@@ -1090,7 +1079,7 @@ class _DashboardTabState extends State<DashboardTab>
                         const SizedBox(height: 4),
                         Text(
                           l10n.viewShopDetail,
-                          style: GoogleFonts.figtree(
+                          style: TextStyle(
                             fontSize: 12,
                             color: const Color(0xFF00A86B),
                             fontWeight: FontWeight.w500,
@@ -1196,7 +1185,7 @@ class _DashboardTabState extends State<DashboardTab>
                                         ? 'Kampanyaya Katıldınız! 🎉'
                                         : (campaign['name'] as String? ??
                                             'Kampanya'),
-                                    style: GoogleFonts.figtree(
+                                    style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                       color:
@@ -1239,7 +1228,7 @@ class _DashboardTabState extends State<DashboardTab>
                                         'Kampanya adı')
                                     : (campaign['description'] as String? ??
                                         'Kampanya açıklaması'),
-                                style: GoogleFonts.figtree(
+                                style: TextStyle(
                                   fontSize: 14,
                                   color: isDark ? Colors.white : Colors.black,
                                 ),
@@ -1287,7 +1276,7 @@ class _DashboardTabState extends State<DashboardTab>
                                 ),
                                 child: Text(
                                   hasParticipated ? 'Düzenle' : 'Devam Et',
-                                  style: GoogleFonts.figtree(
+                                  style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -1314,7 +1303,7 @@ class _DashboardTabState extends State<DashboardTab>
                         ),
                         child: Text(
                           '${(provider.currentCampaignIndex + 1).clamp(1, campaigns.length)}/${campaigns.length}',
-                          style: GoogleFonts.figtree(
+                          style: TextStyle(
                             fontSize: 12,
                             color: Colors.white,
                             fontWeight: FontWeight.w600,
@@ -1702,7 +1691,6 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            fontFamily: 'Figtree',
                             color: isDarkMode ? Colors.white : Colors.black,
                           ),
                         ),
@@ -1855,7 +1843,6 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
                               child: Text(
                                 l10n.cancel,
                                 style: TextStyle(
-                                  fontFamily: 'Figtree',
                                   color:
                                       isDarkMode ? Colors.white : Colors.black,
                                   fontWeight: FontWeight.w600,
@@ -1959,7 +1946,6 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
                                     ? l10n.save
                                     : l10n.create,
                                 style: const TextStyle(
-                                  fontFamily: 'Figtree',
                                   fontWeight: FontWeight.w600,
                                   color: Colors.white,
                                   fontSize: 16,
@@ -2027,7 +2013,6 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
           style: TextStyle(
             color: isLight ? Colors.black : Colors.white,
             fontWeight: FontWeight.w600,
-            fontFamily: 'Figtree',
             fontSize: 16,
           ),
         ),
@@ -2042,7 +2027,6 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
               style: TextStyle(
                 color: isLight ? Colors.black : Colors.white,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Figtree',
                 fontSize: 16,
               ),
             ),
@@ -2055,7 +2039,6 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
             style: TextStyle(
               color: isLight ? Colors.black : Colors.white,
               fontWeight: FontWeight.w600,
-              fontFamily: 'Figtree',
             ),
           ),
         ),
@@ -2080,7 +2063,6 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
               style: TextStyle(
                 color: isLight ? Colors.black : Colors.white,
                 fontWeight: FontWeight.w700,
-                fontFamily: 'Figtree',
                 fontSize: 18,
               ),
             ),
@@ -2090,7 +2072,6 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
               style: TextStyle(
                 color: isLight ? Colors.black54 : Colors.white70,
                 fontWeight: FontWeight.w500,
-                fontFamily: 'Figtree',
                 fontSize: 14,
               ),
             ),
@@ -2121,7 +2102,6 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
                   style: TextStyle(
                     color: const Color(0xFF00A86B),
                     fontWeight: FontWeight.w600,
-                    fontFamily: 'Figtree',
                     fontSize: 16,
                   ),
                 ),
@@ -2151,7 +2131,6 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
                 style: TextStyle(
                   color: isLight ? Colors.black : Colors.white,
                   fontWeight: FontWeight.w600,
-                  fontFamily: 'Figtree',
                   fontSize: 16,
                 ),
               ),
@@ -2169,7 +2148,6 @@ class _SellerInfoFormModalState extends State<SellerInfoFormModal> {
             style: TextStyle(
               color: isLight ? Colors.black : Colors.white,
               fontWeight: FontWeight.w600,
-              fontFamily: 'Figtree',
             ),
           ),
         ),

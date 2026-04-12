@@ -714,7 +714,6 @@ class _AddressesScreenState extends State<AddressesScreen>
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Figtree',
                 letterSpacing: -0.2,
               ),
             ),
@@ -1082,7 +1081,6 @@ class _AddressFormModalState extends State<AddressFormModal> {
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        fontFamily: 'Figtree',
                         color: isDarkMode ? Colors.white : Colors.black,
                       ),
                     ),
@@ -1250,7 +1248,6 @@ class _AddressFormModalState extends State<AddressFormModal> {
                               child: Text(
                                 localization.cancel,
                                 style: TextStyle(
-                                  fontFamily: 'Figtree',
                                   color: isDarkMode ? Colors.white : Colors.black,
                                   fontWeight: FontWeight.w600,
                                   fontSize: 16,
@@ -1287,7 +1284,6 @@ class _AddressFormModalState extends State<AddressFormModal> {
                               child: Text(
                                 localization.save,
                                 style: const TextStyle(
-                                  fontFamily: 'Figtree',
                                   fontWeight: FontWeight.w600,
                                   color: Colors.white,
                                   fontSize: 16,

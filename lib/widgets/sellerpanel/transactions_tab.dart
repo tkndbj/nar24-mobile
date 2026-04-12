@@ -6,7 +6,6 @@ import '../../generated/l10n/app_localizations.dart';
 import '../../widgets/product_card_4.dart';
 import 'dart:async';
 import '../../services/typesense_service_manager.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../screens/SELLER-PANEL/seller_panel_order_details_screen.dart';
 import '../../utils/attribute_localization_utils.dart';
 import 'package:intl/intl.dart';
@@ -504,7 +503,7 @@ class _TransactionsTabState extends State<TransactionsTab>
             const SizedBox(height: 12),
             Text(
               l10n.noTransactionsForSelectedDates,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
                 color: isDarkMode ? Colors.white70 : Colors.grey[700],
@@ -553,7 +552,7 @@ class _TransactionsTabState extends State<TransactionsTab>
                   const SizedBox(width: 8),
                   Text(
                     '${l10n.searchResults}: ${_searchResults.length}',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: isDarkMode ? Colors.tealAccent : Colors.teal,
@@ -1029,7 +1028,6 @@ class _SearchBar extends StatelessWidget {
         controller: searchController,
         style: TextStyle(
           fontSize: 14,
-          fontFamily: 'Figtree',
           fontWeight: FontWeight.w500,
           color: isDark ? Colors.white : Colors.black87,
         ),
@@ -1077,7 +1075,7 @@ class _SearchBar extends StatelessWidget {
                   ),
                 ),
           hintText: l10n.searchProducts,
-          hintStyle: GoogleFonts.inter(
+          hintStyle: TextStyle(
             fontSize: 14,
             color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
             fontWeight: FontWeight.w600,
@@ -1384,7 +1382,7 @@ class _CategorizedTransactionList extends StatelessWidget {
                 const SizedBox(height: 12),
                 Text(
                   l10n.noTransactionsForSelectedDates,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                     color: isDarkMode ? Colors.white70 : Colors.grey[700],
@@ -1474,7 +1472,7 @@ class _DateHeaderWidget extends StatelessWidget {
           const SizedBox(width: 12),
           Text(
             date,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: isDarkMode ? Colors.white70 : Colors.grey[700],
@@ -1519,7 +1517,7 @@ class _BuyerHeaderWidget extends StatelessWidget {
           Expanded(
             child: Text(
               buyerName,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: const Color(0xFF3B82F6),
@@ -1534,7 +1532,7 @@ class _BuyerHeaderWidget extends StatelessWidget {
             ),
             child: Text(
               '$transactionCount',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
                 color: const Color(0xFF3B82F6),

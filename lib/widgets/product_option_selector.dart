@@ -339,7 +339,6 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
           title: Text(
             l10n.selectOptions,
             style: const TextStyle(
-              fontFamily: 'Figtree',
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -350,7 +349,7 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
             child: Text(
               l10n.cancel,
               style: TextStyle(
-                  fontSize: 14, fontFamily: 'Figtree', color: txtColor),
+                  fontSize: 14, color: txtColor),
             ),
           ),
         ),
@@ -364,7 +363,6 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
           title: Text(
             l10n.selectOptions,
             style: const TextStyle(
-              fontFamily: 'Figtree',
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -392,7 +390,7 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
             child: Text(
               l10n.close ?? 'Close',
               style: TextStyle(
-                  fontSize: 14, fontFamily: 'Figtree', color: txtColor),
+                  fontSize: 14, color: txtColor),
             ),
           ),
         ),
@@ -418,7 +416,6 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
           title: Text(
             l10n.selectOptions,
             style: const TextStyle(
-              fontFamily: 'Figtree',
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -446,7 +443,7 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
             child: Text(
               l10n.close ?? 'Close',
               style: TextStyle(
-                  fontSize: 14, fontFamily: 'Figtree', color: txtColor),
+                  fontSize: 14, color: txtColor),
             ),
           ),
         ),
@@ -458,7 +455,6 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
         title: Text(
           l10n.selectOptions,
           style: const TextStyle(
-            fontFamily: 'Figtree',
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -542,7 +538,6 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
               l10n.confirm,
               style: TextStyle(
                 fontSize: 16,
-                fontFamily: 'Figtree',
                 fontWeight: FontWeight.w600,
                 color: isConfirmEnabled ? txtColor : Colors.grey,
               ),
@@ -555,7 +550,7 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
           child: Text(
             l10n.cancel,
             style:
-                TextStyle(fontSize: 14, fontFamily: 'Figtree', color: txtColor),
+                TextStyle(fontSize: 14, color: txtColor),
           ),
         ),
       ),

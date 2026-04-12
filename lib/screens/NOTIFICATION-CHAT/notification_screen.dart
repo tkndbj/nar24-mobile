@@ -11,7 +11,6 @@ import '../../models/product.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/notification.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../../services/firestore_read_tracker.dart';
 import '../PAYMENT-RECEIPT/dynamic_payment_screen.dart';
@@ -176,7 +175,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         SnackBar(
           content: Text(
             'Please wait $remaining seconds before refreshing again',
-            style: const TextStyle(fontFamily: 'Figtree'),
+            style: const TextStyle(),
           ),
           duration: const Duration(seconds: 2),
         ),
@@ -395,7 +394,7 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
               isRestaurant
                   ? (l10n.joiningRestaurant ?? 'Joining restaurant...')
                   : (l10n.joiningShop ?? 'Joining shop...'),
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
                 color: isDark ? Colors.white : Colors.black87,
@@ -405,7 +404,7 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
             const SizedBox(height: 8),
             Text(
               entityName,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 14,
                 color: isDark ? Colors.white70 : Colors.grey.shade600,
               ),
@@ -500,7 +499,6 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
               title: Text(
                 l10n.refundRequestApprovedTitle,
                 style: const TextStyle(
-                  fontFamily: 'Figtree',
                   fontSize: 18.0,
                   fontWeight: FontWeight.w600,
                 ),
@@ -514,7 +512,6 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                   Text(
                     l10n.refundRequestApprovedMessage,
                     style: const TextStyle(
-                      fontFamily: 'Figtree',
                       fontSize: 16.0,
                     ),
                     textAlign: TextAlign.center, // ✅ Added text alignment
@@ -539,7 +536,6 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                           child: Text(
                             l10n.refundOfficeAddress,
                             style: const TextStyle(
-                              fontFamily: 'Figtree',
                               fontSize: 14.0,
                               fontWeight: FontWeight.w500,
                             ),
@@ -590,7 +586,6 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                   Text(
                     l10n.refundRequestRejectedMessage,
                     style: const TextStyle(
-                      fontFamily: 'Figtree',
                       fontSize: 16.0,
                       fontWeight: FontWeight.w600,
                     ),
@@ -602,7 +597,6 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                     Text(
                       l10n.rejectionReason,
                       style: const TextStyle(
-                        fontFamily: 'Figtree',
                         fontSize: 14.0,
                         fontWeight: FontWeight.bold,
                       ),
@@ -619,7 +613,6 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                       child: Text(
                         rejectionReason,
                         style: const TextStyle(
-                          fontFamily: 'Figtree',
                           fontSize: 16.0,
                         ),
                         textAlign: TextAlign.center, // ✅ Added text alignment
@@ -673,7 +666,6 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                   Text(
                     notification.message ?? l10n.productEditRejectedMessage,
                     style: const TextStyle(
-                      fontFamily: 'Figtree',
                       fontSize: 16.0,
                       fontWeight: FontWeight.w600,
                     ),
@@ -684,7 +676,6 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                     Text(
                       l10n.rejectionReason,
                       style: const TextStyle(
-                        fontFamily: 'Figtree',
                         fontSize: 14.0,
                         fontWeight: FontWeight.bold,
                       ),
@@ -700,7 +691,6 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                       child: Text(
                         rejectionReason,
                         style: const TextStyle(
-                          fontFamily: 'Figtree',
                           fontSize: 16.0,
                         ),
                       ),
@@ -786,7 +776,6 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
               content: Text(
                 l10n.invitationMessage(inviterName, shopName),
                 style: const TextStyle(
-                    fontFamily: 'Figtree',
                     fontSize: 16.0,
                     fontWeight: FontWeight.w600),
               ),
@@ -885,7 +874,6 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                   Text(
                     notification.message ?? l10n.shopDisapprovedMessage,
                     style: const TextStyle(
-                      fontFamily: 'Figtree',
                       fontSize: 16.0,
                       fontWeight: FontWeight.w600,
                     ),
@@ -896,7 +884,6 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                     Text(
                       l10n.rejectionReason,
                       style: const TextStyle(
-                        fontFamily: 'Figtree',
                         fontSize: 14.0,
                         fontWeight: FontWeight.bold,
                       ),
@@ -912,7 +899,6 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                       child: Text(
                         rejectionReason,
                         style: const TextStyle(
-                          fontFamily: 'Figtree',
                           fontSize: 16.0,
                         ),
                       ),
@@ -1055,7 +1041,7 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
           ),
           title: Text(
             l10n.notifications,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w600,
               color: Theme.of(context).colorScheme.onSurface,
@@ -1087,7 +1073,7 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                 Text(
                   l10n.noLoggedInForNotifications,
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                     color: Theme.of(context).brightness == Brightness.dark
@@ -1112,7 +1098,7 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                           ),
                           child: Text(
                             l10n.login2,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.w600,
                               fontSize: 15,
@@ -1139,7 +1125,7 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                           ),
                           child: Text(
                             l10n.register,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: Colors.orange,
                               fontWeight: FontWeight.w600,
                               fontSize: 15,
@@ -1175,7 +1161,6 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
         title: Text(
           l10n.notifications,
           style: TextStyle(
-            fontFamily: 'Figtree',
             fontSize: 20,
             color: Theme.of(context).colorScheme.onSurface,
           ),
@@ -1211,7 +1196,6 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                                   .onSurface
                                   .withOpacity(0.7),
                               fontSize: 16,
-                              fontFamily: 'Figtree',
                             ),
                           ),
                         ],
@@ -1440,7 +1424,6 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                                   content: Text(
                                     l10n.confirmDeleteNotification,
                                     style: TextStyle(
-                                      fontFamily: 'Figtree',
                                       fontSize: 16,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -1507,7 +1490,6 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                                           .colorScheme
                                           .onSurface,
                                       fontSize: 14,
-                                      fontFamily: 'Figtree',
                                     ),
                                   ),
                                   const SizedBox(height: 4),
@@ -1518,7 +1500,6 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                                           .colorScheme
                                           .onSurface,
                                       fontSize: 12,
-                                      fontFamily: 'Figtree',
                                     ),
                                   ),
                                 ],

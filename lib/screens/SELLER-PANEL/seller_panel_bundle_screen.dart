@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../models/bundle.dart';
 import '../../providers/seller_panel_provider.dart';
 import '../../generated/l10n/app_localizations.dart';
@@ -125,7 +124,7 @@ class _SellerPanelBundleScreenState extends State<SellerPanelBundleScreen> {
       foregroundColor: isDark ? Colors.white : const Color(0xFF1A202C),
       title: Text(
         l10n.productBundles,
-        style: GoogleFonts.figtree(
+        style: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.w600,
           color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -149,7 +148,7 @@ class _SellerPanelBundleScreenState extends State<SellerPanelBundleScreen> {
           Expanded(
             child: Text(
               l10n.activeBundlesCount(_bundles.length),
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -161,7 +160,7 @@ class _SellerPanelBundleScreenState extends State<SellerPanelBundleScreen> {
             icon: const Icon(Icons.add_rounded, size: 18),
             label: Text(
               l10n.createBundle,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
               ),
@@ -241,7 +240,7 @@ class _SellerPanelBundleScreenState extends State<SellerPanelBundleScreen> {
                     Expanded(
                       child: Text(
                         l10n.productCountBundle(bundle.productCount),
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 16,
                           color:
@@ -263,7 +262,7 @@ class _SellerPanelBundleScreenState extends State<SellerPanelBundleScreen> {
                   children: [
                     Text(
                       '${bundle.totalOriginalPrice.toStringAsFixed(2)} ${bundle.currency}',
-                      style: GoogleFonts.figtree(
+                      style: TextStyle(
                         fontSize: 14,
                         color: isDark
                             ? const Color(0xFFA0AAB8)
@@ -274,7 +273,7 @@ class _SellerPanelBundleScreenState extends State<SellerPanelBundleScreen> {
                     const SizedBox(width: 8),
                     Text(
                       '${bundle.totalBundlePrice.toStringAsFixed(2)} ${bundle.currency}',
-                      style: GoogleFonts.figtree(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: const Color(0xFF667EEA),
@@ -292,7 +291,7 @@ class _SellerPanelBundleScreenState extends State<SellerPanelBundleScreen> {
                       ),
                       child: Text(
                         '-${bundle.discountPercentage.toStringAsFixed(0)}%',
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                           color: const Color(0xFF38A169),
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -304,7 +303,7 @@ class _SellerPanelBundleScreenState extends State<SellerPanelBundleScreen> {
                 const SizedBox(height: 12),
                 Text(
                   l10n.productsColon,
-                  style: GoogleFonts.figtree(
+                  style: TextStyle(
                     color: isDark
                         ? const Color(0xFFA0AAB8)
                         : const Color(0xFF64748B),
@@ -329,7 +328,7 @@ class _SellerPanelBundleScreenState extends State<SellerPanelBundleScreen> {
                           Expanded(
                             child: Text(
                               product.productName,
-                              style: GoogleFonts.figtree(
+                              style: TextStyle(
                                 fontSize: 12,
                                 color: isDark
                                     ? const Color(0xFFA0AAB8)
@@ -346,7 +345,7 @@ class _SellerPanelBundleScreenState extends State<SellerPanelBundleScreen> {
                   const SizedBox(height: 4),
                   Text(
                     l10n.moreProductsCount(bundle.products.length - 3),
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                       color: const Color(0xFF667EEA),
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
@@ -446,7 +445,7 @@ class _SellerPanelBundleScreenState extends State<SellerPanelBundleScreen> {
             const SizedBox(height: 16),
             Text(
               title,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color:
@@ -456,7 +455,7 @@ class _SellerPanelBundleScreenState extends State<SellerPanelBundleScreen> {
             const SizedBox(height: 8),
             Text(
               subtitle,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 13,
                 color:
                     isDark ? const Color(0xFF718096) : const Color(0xFF64748B),

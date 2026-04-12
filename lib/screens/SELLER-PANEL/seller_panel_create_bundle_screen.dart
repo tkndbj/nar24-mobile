@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../models/product.dart';
 import '../../models/bundle.dart';
 import '../../providers/seller_panel_provider.dart';
@@ -456,7 +455,7 @@ class _SellerPanelCreateBundleScreenState
       foregroundColor: isDark ? Colors.white : const Color(0xFF1A202C),
       title: Text(
         l10n.createBundle,
-        style: GoogleFonts.figtree(
+        style: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.w600,
           color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -474,7 +473,7 @@ class _SellerPanelCreateBundleScreenState
             },
             child: Text(
               l10n.clearAll,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 color: const Color(0xFFE53E3E),
                 fontWeight: FontWeight.w600,
               ),
@@ -513,7 +512,7 @@ class _SellerPanelCreateBundleScreenState
               const SizedBox(width: 8),
               Text(
                 l10n.productsSelectedCount(_selectedProducts.length),
-                style: GoogleFonts.figtree(
+                style: TextStyle(
                   color: Colors.white,
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
@@ -524,7 +523,7 @@ class _SellerPanelCreateBundleScreenState
           const SizedBox(height: 12),
           Text(
             l10n.originalTotal,
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               color: Colors.white.withOpacity(0.8),
               fontSize: 11,
               fontWeight: FontWeight.w500,
@@ -532,7 +531,7 @@ class _SellerPanelCreateBundleScreenState
           ),
           Text(
             '${_totalOriginalPrice.toStringAsFixed(2)} ${_selectedProducts.values.first.currency ?? 'TL'}',
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               color: Colors.white,
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -542,7 +541,7 @@ class _SellerPanelCreateBundleScreenState
           const SizedBox(height: 12),
           Text(
             l10n.bundlePrice,
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               color: Colors.white.withOpacity(0.8),
               fontSize: 11,
               fontWeight: FontWeight.w500,
@@ -557,14 +556,14 @@ class _SellerPanelCreateBundleScreenState
               FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
             ],
             onChanged: _updateBundlePrice,
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               color: Colors.white,
               fontSize: 20,
               fontWeight: FontWeight.w700,
             ),
             decoration: InputDecoration(
               prefixText: '${_selectedProducts.values.first.currency ?? 'TL'} ',
-              prefixStyle: GoogleFonts.figtree(
+              prefixStyle: TextStyle(
                 color: Colors.white.withOpacity(0.9),
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
@@ -589,7 +588,7 @@ class _SellerPanelCreateBundleScreenState
                 _selectedProducts.values.first.currency ?? 'TL',
                 _savingsPercentage.toStringAsFixed(1),
               ),
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 color: Colors.white,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -655,7 +654,7 @@ class _SellerPanelCreateBundleScreenState
           const SizedBox(width: 8),
           Text(
             l10n.productsSelectedOutOfSix(_selectedProducts.length),
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               color: const Color(0xFF38A169),
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -796,7 +795,7 @@ class _SellerPanelCreateBundleScreenState
                           children: [
                             Text(
                               product.productName,
-                              style: GoogleFonts.figtree(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
                                 color: isDark
@@ -809,7 +808,7 @@ class _SellerPanelCreateBundleScreenState
                             const SizedBox(height: 4),
                             Text(
                               '${product.price.toStringAsFixed(2)} ${product.currency ?? 'TL'}',
-                              style: GoogleFonts.figtree(
+                              style: TextStyle(
                                 color: isDark
                                     ? const Color(0xFFA0AAB8)
                                     : const Color(0xFF64748B),
@@ -848,7 +847,7 @@ class _SellerPanelCreateBundleScreenState
                     child: Text(
                       l10n.removeSalePreferenceToCreateBundle ??
                           'Remove sale preference to bundle this product',
-                      style: GoogleFonts.figtree(
+                      style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
                         color: isDark
@@ -874,7 +873,7 @@ class _SellerPanelCreateBundleScreenState
                       ),
                       child: Text(
                         l10n.remove ?? 'Remove',
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),
@@ -907,7 +906,7 @@ class _SellerPanelCreateBundleScreenState
                   Expanded(
                     child: Text(
                       l10n.removeDiscountToCreateBundle,
-                      style: GoogleFonts.figtree(
+                      style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
                         color: isDark
@@ -966,7 +965,7 @@ class _SellerPanelCreateBundleScreenState
                   )
                 : Text(
                     l10n.createBundleWithCount(_selectedProducts.length),
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 15,
                     ),
@@ -1021,7 +1020,7 @@ class _SellerPanelCreateBundleScreenState
             const SizedBox(height: 16),
             Text(
               title,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color:
@@ -1031,7 +1030,7 @@ class _SellerPanelCreateBundleScreenState
             const SizedBox(height: 8),
             Text(
               subtitle,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 13,
                 color:
                     isDark ? const Color(0xFF718096) : const Color(0xFF64748B),

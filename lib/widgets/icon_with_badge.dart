@@ -55,7 +55,6 @@ class IconWithBadge extends StatelessWidget {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 10,
-                      fontFamily: 'Figtree',
                       fontWeight: FontWeight.bold,
                     ),
                     textAlign: TextAlign.center,

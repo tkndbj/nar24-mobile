@@ -349,7 +349,6 @@ class _ProductDetailActionsRowState extends State<ProductDetailActionsRow> {
                 l10n.cancel,
                 style: TextStyle(
                   fontSize: 16,
-                  fontFamily: 'Figtree',
                   color:
                       isDarkMode ? Colors.white : Colors.black,
                 ),
@@ -362,7 +361,6 @@ class _ProductDetailActionsRowState extends State<ProductDetailActionsRow> {
                 l10n.confirm,
                 style: TextStyle(
                   fontSize: 16,
-                  fontFamily: 'Figtree',
                   color:
                       isDarkMode ? Colors.white : Colors.black,
                 ),

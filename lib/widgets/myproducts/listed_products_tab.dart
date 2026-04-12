@@ -223,7 +223,6 @@ class _ListedProductsTabState extends State<ListedProductsTab>
           l10n.confirmDeletion,
           style: const TextStyle(
             fontWeight: FontWeight.bold,
-            fontFamily: 'Figtree',
           ),
         ),
         content: Padding(
@@ -232,7 +231,6 @@ class _ListedProductsTabState extends State<ListedProductsTab>
             l10n.confirmDeletionMessage,
             style: const TextStyle(
               fontWeight: FontWeight.w600,
-              fontFamily: 'Figtree',
             ),
           ),
         ),
@@ -247,7 +245,6 @@ class _ListedProductsTabState extends State<ListedProductsTab>
               style: TextStyle(
                 color: isDark ? Colors.white : Colors.black,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Figtree',
               ),
             ),
           ),
@@ -359,7 +356,6 @@ class _ListedProductsTabState extends State<ListedProductsTab>
               l10n.confirm,
               style: const TextStyle(
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Figtree',
               ),
             ),
           ),
@@ -414,7 +410,6 @@ class _ListedProductsTabState extends State<ListedProductsTab>
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                   color: isDark ? Colors.white : Colors.black87,
-                  fontFamily: 'Figtree',
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -424,7 +419,6 @@ class _ListedProductsTabState extends State<ListedProductsTab>
                 style: TextStyle(
                   fontSize: 14,
                   color: isDark ? Colors.white70 : Colors.grey.shade600,
-                  fontFamily: 'Figtree',
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -503,7 +497,6 @@ class _SearchBox extends StatelessWidget {
           onChanged: onChanged,
           style: const TextStyle(
             fontSize: 15,
-            fontFamily: 'Figtree',
             fontWeight: FontWeight.w600,
           ),
           decoration: InputDecoration(
@@ -515,7 +508,6 @@ class _SearchBox extends StatelessWidget {
             hintText: hint,
             hintStyle: TextStyle(
               fontSize: 15,
-              fontFamily: 'Figtree',
               color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
             ),
             contentPadding:
@@ -778,7 +770,6 @@ class _ActionButton extends StatelessWidget {
                 label,
                 style: TextStyle(
                   fontSize: 11,
-                  fontFamily: 'Figtree',
                   fontWeight: FontWeight.w600,
                   color: effectiveColor,
                 ),
@@ -872,7 +863,6 @@ class _BoostLabelState extends State<_BoostLabel> {
             '$h:$m:$s',
             style: const TextStyle(
               fontSize: 12,
-              fontFamily: 'Figtree',
               fontWeight: FontWeight.bold,
               color: Colors.white,
               letterSpacing: 0.5,
@@ -1022,7 +1012,6 @@ class _StatCard extends StatelessWidget {
               value,
               style: const TextStyle(
                 fontSize: 18,
-                fontFamily: 'Figtree',
                 fontWeight: FontWeight.bold,
                 color: _AppColors.jadeGreen,
               ),
@@ -1035,7 +1024,6 @@ class _StatCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 11,
-                fontFamily: 'Figtree',
                 fontWeight: FontWeight.w600,
                 color: isDark ? Colors.white70 : Colors.black87,
               ),
@@ -1079,7 +1067,6 @@ class _NotLoggedInPlaceholder extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 16,
-                fontFamily: 'Figtree',
                 fontWeight: FontWeight.w600,
                 color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                 height: 1.5,
@@ -1111,7 +1098,6 @@ class _NotLoggedInPlaceholder extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        fontFamily: 'Figtree',
                         letterSpacing: -0.2,
                       ),
                     ),
@@ -1166,7 +1152,6 @@ class _NoProductsPlaceholder extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 18,
-                      fontFamily: 'Figtree',
                       fontWeight: FontWeight.w600,
                       color: Theme.of(context).colorScheme.onSurface,
                     ),
@@ -1177,7 +1162,6 @@ class _NoProductsPlaceholder extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,
-                      fontFamily: 'Figtree',
                       color: Theme.of(context)
                           .colorScheme
                           .onSurface
@@ -1260,7 +1244,6 @@ class _NoProductsPlaceholder extends StatelessWidget {
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
-                              fontFamily: 'Figtree',
                               letterSpacing: -0.2,
                             ),
                           ),
@@ -1327,7 +1310,6 @@ class _AddProductButton extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      fontFamily: 'Figtree',
                     ),
                   ),
                 ),
@@ -1362,7 +1344,6 @@ class _AddProductButton extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      fontFamily: 'Figtree',
                     ),
                   ),
                 ),

@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../generated/l10n/app_localizations.dart';
 import '../main.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -131,7 +130,7 @@ class _LanguageOptionsSheet extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Text(
               l10n.settingsLanguage,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
               ),
@@ -221,7 +220,7 @@ class _LanguageOptionTile extends StatelessWidget {
                 Expanded(
                   child: Text(
                     languageName,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                       color: isSelected ? selectedColor : null,
                     ),

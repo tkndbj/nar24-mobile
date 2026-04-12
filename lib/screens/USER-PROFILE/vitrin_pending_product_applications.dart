@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:intl/intl.dart';
@@ -580,7 +579,7 @@ class _VitrinPendingProductApplicationsState
               const SizedBox(height: 16),
               Text(
                 l10n.pleaseLoginToViewApplications,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 16,
                   color: isDark ? Colors.white70 : Colors.grey[600],
                 ),
@@ -666,7 +665,7 @@ class _VitrinPendingProductApplicationsState
       ),
       title: Text(
         l10n.myProductApplications,
-        style: GoogleFonts.inter(
+        style: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.w600,
           color: isDark ? Colors.white : Colors.grey[900],
@@ -711,11 +710,11 @@ class _VitrinPendingProductApplicationsState
         ),
         labelColor: Colors.white,
         unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[600],
-        labelStyle: GoogleFonts.inter(
+        labelStyle: TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 13,
         ),
-        unselectedLabelStyle: GoogleFonts.inter(
+        unselectedLabelStyle: TextStyle(
           fontWeight: FontWeight.w500,
           fontSize: 13,
         ),
@@ -763,7 +762,7 @@ class _VitrinPendingProductApplicationsState
                 ),
                 child: Text(
                   count.toString(),
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
                   ),
@@ -852,7 +851,7 @@ class _VitrinPendingProductApplicationsState
             const SizedBox(height: 16),
             Text(
               title,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
                 color: isDark ? Colors.white : Colors.grey[800],
@@ -862,7 +861,7 @@ class _VitrinPendingProductApplicationsState
             const SizedBox(height: 8),
             Text(
               description,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 14,
                 color: isDark ? Colors.grey[400] : Colors.grey[600],
               ),
@@ -960,7 +959,7 @@ class _VitrinPendingProductApplicationsState
                     applications.length.toString(),
                     (_counts[tab] ?? 0).toString(),
                   ),
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 12,
                     color: isDark ? Colors.grey[500] : Colors.grey[600],
                   ),
@@ -1038,7 +1037,7 @@ class _VitrinStatusBadge extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w600,
               color: textColor,
@@ -1205,7 +1204,7 @@ class _VitrinApplicationCard extends StatelessWidget {
                             const SizedBox(width: 2),
                             Text(
                               l10n.edit,
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 fontSize: 9,
                                 fontWeight: FontWeight.w600,
                                 color: const Color(0xFF1E40AF),
@@ -1241,7 +1240,7 @@ class _VitrinApplicationCard extends StatelessWidget {
                             const SizedBox(width: 3),
                             Text(
                               application.imageUrls.length.toString(),
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
@@ -1270,7 +1269,7 @@ class _VitrinApplicationCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             application.productName,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                               color: isDark ? Colors.white : Colors.grey[800],
@@ -1282,7 +1281,7 @@ class _VitrinApplicationCard extends StatelessWidget {
                         const SizedBox(width: 4),
                         Text(
                           _formatPrice(application.price),
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             color: const Color(0xFF667EEA),
@@ -1296,7 +1295,7 @@ class _VitrinApplicationCard extends StatelessWidget {
                     // Category path
                     Text(
                       _getLocalizedCategoryPath(context),
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 9,
                         color: isDark ? Colors.grey[500] : Colors.grey[600],
                       ),
@@ -1321,7 +1320,7 @@ class _VitrinApplicationCard extends StatelessWidget {
                         ),
                         child: Text(
                           application.rejectionReason!,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 8,
                             color: const Color(0xFF991B1B),
                           ),
@@ -1342,7 +1341,7 @@ class _VitrinApplicationCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             _formatDate(application.submittedAt, localeCode),
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               fontSize: 9,
                               color:
                                   isDark ? Colors.grey[500] : Colors.grey[600],
@@ -1496,7 +1495,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                         const SizedBox(width: 4),
                         Text(
                           l10n.editApplication,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                             color: const Color(0xFF1E40AF),
@@ -1531,7 +1530,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                   if (application.imageUrls.isNotEmpty) ...[
                     Text(
                       l10n.images,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: isDark ? Colors.white : Colors.grey[800],
@@ -1561,7 +1560,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                   // Product name & price
                   Text(
                     application.productName,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
                       color: isDark ? Colors.white : Colors.grey[900],
@@ -1570,7 +1569,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     _formatPrice(application.price),
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w700,
                       color: const Color(0xFF667EEA),
@@ -1583,7 +1582,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                   if (application.description.isNotEmpty) ...[
                     Text(
                       l10n.description,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: isDark ? Colors.grey[400] : Colors.grey[500],
@@ -1592,7 +1591,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       application.description,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 14,
                         color: isDark ? Colors.white70 : Colors.grey[700],
                       ),
@@ -1609,7 +1608,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                     const SizedBox(height: 16),
                     Text(
                       l10n.colors,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: isDark ? Colors.grey[400] : Colors.grey[500],
@@ -1651,7 +1650,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                               const SizedBox(width: 6),
                               Text(
                                 color,
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   fontSize: 12,
                                   color: isDark
                                       ? Colors.white70
@@ -1662,7 +1661,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                                 const SizedBox(width: 4),
                                 Text(
                                   '($qty)',
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     fontSize: 11,
                                     color: isDark
                                         ? Colors.grey[500]
@@ -1694,7 +1693,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                         children: [
                           Text(
                             l10n.editedFields,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                               color: const Color(0xFF1E40AF),
@@ -1716,7 +1715,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                                 ),
                                 child: Text(
                                   field,
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     fontSize: 11,
                                     color: const Color(0xFF1E40AF),
                                   ),
@@ -1745,7 +1744,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                         children: [
                           Text(
                             l10n.rejectionReason,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                               color: const Color(0xFF991B1B),
@@ -1754,7 +1753,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                           const SizedBox(height: 4),
                           Text(
                             application.rejectionReason!,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               fontSize: 13,
                               color: const Color(0xFF991B1B),
                             ),
@@ -1783,7 +1782,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                           children: [
                             Text(
                               '${l10n.submittedAt}: ',
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 fontSize: 12,
                                 color: isDark
                                     ? Colors.grey[500]
@@ -1792,7 +1791,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                             ),
                             Text(
                               _formatDate(application.submittedAt, localeCode),
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 fontSize: 12,
                                 color: isDark
                                     ? Colors.grey[400]
@@ -1807,7 +1806,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                             children: [
                               Text(
                                 '${l10n.reviewedAt}: ',
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   fontSize: 12,
                                   color: isDark
                                       ? Colors.grey[500]
@@ -1816,7 +1815,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                               ),
                               Text(
                                 _formatDate(application.reviewedAt!, localeCode),
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   fontSize: 12,
                                   color: isDark
                                       ? Colors.grey[400]
@@ -1864,7 +1863,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
                   ),
                   child: Text(
                     l10n.close,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1953,7 +1952,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
       children: [
         Text(
           label.toUpperCase(),
-          style: GoogleFonts.inter(
+          style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w600,
             color: isDark ? Colors.grey[500] : Colors.grey[500],
@@ -1963,7 +1962,7 @@ class _VitrinApplicationDetailSheet extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           value,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             fontSize: 13,
             color: isDark ? Colors.white : Colors.grey[800],
           ),

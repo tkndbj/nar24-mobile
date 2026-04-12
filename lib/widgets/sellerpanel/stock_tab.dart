@@ -7,7 +7,6 @@ import '../../generated/l10n/app_localizations.dart';
 import '../../providers/seller_panel_provider.dart';
 import '../product_card_4.dart';
 import '../../constants/all_in_one_category_data.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
 
 /// Checks if the current user is a viewer for the given shop.
@@ -228,7 +227,7 @@ class _StockTabState extends State<StockTab> with TickerProviderStateMixin {
               const SizedBox(height: 12),
               Text(
                 message,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                   color: isDark ? Colors.white70 : Colors.grey[700],
@@ -274,7 +273,7 @@ class _StockTabState extends State<StockTab> with TickerProviderStateMixin {
                   const SizedBox(width: 8),
                   Text(
                     l10n.searchResultsCount(products.length.toString()),
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: isDark ? Colors.tealAccent : Colors.teal,
@@ -475,7 +474,6 @@ class _SearchBar extends StatelessWidget {
         controller: searchController,
         style: TextStyle(
           fontSize: 14,
-          fontFamily: 'Figtree',
           fontWeight: FontWeight.w500,
           color: isDark ? Colors.white : Colors.black87,
         ),
@@ -530,7 +528,7 @@ class _SearchBar extends StatelessWidget {
                   ),
                 ),
           hintText: l10n.searchProducts,
-          hintStyle: GoogleFonts.inter(
+          hintStyle: TextStyle(
             fontSize: 14,
             color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
             fontWeight: FontWeight.w600,
@@ -706,7 +704,7 @@ class _FilterRow extends StatelessWidget {
               },
               child: Text(
                 l10n.none,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: isDarkMode ? Colors.white : Colors.black,
                   fontSize: 14,
                 ),
@@ -721,7 +719,7 @@ class _FilterRow extends StatelessWidget {
                 child: Text(
                   AllInOneCategoryData.localizeCategoryKey(
                       category['key']!, l10n),
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: isDarkMode ? Colors.white : Colors.black,
                     fontSize: 14,
                   ),
@@ -733,7 +731,7 @@ class _FilterRow extends StatelessWidget {
             onPressed: () => Navigator.pop(context),
             child: Text(
               l10n.cancel,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: isDarkMode ? Colors.white : Colors.black,
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
@@ -780,7 +778,7 @@ class _FilterRow extends StatelessWidget {
               },
               child: Text(
                 l10n.none,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: isDarkMode ? Colors.white : Colors.black,
                   fontSize: 14,
                 ),
@@ -795,7 +793,7 @@ class _FilterRow extends StatelessWidget {
                 child: Text(
                   AllInOneCategoryData.localizeSubcategoryKey(
                       provider.stockCategory!, subcategory, l10n),
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: isDarkMode ? Colors.white : Colors.black,
                     fontSize: 14,
                   ),
@@ -807,7 +805,7 @@ class _FilterRow extends StatelessWidget {
             onPressed: () => Navigator.pop(context),
             child: Text(
               l10n.cancel,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: isDarkMode ? Colors.white : Colors.black,
                 fontSize: 14,
                 fontWeight: FontWeight.bold,

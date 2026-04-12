@@ -105,8 +105,7 @@
 //                         loc.noSalesYet, // "Currently you haven't made any sales..."
 //                         textAlign: TextAlign.center,
 //                         style: const TextStyle(
-//                           fontFamily: 'Figtree',
-//                           fontSize: 16,
+//                           //                           fontSize: 16,
 //                         ),
 //                       ),
 //                     ),
@@ -137,8 +136,7 @@
 //                         style: const TextStyle(
 //                           color: Colors.white,
 //                           fontWeight: FontWeight.w600,
-//                           fontFamily: 'Figtree',
-//                         ),
+//                           //                         ),
 //                       ),
 //                     ),
 //                   ],
@@ -242,8 +240,7 @@
 //                 textAlign: TextAlign.center,
 //                 style: const TextStyle(
 //                   fontWeight: FontWeight.bold,
-//                   fontFamily: 'Figtree',
-//                   fontSize: 16,
+//                   //                   fontSize: 16,
 //                 ),
 //               ),
 //               const SizedBox(height: 8),
@@ -252,8 +249,7 @@
 //                 loc.becomeVipSubtitle,
 //                 textAlign: TextAlign.center,
 //                 style: const TextStyle(
-//                   fontFamily: 'Figtree',
-//                   fontSize: 14,
+//                   //                   fontSize: 14,
 //                 ),
 //               ),
 

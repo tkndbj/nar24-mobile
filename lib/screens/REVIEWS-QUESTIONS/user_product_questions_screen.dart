@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../widgets/product_card_4.dart';
 import '../../../generated/l10n/app_localizations.dart';
@@ -596,11 +595,11 @@ if (mounted) {
         unselectedLabelColor: Theme.of(context).brightness == Brightness.light
             ? Colors.grey[600]
             : Colors.grey[400],
-        labelStyle: GoogleFonts.inter(
+        labelStyle: TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 13,
         ),
-        unselectedLabelStyle: GoogleFonts.inter(
+        unselectedLabelStyle: TextStyle(
           fontWeight: FontWeight.w500,
           fontSize: 13,
         ),
@@ -660,7 +659,7 @@ if (mounted) {
             const SizedBox(height: 12),
             Text(
               l10n.noQuestions,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 16,
                 color: Theme.of(context).colorScheme.onSurface,
               ),
@@ -745,7 +744,7 @@ if (mounted) {
                       children: [
                         Text(
                           questionText,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),
@@ -753,7 +752,7 @@ if (mounted) {
                         const SizedBox(height: 4),
                         Text(
                           'Soran: $askerName',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 12,
                             color: isDarkMode
                                 ? Colors.grey[400]
@@ -786,14 +785,14 @@ if (mounted) {
                                       if (answererName.isNotEmpty)
                                         Text(
                                           answererName,
-                                          style: GoogleFonts.inter(
+                                          style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
                                       Text(
                                         answerText,
-                                        style: GoogleFonts.inter(fontSize: 14),
+                                        style: TextStyle(fontSize: 14),
                                       ),
                                     ],
                                   ),
@@ -809,7 +808,7 @@ if (mounted) {
                     const SizedBox(height: 4),
                     Text(
                       l10n.waitingForAnswer,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 12,
                         color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
                       ),
@@ -827,7 +826,7 @@ if (mounted) {
                       children: [
                         Text(
                           questionText,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),
@@ -835,7 +834,7 @@ if (mounted) {
                         const SizedBox(height: 4),
                         Text(
                           'Soran: $askerName',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 12,
                             color: isDarkMode
                                 ? Colors.grey[400]
@@ -852,7 +851,7 @@ if (mounted) {
                             ),
                             child: Text(
                               answerText,
-                              style: GoogleFonts.inter(fontSize: 14),
+                              style: TextStyle(fontSize: 14),
                             ),
                           ),
                         ],
@@ -872,7 +871,6 @@ if (mounted) {
                               'Cevapla',
                               style: const TextStyle(
                                 fontSize: 13,
-                                fontFamily: 'Figtree',
                                 fontWeight: FontWeight.w600,
                               ),
                               maxLines: 1,
@@ -902,7 +900,6 @@ if (mounted) {
                               'Sil',
                               style: const TextStyle(
                                 fontSize: 13,
-                                fontFamily: 'Figtree',
                                 fontWeight: FontWeight.w600,
                               ),
                               maxLines: 1,
@@ -1111,7 +1108,7 @@ if (mounted) {
           backgroundColor: isDark ? null : Colors.white,
           title: Text(
             l10n.userQuestionsTitle,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.w600,
               fontSize: 18,
@@ -1141,7 +1138,7 @@ if (mounted) {
         ),
         title: Text(
           l10n.userQuestionsTitle,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w600,
             fontSize: 18,

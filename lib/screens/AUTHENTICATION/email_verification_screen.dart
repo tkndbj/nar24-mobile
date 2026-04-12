@@ -449,7 +449,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w700,
-            fontFamily: 'Figtree',
             color: isDark ? Colors.white : Colors.black87,
           ),
           textAlign: TextAlign.center,
@@ -470,7 +469,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
             style: TextStyle(
               fontSize: 14,
               color: isDark ? Colors.white70 : Colors.black54,
-              fontFamily: 'Figtree',
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -485,7 +483,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
           style: TextStyle(
             fontSize: 14,
             color: isDark ? Colors.white60 : Colors.black54,
-            fontFamily: 'Figtree',
           ),
         ),
       ],
@@ -527,7 +524,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w600,
-                    fontFamily: 'Figtree',
                     color: isDark ? Colors.white : Colors.black87,
                   ),
                 ),
@@ -599,7 +595,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                 style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
-                  fontFamily: 'Figtree',
                 ),
               ),
       ),
@@ -642,7 +637,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  fontFamily: 'Figtree',
                   color: isDisabled
                       ? (isDark ? Colors.white38 : Colors.black38)
                       : (isDark ? Colors.white : Colors.black87),
@@ -669,7 +663,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
             style: TextStyle(
               fontSize: 12,
               color: isDark ? Colors.white38 : Colors.black38,
-              fontFamily: 'Figtree',
             ),
           ),
         ),

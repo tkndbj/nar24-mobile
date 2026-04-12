@@ -196,7 +196,7 @@ Widget build(BuildContext context) {
       hintText: l10n.searchProducts,
       hintStyle: _theme!.textTheme.bodySmall!.copyWith(
         fontSize: 14,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w600,
         color: widget.isDefaultView
             ? const Color.fromARGB(255, 63, 63, 63)
             : (widget.useWhiteColors

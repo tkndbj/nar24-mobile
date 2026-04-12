@@ -17,7 +17,6 @@ import '../../services/translation_service.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../widgets/productdetail/full_screen_image_viewer.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Shop Detail Screen - Main entry point
 ///
@@ -1757,7 +1756,7 @@ class _SearchResultsHeader extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 l10n.searchResultsCount(state.count.toString()),
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: color,

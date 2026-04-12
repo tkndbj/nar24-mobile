@@ -155,7 +155,6 @@ class _AppBarTitle extends StatelessWidget {
           l10n.myProducts,
           style: TextStyle(
             color: theme.colorScheme.onSurface,
-            fontFamily: 'Figtree',
             fontSize: 18,
             fontWeight: FontWeight.w600,
             letterSpacing: -0.3,

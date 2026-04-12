@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
@@ -322,7 +321,7 @@ class _RestaurantFoodsTabState extends State<RestaurantFoodsTab> {
   void _showSnackBar(String message, {required bool isError}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message, style: GoogleFonts.inter(fontSize: 13)),
+      content: Text(message, style: TextStyle(fontSize: 13)),
       backgroundColor: isError ? Colors.red[600] : Colors.green[600],
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -375,7 +374,7 @@ class _RestaurantFoodsTabState extends State<RestaurantFoodsTab> {
                       ),
                       child: Text(
                         l10n.foodCount(_foods.length),
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: Colors.grey[500],
@@ -413,7 +412,7 @@ class _RestaurantFoodsTabState extends State<RestaurantFoodsTab> {
                             children: [
                               Text(
                                 _getCategoryName(category),
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w700,
                                   color:
@@ -432,7 +431,7 @@ class _RestaurantFoodsTabState extends State<RestaurantFoodsTab> {
                                 ),
                                 child: Text(
                                   '${items.length}',
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
                                     color: Colors.grey[400],
@@ -517,7 +516,7 @@ class _RestaurantFoodsTabState extends State<RestaurantFoodsTab> {
             Icon(Icons.error_outline_rounded, size: 48, color: Colors.red[400]),
             const SizedBox(height: 16),
             Text(l10n.fetchError,
-                style: GoogleFonts.inter(fontSize: 14, color: Colors.grey[600]),
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                 textAlign: TextAlign.center),
             const SizedBox(height: 16),
             TextButton.icon(
@@ -554,7 +553,7 @@ class _RestaurantFoodsTabState extends State<RestaurantFoodsTab> {
             const SizedBox(height: 16),
             Text(
               l10n.noFoodsFound,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: isDark ? Colors.white : Colors.grey[900],
@@ -563,7 +562,7 @@ class _RestaurantFoodsTabState extends State<RestaurantFoodsTab> {
             const SizedBox(height: 8),
             Text(
               l10n.startByAddingFood,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                   fontSize: 13,
                   color: isDark ? Colors.white54 : Colors.grey[500]),
               textAlign: TextAlign.center,
@@ -652,7 +651,7 @@ class _FoodCard extends StatelessWidget {
                       ),
                       child: Text(
                         '-${food.discount!.percentage}%',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
@@ -673,7 +672,7 @@ class _FoodCard extends StatelessWidget {
                       ),
                       child: Text(
                         l10n.discountExpired,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
@@ -698,7 +697,7 @@ class _FoodCard extends StatelessWidget {
                       Expanded(
                         child: Text(
                           food.name,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                             color: isDark ? Colors.white : Colors.grey[900],
@@ -739,7 +738,7 @@ class _FoodCard extends StatelessWidget {
                                     food.isAvailable
                                         ? l10n.available
                                         : l10n.unavailable,
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
                                       fontSize: 9,
                                       fontWeight: FontWeight.w700,
                                       color: food.isAvailable
@@ -753,7 +752,7 @@ class _FoodCard extends StatelessWidget {
                             const SizedBox(height: 2),
                             Text(
                               l10n.tapToChange,
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                   fontSize: 8, color: Colors.grey[400]),
                             ),
                           ],
@@ -770,7 +769,7 @@ class _FoodCard extends StatelessWidget {
                       if (active && food.discount != null) ...[
                         Text(
                           '${food.discount!.originalPrice.toStringAsFixed(2)} TL',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 11,
                             color: Colors.grey[400],
                             decoration: TextDecoration.lineThrough,
@@ -779,7 +778,7 @@ class _FoodCard extends StatelessWidget {
                         const SizedBox(width: 6),
                         Text(
                           '${food.price.toStringAsFixed(2)} TL',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: const Color(0xFF059669),
@@ -788,7 +787,7 @@ class _FoodCard extends StatelessWidget {
                       ] else if (expired && food.discount != null) ...[
                         Text(
                           '${food.price.toStringAsFixed(2)} TL',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: isDark ? Colors.white : Colors.grey[900],
@@ -797,7 +796,7 @@ class _FoodCard extends StatelessWidget {
                         const SizedBox(width: 6),
                         Text(
                           '(${l10n.originalPrice2}: ${food.discount!.originalPrice.toStringAsFixed(2)} TL)',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 10,
                             color: const Color(0xFFF59E0B),
                             fontWeight: FontWeight.w500,
@@ -806,7 +805,7 @@ class _FoodCard extends StatelessWidget {
                       ] else ...[
                         Text(
                           '${food.price.toStringAsFixed(2)} TL',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: isDark ? Colors.white : Colors.grey[900],
@@ -820,7 +819,7 @@ class _FoodCard extends StatelessWidget {
                         const SizedBox(width: 2),
                         Text(
                           '${food.preparationTime!} ${l10n.minutes}',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                               fontSize: 10, color: Colors.grey[400]),
                         ),
                       ],
@@ -833,7 +832,7 @@ class _FoodCard extends StatelessWidget {
                     Text(
                       l10n.discountExpires(
                           formatExpiry(food.discount!.endDate)),
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 9,
                         color: const Color(0xFF10B981),
                       ),
@@ -902,7 +901,7 @@ class _ActionBtn extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: TextStyle(
                 fontSize: 11, fontWeight: FontWeight.w500, color: color),
           ),
         ],
@@ -928,7 +927,7 @@ class _AddFoodButton extends StatelessWidget {
       icon: Icon(Icons.add_rounded, size: isLarge ? 18 : 15),
       label: Text(
         l10n.addFood,
-        style: GoogleFonts.inter(
+        style: TextStyle(
           fontSize: isLarge ? 14 : 13,
           fontWeight: FontWeight.w600,
         ),
@@ -1117,7 +1116,7 @@ class _DiscountModalState extends State<_DiscountModal> {
                     children: [
                       Text(
                         hasActive ? l10n.editDiscount : l10n.addDiscount,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
                           color: isDark ? Colors.white : Colors.grey[900],
@@ -1125,7 +1124,7 @@ class _DiscountModalState extends State<_DiscountModal> {
                       ),
                       Text(
                         widget.food.name,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                             fontSize: 11, color: Colors.grey[400]),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1145,7 +1144,7 @@ class _DiscountModalState extends State<_DiscountModal> {
             // Percentage slider + input
             Text(
               l10n.discountPercentage,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: Colors.grey[600],
@@ -1185,7 +1184,7 @@ class _DiscountModalState extends State<_DiscountModal> {
                   ),
                   child: Text(
                     '$_percentage%',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                       color: const Color(0xFFFF6200),
@@ -1197,7 +1196,7 @@ class _DiscountModalState extends State<_DiscountModal> {
             ),
             Text(
               l10n.percentRange(_maxDiscount, _minDiscount),
-              style: GoogleFonts.inter(fontSize: 10, color: Colors.grey[400]),
+              style: TextStyle(fontSize: 10, color: Colors.grey[400]),
             ),
             const SizedBox(height: 16),
 
@@ -1239,11 +1238,11 @@ class _DiscountModalState extends State<_DiscountModal> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(l10n.originalPrice2,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                               fontSize: 12, color: Colors.grey[500])),
                       Text(
                         '${_basePrice.toStringAsFixed(2)} TL',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 13,
                           color: Colors.grey[500],
                           decoration: TextDecoration.lineThrough,
@@ -1256,14 +1255,14 @@ class _DiscountModalState extends State<_DiscountModal> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(l10n.discountedPrice,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                             color: const Color(0xFF059669),
                           )),
                       Text(
                         '${_discountedPrice.toStringAsFixed(2)} TL',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                           color: const Color(0xFF059669),
@@ -1287,7 +1286,7 @@ class _DiscountModalState extends State<_DiscountModal> {
                   border: Border.all(color: Colors.red[200]!),
                 ),
                 child: Text(_error!,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                         color: Colors.red[700])),
@@ -1303,7 +1302,7 @@ class _DiscountModalState extends State<_DiscountModal> {
                       onPressed: _saving ? null : _handleRemove,
                       icon: const Icon(Icons.delete_outline_rounded, size: 16),
                       label: Text(l10n.removeDiscount,
-                          style: GoogleFonts.inter(fontSize: 12)),
+                          style: TextStyle(fontSize: 12)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red[50],
                         foregroundColor: Colors.red[600],
@@ -1326,7 +1325,7 @@ class _DiscountModalState extends State<_DiscountModal> {
                           borderRadius: BorderRadius.circular(10)),
                     ),
                     child: Text(l10n.cancel,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                             fontSize: 13, fontWeight: FontWeight.w500)),
                   ),
                 ),
@@ -1349,7 +1348,7 @@ class _DiscountModalState extends State<_DiscountModal> {
                             child: CircularProgressIndicator(
                                 strokeWidth: 2, color: Colors.white))
                         : Text(l10n.apply,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                                 fontSize: 13, fontWeight: FontWeight.w600)),
                   ),
                 ),
@@ -1391,7 +1390,7 @@ class _DatePickerTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                   color: Colors.grey[600])),
@@ -1411,7 +1410,7 @@ class _DatePickerTile extends StatelessWidget {
                 Expanded(
                   child: Text(
                     formatted,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 12,
                       color: isDark ? Colors.white : Colors.grey[800],
                     ),

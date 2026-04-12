@@ -190,7 +190,6 @@ class _ListColorOptionScreenState extends State<ListColorOptionScreen> {
             content: Text(
               l10n.colorOptionWarning,
               style: const TextStyle(
-                  fontFamily: 'Figtree',
                   fontSize: 16.0,
                   fontWeight: FontWeight.w600),
             ),

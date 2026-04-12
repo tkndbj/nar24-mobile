@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../services/ad_analytics_service.dart';
@@ -60,7 +59,7 @@ class _AdAnalyticsScreenState extends State<AdAnalyticsScreen> {
         backgroundColor: isDark ? const Color(0xFF1A1B23) : Colors.white,
         title: Text(
           l10n.adAnalytics,
-          style: GoogleFonts.figtree(
+          style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
@@ -289,7 +288,7 @@ class _AdAnalyticsScreenState extends State<AdAnalyticsScreen> {
             // Gender Distribution
             Text(
               l10n.genderDistribution,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -303,7 +302,7 @@ class _AdAnalyticsScreenState extends State<AdAnalyticsScreen> {
             // Age Groups
             Text(
               l10n.ageGroups,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -354,7 +353,7 @@ class _AdAnalyticsScreenState extends State<AdAnalyticsScreen> {
           const SizedBox(height: 12),
           Text(
             value,
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.w700,
               color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -363,7 +362,7 @@ class _AdAnalyticsScreenState extends State<AdAnalyticsScreen> {
           const SizedBox(height: 4),
           Text(
             label,
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               fontSize: 13,
               color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
             ),
@@ -433,7 +432,7 @@ class _AdAnalyticsScreenState extends State<AdAnalyticsScreen> {
                     value: data.value.toDouble(),
                     title: '${percentage.toStringAsFixed(1)}%',
                     radius: radius,
-                    titleStyle: GoogleFonts.figtree(
+                    titleStyle: TextStyle(
                       fontSize: fontSize,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -463,7 +462,7 @@ class _AdAnalyticsScreenState extends State<AdAnalyticsScreen> {
                   const SizedBox(width: 6),
                   Text(
                     '${entry.key} (${entry.value})',
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                       fontSize: 13,
                       color: isDark
                           ? const Color(0xFF94A3B8)
@@ -542,7 +541,7 @@ class _AdAnalyticsScreenState extends State<AdAnalyticsScreen> {
                     value: data.value.toDouble(),
                     title: '${percentage.toStringAsFixed(1)}%',
                     radius: radius,
-                    titleStyle: GoogleFonts.figtree(
+                    titleStyle: TextStyle(
                       fontSize: fontSize,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -575,7 +574,7 @@ class _AdAnalyticsScreenState extends State<AdAnalyticsScreen> {
                   const SizedBox(width: 6),
                   Text(
                     '${data.key} (${data.value})',
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                       fontSize: 13,
                       color: isDark
                           ? const Color(0xFF94A3B8)
@@ -604,7 +603,7 @@ class _AdAnalyticsScreenState extends State<AdAnalyticsScreen> {
       child: Center(
         child: Text(
           message,
-          style: GoogleFonts.figtree(
+          style: TextStyle(
             fontSize: 14,
             color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
           ),
@@ -626,7 +625,7 @@ class _AdAnalyticsScreenState extends State<AdAnalyticsScreen> {
           const SizedBox(height: 16),
           Text(
             l10n.failedToLoadAnalytics,
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: isDark ? Colors.white : const Color(0xFF1A202C),

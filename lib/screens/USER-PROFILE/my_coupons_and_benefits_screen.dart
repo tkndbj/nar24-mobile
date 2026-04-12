@@ -6,7 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../generated/l10n/app_localizations.dart';
@@ -524,11 +523,11 @@ class _MyCouponsAndBenefitsScreenState
         ),
         labelColor: Colors.white,
         unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[600],
-        labelStyle: GoogleFonts.inter(
+        labelStyle: TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 13,
         ),
-        unselectedLabelStyle: GoogleFonts.inter(
+        unselectedLabelStyle: TextStyle(
           fontWeight: FontWeight.w500,
           fontSize: 13,
         ),

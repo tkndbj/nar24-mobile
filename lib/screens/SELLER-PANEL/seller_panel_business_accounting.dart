@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../generated/l10n/app_localizations.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -199,7 +198,7 @@ class _SellerPanelBusinessAccountingState
       appBar: AppBar(
         title: Text(
           l10n.salesInformation,
-          style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 18),
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
         ),
         elevation: 0,
         backgroundColor: isDark ? null : Colors.white,
@@ -224,7 +223,7 @@ class _SellerPanelBusinessAccountingState
                 const SizedBox(width: 8),
                 Text(
                   l10n.generatedReports,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 15,
                     color: isDark ? Colors.white70 : Colors.grey[800],
@@ -296,7 +295,7 @@ class _SellerPanelBusinessAccountingState
                 child: Text(
                   labels[i],
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontWeight:
                         selected ? FontWeight.w600 : FontWeight.w500,
                     fontSize: 13,
@@ -331,7 +330,7 @@ class _SellerPanelBusinessAccountingState
         children: [
           Text(
             l10n.selectPeriod,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontWeight: FontWeight.w500,
               fontSize: 13,
               color: isDark ? Colors.white54 : Colors.grey[600],
@@ -399,7 +398,7 @@ class _SellerPanelBusinessAccountingState
             Expanded(
               child: Text(
                 displayText,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                     fontWeight: FontWeight.w500, fontSize: 14),
               ),
             ),
@@ -436,7 +435,7 @@ class _SellerPanelBusinessAccountingState
               child: DropdownButton<int>(
                 value: _selectedMonth,
                 isExpanded: true,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontWeight: FontWeight.w500,
                   fontSize: 14,
                   color: isDark ? Colors.white : Colors.black87,
@@ -470,7 +469,7 @@ class _SellerPanelBusinessAccountingState
               child: DropdownButton<int>(
                 value: _selectedMonthYear,
                 isExpanded: true,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontWeight: FontWeight.w500,
                   fontSize: 14,
                   color: isDark ? Colors.white : Colors.black87,
@@ -523,7 +522,7 @@ class _SellerPanelBusinessAccountingState
                     ),
                     const SizedBox(width: 12),
                     Text(l10n.generatingReport,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                             fontWeight: FontWeight.w600, fontSize: 15)),
                   ],
                 )
@@ -533,7 +532,7 @@ class _SellerPanelBusinessAccountingState
                     const Icon(Icons.bar_chart_rounded, size: 20),
                     const SizedBox(width: 8),
                     Text(l10n.generateReport,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                             fontWeight: FontWeight.w600, fontSize: 15)),
                   ],
                 ),
@@ -560,7 +559,7 @@ class _SellerPanelBusinessAccountingState
             const SizedBox(height: 16),
             Text(
               l10n.noReportsYet,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontWeight: FontWeight.w600,
                 fontSize: 16,
                 color: isDark ? Colors.white54 : Colors.grey[600],
@@ -572,7 +571,7 @@ class _SellerPanelBusinessAccountingState
               child: Text(
                 l10n.noReportsYetDesc,
                 textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 13,
                   color: isDark ? Colors.white38 : Colors.grey[400],
                 ),
@@ -667,12 +666,12 @@ class _SellerPanelBusinessAccountingState
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(periodLabel,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                           fontWeight: FontWeight.w600, fontSize: 14)),
                   const SizedBox(height: 4),
                   Text(
                     '$orders ${AppLocalizations.of(context).ordersLabel} • $timeAgo',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 12,
                       color:
                           isDark ? Colors.white38 : Colors.grey[500],
@@ -683,7 +682,7 @@ class _SellerPanelBusinessAccountingState
             ),
             Text(
               '₺${revenue.toStringAsFixed(2)}',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 15,
                 color: const Color(0xFF4CAF50),
@@ -944,12 +943,12 @@ Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(l10n.reportDetails,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                   fontWeight: FontWeight.w700, fontSize: 20)),
           const SizedBox(height: 4),
           Text(
             data['periodLabel'] as String? ?? '',
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 14,
               color: isDark ? Colors.white54 : Colors.grey[500],
             ),
@@ -967,7 +966,7 @@ Row(
       icon: const Icon(Icons.download_rounded, size: 18,
           color: Color(0xFF4CAF50)),
       label: Text('Excel',
-          style: GoogleFonts.inter(
+          style: TextStyle(
               fontWeight: FontWeight.w600,
               fontSize: 13,
               color: const Color(0xFF4CAF50))),
@@ -1148,7 +1147,7 @@ const SizedBox(height: 20),
               Expanded(
                 child: Text(
                   m.label,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 11,
                     color: isDark ? Colors.white54 : Colors.grey[500],
                   ),
@@ -1159,7 +1158,7 @@ const SizedBox(height: 20),
           ),
           const SizedBox(height: 8),
           Text(m.value,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                   fontWeight: FontWeight.w700, fontSize: 16)),
         ],
       ),
@@ -1169,7 +1168,7 @@ const SizedBox(height: 20),
   Widget _section(String title, bool isDark) {
     return Text(
       title,
-      style: GoogleFonts.inter(
+      style: TextStyle(
         fontWeight: FontWeight.w600,
         fontSize: 15,
         color: isDark ? Colors.white70 : Colors.grey[800],
@@ -1203,11 +1202,11 @@ const SizedBox(height: 20),
             children: [
               Expanded(
                 child: Text(label,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                         fontWeight: FontWeight.w500, fontSize: 14)),
               ),
               Text('$count',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 13,
                     color:
                         isDark ? Colors.white38 : Colors.grey[500],
@@ -1215,7 +1214,7 @@ const SizedBox(height: 20),
               const SizedBox(width: 16),
               Text(
                 '₺${amount.toStringAsFixed(2)}',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                   color: const Color(0xFF4CAF50),
@@ -1244,18 +1243,18 @@ const SizedBox(height: 20),
         children: [
           Expanded(
             child: Text(name,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                     fontSize: 13, fontWeight: FontWeight.w500),
                 overflow: TextOverflow.ellipsis),
           ),
           Text('×$qty',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 12,
                 color: isDark ? Colors.white38 : Colors.grey[500],
               )),
           const SizedBox(width: 12),
           Text(revenue,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
                 color: const Color(0xFF4CAF50),

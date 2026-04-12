@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../generated/l10n/app_localizations.dart';
@@ -372,7 +371,7 @@ class _SellerPanelUserPermissionState
             appBar: AppBar(
               title: Text(
                 l10n.userPermissions,
-                style: GoogleFonts.figtree(
+                style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: isDarkMode ? Colors.white : Colors.black,
                 ),
@@ -390,7 +389,7 @@ class _SellerPanelUserPermissionState
           return Scaffold(
             appBar: AppBar(
               title: Text(l10n.userPermissions,
-                  style: GoogleFonts.figtree(
+                  style: TextStyle(
                       fontWeight: FontWeight.w600,
                       color: isDarkMode ? Colors.white : Colors.black)),
               backgroundColor: isDarkMode ? null : Colors.white,
@@ -409,7 +408,7 @@ class _SellerPanelUserPermissionState
                         ? l10n.initializationFailed
                         : '${l10n.initializationFailed}: ${snapshot.error}',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                         color:
                             isDarkMode ? Colors.white70 : Colors.grey[600]),
                   ),
@@ -441,7 +440,7 @@ class _SellerPanelUserPermissionState
                       : const Color(0xFFF8F9FA),
                   appBar: AppBar(
                     title: Text(l10n.userPermissions,
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color:
                                 isDarkMode ? Colors.white : Colors.black)),
@@ -535,7 +534,7 @@ class _SellerPanelUserPermissionState
               const SizedBox(width: 8),
               Expanded(
                 child: Text(entityName,
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: Colors.white)),
@@ -544,7 +543,7 @@ class _SellerPanelUserPermissionState
           ),
           const SizedBox(height: 4),
           Text(l10n.managingPermissionsFor(entityName),
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                   fontSize: 12, color: Colors.white.withOpacity(0.9))),
         ],
       ),
@@ -586,7 +585,7 @@ class _SellerPanelUserPermissionState
               ),
               const SizedBox(width: 10),
               Text(l10n.sendInvitation,
-                  style: GoogleFonts.figtree(
+                  style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       color: isDarkMode ? Colors.white : Colors.black)),
@@ -688,7 +687,7 @@ class _SellerPanelUserPermissionState
                         const Icon(Icons.send, size: 16),
                         const SizedBox(width: 6),
                         Text(l10n.sendInvitation,
-                            style: GoogleFonts.figtree(
+                            style: TextStyle(
                                 fontWeight: FontWeight.w600, fontSize: 14)),
                       ],
                     ),
@@ -738,7 +737,7 @@ class _SellerPanelUserPermissionState
               ),
               const SizedBox(width: 10),
               Text(l10n.acceptedUsers,
-                  style: GoogleFonts.figtree(
+                  style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       color: isDarkMode ? Colors.white : Colors.black)),
@@ -829,7 +828,7 @@ class _SellerPanelUserPermissionState
                                 member.displayName.isNotEmpty
                                     ? member.displayName[0].toUpperCase()
                                     : '?',
-                                style: GoogleFonts.figtree(
+                                style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     color: _getRoleColor(member.role),
                                     fontSize: 16),
@@ -841,7 +840,7 @@ class _SellerPanelUserPermissionState
                               Flexible(
                                 child: Text(member.displayName,
                                     overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.figtree(
+                                    style: TextStyle(
                                         fontWeight: FontWeight.w600,
                                         color: isDarkMode
                                             ? Colors.white
@@ -851,7 +850,7 @@ class _SellerPanelUserPermissionState
                               if (isCurrentUser) ...[
                                 const SizedBox(width: 6),
                                 Text('(${l10n.youLabel})',
-                                    style: GoogleFonts.figtree(
+                                    style: TextStyle(
                                         fontSize: 11,
                                         color: Colors.grey[400],
                                         fontWeight: FontWeight.normal)),
@@ -865,7 +864,7 @@ class _SellerPanelUserPermissionState
                                   color: _getRoleColor(member.role)),
                               const SizedBox(width: 3),
                               Text(getLocalizedRole(member.role, l10n),
-                                  style: GoogleFonts.figtree(
+                                  style: TextStyle(
                                       color: _getRoleColor(member.role),
                                       fontWeight: FontWeight.w500,
                                       fontSize: 12)),
@@ -880,7 +879,7 @@ class _SellerPanelUserPermissionState
                                         BorderRadius.circular(10),
                                   ),
                                   child: Text('OWNER',
-                                      style: GoogleFonts.figtree(
+                                      style: TextStyle(
                                           fontSize: 9,
                                           color: Colors.white,
                                           fontWeight: FontWeight.bold)),
@@ -956,7 +955,7 @@ class _SellerPanelUserPermissionState
               ),
               const SizedBox(width: 10),
               Text(l10n.pendingInvitations,
-                  style: GoogleFonts.figtree(
+                  style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       color: isDarkMode ? Colors.white : Colors.black)),
@@ -1010,7 +1009,7 @@ class _SellerPanelUserPermissionState
                             inviteEmail.isNotEmpty
                                 ? inviteEmail[0].toUpperCase()
                                 : '?',
-                            style: GoogleFonts.figtree(
+                            style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: _getRoleColor(role),
                                 fontSize: 16),
@@ -1019,7 +1018,7 @@ class _SellerPanelUserPermissionState
                       ),
                       title: Text(inviteEmail,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.figtree(
+                          style: TextStyle(
                               fontWeight: FontWeight.w600,
                               color: isDarkMode
                                   ? Colors.white
@@ -1031,7 +1030,7 @@ class _SellerPanelUserPermissionState
                               size: 12, color: _getRoleColor(role)),
                           const SizedBox(width: 3),
                           Text(getLocalizedRole(role, l10n),
-                              style: GoogleFonts.figtree(
+                              style: TextStyle(
                                   color: _getRoleColor(role),
                                   fontWeight: FontWeight.w500,
                                   fontSize: 12)),
@@ -1111,7 +1110,7 @@ class _SellerPanelUserPermissionState
                   const SizedBox(height: 12),
                   Text(
                     l10n.revokeAccess ?? 'Revoke Access',
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                         color:
@@ -1121,7 +1120,7 @@ class _SellerPanelUserPermissionState
                   Text(
                     l10n.revokeAccessConfirmation ??
                         'This will remove their access to the ${_isRestaurant ? 'restaurant' : 'shop'}.',
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                         fontSize: 13,
                         color: isDarkMode
                             ? Colors.white60
@@ -1130,7 +1129,7 @@ class _SellerPanelUserPermissionState
                   const SizedBox(height: 4),
                   Text(
                     target.displayName,
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: Colors.red),
@@ -1154,7 +1153,7 @@ class _SellerPanelUserPermissionState
                             borderRadius: BorderRadius.circular(10)),
                       ),
                       child: Text(l10n.cancel,
-                          style: GoogleFonts.figtree(
+                          style: TextStyle(
                               fontWeight: FontWeight.w600, fontSize: 13)),
                     ),
                   ),
@@ -1184,7 +1183,7 @@ class _SellerPanelUserPermissionState
                                     size: 16),
                                 const SizedBox(width: 6),
                                 Text(l10n.revoke ?? 'Revoke',
-                                    style: GoogleFonts.figtree(
+                                    style: TextStyle(
                                         fontWeight: FontWeight.w600,
                                         fontSize: 13)),
                               ],
@@ -1211,7 +1210,7 @@ class _SellerPanelUserPermissionState
             Icon(icon, size: 40, color: Colors.grey.withOpacity(0.5)),
             const SizedBox(height: 8),
             Text(text,
-                style: GoogleFonts.figtree(
+                style: TextStyle(
                     fontSize: 12, color: Colors.grey)),
           ],
         ),

@@ -79,7 +79,6 @@ class TerasFilterSortRow extends StatelessWidget {
                                 Text(
                                   l10n.categories,
                                   style: TextStyle(
-                                    fontFamily: 'Figtree',
                                     fontWeight: FontWeight.w600,
                                     fontSize: 12,
                                     color: Theme.of(context).brightness ==
@@ -164,7 +163,6 @@ class TerasFilterSortRow extends StatelessWidget {
                                 Text(
                                   l10n.sellOnVitrin,
                                   style: TextStyle(
-                                    fontFamily: 'Figtree',
                                     fontWeight: FontWeight.w600,
                                     fontSize: 12,
                                     color: Theme.of(context).brightness ==

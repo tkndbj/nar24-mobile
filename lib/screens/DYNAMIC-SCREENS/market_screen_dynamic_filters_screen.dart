@@ -515,7 +515,6 @@ class _MarketScreenDynamicFiltersScreenState
           l10n.sortBy,
           style: TextStyle(
             color: textColor,
-            fontFamily: 'Figtree',
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -530,7 +529,6 @@ class _MarketScreenDynamicFiltersScreenState
               _localizedSortOption(option, l10n),
               style: TextStyle(
                 color: textColor,
-                fontFamily: 'Figtree',
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
@@ -543,7 +541,6 @@ class _MarketScreenDynamicFiltersScreenState
             l10n.cancel,
             style: TextStyle(
               color: textColor,
-              fontFamily: 'Figtree',
               fontSize: 15,
               fontWeight: FontWeight.w600,
             ),
@@ -827,7 +824,6 @@ class _MarketScreenDynamicFiltersScreenState
                       _localizedSortOption(_selectedSortOption, l10n),
                       style: const TextStyle(
                         fontSize: 14,
-                        fontFamily: 'Figtree',
                       ),
                     ),
                   ),

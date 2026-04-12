@@ -145,7 +145,7 @@ class ShopProvider with ChangeNotifier {
   DocumentSnapshot? _lastDocument;
   bool _hasMore = true;
   bool _isLoadingMore = false;
-  bool _isInitialLoading = false;
+  bool _isInitialLoading = true;
   bool _hasError = false;
   final int _limit = 10;
   final ScrollController scrollController = ScrollController();

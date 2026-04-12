@@ -6,7 +6,6 @@ import '../../services/typesense_service_manager.dart';
 import '../../services/search_config_service.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class ShopSearchBar extends StatefulWidget {
   final Function(List<DocumentSnapshot>?, bool) onSearchResultsChanged;
@@ -307,7 +306,7 @@ class ShopSearchBarState extends State<ShopSearchBar> {
           child: TextField(
             focusNode: _focusNode,
             controller: _searchController,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,
               color: isDark ? Colors.white : Colors.black87,
@@ -364,7 +363,7 @@ class ShopSearchBarState extends State<ShopSearchBar> {
                       ),
                     ),
               hintText: l10n.searchShops ?? 'Search shops...',
-              hintStyle: GoogleFonts.inter(
+              hintStyle: TextStyle(
                 fontSize: 14,
                 color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
                 fontWeight: FontWeight.w600,

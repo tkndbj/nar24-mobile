@@ -164,10 +164,9 @@ class _ShopScreenState extends State<ShopScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final userOwnsShop = context.watch<ShopProvider>().userOwnsShop;
+    final userOwnsShop =
+        context.select<ShopProvider, bool>((p) => p.userOwnsShop);
     final l10n = AppLocalizations.of(context);
-    final shopProvider = context.read<ShopProvider>();
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
       // Dismiss keyboard when tapping outside
@@ -243,7 +242,8 @@ class _ShopScreenState extends State<ShopScreen> {
 
               // Main Content
               Expanded(
-                child: RefreshIndicator(
+                child: Consumer<ShopProvider>(
+                  builder: (context, shopProvider, _) => RefreshIndicator(
                   onRefresh: () async {
                     // ✅ Clear search state first
                     if (mounted) {
@@ -290,9 +290,10 @@ class _ShopScreenState extends State<ShopScreen> {
                       ),
 
                       // Shops Grid
-                      _buildShopsSliver(context),
+                      _buildShopsSliver(context, shopProvider),
                     ],
                   ),
+                ),
                 ),
               ),
             ],
@@ -302,8 +303,7 @@ class _ShopScreenState extends State<ShopScreen> {
     );
   }
 
-  Widget _buildShopsSliver(BuildContext context) {
-    final shopProvider = Provider.of<ShopProvider>(context);
+  Widget _buildShopsSliver(BuildContext context, ShopProvider shopProvider) {
     final l10n = AppLocalizations.of(context);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 

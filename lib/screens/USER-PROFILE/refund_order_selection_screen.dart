@@ -3,7 +3,6 @@ import 'package:flutter_feather_icons/flutter_feather_icons.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../generated/l10n/app_localizations.dart';
 
@@ -371,7 +370,7 @@ class _RefundOrderSelectionScreenState
                     children: [
                       Text(
                         productName,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                           color: theme.textTheme.bodyMedium?.color,
@@ -408,7 +407,7 @@ class _RefundOrderSelectionScreenState
                         children: [
                           Text(
                             '${price.toStringAsFixed(2)} $currency',
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
                               color: Colors.orange,
@@ -521,7 +520,7 @@ class _RefundOrderSelectionScreenState
             Text(
               localization.noOrdersForRefund,
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
                 color: isDarkMode ? Colors.white70 : Colors.grey[700],
@@ -531,7 +530,7 @@ class _RefundOrderSelectionScreenState
             Text(
               localization.noOrdersForRefundDesc,
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 14,
                 color: isDarkMode ? Colors.white54 : Colors.grey[600],
               ),

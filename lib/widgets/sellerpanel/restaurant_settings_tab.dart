@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../generated/l10n/app_localizations.dart';
@@ -274,7 +273,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
   void _showSnackBar(String message, {required bool isError}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: GoogleFonts.inter(fontSize: 13)),
+        content: Text(message, style: TextStyle(fontSize: 13)),
         backgroundColor: isError ? Colors.red[600] : Colors.green[600],
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -386,7 +385,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
                       Expanded(
                         child: Text(
                           AppLocalizations.of(context).selectFoodType,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                               fontSize: 17, fontWeight: FontWeight.w600),
                         ),
                       ),
@@ -413,7 +412,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
                         },
                         title: Text(
                           _getCategoryName(cat),
-                          style: GoogleFonts.inter(fontSize: 13),
+                          style: TextStyle(fontSize: 13),
                         ),
                         activeColor: const Color(0xFF667EEA),
                         shape: RoundedRectangleBorder(
@@ -442,7 +441,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
                     child: Text(
                       AppLocalizations.of(context)
                           .okCategoriesSelected(_foodType.length),
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                           fontSize: 14, fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -591,7 +590,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
                 children: [
                   Text(
                     _isActive ? l10n.active : l10n.inactive,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: _isActive
@@ -673,7 +672,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
                 _foodType.isEmpty
                     ? l10n.selectFoodType
                     : l10n.categoriesSelected(_foodType.length),
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 13,
                   color: _foodType.isEmpty
                       ? Colors.grey[400]
@@ -703,7 +702,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
                     children: [
                       Text(
                         _getCategoryName(ft),
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
                           color: const Color(0xFF6D28D9),
@@ -773,7 +772,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
                   ),
                   child: Text(
                     _cuisineLabel(cuisine),
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: isSelected
@@ -831,7 +830,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
                 Expanded(
                   child: Text(
                     l10n.minOrderPriceWarning,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                         fontSize: 12, color: const Color(0xFF92400E)),
                   ),
                 ),
@@ -885,10 +884,10 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
                         RegExp(r'^\d*\.?\d{0,2}')),
                   ],
                   onChanged: (_) => setState(() {}),
-                  style: GoogleFonts.inter(fontSize: 13),
+                  style: TextStyle(fontSize: 13),
                   decoration: InputDecoration(
                     hintText: '0.00',
-                    hintStyle: GoogleFonts.inter(
+                    hintStyle: TextStyle(
                         fontSize: 13, color: Colors.grey[400]),
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 14),
@@ -951,7 +950,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
               children: [
                 Text(
                   '${l10n.addedRegions} (${_minOrderPrices.length})',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: Colors.grey[400],
@@ -986,7 +985,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
                       ),
                       child: Text(
                         entry.mainRegion,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                           color: const Color(0xFF065F46),
@@ -997,7 +996,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
                     Expanded(
                       child: Text(
                         entry.subregion,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                           color: isDark ? Colors.white : Colors.grey[800],
@@ -1007,7 +1006,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
                     ),
                     Text(
                       '${entry.minOrderPrice.toStringAsFixed(2)} TL',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: isDark ? Colors.white : Colors.grey[900],
@@ -1060,7 +1059,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
             children: [
               Text(
                 l10n.workingDays,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: Colors.grey[400],
@@ -1073,7 +1072,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
                   _workingDays.length == _allDays.length
                       ? l10n.deselectAll
                       : l10n.selectAll,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: const Color(0xFF4F46E5),
@@ -1114,7 +1113,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
                   ),
                   child: Text(
                     _dayLabel(day).substring(0, 3),
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: isSelected
@@ -1131,7 +1130,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
           // Working hours
           Text(
             l10n.workingHours,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
               color: Colors.grey[400],
@@ -1147,7 +1146,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 20),
                 child: Text('  –  ',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                         color: Colors.grey[300], fontWeight: FontWeight.w500)),
               ),
               Expanded(
@@ -1183,7 +1182,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
                     size: 16, color: Colors.grey[400]),
                 const SizedBox(width: 8),
                 Text(time,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                       color: isDark ? Colors.white : Colors.grey[800],
@@ -1194,7 +1193,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
         ),
         const SizedBox(height: 4),
         Text(label,
-            style: GoogleFonts.inter(fontSize: 10, color: Colors.grey[400]),
+            style: TextStyle(fontSize: 10, color: Colors.grey[400]),
             textAlign: TextAlign.center),
       ],
     );
@@ -1250,7 +1249,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
                           : _hasChanges
                               ? l10n.saveChanges
                               : l10n.noChanges,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                           fontSize: 14, fontWeight: FontWeight.w600),
                     ),
                   ],
@@ -1264,7 +1263,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
 
   Widget _buildDropdownLabel(String label, bool isDark) => Text(
         label.toUpperCase(),
-        style: GoogleFonts.inter(
+        style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
           color: Colors.grey[400],
@@ -1308,11 +1307,11 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
             ? (isDark ? Colors.white.withOpacity(0.03) : Colors.grey[50])
             : (isDark ? Colors.white.withOpacity(0.05) : Colors.white),
       ),
-      style: GoogleFonts.inter(
+      style: TextStyle(
           fontSize: 13, color: isDark ? Colors.white : Colors.grey[900]),
       dropdownColor: isDark ? const Color(0xFF1E1B2E) : Colors.white,
       hint: Text(hint,
-          style: GoogleFonts.inter(fontSize: 13, color: Colors.grey[400])),
+          style: TextStyle(fontSize: 13, color: Colors.grey[400])),
       items: enabled
           ? items.map((item) {
               final isDisabled = disabledItems.contains(item);
@@ -1321,7 +1320,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
                 enabled: !isDisabled,
                 child: Text(
                   item,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 13,
                     color: isDisabled
                         ? Colors.grey[400]
@@ -1371,7 +1370,7 @@ class _RestaurantSettingsTabState extends State<RestaurantSettingsTab> {
             const SizedBox(height: 16),
             Text(
               AppLocalizations.of(context).fetchError,
-              style: GoogleFonts.inter(fontSize: 14, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -1452,7 +1451,7 @@ class _SectionHeader extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                   color: isDark ? Colors.white : Colors.grey[900],
@@ -1463,7 +1462,7 @@ class _SectionHeader extends StatelessWidget {
                 Text(
                   subtitle!,
                   style:
-                      GoogleFonts.inter(fontSize: 11, color: Colors.grey[400]),
+                      TextStyle(fontSize: 11, color: Colors.grey[400]),
                 ),
               ],
             ],

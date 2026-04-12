@@ -4,7 +4,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../PAYMENT-RECEIPT/dynamic_payment_screen.dart';
 import 'dart:io';
 import '../../generated/l10n/app_localizations.dart';
@@ -393,7 +392,7 @@ class _AdsScreenState extends State<AdsScreen>
                     Expanded(
                       child: Text(
                         l10n.selectDuration,
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
                           color:
@@ -457,7 +456,7 @@ class _AdsScreenState extends State<AdsScreen>
                     ),
                     child: Text(
                       '${l10n.continueText} • ${_getPrice(adType, _selectedDuration).toStringAsFixed(0)} TL',
-                      style: GoogleFonts.figtree(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
@@ -549,7 +548,7 @@ class _AdsScreenState extends State<AdsScreen>
                     children: [
                       Text(
                         label,
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                           color: isSelected
@@ -574,7 +573,7 @@ class _AdsScreenState extends State<AdsScreen>
                           ),
                           child: Text(
                             l10n.recommended,
-                            style: GoogleFonts.figtree(
+                            style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
                               color: isSelected
@@ -589,7 +588,7 @@ class _AdsScreenState extends State<AdsScreen>
                   const SizedBox(height: 4),
                   Text(
                     '${price.toStringAsFixed(0)} TL',
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                       fontSize: 14,
                       color: isSelected
                           ? Colors.white.withOpacity(0.9)
@@ -615,7 +614,7 @@ class _AdsScreenState extends State<AdsScreen>
                 ),
                 child: Text(
                   l10n.bestValue,
-                  style: GoogleFonts.figtree(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: isSelected ? Colors.white : const Color(0xFF38A169),
@@ -654,7 +653,7 @@ class _AdsScreenState extends State<AdsScreen>
               Expanded(
                 child: Text(
                   l10n.imageTooLarge,
-                  style: GoogleFonts.figtree(fontSize: 14),
+                  style: TextStyle(fontSize: 14),
                 ),
               ),
             ],
@@ -682,7 +681,7 @@ class _AdsScreenState extends State<AdsScreen>
               Expanded(
                 child: Text(
                   'Only JPG, PNG, WebP, and HEIC formats are allowed',
-                  style: GoogleFonts.figtree(fontSize: 14),
+                  style: TextStyle(fontSize: 14),
                 ),
               ),
             ],
@@ -829,7 +828,7 @@ class _AdsScreenState extends State<AdsScreen>
                     children: [
                       Text(
                         l10n.adSubmittedSuccessfully,
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
@@ -837,7 +836,7 @@ class _AdsScreenState extends State<AdsScreen>
                       const SizedBox(height: 2),
                       Text(
                         l10n.adUnderReview,
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                           fontSize: 12,
                           color: Colors.white.withOpacity(0.9),
                         ),
@@ -882,7 +881,7 @@ class _AdsScreenState extends State<AdsScreen>
                     e.toString().contains('too large')
                         ? l10n.imageTooLarge
                         : l10n.errorUploadingAd,
-                    style: GoogleFonts.figtree(fontSize: 14),
+                    style: TextStyle(fontSize: 14),
                   ),
                 ),
               ],
@@ -1001,7 +1000,7 @@ class _AdsScreenState extends State<AdsScreen>
     ),
     title: Text(
       l10n.adManagement,
-      style: GoogleFonts.figtree(
+      style: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.w600,
         color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -1041,7 +1040,7 @@ class _AdsScreenState extends State<AdsScreen>
         indicatorSize: TabBarIndicatorSize.tab,
         labelColor: Colors.white,
         unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[600],
-        labelStyle: GoogleFonts.inter(
+        labelStyle: TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 13,
         ),
@@ -1099,7 +1098,7 @@ class _AdsScreenState extends State<AdsScreen>
                 Expanded(
                   child: Text(
                     l10n.adSubmissionInfo,
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                       fontSize: 13,
                       color: isDark
                           ? const Color(0xFFA0AAB8)
@@ -1116,7 +1115,7 @@ class _AdsScreenState extends State<AdsScreen>
           // Ad Types Section
           Text(
             l10n.selectAdType,
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
               color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -1184,7 +1183,7 @@ class _AdsScreenState extends State<AdsScreen>
             const SizedBox(height: 24),
             Text(
               l10n.adServiceTemporarilyOff,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
                 color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -1194,7 +1193,7 @@ class _AdsScreenState extends State<AdsScreen>
             const SizedBox(height: 12),
             Text(
               l10n.adServiceDisabledMessage,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 14,
                 color:
                     isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
@@ -1264,7 +1263,7 @@ class _AdsScreenState extends State<AdsScreen>
                         children: [
                           Text(
                             title,
-                            style: GoogleFonts.figtree(
+                            style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
                               color: isDark
@@ -1275,7 +1274,7 @@ class _AdsScreenState extends State<AdsScreen>
                           const SizedBox(height: 4),
                           Text(
                             description,
-                            style: GoogleFonts.figtree(
+                            style: TextStyle(
                               fontSize: 12,
                               color: isDark
                                   ? const Color(0xFF94A3B8)
@@ -1286,7 +1285,7 @@ class _AdsScreenState extends State<AdsScreen>
                           const SizedBox(height: 4),
                           Text(
                             l10n.bannerDimensions,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
                               color: const Color(0xFFED8936), // Orange color
@@ -1359,7 +1358,7 @@ class _AdsScreenState extends State<AdsScreen>
         children: [
           Text(
             duration,
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               fontSize: 11,
               color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
             ),
@@ -1367,7 +1366,7 @@ class _AdsScreenState extends State<AdsScreen>
           const SizedBox(height: 4),
           Text(
             '${price.toStringAsFixed(0)} TL',
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
               color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -1557,7 +1556,7 @@ class _AdsScreenState extends State<AdsScreen>
                             const SizedBox(width: 4),
                             Text(
                               _getDurationLabel(submission.duration, l10n),
-                              style: GoogleFonts.figtree(
+                              style: TextStyle(
                                 fontSize: titleFontSize,
                                 fontWeight: FontWeight.w600,
                                 color: isDark
@@ -1576,7 +1575,7 @@ class _AdsScreenState extends State<AdsScreen>
                             const SizedBox(width: 4),
                             Text(
                               '${submission.price?.toStringAsFixed(0) ?? '0'} TL',
-                              style: GoogleFonts.figtree(
+                              style: TextStyle(
                                 fontSize: titleFontSize,
                                 fontWeight: FontWeight.w700,
                                 color: isDark
@@ -1592,7 +1591,7 @@ class _AdsScreenState extends State<AdsScreen>
                         isTablet
                             ? '${submission.price?.toStringAsFixed(0) ?? '0'} TL'
                             : _formatDate(submission.createdAt, l10n),
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                           fontSize: isTablet ? 11.0 : 11.0,
                           fontWeight:
                               isTablet ? FontWeight.w600 : FontWeight.normal,
@@ -1644,7 +1643,7 @@ class _AdsScreenState extends State<AdsScreen>
                                       const SizedBox(width: 4),
                                       Text(
                                         l10n.viewAnalytics ?? 'Analytics',
-                                        style: GoogleFonts.figtree(
+                                        style: TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -1684,7 +1683,7 @@ class _AdsScreenState extends State<AdsScreen>
                                       size: 20),
                                   label: Text(
                                     l10n.viewAnalytics ?? 'View Analytics',
-                                    style: GoogleFonts.figtree(
+                                    style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -1717,7 +1716,7 @@ class _AdsScreenState extends State<AdsScreen>
                               Expanded(
                                 child: Text(
                                   l10n.adApprovedMessage,
-                                  style: GoogleFonts.figtree(
+                                  style: TextStyle(
                                     fontSize: isTablet ? 10 : 12,
                                     color: const Color(0xFF38A169),
                                   ),
@@ -1754,7 +1753,7 @@ class _AdsScreenState extends State<AdsScreen>
                               Expanded(
                                 child: Text(
                                   submission.rejectionReason!,
-                                  style: GoogleFonts.figtree(
+                                  style: TextStyle(
                                     fontSize: isTablet ? 10 : 12,
                                     color: const Color(0xFFE53E3E),
                                   ),
@@ -1804,7 +1803,7 @@ class _AdsScreenState extends State<AdsScreen>
                             icon: const Icon(Icons.payment_rounded, size: 20),
                             label: Text(
                               '${l10n.proceedToPayment} (${submission.price!.toStringAsFixed(0)} TL)',
-                              style: GoogleFonts.figtree(
+                              style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -1853,7 +1852,7 @@ class _AdsScreenState extends State<AdsScreen>
                       const SizedBox(width: 4),
                       Text(
                         _getDurationLabel(submission.duration, l10n),
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                           fontSize: titleFontSize,
                           fontWeight: FontWeight.w600,
                           color: isDark
@@ -1872,7 +1871,7 @@ class _AdsScreenState extends State<AdsScreen>
                       const SizedBox(width: 4),
                       Text(
                         '${submission.price?.toStringAsFixed(0) ?? '0'} TL',
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                           fontSize: titleFontSize,
                           fontWeight: FontWeight.w700,
                           color:
@@ -1884,7 +1883,7 @@ class _AdsScreenState extends State<AdsScreen>
                   const SizedBox(height: 8),
                   Text(
                     _formatDate(submission.createdAt, l10n),
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                       fontSize: 11.0,
                       color: isDark
                           ? const Color(0xFF94A3B8)
@@ -1924,7 +1923,7 @@ class _AdsScreenState extends State<AdsScreen>
                         icon: const Icon(Icons.analytics_rounded, size: 20),
                         label: Text(
                           l10n.viewAnalytics ?? 'View Analytics',
-                          style: GoogleFonts.figtree(
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1955,7 +1954,7 @@ class _AdsScreenState extends State<AdsScreen>
                           Expanded(
                             child: Text(
                               l10n.adApprovedMessage,
-                              style: GoogleFonts.figtree(
+                              style: TextStyle(
                                 fontSize: 12,
                                 color: const Color(0xFF38A169),
                               ),
@@ -1989,7 +1988,7 @@ class _AdsScreenState extends State<AdsScreen>
                           Expanded(
                             child: Text(
                               submission.rejectionReason!,
-                              style: GoogleFonts.figtree(
+                              style: TextStyle(
                                 fontSize: 12,
                                 color: const Color(0xFFE53E3E),
                               ),
@@ -2035,7 +2034,7 @@ class _AdsScreenState extends State<AdsScreen>
                         icon: const Icon(Icons.payment_rounded, size: 20),
                         label: Text(
                           '${l10n.proceedToPayment} (${submission.price!.toStringAsFixed(0)} TL)',
-                          style: GoogleFonts.figtree(
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),
@@ -2086,7 +2085,7 @@ class _AdsScreenState extends State<AdsScreen>
           const SizedBox(width: 4),
           Text(
             remainingTime,
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               fontSize: fontSize,
               fontWeight: FontWeight.w600,
               color: const Color(0xFFED8936),
@@ -2173,7 +2172,7 @@ class _AdsScreenState extends State<AdsScreen>
           const SizedBox(width: 4),
           Text(
             config['text'] as String,
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               fontSize: fontSize,
               fontWeight: FontWeight.w600,
               color: config['color'],
@@ -2199,7 +2198,7 @@ class _AdsScreenState extends State<AdsScreen>
       ),
       child: Text(
         config['text'] as String,
-        style: GoogleFonts.figtree(
+        style: TextStyle(
           fontSize: fontSize,
           fontWeight: FontWeight.w600,
           color: config['color'] as Color,
@@ -2350,7 +2349,7 @@ class _AdsScreenState extends State<AdsScreen>
             const SizedBox(height: 16),
             Text(
               title,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color:
@@ -2360,7 +2359,7 @@ class _AdsScreenState extends State<AdsScreen>
             const SizedBox(height: 8),
             Text(
               subtitle,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 13,
                 color:
                     isDark ? const Color(0xFF718096) : const Color(0xFF64748B),
@@ -2493,7 +2492,7 @@ class _UploadProgressModalState extends State<UploadProgressModal>
               // Title
               Text(
                 l10n.uploadingAd,
-                style: GoogleFonts.figtree(
+                style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
                   color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -2504,7 +2503,7 @@ class _UploadProgressModalState extends State<UploadProgressModal>
               // Shop Name
               Text(
                 widget.shopName,
-                style: GoogleFonts.figtree(
+                style: TextStyle(
                   fontSize: 14,
                   color: isDark
                       ? const Color(0xFF94A3B8)
@@ -2556,7 +2555,7 @@ class _UploadProgressModalState extends State<UploadProgressModal>
                       child: Text(
                         _currentStage,
                         key: ValueKey(_currentStage),
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                           fontSize: 13,
                           color: isDark
                               ? const Color(0xFF94A3B8)
@@ -2570,7 +2569,7 @@ class _UploadProgressModalState extends State<UploadProgressModal>
                     builder: (context, child) {
                       return Text(
                         '${(_progressAnimation.value * 100).toInt()}%',
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: _getAdTypeColor(widget.adType),
@@ -2700,7 +2699,7 @@ class _AdLinkSelectionSheetState extends State<AdLinkSelectionSheet> {
               Expanded(
                 child: Text(
                   l10n.addLinkOptional,
-                  style: GoogleFonts.figtree(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
                     color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -2716,7 +2715,7 @@ class _AdLinkSelectionSheetState extends State<AdLinkSelectionSheet> {
           const SizedBox(height: 8),
           Text(
             l10n.chooseAdDestination,
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               fontSize: 13,
               color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
             ),
@@ -2773,7 +2772,7 @@ class _AdLinkSelectionSheetState extends State<AdLinkSelectionSheet> {
                   : _products.isEmpty
                       ? Text(
                           l10n.noProductsAvailable,
-                          style: GoogleFonts.figtree(
+                          style: TextStyle(
                             fontSize: 13,
                             color: isDark
                                 ? const Color(0xFF94A3B8)
@@ -2789,7 +2788,7 @@ class _AdLinkSelectionSheetState extends State<AdLinkSelectionSheet> {
                               value: product.id,
                               child: Text(
                                 product.productName,
-                                style: GoogleFonts.figtree(fontSize: 14),
+                                style: TextStyle(fontSize: 14),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             );
@@ -2819,7 +2818,7 @@ class _AdLinkSelectionSheetState extends State<AdLinkSelectionSheet> {
               ),
               child: Text(
                 l10n.continueText,
-                style: GoogleFonts.figtree(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
@@ -2893,7 +2892,7 @@ class _AdLinkSelectionSheetState extends State<AdLinkSelectionSheet> {
                 children: [
                   Text(
                     title,
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -2902,7 +2901,7 @@ class _AdLinkSelectionSheetState extends State<AdLinkSelectionSheet> {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                       fontSize: 12,
                       color: isDark
                           ? const Color(0xFF94A3B8)

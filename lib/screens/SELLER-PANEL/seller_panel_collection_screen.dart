@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
@@ -1728,7 +1727,7 @@ class _SellerPanelCollectionScreenState
         backgroundColor: isDark ? const Color(0xFF1C1A29) : Colors.white,
         title: Text(
           l10n.collections,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             fontWeight: FontWeight.w600,
             color: isDark ? Colors.white : Colors.black,
           ),
@@ -1790,7 +1789,7 @@ class _SellerPanelCollectionScreenState
                     const SizedBox(width: 12),
                     Text(
                       l10n.manageCollections,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
                         color: isDark ? Colors.white : Colors.black87,
@@ -1801,7 +1800,7 @@ class _SellerPanelCollectionScreenState
                 const SizedBox(height: 12),
                 Text(
                   l10n.collectionsDescription,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 14,
                     height: 1.4,
                     color: isDark ? Colors.white70 : Colors.grey.shade700,
@@ -1838,7 +1837,7 @@ class _SellerPanelCollectionScreenState
                     const SizedBox(width: 8),
                     Text(
                       l10n.createCollection,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                         color: isDark ? Colors.black : Colors.white,
@@ -1894,7 +1893,7 @@ class _SellerPanelCollectionScreenState
           const SizedBox(height: 16),
           Text(
             l10n.noCollectionsYet,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w500,
               color: isDark ? Colors.white70 : Colors.grey.shade600,
@@ -1903,7 +1902,7 @@ class _SellerPanelCollectionScreenState
           const SizedBox(height: 8),
           Text(
             l10n.createFirstCollection,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 14,
               color: isDark ? Colors.white30 : Colors.grey.shade500,
             ),
@@ -1978,7 +1977,7 @@ class _SellerPanelCollectionScreenState
                     children: [
                       Text(
                         collection['name'] ?? l10n.unnamedCollection,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
                           color: isDark ? Colors.white : Colors.black87,
@@ -1987,7 +1986,7 @@ class _SellerPanelCollectionScreenState
                       const SizedBox(height: 4),
                       Text(
                         '${productIds.length} ${l10n.products}',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 14,
                           color: isDark ? Colors.white60 : Colors.grey.shade600,
                         ),
@@ -2049,7 +2048,7 @@ class _SellerPanelCollectionScreenState
                     const SizedBox(width: 8),
                     Text(
                       l10n.addProducts,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: isDark ? Colors.tealAccent : Colors.teal,
@@ -2333,7 +2332,7 @@ class _ProductSelectorSheetState extends State<ProductSelectorSheet> {
                 Expanded(
                   child: Text(
                     '${l10n.selectProducts} - ${widget.collection['name']}',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                       color: isDark ? Colors.white : Colors.black87,
@@ -2353,7 +2352,7 @@ class _ProductSelectorSheetState extends State<ProductSelectorSheet> {
                         onPressed: _handleDonePressed,
                         child: Text(
                           l10n.done,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                             color: isDark ? Colors.tealAccent : Colors.teal,
@@ -2369,12 +2368,12 @@ class _ProductSelectorSheetState extends State<ProductSelectorSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             child: TextField(
               controller: searchController,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: isDark ? Colors.white : Colors.black87,
               ),
               decoration: InputDecoration(
                 hintText: l10n.searchProducts,
-                hintStyle: GoogleFonts.inter(
+                hintStyle: TextStyle(
                   color: isDark ? Colors.white30 : Colors.grey.shade500,
                 ),
                 prefixIcon: Icon(
@@ -2421,7 +2420,7 @@ class _ProductSelectorSheetState extends State<ProductSelectorSheet> {
                   ),
                   child: Text(
                     '${selectedIds.length}/$_maxProducts ${l10n.productsSelectedCount}',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                       color: isAtLimit
@@ -2457,7 +2456,7 @@ class _ProductSelectorSheetState extends State<ProductSelectorSheet> {
                           searchQuery.isNotEmpty
                               ? l10n.noProductsFound
                               : l10n.noProductsAvailable,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color:
                                 isDark ? Colors.white70 : Colors.grey.shade600,
                           ),
@@ -2568,7 +2567,7 @@ class _ProductSelectorSheetState extends State<ProductSelectorSheet> {
                                     ),
                                     title: Text(
                                       product.productName,
-                                      style: GoogleFonts.inter(
+                                      style: TextStyle(
                                         fontWeight: FontWeight.w500,
                                         color: isDark
                                             ? Colors.white
@@ -2579,7 +2578,7 @@ class _ProductSelectorSheetState extends State<ProductSelectorSheet> {
                                     ),
                                     subtitle: Text(
                                       '${_formatPrice(product.price)} ${product.currency}',
-                                      style: GoogleFonts.inter(
+                                      style: TextStyle(
                                         color: isDark
                                             ? Colors.white70
                                             : Colors.grey.shade600,

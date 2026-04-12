@@ -158,7 +158,6 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: Colors.orange,
-                        fontFamily: 'Figtree',
                       ),
                     ),
                     Text(
@@ -169,7 +168,6 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: Color(0xFF00A36C),
-                        fontFamily: 'Figtree',
                       ),
                     ),
                   ],
@@ -383,7 +381,6 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                                               : localizations.addToCart),
                                       textAlign: TextAlign.center,
                                       style: const TextStyle(
-                                        fontFamily: 'Figtree',
                                         fontWeight: FontWeight.w600,
                                         fontSize: 12,
                                         color: Colors.white,
@@ -521,7 +518,6 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                                               ? localizations.checkoutPaused
                                               : localizations.buyItNow),
                                       style: const TextStyle(
-                                        fontFamily: 'Figtree',
                                         fontWeight: FontWeight.w600,
                                         fontSize: 12,
                                         color: Colors.white,
@@ -550,7 +546,6 @@ class _ProductDetailButtonsState extends State<ProductDetailButtons> {
                                         localizations.lastProducts(
                                             widget.product.quantity),
                                         style: const TextStyle(
-                                          fontFamily: 'Figtree',
                                           fontWeight: FontWeight.w600,
                                           fontSize: 10,
                                           color: Colors.white,

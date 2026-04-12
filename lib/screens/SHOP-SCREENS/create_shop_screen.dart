@@ -197,7 +197,6 @@ Future<T> _retryOperation<T>(
               text: TextSpan(
                 style: TextStyle(
                   fontSize: 14,
-                  fontFamily: 'Figtree',
                   color:
                       isDark ? Colors.white.withOpacity(0.9) : Colors.black87,
                   height: 1.4,
@@ -219,7 +218,6 @@ Future<T> _retryOperation<T>(
                             'Distance Sales Agreement',
                         style: TextStyle(
                           fontSize: 14,
-                          fontFamily: 'Figtree',
                           color: const Color(0xFF00A86B),
                           fontWeight: FontWeight.w600,
                           decoration: TextDecoration.underline,
@@ -245,7 +243,6 @@ Future<T> _retryOperation<T>(
                             'Seller Membership and Business Partnership Agreement',
                         style: TextStyle(
                           fontSize: 14,
-                          fontFamily: 'Figtree',
                           color: const Color(0xFF00A86B),
                           fontWeight: FontWeight.w600,
                           decoration: TextDecoration.underline,
@@ -930,7 +927,6 @@ void _showSubmittingModal() {
                         style: TextStyle(
                           color: isDarkMode ? Colors.white : Colors.black,
                           fontWeight: FontWeight.w600,
-                          fontFamily: 'Figtree',
                         ),
                       ),
                       if (isSelected) const SizedBox(width: 8),
@@ -1427,7 +1423,6 @@ Center(
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Figtree',
                 letterSpacing: -0.2,
               ),
               textAlign: TextAlign.center,
@@ -1614,7 +1609,6 @@ Center(
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    fontFamily: 'Figtree',
                     letterSpacing: -0.2,
                   ),
                 ),

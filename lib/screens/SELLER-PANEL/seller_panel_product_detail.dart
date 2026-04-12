@@ -10,7 +10,6 @@ import 'package:flutter/services.dart';
 import '../../../generated/l10n/app_localizations.dart';
 import '../../../models/product.dart';
 import '../../../providers/seller_panel_provider.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class SellerPanelProductDetail extends StatefulWidget {
   final Product product;
@@ -395,7 +394,7 @@ class _SellerPanelProductDetailState extends State<SellerPanelProductDetail> {
                   const SizedBox(height: 20),
                   Text(
                     l10n.applyingDiscount ?? 'Applying discount...',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                       color: Theme.of(context).brightness == Brightness.dark
@@ -603,7 +602,7 @@ class _SellerPanelProductDetailState extends State<SellerPanelProductDetail> {
                   const SizedBox(height: 20),
                   Text(
                     l10n.removingDiscount ?? 'Removing discount...',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                       color: Theme.of(context).brightness == Brightness.dark
@@ -757,7 +756,7 @@ class _SellerPanelProductDetailState extends State<SellerPanelProductDetail> {
                   const SizedBox(height: 20),
                   Text(
                     l10n.removingFromCampaign ?? 'Removing from campaign...',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                       color: Theme.of(context).brightness == Brightness.dark
@@ -1321,7 +1320,7 @@ class _SellerPanelProductDetailState extends State<SellerPanelProductDetail> {
                   const SizedBox(height: 20),
                   Text(
                     message,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                       color: isDarkMode ? Colors.white : Colors.black87,

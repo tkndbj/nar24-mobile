@@ -12,7 +12,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:math' as math;
 import '../market_screen.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../widgets/cart_validation_bottom_sheet.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../services/sales_config_service.dart';
@@ -1624,7 +1623,7 @@ final showSellerHeader = index == 0 || () {
             Text(
               l10n.yourCartIsEmpty,
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: Colors.grey,
@@ -1651,7 +1650,7 @@ final showSellerHeader = index == 0 || () {
                 ),
                 child: Text(
                   l10n.discover,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       color: Colors.white),
@@ -1684,7 +1683,7 @@ final showSellerHeader = index == 0 || () {
             Text(
               l10n.noLoggedInForCart,
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
                 color: isDark ? Colors.white70 : Colors.grey[700],
@@ -1710,7 +1709,7 @@ final showSellerHeader = index == 0 || () {
                           ),
                           child: Text(
                             l10n.login2,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.w600,
                               fontSize: 15,
@@ -1737,7 +1736,7 @@ final showSellerHeader = index == 0 || () {
                           ),
                           child: Text(
                             l10n.register,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: Colors.orange,
                               fontWeight: FontWeight.w600,
                               fontSize: 15,

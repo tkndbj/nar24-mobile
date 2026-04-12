@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../screens/CARGO-FOOD-PANEL/receipt_scanner.dart';
 import '../../generated/l10n/app_localizations.dart';
@@ -445,7 +444,7 @@ class _RestaurantDashboardTabState extends State<RestaurantDashboardTab>
             const SizedBox(height: 16),
             Text(
               l10n.restaurantDashboardFetchFailedTitle,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
                 color: isDark ? Colors.white : const Color(0xFF111827),
@@ -455,7 +454,7 @@ class _RestaurantDashboardTabState extends State<RestaurantDashboardTab>
             const SizedBox(height: 8),
             Text(
               l10n.restaurantDashboardFetchFailedMessage,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 13,
                 color: isDark ? Colors.grey[400] : const Color(0xFF6B7280),
               ),
@@ -467,7 +466,7 @@ class _RestaurantDashboardTabState extends State<RestaurantDashboardTab>
               icon: const Icon(Icons.refresh_rounded, size: 16),
               label: Text(
                 l10n.restaurantDashboardRetry,
-                style: GoogleFonts.figtree(fontWeight: FontWeight.w600),
+                style: TextStyle(fontWeight: FontWeight.w600),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFEA580C),
@@ -506,7 +505,7 @@ class _RestaurantDashboardTabState extends State<RestaurantDashboardTab>
             const SizedBox(height: 16),
             Text(
               l10n.restaurantDashboardNoRestaurantTitle,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
                 color: isDark ? Colors.white : const Color(0xFF111827),
@@ -516,7 +515,7 @@ class _RestaurantDashboardTabState extends State<RestaurantDashboardTab>
             const SizedBox(height: 8),
             Text(
               l10n.restaurantDashboardNoRestaurantDescription,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 13,
                 color: isDark ? Colors.grey[400] : const Color(0xFF6B7280),
               ),
@@ -552,7 +551,7 @@ class _RestaurantDashboardTabState extends State<RestaurantDashboardTab>
         onTap: () => context.push('/orders_food'),
         child: Text(
           l10n.restaurantDashboardViewAll,
-          style: GoogleFonts.figtree(
+          style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
             color: const Color(0xFFEA580C),
@@ -583,7 +582,7 @@ class _RestaurantDashboardTabState extends State<RestaurantDashboardTab>
       children: [
         Text(
           _greeting(l10n),
-          style: GoogleFonts.figtree(
+          style: TextStyle(
             fontSize: 13,
             color: isDark ? Colors.grey[400] : const Color(0xFF6B7280),
           ),
@@ -594,7 +593,7 @@ class _RestaurantDashboardTabState extends State<RestaurantDashboardTab>
             Expanded(
               child: Text(
                 _restaurantName ?? '',
-                style: GoogleFonts.figtree(
+                style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: isDark ? Colors.white : const Color(0xFF111827),
@@ -626,7 +625,7 @@ class _RestaurantDashboardTabState extends State<RestaurantDashboardTab>
 
   Widget _sectionLabel(String text, bool isDark) => Text(
         text.toUpperCase(),
-        style: GoogleFonts.figtree(
+        style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.8,
@@ -678,7 +677,7 @@ class _OpenStatusBadge extends StatelessWidget {
           const SizedBox(width: 5),
           Text(
             label,
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w700,
               color: isOpen ? const Color(0xFF15803D) : const Color(0xFFDC2626),
@@ -756,7 +755,7 @@ class _Badge extends StatelessWidget {
             const SizedBox(width: 4),
             Text(
               label,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
                 color: fg,
@@ -1153,7 +1152,7 @@ class _PendingOrdersSectionState extends State<_PendingOrdersSection> {
                 const SizedBox(height: 8),
                 Text(
                   widget.l10n.restaurantDashboardPendingOrdersEmpty,
-                  style: GoogleFonts.figtree(
+                  style: TextStyle(
                     fontSize: 12,
                     color: widget.isDark
                         ? Colors.grey[600]
@@ -1219,7 +1218,7 @@ class _OrderCard extends StatelessWidget {
                     Flexible(
                       child: Text(
                         order.buyerName,
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color:
@@ -1232,7 +1231,7 @@ class _OrderCard extends StatelessWidget {
                     const SizedBox(width: 6),
                     Text(
                       _timeAgo(order.createdAt, locale),
-                      style: GoogleFonts.figtree(
+                      style: TextStyle(
                         fontSize: 10,
                         color:
                             isDark ? Colors.grey[600] : const Color(0xFFD1D5DB),
@@ -1246,7 +1245,7 @@ class _OrderCard extends StatelessWidget {
                 text: TextSpan(children: [
                   TextSpan(
                     text: order.totalPrice.toStringAsFixed(2),
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
                       color: isDark ? Colors.white : const Color(0xFF111827),
@@ -1254,7 +1253,7 @@ class _OrderCard extends StatelessWidget {
                   ),
                   TextSpan(
                     text: ' ${order.currency}',
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                       fontSize: 10,
                       color:
                           isDark ? Colors.grey[500] : const Color(0xFF9CA3AF),
@@ -1336,7 +1335,7 @@ class _ItemChip extends StatelessWidget {
         children: [
           Text(
             '${item.quantity}× ${item.name}',
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: isDark ? Colors.white : const Color(0xFF1F2937),
@@ -1349,7 +1348,7 @@ class _ItemChip extends StatelessWidget {
                   .map((e) =>
                       '+${localizeExtra(e.name, AppLocalizations.of(context))}')
                   .join(', '),
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: isDark ? Colors.grey[300] : const Color(0xFF4B5563),
@@ -1360,7 +1359,7 @@ class _ItemChip extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               item.description,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 10,
                 color: isDark ? Colors.grey[400] : const Color(0xFF6B7280),
               ),
@@ -1378,7 +1377,7 @@ class _ItemChip extends StatelessWidget {
               ),
               child: Text(
                 item.specialNotes,
-                style: GoogleFonts.figtree(
+                style: TextStyle(
                   fontSize: 10,
                   color: const Color(0xFFB45309),
                 ),
@@ -1445,7 +1444,7 @@ class _ActionButton extends StatelessWidget {
                     const SizedBox(width: 4),
                     Text(
                       label,
-                      style: GoogleFonts.figtree(
+                      style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         color: fg,

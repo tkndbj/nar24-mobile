@@ -634,7 +634,6 @@ class _SellerInfoScreenState extends State<SellerInfoScreen> {
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Figtree',
                 letterSpacing: -0.2,
               ),
             ),
@@ -745,7 +744,6 @@ class _SellerInfoScreenState extends State<SellerInfoScreen> {
               localization.cannotDeleteSellerInfo ?? 'Cannot Delete',
               style: const TextStyle(
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Figtree',
               ),
             ),
             content: Padding(
@@ -754,7 +752,6 @@ class _SellerInfoScreenState extends State<SellerInfoScreen> {
                 localization.cannotDeleteSellerInfoWithProducts ??
                     'You cannot delete your seller information while you have listed products. Please delete all your products first.',
                 style: const TextStyle(
-                  fontFamily: 'Figtree',
                   height: 1.4,
                 ),
               ),
@@ -1067,7 +1064,6 @@ class _CupertinoSellerInfoFormModalState
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        fontFamily: 'Figtree',
                         color: isDark ? Colors.white : Colors.black,
                       ),
                     ),
@@ -1197,7 +1193,6 @@ class _CupertinoSellerInfoFormModalState
                               child: Text(
                                 l10n.cancel,
                                 style: TextStyle(
-                                  fontFamily: 'Figtree',
                                   color: isDark ? Colors.white : Colors.black,
                                   fontWeight: FontWeight.w600,
                                   fontSize: 16,
@@ -1213,7 +1208,6 @@ class _CupertinoSellerInfoFormModalState
                               child: Text(
                                 l10n.save,
                                 style: const TextStyle(
-                                  fontFamily: 'Figtree',
                                   fontWeight: FontWeight.w600,
                                   color: Colors.white,
                                   fontSize: 16,

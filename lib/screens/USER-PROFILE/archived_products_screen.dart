@@ -6,7 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../models/product.dart';
 import '../../widgets/product_card_4.dart';
@@ -471,7 +470,7 @@ class _ArchivedProductsScreenState extends State<ArchivedProductsScreen> {
             const SizedBox(height: 20),
             Text(
               l10n.unarchivingProduct,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
                 color: isDark ? Colors.white : Colors.black87,
@@ -481,7 +480,7 @@ class _ArchivedProductsScreenState extends State<ArchivedProductsScreen> {
             const SizedBox(height: 8),
             Text(
               productName,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 14,
                 color: isDark ? Colors.white70 : Colors.grey.shade600,
               ),
@@ -604,7 +603,7 @@ class _ArchivedProductsScreenState extends State<ArchivedProductsScreen> {
       backgroundColor: isDark ? const Color(0xFF1C1A29) : Colors.white,
       title: Text(
         l10n.archivedProducts,
-        style: GoogleFonts.inter(
+        style: TextStyle(
           fontWeight: FontWeight.w600,
           color: isDark ? Colors.white : Colors.black,
         ),
@@ -663,7 +662,7 @@ class _ArchivedProductsScreenState extends State<ArchivedProductsScreen> {
               const SizedBox(width: 12),
               Text(
                 l10n.archivedProductsManager,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                   color: isDark ? Colors.white : Colors.black87,
@@ -674,7 +673,7 @@ class _ArchivedProductsScreenState extends State<ArchivedProductsScreen> {
           const SizedBox(height: 12),
           Text(
             l10n.archivedProductsDescription,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 14,
               height: 1.4,
               color: isDark ? Colors.white70 : Colors.grey.shade700,
@@ -700,7 +699,7 @@ class _ArchivedProductsScreenState extends State<ArchivedProductsScreen> {
       ),
       child: TextField(
         controller: _searchController,
-        style: GoogleFonts.inter(
+        style: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w500,
           color: isDark ? Colors.white : Colors.black87,
@@ -748,7 +747,7 @@ class _ArchivedProductsScreenState extends State<ArchivedProductsScreen> {
             },
           ),
           hintText: l10n.searchArchivedProducts,
-          hintStyle: GoogleFonts.inter(
+          hintStyle: TextStyle(
             fontSize: 14,
             color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
             fontWeight: FontWeight.w600,
@@ -826,7 +825,7 @@ class _ArchivedProductsScreenState extends State<ArchivedProductsScreen> {
                             Text(
                               l10n.searchResultsCount(
                                   filteredProducts.length.toString()),
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.orange,
@@ -991,7 +990,7 @@ class _ArchivedProductsScreenState extends State<ArchivedProductsScreen> {
                     searchQuery.isNotEmpty
                         ? l10n.noArchivedProductsFound
                         : l10n.noArchivedProducts,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                       color: isDark ? Colors.white70 : Colors.grey[700],
@@ -1003,7 +1002,7 @@ class _ArchivedProductsScreenState extends State<ArchivedProductsScreen> {
                     searchQuery.isNotEmpty
                         ? l10n.tryDifferentSearchTerm
                         : l10n.archivedProductsEmptyDescription,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 14,
                       color: isDark ? Colors.white30 : Colors.grey.shade500,
                     ),
@@ -1097,7 +1096,7 @@ class _ArchivedProductCard extends StatelessWidget {
                           ? l10n.productNeedsUpdate ?? 'Güncelleme Gerekli'
                           : l10n.archivedByAdmin ??
                               'Admin tarafından arşivlendi',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: needsUpdate
@@ -1141,7 +1140,7 @@ class _ArchivedProductCard extends StatelessWidget {
                       const SizedBox(width: 6),
                       Text(
                         l10n.adminMessage ?? 'Admin Mesajı',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: Colors.orange.shade700,
@@ -1152,7 +1151,7 @@ class _ArchivedProductCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     archiveReason,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 13,
                       height: 1.4,
                       color: isDark ? Colors.white70 : Colors.grey.shade800,
@@ -1226,7 +1225,7 @@ class _ArchivedProductCard extends StatelessWidget {
                               const SizedBox(width: 4),
                               Text(
                                 l10n.update ?? 'Güncelle',
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
@@ -1258,7 +1257,7 @@ class _ArchivedProductCard extends StatelessWidget {
                           ),
                           child: Text(
                             l10n.unarchive,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: Colors.white,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,

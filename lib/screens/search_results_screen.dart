@@ -504,7 +504,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
                       _localizedSortLabel(_sortOption, l10n),
                       style: const TextStyle(
                         fontSize: 14,
-                        fontFamily: 'Figtree',
                       ),
                     ),
                   ),

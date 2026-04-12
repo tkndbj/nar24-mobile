@@ -5,7 +5,6 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../widgets/product_card_4.dart';
@@ -1182,9 +1181,9 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
             ? Colors.grey[600]
             : Colors.grey[400],
         labelStyle:
-            GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13),
+            TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
         unselectedLabelStyle:
-            GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13),
+            TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
         overlayColor: WidgetStateProperty.all(Colors.transparent),
         indicatorSize: TabBarIndicatorSize.tab,
         tabs: [
@@ -1304,7 +1303,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
             IconThemeData(color: Theme.of(context).colorScheme.onSurface),
         title: Text(
           l10n.myReviews,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w600,
             fontSize: 18,
@@ -1462,7 +1461,6 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                       label: Text(l10n.writeYourReview,
                           style: const TextStyle(
                               fontSize: 13,
-                              fontFamily: 'Figtree',
                               fontWeight: FontWeight.w600),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
@@ -1496,7 +1494,6 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                         pr.isShopProduct ? l10n.shopReview : l10n.sellerReview3,
                         style: const TextStyle(
                             fontSize: 13,
-                            fontFamily: 'Figtree',
                             fontWeight: FontWeight.w600),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1621,7 +1618,6 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                 l10n.writeRestaurantReview,
                 style: const TextStyle(
                     fontSize: 13,
-                    fontFamily: 'Figtree',
                     fontWeight: FontWeight.w600),
               ),
               style: ElevatedButton.styleFrom(

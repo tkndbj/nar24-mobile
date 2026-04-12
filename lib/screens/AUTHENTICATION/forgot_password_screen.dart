@@ -99,7 +99,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                 message,
                 style: const TextStyle(
                   fontSize: 14,
-                  fontFamily: 'Figtree',
                 ),
               ),
             ),
@@ -356,7 +355,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w700,
-            fontFamily: 'Figtree',
             color: isDark ? Colors.white : Colors.black87,
           ),
           textAlign: TextAlign.center,
@@ -375,7 +373,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             style: TextStyle(
               fontSize: 14,
               color: isDark ? Colors.white60 : Colors.black54,
-              fontFamily: 'Figtree',
               height: 1.4,
             ),
             textAlign: TextAlign.center,
@@ -395,7 +392,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           Text(
             l10n.emailLabel ?? 'Email',
             style: TextStyle(
-              fontFamily: 'Figtree',
               fontSize: 14,
               fontWeight: FontWeight.w600,
               color: isDark ? Colors.white70 : Colors.black87,
@@ -408,7 +404,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
             style: TextStyle(
-              fontFamily: 'Figtree',
               fontSize: 15,
               color: isDark ? Colors.white : Colors.black87,
             ),
@@ -416,7 +411,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
               hintText: l10n.emailHint ?? 'Enter your email',
               hintStyle: TextStyle(
                 color: isDark ? Colors.white30 : Colors.black26,
-                fontFamily: 'Figtree',
                 fontSize: 14,
               ),
               prefixIcon: Icon(
@@ -501,7 +495,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        fontFamily: 'Figtree',
                       ),
                     ),
             ),
@@ -545,7 +538,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             style: TextStyle(
               fontSize: 13,
               color: isDark ? Colors.white60 : Colors.black54,
-              fontFamily: 'Figtree',
             ),
           ),
           const SizedBox(height: 6),
@@ -564,7 +556,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
               style: TextStyle(
                 fontSize: 14,
                 color: isDark ? Colors.white : Colors.black87,
-                fontFamily: 'Figtree',
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -620,7 +611,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
-                            fontFamily: 'Figtree',
                             color: (_resendCountdown > 0)
                                 ? (isDark ? Colors.white38 : Colors.black26)
                                 : (isDark ? Colors.white70 : Colors.black54),
@@ -660,7 +650,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
               style: TextStyle(
                 fontSize: 13,
                 color: isDark ? Colors.white60 : Colors.amber.shade900,
-                fontFamily: 'Figtree',
               ),
             ),
           ),
@@ -677,7 +666,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           l10n.rememberPasswordText ?? 'Remember your password?',
           style: TextStyle(
             color: isDark ? Colors.white60 : Colors.black54,
-            fontFamily: 'Figtree',
             fontSize: 14,
           ),
         ),
@@ -688,7 +676,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             l10n.backToLoginText ?? 'Sign In',
             style: TextStyle(
               color: const Color(0xFF00A86B),
-              fontFamily: 'Figtree',
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),

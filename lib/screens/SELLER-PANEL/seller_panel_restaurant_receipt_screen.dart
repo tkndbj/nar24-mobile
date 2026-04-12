@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shimmer/shimmer.dart';
@@ -196,7 +195,7 @@ class _SellerPanelRestaurantReceiptScreenState
   void _showSnackbar(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: GoogleFonts.inter(fontSize: 13)),
+        content: Text(message, style: TextStyle(fontSize: 13)),
         backgroundColor: isError ? const Color(0xFFEF4444) : const Color(0xFF10B981),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -242,7 +241,7 @@ class _SellerPanelRestaurantReceiptScreenState
         children: [
           Text(
             l10n.restaurantReceiptsTitle,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w700,
               color: isDark ? Colors.white : Colors.grey[900],
@@ -258,7 +257,7 @@ class _SellerPanelRestaurantReceiptScreenState
               ),
               child: Text(
                 '${_receipts.length}${_hasMore ? '+' : ''}',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: isDark ? Colors.white54 : Colors.grey[500],
@@ -350,7 +349,7 @@ class _SellerPanelRestaurantReceiptScreenState
             child: Center(
               child: Text(
                 l10n.restaurantReceiptsShowingAll(_receipts.length),
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 11,
                   color: isDark ? Colors.white24 : Colors.grey[400],
                 ),
@@ -408,7 +407,7 @@ class _SellerPanelRestaurantReceiptScreenState
                         Flexible(
                           child: Text(
                             receipt.buyerName,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                               color: isDark ? Colors.white : Colors.grey[900],
@@ -419,7 +418,7 @@ class _SellerPanelRestaurantReceiptScreenState
                         const SizedBox(width: 6),
                         Text(
                           '#${receipt.shortId}',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w500,
                             color: isDark ? Colors.white38 : Colors.grey[400],
@@ -431,7 +430,7 @@ class _SellerPanelRestaurantReceiptScreenState
                     const SizedBox(height: 3),
                     Text(
                       dateLabel,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 11,
                         color: isDark ? Colors.white38 : Colors.grey[500],
                       ),
@@ -449,7 +448,7 @@ class _SellerPanelRestaurantReceiptScreenState
                   // Price
                   Text(
                     '${receipt.totalPrice.toStringAsFixed(0)} ${receipt.currency}',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: isDark ? Colors.white : Colors.grey[900],
@@ -525,7 +524,7 @@ class _SellerPanelRestaurantReceiptScreenState
           ),
           child: Text(
             l10n.restaurantReceiptsLoadMore,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
               color: isDark ? Colors.white70 : Colors.grey[700],
@@ -561,7 +560,7 @@ class _SellerPanelRestaurantReceiptScreenState
             const SizedBox(height: 20),
             Text(
               l10n.restaurantReceiptsEmptyTitle,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: isDark ? Colors.white : Colors.grey[900],
@@ -570,7 +569,7 @@ class _SellerPanelRestaurantReceiptScreenState
             const SizedBox(height: 6),
             Text(
               l10n.restaurantReceiptsEmptyDescription,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 13,
                 color: isDark ? Colors.white54 : Colors.grey[500],
               ),
@@ -616,7 +615,7 @@ class _PaymentBadge extends StatelessWidget {
             isCard
                 ? l10n.restaurantReceiptsPaymentCard
                 : l10n.restaurantReceiptsPaymentDoor,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 9,
               fontWeight: FontWeight.w600,
               color: fg,
@@ -661,7 +660,7 @@ class _DeliveryBadge extends StatelessWidget {
             isPickup
                 ? l10n.restaurantReceiptsDeliveryPickup
                 : l10n.restaurantReceiptsDeliveryDelivery,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 9,
               fontWeight: FontWeight.w600,
               color: fg,

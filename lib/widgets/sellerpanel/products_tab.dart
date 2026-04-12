@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../constants/all_in_one_category_data.dart';
@@ -198,7 +197,7 @@ class FilterBar extends StatelessWidget {
                   child: TextField(
                     focusNode: searchFocus,
                     controller: searchController,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                       color: isDark ? Colors.white : Colors.black87,
@@ -259,7 +258,7 @@ class FilterBar extends StatelessWidget {
                               ),
                             ),
                       hintText: l10n.searchProducts,
-                      hintStyle: GoogleFonts.inter(
+                      hintStyle: TextStyle(
                         fontSize: 14,
                         color: isDark
                             ? Colors.grey.shade500
@@ -571,7 +570,7 @@ class FilterBar extends StatelessWidget {
             Flexible(
               child: Text(
                 label,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: isSecondary ? 12 : 13,
                   fontWeight: FontWeight.w600,
                   color: isActionButton || isSelected
@@ -606,7 +605,7 @@ class FilterBar extends StatelessWidget {
               },
               child: Text(
                 l10n.none,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: isDarkMode ? Colors.white : Colors.black,
                   fontSize: 14,
                 ),
@@ -621,7 +620,7 @@ class FilterBar extends StatelessWidget {
                 child: Text(
                   AllInOneCategoryData.localizeCategoryKey(
                       category['key']!, l10n),
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: isDarkMode ? Colors.white : Colors.black,
                     fontSize: 14,
                   ),
@@ -633,7 +632,7 @@ class FilterBar extends StatelessWidget {
             onPressed: () => Navigator.pop(context),
             child: Text(
               l10n.cancel,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: isDarkMode ? Colors.white : Colors.black,
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
@@ -679,7 +678,7 @@ class FilterBar extends StatelessWidget {
               },
               child: Text(
                 l10n.none,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: isDarkMode ? Colors.white : Colors.black,
                   fontSize: 14,
                 ),
@@ -694,7 +693,7 @@ class FilterBar extends StatelessWidget {
                 child: Text(
                   AllInOneCategoryData.localizeSubcategoryKey(
                       provider.selectedCategory!, subcategory, l10n),
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: isDarkMode ? Colors.white : Colors.black,
                     fontSize: 14,
                   ),
@@ -706,7 +705,7 @@ class FilterBar extends StatelessWidget {
             onPressed: () => Navigator.pop(context),
             child: Text(
               l10n.cancel,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: isDarkMode ? Colors.white : Colors.black,
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
@@ -757,7 +756,7 @@ class ProductsList extends StatelessWidget {
           return Center(
             child: Text(
               l10n.pleaseSelectShop,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
                 color: isDark ? Colors.white70 : Colors.grey[700],
@@ -874,7 +873,7 @@ class ProductsList extends StatelessWidget {
               const SizedBox(height: 16),
               Text(
                 message,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                   color: isDark ? Colors.white70 : Colors.grey[700],
@@ -923,7 +922,7 @@ class ProductsList extends StatelessWidget {
                   const SizedBox(width: 8),
                   Text(
                     l10n.searchResultsCount(products.length.toString()),
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: isDark ? Colors.tealAccent : Colors.teal,
@@ -1136,7 +1135,7 @@ class ProductsList extends StatelessWidget {
                 const SizedBox(height: 20),
                 Text(
                   l10n.archivingProduct ?? 'Archiving product...',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
                     color: Theme.of(context).brightness == Brightness.dark
@@ -1148,7 +1147,7 @@ class ProductsList extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   productName,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 14,
                     color: Theme.of(context).brightness == Brightness.dark
                         ? Colors.white70
@@ -1470,7 +1469,7 @@ class ProductsList extends StatelessWidget {
               const SizedBox(height: 20),
               Text(
                 l10n.archivingProduct ?? 'Archiving product...',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                   color: isDark ? Colors.white : Colors.black87,
@@ -1480,7 +1479,7 @@ class ProductsList extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 productName,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 14,
                   color: isDark ? Colors.white70 : Colors.grey.shade600,
                 ),
@@ -1571,7 +1570,7 @@ class ProductsList extends StatelessWidget {
                 const SizedBox(height: 20),
                 Text(
                   l10n.deletingProduct ?? 'Deleting product...',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
                     color: Theme.of(context).brightness == Brightness.dark
@@ -1583,7 +1582,7 @@ class ProductsList extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   productName,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 14,
                     color: Theme.of(context).brightness == Brightness.dark
                         ? Colors.white70
@@ -1907,7 +1906,7 @@ class ProductsList extends StatelessWidget {
               const SizedBox(height: 20),
               Text(
                 l10n.deletingProduct ?? 'Deleting product...',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                   color: isDark ? Colors.white : Colors.black87,
@@ -1917,7 +1916,7 @@ class ProductsList extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 productName,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 14,
                   color: isDark ? Colors.white70 : Colors.grey.shade600,
                 ),
@@ -2105,7 +2104,7 @@ class _ProductActionButton extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: Colors.white,
             fontSize: 11,
             fontWeight: FontWeight.w600,

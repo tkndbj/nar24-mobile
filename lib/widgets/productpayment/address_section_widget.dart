@@ -33,7 +33,6 @@ class _AddressSectionWidgetState extends State<AddressSectionWidget> {
             style: TextStyle(
               color: isLight ? Colors.black : Colors.white,
               fontWeight: FontWeight.w600,
-              fontFamily: 'Figtree',
               fontSize: 16,
             ),
           ),
@@ -48,7 +47,6 @@ class _AddressSectionWidgetState extends State<AddressSectionWidget> {
                 style: TextStyle(
                   color: isLight ? Colors.black : Colors.white,
                   fontWeight: FontWeight.w600,
-                  fontFamily: 'Figtree',
                   fontSize: 16,
                 ),
               ),
@@ -61,7 +59,6 @@ class _AddressSectionWidgetState extends State<AddressSectionWidget> {
               style: TextStyle(
                 color: buttonTextColor,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Figtree',
               ),
             ),
           ),
@@ -89,7 +86,6 @@ class _AddressSectionWidgetState extends State<AddressSectionWidget> {
                 style: TextStyle(
                   color: isLight ? Colors.black : Colors.white,
                   fontWeight: FontWeight.w700,
-                  fontFamily: 'Figtree',
                   fontSize: 18,
                 ),
               ),
@@ -99,7 +95,6 @@ class _AddressSectionWidgetState extends State<AddressSectionWidget> {
                 style: TextStyle(
                   color: isLight ? Colors.black54 : Colors.white70,
                   fontWeight: FontWeight.w500,
-                  fontFamily: 'Figtree',
                   fontSize: 14,
                 ),
               ),
@@ -126,7 +121,6 @@ class _AddressSectionWidgetState extends State<AddressSectionWidget> {
                     style: TextStyle(
                       color: const Color(0xFF0096FF),
                       fontWeight: FontWeight.w600,
-                      fontFamily: 'Figtree',
                       fontSize: 16,
                     ),
                   ),
@@ -152,7 +146,6 @@ class _AddressSectionWidgetState extends State<AddressSectionWidget> {
                   style: TextStyle(
                     color: isLight ? Colors.black : Colors.white,
                     fontWeight: FontWeight.w600,
-                    fontFamily: 'Figtree',
                     fontSize: 16,
                   ),
                 ),
@@ -170,7 +163,6 @@ class _AddressSectionWidgetState extends State<AddressSectionWidget> {
               style: TextStyle(
                 color: buttonTextColor,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Figtree',
               ),
             ),
           ),

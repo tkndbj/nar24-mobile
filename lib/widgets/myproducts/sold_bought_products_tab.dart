@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
@@ -74,6 +73,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
   static const double _loadMoreTriggerOffset = 0.8;
 
   bool _hasStartedLoading = false;
+  bool get hasStartedLoading => _hasStartedLoading;
 
   void refresh() => _refreshData();
 
@@ -760,7 +760,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
             Text(
               _errorMessage ?? l10n.somethingWentWrong,
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
                 color: isDark ? Colors.white70 : Colors.grey[700],
@@ -779,7 +779,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
               ),
               child: Text(
                 l10n.retry,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
                 ),
@@ -816,7 +816,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
           Text(
             message,
             textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w500,
               color: isDark ? Colors.white70 : Colors.grey[700],
@@ -827,7 +827,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
             Text(
               l10n.trySearchingWithDifferentKeywords,
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w400,
                 color: isDark ? Colors.white54 : Colors.grey[600],
@@ -859,7 +859,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
             Text(
               l10n.youNeedToLoginToTrackYourProducts,
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
                 color: isDark ? Colors.white70 : Colors.grey[700],
@@ -879,7 +879,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
               ),
               child: Text(
                 l10n.loginButton,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
@@ -955,7 +955,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
                   const SizedBox(width: 8),
                   Text(
                     '${l10n.searchResults}: ${_searchResults.length}',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: isDark ? Colors.tealAccent : Colors.teal,
@@ -1062,7 +1062,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
                       const SizedBox(width: 12),
                       Text(
                         dateGroup.date,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                           color: isDark ? Colors.white70 : Colors.grey[700],
@@ -1098,7 +1098,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
                             Expanded(
                               child: Text(
                                 sellerGroup.sellerName,
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
                                   color: const Color(0xFF00A86B),
@@ -1114,7 +1114,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
                               ),
                               child: Text(
                                 '${sellerGroup.transactions.length} item${sellerGroup.transactions.length > 1 ? 's' : ''}',
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
                                   color: const Color(0xFF00A86B),
@@ -1273,7 +1273,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
                                       Flexible(
                                         child: Text(
                                           statusText,
-                                          style: GoogleFonts.inter(
+                                          style: TextStyle(
                                             color: statusColor,
                                             fontSize: 8,
                                             fontWeight: FontWeight.w600,
@@ -1299,7 +1299,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
                               children: [
                                 Text(
                                   name,
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
                                     color:
@@ -1311,7 +1311,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
                                 const SizedBox(height: 4),
                                 Text(
                                   '${price.toStringAsFixed(2)} $currency',
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
                                     color: isDark
@@ -1331,7 +1331,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
                       if (timeText.isNotEmpty)
                         Text(
                           timeText,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 12,
                             color: isDark ? Colors.white60 : Colors.grey[600],
                             fontWeight: FontWeight.w500,
@@ -1348,7 +1348,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
                           ),
                           child: Text(
                             'x$quantity',
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               fontSize: 11,
                               color: const Color(0xFF00A86B),
                               fontWeight: FontWeight.w600,
@@ -1411,7 +1411,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
                         const SizedBox(width: 12),
                         Text(
                           dateGroup.date,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                             color: isDark ? Colors.white70 : Colors.grey[700],
@@ -1448,7 +1448,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
                               Expanded(
                                 child: Text(
                                   sellerGroup.sellerName,
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
                                     color: const Color(0xFF00A86B),
@@ -1465,7 +1465,7 @@ class SoldBoughtProductsTabState extends State<SoldBoughtProductsTab>
                                 ),
                                 child: Text(
                                   '${sellerGroup.transactions.length}',
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
                                     color: const Color(0xFF00A86B),

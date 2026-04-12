@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class TermsOfUseScreen extends StatefulWidget {
   final String? agreementAssetPath;
@@ -84,7 +83,7 @@ class _TermsOfUseScreenState extends State<TermsOfUseScreen> {
                   children: [
                     Text(
                       agreementTitle,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w600,
                         color: isDarkMode ? Colors.white : Colors.black,
@@ -94,7 +93,7 @@ class _TermsOfUseScreenState extends State<TermsOfUseScreen> {
                     const SizedBox(height: 30),
                     Text(
                       agreementText,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w400,
                         color: isDarkMode ? Colors.white : Colors.black,

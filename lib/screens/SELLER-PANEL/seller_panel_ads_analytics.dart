@@ -148,7 +148,6 @@ class _SellerPanelAdsAnalyticsState extends State<SellerPanelAdsAnalytics> {
             color: isDark ? Colors.white : Colors.grey[900],
             fontWeight: FontWeight.w600,
             fontSize: 20,
-            fontFamily: 'Figtree',
           ),
         ),
         iconTheme: IconThemeData(
@@ -215,7 +214,6 @@ class _SellerPanelAdsAnalyticsState extends State<SellerPanelAdsAnalytics> {
               fontSize: 18,
               fontWeight: FontWeight.w600,
               color: isDark ? Colors.white : Colors.grey[900],
-              fontFamily: 'Figtree',
             ),
           ),
           const SizedBox(height: 8),
@@ -224,7 +222,6 @@ class _SellerPanelAdsAnalyticsState extends State<SellerPanelAdsAnalytics> {
             style: TextStyle(
               fontSize: 14,
               color: isDark ? Colors.grey[400] : Colors.grey[600],
-              fontFamily: 'Figtree',
             ),
           ),
         ],
@@ -520,7 +517,6 @@ class _ModernBoostAnalyticsCardState extends State<_ModernBoostAnalyticsCard> {
                             fontWeight: FontWeight.w600,
                             color:
                                 widget.isDark ? Colors.white : Colors.grey[900],
-                            fontFamily: 'Figtree',
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -543,7 +539,6 @@ class _ModernBoostAnalyticsCardState extends State<_ModernBoostAnalyticsCard> {
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: primaryAccent,
-                                  fontFamily: 'Figtree',
                                 ),
                               ),
                             ),
@@ -561,7 +556,6 @@ class _ModernBoostAnalyticsCardState extends State<_ModernBoostAnalyticsCard> {
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: Colors.amber[600],
-                                  fontFamily: 'Figtree',
                                 ),
                               ),
                             ],
@@ -640,7 +634,6 @@ class _ModernBoostAnalyticsCardState extends State<_ModernBoostAnalyticsCard> {
                               color: widget.isDark
                                   ? Colors.grey[300]
                                   : Colors.grey[700],
-                              fontFamily: 'Figtree',
                             ),
                           ),
                           const Spacer(),
@@ -703,7 +696,6 @@ class _ModernBoostAnalyticsCardState extends State<_ModernBoostAnalyticsCard> {
                       fontSize: 12,
                       color:
                           widget.isDark ? Colors.grey[400] : Colors.grey[600],
-                      fontFamily: 'Figtree',
                     ),
                   ),
                   const Spacer(),
@@ -716,7 +708,6 @@ class _ModernBoostAnalyticsCardState extends State<_ModernBoostAnalyticsCard> {
                         fontSize: 12,
                         color:
                             widget.isDark ? Colors.grey[400] : Colors.grey[600],
-                        fontFamily: 'Figtree',
                       ),
                     ),
                 ],
@@ -735,7 +726,6 @@ class _ModernBoostAnalyticsCardState extends State<_ModernBoostAnalyticsCard> {
         fontSize: 12,
         fontWeight: FontWeight.w600,
         color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
-        fontFamily: 'Figtree',
       ),
     );
   }
@@ -751,7 +741,6 @@ class _ModernBoostAnalyticsCardState extends State<_ModernBoostAnalyticsCard> {
         style: TextStyle(
           fontSize: 11,
           color: widget.isDark ? Colors.grey[500] : Colors.grey[500],
-          fontFamily: 'Figtree',
         ),
       );
     }
@@ -804,7 +793,6 @@ class _ModernBoostAnalyticsCardState extends State<_ModernBoostAnalyticsCard> {
                             color: widget.isDark
                                 ? Colors.grey[300]
                                 : Colors.grey[700],
-                            fontFamily: 'Figtree',
                           ),
                         ),
                         Text(
@@ -813,7 +801,6 @@ class _ModernBoostAnalyticsCardState extends State<_ModernBoostAnalyticsCard> {
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                             color: genderColor,
-                            fontFamily: 'Figtree',
                           ),
                         ),
                       ],
@@ -849,7 +836,6 @@ class _ModernBoostAnalyticsCardState extends State<_ModernBoostAnalyticsCard> {
         style: TextStyle(
           fontSize: 11,
           color: widget.isDark ? Colors.grey[500] : Colors.grey[500],
-          fontFamily: 'Figtree',
         ),
       );
     }
@@ -906,7 +892,6 @@ class _ModernBoostAnalyticsCardState extends State<_ModernBoostAnalyticsCard> {
                             color: widget.isDark
                                 ? Colors.grey[300]
                                 : Colors.grey[700],
-                            fontFamily: 'Figtree',
                           ),
                         ),
                         Text(
@@ -915,7 +900,6 @@ class _ModernBoostAnalyticsCardState extends State<_ModernBoostAnalyticsCard> {
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                             color: ageColor,
-                            fontFamily: 'Figtree',
                           ),
                         ),
                       ],
@@ -1074,7 +1058,6 @@ class _ModernBoostAnalyticsCardState extends State<_ModernBoostAnalyticsCard> {
               fontSize: 16,
               fontWeight: FontWeight.w700,
               color: color,
-              fontFamily: 'Figtree',
             ),
           ),
           Text(
@@ -1083,7 +1066,6 @@ class _ModernBoostAnalyticsCardState extends State<_ModernBoostAnalyticsCard> {
               fontSize: 10,
               fontWeight: FontWeight.w600,
               color: color.withOpacity(0.8),
-              fontFamily: 'Figtree',
             ),
           ),
         ],

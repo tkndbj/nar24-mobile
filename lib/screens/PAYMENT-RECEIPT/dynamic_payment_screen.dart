@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'isbank_ads_images_payment_screen.dart';
 
@@ -124,7 +123,7 @@ class _DynamicPaymentScreenState extends State<DynamicPaymentScreen> {
         foregroundColor: isDark ? Colors.white : const Color(0xFF1A202C),
         title: Text(
           l10n.paymentSummary,
-          style: GoogleFonts.figtree(
+          style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
             color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -183,7 +182,7 @@ class _DynamicPaymentScreenState extends State<DynamicPaymentScreen> {
                             children: [
                               Text(
                                 l10n.adPayment,
-                                style: GoogleFonts.figtree(
+                                style: TextStyle(
                                   fontSize: 14,
                                   color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                                 ),
@@ -191,7 +190,7 @@ class _DynamicPaymentScreenState extends State<DynamicPaymentScreen> {
                               const SizedBox(height: 4),
                               Text(
                                 widget.shopName,
-                                style: GoogleFonts.figtree(
+                                style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w700,
                                   color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -244,7 +243,7 @@ class _DynamicPaymentScreenState extends State<DynamicPaymentScreen> {
                               const SizedBox(width: 8),
                               Text(
                                 l10n.adPreview,
-                                style: GoogleFonts.figtree(
+                                style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,
                                   color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -312,7 +311,7 @@ class _DynamicPaymentScreenState extends State<DynamicPaymentScreen> {
                       children: [
                         Text(
                           l10n.orderDetails,
-                          style: GoogleFonts.figtree(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -358,7 +357,7 @@ class _DynamicPaymentScreenState extends State<DynamicPaymentScreen> {
                         // Price Breakdown
                         Text(
                           l10n.priceBreakdown,
-                          style: GoogleFonts.figtree(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -402,7 +401,7 @@ class _DynamicPaymentScreenState extends State<DynamicPaymentScreen> {
                             children: [
                               Text(
                                 l10n.totalAmount,
-                                style: GoogleFonts.figtree(
+                                style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w700,
                                   color: const Color(0xFF38A169),
@@ -410,7 +409,7 @@ class _DynamicPaymentScreenState extends State<DynamicPaymentScreen> {
                               ),
                               Text(
                                 '${(widget.price * 1.20).toStringAsFixed(2)} TL',
-                                style: GoogleFonts.figtree(
+                                style: TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.w700,
                                   color: const Color(0xFF38A169),
@@ -460,7 +459,7 @@ class _DynamicPaymentScreenState extends State<DynamicPaymentScreen> {
                         Expanded(
                           child: Text(
                             l10n.acceptTermsAndConditions,
-                            style: GoogleFonts.figtree(
+                            style: TextStyle(
                               fontSize: 13,
                               color: isDark ? const Color(0xFFA0AAB8) : const Color(0xFF4A5568),
                               height: 1.4,
@@ -516,7 +515,7 @@ class _DynamicPaymentScreenState extends State<DynamicPaymentScreen> {
                       const SizedBox(width: 8),
                       Text(
                         l10n.continueToPayment,
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                         ),
@@ -560,7 +559,7 @@ class _DynamicPaymentScreenState extends State<DynamicPaymentScreen> {
             children: [
               Text(
                 label,
-                style: GoogleFonts.figtree(
+                style: TextStyle(
                   fontSize: 12,
                   color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                 ),
@@ -568,7 +567,7 @@ class _DynamicPaymentScreenState extends State<DynamicPaymentScreen> {
               const SizedBox(height: 2),
               Text(
                 value,
-                style: GoogleFonts.figtree(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -592,14 +591,14 @@ class _DynamicPaymentScreenState extends State<DynamicPaymentScreen> {
       children: [
         Text(
           label,
-          style: GoogleFonts.figtree(
+          style: TextStyle(
             fontSize: isSubtext ? 13 : 14,
             color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
           ),
         ),
         Text(
           '${amount.toStringAsFixed(2)} TL',
-          style: GoogleFonts.figtree(
+          style: TextStyle(
             fontSize: isSubtext ? 13 : 14,
             fontWeight: isSubtext ? FontWeight.w500 : FontWeight.w600,
             color: isDark ? Colors.white : const Color(0xFF1A202C),

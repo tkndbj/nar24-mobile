@@ -12,7 +12,6 @@ import 'package:provider/provider.dart';
 import 'package:dotted_border/dotted_border.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../providers/seller_panel_provider.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 class SellerPanelShopSettingsScreen extends StatefulWidget {
@@ -364,7 +363,7 @@ Future<void> _pickAndUpload({
               // Title
               Text(
                 l10n.uploadingImage ?? 'Uploading Image',
-                style: GoogleFonts.poppins(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                   color: isDark ? Colors.white : Colors.black,
@@ -375,7 +374,7 @@ Future<void> _pickAndUpload({
               // Subtitle
               Text(
                 l10n.pleaseWait ?? 'Please wait...',
-                style: GoogleFonts.poppins(
+                style: TextStyle(
                   fontSize: 14,
                   color: isDark ? Colors.grey[400] : Colors.grey[600],
                 ),
@@ -824,7 +823,7 @@ Future<void> _pickAndUpload({
             appBar: AppBar(
               title: Text(
                 l10n.shopSettings,
-                style: GoogleFonts.figtree(
+                style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: isDarkMode ? Colors.white : Colors.black,
                 ),
@@ -850,7 +849,7 @@ Future<void> _pickAndUpload({
           appBar: AppBar(
             title: Text(
               l10n.shopSettings,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontWeight: FontWeight.w600,
                 color: isDarkMode ? Colors.white : Colors.black,
               ),

@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../generated/l10n/app_localizations.dart';
 import '../models/product.dart';
 import '../utils/attribute_localization_utils.dart';
@@ -157,7 +156,7 @@ class _CartValidationBottomSheetState
               children: [
                 Text(
                   l10n.validationIssuesDetected,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
                     color: isDark ? Colors.white : Colors.black87,
@@ -166,7 +165,7 @@ class _CartValidationBottomSheetState
                 const SizedBox(height: 2),
                 Text(
                   _buildHeaderSubtitle(l10n),
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 13,
                     color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                   ),
@@ -202,7 +201,7 @@ class _CartValidationBottomSheetState
         const SizedBox(width: 8),
         Text(
           title,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w700,
             color: isDark ? Colors.white : Colors.black87,
@@ -263,7 +262,7 @@ Widget _buildErrorProductCard(
                   children: [
                     Text(
                       product?.productName ?? l10n.unknownProduct,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: isDark ? Colors.white : Colors.black87,
@@ -277,7 +276,7 @@ Widget _buildErrorProductCard(
   const SizedBox(height: 4),
   Text(
     '${l10n.color}: ${AttributeLocalizationUtils.localizeColorName(validatedItem!['selectedColor'], l10n)}',
-    style: GoogleFonts.inter(
+    style: TextStyle(
       fontSize: 11,
       color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
     ),
@@ -302,7 +301,7 @@ Widget _buildErrorProductCard(
                           Flexible(
                             child: Text(
                               errorMessage,
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.red,
@@ -339,7 +338,7 @@ Widget _buildErrorProductCard(
               Expanded(
                 child: Text(
                   l10n.validationWillBeRemoved,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                     color: Colors.red,
@@ -417,7 +416,7 @@ Widget _buildWarningProductCard(
                   children: [
                     Text(
                       product?.productName ?? l10n.unknownProduct,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: isDark ? Colors.white : Colors.black87,
@@ -431,7 +430,7 @@ Widget _buildWarningProductCard(
   const SizedBox(height: 4),
   Text(
     '${l10n.color}: ${AttributeLocalizationUtils.localizeColorName(validatedItem!['selectedColor'], l10n)}',
-    style: GoogleFonts.inter(
+    style: TextStyle(
       fontSize: 11,
       color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
     ),
@@ -467,7 +466,7 @@ Widget _buildWarningProductCard(
                             Flexible(
                               child: Text(
                                 warningMessage,
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
                                   color: Colors.orange,
@@ -540,7 +539,7 @@ Widget _buildWarningProductCard(
                 Expanded(
                   child: Text(
                     l10n.validationAcceptChange,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: isConfirmed
@@ -579,7 +578,7 @@ Widget _buildWarningProductCard(
         children: [
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w700,
               color: Colors.orange.shade800,
@@ -604,7 +603,7 @@ Widget _buildWarningProductCard(
                     children: [
                       Text(
                         l10n.oldLabel,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.w600,
                           color: Colors.grey.shade600,
@@ -613,7 +612,7 @@ Widget _buildWarningProductCard(
                       const SizedBox(height: 2),
                       Text(
                         oldValue,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: isDark ? Colors.white70 : Colors.black87,
@@ -645,7 +644,7 @@ Widget _buildWarningProductCard(
                     children: [
                       Text(
                         l10n.newLabel,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.w600,
                           color: Colors.orange.shade800,
@@ -654,7 +653,7 @@ Widget _buildWarningProductCard(
                       const SizedBox(height: 2),
                       Text(
                         newValue,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                           color: Colors.orange.shade900,
@@ -785,7 +784,7 @@ Widget _buildWarningProductCard(
                         _hasErrors
                             ? l10n.validationContinueWithoutErrors
                             : l10n.validationContinueWithChanges,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                         ),
@@ -813,7 +812,7 @@ Widget _buildWarningProductCard(
                 ),
                 child: Text(
                   l10n.cancel,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                     color: isDark ? Colors.white70 : Colors.black87,

@@ -53,16 +53,25 @@ class MyProductsProvider extends ChangeNotifier {
   String? get error => _error;
 
   List<Product> get _filteredProducts {
+    final hasDateFilter = selectedDateRange != null;
+    final hasSearchFilter = searchQuery.isNotEmpty && !_isSearchMode;
+
+    // No filters active: return the same list instance so Selector equality
+    // doesn't rebuild on unrelated notifyListeners() calls.
+    if (!hasDateFilter && !hasSearchFilter) {
+      return _products;
+    }
+
     var filtered = _products;
 
-    if (selectedDateRange != null) {
+    if (hasDateFilter) {
       filtered = filtered.where((p) {
         final date = p.createdAt.toDate();
         return _isDateInRange(date, selectedDateRange!);
       }).toList();
     }
 
-    if (searchQuery.isNotEmpty && !_isSearchMode) {
+    if (hasSearchFilter) {
       filtered = filtered.where((p) {
         final name = p.productName.toLowerCase();
         final brand = p.brandModel?.toLowerCase() ?? '';
@@ -122,10 +131,10 @@ class MyProductsProvider extends ChangeNotifier {
       _isLoading = false;
       _error = null;
 
-      // Update product cache with fresh data
-      for (final doc in snapshot.docs) {
-        final product = Product.fromDocument(doc);
-        _productCache[product.id] = _CachedProduct(product, DateTime.now());
+      // Update product cache with fresh data (reuse already-parsed products)
+      final now = DateTime.now();
+      for (final product in _products) {
+        _productCache[product.id] = _CachedProduct(product, now);
       }
 
       notifyListeners();
@@ -283,6 +292,33 @@ class MyProductsProvider extends ChangeNotifier {
         query = query.where('buyerId', isEqualTo: userId);
       }
 
+      // Server-side date range filter. Inclusive on both ends: we normalize
+      // start to 00:00:00 and end to 23:59:59.999 so whole calendar days count.
+      // Cursor pagination (startAfterDocument + orderBy timestamp) composes
+      // correctly with the range filter because the range is on the ordered
+      // field, so every page yields up to pageSize matching rows.
+      final range = selectedDateRange;
+      if (range != null) {
+        final start = DateTime(
+          range.start.year,
+          range.start.month,
+          range.start.day,
+        );
+        final end = DateTime(
+          range.end.year,
+          range.end.month,
+          range.end.day,
+          23,
+          59,
+          59,
+          999,
+        );
+        query = query
+            .where('timestamp',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+            .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(end));
+      }
+
       query = query.orderBy('timestamp', descending: true);
 
       if (lastTransactionDoc != null) {
@@ -298,11 +334,7 @@ class MyProductsProvider extends ChangeNotifier {
                 'id': doc.id,
                 'data': doc.data(),
               })
-          .where((tx) {
-        final ts =
-            (tx['data'] as Map<String, dynamic>)['timestamp'] as Timestamp?;
-        return matchesSelectedDateRange(ts);
-      }).toList();
+          .toList();
 
       // Cache the results
       final lastDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;

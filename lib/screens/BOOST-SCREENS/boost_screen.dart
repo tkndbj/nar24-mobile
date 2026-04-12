@@ -216,7 +216,7 @@ class _BoostScreenState extends State<BoostScreen>
           SnackBar(
             content: Text(
               l10n.itemNotFound,
-              style: const TextStyle(fontFamily: 'Figtree'),
+              style: const TextStyle(),
             ),
           ),
         );
@@ -242,7 +242,7 @@ class _BoostScreenState extends State<BoostScreen>
         SnackBar(
           content: Text(
             '${l10n.errorOccurred}: $e',
-            style: const TextStyle(fontFamily: 'Figtree'),
+            style: const TextStyle(),
           ),
         ),
       );
@@ -354,7 +354,6 @@ class _BoostScreenState extends State<BoostScreen>
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: isLightMode ? Colors.grey[800] : Colors.grey[100],
-                    fontFamily: 'Inter',
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -363,7 +362,6 @@ class _BoostScreenState extends State<BoostScreen>
                   style: TextStyle(
                     fontSize: 13,
                     color: isLightMode ? Colors.grey[600] : Colors.grey[300],
-                    fontFamily: 'Inter',
                     height: 1.4,
                   ),
                 ),
@@ -408,7 +406,6 @@ class _BoostScreenState extends State<BoostScreen>
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
                 color: isLightMode ? Colors.grey[800] : Colors.grey[200],
-                fontFamily: 'Inter',
               ),
               textAlign: TextAlign.center,
             ),
@@ -418,7 +415,6 @@ class _BoostScreenState extends State<BoostScreen>
               style: TextStyle(
                 fontSize: 14,
                 color: isLightMode ? Colors.grey[600] : Colors.grey[400],
-                fontFamily: 'Inter',
                 height: 1.5,
               ),
               textAlign: TextAlign.center,
@@ -455,7 +451,6 @@ class _BoostScreenState extends State<BoostScreen>
                             fontSize: 14,
                             color: Colors.white,
                             fontWeight: FontWeight.w600,
-                            fontFamily: 'Inter',
                           ),
                         ),
                       ],
@@ -531,7 +526,7 @@ class _BoostScreenState extends State<BoostScreen>
                     SnackBar(
                       content: Text(
                         l10n.maximumProductsCanBeBoostedAtOnce,
-                        style: const TextStyle(fontFamily: 'Figtree'),
+                        style: const TextStyle(),
                       ),
                       backgroundColor: Colors.orange,
                       behavior: SnackBarBehavior.floating,
@@ -613,7 +608,6 @@ class _BoostScreenState extends State<BoostScreen>
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        fontFamily: 'Figtree',
                         color:
                             isLightMode ? Colors.grey[800] : Colors.grey[200],
                       ),
@@ -733,7 +727,6 @@ class _BoostScreenState extends State<BoostScreen>
                   style: TextStyle(
                     fontSize: isTablet ? 13 : 15,
                     fontWeight: FontWeight.w600,
-                    fontFamily: 'Figtree',
                     color: isLightMode ? Colors.grey[800] : Colors.grey[100],
                   ),
                   maxLines: 2,
@@ -754,7 +747,6 @@ class _BoostScreenState extends State<BoostScreen>
                       fontSize: isTablet ? 10 : 11,
                       fontWeight: FontWeight.w600,
                       color: jadeGreen,
-                      fontFamily: 'Figtree',
                     ),
                   ),
                 ),
@@ -815,7 +807,6 @@ class _BoostScreenState extends State<BoostScreen>
                   fontWeight: FontWeight.w600,
                   color:
                       totalSelected >= maxProducts ? Colors.orange : jadeGreen,
-                  fontFamily: 'Figtree',
                 ),
               ),
             ],
@@ -855,7 +846,6 @@ class _BoostScreenState extends State<BoostScreen>
               style: const TextStyle(
                 fontSize: 13,
                 color: Colors.grey,
-                fontFamily: 'Figtree',
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -1021,7 +1011,6 @@ class _BoostScreenState extends State<BoostScreen>
                               color: isLightMode
                                   ? Colors.grey[800]
                                   : Colors.grey[100],
-                              fontFamily: 'Figtree',
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -1033,7 +1022,6 @@ class _BoostScreenState extends State<BoostScreen>
                               color: isLightMode
                                   ? Colors.grey[600]
                                   : Colors.grey[400],
-                              fontFamily: 'Figtree',
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -1128,7 +1116,6 @@ class _BoostScreenState extends State<BoostScreen>
                     fontSize: 15,
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
-                    fontFamily: 'Figtree',
                   ),
                 ),
               ],
@@ -1157,7 +1144,6 @@ class _BoostScreenState extends State<BoostScreen>
           style: TextStyle(
             color: textAndBorderColor,
             fontWeight: FontWeight.w700,
-            fontFamily: 'Figtree',
             fontSize: 18,
           ),
         ),
@@ -1201,7 +1187,6 @@ class _BoostScreenState extends State<BoostScreen>
                             color: textAndBorderColor,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            fontFamily: 'Figtree',
                           ),
                         ),
                       ],
@@ -1240,7 +1225,6 @@ class _BoostScreenState extends State<BoostScreen>
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                           color: textAndBorderColor,
-                          fontFamily: 'Figtree',
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -1282,7 +1266,6 @@ class _BoostScreenState extends State<BoostScreen>
                                   fontSize: 15,
                                   fontWeight: FontWeight.w700,
                                   color: textAndBorderColor,
-                                  fontFamily: 'Figtree',
                                 ),
                               ),
                             ],
@@ -1336,7 +1319,6 @@ class _BoostScreenState extends State<BoostScreen>
                                   fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                   color: jadeGreen,
-                                  fontFamily: 'Figtree',
                                 ),
                               ),
                             ),
@@ -1373,7 +1355,6 @@ class _BoostScreenState extends State<BoostScreen>
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                               color: textAndBorderColor.withOpacity(0.7),
-                              fontFamily: 'Figtree',
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -1389,7 +1370,6 @@ class _BoostScreenState extends State<BoostScreen>
                                 fontSize: 24,
                                 fontWeight: FontWeight.w800,
                                 color: Colors.white,
-                                fontFamily: 'Figtree',
                               ),
                             ),
                           ),
@@ -1461,7 +1441,6 @@ class _BoostScreenState extends State<BoostScreen>
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
                 color: isLightMode ? Colors.grey[800] : Colors.grey[200],
-                fontFamily: 'Inter',
               ),
               textAlign: TextAlign.center,
             ),
@@ -1471,7 +1450,6 @@ class _BoostScreenState extends State<BoostScreen>
               style: TextStyle(
                 fontSize: 14,
                 color: isLightMode ? Colors.grey[600] : Colors.grey[400],
-                fontFamily: 'Inter',
                 height: 1.5,
               ),
               textAlign: TextAlign.center,

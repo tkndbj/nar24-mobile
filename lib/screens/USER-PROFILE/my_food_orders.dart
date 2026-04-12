@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../widgets/myproducts/food_orders_tab.dart';
 import 'package:go_router/go_router.dart';
@@ -126,7 +125,7 @@ class _MyFoodOrdersScreenState extends State<MyFoodOrdersScreen> {
         child: TextField(
           controller: _searchController,
           focusNode: _searchFocusNode,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
             color: isDark ? Colors.white : Colors.black87,
@@ -142,7 +141,7 @@ class _MyFoodOrdersScreenState extends State<MyFoodOrdersScreen> {
             ),
             suffixIcon: _buildSuffixIcon(isDark),
             hintText: l10n.searchRestaurants,
-            hintStyle: GoogleFonts.inter(
+            hintStyle: TextStyle(
               fontSize: 14,
               color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
               fontWeight: FontWeight.w500,
@@ -235,7 +234,7 @@ class _MyFoodOrdersScreenState extends State<MyFoodOrdersScreen> {
                 ),
           title: Text(
             l10n.foodOrders,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.w600,
               fontSize: 18,

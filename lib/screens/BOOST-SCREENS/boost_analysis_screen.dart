@@ -4,7 +4,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../providers/boost_analysis_provider.dart';
 import '../../widgets/boostanalysis/ongoing_boosts_widget.dart';
 import '../../widgets/boostanalysis/past_boosts_widget.dart';
@@ -101,11 +100,11 @@ class _BoostAnalysisScreenState extends State<BoostAnalysisScreen>
         unselectedLabelColor: Theme.of(context).brightness == Brightness.light
             ? Colors.grey[600]
             : Colors.grey[400],
-        labelStyle: GoogleFonts.inter(
+        labelStyle: TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 13,
         ),
-        unselectedLabelStyle: GoogleFonts.inter(
+        unselectedLabelStyle: TextStyle(
           fontWeight: FontWeight.w500,
           fontSize: 13,
         ),
@@ -175,7 +174,7 @@ class _BoostAnalysisScreenState extends State<BoostAnalysisScreen>
           focusNode: _focusNode,
           textInputAction: TextInputAction.search,
           onSubmitted: (_) => _focusNode.unfocus(),
-          style: GoogleFonts.inter(
+          style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
             color: isDark ? Colors.white : Colors.black87,
@@ -223,7 +222,7 @@ class _BoostAnalysisScreenState extends State<BoostAnalysisScreen>
                     ),
                   ),
             hintText: hint,
-            hintStyle: GoogleFonts.inter(
+            hintStyle: TextStyle(
               fontSize: 14,
               color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
               fontWeight: FontWeight.w600,
@@ -325,7 +324,7 @@ class _BoostAnalysisScreenState extends State<BoostAnalysisScreen>
               ),
               title: Text(
                 l10n.boostAnalysisTitle,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: Theme.of(context).colorScheme.onSurface,
                   fontWeight: FontWeight.w600,
                   fontSize: 18,
@@ -396,7 +395,7 @@ class _BoostAnalysisScreenState extends State<BoostAnalysisScreen>
                                   const SizedBox(height: 16),
                                   Text(
                                     l10n.loading,
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
                                       color: isDark
                                           ? Colors.white70
                                           : Colors.grey[600],

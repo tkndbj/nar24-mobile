@@ -6,7 +6,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../widgets/product_card_4.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../generated/l10n/app_localizations.dart';
 import '../../../constants/all_in_one_category_data.dart';
 import '../../../providers/seller_panel_provider.dart';
@@ -196,7 +195,7 @@ _scrollCtrl.addListener(() {
         child: TextField(
           focusNode: _searchFocus,
           controller: _searchCtrl,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
             color: isDarkMode ? Colors.white : Colors.black87,
@@ -260,7 +259,7 @@ _scrollCtrl.addListener(() {
   },
 ),
             hintText: l10n.searchProducts,
-            hintStyle: GoogleFonts.inter(
+            hintStyle: TextStyle(
               fontSize: 14,
               color: isDarkMode ? Colors.grey.shade500 : Colors.grey.shade500,
               fontWeight: FontWeight.w600,
@@ -827,7 +826,7 @@ Widget _buildProductGrid(BuildContext context, List<Product> products,
               const SizedBox(width: 8),
               Text(
                 l10n.searchResultsCount(products.length.toString()),
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: isDarkMode ? Colors.tealAccent : Colors.teal,
@@ -2853,14 +2852,14 @@ void _clearSearch() {
         builder: (BuildContext modalContext) => CupertinoActionSheet(
           title: Text(
             l10n.removeFromCampaignTitle,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
             ),
           ),
           message: Text(
             l10n.productInCampaignMessage(campaignName),
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 14,
               color: CupertinoColors.secondaryLabel,
             ),
@@ -2876,7 +2875,7 @@ void _clearSearch() {
               isDestructiveAction: true,
               child: Text(
                 l10n.removeFromCampaignAndDiscount,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: CupertinoColors.destructiveRed,
@@ -2888,7 +2887,7 @@ void _clearSearch() {
             onPressed: () => Navigator.pop(modalContext),
             child: Text(
               l10n.cancel,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
               ),
@@ -2967,7 +2966,7 @@ Future<void> _processRemoveDiscountOnlyWithProvider(
                 const SizedBox(height: 20),
                 Text(
                   l10n.removingDiscount ?? 'Removing discount...',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
                     color: Theme.of(context).brightness == Brightness.dark
@@ -3100,7 +3099,7 @@ Future<void> _processRemoveFromCampaignAndDiscountWithProvider(
                 const SizedBox(height: 20),
                 Text(
                   l10n.removingFromCampaign ?? 'Removing from campaign...',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
                     color: Theme.of(context).brightness == Brightness.dark

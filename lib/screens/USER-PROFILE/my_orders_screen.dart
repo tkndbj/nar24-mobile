@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../widgets/myproducts/sold_bought_products_tab.dart';
 import 'package:provider/provider.dart';
@@ -70,6 +70,13 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _pendingOrderSub;
   Timer? _bannerDismissTimer;
 
+  // ── Orders provider (owned by this screen) ─────────────────────────────────
+  // Owned here (not created in build) so: (1) the calendar AppBar action can
+  // reach it via a stable reference, and (2) we can listen for date-range
+  // changes and refresh the already-loaded tabs.
+  late final MyProductsProvider _ordersProvider;
+  DateTimeRange? _activeDateRange;
+
   // =============================================================================
   // LIFECYCLE
   // =============================================================================
@@ -77,6 +84,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
   @override
   void initState() {
     super.initState();
+    _ordersProvider = MyProductsProvider();
+    _ordersProvider.addListener(_onOrdersProviderChanged);
+
     _tabController = TabController(length: 2, vsync: this);
     _pageController = PageController();
     _tabController.addListener(_handleTabChange);
@@ -89,6 +99,29 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
     ]);
 
     _initPendingOrder();
+  }
+
+  /// Fires on every provider notification. We only react to date-range
+  /// transitions (equality check below) to avoid re-fetching on unrelated
+  /// notifications like search query updates.
+  void _onOrdersProviderChanged() {
+    final current = _ordersProvider.selectedDateRange;
+    if (current == _activeDateRange) return;
+    _activeDateRange = current;
+    if (!mounted) return;
+    setState(() {}); // refresh AppBar icon state + filter chip
+    _refreshLoadedTabs();
+  }
+
+  /// Reset pagination on both tabs whose data is already on screen.
+  /// The lazy sold tab is skipped until the user actually opens it —
+  /// ensureLoaded() will pick up the current date range at that point.
+  void _refreshLoadedTabs() {
+    _boughtTabKey.currentState?.refresh();
+    final sold = _soldTabKey.currentState;
+    if (sold != null && sold.hasStartedLoading) {
+      sold.refresh();
+    }
   }
 
   /// Wire up the pending order state depending on which param was passed.
@@ -109,6 +142,8 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
 
   @override
   void dispose() {
+    _ordersProvider.removeListener(_onOrdersProviderChanged);
+    _ordersProvider.dispose();
     _tabController.removeListener(_handleTabChange);
     _searchFocusNode.removeListener(_onSearchFocusChange);
     _tabController.dispose();
@@ -260,21 +295,19 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
   Future<void> _pickDateRange() async {
     _dismissKeyboard();
 
-    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final isLight = theme.brightness == Brightness.light;
     final backgroundColor = isLight ? Colors.white : Colors.grey[900]!;
 
     final picked = await showDateRangePicker(
       context: context,
-      initialDateRange: Provider.of<MyProductsProvider>(context, listen: false)
-              .selectedDateRange ??
+      initialDateRange: _ordersProvider.selectedDateRange ??
           DateTimeRange(
             start: DateTime.now().subtract(const Duration(days: 7)),
             end: DateTime.now(),
           ),
       firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      lastDate: DateTime.now(),
       builder: (context, child) {
         return Theme(
           data: theme.copyWith(
@@ -297,9 +330,57 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
     );
 
     if (picked != null) {
-      Provider.of<MyProductsProvider>(context, listen: false)
-          .updateSelectedDateRange(picked);
+      _ordersProvider.updateSelectedDateRange(picked);
     }
+  }
+
+  void _clearDateRange() {
+    _ordersProvider.updateSelectedDateRange(null);
+  }
+
+  Widget _buildDateFilterChip() {
+    final range = _ordersProvider.selectedDateRange;
+    if (range == null) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final fmt = DateFormat('dd MMM yyyy');
+    final label = '${fmt.format(range.start)}  –  ${fmt.format(range.end)}';
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: jadeGreen.withValues(alpha: isDark ? 0.18 : 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: jadeGreen.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.event_rounded, size: 16, color: jadeGreen),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: jadeGreen,
+                fontWeight: FontWeight.w600,
+                fontSize: 12.5,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          InkWell(
+            onTap: _clearDateRange,
+            borderRadius: BorderRadius.circular(20),
+            child: const Padding(
+              padding: EdgeInsets.all(2),
+              child: Icon(Icons.close_rounded, size: 16, color: jadeGreen),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // =============================================================================
@@ -343,14 +424,13 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: isDark
-            ? Colors.white.withOpacity(0.05)
-            : Colors.grey.withOpacity(0.1),
+            ? Colors.white.withValues(alpha: 0.05)
+            : Colors.grey.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: TabBar(
         controller: _tabController,
-        isScrollable: true,
-        tabAlignment: TabAlignment.center,
+        isScrollable: false,
         padding: const EdgeInsets.all(4),
         dividerColor: Colors.transparent,
         indicator: BoxDecoration(
@@ -362,7 +442,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
           borderRadius: BorderRadius.circular(8),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF00A86B).withOpacity(0.3),
+              color: const Color(0xFF00A86B).withValues(alpha: 0.3),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -370,11 +450,11 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
         ),
         labelColor: Colors.white,
         unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[600],
-        labelStyle: GoogleFonts.inter(
+        labelStyle: TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 13,
         ),
-        unselectedLabelStyle: GoogleFonts.inter(
+        unselectedLabelStyle: TextStyle(
           fontWeight: FontWeight.w500,
           fontSize: 13,
         ),
@@ -404,13 +484,19 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
     return Tab(
       height: 40,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 15),
-            const SizedBox(width: 5),
-            Text(text),
+            Icon(icon, size: 16),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                text,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
           ],
         ),
       ),
@@ -458,7 +544,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
         child: TextField(
           controller: _searchController,
           focusNode: _searchFocusNode,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
             color: isDark ? Colors.white : Colors.black87,
@@ -474,7 +560,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
             ),
             suffixIcon: _buildSuffixIcon(isDark),
             hintText: l10n.searchOrders,
-            hintStyle: GoogleFonts.inter(
+            hintStyle: TextStyle(
               fontSize: 14,
               color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
               fontWeight: FontWeight.w500,
@@ -544,8 +630,10 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
     final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return ChangeNotifierProvider(
-      create: (_) => MyProductsProvider(),
+    final hasDateFilter = _ordersProvider.selectedDateRange != null;
+
+    return ChangeNotifierProvider<MyProductsProvider>.value(
+      value: _ordersProvider,
       child: GestureDetector(
         onTap: _dismissKeyboard,
         child: Scaffold(
@@ -572,7 +660,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
             ),
             title: Text(
               l10n.myOrders,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurface,
                 fontWeight: FontWeight.w600,
                 fontSize: 18,
@@ -582,7 +670,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
               IconButton(
                 icon: Icon(
                   Icons.date_range_rounded,
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  color: hasDateFilter
+                      ? jadeGreen
+                      : (isDark ? Colors.grey[400] : Colors.grey[600]),
                 ),
                 onPressed: _pickDateRange,
                 tooltip: AppLocalizations.of(context).filterByDateRange,
@@ -605,6 +695,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                 _buildSearchBox(),
                 // ── Pending order banner ─────────────────────────────────────
                 _buildPendingOrderBanner(),
+                _buildDateFilterChip(),
                 _buildModernTabBar(),
                 Expanded(
                   child: PageView(
@@ -753,7 +844,7 @@ class _PendingBannerContentState extends State<_PendingBannerContent>
                 children: [
                   Text(
                     config.title,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: config.titleColor,
@@ -763,7 +854,7 @@ class _PendingBannerContentState extends State<_PendingBannerContent>
                     const SizedBox(height: 2),
                     Text(
                       config.subtitle!,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
                         color: config.subtitleColor,

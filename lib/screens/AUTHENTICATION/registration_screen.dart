@@ -107,7 +107,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                 message,
                 style: const TextStyle(
                   fontSize: 14,
-                  fontFamily: 'Figtree',
                 ),
               ),
             ),
@@ -534,7 +533,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w700,
-            fontFamily: 'Figtree',
             color: isDark ? Colors.white : Colors.black87,
           ),
         ),
@@ -543,7 +541,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
           l10n.joinUsToday ?? 'Join us today!',
           style: TextStyle(
             fontSize: 14,
-            fontFamily: 'Figtree',
             color: isDark ? Colors.white60 : Colors.black54,
           ),
         ),
@@ -574,7 +571,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
       textCapitalization: textCapitalization,
       onChanged: onChanged,
       style: TextStyle(
-        fontFamily: 'Figtree',
         fontSize: 15,
         color: isDark ? Colors.white : Colors.black87,
       ),
@@ -582,13 +578,11 @@ class _RegistrationScreenState extends State<RegistrationScreen>
         labelText: label,
         labelStyle: TextStyle(
           color: isDark ? Colors.white60 : Colors.black54,
-          fontFamily: 'Figtree',
           fontSize: 14,
         ),
         hintText: hint,
         hintStyle: TextStyle(
           color: isDark ? Colors.white30 : Colors.black26,
-          fontFamily: 'Figtree',
           fontSize: 14,
         ),
         prefixIcon: Icon(
@@ -722,7 +716,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                 '$metCount/5',
                 style: TextStyle(
                   fontSize: 11,
-                  fontFamily: 'Figtree',
                   fontWeight: FontWeight.w600,
                   color: metCount == 5
                       ? const Color(0xFF00A86B)
@@ -761,7 +754,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
           text,
           style: TextStyle(
             fontSize: 11,
-            fontFamily: 'Figtree',
             color: isMet
                 ? const Color(0xFF00A86B)
                 : (isDark ? Colors.white54 : Colors.black45),
@@ -812,7 +804,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                   l10n.iAgreeToThe ?? 'I agree to the ',
                   style: TextStyle(
                     fontSize: 13,
-                    fontFamily: 'Figtree',
                     color: isDark ? Colors.white70 : Colors.black87,
                   ),
                 ),
@@ -827,7 +818,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                     l10n.membershipAgreement ?? 'Membership Agreement',
                     style: const TextStyle(
                       fontSize: 13,
-                      fontFamily: 'Figtree',
                       color: Color(0xFF00A86B),
                       fontWeight: FontWeight.w600,
                       decoration: TextDecoration.underline,
@@ -838,7 +828,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                   ' ${l10n.andText ?? "and"} ',
                   style: TextStyle(
                     fontSize: 13,
-                    fontFamily: 'Figtree',
                     color: isDark ? Colors.white70 : Colors.black87,
                   ),
                 ),
@@ -853,7 +842,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                     l10n.termsOfUse ?? 'Terms of Use',
                     style: const TextStyle(
                       fontSize: 13,
-                      fontFamily: 'Figtree',
                       color: Color(0xFF00A86B),
                       fontWeight: FontWeight.w600,
                       decoration: TextDecoration.underline,
@@ -864,7 +852,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                   ' ${l10n.andText ?? "and"} ',
                   style: TextStyle(
                     fontSize: 13,
-                    fontFamily: 'Figtree',
                     color: isDark ? Colors.white70 : Colors.black87,
                   ),
                 ),
@@ -879,7 +866,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                     l10n.personalData ?? 'Personal Data',
                     style: const TextStyle(
                       fontSize: 13,
-                      fontFamily: 'Figtree',
                       color: Color(0xFF00A86B),
                       fontWeight: FontWeight.w600,
                       decoration: TextDecoration.underline,
@@ -922,7 +908,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                 style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
-                  fontFamily: 'Figtree',
                 ),
               ),
       ),
@@ -944,7 +929,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
             l10n.or ?? 'or',
             style: TextStyle(
               color: isDark ? Colors.white38 : Colors.black38,
-              fontFamily: 'Figtree',
               fontSize: 13,
             ),
           ),
@@ -1001,7 +985,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Figtree',
                 color: isDark ? Colors.black : Colors.white,
               ),
             ),
@@ -1044,7 +1027,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Figtree',
                 color: isDark ? Colors.white : Colors.black87,
               ),
             ),
@@ -1064,7 +1046,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                 'Already have an account? ',
             style: TextStyle(
               color: isDark ? Colors.white60 : Colors.black54,
-              fontFamily: 'Figtree',
               fontSize: 14,
             ),
           ),
@@ -1074,7 +1055,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
               l10n.loginButton ?? 'Sign In',
               style: const TextStyle(
                 color: Color(0xFF00A86B),
-                fontFamily: 'Figtree',
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),

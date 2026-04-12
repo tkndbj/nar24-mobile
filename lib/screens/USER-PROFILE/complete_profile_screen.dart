@@ -240,7 +240,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
           l10n.completeProfile,
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontFamily: 'Figtree',
             fontSize: 26,
             fontWeight: FontWeight.w700,
             color: isDark ? Colors.white : Colors.black87,
@@ -273,7 +272,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
                   style: TextStyle(
                     fontSize: 13,
                     color: isDark ? Colors.white70 : Colors.black54,
-                    fontFamily: 'Figtree',
                   ),
                 ),
               ],
@@ -286,7 +284,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
           l10n.pleaseFillMissingFields,
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontFamily: 'Figtree',
             fontSize: 14,
             fontWeight: FontWeight.w400,
             color: isDark ? Colors.white60 : Colors.black54,
@@ -318,7 +315,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
     return Text(
       label,
       style: TextStyle(
-        fontFamily: 'Figtree',
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: isDark ? Colors.white70 : Colors.black87,
@@ -333,7 +329,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
       dropdownColor:
           isDark ? const Color.fromARGB(255, 45, 42, 62) : Colors.white,
       style: TextStyle(
-        fontFamily: 'Figtree',
         color: isDark ? Colors.white : Colors.black87,
         fontSize: 16,
       ),
@@ -341,7 +336,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
         hintText: l10n.selectGender,
         hintStyle: TextStyle(
           color: isDark ? Colors.white38 : Colors.black38,
-          fontFamily: 'Figtree',
         ),
         prefixIcon: Icon(
           Icons.people_outline,
@@ -397,7 +391,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
       readOnly: true,
       controller: TextEditingController(text: _birthDateText),
       style: TextStyle(
-        fontFamily: 'Figtree',
         color: isDark ? Colors.white : Colors.black87,
         fontSize: 16,
       ),
@@ -405,7 +398,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
         hintText: l10n.selectBirthDate,
         hintStyle: TextStyle(
           color: isDark ? Colors.white38 : Colors.black38,
-          fontFamily: 'Figtree',
         ),
         prefixIcon: Icon(
           Icons.calendar_today_outlined,
@@ -485,7 +477,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  fontFamily: 'Figtree',
                 ),
               ),
       ),
@@ -514,7 +505,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
               style: TextStyle(
                 fontSize: 13,
                 color: isDark ? Colors.white54 : Colors.black45,
-                fontFamily: 'Figtree',
               ),
             ),
           ),

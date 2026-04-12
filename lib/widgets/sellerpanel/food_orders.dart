@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -797,7 +796,7 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
                 ),
                 child: Text(
                   _tabLabel(tab, locale),
-                  style: GoogleFonts.figtree(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: isActive
@@ -887,7 +886,7 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
             locale == 'tr'
                 ? 'Sipariş yok'
                 : (locale == 'ru' ? 'Нет заказов' : 'No orders'),
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w700,
               color: isDark ? Colors.white : const Color(0xFF111827),
@@ -900,7 +899,7 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
                 : (locale == 'ru'
                     ? 'В этой категории нет заказов'
                     : 'No orders in this category'),
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               fontSize: 13,
               color: isDark ? Colors.grey[500] : const Color(0xFF9CA3AF),
             ),
@@ -963,7 +962,7 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
                     locale == 'tr'
                         ? 'Daha Fazla Yükle'
                         : (locale == 'ru' ? 'Загрузить ещё' : 'Load More'),
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: isDark
@@ -1071,7 +1070,7 @@ class _OrderCard extends StatelessWidget {
                 Row(children: [
                   Flexible(
                     child: Text(order.buyerName,
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
                             color: isDark
@@ -1083,7 +1082,7 @@ class _OrderCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   Text(
                       '${order.itemCount} ${order.itemCount == 1 ? 'item' : 'items'}',
-                      style: GoogleFonts.figtree(
+                      style: TextStyle(
                           fontSize: 10,
                           color: isDark
                               ? Colors.grey[500]
@@ -1092,7 +1091,7 @@ class _OrderCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Row(children: [
                   Text(_formatTime(order.createdAt),
-                      style: GoogleFonts.figtree(
+                      style: TextStyle(
                           fontSize: 10,
                           color: isDark
                               ? Colors.grey[500]
@@ -1100,14 +1099,14 @@ class _OrderCard extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Text('·',
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                             fontSize: 10,
                             color: isDark
                                 ? Colors.grey[600]
                                 : const Color(0xFFD1D5DB))),
                   ),
                   Text(_timeAgo(order.createdAt, locale),
-                      style: GoogleFonts.figtree(
+                      style: TextStyle(
                           fontSize: 10,
                           color: isDark
                               ? Colors.grey[500]
@@ -1124,14 +1123,14 @@ class _OrderCard extends StatelessWidget {
                   text: TextSpan(children: [
                 TextSpan(
                     text: order.totalPrice.toStringAsFixed(2),
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
                         color:
                             isDark ? Colors.white : const Color(0xFF111827))),
                 TextSpan(
                     text: ' ${order.currency}',
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                         fontSize: 10,
                         color: isDark
                             ? Colors.grey[500]
@@ -1171,7 +1170,7 @@ class _OrderCard extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                               Text('${item.quantity}x ${item.name}',
-                                  style: GoogleFonts.figtree(
+                                  style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
                                       color: isDark
@@ -1185,7 +1184,7 @@ class _OrderCard extends StatelessWidget {
                                         .map((e) =>
                                             '+${localizeExtra(e.name, l10n)}${e.price > 0 ? ' ${e.price.toStringAsFixed(2)}' : ''}')
                                         .join(', '),
-                                    style: GoogleFonts.figtree(
+                                    style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w500,
                                         color: isDark
@@ -1195,7 +1194,7 @@ class _OrderCard extends StatelessWidget {
                                 ),
                             ])),
                         Text(item.itemTotal.toStringAsFixed(2),
-                            style: GoogleFonts.figtree(
+                            style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                                 color: isDark
@@ -1211,7 +1210,7 @@ class _OrderCard extends StatelessWidget {
                               color: const Color(0xFFFFFBEB),
                               borderRadius: BorderRadius.circular(5)),
                           child: Text(item.specialNotes,
-                              style: GoogleFonts.figtree(
+                              style: TextStyle(
                                   fontSize: 10,
                                   color: const Color(0xFFB45309))),
                         ),
@@ -1239,7 +1238,7 @@ class _OrderCard extends StatelessWidget {
           const SizedBox(width: 6),
           Expanded(
               child: Text(order.orderNotes,
-                  style: GoogleFonts.figtree(
+                  style: TextStyle(
                       fontSize: 13,
                       fontStyle: FontStyle.italic,
                       color: const Color(0xFFB45309)))),
@@ -1324,7 +1323,7 @@ class _OrderCard extends StatelessWidget {
         const SizedBox(width: 4),
         Expanded(
             child: Text(lines.join('\n'),
-                style: GoogleFonts.figtree(
+                style: TextStyle(
                     fontSize: 12,
                     color:
                         isDark ? Colors.grey[400] : const Color(0xFF6B7280)))),
@@ -1338,18 +1337,18 @@ class _OrderCard extends StatelessWidget {
       child: Wrap(spacing: 12, children: [
         Text(
             '${locale == 'tr' ? 'Ara toplam' : 'Subtotal'}: ${order.subtotal.toStringAsFixed(2)}',
-            style: GoogleFonts.figtree(
+            style: TextStyle(
                 fontSize: 13,
                 color: isDark ? Colors.grey[500] : const Color(0xFF9CA3AF))),
         if (order.deliveryFee > 0)
           Text(
               '${locale == 'tr' ? 'Teslimat' : 'Delivery'}: ${order.deliveryFee.toStringAsFixed(2)}',
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                   fontSize: 13,
                   color: isDark ? Colors.grey[500] : const Color(0xFF9CA3AF))),
         Text(
             '${locale == 'tr' ? 'Toplam' : 'Total'}: ${order.totalPrice.toStringAsFixed(2)} ${order.currency}',
-            style: GoogleFonts.figtree(
+            style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: isDark ? Colors.grey[300] : const Color(0xFF374151))),
@@ -1372,7 +1371,7 @@ class _OrderCard extends StatelessWidget {
             showUpdated
                 ? '$created · ${locale == 'tr' ? 'güncellendi' : 'updated'} ${_formatTime(order.updatedAt)}'
                 : created,
-            style: GoogleFonts.figtree(
+            style: TextStyle(
                 fontSize: 12,
                 color: isDark ? Colors.grey[600] : const Color(0xFFD1D5DB)),
             textAlign: TextAlign.center,
@@ -1380,7 +1379,7 @@ class _OrderCard extends StatelessWidget {
           if (showInformed)
             Text(
               '· ${locale == 'tr' ? 'Kurye bildirildi' : 'Courier informed'} ${_formatTime(order.lastInformedAt)}',
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                   fontSize: 12, color: const Color(0xFFC4B5FD)), // violet-300
               textAlign: TextAlign.center,
             ),
@@ -1466,7 +1465,7 @@ class _OrderCard extends StatelessWidget {
                         : (locale == 'ru'
                             ? 'Ожидание курьера'
                             : 'Waiting for cargo'),
-                    style: GoogleFonts.figtree(
+                    style: TextStyle(
                         fontSize: 12,
                         color: isDark
                             ? Colors.grey[500]
@@ -1520,7 +1519,7 @@ class _OrderCard extends StatelessWidget {
           isExpanded
               ? (locale == 'tr' ? 'Daha az' : 'Less detail')
               : (locale == 'tr' ? 'Daha fazla' : 'More detail'),
-          style: GoogleFonts.figtree(
+          style: TextStyle(
               fontSize: 10,
               color: isDark ? Colors.grey[600] : const Color(0xFFD1D5DB)),
         ),
@@ -1681,7 +1680,7 @@ class _InformCourierBtnState extends State<_InformCourierBtn> {
             const SizedBox(width: 5),
             Text(
               label,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
                 color: disabled
@@ -1720,7 +1719,7 @@ class _StatusBadge extends StatelessWidget {
                   BoxDecoration(shape: BoxShape.circle, color: cfg.dot)),
           const SizedBox(width: 4),
           Text(_statusLabel(status, locale),
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                   fontSize: 9, fontWeight: FontWeight.w700, color: cfg.fg)),
         ]),
       );
@@ -1758,7 +1757,7 @@ class _InfoChip extends StatelessWidget {
               color: isDark ? Colors.grey[400] : const Color(0xFF9CA3AF)),
           const SizedBox(width: 4),
           Text(label,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                   fontSize: 12,
                   fontWeight: tappable ? FontWeight.w600 : FontWeight.normal,
                   color: isDark ? Colors.grey[300] : const Color(0xFF6B7280))),
@@ -1809,7 +1808,7 @@ class _ActionBtn extends StatelessWidget {
                       Icon(icon, size: 13, color: fg),
                       const SizedBox(width: 5),
                       Text(label,
-                          style: GoogleFonts.figtree(
+                          style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                               color: fg)),

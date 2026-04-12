@@ -1,6 +1,7 @@
 // lib/theme.dart
 
 import 'package:flutter/material.dart';
+import 'config/app_fonts.dart';
 
 // Define a ThemeExtension to hold custom colors
 class CustomColors extends ThemeExtension<CustomColors> {
@@ -90,6 +91,8 @@ class CustomColors extends ThemeExtension<CustomColors> {
 
 class AppThemes {
   static final ThemeData lightTheme = ThemeData(
+    useMaterial3: true,
+    fontFamily: AppFonts.primary,
     brightness: Brightness.light,
     primaryColor:
         const Color.fromARGB(255, 255, 255, 255), // Sand color as primary
@@ -110,33 +113,32 @@ class AppThemes {
       elevation: 3,
       iconTheme: IconThemeData(color: Colors.black),
       titleTextStyle: TextStyle(
-          color: Colors.black,
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          fontFamily: 'Figtree'),
+        fontFamily: AppFonts.primary,
+        color: Colors.black,
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+      ),
     ),
-    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-      backgroundColor: Color(0xFFC8C8C8),
+    bottomNavigationBarTheme: BottomNavigationBarThemeData(
+      backgroundColor: const Color(0xFFC8C8C8),
       selectedItemColor: Colors.black,
       unselectedItemColor: Colors.black,
       selectedLabelStyle: TextStyle(
-        fontFamily: 'Figtree',
+        fontFamily: AppFonts.primary,
         fontWeight: FontWeight.w600,
       ),
       unselectedLabelStyle: TextStyle(
-        fontFamily: 'Figtree',
+        fontFamily: AppFonts.primary,
         fontWeight: FontWeight.w600,
       ),
       // Border is handled in the screen code by using colorScheme.secondary
     ),
     textTheme: const TextTheme(
       bodyLarge: TextStyle(
-        fontFamily: 'Figtree',
         fontWeight: FontWeight.w600,
         color: Color.fromARGB(255, 29, 29, 0), // Olive Green for general text
       ),
       bodyMedium: TextStyle(
-        fontFamily: 'Figtree',
         fontWeight: FontWeight.w600,
         color: Colors.black,
       ),
@@ -168,6 +170,8 @@ class AppThemes {
   );
 
   static final ThemeData darkTheme = ThemeData(
+    useMaterial3: true,
+    fontFamily: AppFonts.primary,
     brightness: Brightness.dark,
     // A dark purple, gray combination for overall background
     scaffoldBackgroundColor: const Color(0xFF1C1A29),
@@ -182,44 +186,44 @@ class AppThemes {
       onSurface: Colors.white,
     ),
     appBarTheme: AppBarTheme(
-      backgroundColor: Color.fromARGB(255, 35, 33, 51),
+      backgroundColor: const Color.fromARGB(255, 35, 33, 51),
       surfaceTintColor: Colors.transparent,
       elevation: 3,
-      iconTheme: IconThemeData(color: Colors.white),
+      iconTheme: const IconThemeData(color: Colors.white),
       titleTextStyle: TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          fontFamily: 'Figtree'),
+        fontFamily: AppFonts.primary,
+        color: Colors.white,
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+      ),
     ),
-    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-      backgroundColor: Color(0xFF1C1A29),
+    bottomNavigationBarTheme: BottomNavigationBarThemeData(
+      backgroundColor: const Color(0xFF1C1A29),
       selectedItemColor: Colors.white,
       unselectedItemColor: Colors.white70,
       selectedLabelStyle: TextStyle(
-        fontFamily: 'Figtree',
+        fontFamily: AppFonts.primary,
         fontWeight: FontWeight.w600,
       ),
       unselectedLabelStyle: TextStyle(
-        fontFamily: 'Figtree',
+        fontFamily: AppFonts.primary,
         fontWeight: FontWeight.w600,
       ),
     ),
     textTheme: const TextTheme(
-        bodyLarge: TextStyle(
-          fontFamily: 'Figtree',
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-        ),
-        bodyMedium: TextStyle(
-          fontFamily: 'Figtree',
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-        ),
-        bodySmall: TextStyle(
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-        )),
+      bodyLarge: TextStyle(
+        fontWeight: FontWeight.w600,
+        color: Colors.white,
+      ),
+      bodyMedium: TextStyle(
+        fontWeight: FontWeight.w600,
+        color: Colors.white,
+      ),
+      bodySmall: TextStyle(
+        fontWeight: FontWeight.w600,
+        color: Colors.white,
+      ),
+    ),
     buttonTheme: const ButtonThemeData(
       buttonColor: Color(0xFF00A86B), // Jade green
       textTheme: ButtonTextTheme.primary,

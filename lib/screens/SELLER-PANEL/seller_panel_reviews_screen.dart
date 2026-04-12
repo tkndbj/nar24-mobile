@@ -6,7 +6,6 @@ import 'package:shimmer/shimmer.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../widgets/product_card_4.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class SellerPanelReviewsScreen extends StatefulWidget {
   final String shopId;
@@ -132,11 +131,11 @@ class _SellerPanelReviewsScreenState extends State<SellerPanelReviewsScreen>
         ),
         labelColor: Colors.white,
         unselectedLabelColor: isLight ? Colors.grey[600] : Colors.grey[400],
-        labelStyle: GoogleFonts.inter(
+        labelStyle: TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 13,
         ),
-        unselectedLabelStyle: GoogleFonts.inter(
+        unselectedLabelStyle: TextStyle(
           fontWeight: FontWeight.w500,
           fontSize: 13,
         ),

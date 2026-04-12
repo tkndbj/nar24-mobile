@@ -9,7 +9,6 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../generated/l10n/app_localizations.dart';
 
@@ -535,7 +534,7 @@ void _handlePaymentSuccess() {
                     const SizedBox(height: 24),
                     Text(
                       l10n.loadingPaymentPage,
-                      style: GoogleFonts.figtree(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
@@ -544,7 +543,7 @@ void _handlePaymentSuccess() {
                     const SizedBox(height: 6),
                     Text(
                       l10n.pleaseWait,
-                      style: GoogleFonts.figtree(
+                      style: TextStyle(
                         fontSize: 13,
                         color: Colors.grey[300],
                       ),
@@ -597,7 +596,7 @@ class _Scaffold extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               l10n.securePayment,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 color: isDark ? Colors.white : const Color(0xFF1A202C),
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -634,7 +633,7 @@ class _InitializingView extends StatelessWidget {
           const SizedBox(height: 24),
           Text(
             l10n.initializingPayment,
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w500,
               color: isDark ? Colors.white70 : const Color(0xFF64748B),
@@ -675,7 +674,7 @@ class _ErrorView extends StatelessWidget {
             const SizedBox(height: 24),
             Text(
               l10n.connectionError,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
                 color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -685,7 +684,7 @@ class _ErrorView extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               message,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 14,
                 color: isDark ? Colors.white70 : const Color(0xFF64748B),
               ),
@@ -762,7 +761,7 @@ class _FullScreenMessage extends StatelessWidget {
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: GoogleFonts.figtree(
+                style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                   color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -772,7 +771,7 @@ class _FullScreenMessage extends StatelessWidget {
               Text(
                 subtitle,
                 textAlign: TextAlign.center,
-                style: GoogleFonts.figtree(
+                style: TextStyle(
                   fontSize: 14,
                   color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
                 ),
@@ -820,7 +819,7 @@ class _PrimaryButton extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: GoogleFonts.figtree(fontWeight: FontWeight.bold, fontSize: 15),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
         ),
       ),
     );
@@ -845,14 +844,14 @@ class _CancelDialog extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Text(
         l10n.cancelPaymentTitle,
-        style: GoogleFonts.figtree(
+        style: TextStyle(
           fontWeight: FontWeight.bold,
           color: isDark ? Colors.white : const Color(0xFF1A202C),
         ),
       ),
       content: Text(
         l10n.cancelPaymentMessage,
-        style: GoogleFonts.figtree(
+        style: TextStyle(
           fontSize: 14,
           color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
         ),
@@ -862,7 +861,7 @@ class _CancelDialog extends StatelessWidget {
           onPressed: () => Navigator.of(context).pop(false),
           child: Text(
             l10n.no,
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               color: isDark ? Colors.grey[300] : const Color(0xFF64748B),
             ),
           ),
@@ -879,7 +878,7 @@ class _CancelDialog extends StatelessWidget {
           ),
           child: Text(
             l10n.yes,
-            style: GoogleFonts.figtree(fontWeight: FontWeight.bold),
+            style: TextStyle(fontWeight: FontWeight.bold),
           ),
         ),
       ],

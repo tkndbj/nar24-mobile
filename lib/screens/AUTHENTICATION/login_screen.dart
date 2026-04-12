@@ -116,7 +116,6 @@ class _LoginScreenState extends State<LoginScreen>
                 message,
                 style: const TextStyle(
                   fontSize: 14,
-                  fontFamily: 'Figtree',
                 ),
               ),
             ),
@@ -752,7 +751,6 @@ class _LoginScreenState extends State<LoginScreen>
           l10n.welcomeBack ?? 'Welcome back',
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontFamily: 'Figtree',
             fontSize: 26,
             fontWeight: FontWeight.w700,
             color: isDark ? Colors.white : Colors.black87,
@@ -789,7 +787,6 @@ class _LoginScreenState extends State<LoginScreen>
                   l10n.emailVerificationMessage ??
                       'Please verify your email to continue.',
                   style: TextStyle(
-                    fontFamily: 'Figtree',
                     color:
                         isDark ? Colors.white.withOpacity(0.9) : Colors.black87,
                     fontSize: 14,
@@ -827,7 +824,6 @@ class _LoginScreenState extends State<LoginScreen>
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        fontFamily: 'Figtree',
                       ),
                     ),
             ),
@@ -868,7 +864,6 @@ class _LoginScreenState extends State<LoginScreen>
                 l10n.forgotPasswordText ?? 'Forgot Password?',
                 style: TextStyle(
                   color: Colors.orange.shade600,
-                  fontFamily: 'Figtree',
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
@@ -913,7 +908,6 @@ class _LoginScreenState extends State<LoginScreen>
     return Text(
       label,
       style: TextStyle(
-        fontFamily: 'Figtree',
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: isDark ? Colors.white70 : Colors.black87,
@@ -928,7 +922,6 @@ class _LoginScreenState extends State<LoginScreen>
       keyboardType: TextInputType.emailAddress,
       cursorColor: isDark ? Colors.white : Colors.black87,
       style: TextStyle(
-        fontFamily: 'Figtree',
         fontSize: 16,
         color: isDark ? Colors.white : Colors.black87,
       ),
@@ -936,7 +929,6 @@ class _LoginScreenState extends State<LoginScreen>
         hintText: l10n.emailHint ?? 'Enter your email',
         hintStyle: TextStyle(
           color: isDark ? Colors.white38 : Colors.black38,
-          fontFamily: 'Figtree',
         ),
         prefixIcon: Icon(
           Icons.email_outlined,
@@ -1006,7 +998,6 @@ class _LoginScreenState extends State<LoginScreen>
       obscureText: !_isPasswordVisible,
       cursorColor: isDark ? Colors.white : Colors.black87,
       style: TextStyle(
-        fontFamily: 'Figtree',
         fontSize: 16,
         color: isDark ? Colors.white : Colors.black87,
       ),
@@ -1014,7 +1005,6 @@ class _LoginScreenState extends State<LoginScreen>
         hintText: l10n.passwordHint ?? 'Enter your password',
         hintStyle: TextStyle(
           color: isDark ? Colors.white38 : Colors.black38,
-          fontFamily: 'Figtree',
         ),
         prefixIcon: Icon(
           Icons.lock_outline,
@@ -1118,7 +1108,6 @@ class _LoginScreenState extends State<LoginScreen>
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  fontFamily: 'Figtree',
                 ),
               ),
       ),
@@ -1140,7 +1129,6 @@ class _LoginScreenState extends State<LoginScreen>
             l10n.or ?? 'or',
             style: TextStyle(
               color: isDark ? Colors.white38 : Colors.black38,
-              fontFamily: 'Figtree',
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
@@ -1184,7 +1172,6 @@ class _LoginScreenState extends State<LoginScreen>
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Figtree',
                 color: isDark ? Colors.black : Colors.white,
               ),
             ),
@@ -1227,7 +1214,6 @@ class _LoginScreenState extends State<LoginScreen>
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Figtree',
                 color: isDark ? Colors.white : Colors.black87,
               ),
             ),
@@ -1248,7 +1234,6 @@ class _LoginScreenState extends State<LoginScreen>
               l10n.dontHaveAccount ?? "Don't have an account? ",
               style: TextStyle(
                 color: isDark ? Colors.white60 : Colors.black54,
-                fontFamily: 'Figtree',
                 fontSize: 14,
               ),
             ),
@@ -1258,7 +1243,6 @@ class _LoginScreenState extends State<LoginScreen>
                 l10n.signUp ?? 'Sign Up',
                 style: TextStyle(
                   color: Colors.orange.shade600,
-                  fontFamily: 'Figtree',
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1287,7 +1271,6 @@ class _LoginScreenState extends State<LoginScreen>
                 l10n.guestContinueText ?? 'Continue as Guest',
                 style: TextStyle(
                   color: isDark ? Colors.white38 : Colors.black45,
-                  fontFamily: 'Figtree',
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),

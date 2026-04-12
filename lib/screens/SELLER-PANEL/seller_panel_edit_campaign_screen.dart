@@ -4,7 +4,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../models/product.dart';
 import '../../providers/seller_panel_provider.dart';
 import '../../generated/l10n/app_localizations.dart';
@@ -721,14 +720,14 @@ class _SellerPanelEditCampaignScreenState
       builder: (BuildContext context) => CupertinoActionSheet(
         title: Text(
           l10n.removeFromCampaign,
-          style: GoogleFonts.figtree(
+          style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
           ),
         ),
         message: Text(
           '${l10n.chooseRemovalOption}',
-          style: GoogleFonts.figtree(
+          style: TextStyle(
             fontSize: 14,
             color: CupertinoColors.secondaryLabel,
           ),
@@ -743,7 +742,7 @@ class _SellerPanelEditCampaignScreenState
               children: [
                 Text(
                   l10n.keepDiscountRemoveFromCampaign,
-                  style: GoogleFonts.figtree(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: const Color(0xFF10B981),
@@ -751,7 +750,7 @@ class _SellerPanelEditCampaignScreenState
                 ),
                 Text(
                   l10n.keepDiscountDescription,
-                  style: GoogleFonts.figtree(
+                  style: TextStyle(
                     fontSize: 13,
                     color: CupertinoColors.secondaryLabel,
                   ),
@@ -768,7 +767,7 @@ class _SellerPanelEditCampaignScreenState
               children: [
                 Text(
                   l10n.removeDiscountAndFromCampaign,
-                  style: GoogleFonts.figtree(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: const Color(0xFF6366F1),
@@ -776,7 +775,7 @@ class _SellerPanelEditCampaignScreenState
                 ),
                 Text(
                   l10n.removeDiscountDescription,
-                  style: GoogleFonts.figtree(
+                  style: TextStyle(
                     fontSize: 13,
                     color: CupertinoColors.secondaryLabel,
                   ),
@@ -791,7 +790,7 @@ class _SellerPanelEditCampaignScreenState
           },
           child: Text(
             l10n.cancel,
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
             ),
@@ -898,7 +897,7 @@ class _SellerPanelEditCampaignScreenState
           isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       title: Text(
         l10n.editCampaign,
-        style: GoogleFonts.figtree(
+        style: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.w600,
           color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -972,7 +971,7 @@ class _SellerPanelEditCampaignScreenState
                   children: [
                     Text(
                       widget.campaign['name'] ?? l10n.campaign,
-                      style: GoogleFonts.figtree(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
                         color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -993,7 +992,7 @@ class _SellerPanelEditCampaignScreenState
                       ),
                       child: Text(
                         '${_campaignedProducts.length} ${l10n.productsInCampaign}',
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                           color: const Color(0xFF4299E1),
@@ -1022,7 +1021,7 @@ class _SellerPanelEditCampaignScreenState
               ),
               child: Text(
                 widget.campaign['description'],
-                style: GoogleFonts.figtree(
+                style: TextStyle(
                   fontSize: 13,
                   color: isDark
                       ? const Color(0xFFA0AAB8)
@@ -1071,11 +1070,11 @@ class _SellerPanelEditCampaignScreenState
         unselectedLabelColor: Theme.of(context).brightness == Brightness.light
             ? Colors.grey[600]
             : Colors.grey[400],
-        labelStyle: GoogleFonts.inter(
+        labelStyle: TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 13,
         ),
-        unselectedLabelStyle: GoogleFonts.inter(
+        unselectedLabelStyle: TextStyle(
           fontWeight: FontWeight.w500,
           fontSize: 13,
         ),
@@ -1195,7 +1194,7 @@ class _SellerPanelEditCampaignScreenState
                 const SizedBox(width: 8),
                 Text(
                   '${_selectedNewProducts.length} ${l10n.productsSelected(_selectedNewProducts.length)}',
-                  style: GoogleFonts.figtree(
+                  style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: const Color(0xFF4299E1),
@@ -1341,7 +1340,7 @@ class _SellerPanelEditCampaignScreenState
                     children: [
                       Text(
                         product.productName,
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
                           color:
@@ -1356,7 +1355,7 @@ class _SellerPanelEditCampaignScreenState
                         children: [
                           Text(
                             '${product.price.toStringAsFixed(2)} ${product.currency ?? '\$'}',
-                            style: GoogleFonts.figtree(
+                            style: TextStyle(
                               color: hasDiscount
                                   ? const Color(0xFF38A169)
                                   : const Color(0xFF667EEA),
@@ -1390,7 +1389,7 @@ class _SellerPanelEditCampaignScreenState
                               ),
                               child: Text(
                                 '-${discount.toStringAsFixed(1)}%',
-                                style: GoogleFonts.figtree(
+                                style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
@@ -1510,7 +1509,7 @@ class _SellerPanelEditCampaignScreenState
                             width: 1.5,
                           ),
                         ),
-                        labelStyle: GoogleFonts.figtree(
+                        labelStyle: TextStyle(
                           color: isDark
                               ? const Color(0xFFA0AAB8)
                               : const Color(0xFF64748B),
@@ -1518,7 +1517,7 @@ class _SellerPanelEditCampaignScreenState
                         ),
                         helperText:
                             '${l10n.min}: $_minDiscountPercentage%, ${l10n.max}: $_maxDiscountPercentage%',
-                        helperStyle: GoogleFonts.figtree(
+                        helperStyle: TextStyle(
                           color: isDark
                               ? const Color(0xFF718096)
                               : const Color(0xFF94A3B8),
@@ -1527,7 +1526,7 @@ class _SellerPanelEditCampaignScreenState
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 8),
                       ),
-                      style: GoogleFonts.figtree(
+                      style: TextStyle(
                         fontSize: 14,
                         color: isDark ? Colors.white : const Color(0xFF1A202C),
                       ),
@@ -1577,7 +1576,7 @@ class _SellerPanelEditCampaignScreenState
                       ),
                       child: Text(
                         l10n.update,
-                        style: GoogleFonts.figtree(
+                        style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
                         ),
@@ -1676,7 +1675,7 @@ class _SellerPanelEditCampaignScreenState
         ),
         title: Text(
           product.productName,
-          style: GoogleFonts.figtree(
+          style: TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 13,
             color: isDark ? Colors.white : const Color(0xFF1A202C),
@@ -1689,7 +1688,7 @@ class _SellerPanelEditCampaignScreenState
           padding: const EdgeInsets.only(top: 6),
           child: Text(
             '${product.price.toStringAsFixed(2)} ${product.currency ?? '\$'}',
-            style: GoogleFonts.figtree(
+            style: TextStyle(
               fontWeight: FontWeight.w600,
               fontSize: 14,
               color: const Color(0xFF667EEA),
@@ -1755,7 +1754,7 @@ class _SellerPanelEditCampaignScreenState
             const SizedBox(height: 16),
             Text(
               title,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color:
@@ -1765,7 +1764,7 @@ class _SellerPanelEditCampaignScreenState
             const SizedBox(height: 8),
             Text(
               subtitle,
-              style: GoogleFonts.figtree(
+              style: TextStyle(
                 fontSize: 13,
                 color:
                     isDark ? const Color(0xFF718096) : const Color(0xFF64748B),
@@ -1819,7 +1818,7 @@ class _SellerPanelEditCampaignScreenState
           _isSaving
               ? l10n.adding
               : '${l10n.add} ${_selectedNewProducts.length} ${l10n.products}',
-          style: GoogleFonts.figtree(
+          style: TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 14,
           ),

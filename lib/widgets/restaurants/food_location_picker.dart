@@ -537,7 +537,6 @@ class _FoodLocationPickerSheetState extends State<_FoodLocationPickerSheet> {
                                 color: Colors.white,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 16,
-                                fontFamily: 'Figtree',
                               ),
                             ),
                     ),

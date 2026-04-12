@@ -18,7 +18,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../services/favorites_sharing_service.dart';
 import '../market_screen.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../widgets/product_option_selector.dart';
 
 class FavoritesScreen extends StatefulWidget {
@@ -1086,7 +1085,7 @@ Future<void> _showTransferBasketDialog() async {
             Text(
               l10n.noLoggedInForFavorites,
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
                 color: isDark ? Colors.white70 : Colors.grey[700],
@@ -1112,7 +1111,7 @@ Future<void> _showTransferBasketDialog() async {
                           ),
                           child: Text(
                             l10n.login2,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.w600,
                               fontSize: 15,
@@ -1139,7 +1138,7 @@ Future<void> _showTransferBasketDialog() async {
                           ),
                           child: Text(
                             l10n.register,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: Colors.orange,
                               fontWeight: FontWeight.w600,
                               fontSize: 15,
@@ -1325,7 +1324,7 @@ Future<void> _showTransferBasketDialog() async {
                     Text(
                       l10n.discoverProducts,
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                         color: Colors.grey,
@@ -1352,7 +1351,7 @@ Future<void> _showTransferBasketDialog() async {
                         ),
                         child: Text(
                           l10n.discover,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                               color: Colors.white),
@@ -1472,7 +1471,7 @@ Widget build(BuildContext context) {
         automaticallyImplyLeading: false,
         title: Text(
           l10n.myFavorites,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
             color: Theme.of(context).colorScheme.onSurface,
