@@ -44,6 +44,8 @@ class SearchHistoryProvider with ChangeNotifier {
   /// Auth subscription for login/logout handling
   StreamSubscription<User?>? _authSubscription;
 
+  bool _disposed = false;
+
   // ==================== CONSTRUCTOR ====================
 
   SearchHistoryProvider() {
@@ -445,7 +447,14 @@ class SearchHistoryProvider with ChangeNotifier {
   // ==================== DISPOSE ====================
 
   @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
+  }
+
+  @override
   void dispose() {
+    _disposed = true;
     _authSubscription?.cancel();
     _authSubscription = null;
 

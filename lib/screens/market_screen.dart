@@ -140,6 +140,7 @@ class MarketScreenState extends State<MarketScreen>
   late final ScrollController _filterScrollController;
   late final PageController _pageController;
   late final ValueNotifier<Color> _adsBannerBgColor;
+  late final ValueNotifier<Color> _searchFallbackColorNotifier;
   late final GlobalKey<TerasMarketState> _terasKey;
   bool _couponOverlayChecked = false;
   // Providers - lazy loaded
@@ -225,6 +226,7 @@ class MarketScreenState extends State<MarketScreen>
     _filterScrollController = ScrollController();
     _pageController = PageController();
     _adsBannerBgColor = ValueNotifier<Color>(Colors.transparent);
+    _searchFallbackColorNotifier = ValueNotifier<Color>(Colors.white);
     _terasKey = GlobalKey<TerasMarketState>();
 
     // Initialize collections
@@ -2292,7 +2294,10 @@ class MarketScreenState extends State<MarketScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    routeObserver.subscribe(this, ModalRoute.of(context)!);
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      routeObserver.subscribe(this, route);
+    }
   }
 
   /// Optimized disposal
@@ -2413,6 +2418,14 @@ class MarketScreenState extends State<MarketScreen>
       }
     }
 
+    try {
+      _searchFallbackColorNotifier.dispose();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ Error disposing _searchFallbackColorNotifier: $e');
+      }
+    }
+
     // 9. Clear collections
     _filterViews.clear();
     _filterTabIndices.clear();
@@ -2525,9 +2538,13 @@ class MarketScreenState extends State<MarketScreen>
   ) {
     final fallbackColor = isDarkMode ? const Color(0xFF1C1A29) : Colors.white;
 
-    // AppBar color: use fallback when searching, otherwise use effective color
+    // AppBar color: use fallback when searching, otherwise use effective color.
+    // Reuse a single ValueNotifier so we don't leak one per build.
+    if (_searchFallbackColorNotifier.value != fallbackColor) {
+      _searchFallbackColorNotifier.value = fallbackColor;
+    }
     final effectiveColorNotifier = (_isSearching || !onHomeFilter)
-        ? ValueNotifier<Color>(fallbackColor)
+        ? _searchFallbackColorNotifier
         : bannerColorNotifier;
 
     // Show AppBar when searching OR on tabs that need it
