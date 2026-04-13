@@ -12,7 +12,6 @@ import '../../widgets/product_list_sliver.dart';
 import '../FILTER-SCREENS/shop_detail_filter_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/translation_service.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../widgets/productdetail/full_screen_image_viewer.dart';
@@ -358,7 +357,16 @@ class _ShopContent extends StatelessWidget {
           ),
         ),
         SliverToBoxAdapter(
-          child: _FilterSection(onDismissKeyboard: onDismissKeyboard),
+          child: AnimatedBuilder(
+            animation: tabController,
+            builder: (context, _) {
+              final allProductsIndex = hasHomeTab ? 1 : 0;
+              if (tabController.index != allProductsIndex) {
+                return const SizedBox.shrink();
+              }
+              return _FilterSection(onDismissKeyboard: onDismissKeyboard);
+            },
+          ),
         ),
       ],
       body: _TabContent(
@@ -431,7 +439,6 @@ class _ShopAppBar extends StatelessWidget {
     final profileImageUrl = shopData['profileImageUrl'] ?? '';
     final shopName = shopData['name'] ?? l10n.shop;
     final rating = (shopData['averageRating'] as num?)?.toDouble() ?? 0.0;
-    final followers = (shopData['followerCount'] as num?)?.toInt() ?? 0;
     final shopId = context.read<ShopProvider>().shopDoc?.id ?? '';
 
     final iconColor =
@@ -462,7 +469,6 @@ class _ShopAppBar extends StatelessWidget {
         background: _CoverImage(
           coverImageUrls: coverImageUrls,
           rating: rating,
-          followers: followers,
         ),
       ),
     );
@@ -499,12 +505,10 @@ class _ShopAvatar extends StatelessWidget {
 class _CoverImage extends StatelessWidget {
   final List<String> coverImageUrls;
   final double rating;
-  final int followers;
 
   const _CoverImage({
     required this.coverImageUrls,
     required this.rating,
-    required this.followers,
   });
 
   @override
@@ -521,7 +525,6 @@ class _CoverImage extends StatelessWidget {
             Container(color: Colors.black.withOpacity(0.3)),
             _ShopInfoOverlay(
               rating: rating,
-              followers: followers,
             ),
           ],
         ),
@@ -566,11 +569,9 @@ class _CoverImage extends StatelessWidget {
 
 class _ShopInfoOverlay extends StatelessWidget {
   final double rating;
-  final int followers;
 
   const _ShopInfoOverlay({
     required this.rating,
-    required this.followers,
   });
 
   @override
@@ -584,13 +585,6 @@ class _ShopInfoOverlay extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             rating.toStringAsFixed(1),
-            style: const TextStyle(color: Colors.white, fontSize: 12),
-          ),
-          const SizedBox(width: 8),
-          const Icon(Icons.person, color: Colors.white, size: 14),
-          const SizedBox(width: 4),
-          Text(
-            '$followers Followers',
             style: const TextStyle(color: Colors.white, fontSize: 12),
           ),
         ],
@@ -1522,10 +1516,6 @@ class _ReviewTileState extends State<_ReviewTile> {
     final rating = (widget.review['rating'] as num).toDouble();
     final reviewText = widget.review['review'] ?? '';
     final date = _parseTimestamp(widget.review['timestamp']);
-    final currentUser = FirebaseAuth.instance.currentUser;
-    final likes = (widget.review['likes'] as List?) ?? [];
-    final isLiked = currentUser != null && likes.contains(currentUser.uid);
-    final likeCount = likes.length;
 
     final iconTextColor =
         isDark ? Colors.white : const Color.fromRGBO(0, 0, 0, 0.6);
@@ -1555,10 +1545,25 @@ class _ReviewTileState extends State<_ReviewTile> {
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            _isTranslated ? _translatedText : reviewText,
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-          ),
+          if (_isTranslating)
+            Shimmer.fromColors(
+              baseColor: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+              highlightColor: isDark ? Colors.grey[500]! : Colors.grey[100]!,
+              child: Text(
+                reviewText,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  backgroundColor: isDark
+                      ? Colors.grey[700]
+                      : Colors.grey[300],
+                ),
+              ),
+            )
+          else
+            Text(
+              _isTranslated ? _translatedText : reviewText,
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+            ),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -1575,37 +1580,6 @@ class _ReviewTileState extends State<_ReviewTile> {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () => _toggleLike(isLiked),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isLiked ? Icons.thumb_up : Icons.thumb_up_off_alt,
-                      size: 16,
-                      color: isLiked ? Colors.blue : iconTextColor,
-                    ),
-                    const SizedBox(width: 4),
-                    Text('$likeCount',
-                        style: TextStyle(fontSize: 14, color: iconTextColor)),
-                  ],
-                ),
-              ),
-              const Spacer(),
-              if (_isTranslating)
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      isDark
-                          ? Colors.white
-                          : Theme.of(context).colorScheme.secondary,
-                    ),
-                  ),
-                ),
             ],
           ),
         ],
@@ -1680,24 +1654,6 @@ class _ReviewTileState extends State<_ReviewTile> {
     }
   }
 
-  Future<void> _toggleLike(bool currentlyLiked) async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) return;
-
-    try {
-      await context.read<ShopProvider>().toggleShopReviewLike(
-            widget.shopId,
-            widget.reviewId,
-            currentlyLiked,
-          );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update like: $e')),
-        );
-      }
-    }
-  }
 }
 
 class _StarRating extends StatelessWidget {

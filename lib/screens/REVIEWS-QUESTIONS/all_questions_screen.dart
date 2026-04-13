@@ -6,6 +6,33 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../services/translation_service.dart';
 
+/// Masks a display name for privacy: "Tekin Dabaj" -> "T**** ****j".
+/// Keeps the first character of the first token and the last character of the
+/// last token; everything else becomes '*'. Single-token names keep first+last.
+String _maskAskerName(String fullName) {
+  final trimmed = fullName.trim();
+  if (trimmed.isEmpty) return trimmed;
+  final parts = trimmed.split(RegExp(r'\s+'));
+
+  String maskFirst(String s) =>
+      s.length <= 1 ? s : s[0] + '*' * (s.length - 1);
+  String maskLast(String s) =>
+      s.length <= 1 ? s : '*' * (s.length - 1) + s[s.length - 1];
+
+  if (parts.length == 1) {
+    final s = parts[0];
+    if (s.length <= 2) return s;
+    return s[0] + '*' * (s.length - 2) + s[s.length - 1];
+  }
+
+  final masked = <String>[maskFirst(parts.first)];
+  for (var i = 1; i < parts.length - 1; i++) {
+    masked.add('*' * parts[i].length);
+  }
+  masked.add(maskLast(parts.last));
+  return masked.join(' ');
+}
+
 class AllQuestionsScreen extends StatefulWidget {
   final String productId;
   final String sellerId;
@@ -190,7 +217,6 @@ class _AllQuestionsScreenState extends State<AllQuestionsScreen> {
         ),
         persistentFooterButtons: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               Expanded(
                 child: OutlinedButton(
@@ -214,23 +240,6 @@ class _AllQuestionsScreenState extends State<AllQuestionsScreen> {
                   child: Text(
                     l10n.askToSeller,
                     style: const TextStyle(color: Colors.orange),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.zero,
-                    ),
-                  ),
-                  child: Text(
-                    l10n.addToCart,
-                    style: const TextStyle(color: Colors.white),
                   ),
                 ),
               ),
@@ -352,7 +361,8 @@ class _QuestionTileState extends State<QuestionTile> {
     final questionText = widget.data['questionText'] as String? ?? '';
     final answerText = widget.data['answerText'] as String? ?? '';
     final askerName = (widget.data['askerNameVisible'] == true)
-        ? widget.data['askerName'] as String? ?? widget.l10n.anonymous
+        ? _maskAskerName(
+            widget.data['askerName'] as String? ?? widget.l10n.anonymous)
         : widget.l10n.anonymous;
     final answered = widget.data['answered'] as bool? ?? false;
     final answererName = widget.data['answererName'] as String? ??

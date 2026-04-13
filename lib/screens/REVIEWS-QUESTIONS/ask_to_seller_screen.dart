@@ -26,7 +26,6 @@ class AskToSellerScreen extends StatefulWidget {
 
 class _AskToSellerScreenState extends State<AskToSellerScreen> {
   final TextEditingController _controller = TextEditingController();
-  bool _allowNameVisible = false;
   bool _acceptTerms = false;
   bool _isSubmitting = false;
   int _charCount = 0;
@@ -174,7 +173,7 @@ class _AskToSellerScreenState extends State<AskToSellerScreen> {
         'productId': widget.productId,
         'askerId': user.uid,
         'askerName': askerName,
-        'askerNameVisible': _allowNameVisible,
+        'askerNameVisible': true,
         'questionText': text,
         'timestamp': FieldValue.serverTimestamp(),
         'answered': false,
@@ -199,7 +198,7 @@ class _AskToSellerScreenState extends State<AskToSellerScreen> {
         productId: widget.productId,
         productName: productName,
         questionText: text,
-        askerName: _allowNameVisible ? askerName : 'Anonymous',
+        askerName: askerName,
         askerId: user.uid,
       );
 
@@ -344,13 +343,6 @@ class _AskToSellerScreenState extends State<AskToSellerScreen> {
 
                   const SizedBox(height: 12),
                   CheckboxListTile(
-                    value: _allowNameVisible,
-                    onChanged: (v) => setState(() => _allowNameVisible = v!),
-                    controlAffinity: ListTileControlAffinity.leading,
-                    title: Text(l10n.askToSellerNameVisibility),
-                  ),
-
-                  CheckboxListTile(
                     value: _acceptTerms,
                     onChanged: (v) => setState(() => _acceptTerms = v!),
                     controlAffinity: ListTileControlAffinity.leading,
@@ -384,7 +376,7 @@ class _AskToSellerScreenState extends State<AskToSellerScreen> {
         },
       ),
       bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        minimum: const EdgeInsets.fromLTRB(16, 0, 16, 28),
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.orange,

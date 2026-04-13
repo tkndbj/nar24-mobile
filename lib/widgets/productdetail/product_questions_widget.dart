@@ -9,6 +9,33 @@ import 'package:provider/provider.dart';
 import '../../providers/product_detail_provider.dart';
 import 'package:shimmer/shimmer.dart';
 
+/// Masks a display name for privacy: "Tekin Dabaj" -> "T**** ****j".
+/// Keeps the first character of the first token and the last character of the
+/// last token; everything else becomes '*'. Single-token names keep first+last.
+String _maskAskerName(String fullName) {
+  final trimmed = fullName.trim();
+  if (trimmed.isEmpty) return trimmed;
+  final parts = trimmed.split(RegExp(r'\s+'));
+
+  String maskFirst(String s) =>
+      s.length <= 1 ? s : s[0] + '*' * (s.length - 1);
+  String maskLast(String s) =>
+      s.length <= 1 ? s : '*' * (s.length - 1) + s[s.length - 1];
+
+  if (parts.length == 1) {
+    final s = parts[0];
+    if (s.length <= 2) return s;
+    return s[0] + '*' * (s.length - 2) + s[s.length - 1];
+  }
+
+  final masked = <String>[maskFirst(parts.first)];
+  for (var i = 1; i < parts.length - 1; i++) {
+    masked.add('*' * parts[i].length);
+  }
+  masked.add(maskLast(parts.last));
+  return masked.join(' ');
+}
+
 class ProductQuestionsWidget extends StatefulWidget {
   final String productId;
   final String sellerId;
@@ -317,7 +344,8 @@ class _QuestionAnswerCardState extends State<_QuestionAnswerCard> {
     final ts = (widget.data['timestamp'] as Timestamp?)?.toDate();
     final dateLabel = ts == null ? '' : DateFormat('dd/MM/yyyy').format(ts);
     final askerName = widget.data['askerNameVisible'] == true
-        ? (widget.data['askerName'] as String? ?? widget.l10n.anonymous)
+        ? _maskAskerName(
+            widget.data['askerName'] as String? ?? widget.l10n.anonymous)
         : widget.l10n.anonymous;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;

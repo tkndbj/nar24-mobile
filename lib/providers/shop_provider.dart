@@ -1448,6 +1448,7 @@ class ShopProvider with ChangeNotifier {
     if (_selectedSizes.isNotEmpty) return true;
     if (_selectedColors.isNotEmpty) return true;
     if (_selectedGender != null) return true;
+    if (_selectedSubcategory != null) return true;
     if (_minPrice != null || _maxPrice != null) return true;
     if (_minRating != null) return true;
     return false;

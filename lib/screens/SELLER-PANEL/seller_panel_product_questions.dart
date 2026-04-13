@@ -356,20 +356,20 @@ class _SellerPanelProductQuestionsState
           // Compact modal for both mobile and tablet
           final double maxModalWidth = isTablet ? 500.0 : double.infinity;
 
+          final viewInsetsBottom = MediaQuery.of(ctx).viewInsets.bottom;
           return GestureDetector(
             onTap: () => FocusScope.of(ctx).unfocus(),
-            child: Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(ctx).viewInsets.bottom,
-              ),
+            child: AnimatedPadding(
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOut,
+              padding: EdgeInsets.only(bottom: viewInsetsBottom),
               child: Material(
                 color: Colors.transparent,
                 child: Container(
-                  margin: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.fromLTRB(16, 16, 16, 32),
                   constraints: BoxConstraints(
                     maxWidth: maxModalWidth,
-                    maxHeight: screenHeight * 0.65 -
-                        MediaQuery.of(ctx).viewInsets.bottom,
+                    maxHeight: screenHeight * 0.65,
                   ),
                   decoration: BoxDecoration(
                     color: isDark

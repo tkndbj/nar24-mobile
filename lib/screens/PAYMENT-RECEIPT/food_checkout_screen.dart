@@ -285,9 +285,14 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
               onPressed: () => context.pop(),
             ),
           ),
-          body: Stack(
+          body: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => FocusScope.of(context).unfocus(),
+            child: Stack(
             children: [
               ListView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.fromLTRB(0, 0, 0, 140),
                 children: [
                   Padding(
@@ -415,6 +420,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                 ),
               ),
             ],
+          ),
           ),
         );
       },
