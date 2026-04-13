@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../services/ad_analytics_service.dart';
 import '../providers/market_banner_provider.dart';
 import '../utils/cloudinary_url_builder.dart';
+import 'cloudinary_image.dart';
 
 class MarketBannerItem {
   final String id;
@@ -201,60 +202,33 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
     }
   }
 
-  /// CDN primary + Firebase Storage fallback.
-  /// - Primary: Cloudinary-sized bytes decode at native size, no memCacheWidth.
-  /// - Fallback: original URL with memCacheWidth to protect against full-size
-  ///   originals blowing up memory if Cloudinary is unreachable.
   Widget _buildBannerImage(MarketBannerItem item, Color placeholderColor) {
-    final cdnUrl = CloudinaryUrl.fromUrl(item.url, width: _imageCacheWidth);
-
-    Widget placeholder() => Container(
-          height: 150,
-          width: double.infinity,
-          color: placeholderColor,
-          child: const Center(
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-        );
-
-    Widget errorFallback() => Container(
-          height: 150,
-          width: double.infinity,
-          color: placeholderColor,
-          child: const Center(
-            child: Icon(Icons.broken_image_outlined, size: 32),
-          ),
-        );
-
-    return CachedNetworkImage(
+    return CloudinaryImage.fromUrl(
       key: ValueKey('banner_${item.id}'),
-      imageUrl: cdnUrl,
+      url: item.url,
+      cdnWidth: _imageCacheWidth,
       width: double.infinity,
       fit: BoxFit.fitWidth,
-      fadeInDuration: Duration.zero,
-      fadeOutDuration: Duration.zero,
-      useOldImageOnUrlChange: true,
-      filterQuality: FilterQuality.medium,
-      placeholder: (_, __) => placeholder(),
-      errorWidget: (_, __, ___) {
-        if (cdnUrl == item.url) return errorFallback();
-        return CachedNetworkImage(
-          imageUrl: item.url,
-          width: double.infinity,
-          fit: BoxFit.fitWidth,
-          fadeInDuration: Duration.zero,
-          fadeOutDuration: Duration.zero,
-          useOldImageOnUrlChange: true,
-          filterQuality: FilterQuality.medium,
-          memCacheWidth: _imageCacheWidth,
-          placeholder: (_, __) => placeholder(),
-          errorWidget: (_, __, ___) => errorFallback(),
-        );
-      },
+      placeholderBuilder: (_) => Container(
+        height: 150,
+        width: double.infinity,
+        color: placeholderColor,
+        child: const Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      ),
+      errorBuilder: (_) => Container(
+        height: 150,
+        width: double.infinity,
+        color: placeholderColor,
+        child: const Center(
+          child: Icon(Icons.broken_image_outlined, size: 32),
+        ),
+      ),
     );
   }
 

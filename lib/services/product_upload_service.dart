@@ -19,7 +19,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:image_picker/image_picker.dart';
 import '../utils/image_compression_utils.dart';
 
 /// Result of uploading all product files.

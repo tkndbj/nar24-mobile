@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import '../services/ad_analytics_service.dart';
 import '../utils/cloudinary_url_builder.dart';
+import 'cloudinary_image.dart';
 
 // Thin banner target width — matches max device width at 2x DPR.
 const int _kThinBannerCdnWidth = 800;
@@ -150,49 +151,19 @@ class _MarketThinBannerState extends State<MarketThinBanner>
     });
   }
 
-  /// CDN primary + Firebase Storage fallback.
-  /// - Primary: Cloudinary-sized bytes, no memCacheWidth (no upscale glitches).
-  /// - Fallback: original URL with memCacheWidth to cap decode if the
-  ///   full-size original is large.
   Widget _buildBannerImage(String url, double bannerHeight) {
-    final cdnUrl = CloudinaryUrl.fromUrl(url, width: _kThinBannerCdnWidth);
-
-    Widget placeholder() => Container(
-          width: double.infinity,
-          height: bannerHeight,
-          color: Colors.grey.shade200,
-        );
-
-    Widget errorFallback() =>
-        const Center(child: Icon(Icons.error));
-
-    return CachedNetworkImage(
-      imageUrl: cdnUrl,
+    return CloudinaryImage.fromUrl(
+      url: url,
+      cdnWidth: _kThinBannerCdnWidth,
       width: double.infinity,
       height: bannerHeight,
       fit: BoxFit.fill,
-      placeholder: (_, __) => placeholder(),
-      fadeInDuration: Duration.zero,
-      fadeOutDuration: Duration.zero,
-      useOldImageOnUrlChange: true,
-      filterQuality: FilterQuality.medium,
-      errorWidget: (_, __, ___) {
-        // CDN failed — fall back to the original Firebase URL.
-        if (cdnUrl == url) return errorFallback();
-        return CachedNetworkImage(
-          imageUrl: url,
-          width: double.infinity,
-          height: bannerHeight,
-          fit: BoxFit.fill,
-          placeholder: (_, __) => placeholder(),
-          errorWidget: (_, __, ___) => errorFallback(),
-          fadeInDuration: Duration.zero,
-          fadeOutDuration: Duration.zero,
-          memCacheWidth: _kThinBannerCdnWidth,
-          useOldImageOnUrlChange: true,
-          filterQuality: FilterQuality.medium,
-        );
-      },
+      placeholderBuilder: (_) => Container(
+        width: double.infinity,
+        height: bannerHeight,
+        color: Colors.grey.shade200,
+      ),
+      errorBuilder: (_) => const Center(child: Icon(Icons.error)),
     );
   }
 

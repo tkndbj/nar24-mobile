@@ -19,6 +19,7 @@ import 'dart:ui';
 import '../services/click_tracking_service.dart';
 import '../services/user_activity_service.dart';
 import '../utils/cloudinary_url_builder.dart';
+import 'cloudinary_image.dart';
 
 class ProductCard extends StatefulWidget {
   final ProductSummary product;
@@ -1077,45 +1078,15 @@ class _ImageSection extends StatelessWidget {
 
   Widget _buildImageWidget(String imageUrl, double height) {
     return RepaintBoundary(
-      child: CachedNetworkImage(
-        imageUrl: imageUrl,
+      child: CloudinaryImage.fromResolvedUrl(
+        url: imageUrl,
         fit: BoxFit.cover,
-        fadeInDuration: Duration.zero,
-        fadeOutDuration: Duration.zero,
-        useOldImageOnUrlChange: true,
-        filterQuality: FilterQuality.medium,
-        // No memCacheWidth here — Cloudinary already sends 400w
-        placeholder: (context, url) =>
+        fallbackMemCacheWidth: 540,
+        placeholderBuilder: (_) =>
             _buildImagePlaceholder(effectiveScaleFactor),
-        errorWidget: (context, url, error) {
-          final fallback = _extractFallbackUrl(url);
-          if (fallback != null) {
-            return CachedNetworkImage(
-              imageUrl: fallback,
-              fit: BoxFit.cover,
-              fadeInDuration: Duration.zero,
-              fadeOutDuration: Duration.zero,
-              memCacheWidth: 540, // Only here — fallback is full-size original
-              placeholder: (_, __) =>
-                  _buildImagePlaceholder(effectiveScaleFactor),
-              errorWidget: (_, __, ___) =>
-                  _buildImageErrorWidget(effectiveScaleFactor),
-            );
-          }
-          return _buildImageErrorWidget(effectiveScaleFactor);
-        },
+        errorBuilder: (_) => _buildImageErrorWidget(effectiveScaleFactor),
       ),
     );
-  }
-
-  /// Extract Firebase Storage fallback URL from a Cloudinary URL.
-  /// Returns null if the URL isn't a Cloudinary URL.
-  static String? _extractFallbackUrl(String url) {
-    final marker = '/${CloudinaryUrl.autoUploadFolder}/';
-    final idx = url.indexOf(marker);
-    if (idx == -1) return null;
-    final storagePath = url.substring(idx + marker.length);
-    return 'https://storage.googleapis.com/${CloudinaryUrl.storageBucket}/$storagePath';
   }
 
   Widget _buildNoImageWidget(double effectiveScaleFactor) {

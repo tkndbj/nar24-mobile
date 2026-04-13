@@ -248,11 +248,46 @@ Future<void> main() async {
   }
 
   // ── Cloudinary init — must run regardless of Firebase init path ──
-  await FirebaseRemoteConfig.instance.setDefaults({'cloudinary_enabled': true});
+  //
+  // Reliability contract:
+  //  - setDefaults runs first, so the kill switch has a safe value even if
+  //    every Remote Config / network call below fails.
+  //  - fetchAndActivate is time-boxed (3s) and wrapped in try/catch so a
+  //    Cloudinary outage, deleted account, or offline device can never
+  //    block app startup.
+  //  - Any later config refresh is picked up live via onConfigUpdated
+  //    (see _MyAppState.initState).
+  try {
+    await FirebaseRemoteConfig.instance
+        .setDefaults({'cloudinary_enabled': true});
+    await FirebaseRemoteConfig.instance.setConfigSettings(
+      RemoteConfigSettings(
+        fetchTimeout: const Duration(seconds: 3),
+        minimumFetchInterval: const Duration(hours: 1),
+      ),
+    );
+    await FirebaseRemoteConfig.instance
+        .fetchAndActivate()
+        .timeout(const Duration(seconds: 3));
+  } catch (e) {
+    if (kDebugMode) {
+      debugPrint('⚠️ Remote Config fetch failed, using defaults: $e');
+    }
+  }
+
+  bool cloudinaryEnabled = true;
+  try {
+    cloudinaryEnabled =
+        FirebaseRemoteConfig.instance.getBool('cloudinary_enabled');
+  } catch (_) {
+    // Remote Config not initialized (Firebase init failed earlier) —
+    // leave Cloudinary enabled by default; the CDN itself is the fallback path.
+  }
+
   CloudinaryUrl.init(
     cloudName: 'dpeamfn2v',
     storageBucket: 'emlak-mobile-app.appspot.com',
-    enabled: FirebaseRemoteConfig.instance.getBool('cloudinary_enabled'),
+    enabled: cloudinaryEnabled,
   );
 
   // ── Services that only need Firebase to be running (not freshly initialized) ──

@@ -2,10 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../providers/product_detail_provider.dart';
 import '../../models/product.dart';
 import '../../utils/cloudinary_url_builder.dart';
+import '../cloudinary_image.dart';
 import 'full_screen_image_viewer.dart';
 
 class ProductDetailImages extends StatelessWidget {
@@ -48,8 +48,8 @@ class ProductDetailImages extends StatelessWidget {
 
     final currentIndex = provider.currentImageIndex;
 
-    // Fallback decode cap (only used if Cloudinary is unreachable and we
-    // fall back to the raw Firebase Storage original).
+    // Fallback decode cap — only applies when the CDN fails and we fall
+    // back to the raw Firebase Storage original.
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
@@ -57,9 +57,11 @@ class ProductDetailImages extends StatelessWidget {
     final fallbackCacheHeight =
         (screenHeight * 0.70 * devicePixelRatio * 1.5).toInt();
 
+    String sourceAt(int index) =>
+        hasPaths ? storagePaths[index] : legacyUrls[index];
+
     return Stack(
       children: [
-        // Tappable, full‐screen PageView:
         GestureDetector(
           onTap: () {
             Navigator.push(
@@ -81,28 +83,28 @@ class ProductDetailImages extends StatelessWidget {
                 itemCount: imageCount,
                 onPageChanged: provider.updateCurrentImageIndex,
                 itemBuilder: (context, index) {
-                  // Build render URL: CDN (detail size) if we have a storage
-                  // path, otherwise the legacy URL as-is.
-                  final String primaryUrl = hasPaths
-                      ? CloudinaryUrl.product(
-                          storagePaths[index],
-                          size: ProductImageSize.detail,
-                        )
-                      : legacyUrls[index];
-                  // Fallback URL: raw Firebase Storage original (used only
-                  // when the CDN request errors out).
-                  final String? fallbackUrl = hasPaths
-                      ? 'https://storage.googleapis.com/${CloudinaryUrl.storageBucket}/${storagePaths[index]}'
-                      : null;
-
                   final isTablet = screenWidth > 600;
 
-                  final imageWidget = _DetailImage(
-                    primaryUrl: primaryUrl,
-                    fallbackUrl: fallbackUrl,
-                    backgroundColor: backgroundColor,
-                    fallbackCacheWidth: fallbackCacheWidth,
-                    fallbackCacheHeight: fallbackCacheHeight,
+                  final imageWidget = CloudinaryImage.product(
+                    source: sourceAt(index),
+                    size: ProductImageSize.detail,
+                    fit: BoxFit.contain,
+                    width: double.infinity,
+                    height: double.infinity,
+                    fallbackMemCacheWidth: fallbackCacheWidth,
+                    fallbackMemCacheHeight: fallbackCacheHeight,
+                    placeholderBuilder: (_) => Container(
+                      color: backgroundColor,
+                      child: const Center(child: CircularProgressIndicator()),
+                    ),
+                    errorBuilder: (_) => Container(
+                      color: backgroundColor,
+                      child: const Icon(
+                        Icons.image_not_supported,
+                        size: 100,
+                        color: Colors.grey,
+                      ),
+                    ),
                   );
 
                   return Container(
@@ -157,68 +159,6 @@ class ProductDetailImages extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-/// Renders a single detail image with CDN primary + Firebase Storage fallback.
-/// - Primary: Cloudinary already serves detail-sized bytes, so decode is clean
-///   (no memCacheWidth needed).
-/// - Fallback: only used if the CDN request errors; capped with memCacheWidth
-///   because the raw Firebase original can be much larger.
-class _DetailImage extends StatelessWidget {
-  final String primaryUrl;
-  final String? fallbackUrl;
-  final Color backgroundColor;
-  final int fallbackCacheWidth;
-  final int fallbackCacheHeight;
-
-  const _DetailImage({
-    Key? key,
-    required this.primaryUrl,
-    required this.fallbackUrl,
-    required this.backgroundColor,
-    required this.fallbackCacheWidth,
-    required this.fallbackCacheHeight,
-  }) : super(key: key);
-
-  Widget _placeholder() => Container(
-        color: backgroundColor,
-        child: const Center(child: CircularProgressIndicator()),
-      );
-
-  Widget _error() => Container(
-        color: backgroundColor,
-        child: const Icon(
-          Icons.image_not_supported,
-          size: 100,
-          color: Colors.grey,
-        ),
-      );
-
-  @override
-  Widget build(BuildContext context) {
-    return CachedNetworkImage(
-      imageUrl: primaryUrl,
-      fit: BoxFit.contain,
-      width: double.infinity,
-      height: double.infinity,
-      placeholder: (_, __) => _placeholder(),
-      errorWidget: (_, __, ___) {
-        if (fallbackUrl == null) return _error();
-        return CachedNetworkImage(
-          imageUrl: fallbackUrl!,
-          fit: BoxFit.contain,
-          width: double.infinity,
-          height: double.infinity,
-          memCacheWidth: fallbackCacheWidth,
-          memCacheHeight: fallbackCacheHeight,
-          maxWidthDiskCache: fallbackCacheWidth,
-          maxHeightDiskCache: fallbackCacheHeight,
-          placeholder: (_, __) => _placeholder(),
-          errorWidget: (_, __, ___) => _error(),
-        );
-      },
     );
   }
 }
