@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../services/typesense_service.dart';
 import '../../generated/l10n/app_localizations.dart';
@@ -49,7 +50,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
 
   Timer? _searchDebounce;
   Timer? _loadingTimeout;
-  bool _isScrolled = false;
+  final ValueNotifier<bool> _isScrolled = ValueNotifier<bool>(false);
 
   static const Duration _searchDebounceDelay = Duration(milliseconds: 300);
   static const Duration _loadingTimeoutDuration = Duration(seconds: 10);
@@ -93,8 +94,8 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
 
   void _onScroll() {
     final isScrolled = _scrollController.offset > 50;
-    if (isScrolled != _isScrolled) {
-      setState(() => _isScrolled = isScrolled);
+    if (isScrolled != _isScrolled.value) {
+      _isScrolled.value = isScrolled;
     }
   }
 
@@ -115,6 +116,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
     _searchController.dispose();
     _searchFocusNode.dispose();
     _scrollController.dispose();
+    _isScrolled.dispose();
     super.dispose();
   }
 
@@ -211,7 +213,7 @@ class _ShopContentWithTabs extends StatelessWidget {
   final TextEditingController searchController;
   final FocusNode searchFocusNode;
   final ScrollController scrollController;
-  final bool isScrolled;
+  final ValueListenable<bool> isScrolled;
   final VoidCallback onDismissKeyboard;
 
   const _ShopContentWithTabs({
@@ -259,7 +261,7 @@ class _TabbedContent extends StatefulWidget {
   final TextEditingController searchController;
   final FocusNode searchFocusNode;
   final ScrollController scrollController;
-  final bool isScrolled;
+  final ValueListenable<bool> isScrolled;
   final VoidCallback onDismissKeyboard;
 
   const _TabbedContent({
@@ -318,7 +320,7 @@ class _ShopContent extends StatelessWidget {
   final TextEditingController searchController;
   final FocusNode searchFocusNode;
   final ScrollController scrollController;
-  final bool isScrolled;
+  final ValueListenable<bool> isScrolled;
   final VoidCallback onDismissKeyboard;
 
   const _ShopContent({
@@ -358,13 +360,23 @@ class _ShopContent extends StatelessWidget {
         ),
         SliverToBoxAdapter(
           child: AnimatedBuilder(
-            animation: tabController,
-            builder: (context, _) {
+            animation: tabController.animation!,
+            child: _FilterSection(onDismissKeyboard: onDismissKeyboard),
+            builder: (context, child) {
               final allProductsIndex = hasHomeTab ? 1 : 0;
-              if (tabController.index != allProductsIndex) {
-                return const SizedBox.shrink();
-              }
-              return _FilterSection(onDismissKeyboard: onDismissKeyboard);
+              final distance =
+                  (tabController.animation!.value - allProductsIndex)
+                      .abs()
+                      .clamp(0.0, 1.0);
+              final t = 1.0 - distance;
+              if (t == 0.0) return const SizedBox.shrink();
+              return ClipRect(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  heightFactor: t,
+                  child: Opacity(opacity: t, child: child),
+                ),
+              );
             },
           ),
         ),
@@ -380,7 +392,7 @@ class _ShopContent extends StatelessWidget {
 
 /// Shop App Bar with cover image and shop info
 class _ShopAppBar extends StatelessWidget {
-  final bool isScrolled;
+  final ValueListenable<bool> isScrolled;
 
   const _ShopAppBar({required this.isScrolled});
 
@@ -441,26 +453,38 @@ class _ShopAppBar extends StatelessWidget {
     final rating = (shopData['averageRating'] as num?)?.toDouble() ?? 0.0;
     final shopId = context.read<ShopProvider>().shopDoc?.id ?? '';
 
-    final iconColor =
-        isDark ? Colors.white : (isScrolled ? Colors.black : Colors.white);
-
     return SliverAppBar(
       pinned: true,
       expandedHeight: MediaQuery.of(context).size.height * 0.25,
-      leading: _BackButton(iconColor: iconColor),
+      leading: ValueListenableBuilder<bool>(
+        valueListenable: isScrolled,
+        builder: (_, scrolled, __) {
+          final iconColor =
+              isDark ? Colors.white : (scrolled ? Colors.black : Colors.white);
+          return _BackButton(iconColor: iconColor);
+        },
+      ),
       title: Row(
         children: [
           _ShopAvatar(imageUrl: profileImageUrl),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              shopName,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: iconColor,
-              ),
-              overflow: TextOverflow.ellipsis,
+            child: ValueListenableBuilder<bool>(
+              valueListenable: isScrolled,
+              builder: (_, scrolled, __) {
+                final iconColor = isDark
+                    ? Colors.white
+                    : (scrolled ? Colors.black : Colors.white);
+                return Text(
+                  shopName,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: iconColor,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                );
+              },
             ),
           ),
         ],

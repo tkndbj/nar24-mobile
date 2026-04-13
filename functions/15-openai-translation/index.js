@@ -170,7 +170,7 @@ export const translateText = onRequest(
     cors: true,
     maxInstances: 10,
     timeoutSeconds: 30,
-    memory: '256MiB',
+    memory: '512MiB',
     vpcConnector: 'nar24-vpc',
     vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
   },

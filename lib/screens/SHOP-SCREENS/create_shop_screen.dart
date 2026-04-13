@@ -10,7 +10,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:dotted_border/dotted_border.dart';
 import '../../constants/all_in_one_category_data.dart';
 import '../../utils/image_compression_utils.dart';
-import '../AGREEMENTS/mesafeli_satis_sozlesmesi.dart';
 import '../AGREEMENTS/satici_uyelik_ve_is_ortakligi.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../LOCATION-SCREENS/pin_location_screen.dart';
@@ -203,30 +202,6 @@ Future<T> _retryOperation<T>(
                 ),
                 children: [
                   TextSpan(text: l10n.iAgreeToThe ?? 'I agree to the '),
-                  WidgetSpan(
-                    child: GestureDetector(
-                      onTap: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const SalesContractScreen(),
-                          ),
-                        );
-                      },
-                      child: Text(
-                        l10n.mesafeliSatisSozlesmesi ??
-                            'Distance Sales Agreement',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: const Color(0xFF00A86B),
-                          fontWeight: FontWeight.w600,
-                          decoration: TextDecoration.underline,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const TextSpan(text: ' and '),
                   WidgetSpan(
                     child: GestureDetector(
                       onTap: () async {
