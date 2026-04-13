@@ -8,7 +8,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../constants/foodData.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../models/food_address.dart';
@@ -94,9 +94,8 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
         }
       }
 
-      // Fetch after context is available so delivery region filter works
-      _fetchRestaurants();
-      _fetchFacets();
+      // Try cache first, fall back to Typesense
+_fetchFromCache();
     });
   }
 
@@ -120,15 +119,13 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
 
     if (city != _lastDeliveryCity) {
       _lastDeliveryCity = city;
-      // Only refetch if initial load is already done
-      // (initState handles the first fetch via addPostFrameCallback)
-      if (!_isLoadingData) {
-        if (_selectedCuisine != null) {
-          setState(() => _selectedCuisine = null);
-        }
-        _fetchRestaurants();
-        _fetchFacets();
-      }
+
+     if (!_isLoadingData) {
+  if (_selectedCuisine != null) {
+    setState(() => _selectedCuisine = null);
+  }
+  _fetchFromCache();
+}
     }
   }
 
@@ -145,6 +142,86 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
   // ============================================================================
   // DATA FETCHING
   // ============================================================================
+
+  /// Tries to load the default view from the pre-computed Firestore cache.
+/// Falls back to Typesense if the cache doc doesn't exist or on error.
+ Future<void> _fetchFromCache() async {
+    final regions = _deliveryFilterRegions();
+    if (regions == null || regions.isEmpty) {
+      // No address → can't determine region → use Typesense directly
+      await Future.wait([_fetchRestaurants(), _fetchFacets()]);
+      return;
+    }
+ 
+    final region = regions.first;
+ 
+    try {
+      final doc = await FirebaseFirestore.instance
+          .doc('food_cache/region_$region')
+          .get(const GetOptions(source: Source.serverAndCache));
+ 
+      if (!doc.exists || doc.data() == null) {
+        debugPrint('[RestaurantsScreen] No cache for $region, falling back.');
+        await Future.wait([_fetchRestaurants(), _fetchFacets()]);
+        return;
+      }
+ 
+      final data = doc.data()!;
+ 
+      // ── Parse restaurants ────────────────────────────────────────────
+      final rawList = (data['restaurants'] as List<dynamic>?) ?? [];
+      final restaurants = rawList.map((r) {
+        final map = Map<String, dynamic>.from(r as Map);
+        return Restaurant.fromMap(map, id: map['id']?.toString() ?? '');
+      }).toList();
+ 
+      // ── Parse cuisine facets ─────────────────────────────────────────
+      final rawCuisines = (data['cuisineFacets'] as List<dynamic>?) ?? [];
+      final cuisines = rawCuisines
+          .map((f) {
+            final m = f as Map;
+            return FacetValue(
+              value: m['value']?.toString() ?? '',
+              count: (m['count'] as num?)?.toInt() ?? 0,
+            );
+          })
+          .where((fv) => fv.value.isNotEmpty && fv.count > 0)
+          .toList();
+ 
+      // ── Detect whether the cache has all restaurants ─────────────────
+      // The CF writes `restaurantCount` as the true Typesense total.
+      // If it exceeds what we cached (200 cap), allow pagination via
+      // Typesense so the user can still reach the rest.
+      final totalInRegion =
+          (data['restaurantCount'] as num?)?.toInt() ?? restaurants.length;
+      final cacheIsComplete = restaurants.length >= totalInRegion;
+
+      // If the cache doesn't have all restaurants for this region,
+      // fall back to Typesense entirely — mixing cache + Typesense
+      // pagination with different page sizes causes duplicates.
+      if (!cacheIsComplete) {
+        debugPrint(
+          '[RestaurantsScreen] Cache incomplete for $region '
+          '(${restaurants.length}/$totalInRegion), falling back.',
+        );
+        await Future.wait([_fetchRestaurants(), _fetchFacets()]);
+        return;
+      }
+
+      if (mounted) {
+        setState(() {
+          _restaurants = _openFirst(restaurants);
+          _cuisineFacets = cuisines;
+          _currentPage = 0;
+          _hasMore = false;
+          _isLoadingData = false;
+        });
+      } 
+    } catch (e) {
+      debugPrint('[RestaurantsScreen] Cache read failed: $e');
+      await Future.wait([_fetchRestaurants(), _fetchFacets()]);
+    }
+  }
 
   /// Initial load via Typesense (with delivery-region filter).
   /// Resets pagination and fetches page 0.
@@ -342,7 +419,7 @@ class _RestaurantsScreenState extends State<RestaurantsScreen> {
       _selectedFoodType = null;
       _sortOption = RestaurantSortOption.defaultSort;
     });
-    _fetchRestaurants();
+    _fetchFromCache();
   }
 
   // ── Min order price helper ─────────────────────────────────────────────

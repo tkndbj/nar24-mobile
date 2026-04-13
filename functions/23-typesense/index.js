@@ -1,6 +1,7 @@
 import {onDocumentWritten} from 'firebase-functions/v2/firestore';
 import {onRequest} from 'firebase-functions/v2/https';
 import {SecretManagerServiceClient} from '@google-cloud/secret-manager';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import Typesense from 'typesense';
 import mod from '../i18n.cjs';
 
@@ -685,14 +686,128 @@ export const syncRestaurantsWithTypesense = onDocumentWritten(
     const beforeData = event.data.before?.data() ?? null;
     const afterData = event.data.after?.data() ?? null;
 
+    // Fields that matter for either Typesense sync or cache rebuild
+    const relevantFields = [
+      'name', 'address', 'isActive', 'isBoosted', 'foodType',
+      'averageRating', 'reviewCount', 'profileImageUrl', 'cuisineTypes',
+      'minOrderPrices', 'workingHours', 'workingDays',
+    ];
+
     if (beforeData && afterData) {
-      const searchFields = ['name', 'address', 'isActive', 'isBoosted', 'foodType',
-        'averageRating', 'profileImageUrl', 'cuisineTypes', 'minOrderPrices', 
-        'workingHours', 'workingDays'];
-      const hasRelevantChanges = searchFields.some((f) => fieldChanged(beforeData[f], afterData[f]));
+      const hasRelevantChanges = relevantFields.some(
+        (f) => fieldChanged(beforeData[f], afterData[f])
+      );
       if (!hasRelevantChanges) return;
     }
 
-    return syncDocumentToTypesense('restaurants', restaurantId, beforeData, afterData, sanitizeForRestaurants);
+       // 1. Sync to Typesense (always runs first)
+       await syncDocumentToTypesense(
+        'restaurants', restaurantId, beforeData, afterData, sanitizeForRestaurants
+      );
+  
+      // 2. Wait for Typesense to finish indexing before querying for cache rebuild
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+  
+      // 3. Rebuild region cache if needed
+      await maybeRebuildRegionCache(beforeData, afterData);
   },
 );
+
+async function maybeRebuildRegionCache(beforeData, afterData) {
+  const affectedRegions = new Set();
+  for (const data of [beforeData, afterData]) {
+    if (!data?.minOrderPrices) continue;
+    for (const entry of data.minOrderPrices) {
+      if (entry.subregion) affectedRegions.add(entry.subregion);
+    }
+  }
+
+  if (affectedRegions.size === 0) return;
+
+  const db = getFirestore();
+  const rebuilds = [];
+
+  for (const region of affectedRegions) {
+    const cacheRef = db.doc(`food_cache/region_${region}`);
+    const existing = await cacheRef.get();
+    const lastUpdate = existing.data()?.updatedAt?.toMillis() || 0;
+
+    if (Date.now() - lastUpdate < 120000) {
+      console.log(`[FoodCache] region_${region} rebuilt recently, skipping.`);
+      continue;
+    }
+
+    rebuilds.push(rebuildRegionCache(region, cacheRef));
+  }
+
+  if (rebuilds.length > 0) {
+    await Promise.allSettled(rebuilds);
+  }
+}
+
+async function rebuildRegionCache(region, cacheRef) {
+  const client = await getTypesenseClient();
+  const filterBy =
+    `isActive:=true && (deliveryRegions:=\`${region}\` || deliveryRegions:=\`__ALL__\`)`;
+ 
+  const result = await client.collections('restaurants')
+    .documents()
+    .search({
+      q: '*',
+      query_by: 'name,address',
+      filter_by: filterBy,
+      sort_by: 'averageRating:desc,createdAt:desc',
+      per_page: 200,
+      facet_by: 'cuisineTypes,foodType',
+      max_facet_values: 50,
+    });
+ 
+  // Total matching restaurants in Typesense (may exceed 200)
+  const found = result.found || 0;
+ 
+  const restaurants = (result.hits || []).map((h) => {
+    const d = h.document;
+ 
+    // Only keep the minOrderPrice entry for THIS region, not the full array.
+    // Cuts ~80% of minOrderPricesJson bloat per restaurant.
+    let regionMinOrderJson = null;
+    if (d.minOrderPricesJson) {
+      try {
+        const allPrices = JSON.parse(d.minOrderPricesJson);
+        const entry = allPrices.find((e) => e.subregion === region);
+        if (entry) regionMinOrderJson = JSON.stringify([entry]);
+      } catch (_) {/* ignore parse errors */}
+    }
+ 
+    return {
+      id: (d.id || '').replace('restaurants_', ''),
+      name: d.name || null,
+      profileImageUrl: d.profileImageUrl || null,
+      cuisineTypes: d.cuisineTypes || [],
+      foodType: d.foodType || [],
+      averageRating: d.averageRating || 0,
+      reviewCount: d.reviewCount || 0,
+      workingHoursJson: d.workingHoursJson || null,
+      workingDays: d.workingDays || [],
+      minOrderPricesJson: regionMinOrderJson,
+      isActive: true,
+    };
+  });
+ 
+  const facets = {};
+  for (const f of (result.facet_counts || [])) {
+    facets[f.field_name] = (f.counts || [])
+      .filter((c) => c.value && c.count > 0)
+      .map((c) => ({ value: c.value, count: c.count }));
+  }
+ 
+  await cacheRef.set({
+    updatedAt: FieldValue.serverTimestamp(),
+    restaurantCount: found, // ← true total, not capped at 200
+    restaurants,
+    cuisineFacets: facets.cuisineTypes || [],
+    foodTypeFacets: facets.foodType || [],
+  });
+ 
+  console.log(`[FoodCache] region_${region}: cached ${restaurants.length}/${found} restaurants.`);
+}

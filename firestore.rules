@@ -316,18 +316,9 @@ match /paused_shop_products/{productId} {
   allow read, write: if isAdmin() || isSemiAdmin();
   
   // Rules for subcollections under paused_shop_products (if needed)
-  match /reviews/{reviewId} {
+    match /reviews/{reviewId} {
     allow read: if true;
-    allow create: if request.auth != null
-                  && request.resource.data.userId == request.auth.uid;
-    allow update: if request.auth != null && (
-      (request.writeFields.hasOnly(['likes']) 
-       && request.resource.data.likes is list)
-      || (resource.data.userId == request.auth.uid 
-          && !request.writeFields.hasAny(['likes']))
-    );
-    allow delete: if request.auth != null
-                  && resource.data.userId == request.auth.uid;
+    allow create, update, delete: if false;
   }
   
   match /product_questions/{questionId} {
@@ -500,123 +491,18 @@ function isShopMemberProductUpdate() {
         && isShopMember(resource.data.shopId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
   }
-
-  
-   function isIncrementingImpressionCountAnyUser() {
-    return request.writeFields.hasOnly(['impressionCount']) &&
-           request.resource.data.impressionCount == resource.data.impressionCount + 1;
-  }
-  // let anyone increment boosted impressions
-  function isIncrementingBoostedImpressionCountAnyUser() {
-    return request.writeFields.hasOnly(['boostedImpressionCount']) &&
-           request.resource.data.boostedImpressionCount == resource.data.boostedImpressionCount + 1;
-  }
-  
-  function isUpdatingReviewStats() {
-    return request.writeFields.hasOnly(['reviewCount','averageRating'])
-      // ensure they only ever increment the count by one:
-      && request.resource.data.reviewCount == resource.data.reviewCount + 1
-      // and supply a numeric averageRating
-      && request.resource.data.averageRating is number;
-  }
   
   // Allow update and delete if the user is a shop member or admin.
  allow update: if resource.data.shopId is string &&
   (
  isShopMemberProductUpdate() 
-    // (2) raw impressionCount +1
- || isIncrementingImpressionCountAnyUser()
-
-    // (3) boostedImpressionCount +1
- || isIncrementingBoostedImpressionCountAnyUser()
-
-    // (4) Cart / Favorites updates (authenticated only):
- || (
-    request.auth != null
-    && request.resource.data.diff(resource.data).affectedKeys()
-         .hasOnly(['cartCount','metricsUpdatedAt'])
-    && (
-         request.resource.data.cartCount == resource.data.cartCount + 1
-      || request.resource.data.cartCount == resource.data.cartCount - 1
-       )
-    && request.resource.data.metricsUpdatedAt is timestamp
-  )
-|| (
-    request.auth != null
-    && request.resource.data.diff(resource.data).affectedKeys()
-         .hasOnly(['favoritesCount','metricsUpdatedAt'])
-    && (
-         request.resource.data.favoritesCount == resource.data.favoritesCount + 1
-      || request.resource.data.favoritesCount == resource.data.favoritesCount - 1
-       )
-    && request.resource.data.metricsUpdatedAt is timestamp
-  )
-|| (
-    request.auth != null
-    && request.resource.data.diff(resource.data).affectedKeys()
-         .hasOnly(['cartCount','favoritesCount','metricsUpdatedAt'])
-    && (
-         request.resource.data.cartCount      == resource.data.cartCount      + 1
-      || request.resource.data.cartCount      == resource.data.cartCount      - 1
-       )
-    && (
-         request.resource.data.favoritesCount == resource.data.favoritesCount + 1
-      || request.resource.data.favoritesCount == resource.data.favoritesCount - 1
-       )
-    && request.resource.data.metricsUpdatedAt is timestamp
-  )
-
-    // (5) review stats bump
- || ( request.auth != null && isUpdatingReviewStats() )
-
  
   );
 
- 
-  match /detailViews/{viewId} {
-  // Allow any authenticated user to create a detail-page-view record,
-  // ensuring the recorded userId matches the authenticated user's UID.
-  allow create: if request.auth != null
-                && request.resource.data.userId == request.auth.uid;
-  
-  // Optionally restrict read access to admins.
-  allow read: if isAdmin();
 
-  // Prevent updates or deletions once a detail-view record is created.
-  allow update, delete: if false;
-}
-
-match /reviews/{reviewId} {
-    // Anyone can read reviews
+   match /reviews/{reviewId} {
     allow read: if true;
-    
-    // Allow authenticated users to create reviews
-    allow create: if request.auth != null
-                  && request.resource.data.userId == request.auth.uid
-                  && request.resource.data.rating is number
-                  && request.resource.data.rating >= 1 
-                  && request.resource.data.rating <= 5
-                  && request.resource.data.review is string
-                  && request.resource.data.timestamp <= request.time;
-    
-    // Allow updates for likes OR owner editing their review
-    allow update: if request.auth != null && (
-      // Case 1: Any authenticated user can like/unlike (only 'likes' field)
-      (request.writeFields.hasOnly(['likes']) 
-       && request.resource.data.likes is list)
-      
-      // Case 2: Review author can update their own review content (but not likes)
-      || (resource.data.userId == request.auth.uid 
-          && !request.writeFields.hasAny(['likes'])
-          && request.resource.data.rating is number
-          && request.resource.data.rating >= 1 
-          && request.resource.data.rating <= 5
-          && request.resource.data.review is string)
-    );
-    
-    // Allow review author to delete their own review
-    allow delete: if request.auth != null
-                  && resource.data.userId == request.auth.uid;
+    allow create, update, delete: if false;
   }
   }
 
@@ -1425,38 +1311,9 @@ match /foodCartMeta/{metaDoc} {
       }
 
       // *** Rules for 'reviews' subcollection under 'users' collection ***
-      match /reviews/{reviewId} {
-    // Anyone can read reviews
+        match /reviews/{reviewId} {
     allow read: if true;
-
-    // Allow authenticated users to create reviews
-    allow create: if request.auth != null
-      && request.resource.data.userId == request.auth.uid
-      && request.resource.data.rating is number
-      && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
-      && request.resource.data.review is string
-      && request.resource.data.timestamp <= request.time;
-
-    // ✅ FIXED: Allow likes + author updates (same as products)
-    allow update: if request.auth != null && (
-      // Case 1: Any authenticated user can like/unlike (only 'likes' field)
-      (request.writeFields.hasOnly(['likes']) 
-       && request.resource.data.likes is list)
-      
-      // Case 2: Review author can update their own review content (but not likes)
-      || (resource.data.userId == request.auth.uid 
-          && !request.writeFields.hasAny(['likes'])
-          && request.resource.data.rating is number
-          && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
-          && request.resource.data.review is string)
-    );
-
-    // Allow review author to delete their own review
-    allow delete: if request.auth != null
-      && resource.data.userId == request.auth.uid;
-
-    // Allow admin to perform any operation
-    allow read, write: if isAdmin();
+    allow create, update, delete: if false;
   }
 
        // Rules for 'paymentMethods' subcollection
@@ -1625,36 +1482,7 @@ function isOwnerUpdatingAllowedFields() {
     request.resource.data.purchaseCount == resource.data.purchaseCount + 1;
 }
 
-	function isIncrementingBoostedImpressionCountAnyUser() {
-  return request.writeFields.hasOnly(['boostedImpressionCount']) &&
-         request.resource.data.boostedImpressionCount == resource.data.boostedImpressionCount + 1;
-}
-
-
-  // Function to check if cart or favorites are updated correctly
- function isUpdatingCartOrFavorites() {
-    return request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['cartCount','favoritesCount','metricsUpdatedAt'])
-      && request.resource.data.metricsUpdatedAt is timestamp &&
-           (request.resource.data.cartCount == resource.data.cartCount + 1 ||
-            request.resource.data.cartCount == resource.data.cartCount - 1 ||
-            request.resource.data.favoritesCount == resource.data.favoritesCount + 1 ||
-            request.resource.data.favoritesCount == resource.data.favoritesCount - 1);
-  }
-  
-  function isUpdatingReviewStats() {
-    return request.writeFields.hasOnly(['reviewCount','averageRating'])
-      // ensure they only ever increment the count by one:
-      && request.resource.data.reviewCount == resource.data.reviewCount + 1
-      // and supply a numeric averageRating
-      && request.resource.data.averageRating is number;
-  }
-
     allow update: if (
- isIncrementingBoostedImpressionCountAnyUser()
-   
-    ||
-    
     (request.auth != null && (
     
     (resource.data.userId == request.auth.uid && isOwnerUpdatingAllowedFields())    
@@ -1662,8 +1490,6 @@ function isOwnerUpdatingAllowedFields() {
     || isBuyerUpdatingProductCorrectly()    
     || isAdmin()
     || isSemiAdmin()
-    || isUpdatingCartOrFavorites()    
-    || isUpdatingReviewStats() 
     ))
   );
    
@@ -1692,50 +1518,9 @@ function isOwnerUpdatingAllowedFields() {
       (!('location' in address) || address.location is latlng);
   }
 
-match /detailViews/{viewId} {
-  // Allow any authenticated user to create a detail-page-view record,
-  // ensuring the recorded userId matches the authenticated user's UID.
-  allow create: if request.auth != null
-                && request.resource.data.userId == request.auth.uid;
-  
-  // Optionally restrict read access to admins.
-  allow read: if isAdmin();
-
-  // Prevent updates or deletions once a detail-view record is created.
-  allow update, delete: if false;
-}
-
-match /reviews/{reviewId} {
-    // Anyone can read reviews
+   match /reviews/{reviewId} {
     allow read: if true;
-    
-    // Allow authenticated users to create reviews
-    allow create: if request.auth != null
-                  && request.resource.data.userId == request.auth.uid
-                  && request.resource.data.rating is number
-                  && request.resource.data.rating >= 1 
-                  && request.resource.data.rating <= 5
-                  && request.resource.data.review is string
-                  && request.resource.data.timestamp <= request.time;
-    
-    // Allow updates for likes OR owner editing their review
-    allow update: if request.auth != null && (
-      // Case 1: Any authenticated user can like/unlike (only 'likes' field)
-      (request.writeFields.hasOnly(['likes']) 
-       && request.resource.data.likes is list)
-      
-      // Case 2: Review author can update their own review content (but not likes)
-      || (resource.data.userId == request.auth.uid 
-          && !request.writeFields.hasAny(['likes'])
-          && request.resource.data.rating is number
-          && request.resource.data.rating >= 1 
-          && request.resource.data.rating <= 5
-          && request.resource.data.review is string)
-    );
-    
-    // Allow review author to delete their own review
-    allow delete: if request.auth != null
-                  && resource.data.userId == request.auth.uid;
+    allow create, update, delete: if false;
   }
 
 }
@@ -1748,16 +1533,6 @@ match /reviews/{reviewId} {
            request.resource.data.followerCount == resource.data.followerCount + 1
         || request.resource.data.followerCount == resource.data.followerCount - 1
          );
-}
-
-
-function canIncrementReviewStats() {
-  return request.auth != null
-      && request.writeFields.hasOnly(['reviewCount','averageRating'])
-      // reviewCount must bump by +1
-      && request.resource.data.reviewCount == resource.data.reviewCount + 1
-      // averageRating must be a number (your transaction logic already computes the new average)
-      && request.resource.data.averageRating is number;
 }
 
     // *** Rules for 'shops' Collection ***
@@ -1774,9 +1549,6 @@ allow update: if request.auth != null && (
   // Existing conditions
   resource.data.ownerId == request.auth.uid
   || isAdmin()
-  || canIncrementReviewStats()
- || (isShopMember(shopId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stockBadgeAcknowledged']))
-|| (isShopMember(shopId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['transactionsBadgeAcknowledged']))
   || isIncrementingFollowerCount()
   
   // NEW: Allow any authenticated user to update metrics fields
@@ -1867,35 +1639,9 @@ allow update: if request.auth != null && (
     allow write: if request.auth != null && isShopMember(shopId);  
     
   } 
-  match /reviews/{reviewId} {
+     match /reviews/{reviewId} {
     allow read: if true;
-
-    allow create: if request.auth != null
-                  && request.resource.data.userId == request.auth.uid
-                  && request.resource.data.rating is number
-                  && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
-                  && request.resource.data.review is string
-                  && request.resource.data.timestamp <= request.time;
-
-    // ✅ FIXED: Allow likes + author updates
-    allow update: if request.auth != null && (
-      // Any user can like/unlike (only 'likes' field)
-      (request.writeFields.hasOnly(['likes']) 
-       && request.resource.data.likes is list)
-      
-      // Original author can update their own review content (but not likes)
-      || (resource.data.userId == request.auth.uid 
-          && !request.writeFields.hasAny(['likes'])
-          && request.resource.data.rating is number
-          && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
-          && request.resource.data.review is string)
-    );
-
-    allow delete: if request.auth != null
-                  && resource.data.userId == request.auth.uid;
-
-    allow read: if isAdmin() || isSemiAdmin();
-    allow write: if isAdmin();
+    allow create, update, delete: if false;
   }
   
   match /collections/{collectionId} {
@@ -2123,18 +1869,9 @@ match /paused_products/{productId} {
   allow read, write: if isAdmin() || isSemiAdmin();
   
   // Subcollections
-  match /reviews/{reviewId} {
+    match /reviews/{reviewId} {
     allow read: if true;
-    allow create: if request.auth != null
-                  && request.resource.data.userId == request.auth.uid;
-    allow update: if request.auth != null && (
-      (request.writeFields.hasOnly(['likes']) 
-       && request.resource.data.likes is list)
-      || (resource.data.userId == request.auth.uid 
-          && !request.writeFields.hasAny(['likes']))
-    );
-    allow delete: if request.auth != null
-                  && resource.data.userId == request.auth.uid;
+    allow create, update, delete: if false;
   }
   
   match /product_questions/{questionId} {
@@ -2332,6 +2069,11 @@ match /food-accounting-monthly/{docId} {
     || request.auth.token.masterCourier == true
   );
   allow write: if false; // Cloud Functions only
+}
+
+match /food_cache/{regionDoc} {
+  allow read: if true;  // Public cache, no auth needed
+  allow write: if false; // Only Cloud Functions write
 }
 
 match /business-reports/{businessId} {

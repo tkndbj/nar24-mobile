@@ -150,14 +150,17 @@ class RestaurantTypesenseService {
 
   Map<String, String> get _headers => {
         'X-TYPESENSE-API-KEY': _searchKey,
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache, no-store',
+        'Content-Type': 'application/json',        
       };
 
   // ── Custom HTTP client ───────────────────────────────────────────────────
-  // Old Android devices (pre-7.1) don't trust newer root CAs used by
-  // Typesense Cloud. We scope the bypass strictly to *.typesense.net.
-  http.Client _buildClient() {
+   late final http.Client _client = _buildClient();
+
+     // Old Android devices (pre-7.1 / API 25) don't trust newer root CAs
+  // (e.g. ISRG Root X1) used by Typesense Cloud. Scoped strictly to
+  // *.typesense.net to avoid broadly disabling TLS verification.
+
+  static http.Client _buildClient() {
     final inner = HttpClient()
       ..badCertificateCallback = (cert, host, port) {
         return host.endsWith('.typesense.net');
@@ -210,42 +213,37 @@ class RestaurantTypesenseService {
 
   // ── Core fetch ──────────────────────────────────────────────────────────
 
-  Future<Map<String, dynamic>> _fetchTypesense(
+Future<Map<String, dynamic>> _fetchTypesense(
     String collection,
     Map<String, String> params,
   ) async {
     final uri = _searchUri(collection).replace(queryParameters: params);
-    final client = _buildClient(); // ← use custom client
 
-    try {
-      return await _retryOptions.retry(
-        () async {
-          final response = await client
-              .get(uri, headers: _headers)
-              .timeout(const Duration(seconds: 5));
+    return await _retryOptions.retry(
+      () async {
+        final response = await _client
+            .get(uri, headers: _headers)
+            .timeout(const Duration(seconds: 5));
 
-          if (response.statusCode >= 500) {
-            throw HttpException(
-                'Typesense server error: ${response.statusCode}',
-                uri: uri);
-          }
-          if (response.statusCode != 200) {
-            debugPrint(
-                '[RestaurantTypesense] ${response.statusCode} on $collection: ${response.body}');
-            return <String, dynamic>{'hits': [], 'found': 0};
-          }
-          return jsonDecode(response.body) as Map<String, dynamic>;
-        },
-        retryIf: (e) =>
-            e is SocketException ||
-            e is TimeoutException ||
-            e is HttpException ||
-            e is HandshakeException || // ← also retry on TLS errors
-            e.toString().contains('Failed host lookup'),
-      );
-    } finally {
-      client.close(); // ← always clean up
-    }
+        if (response.statusCode >= 500) {
+          throw HttpException(
+              'Typesense server error: ${response.statusCode}',
+              uri: uri);
+        }
+        if (response.statusCode != 200) {
+          debugPrint(
+              '[RestaurantTypesense] ${response.statusCode} on $collection: ${response.body}');
+          return <String, dynamic>{'hits': [], 'found': 0};
+        }
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      },
+      retryIf: (e) =>
+          e is SocketException ||
+          e is TimeoutException ||
+          e is HttpException ||
+          e is HandshakeException ||
+          e.toString().contains('Failed host lookup'),
+    );
   }
 
   // ── Filter builder ──────────────────────────────────────────────────────
@@ -645,23 +643,20 @@ class RestaurantTypesenseService {
   // HEALTH CHECK
   // ============================================================================
 
-  Future<bool> isServiceReachable() async {
-    final client = _buildClient(); // ← use custom client
+ Future<bool> isServiceReachable() async {
     try {
       final uri = _searchUri('restaurants').replace(queryParameters: {
         'q': '*',
         'query_by': 'name',
         'per_page': '1',
       });
-      final response = await client
+      final response = await _client
           .get(uri, headers: _headers)
           .timeout(const Duration(seconds: 5));
       return response.statusCode < 500;
     } catch (e) {
       debugPrint('[RestaurantTypesense] unreachable: $e');
       return false;
-    } finally {
-      client.close();
     }
   }
 
@@ -681,8 +676,9 @@ class RestaurantTypesenseService {
         .toList();
   }
 
-  void dispose() {
+ void dispose() {
     _restaurantDebounceTimer?.cancel();
     _foodDebounceTimer?.cancel();
+    _client.close();
   }
 }
