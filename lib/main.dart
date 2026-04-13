@@ -59,6 +59,8 @@ import 'providers/food_cart_provider.dart';
 import 'services/firestore_read_tracker.dart';
 import 'services/courier_location_service.dart';
 import 'package:timezone/data/latest.dart' as tz;
+import 'utils/cloudinary_url_builder.dart';
+import 'package:firebase_remote_config/firebase_remote_config.dart';
 
 /// Background message handler for FCM.
 ///
@@ -244,6 +246,14 @@ Future<void> main() async {
       debugPrint("Stacktrace: $stacktrace");
     }
   }
+
+  // ── Cloudinary init — must run regardless of Firebase init path ──
+  await FirebaseRemoteConfig.instance.setDefaults({'cloudinary_enabled': true});
+  CloudinaryUrl.init(
+    cloudName: 'dpeamfn2v',
+    storageBucket: 'emlak-mobile-app.appspot.com',
+    enabled: FirebaseRemoteConfig.instance.getBool('cloudinary_enabled'),
+  );
 
   // ── Services that only need Firebase to be running (not freshly initialized) ──
   try {
@@ -437,6 +447,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     });
 
     _configureNotificationDeepLinks();
+
+    FirebaseRemoteConfig.instance.onConfigUpdated.listen((_) async {
+      await FirebaseRemoteConfig.instance.activate();
+      CloudinaryUrl.enabled =
+          FirebaseRemoteConfig.instance.getBool('cloudinary_enabled');
+    });
 
     // Initialize ImpressionBatcher with MarketProvider
     WidgetsBinding.instance.addPostFrameCallback((_) {

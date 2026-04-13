@@ -7,6 +7,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:go_router/go_router.dart';
 import '../services/ad_analytics_service.dart';
 import '../providers/market_banner_provider.dart';
+import '../utils/cloudinary_url_builder.dart';
 
 class MarketBannerItem {
   final String id;
@@ -50,8 +51,9 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
   bool _hasBeenVisible = false;
   bool _isProcessingBanners = false;
 
-  static const int _imageCacheWidth = 1600; // Extra room to avoid decode corruption
-  static const int _imageCacheHeight = 800;
+  // CDN target width — Cloudinary serves bytes at this width, so decode is
+  // already correct. The old _imageCacheHeight is no longer needed.
+  static const int _imageCacheWidth = 1600;
 
   final Set<String> _prefetchedUrls = {};
 
@@ -117,9 +119,10 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
       if (!mounted) return;
 
       try {
-        // Only constrain width - height scales proportionally
-        final provider =
-            CachedNetworkImageProvider(url, maxWidth: _imageCacheWidth);
+        // Prefetch the CDN URL (what actually renders) so cache keys match.
+        final cdnUrl =
+            CloudinaryUrl.fromUrl(url, width: _imageCacheWidth);
+        final provider = CachedNetworkImageProvider(cdnUrl);
         precacheImage(provider, context).catchError((_) {
           _prefetchedUrls.remove(url);
         });
@@ -196,6 +199,63 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
         i++) {
       _prefetchImage(_banners[i].url);
     }
+  }
+
+  /// CDN primary + Firebase Storage fallback.
+  /// - Primary: Cloudinary-sized bytes decode at native size, no memCacheWidth.
+  /// - Fallback: original URL with memCacheWidth to protect against full-size
+  ///   originals blowing up memory if Cloudinary is unreachable.
+  Widget _buildBannerImage(MarketBannerItem item, Color placeholderColor) {
+    final cdnUrl = CloudinaryUrl.fromUrl(item.url, width: _imageCacheWidth);
+
+    Widget placeholder() => Container(
+          height: 150,
+          width: double.infinity,
+          color: placeholderColor,
+          child: const Center(
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        );
+
+    Widget errorFallback() => Container(
+          height: 150,
+          width: double.infinity,
+          color: placeholderColor,
+          child: const Center(
+            child: Icon(Icons.broken_image_outlined, size: 32),
+          ),
+        );
+
+    return CachedNetworkImage(
+      key: ValueKey('banner_${item.id}'),
+      imageUrl: cdnUrl,
+      width: double.infinity,
+      fit: BoxFit.fitWidth,
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
+      useOldImageOnUrlChange: true,
+      filterQuality: FilterQuality.medium,
+      placeholder: (_, __) => placeholder(),
+      errorWidget: (_, __, ___) {
+        if (cdnUrl == item.url) return errorFallback();
+        return CachedNetworkImage(
+          imageUrl: item.url,
+          width: double.infinity,
+          fit: BoxFit.fitWidth,
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
+          useOldImageOnUrlChange: true,
+          filterQuality: FilterQuality.medium,
+          memCacheWidth: _imageCacheWidth,
+          placeholder: (_, __) => placeholder(),
+          errorWidget: (_, __, ___) => errorFallback(),
+        );
+      },
+    );
   }
 
   // ============ Interaction Handlers ============
@@ -426,43 +486,7 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
           return RepaintBoundary(
             child: GestureDetector(
               onTap: () => _handleBannerTap(item),
-              child: CachedNetworkImage(
-                key: ValueKey('banner_${item.id}'),
-                imageUrl: item.url,
-                width: double.infinity,
-                fit: BoxFit.fitWidth,
-
-                fadeInDuration: Duration.zero,
-                fadeOutDuration: Duration.zero,
-                useOldImageOnUrlChange: true,
-                filterQuality: FilterQuality.medium,
-                // Match prefetch constraint (1200) so decode happens once
-                memCacheWidth: _imageCacheWidth,
-
-                // Placeholder while loading
-                placeholder: (_, __) => Container(
-                  height: 150,
-                  width: double.infinity,
-                  color: placeholderColor,
-                  child: const Center(
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
-                ),
-
-                // Error state
-                errorWidget: (_, __, ___) => Container(
-                  height: 150,
-                  width: double.infinity,
-                  color: placeholderColor,
-                  child: const Center(
-                    child: Icon(Icons.broken_image_outlined, size: 32),
-                  ),
-                ),
-              ),
+              child: _buildBannerImage(item, placeholderColor),
             ),
           );
         },

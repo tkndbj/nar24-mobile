@@ -5,6 +5,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import '../services/ad_analytics_service.dart';
+import '../utils/cloudinary_url_builder.dart';
+
+// Thin banner target width — matches max device width at 2x DPR.
+const int _kThinBannerCdnWidth = 800;
 
 class MarketThinBanner extends StatefulWidget {
   final bool shouldAutoPlay;
@@ -120,11 +124,12 @@ class _MarketThinBannerState extends State<MarketThinBanner>
       final url = data['imageUrl'] as String? ?? '';
       if (url.isEmpty) continue;
 
-      // Prefetch image if not cached
+      // Prefetch the CDN URL (what actually renders) so cache keys match.
       if (!_cachedUrls.contains(url)) {
         _cachedUrls.add(url);
-        // Fixed height for thin banners - width scales proportionally
-        final provider = CachedNetworkImageProvider(url, maxWidth: 800, maxHeight: 300);
+        final cdnUrl =
+            CloudinaryUrl.fromUrl(url, width: _kThinBannerCdnWidth);
+        final provider = CachedNetworkImageProvider(cdnUrl);
         precacheImage(provider, context);
       }
 
@@ -143,6 +148,52 @@ class _MarketThinBannerState extends State<MarketThinBanner>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _setupAutoPlayController();
     });
+  }
+
+  /// CDN primary + Firebase Storage fallback.
+  /// - Primary: Cloudinary-sized bytes, no memCacheWidth (no upscale glitches).
+  /// - Fallback: original URL with memCacheWidth to cap decode if the
+  ///   full-size original is large.
+  Widget _buildBannerImage(String url, double bannerHeight) {
+    final cdnUrl = CloudinaryUrl.fromUrl(url, width: _kThinBannerCdnWidth);
+
+    Widget placeholder() => Container(
+          width: double.infinity,
+          height: bannerHeight,
+          color: Colors.grey.shade200,
+        );
+
+    Widget errorFallback() =>
+        const Center(child: Icon(Icons.error));
+
+    return CachedNetworkImage(
+      imageUrl: cdnUrl,
+      width: double.infinity,
+      height: bannerHeight,
+      fit: BoxFit.fill,
+      placeholder: (_, __) => placeholder(),
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
+      useOldImageOnUrlChange: true,
+      filterQuality: FilterQuality.medium,
+      errorWidget: (_, __, ___) {
+        // CDN failed — fall back to the original Firebase URL.
+        if (cdnUrl == url) return errorFallback();
+        return CachedNetworkImage(
+          imageUrl: url,
+          width: double.infinity,
+          height: bannerHeight,
+          fit: BoxFit.fill,
+          placeholder: (_, __) => placeholder(),
+          errorWidget: (_, __, ___) => errorFallback(),
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
+          memCacheWidth: _kThinBannerCdnWidth,
+          useOldImageOnUrlChange: true,
+          filterQuality: FilterQuality.medium,
+        );
+      },
+    );
   }
 
   void _handleBannerTap(ThinBannerItem item) {
@@ -211,22 +262,7 @@ class _MarketThinBannerState extends State<MarketThinBanner>
           // Single image: CachedNetworkImage for caching
           ? GestureDetector(
               onTap: () => _handleBannerTap(_banners.first),
-              child: CachedNetworkImage(
-                imageUrl: _banners.first.url,
-                width: double.infinity,
-                height: bannerHeight,
-                fit: BoxFit.fill,
-                placeholder: (_, __) => Container(
-                    width: double.infinity,
-                    height: bannerHeight,
-                    color: Colors.grey.shade200),
-                errorWidget: (_, __, ___) =>
-                    const Center(child: Icon(Icons.error)),
-                fadeInDuration: Duration.zero,
-                fadeOutDuration: Duration.zero,
-                useOldImageOnUrlChange: true,
-                filterQuality: FilterQuality.medium,
-              ),
+              child: _buildBannerImage(_banners.first.url, bannerHeight),
             )
           // ✅ VSYNC-controlled PageView with infinite scroll
           : PageView.builder(
@@ -246,24 +282,7 @@ class _MarketThinBannerState extends State<MarketThinBanner>
                 final item = _banners[actualIndex];
                 return GestureDetector(
                   onTap: () => _handleBannerTap(item),
-                  child: CachedNetworkImage(
-                    imageUrl: item.url,
-                    width: double.infinity,
-                    height: bannerHeight,
-                    fit: BoxFit.fill,
-                    placeholder: (_, __) => Container(
-                        width: double.infinity,
-                        height: bannerHeight,
-                        color: Colors.grey.shade200),
-                    errorWidget: (_, __, ___) =>
-                        const Center(child: Icon(Icons.error)),
-                    fadeInDuration: Duration.zero,
-                    fadeOutDuration: Duration.zero,
-                    memCacheWidth: 800,
-                    memCacheHeight: 300,
-                    useOldImageOnUrlChange: true,
-                    filterQuality: FilterQuality.medium,
-                  ),
+                  child: _buildBannerImage(item.url, bannerHeight),
                 );
               },
             ),

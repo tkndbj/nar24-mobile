@@ -35,6 +35,10 @@ class Product {
   final List<String> imageUrls;
   final Map<String, List<String>> colorImages;
 
+  final List<String> imageStoragePaths;
+  final String? videoStoragePath;
+  final Map<String, String> colorImageStoragePaths;
+
   // ── Classification ────────────────────────────────────────────────────────
   final String category;
   final String subcategory;
@@ -134,8 +138,11 @@ class Product {
     required this.condition,
     this.brandModel,
     this.videoUrl,
-    required this.imageUrls,
+    this.imageUrls = const [],
     this.colorImages = const {},
+    this.imageStoragePaths = const [],
+    this.videoStoragePath,
+    this.colorImageStoragePaths = const {},
     required this.category,
     required this.subcategory,
     required this.subsubcategory,
@@ -256,6 +263,9 @@ class Product {
       gender: gender,
       availableColors: availableColors,
       colorImages: colorImages,
+      imageStoragePaths: imageStoragePaths,
+      videoStoragePath: videoStoragePath,
+      colorImageStoragePaths: colorImageStoragePaths,
       sellerName: sellerName,
       shopId: shopId,
       userId: userId,
@@ -337,6 +347,13 @@ class Product {
     );
   }
 
+  static Map<String, String> _parseColorStoragePaths(dynamic raw) {
+    if (raw is Map) {
+      return raw.map((k, v) => MapEntry(k.toString(), v.toString()));
+    }
+    return {};
+  }
+
   /// Single internal factory — all three public factories delegate here.
   factory Product._fromMap(
     Map<String, dynamic> d, {
@@ -379,6 +396,10 @@ class Product {
       // ── Media ─────────────────────────────────────────────────────────────
       imageUrls: Parse.toStringList(d['imageUrls']),
       colorImages: Parse.toColorImages(d['colorImages']),
+      imageStoragePaths: Parse.toStringList(d['imageStoragePaths']),
+      videoStoragePath: Parse.toStrNullable(d['videoStoragePath']),
+      colorImageStoragePaths:
+          _parseColorStoragePaths(d['colorImageStoragePaths']),
       // ── Classification ────────────────────────────────────────────────────
       category: Parse.toStr(d['category'], 'Uncategorized'),
       subcategory: Parse.toStr(d['subcategory']),
@@ -494,6 +515,9 @@ class Product {
       // Media
       'imageUrls': imageUrls,
       'colorImages': colorImages,
+      'imageStoragePaths': imageStoragePaths,
+      'videoStoragePath': videoStoragePath,
+      'colorImageStoragePaths': colorImageStoragePaths,
       // Classification
       'category': category,
       'subcategory': subcategory,
@@ -587,6 +611,9 @@ class Product {
       // Media
       'imageUrls': imageUrls,
       'colorImages': colorImages,
+      'imageStoragePaths': imageStoragePaths,
+      'videoStoragePath': videoStoragePath,
+      'colorImageStoragePaths': colorImageStoragePaths,
       // Classification
       'category': category,
       'subcategory': subcategory,
@@ -680,6 +707,9 @@ class Product {
     String? videoUrl,
     List<String>? imageUrls,
     Map<String, List<String>>? colorImages,
+    List<String>? imageStoragePaths,
+    String? videoStoragePath,
+    Map<String, String>? colorImageStoragePaths,
     String? category,
     String? subcategory,
     String? subsubcategory,
@@ -756,6 +786,10 @@ class Product {
       videoUrl: videoUrl ?? this.videoUrl,
       imageUrls: imageUrls ?? this.imageUrls,
       colorImages: colorImages ?? this.colorImages,
+      imageStoragePaths: imageStoragePaths ?? this.imageStoragePaths,
+      videoStoragePath: videoStoragePath ?? this.videoStoragePath,
+      colorImageStoragePaths:
+          colorImageStoragePaths ?? this.colorImageStoragePaths,
       category: category ?? this.category,
       subcategory: subcategory ?? this.subcategory,
       subsubcategory: subsubcategory ?? this.subsubcategory,

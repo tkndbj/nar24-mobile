@@ -184,6 +184,7 @@ class VersionCheckService {
       _RemoteConfigKeys.releaseNotesRu: '',
       _RemoteConfigKeys.storeUrlAndroid: '',
       _RemoteConfigKeys.storeUrlIos: '',
+      'cloudinary_enabled': true,
     };
   }
 

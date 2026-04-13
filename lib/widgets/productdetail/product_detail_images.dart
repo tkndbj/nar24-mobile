@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../providers/product_detail_provider.dart';
 import '../../models/product.dart';
+import '../../utils/cloudinary_url_builder.dart';
 import 'full_screen_image_viewer.dart';
 
 class ProductDetailImages extends StatelessWidget {
@@ -27,7 +28,13 @@ class ProductDetailImages extends StatelessWidget {
         ? const Color.fromARGB(255, 33, 31, 49)
         : Colors.grey.shade200;
 
-    if (product.imageUrls.isEmpty) {
+    // Prefer storage paths (new products) over legacy URLs.
+    final storagePaths = provider.currentImageStoragePaths;
+    final legacyUrls = provider.currentImageUrls;
+    final hasPaths = storagePaths.isNotEmpty;
+    final imageCount = hasPaths ? storagePaths.length : legacyUrls.length;
+
+    if (imageCount == 0) {
       return Container(
         height: double.infinity,
         color: backgroundColor,
@@ -39,18 +46,16 @@ class ProductDetailImages extends StatelessWidget {
       );
     }
 
-    final imageCount = provider.currentImageUrls.length;
     final currentIndex = provider.currentImageIndex;
 
-    // Calculate optimal cache dimensions for memory efficiency
+    // Fallback decode cap (only used if Cloudinary is unreachable and we
+    // fall back to the raw Firebase Storage original).
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
-
-    // Cache at 2x screen resolution for sharp display while limiting memory
-    // This prevents loading 4000x4000 images when display is only 1080x1920
-    final cacheWidth = (screenWidth * devicePixelRatio * 1.5).toInt();
-    final cacheHeight = (screenHeight * 0.70 * devicePixelRatio * 1.5).toInt();
+    final fallbackCacheWidth = (screenWidth * devicePixelRatio * 1.5).toInt();
+    final fallbackCacheHeight =
+        (screenHeight * 0.70 * devicePixelRatio * 1.5).toInt();
 
     return Stack(
       children: [
@@ -61,7 +66,8 @@ class ProductDetailImages extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (_) => FullScreenImageViewer(
-                  imageUrls: provider.currentImageUrls,
+                  imageUrls: legacyUrls,
+                  imageStoragePaths: hasPaths ? storagePaths : null,
                   initialIndex: currentIndex,
                 ),
               ),
@@ -75,63 +81,47 @@ class ProductDetailImages extends StatelessWidget {
                 itemCount: imageCount,
                 onPageChanged: provider.updateCurrentImageIndex,
                 itemBuilder: (context, index) {
-                  final imageUrl = provider.currentImageUrls[index];
+                  // Build render URL: CDN (detail size) if we have a storage
+                  // path, otherwise the legacy URL as-is.
+                  final String primaryUrl = hasPaths
+                      ? CloudinaryUrl.product(
+                          storagePaths[index],
+                          size: ProductImageSize.detail,
+                        )
+                      : legacyUrls[index];
+                  // Fallback URL: raw Firebase Storage original (used only
+                  // when the CDN request errors out).
+                  final String? fallbackUrl = hasPaths
+                      ? 'https://storage.googleapis.com/${CloudinaryUrl.storageBucket}/${storagePaths[index]}'
+                      : null;
 
-                  // Check if we're on a tablet/large screen
                   final isTablet = screenWidth > 600;
+
+                  final imageWidget = _DetailImage(
+                    primaryUrl: primaryUrl,
+                    fallbackUrl: fallbackUrl,
+                    backgroundColor: backgroundColor,
+                    fallbackCacheWidth: fallbackCacheWidth,
+                    fallbackCacheHeight: fallbackCacheHeight,
+                  );
 
                   return Container(
                     color: backgroundColor,
                     child: Center(
                       child: isTablet
                           ? AspectRatio(
-                              aspectRatio: 1.0, // Square aspect ratio on tablets
+                              aspectRatio: 1.0,
                               child: Container(
                                 constraints: BoxConstraints(
                                   maxWidth: screenWidth * 0.8,
                                 ),
-                                child: CachedNetworkImage(
-                                  imageUrl: imageUrl,
-                                  fit: BoxFit.contain,
-                                  memCacheWidth: cacheWidth,
-                                  memCacheHeight: cacheHeight,
-                                  maxWidthDiskCache: cacheWidth,
-                                  maxHeightDiskCache: cacheHeight,
-                                  placeholder: (_, __) => const Center(
-                                      child: CircularProgressIndicator()),
-                                  errorWidget: (_, __, ___) => Container(
-                                    color: backgroundColor,
-                                    child: const Icon(
-                                      Icons.image_not_supported,
-                                      size: 100,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                ),
+                                child: imageWidget,
                               ),
                             )
-                          : CachedNetworkImage(
-                              imageUrl: imageUrl,
-                              fit: BoxFit.contain,
+                          : SizedBox(
                               width: double.infinity,
                               height: double.infinity,
-                              memCacheWidth: cacheWidth,
-                              memCacheHeight: cacheHeight,
-                              maxWidthDiskCache: cacheWidth,
-                              maxHeightDiskCache: cacheHeight,
-                              placeholder: (_, __) => Container(
-                                color: backgroundColor,
-                                child: const Center(
-                                    child: CircularProgressIndicator()),
-                              ),
-                              errorWidget: (_, __, ___) => Container(
-                                color: backgroundColor,
-                                child: const Icon(
-                                  Icons.image_not_supported,
-                                  size: 100,
-                                  color: Colors.grey,
-                                ),
-                              ),
+                              child: imageWidget,
                             ),
                     ),
                   );
@@ -167,6 +157,68 @@ class ProductDetailImages extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Renders a single detail image with CDN primary + Firebase Storage fallback.
+/// - Primary: Cloudinary already serves detail-sized bytes, so decode is clean
+///   (no memCacheWidth needed).
+/// - Fallback: only used if the CDN request errors; capped with memCacheWidth
+///   because the raw Firebase original can be much larger.
+class _DetailImage extends StatelessWidget {
+  final String primaryUrl;
+  final String? fallbackUrl;
+  final Color backgroundColor;
+  final int fallbackCacheWidth;
+  final int fallbackCacheHeight;
+
+  const _DetailImage({
+    Key? key,
+    required this.primaryUrl,
+    required this.fallbackUrl,
+    required this.backgroundColor,
+    required this.fallbackCacheWidth,
+    required this.fallbackCacheHeight,
+  }) : super(key: key);
+
+  Widget _placeholder() => Container(
+        color: backgroundColor,
+        child: const Center(child: CircularProgressIndicator()),
+      );
+
+  Widget _error() => Container(
+        color: backgroundColor,
+        child: const Icon(
+          Icons.image_not_supported,
+          size: 100,
+          color: Colors.grey,
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return CachedNetworkImage(
+      imageUrl: primaryUrl,
+      fit: BoxFit.contain,
+      width: double.infinity,
+      height: double.infinity,
+      placeholder: (_, __) => _placeholder(),
+      errorWidget: (_, __, ___) {
+        if (fallbackUrl == null) return _error();
+        return CachedNetworkImage(
+          imageUrl: fallbackUrl!,
+          fit: BoxFit.contain,
+          width: double.infinity,
+          height: double.infinity,
+          memCacheWidth: fallbackCacheWidth,
+          memCacheHeight: fallbackCacheHeight,
+          maxWidthDiskCache: fallbackCacheWidth,
+          maxHeightDiskCache: fallbackCacheHeight,
+          placeholder: (_, __) => _placeholder(),
+          errorWidget: (_, __, ___) => _error(),
+        );
+      },
     );
   }
 }

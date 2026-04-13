@@ -18,6 +18,7 @@ import 'product_option_selector.dart';
 import 'dart:ui';
 import '../services/click_tracking_service.dart';
 import '../services/user_activity_service.dart';
+import '../utils/cloudinary_url_builder.dart';
 
 class ProductCard extends StatefulWidget {
   final ProductSummary product;
@@ -67,6 +68,15 @@ class _ProductCardState extends State<ProductCard> {
   late List<String> _imageUrls;
   late int _imageCount;
 
+  static List<String> _resolveImageUrls(ProductSummary product) {
+    if (product.imageStoragePaths.isNotEmpty) {
+      return product.imageStoragePaths
+          .map((p) => CloudinaryUrl.product(p, size: ProductImageSize.card))
+          .toList();
+    }
+    return product.imageUrls;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -74,7 +84,7 @@ class _ProductCardState extends State<ProductCard> {
     // ✅ OPTIMIZATION 3: Compute expensive values once
     _isFantasyProduct =
         widget.product.subsubcategory.toLowerCase() == 'fantasy';
-    _imageUrls = widget.product.imageUrls;
+    _imageUrls = _resolveImageUrls(widget.product);
     _imageCount = _imageUrls.length;
 
     _initializeColorOptions();
@@ -96,7 +106,7 @@ class _ProductCardState extends State<ProductCard> {
     if (widget.product.id != oldWidget.product.id) {
       _isFantasyProduct =
           widget.product.subsubcategory.toLowerCase() == 'fantasy';
-      _imageUrls = widget.product.imageUrls;
+      _imageUrls = _resolveImageUrls(widget.product);
       _imageCount = _imageUrls.length;
       _currentImageIndex = 0;
       _selectedColor = widget.selectedColor;
@@ -176,10 +186,16 @@ class _ProductCardState extends State<ProductCard> {
   }
 
   List<String> _getCurrentImageUrls() {
-    if (_selectedColor != null &&
-        widget.product.colorImages.containsKey(_selectedColor!) &&
-        widget.product.colorImages[_selectedColor!]!.isNotEmpty) {
-      return widget.product.colorImages[_selectedColor!]!;
+    if (_selectedColor != null) {
+      // Prefer storage paths for color images
+      if (widget.product.colorImageStoragePaths.containsKey(_selectedColor!)) {
+        final path = widget.product.colorImageStoragePaths[_selectedColor!]!;
+        return [CloudinaryUrl.product(path, size: ProductImageSize.card)];
+      }
+      if (widget.product.colorImages.containsKey(_selectedColor!) &&
+          widget.product.colorImages[_selectedColor!]!.isNotEmpty) {
+        return widget.product.colorImages[_selectedColor!]!;
+      }
     }
     return _imageUrls;
   }
@@ -198,16 +214,27 @@ class _ProductCardState extends State<ProductCard> {
     final market = context.read<MarketProvider>();
     final repo = context.read<ProductRepository>();
 
-    // ✅ OPTIMIZATION: Precache hero image during navigation for instant display
-    if (widget.product.imageUrls.isNotEmpty) {
+    // Precache the detail-size URL (800w) — that's what the detail screen
+    // renders, so warming the card-size (400w) cache would be a wasted fetch.
+    if (widget.product.imageStoragePaths.isNotEmpty) {
       try {
         precacheImage(
-          CachedNetworkImageProvider(widget.product.imageUrls.first),
+          CachedNetworkImageProvider(
+            CloudinaryUrl.product(
+              widget.product.imageStoragePaths.first,
+              size: ProductImageSize.detail,
+            ),
+          ),
           context,
         );
-      } catch (e) {
-        // Silent fail - not critical
-      }
+      } catch (e) {}
+    } else if (_imageUrls.isNotEmpty) {
+      try {
+        precacheImage(
+          CachedNetworkImageProvider(_imageUrls.first),
+          context,
+        );
+      } catch (e) {}
     }
 
     ClickService.instance.trackClick(
@@ -1057,13 +1084,38 @@ class _ImageSection extends StatelessWidget {
         fadeOutDuration: Duration.zero,
         useOldImageOnUrlChange: true,
         filterQuality: FilterQuality.medium,
-        memCacheWidth: 540,
+        // No memCacheWidth here — Cloudinary already sends 400w
         placeholder: (context, url) =>
             _buildImagePlaceholder(effectiveScaleFactor),
-        errorWidget: (context, url, error) =>
-            _buildImageErrorWidget(effectiveScaleFactor),
+        errorWidget: (context, url, error) {
+          final fallback = _extractFallbackUrl(url);
+          if (fallback != null) {
+            return CachedNetworkImage(
+              imageUrl: fallback,
+              fit: BoxFit.cover,
+              fadeInDuration: Duration.zero,
+              fadeOutDuration: Duration.zero,
+              memCacheWidth: 540, // Only here — fallback is full-size original
+              placeholder: (_, __) =>
+                  _buildImagePlaceholder(effectiveScaleFactor),
+              errorWidget: (_, __, ___) =>
+                  _buildImageErrorWidget(effectiveScaleFactor),
+            );
+          }
+          return _buildImageErrorWidget(effectiveScaleFactor);
+        },
       ),
     );
+  }
+
+  /// Extract Firebase Storage fallback URL from a Cloudinary URL.
+  /// Returns null if the URL isn't a Cloudinary URL.
+  static String? _extractFallbackUrl(String url) {
+    final marker = '/${CloudinaryUrl.autoUploadFolder}/';
+    final idx = url.indexOf(marker);
+    if (idx == -1) return null;
+    final storagePath = url.substring(idx + marker.length);
+    return 'https://storage.googleapis.com/${CloudinaryUrl.storageBucket}/$storagePath';
   }
 
   Widget _buildNoImageWidget(double effectiveScaleFactor) {
@@ -1275,9 +1327,14 @@ class _FavoriteIconState extends State<_FavoriteIcon> {
                 widget.product.id,
                 quantity: 1,
                 selectedColor: null,
-                selectedColorImage: widget.product.imageUrls.isNotEmpty
-                    ? widget.product.imageUrls.first
-                    : null,
+                selectedColorImage: widget.product.imageStoragePaths.isNotEmpty
+                    ? CloudinaryUrl.product(
+                        widget.product.imageStoragePaths.first,
+                        size: ProductImageSize.thumbnail,
+                      )
+                    : (widget.product.imageUrls.isNotEmpty
+                        ? widget.product.imageUrls.first
+                        : null),
                 additionalAttributes: {},
                 context: context,
               );

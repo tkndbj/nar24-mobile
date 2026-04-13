@@ -872,7 +872,7 @@ export {
   revokeBenefit,
 } from './17-coupons/index.js';
 export {alertOnPaymentIssue, detectPaymentAnomalies} from './18-payment-alerts/index.js';
-export {weeklyAccountingScheduled, triggerWeeklyAccounting} from './19-accounting-sales-reports/index.js';
+export {triggerDailyAccounting, triggerWeeklyAccounting, triggerMonthlyAccounting} from './19-accounting-sales-reports/index.js';
 export { computeWeeklyAnalytics, computeMonthlySummary, computeDateRangeAnalytics } from './20-admin-analytics/index.js';
 export {
   createTypesenseCollections,
@@ -909,3 +909,5 @@ export { sendNotificationOnCreation, sendRestaurantNotificationOnCreation, sendS
 export { registerWithEmailPassword, verifyEmailCode, resendEmailVerificationCode, sendPasswordResetEmail, sendReceiptEmail, sendReportEmail, shopWelcomeEmail } from './47-emails/index.js';
 export { removeShopProduct, deleteProduct, toggleProductPauseStatus } from './48-product-management/index.js';
 export { incrementImpressionCount, flushImpressions } from './49-impression/index.js';
+export { deleteCloudinaryCache } from './50-cloudinary/index.js';
+export { migrateProductImagePaths } from './51-cloudinary-backfill/index.js';

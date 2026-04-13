@@ -6,6 +6,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import '../services/ad_analytics_service.dart';
+import '../utils/cloudinary_url_builder.dart';
+
+// Hero banner target width — covers up to 1200px logical × ~1.3 DPR.
+const int _kAdsBannerCdnWidth = 1600;
 
 class AdsBannerWidget extends StatefulWidget {
   final ValueNotifier<Color> backgroundColorNotifier;
@@ -269,13 +273,66 @@ class _AdsBannerWidgetState extends State<AdsBannerWidget>
   void _prefetchImageAsync(String url) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        // Fixed width constraint - height scales proportionally
-        final provider = CachedNetworkImageProvider(url, maxWidth: 1200);
+        // Prefetch the CDN URL (what actually renders) so cache keys match.
+        final cdnUrl =
+            CloudinaryUrl.fromUrl(url, width: _kAdsBannerCdnWidth);
+        final provider = CachedNetworkImageProvider(cdnUrl);
         precacheImage(provider, context).catchError((error) {
           debugPrint('Failed to prefetch image: $url, error: $error');
         });
       }
     });
+  }
+
+  /// CDN primary + Firebase Storage fallback. Cloudinary-sized bytes decode
+  /// cleanly without memCacheWidth; the fallback branch caps decode size.
+  Widget _buildBannerImage(
+    BannerItem item, {
+    required bool isLargerScreen,
+  }) {
+    final cdnUrl =
+        CloudinaryUrl.fromUrl(item.url, width: _kAdsBannerCdnWidth);
+
+    Widget placeholder() => Container(
+          color: Colors.grey[200],
+          width: double.infinity,
+        );
+
+    Widget errorFallback() => Container(
+          color: Colors.grey[200],
+          width: double.infinity,
+          child: Icon(
+            Icons.error,
+            color: Colors.grey,
+            size: isLargerScreen ? 32 : 24,
+          ),
+        );
+
+    return CachedNetworkImage(
+      imageUrl: cdnUrl,
+      fit: isLargerScreen ? BoxFit.contain : BoxFit.cover,
+      width: double.infinity,
+      placeholder: (_, __) => placeholder(),
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
+      useOldImageOnUrlChange: true,
+      filterQuality: FilterQuality.medium,
+      errorWidget: (_, __, ___) {
+        if (cdnUrl == item.url) return errorFallback();
+        return CachedNetworkImage(
+          imageUrl: item.url,
+          fit: isLargerScreen ? BoxFit.contain : BoxFit.cover,
+          width: double.infinity,
+          placeholder: (_, __) => placeholder(),
+          errorWidget: (_, __, ___) => errorFallback(),
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
+          useOldImageOnUrlChange: true,
+          filterQuality: FilterQuality.medium,
+          memCacheWidth: _maxWidth.clamp(720, 1800),
+        );
+      },
+    );
   }
 
   void _updateBackgroundColor(List<BannerItem> items) {
@@ -362,30 +419,9 @@ class _AdsBannerWidgetState extends State<AdsBannerWidget>
                     child: Container(
                       width: double.infinity,
                       color: isLargerScreen ? item.color : null,
-                      child: CachedNetworkImage(
-                        imageUrl: item.url,
-                        fit: isLargerScreen ? BoxFit.contain : BoxFit.cover,
-                        width: double.infinity,
-                        placeholder: (_, __) => Container(
-                          color: Colors.grey[200],
-                          width: double.infinity,
-                        ),
-                        errorWidget: (_, __, ___) => Container(
-                          color: Colors.grey[200],
-                          width: double.infinity,
-                          child: Icon(
-                            Icons.error,
-                            color: Colors.grey,
-                            size: isLargerScreen ? 32 : 24,
-                          ),
-                        ),
-                        fadeInDuration: Duration.zero,
-                        fadeOutDuration: Duration.zero,
-                        useOldImageOnUrlChange: true,
-                        filterQuality: FilterQuality.medium,
-                        // Use pre-computed physical pixel width from
-                        // didChangeDependencies — stable, not in build()
-                        memCacheWidth: _maxWidth.clamp(720, 1800),
+                      child: _buildBannerImage(
+                        item,
+                        isLargerScreen: isLargerScreen,
                       ),
                     ),
                   ),

@@ -55,6 +55,10 @@ class ProductSummary {
   final List<String> availableColors;
   final Map<String, List<String>> colorImages;
 
+  final List<String> imageStoragePaths;
+  final String? videoStoragePath;
+  final Map<String, String> colorImageStoragePaths;
+
   // ── Seller display ────────────────────────────────────────────────────
   final String sellerName;
   final String? shopId;
@@ -111,6 +115,9 @@ class ProductSummary {
     this.gender,
     this.availableColors = const [],
     this.colorImages = const {},
+    this.imageStoragePaths = const [],
+    this.videoStoragePath,
+    this.colorImageStoragePaths = const {},
     required this.sellerName,
     this.shopId,
     required this.userId,
@@ -167,6 +174,10 @@ class ProductSummary {
       gender: Parse.toStrNullable(d['gender']),
       availableColors: Parse.toStringList(d['availableColors']),
       colorImages: Parse.toColorImages(d['colorImages']),
+      imageStoragePaths: Parse.toStringList(d['imageStoragePaths']),
+      videoStoragePath: Parse.toStrNullable(d['videoStoragePath']),
+      colorImageStoragePaths:
+          _parseColorStoragePaths(d['colorImageStoragePaths']),
       sellerName: Parse.toStr(d['sellerName'], 'Unknown'),
       campaignName: Parse.toStr(d['campaignName']),
       shopId: Parse.toStrNullable(d['shopId']),
@@ -234,6 +245,14 @@ class ProductSummary {
                   ),
                 )
               : const {},
+      imageStoragePaths: json['imageStoragePaths'] != null
+          ? List<String>.from(json['imageStoragePaths'] as List)
+          : const [],
+      videoStoragePath: json['videoStoragePath'] as String?,
+      colorImageStoragePaths: json['colorImageStoragePaths'] is Map
+          ? (json['colorImageStoragePaths'] as Map)
+              .map((k, v) => MapEntry(k.toString(), v.toString()))
+          : const {},
       sellerName: json['sellerName'] as String? ?? '',
       shopId: json['shopId'] as String?,
       userId: json['userId'] as String? ?? '',
@@ -261,6 +280,13 @@ class ProductSummary {
       createdAt: Parse.toTimestamp(json['createdAt']),
       promotionScore: (json['promotionScore'] as num?)?.toDouble() ?? 0.0,
     );
+  }
+
+  static Map<String, String> _parseColorStoragePaths(dynamic raw) {
+    if (raw is Map) {
+      return raw.map((k, v) => MapEntry(k.toString(), v.toString()));
+    }
+    return {};
   }
 
   /// Parse from an Typesense hit.
@@ -319,6 +345,14 @@ class ProductSummary {
                   ),
                 )
               : const {},
+      imageStoragePaths: json['imageStoragePaths'] != null
+          ? List<String>.from(json['imageStoragePaths'])
+          : const [],
+      videoStoragePath: json['videoStoragePath']?.toString(),
+      colorImageStoragePaths: json['colorImageStoragePaths'] is Map
+          ? (json['colorImageStoragePaths'] as Map)
+              .map((k, v) => MapEntry(k.toString(), v.toString()))
+          : const {},
       sellerName: json['sellerName']?.toString() ?? '',
       shopId: json['shopId']?.toString(),
       userId: json['userId']?.toString() ?? '',

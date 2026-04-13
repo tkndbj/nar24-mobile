@@ -12,16 +12,15 @@
 // Security:
 // - Requires authentication
 // - Verifies shop membership
-// - Validates all Storage URLs belong to this project
+// - Validates submitted storage paths match the authenticated user's upload folder
 // - Sanitizes all inputs
 // ===================================================================
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { getStorage } from 'firebase-admin/storage';
+import { validateStoragePaths } from '../50-cloudinary/index.js';
 import {
-  validateProductFields,
-  validateStorageUrls,
+  validateProductFields, 
   verifyShopMembership,
   sanitizeString,
   sanitizeNumber,
@@ -53,9 +52,7 @@ export const submitProduct = onCall(
       throw new HttpsError('invalid-argument', 'Product data is required.');
     }
 
-    const db = getFirestore();
-    const bucket = getStorage().bucket();
-    const projectBucket = bucket.name;
+    const db = getFirestore();   
 
     // ─── 2. VALIDATE REQUIRED FIELDS ────────────────────────────────
     const fieldValidation = validateProductFields(data);
@@ -66,14 +63,14 @@ export const submitProduct = onCall(
       );
     }
 
-    // ─── 3. VALIDATE STORAGE URLS ───────────────────────────────────
-    const urlValidation = validateStorageUrls(data, projectBucket);
-    if (!urlValidation.valid) {
-      throw new HttpsError(
-        'invalid-argument',
-        `Invalid file URLs: ${urlValidation.errors.join(' ')}`
-      );
-    }
+    // ─── 3. VALIDATE STORAGE PATHS ──────────────────────────────────
+const pathValidation = validateStoragePaths(data, uid);
+if (!pathValidation.valid) {
+  throw new HttpsError(
+    'invalid-argument',
+    `Invalid file paths: ${pathValidation.errors.join(' ')}`
+  );
+}
 
     // ─── 4. VERIFY SHOP MEMBERSHIP ──────────────────────────────────
     const shopId = sanitizeString(data.shopId);
@@ -199,9 +196,20 @@ export const submitProduct = onCall(
         {}),
 
       // ── Media URLs (already uploaded by client) ───────────────────
-      imageUrls: data.imageUrls || [],
-      videoUrl: data.videoUrl || null,
-      colorImages: data.colorImages || {},
+      imageStoragePaths: data.imageStoragePaths || [],
+videoStoragePath: data.videoStoragePath || null,
+colorImageStoragePaths: data.colorImageStoragePaths || {},
+
+imageUrls: (data.imageStoragePaths || []).map(
+  (p) => `https://storage.googleapis.com/emlak-mobile-app.appspot.com/${p}`
+),
+videoUrl: data.videoStoragePath ? `https://storage.googleapis.com/emlak-mobile-app.appspot.com/${data.videoStoragePath}` : null,
+colorImages: Object.fromEntries(
+  Object.entries(data.colorImageStoragePaths || {}).map(([color, p]) => [
+    color,
+    [`https://storage.googleapis.com/emlak-mobile-app.appspot.com/${p}`],
+  ])
+),
 
       // ── Ownership ─────────────────────────────────────────────────
       userId: uid,
@@ -302,9 +310,7 @@ export const submitProductEdit = onCall(
         throw new HttpsError('invalid-argument', 'Edit data is required.');
       }
   
-      const db = getFirestore();
-      const bucket = getStorage().bucket();
-      const projectBucket = bucket.name;
+      const db = getFirestore();    
   
       // ─── 2. VALIDATE EDIT-SPECIFIC FIELDS ───────────────────────────
       const originalProductId = sanitizeString(data.originalProductId);
@@ -324,14 +330,13 @@ export const submitProductEdit = onCall(
         );
       }
   
-      // Validate storage URLs
-      const urlValidation = validateStorageUrls(data, projectBucket);
-      if (!urlValidation.valid) {
-        throw new HttpsError(
-          'invalid-argument',
-          `Invalid file URLs: ${urlValidation.errors.join(' ')}`
-        );
-      }
+      const pathValidation = validateStoragePaths(data, uid);
+if (!pathValidation.valid) {
+  throw new HttpsError(
+    'invalid-argument',
+    `Invalid file paths: ${pathValidation.errors.join(' ')}`
+  );
+}
   
       // ─── 3. VERIFY SHOP MEMBERSHIP ──────────────────────────────────
       const shopId = sanitizeString(data.shopId);
@@ -475,38 +480,27 @@ export const submitProductEdit = onCall(
       const mediaChanges = {};
   
       // Image changes
-      const originalImageUrls = originalProduct.imageUrls || [];
-      const newImageUrls = data.imageUrls || [];
-      if (JSON.stringify(originalImageUrls) !== JSON.stringify(newImageUrls)) {
-        editedFields.push('imageUrls');
-        mediaChanges.imageUrls = {
-          old: originalImageUrls,
-          new: newImageUrls,
-        };
+      const originalImagePaths = originalProduct.imageStoragePaths || [];
+      const newImagePaths = data.imageStoragePaths || [];
+      if (JSON.stringify(originalImagePaths) !== JSON.stringify(newImagePaths)) {
+        editedFields.push('imageStoragePaths');
+        mediaChanges.imageStoragePaths = { old: originalImagePaths, new: newImagePaths };
       }
-  
-      // Video changes
-      const originalVideoUrl = originalProduct.videoUrl || null;
-      const newVideoUrl = data.videoUrl || null;
-      if (originalVideoUrl !== newVideoUrl) {
-        editedFields.push('videoUrl');
-        mediaChanges.videoUrl = {
-          old: originalVideoUrl,
-          new: newVideoUrl,
-        };
+      
+      const originalVideoPath = originalProduct.videoStoragePath || null;
+      const newVideoPath = data.videoStoragePath || null;
+      if (originalVideoPath !== newVideoPath) {
+        editedFields.push('videoStoragePath');
+        mediaChanges.videoStoragePath = { old: originalVideoPath, new: newVideoPath };
       }
-  
-      // Color image changes
-      const originalColorImages = originalProduct.colorImages || {};
-      const newColorImages = data.colorImages || {};
-      if (JSON.stringify(originalColorImages) !== JSON.stringify(newColorImages)) {
-        editedFields.push('colorImages');
-        mediaChanges.colorImages = {
-          old: originalColorImages,
-          new: newColorImages,
-        };
+      
+      const originalColorPaths = originalProduct.colorImageStoragePaths || {};
+      const newColorPaths = data.colorImageStoragePaths || {};
+      if (JSON.stringify(originalColorPaths) !== JSON.stringify(newColorPaths)) {
+        editedFields.push('colorImageStoragePaths');
+        mediaChanges.colorImageStoragePaths = { old: originalColorPaths, new: newColorPaths };
       }
-  
+
       // ─── 8. BUILD EDIT APPLICATION ──────────────────────────────────
       const editApplicationId = crypto.randomUUID();
       const now = FieldValue.serverTimestamp();
@@ -592,9 +586,20 @@ export const submitProductEdit = onCall(
         relatedCount: originalProduct.relatedCount || 0,
   
         // ── Media URLs ────────────────────────────────────────────────
-        imageUrls: data.imageUrls || originalProduct.imageUrls || [],
-        videoUrl: data.videoUrl ?? originalProduct.videoUrl ?? null,
-        colorImages: data.colorImages || originalProduct.colorImages || {},
+        imageStoragePaths: data.imageStoragePaths || originalProduct.imageStoragePaths || [],
+videoStoragePath: data.videoStoragePath ?? originalProduct.videoStoragePath ?? null,
+colorImageStoragePaths: data.colorImageStoragePaths || originalProduct.colorImageStoragePaths || {},
+
+// Backward compat:
+imageUrls: (data.imageStoragePaths || originalProduct.imageStoragePaths || []).map(
+  (p) => `https://storage.googleapis.com/emlak-mobile-app.appspot.com/${p}`),
+videoUrl: (data.videoStoragePath ?? originalProduct.videoStoragePath) ? `https://storage.googleapis.com/emlak-mobile-app.appspot.com/${data.videoStoragePath ?? originalProduct.videoStoragePath}` : null,
+colorImages: Object.fromEntries(
+  Object.entries(data.colorImageStoragePaths || originalProduct.colorImageStoragePaths || {}).map(([color, p]) => [
+    color,
+    [`https://storage.googleapis.com/emlak-mobile-app.appspot.com/${p}`],
+  ])
+),
   
         // ── Change Tracking ───────────────────────────────────────────
         editedFields,

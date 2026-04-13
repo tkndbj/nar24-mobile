@@ -249,6 +249,20 @@ class ProductDetailProvider with ChangeNotifier {
     return _product?.imageUrls ?? [];
   }
 
+  /// Storage paths for the currently selected image set. Empty if the product
+  /// predates the path-based migration. Widgets should prefer these over
+  /// [currentImageUrls] so they can build size-appropriate Cloudinary URLs.
+  List<String> get currentImageStoragePaths {
+    if (_product == null) return const [];
+
+    if (_selectedColor != null) {
+      final path = _product!.colorImageStoragePaths[_selectedColor!];
+      if (path != null && path.isNotEmpty) return [path];
+      return const [];
+    }
+    return _product!.imageStoragePaths;
+  }
+
   // Setters for internal state with safety checks
   void setUserRating(double rating) {
     if (_isDisposed) return;

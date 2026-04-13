@@ -1,19 +1,38 @@
 /**
- * Weekly Sales Accounting Module
- * 
+ * Sales Accounting Module (Daily / Weekly / Monthly)
+ *
  * Processes order items via collectionGroup query, aggregates per-seller,
- * writes results to weekly_sales_accounting/{weekId}/shop_sales/{sellerId}.
- * 
- * Idempotent: completed weeks are never re-processed unless force=true.
+ * writes results to {period}_sales_accounting/{periodId}/shop_sales/{sellerId}.
+ *
+ * Idempotent: completed periods are never re-processed unless force=true.
  * Handles thousands of orders efficiently with cursor-based pagination.
  */
 import admin from 'firebase-admin';
-import {onSchedule} from 'firebase-functions/v2/scheduler';
 import {onCall, HttpsError} from 'firebase-functions/v2/https';
 
 // ═══════════════════════════════════════════════════════════════
 // DATE UTILITIES
 // ═══════════════════════════════════════════════════════════════
+
+// ── Daily ──────────────────────────────────────────────────────
+
+export function getDayBounds(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const next = new Date(d);
+  next.setDate(d.getDate() + 1);
+  next.setHours(0, 0, 0, 0);
+  return {periodStart: d, periodEnd: next};
+}
+
+export function getDayId(periodStart) {
+  const y = periodStart.getFullYear();
+  const m = String(periodStart.getMonth() + 1).padStart(2, '0');
+  const d = String(periodStart.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+// ── Weekly ─────────────────────────────────────────────────────
 
 export function getWeekBounds(date) {
   const d = new Date(date);
@@ -29,44 +48,93 @@ export function getWeekBounds(date) {
   nextMonday.setDate(monday.getDate() + 7);
   nextMonday.setHours(0, 0, 0, 0);
 
-  return {weekStart: monday, weekEnd: nextMonday};
+  return {periodStart: monday, periodEnd: nextMonday};
 }
 
-
-export function getWeekId(weekStart) {
-  const y = weekStart.getFullYear();
-  const m = String(weekStart.getMonth() + 1).padStart(2, '0');
-  const d = String(weekStart.getDate()).padStart(2, '0');
+export function getWeekId(periodStart) {
+  const y = periodStart.getFullYear();
+  const m = String(periodStart.getMonth() + 1).padStart(2, '0');
+  const d = String(periodStart.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
 
+// ── Monthly ───────────────────────────────────────────────────
 
-function formatRange(weekStart, weekEnd) {
-  const sunday = new Date(weekEnd);
-  sunday.setDate(sunday.getDate() - 1);
+export function getMonthBounds(date) {
+  const d = new Date(date);
+  const start = new Date(d.getFullYear(), d.getMonth(), 1);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  end.setHours(0, 0, 0, 0);
+  return {periodStart: start, periodEnd: end};
+}
+
+export function getMonthId(periodStart) {
+  const y = periodStart.getFullYear();
+  const m = String(periodStart.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+}
+
+// ── Shared ─────────────────────────────────────────────────────
+
+function formatRange(periodStart, periodEnd) {
+  const lastDay = new Date(periodEnd);
+  lastDay.setDate(lastDay.getDate() - 1);
   return {
-    startStr: weekStart.toISOString().split('T')[0],
-    endStr: sunday.toISOString().split('T')[0],
+    startStr: periodStart.toISOString().split('T')[0],
+    endStr: lastDay.toISOString().split('T')[0],
   };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AUTH HELPER
+// ═══════════════════════════════════════════════════════════════
+
+async function assertAdmin(request) {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication required');
+  }
+  const db = admin.firestore();
+  const uid = request.auth.uid;
+  const [adminDoc, userDoc] = await Promise.all([
+    db.collection('admins').doc(uid).get(),
+    db.collection('users').doc(uid).get(),
+  ]);
+  const isAdmin =
+    adminDoc.exists ||
+    userDoc.data()?.isAdmin === true ||
+    request.auth.token?.admin === true;
+  if (!isAdmin) {
+    throw new HttpsError('permission-denied', 'Admin access required');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
 // CORE PROCESSOR
 // ═══════════════════════════════════════════════════════════════
 
-const PAGE_SIZE = 500; // Firestore page size for reads
-const BATCH_LIMIT = 500; // Firestore batch write limit
+const PAGE_SIZE = 500;
+const BATCH_LIMIT = 500;
 const STALE_THRESHOLD_MS = 30 * 60 * 1000; // 30 min
 
-export async function processWeekSales(
-  weekStartDate,
-  weekEndDate,
-  weekId,
+/**
+ * @param {Date}   periodStart    – inclusive start
+ * @param {Date}   periodEnd      – exclusive end
+ * @param {string} periodId       – document ID (e.g. "2026-04-13", "2026-04-06", "2026-04")
+ * @param {string} collectionName – top-level collection
+ * @param {string} triggeredBy    – audit label
+ * @param {boolean} force         – reprocess even if completed
+ */
+export async function processSalesAccounting(
+  periodStart,
+  periodEnd,
+  periodId,
+  collectionName,
   triggeredBy,
   force = false,
 ) {
   const db = admin.firestore();
-  const reportRef = db.collection('weekly_sales_accounting').doc(weekId);
+  const reportRef = db.collection(collectionName).doc(periodId);
 
   // ── 1. Idempotency gate ──────────────────────────────────────
   const existingSnap = await reportRef.get();
@@ -74,30 +142,30 @@ export async function processWeekSales(
     const existing = existingSnap.data();
 
     if (existing.status === 'completed' && !force) {
-      console.log(`⏭️  Week ${weekId} already completed — skipping`);
-      return {weekId, status: 'skipped', reason: 'already_completed'};
+      console.log(`⏭️  ${collectionName}/${periodId} already completed — skipping`);
+      return {periodId, status: 'skipped', reason: 'already_completed'};
     }
 
     if (existing.status === 'processing') {
       const startedAt = existing.processingStartedAt?.toDate?.();
       if (startedAt && Date.now() - startedAt.getTime() < STALE_THRESHOLD_MS) {
-        console.log(`⏳ Week ${weekId} is being processed by another invocation`);
-        return {weekId, status: 'skipped', reason: 'currently_processing'};
+        console.log(`⏳ ${collectionName}/${periodId} is being processed by another invocation`);
+        return {periodId, status: 'skipped', reason: 'currently_processing'};
       }
-      console.log(`🔄 Week ${weekId} has stale processing lock — retaking`);
+      console.log(`🔄 ${collectionName}/${periodId} has stale processing lock — retaking`);
     }
   }
 
-  const {startStr, endStr} = formatRange(weekStartDate, weekEndDate);
+  const {startStr, endStr} = formatRange(periodStart, periodEnd);
 
   // ── 2. Acquire processing lock ───────────────────────────────
   await reportRef.set(
     {
-      weekId,
-      weekStart: admin.firestore.Timestamp.fromDate(weekStartDate),
-      weekEnd: admin.firestore.Timestamp.fromDate(weekEndDate),
-      weekStartStr: startStr,
-      weekEndStr: endStr,
+      periodId,
+      periodStart: admin.firestore.Timestamp.fromDate(periodStart),
+      periodEnd: admin.firestore.Timestamp.fromDate(periodEnd),
+      periodStartStr: startStr,
+      periodEndStr: endStr,
       status: 'processing',
       triggeredBy,
       processingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -114,8 +182,8 @@ export async function processWeekSales(
     const uniqueOrderIds = new Set();
     let totalItemsProcessed = 0;
 
-    const tsStart = admin.firestore.Timestamp.fromDate(weekStartDate);
-    const tsEnd = admin.firestore.Timestamp.fromDate(weekEndDate);
+    const tsStart = admin.firestore.Timestamp.fromDate(periodStart);
+    const tsEnd = admin.firestore.Timestamp.fromDate(periodEnd);
 
     let cursor = null;
     let hasMore = true;
@@ -140,7 +208,6 @@ export async function processWeekSales(
       for (const doc of snap.docs) {
         const item = doc.data();
 
-        // Safety: skip docs that aren't real order items
         if (!item.sellerId || !item.orderId) continue;
 
         const sid = item.sellerId;
@@ -171,7 +238,6 @@ export async function processWeekSales(
         seller.totalItemCount += 1;
         seller.orderIds.add(item.orderId);
 
-        // Category breakdown
         const cat = item.category || 'Diger';
         if (!seller.categories[cat]) {
           seller.categories[cat] = {revenue: 0, quantity: 0, count: 0};
@@ -188,11 +254,15 @@ export async function processWeekSales(
       if (snap.docs.length < PAGE_SIZE) hasMore = false;
 
       if (totalItemsProcessed % 2000 === 0) {
-        console.log(`📦 Week ${weekId}: ${totalItemsProcessed} items scanned, ${sellerMap.size} sellers found`);
+        console.log(
+          `📦 ${collectionName}/${periodId}: ${totalItemsProcessed} items scanned, ${sellerMap.size} sellers found`,
+        );
       }
     }
 
-    console.log(`📊 Week ${weekId}: scan complete — ${totalItemsProcessed} items, ${sellerMap.size} sellers, ${uniqueOrderIds.size} orders`);
+    console.log(
+      `📊 ${collectionName}/${periodId}: scan complete — ${totalItemsProcessed} items, ${sellerMap.size} sellers, ${uniqueOrderIds.size} orders`,
+    );
 
     // ── 4. Wipe old shop_sales if force-recalculating ─────────
     if (force && existingSnap.exists) {
@@ -202,7 +272,7 @@ export async function processWeekSales(
         oldDocs.slice(i, i + BATCH_LIMIT).forEach((ref) => batch.delete(ref));
         await batch.commit();
       }
-      console.log(`🗑️  Deleted ${oldDocs.length} old shop_sales docs for ${weekId}`);
+      console.log(`🗑️  Deleted ${oldDocs.length} old shop_sales docs for ${periodId}`);
     }
 
     // ── 5. Batch-write shop_sales subcollection ───────────────
@@ -232,11 +302,10 @@ export async function processWeekSales(
           totalItemCount: data.totalItemCount,
           orderCount,
           averageOrderValue: round2(avgOrderValue),
-          // Store first 200 order IDs for audit; full count in totalOrderIds
           orderIds: Array.from(data.orderIds).slice(0, 200),
           totalOrderIds: orderCount,
           categories: data.categories,
-          weekId,
+          periodId,
         });
 
         totalRevenue += data.totalRevenue;
@@ -264,16 +333,16 @@ export async function processWeekSales(
       individualSellerCount: individualSellers.length,
       completedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      processingDurationMs: null, // will be overwritten below
+      processingDurationMs: null,
       error: null,
     });
 
     console.log(
-      `✅ Week ${weekId} completed: ${sellerMap.size} sellers | ${uniqueOrderIds.size} orders | ₺${round2(totalRevenue)} revenue`,
+      `✅ ${collectionName}/${periodId} completed: ${sellerMap.size} sellers | ${uniqueOrderIds.size} orders | ₺${round2(totalRevenue)} revenue`,
     );
 
     return {
-      weekId,
+      periodId,
       status: 'completed',
       sellerCount: sellerMap.size,
       orderCount: uniqueOrderIds.size,
@@ -281,15 +350,17 @@ export async function processWeekSales(
       totalItemCount: totalItemsProcessed,
     };
   } catch (error) {
-    console.error(`❌ Week ${weekId} FAILED:`, error);
+    console.error(`❌ ${collectionName}/${periodId} FAILED:`, error);
 
-    await reportRef.update({
-      status: 'failed',
-      error: error.message || String(error),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }).catch(() => {}); // never let logging crash the handler
+    await reportRef
+      .update({
+        status: 'failed',
+        error: error.message || String(error),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      .catch(() => {});
 
-    return {weekId, status: 'failed', error: error.message};
+    return {periodId, status: 'failed', error: error.message};
   }
 }
 
@@ -299,120 +370,297 @@ function round2(n) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SCHEDULED — Every Monday 04:00 Istanbul
+// DAILY ACCOUNTING — onCall
 // ═══════════════════════════════════════════════════════════════
-export const weeklyAccountingScheduled = onSchedule(
-    {
-      schedule: 'every monday 04:00',
-      timeZone: 'Europe/Istanbul',
-      region: 'europe-west3',
-      memory: '1GiB',
-      timeoutSeconds: 540,
-      retryCount: 2,
-    },
-    async () => {
+
+export const triggerDailyAccounting = onCall(
+  {
+    region: 'europe-west3',
+    memory: '1GiB',
+    timeoutSeconds: 540,
+  },
+  async (request) => {
+    await assertAdmin(request);
+
+    const {
+      mode = 'single',
+      date: reqDate,
+      startDate,
+      endDate,
+      force = false,
+    } = request.data || {};
+
+    if (mode === 'current') {
+      const {periodStart, periodEnd} = getDayBounds(new Date());
+      const pid = getDayId(periodStart);
+      const result = await processSalesAccounting(
+        periodStart, periodEnd, pid, 'daily_sales_accounting', 'manual', force,
+      );
+      return {success: true, results: [result]};
+    }
+
+    if (mode === 'yesterday') {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const {periodStart, periodEnd} = getDayBounds(yesterday);
+      const pid = getDayId(periodStart);
+      const result = await processSalesAccounting(
+        periodStart, periodEnd, pid, 'daily_sales_accounting', 'manual', force,
+      );
+      return {success: true, results: [result]};
+    }
+
+    if (mode === 'single') {
+      if (!reqDate || !/^\d{4}-\d{2}-\d{2}$/.test(reqDate)) {
+        throw new HttpsError('invalid-argument', 'date must be YYYY-MM-DD');
+      }
+      const [y, m, d] = reqDate.split('-').map(Number);
+      const {periodStart, periodEnd} = getDayBounds(new Date(y, m - 1, d));
+      const pid = getDayId(periodStart);
+      const result = await processSalesAccounting(
+        periodStart, periodEnd, pid, 'daily_sales_accounting', 'manual', force,
+      );
+      return {success: true, results: [result]};
+    }
+
+    if (mode === 'backfill') {
+      if (!startDate || !endDate) {
+        throw new HttpsError('invalid-argument', 'startDate and endDate required');
+      }
+      const rangeStart = new Date(startDate);
+      const rangeEnd = new Date(endDate);
+      if (isNaN(rangeStart.getTime()) || isNaN(rangeEnd.getTime())) {
+        throw new HttpsError('invalid-argument', 'Invalid date format');
+      }
+
+      const results = [];
+      let current = new Date(rangeStart);
+      let dayCount = 0;
+      const MAX_DAYS = 366;
+
+      while (current < rangeEnd && dayCount < MAX_DAYS) {
+        const {periodStart, periodEnd} = getDayBounds(current);
+        const pid = getDayId(periodStart);
+        if (periodEnd > rangeStart && periodStart < rangeEnd) {
+          const result = await processSalesAccounting(
+            periodStart, periodEnd, pid, 'daily_sales_accounting', 'manual_backfill', force,
+          );
+          results.push(result);
+          dayCount++;
+        }
+        current = new Date(periodStart);
+        current.setDate(current.getDate() + 1);
+      }
+
+      const completed = results.filter((r) => r.status === 'completed').length;
+      const skipped = results.filter((r) => r.status === 'skipped').length;
+      const failed = results.filter((r) => r.status === 'failed').length;
+
+      return {
+        success: true,
+        results,
+        summary: {completed, skipped, failed, totalProcessed: dayCount},
+        hasMore: dayCount >= MAX_DAYS && current < rangeEnd,
+      };
+    }
+
+    throw new HttpsError('invalid-argument', `Unknown mode: ${mode}`);
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════
+// WEEKLY ACCOUNTING — onCall
+// ═══════════════════════════════════════════════════════════════
+
+export const triggerWeeklyAccounting = onCall(
+  {
+    region: 'europe-west3',
+    memory: '2GiB',
+    timeoutSeconds: 540,
+  },
+  async (request) => {
+    await assertAdmin(request);
+
+    const {
+      mode = 'single',
+      weekId: reqWeekId,
+      startDate,
+      endDate,
+      force = false,
+    } = request.data || {};
+
+    if (mode === 'current') {
+      const {periodStart, periodEnd} = getWeekBounds(new Date());
+      const pid = getWeekId(periodStart);
+      const result = await processSalesAccounting(
+        periodStart, periodEnd, pid, 'weekly_sales_accounting', 'manual', force,
+      );
+      return {success: true, results: [result]};
+    }
+
+    if (mode === 'lastWeek') {
+      const lastWeek = new Date();
+      lastWeek.setDate(lastWeek.getDate() - 7);
+      const {periodStart, periodEnd} = getWeekBounds(lastWeek);
+      const pid = getWeekId(periodStart);
+      const result = await processSalesAccounting(
+        periodStart, periodEnd, pid, 'weekly_sales_accounting', 'manual', force,
+      );
+      return {success: true, results: [result]};
+    }
+
+    if (mode === 'single') {
+      if (!reqWeekId || !/^\d{4}-\d{2}-\d{2}$/.test(reqWeekId)) {
+        throw new HttpsError('invalid-argument', 'weekId must be YYYY-MM-DD');
+      }
+      const [y, m, d] = reqWeekId.split('-').map(Number);
+      const {periodStart, periodEnd} = getWeekBounds(new Date(y, m - 1, d));
+      const pid = getWeekId(periodStart);
+      const result = await processSalesAccounting(
+        periodStart, periodEnd, pid, 'weekly_sales_accounting', 'manual', force,
+      );
+      return {success: true, results: [result]};
+    }
+
+    if (mode === 'backfill') {
+      if (!startDate || !endDate) {
+        throw new HttpsError('invalid-argument', 'startDate and endDate required');
+      }
+      const rangeStart = new Date(startDate);
+      const rangeEnd = new Date(endDate);
+      if (isNaN(rangeStart.getTime()) || isNaN(rangeEnd.getTime())) {
+        throw new HttpsError('invalid-argument', 'Invalid date format');
+      }
+
+      const results = [];
+      let current = new Date(rangeStart);
+      let weekCount = 0;
+      const MAX_WEEKS = 52;
+
+      while (current < rangeEnd && weekCount < MAX_WEEKS) {
+        const {periodStart, periodEnd} = getWeekBounds(current);
+        const pid = getWeekId(periodStart);
+        if (periodEnd > rangeStart && periodStart < rangeEnd) {
+          const result = await processSalesAccounting(
+            periodStart, periodEnd, pid, 'weekly_sales_accounting', 'manual_backfill', force,
+          );
+          results.push(result);
+          weekCount++;
+        }
+        current = new Date(periodStart);
+        current.setDate(current.getDate() + 7);
+      }
+
+      const completed = results.filter((r) => r.status === 'completed').length;
+      const skipped = results.filter((r) => r.status === 'skipped').length;
+      const failed = results.filter((r) => r.status === 'failed').length;
+
+      return {
+        success: true,
+        results,
+        summary: {completed, skipped, failed, totalProcessed: weekCount},
+        hasMore: weekCount >= MAX_WEEKS && current < rangeEnd,
+      };
+    }
+
+    throw new HttpsError('invalid-argument', `Unknown mode: ${mode}`);
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════
+// MONTHLY ACCOUNTING — onCall
+// ═══════════════════════════════════════════════════════════════
+
+export const triggerMonthlyAccounting = onCall(
+  {
+    region: 'europe-west3',
+    memory: '2GiB',
+    timeoutSeconds: 540,
+  },
+  async (request) => {
+    await assertAdmin(request);
+
+    const {
+      mode = 'single',
+      month: reqMonth,
+      startDate,
+      endDate,
+      force = false,
+    } = request.data || {};
+
+    if (mode === 'current') {
+      const {periodStart, periodEnd} = getMonthBounds(new Date());
+      const pid = getMonthId(periodStart);
+      const result = await processSalesAccounting(
+        periodStart, periodEnd, pid, 'monthly_sales_accounting', 'manual', force,
+      );
+      return {success: true, results: [result]};
+    }
+
+    if (mode === 'lastMonth') {
       const now = new Date();
-      const lastWeekDate = new Date(now);
-      lastWeekDate.setDate(now.getDate() - 7);
-      const {weekStart, weekEnd} = getWeekBounds(lastWeekDate);
-      const weekId = getWeekId(weekStart);
-      console.log(`📅 Scheduled weekly accounting: ${weekId}`);
-      await processWeekSales(weekStart, weekEnd, weekId, 'scheduled', false);
-    },
-  );
-  
-  // ═══════════════════════════════════════════════════════════════
-  // MANUAL TRIGGER — Admin panel
-  // ═══════════════════════════════════════════════════════════════
-  export const triggerWeeklyAccounting = onCall(
-    {
-      region: 'europe-west3',
-      memory: '2GiB',
-      timeoutSeconds: 540,
-    },
-    async (request) => {
-      if (!request.auth) {
-        throw new HttpsError('unauthenticated', 'Authentication required');
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const {periodStart, periodEnd} = getMonthBounds(lastMonth);
+      const pid = getMonthId(periodStart);
+      const result = await processSalesAccounting(
+        periodStart, periodEnd, pid, 'monthly_sales_accounting', 'manual', force,
+      );
+      return {success: true, results: [result]};
+    }
+
+    if (mode === 'single') {
+      if (!reqMonth || !/^\d{4}-\d{2}$/.test(reqMonth)) {
+        throw new HttpsError('invalid-argument', 'month must be YYYY-MM');
       }
-  
-      const db = admin.firestore();
-      const uid = request.auth.uid;
-  
-      const [adminDoc, userDoc] = await Promise.all([
-        db.collection('admins').doc(uid).get(),
-        db.collection('users').doc(uid).get(),
-      ]);
-      const isAdmin = adminDoc.exists || userDoc.data()?.isAdmin === true || request.auth.token?.admin === true;
-      if (!isAdmin) {
-        throw new HttpsError('permission-denied', 'Admin access required');
+      const [y, m] = reqMonth.split('-').map(Number);
+      const {periodStart, periodEnd} = getMonthBounds(new Date(y, m - 1, 1));
+      const pid = getMonthId(periodStart);
+      const result = await processSalesAccounting(
+        periodStart, periodEnd, pid, 'monthly_sales_accounting', 'manual', force,
+      );
+      return {success: true, results: [result]};
+    }
+
+    if (mode === 'backfill') {
+      if (!startDate || !endDate) {
+        throw new HttpsError('invalid-argument', 'startDate and endDate required');
       }
-  
-      const {
-        mode = 'single',
-        weekId: reqWeekId,
-        startDate,
-        endDate,
-        force = false,
-      } = request.data || {};
-  
-      if (mode === 'current') {
-        const {weekStart, weekEnd} = getWeekBounds(new Date());
-        const wid = getWeekId(weekStart);
-        const result = await processWeekSales(weekStart, weekEnd, wid, 'manual', force);
-        return {success: true, results: [result]};
+      const rangeStart = new Date(startDate);
+      const rangeEnd = new Date(endDate);
+      if (isNaN(rangeStart.getTime()) || isNaN(rangeEnd.getTime())) {
+        throw new HttpsError('invalid-argument', 'Invalid date format');
       }
-  
-      if (mode === 'single') {
-        if (!reqWeekId || !/^\d{4}-\d{2}-\d{2}$/.test(reqWeekId)) {
-          throw new HttpsError('invalid-argument', 'weekId must be YYYY-MM-DD');
+
+      const results = [];
+      let current = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
+      let monthCount = 0;
+      const MAX_MONTHS = 24;
+
+      while (current < rangeEnd && monthCount < MAX_MONTHS) {
+        const {periodStart, periodEnd} = getMonthBounds(current);
+        const pid = getMonthId(periodStart);
+        if (periodEnd > rangeStart && periodStart < rangeEnd) {
+          const result = await processSalesAccounting(
+            periodStart, periodEnd, pid, 'monthly_sales_accounting', 'manual_backfill', force,
+          );
+          results.push(result);
+          monthCount++;
         }
-        const [y, m, d] = reqWeekId.split('-').map(Number);
-        const targetDate = new Date(y, m - 1, d);
-        const {weekStart, weekEnd} = getWeekBounds(targetDate);
-        const wid = getWeekId(weekStart);
-        const result = await processWeekSales(weekStart, weekEnd, wid, 'manual', force);
-        return {success: true, results: [result]};
+        current = new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, 1);
       }
-  
-      if (mode === 'backfill') {
-        if (!startDate || !endDate) {
-          throw new HttpsError('invalid-argument', 'startDate and endDate required');
-        }
-        const rangeStart = new Date(startDate);
-        const rangeEnd = new Date(endDate);
-        if (isNaN(rangeStart.getTime()) || isNaN(rangeEnd.getTime())) {
-          throw new HttpsError('invalid-argument', 'Invalid date format');
-        }
-  
-        const results = [];
-        let current = new Date(rangeStart);
-        let weekCount = 0;
-        const MAX_WEEKS = 52;
-  
-        while (current < rangeEnd && weekCount < MAX_WEEKS) {
-          const {weekStart, weekEnd} = getWeekBounds(current);
-          const wid = getWeekId(weekStart);
-          if (weekEnd > rangeStart && weekStart < rangeEnd) {
-            const result = await processWeekSales(weekStart, weekEnd, wid, 'manual_backfill', force);
-            results.push(result);
-            weekCount++;
-          }
-          current = new Date(weekStart);
-          current.setDate(current.getDate() + 7);
-        }
-  
-        const completed = results.filter((r) => r.status === 'completed').length;
-        const skipped = results.filter((r) => r.status === 'skipped').length;
-        const failed = results.filter((r) => r.status === 'failed').length;
-  
-        return {
-          success: true,
-          results,
-          summary: {completed, skipped, failed, totalProcessed: weekCount},
-          hasMore: weekCount >= MAX_WEEKS && current < rangeEnd,
-        };
-      }
-  
-      throw new HttpsError('invalid-argument', `Unknown mode: ${mode}`);
-    },
-  );
+
+      const completed = results.filter((r) => r.status === 'completed').length;
+      const skipped = results.filter((r) => r.status === 'skipped').length;
+      const failed = results.filter((r) => r.status === 'failed').length;
+
+      return {
+        success: true,
+        results,
+        summary: {completed, skipped, failed, totalProcessed: monthCount},
+        hasMore: monthCount >= MAX_MONTHS && current < rangeEnd,
+      };
+    }
+
+    throw new HttpsError('invalid-argument', `Unknown mode: ${mode}`);
+  },
+);

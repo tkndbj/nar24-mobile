@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import '../../services/product_upload_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:go_router/go_router.dart';
@@ -15,45 +15,9 @@ import 'package:image_picker/image_picker.dart';
 import '../../constants/all_in_one_category_data.dart';
 import '../../utils/attribute_localization_utils.dart';
 import '../../utils/firebase_data_cleaner.dart';
-import '../../utils/image_compression_utils.dart';
 import '../../widgets/listproduct/upload_progress_state.dart';
 import '../../widgets/listproduct/upload_progress_overlay.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Internal data class — a compressed file + its Storage destination metadata.
-// ─────────────────────────────────────────────────────────────────────────────
-class _UploadJob {
-  final File file;
-  final String folder;
-
-  /// Non-null for color images; null for main images and video.
-  final String? colorKey;
-
-  /// True when this job carries the product video.
-  final bool isVideo;
-
-  const _UploadJob({
-    required this.file,
-    required this.folder,
-    this.colorKey,
-    this.isVideo = false,
-  });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Result produced by the upload pipeline, consumed by the CF / Firestore call.
-// ─────────────────────────────────────────────────────────────────────────────
-class _UploadResult {
-  final List<String> imageUrls;
-  final String? videoUrl;
-  final Map<String, List<String>> colorImageUrls;
-
-  const _UploadResult({
-    required this.imageUrls,
-    this.videoUrl,
-    required this.colorImageUrls,
-  });
-}
+import '../../utils/cloudinary_url_builder.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Widget
@@ -115,13 +79,11 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
 
   /// All active Storage subscriptions — cancelled on error or dispose so
   /// no callbacks fire after the widget is gone.
-  final List<StreamSubscription<TaskSnapshot>> _storageSubs = [];
+  final ProductUploadService _uploadService = ProductUploadService();
 
   @override
   void dispose() {
-    for (final sub in _storageSubs) {
-      sub.cancel();
-    }
+    _uploadService.dispose();
     super.dispose();
   }
 
@@ -152,215 +114,28 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // Upload pipeline
-  //
-  // Phase 1 — Compress all images (fast, offline, 0–15 % of bar)
-  // Phase 2 — Measure compressed sizes → compute totalBytes
-  // Phase 3 — Upload in batches of 3 with per-file Firebase progress
-  //            events (15–95 % of bar)
-  // Phase 4 — Caller switches to UploadPhase.submitting (95–100 %)
-  // ─────────────────────────────────────────────────────────────────
-
- Future<_UploadResult> _uploadAllFiles(String userId) async {
-  final mainFiles = widget.imageFiles.map((x) => File(x.path)).toList();
-  final videoFile =
-      widget.videoFile != null ? File(widget.videoFile!.path) : null;
-  final colorEntries = <MapEntry<String, File>>[
-    for (final entry in widget.selectedColorImages.entries)
-      if (entry.value['image'] is XFile)
-        MapEntry(entry.key, File((entry.value['image'] as XFile).path)),
-  ];
-
-  if (mainFiles.isEmpty && videoFile == null && colorEntries.isEmpty) {
-    return _UploadResult(
-      imageUrls: List<String>.from(widget.product.imageUrls),
-      videoUrl: widget.product.videoUrl,
-      colorImageUrls:
-          Map<String, List<String>>.from(widget.product.colorImages),
-    );
-  }
-
-  final jobs = <_UploadJob>[];
-
-  // Main images — already compressed at pick time, add directly.
-  for (final file in mainFiles) {
-    jobs.add(_UploadJob(file: file, folder: 'default_images'));
-  }
-
-  // Video — no compression.
-  if (videoFile != null) {
-    jobs.add(_UploadJob(
-      file: videoFile,
-      folder: 'preview_videos',
-      isVideo: true,
-    ));
-  }
-
-  // Color images — compress silently here since they come from
-  // a separate picker screen that doesn't compress on selection yet.
-  for (final entry in colorEntries) {
-    final compressed =
-        await ImageCompressionUtils.ecommerceCompress(entry.value);
-    jobs.add(_UploadJob(
-      file: compressed ?? entry.value,
-      folder: 'color_images/${entry.key}',
-      colorKey: entry.key,
-    ));
-  }
-
-  // ── Measure compressed sizes ───────────────────────────────────
-  int totalBytes = 0;
-  final fileSizes = <int>[];
-  for (final job in jobs) {
-    final size = await job.file.length();
-    fileSizes.add(size);
-    totalBytes += size;
-  }
-
-  // ── Upload ─────────────────────────────────────────────────────
-  _setUploadState(UploadState(
-    phase: UploadPhase.uploading,
-    uploadedFiles: 0,
-    totalFiles: jobs.length,
-    bytesTransferred: 0,
-    totalBytes: totalBytes,
-  ));
-
-  final bytesPerFile = List<int>.filled(jobs.length, 0);
-  int completedFiles = 0;
-
-  void onBytesUpdate(int idx, int bytes) {
-    bytesPerFile[idx] = bytes;
-    _setUploadState(_uploadState!.copyWith(
-      bytesTransferred: bytesPerFile.fold<int>(0, (a, b) => a + b),
-      uploadedFiles: completedFiles,
-    ));
-  }
-
-  const maxConcurrent = 3;
-  final uploadedUrls = List<String?>.filled(jobs.length, null);
-
-  for (int start = 0; start < jobs.length; start += maxConcurrent) {
-    final end = (start + maxConcurrent).clamp(0, jobs.length);
-
-    await Future.wait(
-      List.generate(end - start, (i) => start + i).map((globalIdx) async {
-        uploadedUrls[globalIdx] = await _uploadFileWithRetry(
-          file: jobs[globalIdx].file,
-          userId: userId,
-          folder: jobs[globalIdx].folder,
-          fileIndex: globalIdx,
-          onBytesUpdate: onBytesUpdate,
-        );
-        completedFiles++;
-        bytesPerFile[globalIdx] = fileSizes[globalIdx];
-        onBytesUpdate(globalIdx, fileSizes[globalIdx]);
-      }),
-    );
-  }
-
-  // ── Merge existing + newly uploaded URLs ──────────────────────
-  final finalImageUrls = [
-    ...widget.product.imageUrls,
-    for (int i = 0; i < jobs.length; i++)
-      if (!jobs[i].isVideo && jobs[i].colorKey == null) uploadedUrls[i]!,
-  ];
-
-  String? finalVideoUrl = widget.product.videoUrl;
-  for (int i = 0; i < jobs.length; i++) {
-    if (jobs[i].isVideo) {
-      finalVideoUrl = uploadedUrls[i];
-      break;
-    }
-  }
-
-  final finalColorImages =
-      Map<String, List<String>>.from(widget.product.colorImages);
-  for (int i = 0; i < jobs.length; i++) {
-    if (jobs[i].colorKey != null) {
-      finalColorImages[jobs[i].colorKey!] = [uploadedUrls[i]!];
-    }
-  }
-
-  return _UploadResult(
-    imageUrls: finalImageUrls,
-    videoUrl: finalVideoUrl,
-    colorImageUrls: finalColorImages,
-  );
-}
-
-  // ─────────────────────────────────────────────────────────────────
-  // Single-file upload with Firebase Storage progress events
-  // and exponential-backoff retry (up to 2 retries: 2 s, 4 s).
-  // ─────────────────────────────────────────────────────────────────
-
-  Future<String> _uploadFileWithRetry({
-    required File file,
-    required String userId,
-    required String folder,
-    required int fileIndex,
-    required void Function(int fileIndex, int bytes) onBytesUpdate,
-    int maxRetries = 2,
-  }) async {
-    int attempt = 0;
-
-    while (true) {
-      StreamSubscription<TaskSnapshot>? sub;
-      try {
-        final fileName =
-            '${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
-        final ref =
-            FirebaseStorage.instance.ref('products/$userId/$folder/$fileName');
-
-        final task = ref.putFile(file);
-
-        sub = task.snapshotEvents.listen(
-          (snap) => onBytesUpdate(fileIndex, snap.bytesTransferred),
-        );
-        _storageSubs.add(sub);
-
-        final snapshot = await task;
-        sub.cancel();
-        _storageSubs.remove(sub);
-
-        return await snapshot.ref.getDownloadURL();
-      } catch (e) {
-        sub?.cancel();
-        if (sub != null) _storageSubs.remove(sub);
-
-        attempt++;
-        if (attempt > maxRetries) rethrow;
-
-        // Reset this file's progress before retrying.
-        onBytesUpdate(fileIndex, 0);
-        await Future.delayed(Duration(seconds: attempt * 2));
-      }
-    }
-  }
-
-  // ─────────────────────────────────────────────────────────────────
   // Submit — entry point called by the Confirm button
   // ─────────────────────────────────────────────────────────────────
 
   Future<void> _submitProduct() async {
-    // Synchronous guard — blocks any second tap before the first await.
     if (_isSubmitting) return;
     _isSubmitting = true;
 
-    // Count files so the initial compressing state is accurate.
     final newColorImageCount = widget.selectedColorImages.values
         .where((v) => v['image'] is XFile)
         .length;
 
-   setState(() {
-  _uploadState = UploadState(
-    phase: UploadPhase.uploading,
-    uploadedFiles: 0,
-    totalFiles: widget.imageFiles.length + newColorImageCount,
-    bytesTransferred: 0,
-    totalBytes: 0,
-  );
-});
+    setState(() {
+      _uploadState = UploadState(
+        phase: UploadPhase.uploading,
+        uploadedFiles: 0,
+        totalFiles: widget.imageFiles.length +
+            newColorImageCount +
+            (widget.videoFile != null ? 1 : 0),
+        bytesTransferred: 0,
+        totalBytes: 0,
+      );
+    });
 
     try {
       final user = _auth.currentUser;
@@ -369,10 +144,49 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
         return;
       }
 
-      // Step 1 — Upload everything new, report progress.
-      final upload = await _uploadAllFiles(user.uid);
+      // Build color image files map
+      final newColorFiles = <String, File>{};
+      for (final entry in widget.selectedColorImages.entries) {
+        if (entry.value['image'] is XFile) {
+          newColorFiles[entry.key] = File((entry.value['image'] as XFile).path);
+        }
+      }
 
-      // Step 2 — Switch to "submitting" phase (CF / Firestore call).
+      // Existing storage paths (edit mode)
+      final existingImagePaths = widget.isEditMode
+          ? List<String>.from(
+              widget.originalProduct?.imageStoragePaths ?? <String>[])
+          : <String>[];
+      final existingVideoPath =
+          widget.isEditMode ? widget.originalProduct?.videoStoragePath : null;
+      final existingColorPaths = widget.isEditMode
+          ? Map<String, String>.from(
+              widget.originalProduct?.colorImageStoragePaths ??
+                  <String, String>{})
+          : <String, String>{};
+
+      // Step 1 — Upload via service
+      final upload = await _uploadService.uploadProductFiles(
+        userId: user.uid,
+        existingImagePaths: existingImagePaths,
+        existingVideoPath: existingVideoPath,
+        existingColorPaths: existingColorPaths,
+        newImages: widget.imageFiles.map((x) => File(x.path)).toList(),
+        newColorImages: newColorFiles,
+        newVideo:
+            widget.videoFile != null ? File(widget.videoFile!.path) : null,
+        onProgress: (bytes, total, completed, totalFiles) {
+          _setUploadState(UploadState(
+            phase: UploadPhase.uploading,
+            uploadedFiles: completed,
+            totalFiles: totalFiles,
+            bytesTransferred: bytes,
+            totalBytes: total,
+          ));
+        },
+      );
+
+      // Step 2 — Submitting phase
       _setUploadState(UploadState(
         phase: UploadPhase.submitting,
         uploadedFiles: _uploadState?.totalFiles ?? 0,
@@ -381,7 +195,7 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
         totalBytes: _uploadState?.totalBytes ?? 0,
       ));
 
-      // Step 3 — Persist the product.
+      // Step 3 — Persist
       if (widget.product.shopId != null) {
         await _submitViaCloudFunction(user, upload);
       } else {
@@ -400,8 +214,7 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
         'not-found' => e.message ?? l10n.errorListingProduct,
         _ => l10n.errorListingProduct,
       };
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(msg)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -426,12 +239,12 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
 
   Future<void> _submitViaCloudFunction(
     User user,
-    _UploadResult upload,
+    ProductUploadResult upload,
   ) async {
     final functions = FirebaseFunctions.instanceFor(region: 'europe-west3');
     final colorQuantities = widget.product.colorQuantities;
     final allColors = {
-      ...upload.colorImageUrls.keys,
+      ...upload.colorImageStoragePaths.keys,
       ...colorQuantities.keys,
     }.toList();
 
@@ -449,9 +262,9 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
       'quantity': widget.product.quantity,
       'deliveryOption': widget.product.deliveryOption,
       'shopId': widget.product.shopId,
-      'imageUrls': upload.imageUrls,
-      'videoUrl': upload.videoUrl,
-      'colorImages': upload.colorImageUrls,
+      'imageStoragePaths': upload.imageStoragePaths,
+      'videoStoragePath': upload.videoStoragePath,
+      'colorImageStoragePaths': upload.colorImageStoragePaths,
       'colorQuantities': colorQuantities,
       'availableColors': allColors,
       if (widget.product.clothingSizes != null)
@@ -484,18 +297,17 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
     };
 
     if (widget.isEditMode && widget.originalProduct != null) {
-      final deletedColors = widget.originalProduct!.colorImages.keys
+      final deletedColors = widget.originalProduct!.colorImageStoragePaths.keys
           .toSet()
-          .difference(upload.colorImageUrls.keys.toSet())
+          .difference(upload.colorImageStoragePaths.keys.toSet())
           .toList();
 
       payload['originalProductId'] = widget.originalProduct!.id;
       payload['isArchivedEdit'] = widget.isFromArchivedCollection;
       payload['deletedColors'] = deletedColors;
 
-      final result = await functions
-          .httpsCallable('submitProductEdit')
-          .call(payload);
+      final result =
+          await functions.httpsCallable('submitProductEdit').call(payload);
       debugPrint('✅ Edit via CF: ${result.data['applicationId']}');
     } else {
       final result =
@@ -510,18 +322,18 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
 
   Future<void> _submitVitrinProduct(
     User user,
-    _UploadResult upload,
+    ProductUploadResult upload,
   ) async {
     final colorQuantities = widget.product.colorQuantities;
     final allColors = {
-      ...upload.colorImageUrls.keys,
+      ...upload.colorImageStoragePaths.keys,
       ...colorQuantities.keys,
     }.toList();
 
     final deletedColors = widget.isEditMode && widget.originalProduct != null
-        ? widget.originalProduct!.colorImages.keys
+        ? widget.originalProduct!.colorImageStoragePaths.keys
             .toSet()
-            .difference(upload.colorImageUrls.keys.toSet())
+            .difference(upload.colorImageStoragePaths.keys.toSet())
             .toList()
         : <String>[];
 
@@ -539,17 +351,14 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
       currency: 'TL',
       gender: widget.product.gender,
       boostClickCountAtStart: widget.product.boostClickCountAtStart,
-      imageUrls: upload.imageUrls,
+      imageStoragePaths: upload.imageStoragePaths,
       averageRating:
           widget.isEditMode ? widget.originalProduct!.averageRating : 0.0,
-      reviewCount:
-          widget.isEditMode ? widget.originalProduct!.reviewCount : 0,
-      clickCount:
-          widget.isEditMode ? widget.originalProduct!.clickCount : 0,
+      reviewCount: widget.isEditMode ? widget.originalProduct!.reviewCount : 0,
+      clickCount: widget.isEditMode ? widget.originalProduct!.clickCount : 0,
       favoritesCount:
           widget.isEditMode ? widget.originalProduct!.favoritesCount : 0,
-      cartCount:
-          widget.isEditMode ? widget.originalProduct!.cartCount : 0,
+      cartCount: widget.isEditMode ? widget.originalProduct!.cartCount : 0,
       purchaseCount:
           widget.isEditMode ? widget.originalProduct!.purchaseCount : 0,
       userId: user.uid,
@@ -566,8 +375,7 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
       deliveryOption: widget.product.deliveryOption,
       isFeatured:
           widget.isEditMode ? widget.originalProduct!.isFeatured : false,
-      isBoosted:
-          widget.isEditMode ? widget.originalProduct!.isBoosted : false,
+      isBoosted: widget.isEditMode ? widget.originalProduct!.isBoosted : false,
       boostedImpressionCount: widget.isEditMode
           ? widget.originalProduct!.boostedImpressionCount
           : 0,
@@ -577,21 +385,18 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
       promotionScore:
           widget.isEditMode ? widget.originalProduct!.promotionScore : 0,
       paused: widget.isEditMode ? widget.originalProduct!.paused : false,
-      boostStartTime: widget.isEditMode
-          ? widget.originalProduct!.boostStartTime
-          : null,
+      boostStartTime:
+          widget.isEditMode ? widget.originalProduct!.boostStartTime : null,
       boostEndTime:
           widget.isEditMode ? widget.originalProduct!.boostEndTime : null,
-      lastClickDate: widget.isEditMode
-          ? widget.originalProduct!.lastClickDate
-          : null,
-      clickCountAtStart: widget.isEditMode
-          ? widget.originalProduct!.clickCountAtStart
-          : 0,
-      colorImages: upload.colorImageUrls,
+      lastClickDate:
+          widget.isEditMode ? widget.originalProduct!.lastClickDate : null,
+      clickCountAtStart:
+          widget.isEditMode ? widget.originalProduct!.clickCountAtStart : 0,
+      colorImageStoragePaths: upload.colorImageStoragePaths,
       colorQuantities: colorQuantities,
       availableColors: allColors,
-      videoUrl: upload.videoUrl,
+      videoStoragePath: upload.videoStoragePath,
       attributes: widget.product.attributes,
       productType: widget.product.productType,
       clothingSizes: widget.product.clothingSizes,
@@ -611,9 +416,8 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
           ? (widget.originalProduct!.relatedLastUpdated ??
               Timestamp.fromDate(DateTime(1970, 1, 1)))
           : Timestamp.fromDate(DateTime(1970, 1, 1)),
-      relatedCount: widget.isEditMode
-          ? (widget.originalProduct!.relatedCount ?? 0)
-          : 0,
+      relatedCount:
+          widget.isEditMode ? (widget.originalProduct!.relatedCount ?? 0) : 0,
     );
 
     var productData = product.toMap();
@@ -637,16 +441,17 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
 
       if (deletedColors.isNotEmpty) {
         productData['deletedColors'] = deletedColors;
-        if (!editedFields.contains('colorImages')) editedFields.add('colorImages');
-        changes['colorImages'] ??= {
-          'old': widget.originalProduct!.colorImages,
-          'new': upload.colorImageUrls,
+        if (!editedFields.contains('colorImageStoragePaths'))
+          editedFields.add('colorImageStoragePaths');
+        changes['colorImageStoragePaths'] ??= {
+          'old': widget.originalProduct!.colorImageStoragePaths,
+          'new': upload.colorImageStoragePaths,
         };
       }
 
       productData['originalProductId'] = widget.originalProduct!.id;
-      productData['originalProductData'] = FirebaseDataCleaner.cleanData(
-          widget.originalProduct?.toMap() ?? {});
+      productData['originalProductData'] =
+          FirebaseDataCleaner.cleanData(widget.originalProduct?.toMap() ?? {});
       productData['submittedAt'] = FieldValue.serverTimestamp();
       productData['status'] = 'pending';
       productData['editedFields'] = editedFields;
@@ -688,7 +493,8 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
     final changes = <String, dynamic>{};
 
     dynamic normalize(dynamic v) {
-      if (v == null || v == '' ||
+      if (v == null ||
+          v == '' ||
           (v is List && v.isEmpty) ||
           (v is Map && v.isEmpty)) return null;
       return v;
@@ -712,21 +518,29 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
     compare('gender', original.gender, updated.gender);
     compare('quantity', original.quantity, updated.quantity);
     compare('deliveryOption', original.deliveryOption, updated.deliveryOption);
-    compare('imageUrls', original.imageUrls, updated.imageUrls);
-    compare('videoUrl', original.videoUrl, updated.videoUrl);
-    compare('colorImages', original.colorImages, updated.colorImages);
-    compare('colorQuantities', original.colorQuantities, updated.colorQuantities);
+    compare('imageStoragePaths', original.imageStoragePaths,
+        updated.imageStoragePaths);
+    compare('videoStoragePath', original.videoStoragePath,
+        updated.videoStoragePath);
+    compare('colorImageStoragePaths', original.colorImageStoragePaths,
+        updated.colorImageStoragePaths);
+    compare(
+        'colorQuantities', original.colorQuantities, updated.colorQuantities);
     compare('productType', original.productType, updated.productType);
     compare('clothingSizes', original.clothingSizes, updated.clothingSizes);
     compare('clothingFit', original.clothingFit, updated.clothingFit);
     compare('clothingTypes', original.clothingTypes, updated.clothingTypes);
     compare('pantSizes', original.pantSizes, updated.pantSizes);
-    compare('pantFabricTypes', original.pantFabricTypes, updated.pantFabricTypes);
+    compare(
+        'pantFabricTypes', original.pantFabricTypes, updated.pantFabricTypes);
     compare('footwearSizes', original.footwearSizes, updated.footwearSizes);
-    compare('jewelryMaterials', original.jewelryMaterials, updated.jewelryMaterials);
+    compare('jewelryMaterials', original.jewelryMaterials,
+        updated.jewelryMaterials);
     compare('consoleBrand', original.consoleBrand, updated.consoleBrand);
-    compare('curtainMaxWidth', original.curtainMaxWidth, updated.curtainMaxWidth);
-    compare('curtainMaxHeight', original.curtainMaxHeight, updated.curtainMaxHeight);
+    compare(
+        'curtainMaxWidth', original.curtainMaxWidth, updated.curtainMaxWidth);
+    compare('curtainMaxHeight', original.curtainMaxHeight,
+        updated.curtainMaxHeight);
 
     return {'editedFields': editedFields, 'changes': changes};
   }
@@ -741,8 +555,8 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
     final textTheme = Theme.of(context).textTheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final localizedCategory = AllInOneCategoryData.localizeCategoryKey(
-        widget.product.category, l10n);
+    final localizedCategory =
+        AllInOneCategoryData.localizeCategoryKey(widget.product.category, l10n);
     final localizedSubcategory = AllInOneCategoryData.localizeSubcategoryKey(
         widget.product.category, widget.product.subcategory, l10n);
     final localizedSubSub = widget.product.subsubcategory.isNotEmpty
@@ -781,9 +595,8 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
             GestureDetector(
               onTap: () => FocusScope.of(context).unfocus(),
               child: Container(
-                color: isDark
-                    ? const Color(0xFF1C1A29)
-                    : const Color(0xFFF5F5F5),
+                color:
+                    isDark ? const Color(0xFF1C1A29) : const Color(0xFFF5F5F5),
                 child: SafeArea(
                   bottom: true,
                   child: SingleChildScrollView(
@@ -800,13 +613,17 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
                             children: [
                               // Image grid
                               if (widget.imageFiles.isNotEmpty ||
-                                  widget.product.imageUrls.isNotEmpty)
+                                  widget.product.imageStoragePaths.isNotEmpty)
                                 Wrap(
                                   spacing: 8.0,
                                   runSpacing: 8.0,
                                   children: [
-                                    ...widget.product.imageUrls
-                                        .map(_networkThumb),
+                                    ...widget.product.imageStoragePaths.map(
+                                        (p) => _networkThumb(
+                                            CloudinaryUrl.productCompat(
+                                                p,
+                                                size: ProductImageSize
+                                                    .thumbnail))),
                                     ...widget.imageFiles
                                         .map((x) => _localThumb(x.path)),
                                   ],
@@ -864,7 +681,8 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
                                   widget.product.sellerName),
                               _row(context, l10n.phoneNumber, widget.phone),
                               _row(context, l10n.region, widget.region),
-                              _row(context, l10n.addressDetails, widget.address),
+                              _row(
+                                  context, l10n.addressDetails, widget.address),
                               _row(context, l10n.bankAccountNumberIban,
                                   widget.iban),
                             ],
@@ -961,18 +779,17 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
 
                         // ── Action Buttons ─────────────────────────
                         Padding(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 16.0),
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
                           child: Row(
                             children: [
                               Expanded(
                                 child: ElevatedButton(
-                                  onPressed:
-                                      _isSubmitting ? null : () => context.pop(),
+                                  onPressed: _isSubmitting
+                                      ? null
+                                      : () => context.pop(),
                                   style: _buttonStyle(),
                                   child: Text(l10n.edit,
-                                      style:
-                                          const TextStyle(fontSize: 14)),
+                                      style: const TextStyle(fontSize: 14)),
                                 ),
                               ),
                               const SizedBox(width: 16),
@@ -1023,10 +840,10 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
       const SizedBox(height: 8),
       ...attrs.entries.map((e) {
         try {
-          final title = AttributeLocalizationUtils
-              .getLocalizedAttributeTitle(e.key, l10n);
-          final value = AttributeLocalizationUtils
-              .getLocalizedAttributeValue(e.key, e.value, l10n);
+          final title = AttributeLocalizationUtils.getLocalizedAttributeTitle(
+              e.key, l10n);
+          final value = AttributeLocalizationUtils.getLocalizedAttributeValue(
+              e.key, e.value, l10n);
           if (value.isEmpty) return const SizedBox.shrink();
           return _row(context, title, value);
         } catch (_) {
@@ -1060,9 +877,10 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
           imageWidget = _localThumb(imageData.path);
         } else if (imageData is String) {
           imageWidget = _networkThumb(imageData);
-        } else if (widget.product.colorImages.containsKey(color)) {
-          final urls = widget.product.colorImages[color]!;
-          if (urls.isNotEmpty) imageWidget = _networkThumb(urls.first);
+        } else if (widget.product.colorImageStoragePaths.containsKey(color)) {
+          final path = widget.product.colorImageStoragePaths[color]!;
+          imageWidget = _networkThumb(CloudinaryUrl.productCompat(path,
+              size: ProductImageSize.thumbnail));
         }
 
         return Padding(
@@ -1087,8 +905,7 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
   // ── Reusable UI primitives ────────────────────────────────────────
 
   Widget _sectionHeader(String title) => Padding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
         child: Text(title,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
       );
@@ -1152,8 +969,8 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
 
   Widget _localThumb(String path) => ClipRRect(
         borderRadius: BorderRadius.circular(8.0),
-        child: Image.file(File(path),
-            width: 100, height: 100, fit: BoxFit.cover),
+        child:
+            Image.file(File(path), width: 100, height: 100, fit: BoxFit.cover),
       );
 
   ButtonStyle _buttonStyle() => ElevatedButton.styleFrom(
@@ -1162,8 +979,7 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24.0),
         ),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
       );
 }
 
@@ -1234,8 +1050,7 @@ class _ControlsOverlay extends StatelessWidget {
           : Container(
               color: Colors.black54,
               child: const Center(
-                child:
-                    Icon(Icons.play_arrow, color: Colors.white, size: 60.0),
+                child: Icon(Icons.play_arrow, color: Colors.white, size: 60.0),
               ),
             ),
     );
