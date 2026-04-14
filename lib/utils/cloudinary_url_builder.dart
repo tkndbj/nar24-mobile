@@ -129,6 +129,52 @@ class CloudinaryUrl {
     return 'https://storage.googleapis.com/$storageBucket/$storagePath';
   }
 
+    /// Resolve an ad/banner image source. Accepts either:
+  ///   - A storage path: "ad_submissions/shopId/file.jpg" (post-migration)
+  ///   - A legacy full URL: "https://firebasestorage.googleapis.com/..." (pre-migration)
+  static ResolvedImage resolveBanner(String source, {required int width}) {
+    if (source.isEmpty) return const ResolvedImage('');
+
+    // Kill switch — bypass CDN.
+    if (!enabled || cloudName.isEmpty) {
+      if (isStoragePath(source)) {
+        return ResolvedImage(firebaseStorageUrl(source));
+      }
+      return ResolvedImage(source);
+    }
+
+    // Storage path (from migration or future uploads).
+    if (isStoragePath(source)) {
+      return ResolvedImage(
+        custom(source, width: width),
+        firebaseStorageUrl(source),
+      );
+    }
+
+    // Legacy full URL — extract path, CDN-optimize, original as fallback.
+    final path = extractPathFromUrl(source);
+    if (path != null) {
+      return ResolvedImage(
+        custom(path, width: width),
+        source,
+      );
+    }
+
+    // Opaque URL — pass through.
+    return ResolvedImage(source);
+  }
+
+  /// Banner compat — returns a single CDN URL string from path or URL.
+  /// Use for prefetching where you just need one URL.
+  static String bannerCdn(String urlOrPath, {required int width}) {
+    if (urlOrPath.isEmpty) return '';
+    if (!enabled || cloudName.isEmpty) {
+      return isStoragePath(urlOrPath) ? firebaseStorageUrl(urlOrPath) : urlOrPath;
+    }
+    if (isStoragePath(urlOrPath)) return custom(urlOrPath, width: width);
+    return fromUrl(urlOrPath, width: width);
+  }
+
   // ── Resolvers (primary + fallback pair) ───────────────────────────
 
   /// Resolve a product image source (storage path OR legacy full URL) to

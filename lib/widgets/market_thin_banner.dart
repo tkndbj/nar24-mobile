@@ -122,38 +122,37 @@ class _MarketThinBannerState extends State<MarketThinBanner>
 
     for (var doc in snap.docs) {
       final data = doc.data()! as Map<String, dynamic>;
-      final url = data['imageUrl'] as String? ?? '';
-      if (url.isEmpty) continue;
+      // ✅ Prefer storage path, fall back to URL
+      final source = (data['imageStoragePath'] as String?) ??
+          (data['imageUrl'] as String? ?? '');
+      if (source.isEmpty) continue;
 
-      // Prefetch the CDN URL (what actually renders) so cache keys match.
-      if (!_cachedUrls.contains(url)) {
-        _cachedUrls.add(url);
-        final cdnUrl =
-            CloudinaryUrl.fromUrl(url, width: _kThinBannerCdnWidth);
+      // Prefetch the CDN URL so cache keys match.
+      if (!_cachedUrls.contains(source)) {
+        _cachedUrls.add(source);
+        final cdnUrl = CloudinaryUrl.bannerCdn(source, width: _kThinBannerCdnWidth);
         final provider = CachedNetworkImageProvider(cdnUrl);
         precacheImage(provider, context);
       }
 
       items.add(ThinBannerItem(
-        id: doc.id, // ✅ ADD THIS
-        url: url,
+        id: doc.id,
+        url: source,
         linkType: data['linkType'] as String?,
-        linkId:
-            data['linkedShopId'] ?? data['linkedProductId'], // ✅ UPDATE THIS
+        linkId: data['linkedShopId'] ?? data['linkedProductId'],
       ));
     }
 
     setState(() => _banners = items);
 
-    // Setup auto-play after banners loaded
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _setupAutoPlayController();
     });
   }
 
-  Widget _buildBannerImage(String url, double bannerHeight) {
-    return CloudinaryImage.fromUrl(
-      url: url,
+ Widget _buildBannerImage(String source, double bannerHeight) {
+    return CloudinaryImage.banner(
+      source: source,
       cdnWidth: _kThinBannerCdnWidth,
       width: double.infinity,
       height: bannerHeight,

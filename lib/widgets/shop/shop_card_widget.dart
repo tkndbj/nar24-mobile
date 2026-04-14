@@ -1,20 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../providers/shop_widget_provider.dart';
 import '../../screens/SHOP-SCREENS/shop_detail_screen.dart';
 import '../../providers/shop_provider.dart';
+import '../../utils/cloudinary_url_builder.dart';
+import '../cloudinary_image.dart';
 
-/// Production-grade ShopCardWidget with optimized image rendering
-///
-/// Key fixes for image glitching:
-/// 1. Stable PageController lifecycle management
-/// 2. Fixed cache dimensions (not reactive to mediaQuery changes)
-/// 3. Disabled fade animations to prevent flicker
-/// 4. RepaintBoundary for isolated rendering
-/// 5. Proper key management for widget identity
 class ShopCardWidget extends StatefulWidget {
   final Map<String, dynamic> shop;
   final String shopId;
@@ -62,9 +55,14 @@ class _ShopCardWidgetState extends State<ShopCardWidget>
     super.dispose();
   }
 
-  void _initializeData() {
-    // Parse cover images once and make immutable
-    if (widget.shop['coverImageUrls'] is List) {
+void _initializeData() {
+    // ✅ Prefer storage paths (post-migration), fall back to URLs
+    if (widget.shop['coverImageStoragePaths'] is List &&
+        (widget.shop['coverImageStoragePaths'] as List).isNotEmpty) {
+      _coverImageList = List<String>.unmodifiable(
+        (widget.shop['coverImageStoragePaths'] as List).cast<String>(),
+      );
+    } else if (widget.shop['coverImageUrls'] is List) {
       _coverImageList = List<String>.unmodifiable(
         (widget.shop['coverImageUrls'] as List).cast<String>(),
       );
@@ -76,11 +74,11 @@ class _ShopCardWidgetState extends State<ShopCardWidget>
     }
 
     _hasCoverImages = _coverImageList.isNotEmpty;
-    _profileImageUrl = widget.shop['profileImageUrl'] as String? ?? '';
+    _profileImageUrl = (widget.shop['profileImageStoragePath'] as String?) ??
+        (widget.shop['profileImageUrl'] as String? ?? '');
     _ownerId = widget.shop['ownerId'] as String? ?? '';
     _shopName = widget.shop['name'] as String? ?? '';
 
-    // Initialize PageController only if needed
     if (_coverImageList.length > 1) {
       _pageController = PageController();
     }
@@ -287,66 +285,51 @@ class _CoverSection extends StatelessWidget {
     );
   }
 
-  Widget _buildCoverImages() {
-    // Single image - no PageView needed
+Widget _buildCoverImages() {
     if (coverImageList.length == 1) {
       return _OptimizedCoverImage(
         key: ValueKey('cover_${coverImageList[0].hashCode}'),
-        imageUrl: coverImageList[0],
+        imageSource: coverImageList[0],
       );
     }
 
-    // Multiple images - use PageView with stable controller
     return PageView.builder(
       controller: pageController,
       itemCount: coverImageList.length,
-      // FIX 5: Keep only adjacent pages in memory
       allowImplicitScrolling: false,
       itemBuilder: (context, index) {
         return _OptimizedCoverImage(
           key: ValueKey('cover_${coverImageList[index].hashCode}'),
-          imageUrl: coverImageList[index],
+          imageSource: coverImageList[index],
         );
       },
     );
   }
-}
+  }
 
 /// Optimized cover image with stable caching and constrained memory footprint.
 /// memCacheWidth caps the decoded bitmap size in memory so large originals
 /// don't blow up the image cache and cause re-decode flicker on scroll.
 class _OptimizedCoverImage extends StatelessWidget {
-  final String imageUrl;
+  final String imageSource;
 
   const _OptimizedCoverImage({
     Key? key,
-    required this.imageUrl,
+    required this.imageSource,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    // Strip query params for a stable cache key so token rotation
-    // doesn't cause re-downloads and re-decode glitches.
-    final cacheKey = imageUrl.split('?').first;
-
-    return CachedNetworkImage(
-      imageUrl: imageUrl,
-      cacheKey: cacheKey,
-      fit: BoxFit.cover,
+    return CloudinaryImage.banner(
+      source: imageSource,
+      cdnWidth: 800,
       width: double.infinity,
       height: double.infinity,
-      // Eliminate ALL fade transitions to prevent flicker
-      fadeInDuration: Duration.zero,
-      fadeOutDuration: Duration.zero,
-      placeholderFadeInDuration: Duration.zero,
-      // 720px covers a full-width card on most phones (360dp × 2x/3x).
-      // Must be >= rendered pixel width or BoxFit.cover upscales the
-      // decoded bitmap, producing visible interpolation artifacts.
-      memCacheWidth: 720,
-      placeholder: (context, url) => const _ShimmerCoverPlaceholder(),
-      errorWidget: (context, url, error) => const _ImageErrorPlaceholder(),
+      fit: BoxFit.cover,
       filterQuality: FilterQuality.medium,
       useOldImageOnUrlChange: true,
+      placeholderBuilder: (_) => const _ShimmerCoverPlaceholder(),
+      errorBuilder: (_) => const _ImageErrorPlaceholder(),
     );
   }
 }
@@ -406,23 +389,15 @@ class _NoCoverPlaceholder extends StatelessWidget {
   }
 }
 
-/// Profile avatar with flicker-free image loading.
-///
-/// Uses CachedNetworkImage inside ClipOval instead of DecorationImage +
-/// CachedNetworkImageProvider. DecorationImage has no fade-duration control
-/// and triggers a visible flash every time the widget rebuilds. Wrapping
-/// CachedNetworkImage lets us set fadeIn/fadeOut to Duration.zero.
 class _ProfileAvatar extends StatelessWidget {
   final String profileImageUrl;
 
-  // Pre-computed constant decoration for the outer ring + shadow.
-  // Allocated once and reused across all instances.
   static const _outerDecoration = BoxDecoration(
     shape: BoxShape.circle,
-    color: Color(0xFFEEEEEE), // Colors.grey.shade200 equivalent
+    color: Color(0xFFEEEEEE),
     boxShadow: [
       BoxShadow(
-        color: Color(0x1A000000), // black12-ish
+        color: Color(0x1A000000),
         blurRadius: 4,
         offset: Offset(0, 2),
       ),
@@ -449,20 +424,15 @@ class _ProfileAvatar extends StatelessWidget {
         ),
         child: ClipOval(
           child: hasImage
-              ? CachedNetworkImage(
-                  imageUrl: profileImageUrl,
-                  fit: BoxFit.cover,
-                  width: 44, // 48 - 2*2 border
+              ? CloudinaryImage.banner(
+                  source: profileImageUrl,
+                  cdnWidth: 200,
+                  width: 44,
                   height: 44,
-                  fadeInDuration: Duration.zero,
-                  fadeOutDuration: Duration.zero,
-                  placeholderFadeInDuration: Duration.zero,
-                  memCacheWidth: 220, // 44 * 5 for crisp rendering
-                  memCacheHeight: 220,
+                  fit: BoxFit.cover,
                   useOldImageOnUrlChange: true,
-                  placeholder: (context, url) =>
-                      const _ShimmerAvatarPlaceholder(),
-                  errorWidget: (context, url, error) => const Icon(
+                  placeholderBuilder: (_) => const _ShimmerAvatarPlaceholder(),
+                  errorBuilder: (_) => const Icon(
                     Icons.person,
                     color: Colors.white,
                     size: 24,

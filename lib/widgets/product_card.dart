@@ -1078,8 +1078,9 @@ class _ImageSection extends StatelessWidget {
 
   Widget _buildImageWidget(String imageUrl, double height) {
     return RepaintBoundary(
-      child: CloudinaryImage.fromResolvedUrl(
-        url: imageUrl,
+      child: CloudinaryImage.product(
+        source: imageUrl,
+        size: ProductImageSize.card,
         fit: BoxFit.cover,
         fallbackMemCacheWidth: 540,
         placeholderBuilder: (_) =>

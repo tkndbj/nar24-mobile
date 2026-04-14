@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../cloudinary_image.dart';
 
 class _BannerItem {
   const _BannerItem({
@@ -14,10 +15,11 @@ class _BannerItem {
   final int order;
   final String? linkedRestaurantId;
 
-  factory _BannerItem.fromDoc(QueryDocumentSnapshot doc) {
+factory _BannerItem.fromDoc(QueryDocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return _BannerItem(
-      imageUrl: (data['imageUrl'] as String?) ?? '',
+      imageUrl: (data['imageStoragePath'] as String?) ??
+          (data['imageUrl'] as String? ?? ''),
       order: (data['order'] as int?) ?? 0,
       linkedRestaurantId: data['linkedRestaurantId'] as String?,
     );
@@ -222,34 +224,19 @@ class _NetworkImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Image.network(
-      url,
+    return CloudinaryImage.banner(
+      source: url,
+      cdnWidth: 800,
       fit: BoxFit.cover,
-      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-        if (wasSynchronouslyLoaded) return child;
-        return AnimatedOpacity(
-          opacity: frame == null ? 0 : 1,
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeIn,
-          child: child,
-        );
-      },
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-        return Container(
-          color: Colors.grey.shade200,
-          alignment: Alignment.center,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: Colors.orange,
-            value: loadingProgress.expectedTotalBytes != null
-                ? loadingProgress.cumulativeBytesLoaded /
-                    loadingProgress.expectedTotalBytes!
-                : null,
-          ),
-        );
-      },
-      errorBuilder: (_, __, ___) => Container(
+      placeholderBuilder: (_) => Container(
+        color: Colors.grey.shade200,
+        alignment: Alignment.center,
+        child: const CircularProgressIndicator(
+          strokeWidth: 2,
+          color: Colors.orange,
+        ),
+      ),
+      errorBuilder: (_) => Container(
         color: Colors.orange.withOpacity(0.12),
         alignment: Alignment.center,
         child: const Icon(Icons.restaurant, size: 48, color: Colors.orange),

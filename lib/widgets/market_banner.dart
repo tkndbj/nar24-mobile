@@ -72,7 +72,7 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
 
   // ============ Banner Processing ============
 
-  Future<void> _processBanners(List<dynamic> docs) async {
+ Future<void> _processBanners(List<dynamic> docs) async {
     if (_isProcessingBanners) return;
     _isProcessingBanners = true;
 
@@ -81,12 +81,14 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
 
       for (var doc in docs) {
         final data = doc.data()! as Map<String, dynamic>;
-        final url = data['imageUrl'] as String? ?? '';
-        if (url.isEmpty) continue;
+        // ✅ Prefer storage path, fall back to URL
+        final source = (data['imageStoragePath'] as String?) ??
+            (data['imageUrl'] as String? ?? '');
+        if (source.isEmpty) continue;
 
         items.add(MarketBannerItem(
           id: doc.id,
-          url: url,
+          url: source,
           linkType: data['linkType'] as String?,
           linkId: data['linkedShopId'] ?? data['linkedProductId'],
         ));
@@ -95,8 +97,6 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
       if (!mounted) return;
 
       setState(() => _banners = items);
-
-      // Prefetch only first 2 images for smooth initial render
       _prefetchInitialImages();
     } finally {
       _isProcessingBanners = false;
@@ -112,20 +112,18 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
     }
   }
 
-  void _prefetchImage(String url) {
-    if (_prefetchedUrls.contains(url)) return;
-    _prefetchedUrls.add(url);
+ void _prefetchImage(String source) {
+    if (_prefetchedUrls.contains(source)) return;
+    _prefetchedUrls.add(source);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
 
       try {
-        // Prefetch the CDN URL (what actually renders) so cache keys match.
-        final cdnUrl =
-            CloudinaryUrl.fromUrl(url, width: _imageCacheWidth);
+        final cdnUrl = CloudinaryUrl.bannerCdn(source, width: _imageCacheWidth);
         final provider = CachedNetworkImageProvider(cdnUrl);
         precacheImage(provider, context).catchError((_) {
-          _prefetchedUrls.remove(url);
+          _prefetchedUrls.remove(source);
         });
       } catch (e) {
         if (kDebugMode) {
@@ -202,10 +200,10 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
     }
   }
 
-  Widget _buildBannerImage(MarketBannerItem item, Color placeholderColor) {
-    return CloudinaryImage.fromUrl(
+ Widget _buildBannerImage(MarketBannerItem item, Color placeholderColor) {
+    return CloudinaryImage.banner(
       key: ValueKey('banner_${item.id}'),
-      url: item.url,
+      source: item.url,
       cdnWidth: _imageCacheWidth,
       width: double.infinity,
       fit: BoxFit.fitWidth,

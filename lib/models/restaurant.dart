@@ -48,6 +48,7 @@ class Restaurant {
   final String? contactNo;
   final List<String>? coverImageUrls;
   final String? profileImageUrl;
+  final String? profileImageStoragePath;
   final int? followerCount;
   final bool? isActive;
   final bool? isBoosted;
@@ -71,6 +72,7 @@ class Restaurant {
     this.contactNo,
     this.coverImageUrls,
     this.profileImageUrl,
+    this.profileImageStoragePath,
     this.followerCount,
     this.isActive,
     this.isBoosted,
@@ -100,6 +102,7 @@ class Restaurant {
           ?.map((e) => e.toString())
           .toList(),
       profileImageUrl: map['profileImageUrl'] as String?,
+      profileImageStoragePath: map['profileImageStoragePath'] as String?,
       followerCount: (map['followerCount'] as num?)?.toInt(),
       isActive: map['isActive'] as bool?,
       isBoosted: map['isBoosted'] as bool?,
@@ -157,6 +160,7 @@ class Restaurant {
         if (contactNo != null) 'contactNo': contactNo,
         if (coverImageUrls != null) 'coverImageUrls': coverImageUrls,
         if (profileImageUrl != null) 'profileImageUrl': profileImageUrl,
+        if (profileImageStoragePath != null) 'profileImageStoragePath': profileImageStoragePath,
         if (followerCount != null) 'followerCount': followerCount,
         if (isActive != null) 'isActive': isActive,
         if (isBoosted != null) 'isBoosted': isBoosted,
@@ -181,6 +185,7 @@ class Restaurant {
     String? contactNo,
     List<String>? coverImageUrls,
     String? profileImageUrl,
+    String? profileImageStoragePath,
     int? followerCount,
     bool? isActive,
     bool? isBoosted,
@@ -204,6 +209,7 @@ class Restaurant {
       contactNo: contactNo ?? this.contactNo,
       coverImageUrls: coverImageUrls ?? this.coverImageUrls,
       profileImageUrl: profileImageUrl ?? this.profileImageUrl,
+      profileImageStoragePath: profileImageStoragePath ?? this.profileImageStoragePath,  // ✅ Add in body
       followerCount: followerCount ?? this.followerCount,
       isActive: isActive ?? this.isActive,
       isBoosted: isBoosted ?? this.isBoosted,

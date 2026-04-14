@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../widgets/cloudinary_image.dart';
+import '../../utils/cloudinary_url_builder.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../models/product.dart';
 import 'seller_panel_campaign_success_screen.dart';
@@ -1095,10 +1096,11 @@ class _SellerPanelCampaignDiscountScreenState
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(11),
                 child: product.imageUrls.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: product.imageUrls.first,
+                    ? CloudinaryImage.product(
+                        source: product.imageUrls.first,
+                        size: ProductImageSize.thumbnail,
                         fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
+                        placeholderBuilder: (context) => Container(
                           color: _surfaceColor,
                           child: const Center(
                             child: CircularProgressIndicator(
@@ -1107,7 +1109,7 @@ class _SellerPanelCampaignDiscountScreenState
                             ),
                           ),
                         ),
-                        errorWidget: (context, url, error) => Container(
+                        errorBuilder: (context) => Container(
                           color: _surfaceColor,
                           child: Icon(
                             Icons.image_not_supported_outlined,

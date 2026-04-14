@@ -1,14 +1,14 @@
 // functions/migrations/migrateImagePaths.js
 // ===================================================================
-// ONE-TIME MIGRATION: Backfill imageStoragePaths from imageUrls
+// MIGRATION: Backfill storage paths from download URLs
 //
-// Run once via: firebase functions:shell → migrateProductImagePaths()
-// Or deploy and call from admin panel.
+// Targets: products, ads, shops, restaurants
+// Call from admin panel with { target: 'ads', dryRun: false }
 //
 // What it does:
-// 1. Reads all product documents across all collections
+// 1. Reads documents across configured collections
 // 2. Extracts Firebase Storage paths from download URLs
-// 3. Writes imageStoragePaths, videoStoragePath, colorImageStoragePaths
+// 3. Writes *StoragePath fields alongside original URL fields
 // 4. Keeps original URL fields untouched (backward compat)
 //
 // Safe to run multiple times — skips docs that already have paths.
@@ -53,32 +53,136 @@ function extractStoragePath(url) {
   }
 }
 
-function extractColorPaths(colorImages) {
-  if (!colorImages || typeof colorImages !== 'object') return {};
 
-  const result = {};
-  for (const [color, urls] of Object.entries(colorImages)) {
-    if (Array.isArray(urls) && urls.length > 0) {
-      const path = extractStoragePath(urls[0]);
-      if (path) {
-        result[color] = path;
-      }
-    } else if (typeof urls === 'string') {
-      const path = extractStoragePath(urls);
-      if (path) {
-        result[color] = path;
-      }
+// ── Field migration configs ─────────────────────────────────────────
+
+const MIGRATION_TARGETS = {
+  ads: [
+    { collection: 'ad_submissions',        fields: [{ from: 'imageUrl', to: 'imageStoragePath', type: 'single' }] },
+    { collection: 'market_top_ads_banners', fields: [{ from: 'imageUrl', to: 'imageStoragePath', type: 'single' }] },
+    { collection: 'market_thin_banners',    fields: [{ from: 'imageUrl', to: 'imageStoragePath', type: 'single' }] },
+    { collection: 'market_banners',         fields: [{ from: 'imageUrl', to: 'imageStoragePath', type: 'single' }] },
+  ],
+  shops: [
+    {
+      collection: 'shopApplications',
+      fields: [
+        { from: 'profileImageUrl',          to: 'profileImageStoragePath',     type: 'single' },
+        { from: 'coverImageUrl',            to: 'coverImageStoragePaths',      type: 'csv' },    // comma-separated → array
+        { from: 'taxPlateCertificateUrl',   to: 'taxCertificateStoragePath',   type: 'single' },
+      ],
+    },
+    {
+      collection: 'shops',
+      fields: [
+        { from: 'profileImageUrl',          to: 'profileImageStoragePath',     type: 'single' },
+        { from: 'coverImageUrls',           to: 'coverImageStoragePaths',      type: 'array' },  // string[] → string[]
+        { from: 'taxPlateCertificateUrl',   to: 'taxCertificateStoragePath',   type: 'single' },
+      ],
+    },
+  ],
+  restaurants: [
+    {
+      collection: 'restaurantApplications',
+      fields: [
+        { from: 'profileImageUrl',          to: 'profileImageStoragePath',     type: 'single' },
+        { from: 'taxPlateCertificateUrl',   to: 'taxCertificateStoragePath',   type: 'single' },
+      ],
+    },
+    {
+      collection: 'restaurants',
+      fields: [
+        { from: 'profileImageUrl',          to: 'profileImageStoragePath',     type: 'single' },
+        { from: 'taxPlateCertificateUrl',   to: 'taxCertificateStoragePath',   type: 'single' },
+      ],
+    },
+    {
+      collection: 'restaurant_banners',
+      fields: [
+        { from: 'imageUrl', to: 'imageStoragePath', type: 'single' },
+      ],
+    },
+  ],
+  foods: [
+    {
+      collection: 'foods',
+      fields: [
+        { from: 'imageUrl', to: 'imageStoragePath', type: 'single' },
+      ],
+    },
+  ],
+  products: [
+    { collection: 'shop_products',                  fields: [{ from: 'imageUrls', to: 'imageStoragePaths', type: 'array' }, { from: 'videoUrl', to: 'videoStoragePath', type: 'single' }, { from: 'colorImages', to: 'colorImageStoragePaths', type: 'colorMap' }] },
+    { collection: 'products',                       fields: [{ from: 'imageUrls', to: 'imageStoragePaths', type: 'array' }, { from: 'videoUrl', to: 'videoStoragePath', type: 'single' }, { from: 'colorImages', to: 'colorImageStoragePaths', type: 'colorMap' }] },
+    { collection: 'paused_shop_products',           fields: [{ from: 'imageUrls', to: 'imageStoragePaths', type: 'array' }, { from: 'videoUrl', to: 'videoStoragePath', type: 'single' }, { from: 'colorImages', to: 'colorImageStoragePaths', type: 'colorMap' }] },
+    { collection: 'product_applications',           fields: [{ from: 'imageUrls', to: 'imageStoragePaths', type: 'array' }, { from: 'videoUrl', to: 'videoStoragePath', type: 'single' }, { from: 'colorImages', to: 'colorImageStoragePaths', type: 'colorMap' }] },
+    { collection: 'product_edit_applications',      fields: [{ from: 'imageUrls', to: 'imageStoragePaths', type: 'array' }, { from: 'videoUrl', to: 'videoStoragePath', type: 'single' }, { from: 'colorImages', to: 'colorImageStoragePaths', type: 'colorMap' }] },
+    { collection: 'vitrin_product_applications',    fields: [{ from: 'imageUrls', to: 'imageStoragePaths', type: 'array' }, { from: 'videoUrl', to: 'videoStoragePath', type: 'single' }, { from: 'colorImages', to: 'colorImageStoragePaths', type: 'colorMap' }] },
+    { collection: 'vitrin_edit_product_applications', fields: [{ from: 'imageUrls', to: 'imageStoragePaths', type: 'array' }, { from: 'videoUrl', to: 'videoStoragePath', type: 'single' }, { from: 'colorImages', to: 'colorImageStoragePaths', type: 'colorMap' }] },
+  ],
+};
+
+// ── Extract path from any field type ────────────────────────────────
+
+function extractFieldPaths(data, field) {
+  const sourceValue = data[field.from];
+  if (sourceValue === undefined || sourceValue === null) return null;
+
+  // Skip if target already populated
+  const existing = data[field.to];
+
+  switch (field.type) {
+    case 'single': {
+      if (existing && typeof existing === 'string') return null; // already migrated
+      if (typeof sourceValue !== 'string' || !sourceValue) return null;
+      const path = extractStoragePath(sourceValue);
+      return path ? { [field.to]: path } : null;
     }
+
+    case 'array': {
+      if (Array.isArray(existing) && existing.length > 0) return null; // already migrated
+      if (!Array.isArray(sourceValue) || sourceValue.length === 0) return null;
+      const paths = sourceValue.map(extractStoragePath).filter(Boolean);
+      return paths.length > 0 ? { [field.to]: paths } : null;
+    }
+
+    case 'csv': {
+      // comma-separated URL string → array of paths
+      if (Array.isArray(existing) && existing.length > 0) return null;
+      if (typeof sourceValue !== 'string' || !sourceValue) return null;
+      const urls = sourceValue.split(',').map((u) => u.trim()).filter(Boolean);
+      const paths = urls.map(extractStoragePath).filter(Boolean);
+      return paths.length > 0 ? { [field.to]: paths } : null;
+    }
+
+    case 'colorMap': {
+      // { color: [url, ...] } → { color: path }
+      if (existing && typeof existing === 'object' && Object.keys(existing).length > 0) return null;
+      if (!sourceValue || typeof sourceValue !== 'object') return null;
+      const result = {};
+      for (const [color, urls] of Object.entries(sourceValue)) {
+        if (Array.isArray(urls) && urls.length > 0) {
+          const path = extractStoragePath(urls[0]);
+          if (path) result[color] = path;
+        } else if (typeof urls === 'string') {
+          const path = extractStoragePath(urls);
+          if (path) result[color] = path;
+        }
+      }
+      return Object.keys(result).length > 0 ? { [field.to]: result } : null;
+    }
+
+    default:
+      return null;
   }
-  return result;
 }
 
-// ── Migration logic ─────────────────────────────────────────────────
+// ── Generic collection migrator ─────────────────────────────────────
 
-async function migrateCollection(db, collectionName, dryRun = false) {
+async function migrateGenericCollection(db, collectionName, fields, dryRun = false) {
   const stats = { total: 0, migrated: 0, skipped: 0, errors: 0 };
 
-  console.log(`\n📂 Processing collection: ${collectionName}`);
+  console.log(`\n📂 Processing: ${collectionName} (${fields.length} field(s))`);
 
   const snapshot = await db.collection(collectionName).get();
   stats.total = snapshot.size;
@@ -88,7 +192,6 @@ async function migrateCollection(db, collectionName, dryRun = false) {
     return stats;
   }
 
-  // Process in batches of 500 (Firestore batch limit)
   const batchSize = 500;
   let batch = db.batch();
   let batchCount = 0;
@@ -96,45 +199,22 @@ async function migrateCollection(db, collectionName, dryRun = false) {
   for (const doc of snapshot.docs) {
     const data = doc.data();
 
-    // Skip if already migrated
-    if (
-      data.imageStoragePaths &&
-      Array.isArray(data.imageStoragePaths) &&
-      data.imageStoragePaths.length > 0
-    ) {
+    // Merge all field extractions for this document
+    const update = {};
+    for (const field of fields) {
+      const extracted = extractFieldPaths(data, field);
+      if (extracted) {
+        Object.assign(update, extracted);
+      }
+    }
+
+    if (Object.keys(update).length === 0) {
       stats.skipped++;
       continue;
     }
-
-    // Skip if no imageUrls to migrate from
-    if (!data.imageUrls || !Array.isArray(data.imageUrls) || data.imageUrls.length === 0) {
-      stats.skipped++;
-      continue;
-    }
-
-    // Extract paths
-    const imageStoragePaths = data.imageUrls
-      .map(extractStoragePath)
-      .filter(Boolean);
-
-    const videoStoragePath = data.videoUrl ? extractStoragePath(data.videoUrl) : null;
-
-    const colorImageStoragePaths = extractColorPaths(data.colorImages);
-
-    // Only write if we extracted at least one path
-    if (imageStoragePaths.length === 0) {
-      stats.skipped++;
-      continue;
-    }
-
-    const update = {
-      imageStoragePaths,
-      ...(videoStoragePath && { videoStoragePath }),
-      ...(Object.keys(colorImageStoragePaths).length > 0 && { colorImageStoragePaths }),
-    };
 
     if (dryRun) {
-      console.log(`   [DRY RUN] ${doc.id}: ${imageStoragePaths.length} images, video: ${!!videoStoragePath}, colors: ${Object.keys(colorImageStoragePaths).length}`);
+      console.log(`   [DRY RUN] ${doc.id}: ${JSON.stringify(Object.keys(update))}`);
     } else {
       batch.update(doc.ref, update);
       batchCount++;
@@ -150,73 +230,69 @@ async function migrateCollection(db, collectionName, dryRun = false) {
     stats.migrated++;
   }
 
-  // Commit remaining
   if (!dryRun && batchCount > 0) {
     await batch.commit();
   }
 
-  console.log(`   ✅ ${collectionName}: ${stats.migrated} migrated, ${stats.skipped} skipped, ${stats.errors} errors (of ${stats.total} total)`);
+  console.log(`   ✅ ${collectionName}: ${stats.migrated} migrated, ${stats.skipped} skipped (of ${stats.total} total)`);
   return stats;
 }
 
-// ── Callable Cloud Function ─────────────────────────────────────────
 
-export const migrateProductImagePaths = onCall(
+export const migrateImagePaths = onCall(
   {
     region: 'europe-west3',
     maxInstances: 1,
-    timeoutSeconds: 540, // 9 minutes (max for gen2)
+    timeoutSeconds: 540,
     memory: '1GiB',
   },
   async (request) => {
-    // Admin-only
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Authentication required.');
     }
 
-    // Optional: restrict to admin users
-    // if (!request.auth.token.isAdmin) {
-    //   throw new HttpsError('permission-denied', 'Admin access required.');
-    // }
-
     const dryRun = request.data?.dryRun === true;
+    // 'products' | 'ads' | 'shops' | 'restaurants' | 'all'
+    const target = request.data?.target || 'all';
     const db = getFirestore();
 
-    // All collections that store product documents with imageUrls
-    const collections = [
-      'shop_products',
-      'products',
-      'paused_shop_products',
-      'product_applications',
-      'product_edit_applications',
-      'vitrin_product_applications',
-      'vitrin_edit_product_applications',
-    ];
+    const validTargets = Object.keys(MIGRATION_TARGETS);
 
-    console.log(`\n🚀 Starting migration (dryRun: ${dryRun})`);
+    // Determine which targets to run
+    const targetsToRun = target === 'all' ?
+      validTargets :
+      validTargets.filter((t) => t === target);
+
+    if (targetsToRun.length === 0) {
+      throw new HttpsError('invalid-argument', `Invalid target: ${target}. Valid: ${validTargets.join(', ')}, all`);
+    }
+
+    console.log(`\n🚀 Starting migration (dryRun: ${dryRun}, target: ${target})`);
 
     const results = {};
     let totalMigrated = 0;
 
-    for (const collection of collections) {
-      try {
-        const stats = await migrateCollection(db, collection, dryRun);
-        results[collection] = stats;
-        totalMigrated += stats.migrated;
-      } catch (error) {
-        console.error(`❌ Error migrating ${collection}:`, error.message);
-        results[collection] = { error: error.message };
+    for (const targetKey of targetsToRun) {
+      console.log(`\n━━━ Target: ${targetKey} ━━━`);
+      const configs = MIGRATION_TARGETS[targetKey];
+
+      for (const config of configs) {
+        try {
+          const stats = await migrateGenericCollection(
+            db, config.collection, config.fields, dryRun
+          );
+          results[config.collection] = stats;
+          totalMigrated += stats.migrated;
+        } catch (error) {
+          console.error(`❌ Error migrating ${config.collection}:`, error.message);
+          results[config.collection] = { error: error.message };
+        }
       }
     }
 
-    const summary = `Migration ${dryRun ? '(DRY RUN) ' : ''}complete: ${totalMigrated} documents updated across ${collections.length} collections.`;
+    const summary = `Migration ${dryRun ? '(DRY RUN) ' : ''}complete: ${totalMigrated} documents updated (target: ${target}).`;
     console.log(`\n${summary}`);
 
-    return {
-      success: true,
-      dryRun,
-      summary,
-      results,
-    };
+    return { success: true, dryRun, target, summary, results };
   }
 );

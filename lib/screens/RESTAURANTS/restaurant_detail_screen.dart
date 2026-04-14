@@ -26,6 +26,8 @@ import '../../utils/restaurant_utils.dart';
 import '../../utils/food_localization.dart';
 import '../../services/typesense_service_manager.dart';
 import '../../services/restaurant_typesense_service.dart';
+import '../../widgets/cloudinary_image.dart';
+import '../../utils/cloudinary_url_builder.dart';
 
 class RestaurantDetailScreen extends StatefulWidget {
   final String restaurantId;
@@ -774,12 +776,12 @@ class _RestaurantHeader extends StatelessWidget {
                   ),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: restaurant.profileImageUrl != null
-                    ? Image.network(
-                        restaurant.profileImageUrl!,
+                child: (restaurant.profileImageStoragePath ?? restaurant.profileImageUrl) != null
+                    ? CloudinaryImage.banner(
+                        source: restaurant.profileImageStoragePath ?? restaurant.profileImageUrl!,
+                        cdnWidth: 200,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) =>
-                            _Placeholder(isDark: isDark),
+                        errorBuilder: (_) => _Placeholder(isDark: isDark),
                       )
                     : _Placeholder(isDark: isDark),
               ),
@@ -1296,19 +1298,17 @@ class _FoodCard extends StatelessWidget {
     required this.onRemoveFromCart,
   });
 
-  /// Mirrors: FoodCategoryData.kFoodTypeTranslationKeys[food.foodType]
-  /// TODO: replace with AppLocalizations lookup when i18n is wired up.
   String get _displayType => food.foodType;
 
-  void _openFullScreenImage(
-      BuildContext context, String imageUrl, String title) {
+ void _openFullScreenImage(
+      BuildContext context, String imageSource, String title) {
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: false,
         barrierColor: Colors.black87,
         pageBuilder: (context, animation, secondaryAnimation) {
           return _FullScreenImageViewer(
-            imageUrl: imageUrl,
+            imageUrl: imageSource,
             title: title,
             heroTag: 'food-image-${food.id}',
           );
@@ -1345,8 +1345,8 @@ class _FoodCard extends StatelessWidget {
           // Food image — only shown when available (mirrors conditional in TS)
           if (food.imageUrl != null) ...[
             GestureDetector(
-              onTap: () =>
-                  _openFullScreenImage(context, food.imageUrl!, food.name),
+              onTap: () => _openFullScreenImage(
+                  context, food.imageStoragePath ?? food.imageUrl!, food.name),
               child: Hero(
                 tag: 'food-image-${food.id}',
                 child: ClipRRect(
@@ -1354,10 +1354,11 @@ class _FoodCard extends StatelessWidget {
                   child: SizedBox(
                     width: 112,
                     height: 112,
-                    child: Image.network(
-                      food.imageUrl!,
+                    child: CloudinaryImage.banner(
+                      source: food.imageStoragePath ?? food.imageUrl!,
+                      cdnWidth: 400,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
+                      errorBuilder: (_) => Container(
                         color:
                             isDark ? const Color(0xFF2D2B3F) : Colors.grey[100],
                         alignment: Alignment.center,
@@ -3212,10 +3213,10 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
               transformationController: _transformController,
               minScale: 1.0,
               maxScale: 4.0,
-              child: Hero(
+                child: Hero(
                 tag: widget.heroTag,
                 child: Image.network(
-                  widget.imageUrl,
+                  CloudinaryUrl.bannerCdn(widget.imageUrl, width: 1600),
                   fit: BoxFit.contain,
                   loadingBuilder: (context, child, loadingProgress) {
                     if (loadingProgress == null) return child;

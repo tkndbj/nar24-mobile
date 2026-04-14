@@ -13,7 +13,6 @@ import 'package:go_router/go_router.dart';
 import 'dart:math' as math;
 import '../market_screen.dart';
 import '../../widgets/cart_validation_bottom_sheet.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../services/sales_config_service.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../services/coupon_service.dart';
@@ -21,6 +20,8 @@ import '../../models/coupon.dart';
 import '../../widgets/coupon_selection_sheet.dart';
 import '../../models/user_benefit.dart';
 import '../../services/discount_selection_service.dart';
+import '../../widgets/cloudinary_image.dart';
+import '../../utils/cloudinary_url_builder.dart';
 
 class MyCartScreen extends StatefulWidget {
   const MyCartScreen({Key? key}) : super(key: key);
@@ -874,36 +875,35 @@ final showSellerHeader = index == 0 || () {
                         // Product image
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: CachedNetworkImage(
-                            imageUrl: item['selectedColorImage'] ??
-                                product.imageUrls.first,
-                            width: 70,
-                            height: 70,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(
-                              width: 70,
-                              height: 70,
-                              color: Colors.grey[200],
-                              child: const Center(
-                                child: SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                        Colors.grey),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            errorWidget: (context, url, error) => Container(
-                              width: 70,
-                              height: 70,
-                              color: Colors.grey[300],
-                              child: const Icon(Icons.image_not_supported,
-                                  size: 24),
-                            ),
-                          ),
+                          child: CloudinaryImage.product(
+  source: item['selectedColorImageStoragePath'] ??
+      item['selectedColorImage'] ??
+      (product.imageStoragePaths?.isNotEmpty == true
+          ? product.imageStoragePaths!.first
+          : product.imageUrls.first),
+  size: ProductImageSize.thumbnail,
+  width: 70,
+  height: 70,
+  fit: BoxFit.cover,
+  placeholderBuilder: (_) => Container(
+    width: 70,
+    height: 70,
+    color: Colors.grey[200],
+    child: const Center(
+      child: SizedBox(
+        width: 16,
+        height: 16,
+        child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.grey)),
+      ),
+    ),
+  ),
+  errorBuilder: (_) => Container(
+    width: 70,
+    height: 70,
+    color: Colors.grey[300],
+    child: const Icon(Icons.image_not_supported, size: 24),
+  ),
+)
                         ),
                         const SizedBox(width: 10),
 

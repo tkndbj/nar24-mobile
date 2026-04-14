@@ -42,6 +42,7 @@ class Food {
   final String foodCategory;
   final String foodType;
   final String? imageUrl;
+  final String? imageStoragePath;
   final bool isAvailable;
   final int? preparationTime;
   final double price;
@@ -74,6 +75,7 @@ class Food {
     required this.foodCategory,
     required this.foodType,
     this.imageUrl,
+    this.imageStoragePath,
     required this.isAvailable,
     this.preparationTime,
     required this.price,
@@ -95,6 +97,7 @@ class Food {
       foodCategory: (map['foodCategory'] as String?) ?? '',
       foodType: (map['foodType'] as String?) ?? '',
       imageUrl: map['imageUrl'] as String?,
+      imageStoragePath: map['imageStoragePath'] as String?,
       isAvailable: (map['isAvailable'] as bool?) ?? false,
       preparationTime: (map['preparationTime'] as num?)?.toInt(),
       price: (map['price'] as num?)?.toDouble() ?? 0.0,
@@ -117,6 +120,7 @@ class Food {
         'foodCategory': foodCategory,
         'foodType': foodType,
         if (imageUrl != null) 'imageUrl': imageUrl,
+        if (imageStoragePath != null) 'imageStoragePath': imageStoragePath,
         'isAvailable': isAvailable,
         if (preparationTime != null) 'preparationTime': preparationTime,
         'price': price,
@@ -138,6 +142,7 @@ class Food {
     String? foodCategory,
     String? foodType,
     String? imageUrl,
+    String? imageStoragePath,
     bool? isAvailable,
     int? preparationTime,
     double? price,
@@ -155,6 +160,7 @@ class Food {
       foodCategory: foodCategory ?? this.foodCategory,
       foodType: foodType ?? this.foodType,
       imageUrl: imageUrl ?? this.imageUrl,
+      imageStoragePath: imageStoragePath ?? this.imageStoragePath,
       isAvailable: isAvailable ?? this.isAvailable,
       preparationTime: preparationTime ?? this.preparationTime,
       price: price ?? this.price,

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../widgets/cloudinary_image.dart';
+import '../../utils/cloudinary_url_builder.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import '../../models/product.dart';
@@ -1297,10 +1298,11 @@ class _SellerPanelEditCampaignScreenState
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(10),
                     child: product.imageUrls.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: product.imageUrls.first,
+                        ? CloudinaryImage.product(
+                            source: product.imageUrls.first,
+                            size: ProductImageSize.thumbnail,
                             fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(
+                            placeholderBuilder: (context) => Container(
                               color: isDark
                                   ? const Color(0xFF2D3748)
                                   : const Color(0xFFF7FAFC),
@@ -1309,7 +1311,7 @@ class _SellerPanelEditCampaignScreenState
                                     CircularProgressIndicator(strokeWidth: 2),
                               ),
                             ),
-                            errorWidget: (context, url, error) => Container(
+                            errorBuilder: (context) => Container(
                               color: isDark
                                   ? const Color(0xFF2D3748)
                                   : const Color(0xFFF7FAFC),
@@ -1640,10 +1642,11 @@ class _SellerPanelEditCampaignScreenState
           child: ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: product.imageUrls.isNotEmpty
-                ? CachedNetworkImage(
-                    imageUrl: product.imageUrls.first,
+                ? CloudinaryImage.product(
+                    source: product.imageUrls.first,
+                    size: ProductImageSize.thumbnail,
                     fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
+                    placeholderBuilder: (context) => Container(
                       color: isDark
                           ? const Color(0xFF2D3748)
                           : const Color(0xFFF7FAFC),
@@ -1651,7 +1654,7 @@ class _SellerPanelEditCampaignScreenState
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                     ),
-                    errorWidget: (context, url, error) => Container(
+                    errorBuilder: (context) => Container(
                       color: isDark
                           ? const Color(0xFF2D3748)
                           : const Color(0xFFF7FAFC),

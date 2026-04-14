@@ -22,6 +22,7 @@ import '../../widgets/login_modal.dart';
 import '../../widgets/restaurants/food_location_picker.dart';
 import '../../widgets/restaurants/restaurant_top_banner.dart';
 import '../../utils/food_localization.dart';
+import '../../widgets/cloudinary_image.dart';
 
 // ============================================================================
 // SCREEN
@@ -1125,22 +1126,39 @@ class _RestaurantCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // ── Profile image ──────────────────────────────────────────
+           // ── Profile image ──────────────────────────────────────────
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: SizedBox(
                 width: 72,
                 height: 72,
-                child: restaurant.profileImageUrl != null
-                    ? Image.network(
-                        restaurant.profileImageUrl!,
-                        fit: BoxFit.cover,
-                        color: isOpen ? null : Colors.grey,
-                        colorBlendMode: isOpen ? null : BlendMode.saturation,
-                        errorBuilder: (_, __, ___) =>
-                            _PlaceholderIcon(isDark: isDark),
-                      )
-                    : _PlaceholderIcon(isDark: isDark),
+                child: () {
+                  final source =
+                      restaurant.profileImageStoragePath ??
+                      restaurant.profileImageUrl;
+                  if (source == null || source.isEmpty) {
+                    return _PlaceholderIcon(isDark: isDark);
+                  }
+                  final image = CloudinaryImage.banner(
+                    source: source,
+                    cdnWidth: 200,
+                    width: 72,
+                    height: 72,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_) => _PlaceholderIcon(isDark: isDark),
+                  );
+                  // Desaturate when closed
+                  if (!isOpen) {
+                    return ColorFiltered(
+                      colorFilter: const ColorFilter.mode(
+                        Colors.grey,
+                        BlendMode.saturation,
+                      ),
+                      child: image,
+                    );
+                  }
+                  return image;
+                }(),
               ),
             ),
             const SizedBox(width: 12),

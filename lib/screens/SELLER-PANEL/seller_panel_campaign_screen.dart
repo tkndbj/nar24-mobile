@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../generated/l10n/app_localizations.dart';
+import '../../widgets/cloudinary_image.dart';
+import '../../utils/cloudinary_url_builder.dart';
 import '../../providers/seller_panel_provider.dart';
 import '../../models/product.dart';
 import 'package:flutter/services.dart';
@@ -575,10 +576,11 @@ class _SellerPanelCampaignScreenState extends State<SellerPanelCampaignScreen>
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
                         child: product.imageUrls.isNotEmpty
-                            ? CachedNetworkImage(
-                                imageUrl: product.imageUrls.first,
+                            ? CloudinaryImage.product(
+                                source: product.imageUrls.first,
+                                size: ProductImageSize.thumbnail,
                                 fit: BoxFit.cover,
-                                placeholder: (context, url) => Container(
+                                placeholderBuilder: (context) => Container(
                                   color: _surfaceColor,
                                   child: Center(
                                     child: SizedBox(
@@ -591,7 +593,7 @@ class _SellerPanelCampaignScreenState extends State<SellerPanelCampaignScreen>
                                     ),
                                   ),
                                 ),
-                                errorWidget: (context, url, error) => Container(
+                                errorBuilder: (context) => Container(
                                   color: _surfaceColor,
                                   child: Icon(
                                     Icons.image_not_supported_rounded,

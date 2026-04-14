@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../widgets/cloudinary_image.dart';
+import '../../utils/cloudinary_url_builder.dart';
 import 'package:provider/provider.dart';
 import '../../models/product.dart';
 import '../../models/bundle.dart';
@@ -937,8 +938,9 @@ class _SellerPanelEditBundleScreenState
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: product.imageUrls.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: product.imageUrls.first,
+                    ? CloudinaryImage.product(
+                        source: product.imageUrls.first,
+                        size: ProductImageSize.thumbnail,
                         fit: BoxFit.cover,
                       )
                     : Icon(
@@ -1146,8 +1148,9 @@ class _SellerPanelEditBundleScreenState
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(6),
                           child: product.imageUrls.isNotEmpty
-                              ? CachedNetworkImage(
-                                  imageUrl: product.imageUrls.first,
+                              ? CloudinaryImage.product(
+                                  source: product.imageUrls.first,
+                                  size: ProductImageSize.thumbnail,
                                   fit: BoxFit.cover,
                                 )
                               : Icon(

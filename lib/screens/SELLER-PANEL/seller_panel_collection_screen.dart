@@ -9,6 +9,8 @@ import '../../utils/image_compression_utils.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../providers/seller_panel_provider.dart';
 import '../../models/product.dart';
+import '../../widgets/cloudinary_image.dart';
+import '../../utils/cloudinary_url_builder.dart';
 import 'dart:async';
 import 'package:cloud_functions/cloud_functions.dart';
 
@@ -1300,14 +1302,13 @@ class _SellerPanelCollectionScreenState
                                           ? ClipRRect(
                                               borderRadius:
                                                   BorderRadius.circular(12),
-                                              child: Image.network(
-                                                currentImageUrl,
+                                              child: CloudinaryImage.fromUrl(
+                                                url: currentImageUrl,
+                                                cdnWidth: 400,
                                                 fit: BoxFit.cover,
-                                                errorBuilder: (context, error,
-                                                    stackTrace) {
-                                                  return _buildImagePlaceholder(
-                                                      isDark);
-                                                },
+                                                errorBuilder: (context) =>
+                                                    _buildImagePlaceholder(
+                                                        isDark),
                                               ),
                                             )
                                           : _buildImagePlaceholder(isDark),
@@ -1949,18 +1950,17 @@ class _SellerPanelCollectionScreenState
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: imageUrl != null
-                        ? Image.network(
-                            imageUrl,
+                        ? CloudinaryImage.fromUrl(
+                            url: imageUrl,
+                            cdnWidth: 200,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Icon(
-                                Icons.collections_outlined,
-                                color: isDark
-                                    ? Colors.white30
-                                    : Colors.grey.shade400,
-                                size: 30,
-                              );
-                            },
+                            errorBuilder: (context) => Icon(
+                              Icons.collections_outlined,
+                              color: isDark
+                                  ? Colors.white30
+                                  : Colors.grey.shade400,
+                              size: 30,
+                            ),
                           )
                         : Icon(
                             Icons.collections_outlined,
@@ -2529,27 +2529,27 @@ class _ProductSelectorSheetState extends State<ProductSelectorSheet> {
                                     leading: ClipRRect(
                                       borderRadius: BorderRadius.circular(8),
                                       child: product.imageUrls.isNotEmpty
-                                          ? Image.network(
-                                              product.imageUrls.first,
+                                          ? CloudinaryImage.product(
+                                              source:
+                                                  product.imageUrls.first,
+                                              size: ProductImageSize.thumbnail,
                                               width: 50,
                                               height: 50,
                                               fit: BoxFit.cover,
-                                              errorBuilder:
-                                                  (context, error, stackTrace) {
-                                                return Container(
-                                                  width: 50,
-                                                  height: 50,
+                                              errorBuilder: (context) =>
+                                                  Container(
+                                                width: 50,
+                                                height: 50,
+                                                color: isDark
+                                                    ? Colors.grey.shade700
+                                                    : Colors.grey.shade200,
+                                                child: Icon(
+                                                  Icons.image_not_supported,
                                                   color: isDark
-                                                      ? Colors.grey.shade700
-                                                      : Colors.grey.shade200,
-                                                  child: Icon(
-                                                    Icons.image_not_supported,
-                                                    color: isDark
-                                                        ? Colors.white30
-                                                        : Colors.grey.shade400,
-                                                  ),
-                                                );
-                                              },
+                                                      ? Colors.white30
+                                                      : Colors.grey.shade400,
+                                                ),
+                                              ),
                                             )
                                           : Container(
                                               width: 50,

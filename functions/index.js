@@ -910,4 +910,4 @@ export { registerWithEmailPassword, verifyEmailCode, resendEmailVerificationCode
 export { removeShopProduct, deleteProduct, toggleProductPauseStatus } from './48-product-management/index.js';
 export { incrementImpressionCount, flushImpressions } from './49-impression/index.js';
 export { deleteCloudinaryCache } from './50-cloudinary/index.js';
-export { migrateProductImagePaths } from './51-cloudinary-backfill/index.js';
+export { migrateImagePaths } from './51-cloudinary-backfill/index.js';

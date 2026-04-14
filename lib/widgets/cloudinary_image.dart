@@ -202,6 +202,46 @@ class CloudinaryImage extends StatelessWidget {
     );
   }
 
+  /// Ad/banner image. [source] may be a Firebase Storage path
+  /// (e.g. "ad_submissions/shopId/x.jpg") OR a legacy full URL.
+  factory CloudinaryImage.banner({
+    Key? key,
+    required String source,
+    required int cdnWidth,
+    double? width,
+    double? height,
+    BoxFit fit = BoxFit.cover,
+    double? borderRadius,
+    FilterQuality filterQuality = FilterQuality.medium,
+    Duration fadeInDuration = Duration.zero,
+    Duration fadeOutDuration = Duration.zero,
+    bool useOldImageOnUrlChange = true,
+    int? fallbackMemCacheWidth,
+    int? fallbackMemCacheHeight,
+    CloudinaryPlaceholderBuilder? placeholderBuilder,
+    CloudinaryErrorBuilder? errorBuilder,
+  }) {
+    final resolved = CloudinaryUrl.resolveBanner(source, width: cdnWidth);
+    return CloudinaryImage._(
+      key: key,
+      primary: resolved.primary,
+      fallback: resolved.fallback,
+      width: width,
+      height: height,
+      fit: fit,
+      borderRadius: borderRadius,
+      filterQuality: filterQuality,
+      fadeInDuration: fadeInDuration,
+      fadeOutDuration: fadeOutDuration,
+      useOldImageOnUrlChange: useOldImageOnUrlChange,
+      primaryMaxDiskCacheWidth: cdnWidth,
+      fallbackMemCacheWidth: fallbackMemCacheWidth ?? cdnWidth,
+      fallbackMemCacheHeight: fallbackMemCacheHeight,
+      placeholderBuilder: placeholderBuilder,
+      errorBuilder: errorBuilder,
+    );
+  }
+
   // ─── Build ───────────────────────────────────────────────────────
 
   @override

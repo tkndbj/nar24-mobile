@@ -234,20 +234,22 @@ class _AdsBannerWidgetState extends State<AdsBannerWidget>
       for (int i = 0; i < snap.docs.length; i++) {
         final doc = snap.docs[i];
         final data = doc.data()! as Map<String, dynamic>;
-        final url = data['imageUrl'] as String? ?? '';
-        if (url.isEmpty) continue;
+        // ✅ Prefer storage path, fall back to URL
+        final source = (data['imageStoragePath'] as String?) ??
+            (data['imageUrl'] as String? ?? '');
+        if (source.isEmpty) continue;
 
         final cInt = data['dominantColor'] as int?;
         final color = cInt != null ? Color(cInt) : Colors.grey;
 
-        if (!_cachedUrls.contains(url)) {
-          _cachedUrls.add(url);
-          _prefetchImageAsync(url);
+        if (!_cachedUrls.contains(source)) {
+          _cachedUrls.add(source);
+          _prefetchImageAsync(source);
         }
 
         items.add(BannerItem(
           id: doc.id,
-          url: url,
+          url: source,
           color: color,
           linkType: data['linkType'] as String?,
           linkId: data['linkedShopId'] ?? data['linkedProductId'],
@@ -271,26 +273,24 @@ class _AdsBannerWidgetState extends State<AdsBannerWidget>
     }
   }
 
-  void _prefetchImageAsync(String url) {
+  void _prefetchImageAsync(String source) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        // Prefetch the CDN URL (what actually renders) so cache keys match.
-        final cdnUrl =
-            CloudinaryUrl.fromUrl(url, width: _kAdsBannerCdnWidth);
+        final cdnUrl = CloudinaryUrl.bannerCdn(source, width: _kAdsBannerCdnWidth);
         final provider = CachedNetworkImageProvider(cdnUrl);
         precacheImage(provider, context).catchError((error) {
-          debugPrint('Failed to prefetch image: $url, error: $error');
+          debugPrint('Failed to prefetch image: $source, error: $error');
         });
       }
     });
   }
 
-  Widget _buildBannerImage(
+ Widget _buildBannerImage(
     BannerItem item, {
     required bool isLargerScreen,
   }) {
-    return CloudinaryImage.fromUrl(
-      url: item.url,
+    return CloudinaryImage.banner(
+      source: item.url,
       cdnWidth: _kAdsBannerCdnWidth,
       width: double.infinity,
       fit: isLargerScreen ? BoxFit.contain : BoxFit.cover,
