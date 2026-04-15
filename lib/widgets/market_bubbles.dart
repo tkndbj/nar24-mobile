@@ -10,6 +10,21 @@ class MarketBubbles extends StatelessWidget {
       : bubbles = [
           {
             'label': (BuildContext context) =>
+                AppLocalizations.of(context).food,
+            'image': 'assets/images/foodbubble.png',
+            'borderColor': Colors.blue,
+            'backgroundColor': Colors.blue.withOpacity(0.2),
+            'showComingSoon': false,
+          },
+          {
+            'label': (BuildContext context) => 'Market',
+            'image': 'assets/images/marketbubble.png',
+            'borderColor': Colors.pink,
+            'backgroundColor': Colors.pink.withOpacity(0.2),
+            'showComingSoon': false,
+          },
+          {
+            'label': (BuildContext context) =>
                 AppLocalizations.of(context).shops,
             'image': 'assets/images/shopbubble.png',
             'borderColor': Colors.orange,
@@ -22,21 +37,6 @@ class MarketBubbles extends StatelessWidget {
             'borderColor': Colors.green,
             'backgroundColor': Colors.green.withOpacity(0.2),
             'showComingSoon': false,
-          },
-          {
-            'label': (BuildContext context) =>
-                AppLocalizations.of(context).food,
-            'image': 'assets/images/foodbubble.png',
-            'borderColor': Colors.blue,
-            'backgroundColor': Colors.blue.withOpacity(0.2),
-            'showComingSoon': false,
-          },
-          {
-            'label': (BuildContext context) => 'Market',
-            'image': 'assets/images/marketbubble.png',
-            'borderColor': Colors.pink,
-            'backgroundColor': Colors.pink.withOpacity(0.2),
-            'showComingSoon': true,
           },
         ];
 
@@ -53,11 +53,13 @@ class MarketBubbles extends StatelessWidget {
         return GestureDetector(
           onTap: () {
             if (index == 0) {
-              context.push("/shop"); // Navigate to /shop for Shops bubble
+              context.push("/restaurants"); // Food
             } else if (index == 1) {
-              onNavItemTapped(4); // Use the callback for Vitrin bubble
+              context.push("/market"); // Market
             } else if (index == 2) {
-              context.push("/restaurants"); // Navigate to restaurants screen
+              context.push("/shop"); // Shops
+            } else if (index == 3) {
+              onNavItemTapped(4); // Vitrin
             }
           },
           child: Column(

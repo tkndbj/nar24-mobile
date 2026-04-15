@@ -10,6 +10,7 @@ import 'receipt_detail_screen.dart';
 import 'food_receipt_detail_screen.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
+import '../MARKET/market_receipt_detail_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Food Receipt model (local)
@@ -74,6 +75,57 @@ class FoodReceipt {
   }
 }
 
+class MarketReceipt {
+  final String id;
+  final String orderId;
+  final String receiptId;
+  final double totalPrice;
+  final String currency;
+  final DateTime timestamp;
+  final String paymentMethod;
+  final bool isPaid;
+  final String? filePath;
+  final String? downloadUrl;
+
+  const MarketReceipt({
+    required this.id,
+    required this.orderId,
+    required this.receiptId,
+    required this.totalPrice,
+    required this.currency,
+    required this.timestamp,
+    required this.paymentMethod,
+    required this.isPaid,
+    this.filePath,
+    this.downloadUrl,
+  });
+
+  factory MarketReceipt.fromDoc(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
+    final ts = d['timestamp'];
+    DateTime t;
+    if (ts is Timestamp) {
+      t = ts.toDate();
+    } else if (ts is String) {
+      t = DateTime.tryParse(ts) ?? DateTime.now();
+    } else {
+      t = DateTime.now();
+    }
+    return MarketReceipt(
+      id: doc.id,
+      orderId: (d['orderId'] as String?) ?? '',
+      receiptId: (d['receiptId'] as String?) ?? '',
+      totalPrice: (d['totalPrice'] as num?)?.toDouble() ?? 0,
+      currency: (d['currency'] as String?) ?? 'TL',
+      timestamp: t,
+      paymentMethod: (d['paymentMethod'] as String?) ?? '',
+      isPaid: (d['isPaid'] as bool?) ?? false,
+      filePath: d['filePath'] as String?,
+      downloadUrl: d['downloadUrl'] as String?,
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Screen
 // ─────────────────────────────────────────────────────────────────────────────
@@ -111,6 +163,15 @@ class _ReceiptScreenState extends State<ReceiptScreen>
   bool _isFoodInitialLoad = true;
   bool _foodFetched = false;
 
+  // ── Market receipts ──────────────────────────────────────────────────────
+  final ScrollController _marketScrollController = ScrollController();
+  List<MarketReceipt> _marketReceipts = [];
+  bool _isMarketLoading = false;
+  bool _hasMarketMore = true;
+  DocumentSnapshot? _lastMarketDocument;
+  bool _isMarketInitialLoad = true;
+  bool _marketFetched = false;
+
   bool get _shouldPreventPop {
     final extra = GoRouterState.of(context).extra as Map<String, dynamic>?;
     return extra?['preventPop'] == true;
@@ -119,18 +180,22 @@ class _ReceiptScreenState extends State<ReceiptScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this)
+    _tabController = TabController(length: 3, vsync: this)
       ..addListener(() {
         if (!_tabController.indexIsChanging) {
           setState(() => _activeTab = _tabController.index);
           if (_tabController.index == 1 && !_foodFetched) {
             _fetchFoodReceipts();
           }
+          if (_tabController.index == 2 && !_marketFetched) {
+            _fetchMarketReceipts();
+          }
         }
       });
     _fetchReceipts();
     _scrollController.addListener(_scrollListener);
     _foodScrollController.addListener(_foodScrollListener);
+    _marketScrollController.addListener(_marketScrollListener);
   }
 
   @override
@@ -138,6 +203,7 @@ class _ReceiptScreenState extends State<ReceiptScreen>
     _tabController.dispose();
     _scrollController.dispose();
     _foodScrollController.dispose();
+    _marketScrollController.dispose();
     super.dispose();
   }
 
@@ -154,6 +220,13 @@ class _ReceiptScreenState extends State<ReceiptScreen>
     if (_foodScrollController.position.pixels >=
         _foodScrollController.position.maxScrollExtent - 200) {
       if (!_isFoodLoading && _hasFoodMore) _loadMoreFoodReceipts();
+    }
+  }
+
+  void _marketScrollListener() {
+    if (_marketScrollController.position.pixels >=
+        _marketScrollController.position.maxScrollExtent - 200) {
+      if (!_isMarketLoading && _hasMarketMore) _loadMoreMarketReceipts();
     }
   }
 
@@ -299,6 +372,70 @@ class _ReceiptScreenState extends State<ReceiptScreen>
     await _fetchFoodReceipts();
   }
 
+  // ── Market receipts ─────────────────────────────────────────────────────
+
+  Future<void> _fetchMarketReceipts({bool reset = true}) async {
+    if (_isMarketLoading) return;
+    setState(() => _isMarketLoading = true);
+    final user = _auth.currentUser;
+    if (user != null) {
+      try {
+        Query<Map<String, dynamic>> q = _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('marketReceipts')
+            .orderBy('timestamp', descending: true)
+            .limit(_limit);
+        if (!reset && _lastMarketDocument != null) {
+          q = q.startAfterDocument(_lastMarketDocument!);
+        }
+        final snapshot = await q.get();
+        if (snapshot.docs.isNotEmpty) {
+          _lastMarketDocument = snapshot.docs.last;
+          final items =
+              snapshot.docs.map((d) => MarketReceipt.fromDoc(d)).toList();
+          setState(() {
+            if (reset) {
+              _marketReceipts = items;
+            } else {
+              _marketReceipts.addAll(items);
+            }
+            _hasMarketMore = snapshot.docs.length >= _limit;
+            _isMarketInitialLoad = false;
+          });
+        } else {
+          setState(() {
+            _hasMarketMore = false;
+            _isMarketInitialLoad = false;
+          });
+        }
+      } catch (e) {
+        debugPrint('Error fetching market receipts: $e');
+        setState(() => _isMarketInitialLoad = false);
+      }
+    }
+    setState(() {
+      _isMarketLoading = false;
+      _marketFetched = true;
+    });
+  }
+
+  Future<void> _loadMoreMarketReceipts() async {
+    if (_isMarketLoading || !_hasMarketMore) return;
+    await _fetchMarketReceipts(reset: false);
+  }
+
+  Future<void> _refreshMarketReceipts() async {
+    setState(() {
+      _marketReceipts.clear();
+      _lastMarketDocument = null;
+      _hasMarketMore = true;
+      _isMarketInitialLoad = true;
+      _marketFetched = false;
+    });
+    await _fetchMarketReceipts();
+  }
+
   // ── Helpers (original) ──────────────────────────────────────────────────
 
   Color _getDeliveryColor(String o) {
@@ -401,8 +538,11 @@ class _ReceiptScreenState extends State<ReceiptScreen>
               icon: Icon(FeatherIcons.refreshCw,
                   size: 18,
                   color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6)),
-              onPressed:
-                  _activeTab == 0 ? _refreshReceipts : _refreshFoodReceipts,
+              onPressed: _activeTab == 0
+                  ? _refreshReceipts
+                  : _activeTab == 1
+                      ? _refreshFoodReceipts
+                      : _refreshMarketReceipts,
             ),
           ],
           bottom: PreferredSize(
@@ -427,7 +567,6 @@ class _ReceiptScreenState extends State<ReceiptScreen>
                       end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(8),
-                    
                   ),
                   labelColor: Colors.white,
                   unselectedLabelColor:
@@ -447,7 +586,7 @@ class _ReceiptScreenState extends State<ReceiptScreen>
                         children: [
                           const Icon(FeatherIcons.shoppingBag, size: 13),
                           const SizedBox(width: 6),
-                          Text(l10n.productOrders),
+                          Text(l10n.product),
                         ],
                       ),
                     ),
@@ -459,7 +598,19 @@ class _ReceiptScreenState extends State<ReceiptScreen>
                         children: [
                           const Icon(Icons.restaurant_menu_rounded, size: 13),
                           const SizedBox(width: 6),
-                          Text(l10n.foodOrders),
+                          Text(l10n.food),
+                        ],
+                      ),
+                    ),
+                    Tab(
+                      height: 38,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.shopping_bag_rounded, size: 13),
+                          const SizedBox(width: 6),
+                          Text('Market'),
                         ],
                       ),
                     ),
@@ -481,6 +632,7 @@ class _ReceiptScreenState extends State<ReceiptScreen>
               children: [
                 _buildProductTab(l10n, isDark),
                 _buildFoodTab(l10n, isDark),
+                _buildMarketTab(l10n, isDark),
               ],
             ),
           ),
@@ -1087,6 +1239,356 @@ class _ReceiptScreenState extends State<ReceiptScreen>
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+// MARKET TAB
+// ═══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildMarketTab(AppLocalizations l10n, bool isDark) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                const Color(0xFF10B981).withOpacity(0.1),
+                const Color(0xFF059669).withOpacity(0.1),
+              ],
+            ),
+          ),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF10B981), Color(0xFF059669)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(50),
+                ),
+                child: const Icon(Icons.shopping_bag_rounded,
+                    color: Colors.white, size: 32),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Market Siparişleri',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: theme.textTheme.bodyMedium?.color,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Market sipariş makbuzlarınız burada görünecek',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: _isMarketInitialLoad
+              ? _buildShimmerList()
+              : _marketReceipts.isEmpty
+                  ? _buildMarketEmptyState(l10n, isDark)
+                  : RefreshIndicator(
+                      onRefresh: _refreshMarketReceipts,
+                      child: ListView.builder(
+                        controller: _marketScrollController,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        itemCount:
+                            _marketReceipts.length + (_hasMarketMore ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index == _marketReceipts.length) {
+                            return _buildLoadingIndicator();
+                          }
+                          return _buildMarketReceiptCard(
+                              _marketReceipts[index], isDark, l10n);
+                        },
+                      ),
+                    ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMarketEmptyState(AppLocalizations l10n, bool isDark) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [
+                  const Color(0xFF10B981).withOpacity(0.1),
+                  const Color(0xFF059669).withOpacity(0.1),
+                ]),
+                shape: BoxShape.circle,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                      colors: [Color(0xFF10B981), Color(0xFF059669)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.shopping_bag_rounded,
+                    size: 48, color: Colors.white),
+              ),
+            ),
+            const SizedBox(height: 32),
+            Text(l10n.noReceiptsFound,
+                style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: theme.textTheme.bodyMedium?.color),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            Text('Market sipariş makbuzlarınız burada görünecek',
+                style: TextStyle(
+                    fontSize: 15,
+                    color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                    height: 1.4),
+                textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMarketReceiptCard(
+      MarketReceipt receipt, bool isDark, AppLocalizations l10n) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color.fromARGB(255, 33, 31, 49) : theme.cardColor,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: theme.shadowColor.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => context.push('/market-receipt/${receipt.id}'),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: [
+                          const Color(0xFF10B981).withOpacity(0.15),
+                          const Color(0xFF059669).withOpacity(0.15),
+                        ]),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.shopping_bag_rounded,
+                          color: Color(0xFF10B981), size: 24),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Nar24 Market',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: theme.textTheme.bodyMedium?.color,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(FeatherIcons.truck,
+                                        size: 11, color: Colors.green),
+                                    const SizedBox(width: 4),
+                                    Text(l10n.delivery,
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.green)),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Icon(FeatherIcons.calendar,
+                                  size: 12,
+                                  color: theme.textTheme.bodyMedium?.color
+                                      ?.withOpacity(0.5)),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  _formatDate(receipt.timestamp, l10n),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: theme.textTheme.bodyMedium?.color
+                                        ?.withOpacity(0.6),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Icon(
+                                receipt.paymentMethod == 'pay_at_door'
+                                    ? FeatherIcons.dollarSign
+                                    : FeatherIcons.creditCard,
+                                size: 12,
+                                color: theme.textTheme.bodyMedium?.color
+                                    ?.withOpacity(0.5),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                _localizePaymentMethod(
+                                    receipt.paymentMethod, l10n),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: theme.textTheme.bodyMedium?.color
+                                      ?.withOpacity(0.6),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${receipt.totalPrice.toStringAsFixed(0)} ${receipt.currency}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF10B981),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Icon(FeatherIcons.chevronRight,
+                              size: 16, color: Color(0xFF10B981)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  color: receipt.isPaid
+                      ? (isDark
+                          ? Colors.green.withOpacity(0.08)
+                          : Colors.green.shade50)
+                      : (isDark
+                          ? Colors.amber.withOpacity(0.08)
+                          : Colors.amber.shade50),
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(12),
+                    bottomRight: Radius.circular(12),
+                  ),
+                  border: Border(
+                    top: BorderSide(
+                      color: isDark ? Colors.white12 : Colors.grey.shade100,
+                    ),
+                  ),
+                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          receipt.isPaid
+                              ? Icons.check_circle_outline
+                              : Icons.payments_outlined,
+                          size: 13,
+                          color:
+                              receipt.isPaid ? Colors.green : Colors.amber[700],
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          receipt.isPaid ? l10n.paid : l10n.payAtDoor,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: receipt.isPaid
+                                ? Colors.green
+                                : Colors.amber[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '#${receipt.orderId.substring(0, receipt.orderId.length.clamp(0, 8)).toUpperCase()}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark ? Colors.grey[600] : Colors.grey[400],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

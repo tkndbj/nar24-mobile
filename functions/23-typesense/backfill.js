@@ -344,6 +344,28 @@ async function main() {
     return d;
   });
 
+  await backfillCollection(client, 'market-items', 'market_items', (id, data) => {
+    const d = { id: `market_items_${id}` };
+    const pick = (key) => {if (data[key] != null) d[key] = data[key];};
+    const pickArr = (key) => {if (Array.isArray(data[key]) && data[key].length > 0) d[key] = data[key];};
+  
+    pick('name');
+    pick('brand');
+    pick('type');
+    pick('category');
+    pick('price');
+    pick('stock');
+    pick('description');
+    pick('imageUrl');
+    pickArr('imageUrls');
+    pick('isAvailable');
+  
+    const ts = toUnixSeconds(data.createdAt);
+    if (ts != null) d.createdAt = ts;
+  
+    return d;
+  });
+
   await backfillOrders(client);
 
   console.log('\n✅ Backfill complete!');

@@ -1,8 +1,9 @@
 import 'typesense_service.dart';
 import 'restaurant_typesense_service.dart';
-
+import 'market_typesense_service.dart';
 export 'typesense_service.dart' show TypeSenseService, TypeSensePage;
 export 'restaurant_typesense_service.dart' show RestaurantTypesenseService;
+export 'market_typesense_service.dart' show MarketTypesenseService;
 
 class TypeSenseServiceManager {
   static TypeSenseServiceManager? _instance;
@@ -21,7 +22,8 @@ class TypeSenseServiceManager {
   TypeSenseService? _shopService;
   TypeSenseService? _ordersService;
   TypeSenseService? _shopsService;
-  RestaurantTypesenseService? _restaurantService; // ← NEW
+  RestaurantTypesenseService? _restaurantService;
+  MarketTypesenseService? _marketService;
 
   TypeSenseService get mainService {
     _mainService ??= TypeSenseService(
@@ -80,6 +82,14 @@ class TypeSenseServiceManager {
     return _restaurantService!;
   }
 
+  MarketTypesenseService get marketService {
+    _marketService ??= MarketTypesenseService(
+      typesenseHost: _typesenseHost,
+      typesenseSearchKey: _typesenseSearchKey,
+    );
+    return _marketService!;
+  }
+
   bool get isInitialized =>
       _mainService != null &&
       _shopService != null &&
@@ -99,6 +109,8 @@ class TypeSenseServiceManager {
     _shopsService = null;
     _restaurantService?.dispose();
     _restaurantService = null;
+    _marketService?.dispose();
+    _marketService = null;
   }
 
   Future<bool> isHealthy() async {

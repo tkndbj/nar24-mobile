@@ -50,6 +50,29 @@ const fieldChanged = (a, b) => {
   return a !== b;
 };
 
+// ─── Sanitize for Market Items ────────────────────────────────────────────────
+const sanitizeForMarketItems = (data) => {
+  const d = {};
+  const pick = (key) => {if (data[key] != null) d[key] = data[key];};
+  const pickArr = (key) => {if (Array.isArray(data[key]) && data[key].length > 0) d[key] = data[key];};
+
+  pick('name');
+  pick('brand');
+  pick('type');
+  pick('category');
+  pick('price');
+  pick('stock');
+  pick('description');
+  pick('imageUrl');
+  pickArr('imageUrls');
+  pick('isAvailable');
+
+  const ts = toUnixSeconds(data.createdAt);
+  if (ts != null) d.createdAt = ts;
+
+  return d;
+};
+
 // ─── Sanitize ─────────────────────────────────────────────────────────────────
 const sanitizeForShopProducts = (data) => {
   const d = {};
@@ -333,6 +356,24 @@ const initTypesenseCollections = async (dropExisting = false) => {
         {name: 'restaurantId', type: 'string', facet: true, optional: true},
         {name: 'extras', type: 'string[]', optional: true},
         {name: 'createdAt', type: 'int64', optional: true},
+      ],
+      token_separators: ['-', '_'],
+    },
+    {
+      name: 'market_items',
+      fields: [
+        { name: 'id', type: 'string' },
+        { name: 'name', type: 'string', optional: true },
+        { name: 'brand', type: 'string', facet: true, optional: true },
+        { name: 'type', type: 'string', facet: true, optional: true },
+        { name: 'category', type: 'string', facet: true, optional: true },
+        { name: 'price', type: 'float', optional: true },
+        { name: 'stock', type: 'int32', optional: true },
+        { name: 'description', type: 'string', optional: true },
+        { name: 'imageUrl', type: 'string', optional: true },
+        { name: 'imageUrls', type: 'string[]', optional: true },
+        { name: 'isAvailable', type: 'bool', optional: true },
+        { name: 'createdAt', type: 'int64', optional: true },
       ],
       token_separators: ['-', '_'],
     },
@@ -811,3 +852,27 @@ async function rebuildRegionCache(region, cacheRef) {
  
   console.log(`[FoodCache] region_${region}: cached ${restaurants.length}/${found} restaurants.`);
 }
+
+export const syncMarketItemsWithTypesense = onDocumentWritten(
+  { region: 'europe-west3', document: 'market-items/{itemId}' },
+  async (event) => {
+    const itemId = event.params.itemId;
+    const beforeData = event.data.before?.data() ?? null;
+    const afterData = event.data.after?.data() ?? null;
+
+    if (beforeData && afterData) {
+      const searchFields = [
+        'name', 'brand', 'type', 'category',
+        'price', 'stock', 'isAvailable', 'imageUrl',
+      ];
+      const hasRelevantChanges = searchFields.some(
+        (f) => fieldChanged(beforeData[f], afterData[f]),
+      );
+      if (!hasRelevantChanges) return;
+    }
+
+    return syncDocumentToTypesense(
+      'market_items', itemId, beforeData, afterData, sanitizeForMarketItems,
+    );
+  },
+);

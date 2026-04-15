@@ -193,6 +193,28 @@ flutter:
     - assets/images/category-boxes/pets.jpg
     - assets/images/category-boxes/shoes.jpg
     - assets/images/category-boxes/selfcare.jpg
+    - assets/images/market-items/baby.png
+    - assets/images/market-items/bakery.png
+    - assets/images/market-items/basicfood.png
+    - assets/images/market-items/cigaretteandalcohol.png
+    - assets/images/market-items/clothing.png
+    - assets/images/market-items/dairyandbreakfast.png
+    - assets/images/market-items/drinks.png
+    - assets/images/market-items/fitandform.png
+    - assets/images/market-items/food.png
+    - assets/images/market-items/homecare.png
+    - assets/images/market-items/homelite.png
+    - assets/images/market-items/icecream.png
+    - assets/images/market-items/meat.png
+    - assets/images/market-items/personalcare.png
+    - assets/images/market-items/pets.png
+    - assets/images/market-items/sexualhealth.png
+    - assets/images/market-items/snacks.png
+    - assets/images/market-items/stationery.png
+    - assets/images/market-items/technology.png
+    - assets/images/market-items/tools.png
+    - assets/images/market-items/vegetablesandfruit.png
+    - assets/images/market-items/water.png
 
   fonts:
     - family: Figtree

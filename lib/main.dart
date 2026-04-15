@@ -8,6 +8,7 @@ import 'package:Nar24/providers/special_filter_provider_market.dart';
 import 'package:Nar24/services/typesense_service_manager.dart';
 import 'package:Nar24/providers/product_repository.dart';
 import 'package:Nar24/providers/market_dynamic_filter_provider.dart';
+import 'package:Nar24/providers/market_cart_provider.dart';
 import 'package:Nar24/providers/product_detail_provider.dart';
 import 'package:Nar24/screens/PRODUCT-SCREENS/product_detail_screen.dart';
 import 'package:Nar24/providers/profile_provider.dart';
@@ -367,6 +368,12 @@ Future<void> main() async {
                 ),
                 ChangeNotifierProvider(
                   create: (context) => FoodCartProvider(
+                    context.read<FirebaseAuth>(),
+                    context.read<FirebaseFirestore>(),
+                  ),
+                ),
+                ChangeNotifierProvider(
+                  create: (context) => MarketCartProvider(
                     context.read<FirebaseAuth>(),
                     context.read<FirebaseFirestore>(),
                   ),

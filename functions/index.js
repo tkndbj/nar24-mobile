@@ -881,7 +881,8 @@ export {
   syncShopsWithTypesense,
   syncOrdersWithTypesense,
   syncFoodsWithTypesense,
-  syncRestaurantsWithTypesense
+  syncRestaurantsWithTypesense,
+  syncMarketItemsWithTypesense
 } from './23-typesense/index.js';
 export { computeRankingScores } from './24-promotion-score/index.js';
 export { addProductsToCampaign, removeProductFromCampaign, updateCampaignProductDiscount } from './25-shop-campaign/index.js';
@@ -911,3 +912,4 @@ export { removeShopProduct, deleteProduct, toggleProductPauseStatus } from './48
 export { incrementImpressionCount, flushImpressions } from './49-impression/index.js';
 export { deleteCloudinaryCache } from './50-cloudinary/index.js';
 export { migrateImagePaths } from './51-cloudinary-backfill/index.js';
+export { processMarketOrder, initializeMarketPayment, marketPaymentCallback, checkMarketPaymentStatus, updateMarketOrderStatus, submitMarketReview, generateMarketReceiptBackground } from './52-market-payment/index.js';

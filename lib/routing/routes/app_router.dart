@@ -17,6 +17,7 @@ import 'list_product_routes.dart';
 import 'profile_routes.dart';
 import 'seller_panel_routes.dart';
 import 'restaurant_routes.dart';
+import 'market_routes.dart';
 
 class AppRouter {
   static GoRouter createRouter({
@@ -42,6 +43,7 @@ class AppRouter {
         ...SellerPanelRoutes
             .routes, // ✅ CHANGED: Use .routes instead of .shellRoute
         ...RestaurantRoutes.routes,
+        ...MarketRoutes.routes,
       ],
       redirect: (context, state) {
         final userProvider = Provider.of<UserProvider>(context, listen: false);
