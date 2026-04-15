@@ -133,21 +133,6 @@ async function validateAndPriceMarketItems(tx, db, items) {
 }
 
 // ============================================================================
-// HELPER: Decrement stock for purchased items (fire-and-forget)
-// ============================================================================
-
-async function decrementStock(db, validatedItems) {
-  const batch = db.batch();
-  for (const item of validatedItems) {
-    const ref = db.collection('market-items').doc(item.itemId);
-    batch.update(ref, {
-      stock: admin.firestore.FieldValue.increment(-item.quantity),
-    });
-  }
-  await batch.commit();
-}
-
-// ============================================================================
 // HELPER: Create market order document atomically
 // ============================================================================
 
@@ -257,6 +242,14 @@ async function createMarketOrderCore(buyerId, requestData, paymentOrderId = null
 
     tx.set(orderRef, orderDoc);
 
+    // ── 5. Decrement stock atomically ────────────────────────────
+for (const item of validatedItems) {
+    const ref = db.collection('market-items').doc(item.itemId);
+    tx.update(ref, {
+      stock: admin.firestore.FieldValue.increment(-item.quantity),
+    });
+  }
+
     orderResult = {
       orderId,
       success: true,
@@ -266,11 +259,6 @@ async function createMarketOrderCore(buyerId, requestData, paymentOrderId = null
 
   // ── Post-transaction side effects (fire-and-forget) ────────────────
   if (orderResult && !orderResult.duplicate) {
-    // Decrement stock
-    decrementStock(admin.firestore(), orderDoc.items).catch((err) =>
-      console.error('[MarketOrder] Stock decrement failed:', err)
-    );
-
     // Clear market cart
     clearMarketCartAsync(buyerId).catch((err) =>
       console.error('[MarketOrder] Cart clear failed:', err)

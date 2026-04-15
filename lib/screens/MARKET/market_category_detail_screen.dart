@@ -14,6 +14,7 @@ import '../../services/market_typesense_service.dart';
 import '../../services/typesense_service_manager.dart';
 import '../../providers/market_cart_provider.dart';
 import '../../constants/market_categories.dart';
+import '../../generated/l10n/app_localizations.dart';
 
 // ============================================================================
 // SCREEN
@@ -211,6 +212,9 @@ class _MarketCategoryDetailScreenState
       imageUrl: (d['imageUrl'] as String?) ?? '',
       imageUrls: ((d['imageUrls'] as List?) ?? []).cast<String>(),
       isAvailable: (d['isAvailable'] as bool?) ?? true,
+      nutrition: (d['nutrition'] is Map)
+          ? Map<String, dynamic>.from(d['nutrition'] as Map)
+          : const {},
     );
   }
 
@@ -356,6 +360,7 @@ class _MarketCategoryDetailScreenState
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final category = _category;
+    final l10n = AppLocalizations.of(context)!;
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
@@ -373,7 +378,7 @@ class _MarketCategoryDetailScreenState
                     // ── App bar ──────────────────────────────────────
                     SliverAppBar(
                       title: Text(
-                        category?.labelTr ?? 'Market',
+                        category?.labelTr ?? l10n.marketCategoryFallbackTitle,
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
@@ -402,7 +407,7 @@ class _MarketCategoryDetailScreenState
                                 child: TextField(
                                   controller: _searchController,
                                   decoration: InputDecoration(
-                                    hintText: 'Ürün ara...',
+                                    hintText: l10n.marketSearchHint,
                                     prefixIcon:
                                         const Icon(Icons.search, size: 20),
                                     contentPadding: const EdgeInsets.symmetric(
@@ -438,7 +443,7 @@ class _MarketCategoryDetailScreenState
                       if (_facets.types.isNotEmpty)
                         SliverToBoxAdapter(
                           child: _FacetChipRow(
-                            label: 'Tür',
+                            label: l10n.marketFacetType,
                             facets: _facets.types,
                             selected: _selectedTypes,
                             isDark: isDark,
@@ -450,7 +455,7 @@ class _MarketCategoryDetailScreenState
                       if (_facets.brands.isNotEmpty)
                         SliverToBoxAdapter(
                           child: _FacetChipRow(
-                            label: 'Marka',
+                            label: l10n.marketFacetBrand,
                             facets: _facets.brands,
                             selected: _selectedBrands,
                             isDark: isDark,
@@ -462,23 +467,21 @@ class _MarketCategoryDetailScreenState
                       if (_hasActiveFilters)
                         SliverToBoxAdapter(
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 4),
-                            child: GestureDetector(
-                              onTap: _clearFilters,
-                              child: Row(
-                                children: [
-                                  Icon(Icons.close,
-                                      size: 14, color: Colors.grey[500]),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Filtreleri Temizle',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[500],
-                                    ),
-                                  ),
-                                ],
+                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: _clearFilters,
+                                icon: const Icon(Icons.clear, size: 14),
+                                label: Text(l10n.marketClearFilters),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: const Color(0xFF00A86B),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 2),
+                                  minimumSize: const Size(0, 28),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
                               ),
                             ),
                           ),
@@ -502,7 +505,7 @@ class _MarketCategoryDetailScreenState
                           sliver: SliverGrid(
                             gridDelegate: _gridDelegate,
                             delegate: SliverChildBuilderDelegate(
-                              (_, i) => _MarketItemCard(
+                              (_, i) => MarketItemCard(
                                 item: _items[i],
                                 isDark: isDark,
                               ),
@@ -539,7 +542,7 @@ class _MarketCategoryDetailScreenState
                                     style: TextStyle(fontSize: 56)),
                                 const SizedBox(height: 16),
                                 Text(
-                                  'Ürün bulunamadı',
+                                  l10n.marketNoProductsFound,
                                   style: theme.textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -555,7 +558,7 @@ class _MarketCategoryDetailScreenState
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                     ),
-                                    child: const Text('Filtreleri Temizle'),
+                                    child: Text(l10n.marketClearFilters),
                                   ),
                                 ],
                               ],
@@ -573,7 +576,7 @@ class _MarketCategoryDetailScreenState
               backgroundColor: const Color(0xFF00A86B),
               icon: const Icon(Icons.shopping_bag_rounded, color: Colors.white),
               label: Text(
-                '${cart.itemCount} ürün • ${cart.totals.subtotal.toStringAsFixed(0)} TL',
+                '${l10n.marketCartItemCount(cart.itemCount)} • ${cart.totals.subtotal.toStringAsFixed(0)} TL',
                 style: const TextStyle(
                     color: Colors.white, fontWeight: FontWeight.bold),
               ),
@@ -624,73 +627,60 @@ class _FacetChipRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: SizedBox(
-        height: 40,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          itemCount: facets.length,
-          itemBuilder: (_, i) {
-            final f = facets[i];
-            final isActive = selected.contains(f.value);
-            return Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: GestureDetector(
-                onTap: () => onToggle(f.value),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isActive
-                        ? Colors.green
-                        : isDark
-                            ? const Color(0xFF2D2B3F)
-                            : Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: isActive
-                          ? Colors.green
-                          : isDark
-                              ? Colors.white.withOpacity(0.1)
-                              : Colors.grey[300]!,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        f.value,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: isActive
-                              ? Colors.white
-                              : isDark
-                                  ? Colors.grey[300]
-                                  : Colors.grey[800],
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${f.count}',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: isActive
-                              ? Colors.white70
-                              : isDark
-                                  ? Colors.grey[500]
-                                  : Colors.grey[500],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
               ),
-            );
-          },
-        ),
+            ),
+          ),
+          SizedBox(
+            height: 38,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: facets.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 6),
+              itemBuilder: (context, i) {
+                final fv = facets[i];
+                final isSelected = selected.contains(fv.value);
+                return FilterChip(
+                  label: Text('${fv.value} (${fv.count})'),
+                  selected: isSelected,
+                  onSelected: (_) => onToggle(fv.value),
+                  selectedColor:
+                      const Color(0xFF00A86B).withOpacity(0.18),
+                  checkmarkColor: const Color(0xFF00A86B),
+                  labelStyle: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected
+                        ? const Color(0xFF00A86B)
+                        : (isDark ? Colors.grey[300] : Colors.grey[800]),
+                  ),
+                  backgroundColor:
+                      isDark ? const Color(0xFF1C1A29) : Colors.grey[100],
+                  side: BorderSide(
+                    color: isSelected
+                        ? const Color(0xFF00A86B)
+                        : (isDark ? Colors.white12 : Colors.grey.shade300),
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -700,11 +690,11 @@ class _FacetChipRow extends StatelessWidget {
 // MARKET ITEM CARD (with add-to-cart)
 // ============================================================================
 
-class _MarketItemCard extends StatelessWidget {
+class MarketItemCard extends StatelessWidget {
   final MarketItem item;
   final bool isDark;
 
-  const _MarketItemCard({required this.item, required this.isDark});
+  const MarketItemCard({required this.item, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
@@ -765,9 +755,9 @@ class _MarketItemCard extends StatelessWidget {
                     Container(
                       color: Colors.black.withOpacity(0.5),
                       alignment: Alignment.center,
-                      child: const Text(
-                        'Stokta Yok',
-                        style: TextStyle(
+                      child: Text(
+                        AppLocalizations.of(context)!.marketOutOfStock,
+                        style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
@@ -796,28 +786,76 @@ class _MarketItemCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  Text(
-                    item.name,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : Colors.grey[900],
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  Builder(builder: (context) {
+                    final hasDescription = item.description.isNotEmpty;
+                    final hasNutrition = item.hasNutritionData;
+                    final hasSubline = hasDescription || hasNutrition;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          item.name,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white : Colors.grey[900],
+                          ),
+                          maxLines: hasSubline ? 1 : 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (hasDescription) ...[
+                          const SizedBox(height: 2),
+                          GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => _showDescriptionSheet(context),
+                            child: Text(
+                              item.description,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color:
+                                    isDark ? Colors.grey[400] : Colors.grey[600],
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ] else if (hasNutrition) ...[
+                          const SizedBox(height: 2),
+                          GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => _showDescriptionSheet(context),
+                            child: Text(
+                              AppLocalizations.of(context)!.marketInfo,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF2563EB),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ],
+                    );
+                  }),
                   const Spacer(),
                   Row(
                     children: [
-                      Text(
-                        '${item.price.toStringAsFixed(2)} TL',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : Colors.grey[900],
+                      Expanded(
+                        child: Text(
+                          '${item.price.toStringAsFixed(2)} TL',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.grey[900],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const Spacer(),
+                      const SizedBox(width: 4),
                       if (qtyInCart == 0)
                         _AddButton(
                           isOutOfStock: isOutOfStock,
@@ -849,6 +887,219 @@ class _MarketItemCard extends StatelessWidget {
       alignment: Alignment.center,
       child:
           Icon(Icons.shopping_bag_outlined, size: 40, color: Colors.grey[400]),
+    );
+  }
+
+  void _showDescriptionSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.4,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (_, scrollController) {
+            return Container(
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1C1A29) : Colors.white,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 10, bottom: 6),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[400],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: AspectRatio(
+                              aspectRatio: 1,
+                              child: Container(
+                                color: isDark
+                                    ? const Color(0xFF2D2B3F)
+                                    : Colors.grey[100],
+                                child: item.imageUrl.isNotEmpty
+                                    ? Image.network(
+                                        item.imageUrl,
+                                        fit: BoxFit.contain,
+                                        errorBuilder: (_, __, ___) =>
+                                            _imagePlaceholder(isDark),
+                                      )
+                                    : _imagePlaceholder(isDark),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          if (item.brand.isNotEmpty)
+                            Text(
+                              item.brand,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.green[700],
+                              ),
+                            ),
+                          const SizedBox(height: 4),
+                          Text(
+                            item.name,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color:
+                                  isDark ? Colors.white : Colors.grey[900],
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          if (item.description.isNotEmpty)
+                            Text(
+                              item.description,
+                              style: TextStyle(
+                                fontSize: 14,
+                                height: 1.5,
+                                color: isDark
+                                    ? Colors.grey[300]
+                                    : Colors.grey[800],
+                              ),
+                            ),
+                          ..._buildNutritionSection(isDark),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  List<Widget> _buildNutritionSection(bool isDark) {
+    final n = item.nutrition;
+    if (n.isEmpty) return const [];
+
+    int? asInt(dynamic v) {
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      if (v is String) return int.tryParse(v);
+      return null;
+    }
+
+    final labels = <String, String>{
+      'calories': 'Calories',
+      'protein': 'Protein',
+      'carbs': 'Carbs',
+      'sugar': 'Sugar',
+      'fat': 'Fat',
+      'fiber': 'Fiber',
+      'salt': 'Salt',
+    };
+    final units = <String, String>{
+      'calories': 'kcal',
+      'protein': 'g',
+      'carbs': 'g',
+      'sugar': 'g',
+      'fat': 'g',
+      'fiber': 'g',
+      'salt': 'g',
+    };
+
+    final rows = <Widget>[];
+    labels.forEach((key, label) {
+      final v = asInt(n[key]);
+      if (v != null && v > 0) {
+        rows.add(_nutritionRow(label, '$v ${units[key]}', isDark));
+      }
+    });
+
+    if (rows.isEmpty) return const [];
+
+    final servingSize = n['servingSize']?.toString();
+
+    return [
+      const SizedBox(height: 20),
+      Row(
+        children: [
+          Text(
+            'Nutrition Facts',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: isDark ? Colors.white : Colors.grey[900],
+            ),
+          ),
+          if (servingSize != null && servingSize.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Text(
+              'per ${servingSize}g',
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
+            ),
+          ],
+        ],
+      ),
+      const SizedBox(height: 10),
+      Container(
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF2D2B3F) : Colors.grey[50],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark ? Colors.white12 : Colors.grey.shade200,
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        child: Column(children: rows),
+      ),
+    ];
+  }
+
+  Widget _nutritionRow(String label, String value, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? Colors.grey[300] : Colors.grey[700],
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white : Colors.grey[900],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -955,16 +1206,16 @@ class _SortButton extends StatelessWidget {
     required this.onTap,
   });
 
-  String get _label {
+  String _labelFor(AppLocalizations l10n) {
     switch (sortOption) {
       case MarketSortOption.priceAsc:
-        return 'Ucuz';
+        return l10n.marketSortPriceAsc;
       case MarketSortOption.priceDesc:
-        return 'Pahalı';
+        return l10n.marketSortPriceDesc;
       case MarketSortOption.nameAsc:
-        return 'A-Z';
+        return l10n.marketSortNameAsc;
       case MarketSortOption.newest:
-        return 'Sırala';
+        return l10n.marketSortDefault;
     }
   }
 
@@ -972,6 +1223,7 @@ class _SortButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -1006,7 +1258,7 @@ class _SortButton extends StatelessWidget {
             ),
             const SizedBox(width: 4),
             Text(
-              _label,
+              _labelFor(l10n),
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,

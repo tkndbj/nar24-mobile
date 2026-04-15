@@ -11,6 +11,7 @@ import '../../screens/MARKET/market_order_detail_screen.dart';
 import '../../screens/MARKET/market_receipt_detail_screen.dart';
 import '../../screens/MARKET/my_market_orders_screen.dart';
 import '../../screens/MARKET/isbank_market_payment_screen.dart';
+import '../../screens/MARKET/market_search_results_screen.dart';
 
 class MarketRoutes {
   static Widget _slideTransition(
@@ -52,6 +53,19 @@ class MarketRoutes {
           transitionsBuilder: _slideTransition,
           transitionDuration: const Duration(milliseconds: 200),
         ),
+      ),
+      GoRoute(
+        path: '/market-search',
+        name: 'market-search',
+        pageBuilder: (context, state) {
+          final query = (state.uri.queryParameters['q'] ?? '').trim();
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: MarketSearchResultsScreen(initialQuery: query),
+            transitionsBuilder: _slideTransition,
+            transitionDuration: const Duration(milliseconds: 200),
+          );
+        },
       ),
       GoRoute(
         path: '/market-cart',

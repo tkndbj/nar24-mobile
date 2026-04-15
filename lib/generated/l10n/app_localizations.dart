@@ -30083,6 +30083,780 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Güncelleniyor...'**
   String get updating;
+
+  /// No description provided for @marketBrandName.
+  ///
+  /// In tr, this message translates to:
+  /// **'Nar24'**
+  String get marketBrandName;
+
+  /// No description provided for @marketNavNar24.
+  ///
+  /// In tr, this message translates to:
+  /// **'Nar24'**
+  String get marketNavNar24;
+
+  /// No description provided for @marketNavCart.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sepet'**
+  String get marketNavCart;
+
+  /// No description provided for @marketNavMyOrders.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişlerim'**
+  String get marketNavMyOrders;
+
+  /// No description provided for @marketNavProfile.
+  ///
+  /// In tr, this message translates to:
+  /// **'Profil'**
+  String get marketNavProfile;
+
+  /// No description provided for @marketCategoryTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Nar24 Market'**
+  String get marketCategoryTitle;
+
+  /// No description provided for @marketCategoriesHeader.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kategoriler'**
+  String get marketCategoriesHeader;
+
+  /// No description provided for @marketCategoriesCount.
+  ///
+  /// In tr, this message translates to:
+  /// **'{count} kategori'**
+  String marketCategoriesCount(int count);
+
+  /// No description provided for @marketCategoryFallbackTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kategori'**
+  String get marketCategoryFallbackTitle;
+
+  /// No description provided for @myMarketOrdersTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişlerim'**
+  String get myMarketOrdersTitle;
+
+  /// No description provided for @marketOrdersEmptyTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Henüz siparişiniz yok'**
+  String get marketOrdersEmptyTitle;
+
+  /// No description provided for @marketOrdersEmptySubtitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişleriniz burada görünecek'**
+  String get marketOrdersEmptySubtitle;
+
+  /// No description provided for @marketOrdersTryAgain.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tekrar Dene'**
+  String get marketOrdersTryAgain;
+
+  /// No description provided for @marketOrderLoadFailed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişler yüklenemedi'**
+  String get marketOrderLoadFailed;
+
+  /// No description provided for @marketOrderItemCount.
+  ///
+  /// In tr, this message translates to:
+  /// **'{count} ürün'**
+  String marketOrderItemCount(int count);
+
+  /// No description provided for @marketOrderStatusPending.
+  ///
+  /// In tr, this message translates to:
+  /// **'Beklemede'**
+  String get marketOrderStatusPending;
+
+  /// No description provided for @marketOrderStatusConfirmed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Onaylandı'**
+  String get marketOrderStatusConfirmed;
+
+  /// No description provided for @marketOrderStatusPreparing.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hazırlanıyor'**
+  String get marketOrderStatusPreparing;
+
+  /// No description provided for @marketOrderStatusOutForDelivery.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yolda'**
+  String get marketOrderStatusOutForDelivery;
+
+  /// No description provided for @marketOrderStatusDelivered.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslim Edildi'**
+  String get marketOrderStatusDelivered;
+
+  /// No description provided for @marketOrderStatusCompleted.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tamamlandı'**
+  String get marketOrderStatusCompleted;
+
+  /// No description provided for @marketOrderStatusRejected.
+  ///
+  /// In tr, this message translates to:
+  /// **'Reddedildi'**
+  String get marketOrderStatusRejected;
+
+  /// No description provided for @marketOrderStatusCancelled.
+  ///
+  /// In tr, this message translates to:
+  /// **'İptal'**
+  String get marketOrderStatusCancelled;
+
+  /// No description provided for @marketCheckoutTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme'**
+  String get marketCheckoutTitle;
+
+  /// No description provided for @marketCheckoutDeliveryAddress.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimat Adresi'**
+  String get marketCheckoutDeliveryAddress;
+
+  /// No description provided for @marketCheckoutDeliveryAddressTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimat Adresi'**
+  String get marketCheckoutDeliveryAddressTitle;
+
+  /// No description provided for @marketCheckoutNoAddress.
+  ///
+  /// In tr, this message translates to:
+  /// **'Adres eklenmedi'**
+  String get marketCheckoutNoAddress;
+
+  /// No description provided for @marketCheckoutAddAddress.
+  ///
+  /// In tr, this message translates to:
+  /// **'Adres Ekle'**
+  String get marketCheckoutAddAddress;
+
+  /// No description provided for @marketCheckoutOrderNote.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş Notu'**
+  String get marketCheckoutOrderNote;
+
+  /// No description provided for @marketCheckoutOrderNoteTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş Notu'**
+  String get marketCheckoutOrderNoteTitle;
+
+  /// No description provided for @marketCheckoutNoteHint.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişiniz için not ekleyin (opsiyonel)'**
+  String get marketCheckoutNoteHint;
+
+  /// No description provided for @marketCheckoutPaymentMethod.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme Yöntemi'**
+  String get marketCheckoutPaymentMethod;
+
+  /// No description provided for @marketCheckoutYourOrder.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişiniz'**
+  String get marketCheckoutYourOrder;
+
+  /// No description provided for @marketCheckoutPlaceOrder.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişi Tamamla'**
+  String get marketCheckoutPlaceOrder;
+
+  /// No description provided for @marketCheckoutPayButton.
+  ///
+  /// In tr, this message translates to:
+  /// **'Öde'**
+  String get marketCheckoutPayButton;
+
+  /// No description provided for @marketCartTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sepet'**
+  String get marketCartTitle;
+
+  /// No description provided for @marketCartItemCount.
+  ///
+  /// In tr, this message translates to:
+  /// **'{count} ürün'**
+  String marketCartItemCount(int count);
+
+  /// No description provided for @marketCartClear.
+  ///
+  /// In tr, this message translates to:
+  /// **'Temizle'**
+  String get marketCartClear;
+
+  /// No description provided for @marketCartOrderSummary.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş Özeti'**
+  String get marketCartOrderSummary;
+
+  /// No description provided for @marketCartTotalLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Toplam'**
+  String get marketCartTotalLabel;
+
+  /// No description provided for @marketCartDeliveryFeeWillBeCalculated.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimat ücreti ödeme adımında hesaplanacaktır'**
+  String get marketCartDeliveryFeeWillBeCalculated;
+
+  /// No description provided for @marketCartProceedToCheckout.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödemeye Geç'**
+  String get marketCartProceedToCheckout;
+
+  /// No description provided for @marketCartClearDialogTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sepeti Temizle'**
+  String get marketCartClearDialogTitle;
+
+  /// No description provided for @marketCartClearDialogBody.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sepetinizi temizlemek istediğinize emin misiniz?'**
+  String get marketCartClearDialogBody;
+
+  /// No description provided for @marketCartClearDialogCancel.
+  ///
+  /// In tr, this message translates to:
+  /// **'İptal'**
+  String get marketCartClearDialogCancel;
+
+  /// No description provided for @marketCartEmptyTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sepetiniz boş'**
+  String get marketCartEmptyTitle;
+
+  /// No description provided for @marketCartEmptySubtitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Alışverişe başlamak için ürün ekleyin'**
+  String get marketCartEmptySubtitle;
+
+  /// No description provided for @marketCartEmptyStartShopping.
+  ///
+  /// In tr, this message translates to:
+  /// **'Alışverişe Başla'**
+  String get marketCartEmptyStartShopping;
+
+  /// No description provided for @marketCartGoToMarket.
+  ///
+  /// In tr, this message translates to:
+  /// **'Markete Git'**
+  String get marketCartGoToMarket;
+
+  /// No description provided for @marketSearchHint.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ara...'**
+  String get marketSearchHint;
+
+  /// No description provided for @marketFacetBrand.
+  ///
+  /// In tr, this message translates to:
+  /// **'Marka'**
+  String get marketFacetBrand;
+
+  /// No description provided for @marketFacetType.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tür'**
+  String get marketFacetType;
+
+  /// No description provided for @marketClearFilters.
+  ///
+  /// In tr, this message translates to:
+  /// **'Filtreleri temizle'**
+  String get marketClearFilters;
+
+  /// No description provided for @marketNoProductsFound.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ürün bulunamadı'**
+  String get marketNoProductsFound;
+
+  /// No description provided for @marketSortDefault.
+  ///
+  /// In tr, this message translates to:
+  /// **'Varsayılan'**
+  String get marketSortDefault;
+
+  /// No description provided for @marketSortNameAsc.
+  ///
+  /// In tr, this message translates to:
+  /// **'İsim (A-Z)'**
+  String get marketSortNameAsc;
+
+  /// No description provided for @marketSortPriceAsc.
+  ///
+  /// In tr, this message translates to:
+  /// **'Fiyat (Artan)'**
+  String get marketSortPriceAsc;
+
+  /// No description provided for @marketSortPriceDesc.
+  ///
+  /// In tr, this message translates to:
+  /// **'Fiyat (Azalan)'**
+  String get marketSortPriceDesc;
+
+  /// No description provided for @marketOrderDateLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tarih'**
+  String get marketOrderDateLabel;
+
+  /// No description provided for @marketOrderDeliveryLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimat Ücreti'**
+  String get marketOrderDeliveryLabel;
+
+  /// No description provided for @marketOrderDeliveryFree.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ücretsiz'**
+  String get marketOrderDeliveryFree;
+
+  /// No description provided for @marketOrderNumberLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş No'**
+  String get marketOrderNumberLabel;
+
+  /// No description provided for @marketOrderPaidOnline.
+  ///
+  /// In tr, this message translates to:
+  /// **'Online Ödendi'**
+  String get marketOrderPaidOnline;
+
+  /// No description provided for @marketOrderPaymentAtDoor.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kapıda Ödeme'**
+  String get marketOrderPaymentAtDoor;
+
+  /// No description provided for @marketOrderPaymentCard.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kart'**
+  String get marketOrderPaymentCard;
+
+  /// No description provided for @marketOrderPaymentMethodLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme Yöntemi'**
+  String get marketOrderPaymentMethodLabel;
+
+  /// No description provided for @marketOrderPaymentStatusLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme Durumu'**
+  String get marketOrderPaymentStatusLabel;
+
+  /// No description provided for @marketOrderPayOnDelivery.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kapıda Ödeme'**
+  String get marketOrderPayOnDelivery;
+
+  /// No description provided for @marketOrderQuantityLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Adet'**
+  String get marketOrderQuantityLabel;
+
+  /// No description provided for @marketOrderReceivedNotifications.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişinizle ilgili bildirimleri alacaksınız'**
+  String get marketOrderReceivedNotifications;
+
+  /// No description provided for @marketOrderReceivedSupport.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sorularınız için destek ile iletişime geçin'**
+  String get marketOrderReceivedSupport;
+
+  /// No description provided for @marketOrderReceivedTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişiniz Alındı'**
+  String get marketOrderReceivedTitle;
+
+  /// No description provided for @marketOrderSubtotalLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ara Toplam'**
+  String get marketOrderSubtotalLabel;
+
+  /// No description provided for @marketOrderTotalLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Toplam'**
+  String get marketOrderTotalLabel;
+
+  /// No description provided for @marketPaymentAtDoor.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kapıda Ödeme'**
+  String get marketPaymentAtDoor;
+
+  /// No description provided for @marketPaymentCancelBody.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödemeyi iptal etmek istediğinize emin misiniz?'**
+  String get marketPaymentCancelBody;
+
+  /// No description provided for @marketPaymentCancelConfirm.
+  ///
+  /// In tr, this message translates to:
+  /// **'Evet, İptal'**
+  String get marketPaymentCancelConfirm;
+
+  /// No description provided for @marketPaymentCancelContinue.
+  ///
+  /// In tr, this message translates to:
+  /// **'Devam Et'**
+  String get marketPaymentCancelContinue;
+
+  /// No description provided for @marketPaymentCancelTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödemeyi İptal Et'**
+  String get marketPaymentCancelTitle;
+
+  /// No description provided for @marketPaymentErrorTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme Hatası'**
+  String get marketPaymentErrorTitle;
+
+  /// No description provided for @marketPaymentFailedTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme Başarısız'**
+  String get marketPaymentFailedTitle;
+
+  /// No description provided for @marketPaymentGoBack.
+  ///
+  /// In tr, this message translates to:
+  /// **'Geri Dön'**
+  String get marketPaymentGoBack;
+
+  /// No description provided for @marketPaymentHeaderBadge.
+  ///
+  /// In tr, this message translates to:
+  /// **'Güvenli Ödeme'**
+  String get marketPaymentHeaderBadge;
+
+  /// No description provided for @marketPaymentInfoMissing.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme bilgileri eksik'**
+  String get marketPaymentInfoMissing;
+
+  /// No description provided for @marketPaymentIsbankInfrastructure.
+  ///
+  /// In tr, this message translates to:
+  /// **'İşbank Ödeme Altyapısı'**
+  String get marketPaymentIsbankInfrastructure;
+
+  /// No description provided for @marketPaymentLoadingPage.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme sayfası yükleniyor...'**
+  String get marketPaymentLoadingPage;
+
+  /// No description provided for @marketPaymentMethodCard.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kredi / Banka Kartı'**
+  String get marketPaymentMethodCard;
+
+  /// No description provided for @marketPaymentMethodCardSubtitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Visa, MasterCard, Troy'**
+  String get marketPaymentMethodCardSubtitle;
+
+  /// No description provided for @marketPaymentMethodPayAtDoor.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kapıda Ödeme'**
+  String get marketPaymentMethodPayAtDoor;
+
+  /// No description provided for @marketPaymentMethodPayAtDoorSubtitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimatta nakit veya kart'**
+  String get marketPaymentMethodPayAtDoorSubtitle;
+
+  /// No description provided for @marketPaymentOrderLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş'**
+  String get marketPaymentOrderLabel;
+
+  /// No description provided for @marketPaymentOrderReceived.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişiniz alındı'**
+  String get marketPaymentOrderReceived;
+
+  /// No description provided for @marketPaymentPaid.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödendi'**
+  String get marketPaymentPaid;
+
+  /// No description provided for @marketPaymentPleaseWait.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lütfen bekleyin...'**
+  String get marketPaymentPleaseWait;
+
+  /// No description provided for @marketPaymentProcessingError.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme işlenirken hata'**
+  String get marketPaymentProcessingError;
+
+  /// No description provided for @marketPaymentRedirecting.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yönlendiriliyor...'**
+  String get marketPaymentRedirecting;
+
+  /// No description provided for @marketPaymentReturnToMarket.
+  ///
+  /// In tr, this message translates to:
+  /// **'Markete Dön'**
+  String get marketPaymentReturnToMarket;
+
+  /// No description provided for @marketPaymentSecureSsl.
+  ///
+  /// In tr, this message translates to:
+  /// **'SSL Güvenli'**
+  String get marketPaymentSecureSsl;
+
+  /// No description provided for @marketPaymentSecureTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Güvenli Ödeme'**
+  String get marketPaymentSecureTitle;
+
+  /// No description provided for @marketPaymentSuccessTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme Başarılı'**
+  String get marketPaymentSuccessTitle;
+
+  /// No description provided for @marketPaymentTimeoutTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme Zaman Aşımı'**
+  String get marketPaymentTimeoutTitle;
+
+  /// No description provided for @marketPaymentTryAgain.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tekrar Dene'**
+  String get marketPaymentTryAgain;
+
+  /// No description provided for @marketReceiptPdfNotReady.
+  ///
+  /// In tr, this message translates to:
+  /// **'PDF henüz hazır değil.'**
+  String get marketReceiptPdfNotReady;
+
+  /// No description provided for @marketReceiptTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Makbuz Detayı'**
+  String get marketReceiptTitle;
+
+  /// No description provided for @marketReceiptNotFound.
+  ///
+  /// In tr, this message translates to:
+  /// **'Makbuz bulunamadı'**
+  String get marketReceiptNotFound;
+
+  /// No description provided for @marketReceiptLoadError.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yüklenirken hata oluştu'**
+  String get marketReceiptLoadError;
+
+  /// No description provided for @marketReceiptGoBack.
+  ///
+  /// In tr, this message translates to:
+  /// **'Geri Dön'**
+  String get marketReceiptGoBack;
+
+  /// No description provided for @marketReceiptOrderInfo.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş Bilgileri'**
+  String get marketReceiptOrderInfo;
+
+  /// No description provided for @marketReceiptOrderNumber.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş No'**
+  String get marketReceiptOrderNumber;
+
+  /// No description provided for @marketReceiptPaymentMethod.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme Yöntemi'**
+  String get marketReceiptPaymentMethod;
+
+  /// No description provided for @marketReceiptDelivery.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimat'**
+  String get marketReceiptDelivery;
+
+  /// No description provided for @marketReceiptStatus.
+  ///
+  /// In tr, this message translates to:
+  /// **'Durum'**
+  String get marketReceiptStatus;
+
+  /// No description provided for @marketReceiptDeliveryAddress.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimat Adresi'**
+  String get marketReceiptDeliveryAddress;
+
+  /// No description provided for @marketReceiptOrderedItems.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş Edilen Ürünler'**
+  String get marketReceiptOrderedItems;
+
+  /// No description provided for @marketReceiptOrderNoteHeader.
+  ///
+  /// In tr, this message translates to:
+  /// **'SİPARİŞ NOTU'**
+  String get marketReceiptOrderNoteHeader;
+
+  /// No description provided for @marketReceiptPerUnit.
+  ///
+  /// In tr, this message translates to:
+  /// **'{price} / adet'**
+  String marketReceiptPerUnit(String price);
+
+  /// No description provided for @marketReceiptPriceSummary.
+  ///
+  /// In tr, this message translates to:
+  /// **'Fiyat Özeti'**
+  String get marketReceiptPriceSummary;
+
+  /// No description provided for @marketReceiptOnlinePaymentReceived.
+  ///
+  /// In tr, this message translates to:
+  /// **'Online ödeme alındı'**
+  String get marketReceiptOnlinePaymentReceived;
+
+  /// No description provided for @marketReceiptPayDuringDelivery.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslimat sırasında ödenecek'**
+  String get marketReceiptPayDuringDelivery;
+
+  /// No description provided for @marketPaymentSucceededOrderFailed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme başarılı ancak sipariş oluşturulamadı'**
+  String get marketPaymentSucceededOrderFailed;
+
+  /// No description provided for @marketPaymentTimeout.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme zaman aşımı'**
+  String get marketPaymentTimeout;
+
+  /// No description provided for @marketPaymentFailed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme başarısız'**
+  String get marketPaymentFailed;
+
+  /// No description provided for @marketOutOfStock.
+  ///
+  /// In tr, this message translates to:
+  /// **'Stokta yok'**
+  String get marketOutOfStock;
+
+  /// No description provided for @marketCheckoutAddressRequired.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lütfen bir teslimat adresi seçin'**
+  String get marketCheckoutAddressRequired;
+
+  /// No description provided for @marketCheckoutOrderCreationFailed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş oluşturulamadı'**
+  String get marketCheckoutOrderCreationFailed;
+
+  /// No description provided for @marketCheckoutPaymentInitFailed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ödeme başlatılamadı'**
+  String get marketCheckoutPaymentInitFailed;
+
+  /// No description provided for @marketOrderDetailTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş Detayı'**
+  String get marketOrderDetailTitle;
+
+  /// No description provided for @marketOrdersLoadError.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişler yüklenemedi'**
+  String get marketOrdersLoadError;
+
+  /// No description provided for @marketInfo.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bilgi'**
+  String get marketInfo;
 }
 
 class _AppLocalizationsDelegate

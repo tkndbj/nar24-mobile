@@ -10,6 +10,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../generated/l10n/app_localizations.dart';
 import '../../providers/market_cart_provider.dart';
 
 // =============================================================================
@@ -92,7 +93,7 @@ class _MarketPaymentScreenState extends State<MarketPaymentScreen> {
             break;
           case 'payment_succeeded_order_failed':
             _handlePaymentFailed(
-              'Ödeme alındı ancak sipariş oluşturulamadı. Lütfen destek ile iletişime geçin.',
+              AppLocalizations.of(context)!.marketPaymentSucceededOrderFailed,
             );
             break;
         }
@@ -128,7 +129,7 @@ class _MarketPaymentScreenState extends State<MarketPaymentScreen> {
         if (mounted && !_resultHandled) {
           setState(() {
             _paymentStatus = _PaymentStatus.timeout;
-            _error = 'Ödeme zaman aşımına uğradı. Lütfen tekrar deneyin.';
+            _error = AppLocalizations.of(context)!.marketPaymentTimeout;
           });
         }
         return;
@@ -235,7 +236,7 @@ class _MarketPaymentScreenState extends State<MarketPaymentScreen> {
     if (!mounted) return;
     setState(() {
       _paymentStatus = _PaymentStatus.failed;
-      _error = message.trim().isEmpty ? 'Ödeme başarısız oldu.' : message;
+      _error = message.trim().isEmpty ? AppLocalizations.of(context)!.marketPaymentFailed : message;
     });
   }
 
@@ -297,6 +298,7 @@ class _MarketPaymentScreenState extends State<MarketPaymentScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = _isDark;
+    final l10n = AppLocalizations.of(context)!;
 
     // ── Missing params ───────────────────────────────────────────────────
     if (widget.gatewayUrl.isEmpty || widget.orderNumber.isEmpty) {
@@ -304,9 +306,9 @@ class _MarketPaymentScreenState extends State<MarketPaymentScreen> {
         isDark: isDark,
         icon: Icons.error_outline_rounded,
         iconColor: Colors.red,
-        title: 'Ödeme Hatası',
-        subtitle: _error ?? 'Ödeme bilgileri eksik.',
-        actions: [_GreenButton(label: 'Geri Dön', onTap: () => context.pop())],
+        title: l10n.marketPaymentErrorTitle,
+        subtitle: _error ?? l10n.marketPaymentInfoMissing,
+        actions: [_GreenButton(label: l10n.marketPaymentGoBack, onTap: () => context.pop())],
       );
     }
 
@@ -317,27 +319,27 @@ class _MarketPaymentScreenState extends State<MarketPaymentScreen> {
         icon: Icons.check_circle_rounded,
         iconColor: Colors.green,
         iconBgColor: Colors.green.withOpacity(0.15),
-        title: 'Ödeme Başarılı!',
-        subtitle: 'Siparişiniz alındı.',
+        title: l10n.marketPaymentSuccessTitle,
+        subtitle: l10n.marketPaymentOrderReceived,
         trailing: _successOrderId.isNotEmpty
             ? Text(
-                'Sipariş: ${_successOrderId.substring(0, _successOrderId.length.clamp(0, 8)).toUpperCase()}',
+                '${l10n.marketPaymentOrderLabel}: ${_successOrderId.substring(0, _successOrderId.length.clamp(0, 8)).toUpperCase()}',
                 style: TextStyle(
                     fontSize: 11,
                     color: isDark ? Colors.grey[600] : Colors.grey[400]),
               )
             : null,
-        footer: const Row(
+        footer: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SizedBox(
+            const SizedBox(
                 width: 18,
                 height: 18,
                 child: CircularProgressIndicator(
                     color: Colors.green, strokeWidth: 2)),
-            SizedBox(width: 8),
-            Text('Yönlendiriliyorsunuz...',
-                style: TextStyle(
+            const SizedBox(width: 8),
+            Text(l10n.marketPaymentRedirecting,
+                style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
                     color: Colors.green)),
@@ -354,14 +356,14 @@ class _MarketPaymentScreenState extends State<MarketPaymentScreen> {
         icon: Icons.error_outline_rounded,
         iconColor: Colors.red,
         title: _paymentStatus == _PaymentStatus.timeout
-            ? 'Zaman Aşımı'
-            : 'Ödeme Başarısız',
-        subtitle: _error ?? 'Ödeme işlenirken bir hata oluştu.',
+            ? l10n.marketPaymentTimeoutTitle
+            : l10n.marketPaymentFailedTitle,
+        subtitle: _error ?? l10n.marketPaymentProcessingError,
         actions: [
-          _GreenButton(label: 'Tekrar Dene', onTap: () => context.pop()),
+          _GreenButton(label: l10n.marketPaymentTryAgain, onTap: () => context.pop()),
           TextButton(
             onPressed: () => context.go('/market'),
-            child: Text('Markete Dön',
+            child: Text(l10n.marketPaymentReturnToMarket,
                 style: TextStyle(
                     color: isDark ? Colors.grey[400] : Colors.grey[500])),
           ),
@@ -445,13 +447,13 @@ class _MarketPaymentScreenState extends State<MarketPaymentScreen> {
                                     color: Colors.green, strokeWidth: 3)),
                           ]),
                           const SizedBox(height: 24),
-                          const Text('Ödeme sayfası yükleniyor...',
-                              style: TextStyle(
+                          Text(l10n.marketPaymentLoadingPage,
+                              style: const TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w600,
                                   color: Colors.white)),
                           const SizedBox(height: 6),
-                          Text('Lütfen bekleyin',
+                          Text(l10n.marketPaymentPleaseWait,
                               style: TextStyle(
                                   fontSize: 13, color: Colors.grey[300])),
                         ]),
@@ -468,13 +470,13 @@ class _MarketPaymentScreenState extends State<MarketPaymentScreen> {
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   const Icon(Icons.lock_rounded, size: 13, color: Colors.green),
                   const SizedBox(width: 6),
-                  Text('Güvenli SSL Bağlantı',
+                  Text(l10n.marketPaymentSecureSsl,
                       style: TextStyle(
                           fontSize: 12,
                           color: isDark ? Colors.grey[400] : Colors.grey[600])),
                 ]),
                 const SizedBox(height: 4),
-                Text('İşbank güvenli ödeme altyapısı',
+                Text(l10n.marketPaymentIsbankInfrastructure,
                     style: TextStyle(
                         fontSize: 11,
                         color: isDark ? Colors.grey[600] : Colors.grey[400])),
@@ -499,6 +501,7 @@ class _PaymentHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -526,7 +529,7 @@ class _PaymentHeader extends StatelessWidget {
         const SizedBox(width: 12),
         const Icon(Icons.lock_rounded, size: 17, color: Colors.green),
         const SizedBox(width: 6),
-        Text('Güvenli Ödeme',
+        Text(l10n.marketPaymentSecureTitle,
             style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -543,7 +546,7 @@ class _PaymentHeader extends StatelessWidget {
                 size: 13,
                 color: isDark ? Colors.green[400] : Colors.green[600]),
             const SizedBox(width: 5),
-            Text('Market',
+            Text(l10n.marketPaymentHeaderBadge,
                 style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
@@ -664,22 +667,23 @@ class _CancelDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
       backgroundColor: isDark ? const Color(0xFF1F2937) : Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Text('Ödemeyi İptal Et',
+      title: Text(l10n.marketPaymentCancelTitle,
           style: TextStyle(
               fontWeight: FontWeight.bold,
               color: isDark ? Colors.white : Colors.grey[900])),
       content: Text(
-        'Ödeme işlemi devam ediyor. İptal etmek istediğinize emin misiniz?',
+        l10n.marketPaymentCancelBody,
         style: TextStyle(
             fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: Text('Devam Et',
+          child: Text(l10n.marketPaymentCancelContinue,
               style: TextStyle(
                   color: isDark ? Colors.grey[300] : Colors.grey[700])),
         ),
@@ -692,8 +696,8 @@ class _CancelDialog extends StatelessWidget {
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             elevation: 0,
           ),
-          child: const Text('İptal Et',
-              style: TextStyle(fontWeight: FontWeight.bold)),
+          child: Text(l10n.marketPaymentCancelConfirm,
+              style: const TextStyle(fontWeight: FontWeight.bold)),
         ),
       ],
     );

@@ -25,6 +25,7 @@ class MarketItem {
   final List<String> imageUrls;
   final bool isAvailable;
   final int? createdAt;
+  final Map<String, dynamic> nutrition;
 
   const MarketItem({
     required this.id,
@@ -39,6 +40,7 @@ class MarketItem {
     this.imageUrls = const [],
     this.isAvailable = true,
     this.createdAt,
+    this.nutrition = const {},
   });
 
   factory MarketItem.fromTypesense(Map<String, dynamic> doc,
@@ -56,7 +58,21 @@ class MarketItem {
       imageUrls: (doc['imageUrls'] as List?)?.cast<String>() ?? [],
       isAvailable: (doc['isAvailable'] as bool?) ?? true,
       createdAt: (doc['createdAt'] as num?)?.toInt(),
+      nutrition: (doc['nutrition'] is Map)
+          ? Map<String, dynamic>.from(doc['nutrition'] as Map)
+          : const {},
     );
+  }
+
+  bool get hasNutritionData {
+    if (nutrition.isEmpty) return false;
+    const keys = ['calories', 'protein', 'carbs', 'sugar', 'fat', 'fiber', 'salt'];
+    for (final k in keys) {
+      final v = nutrition[k];
+      final n = v is num ? v : (v is String ? num.tryParse(v) : null);
+      if (n != null && n > 0) return true;
+    }
+    return false;
   }
 }
 
@@ -106,6 +122,20 @@ class MarketFacets {
   });
 
   static const empty = MarketFacets();
+}
+
+class MarketGlobalFacets {
+  final List<MarketFacetValue> brands;
+  final List<MarketFacetValue> types;
+  final List<MarketFacetValue> categories;
+
+  const MarketGlobalFacets({
+    this.brands = const [],
+    this.types = const [],
+    this.categories = const [],
+  });
+
+  static const empty = MarketGlobalFacets();
 }
 
 // ============================================================================
@@ -323,6 +353,208 @@ class MarketTypesenseService {
       }
     });
     return completer.future;
+  }
+
+  // ============================================================================
+  // GLOBAL SEARCH (no category constraint)
+  // ============================================================================
+
+  /// Global search across all categories. Supports brand/type/category
+  /// facet filters and pagination.
+  Future<MarketSearchPage> searchItemsGlobal({
+    required String query,
+    MarketSortOption sort = MarketSortOption.newest,
+    int page = 0,
+    int hitsPerPage = 20,
+    List<String>? brands,
+    List<String>? types,
+    List<String>? categories,
+  }) async {
+    final filterParts = <String>['isAvailable:=true'];
+
+    if (brands != null && brands.isNotEmpty) {
+      final orParts = brands.map((b) => 'brand:=`$b`').toList();
+      filterParts.add(
+        orParts.length == 1 ? orParts.first : '(${orParts.join(' || ')})',
+      );
+    }
+    if (types != null && types.isNotEmpty) {
+      final orParts = types.map((t) => 'type:=`$t`').toList();
+      filterParts.add(
+        orParts.length == 1 ? orParts.first : '(${orParts.join(' || ')})',
+      );
+    }
+    if (categories != null && categories.isNotEmpty) {
+      final orParts = categories.map((c) => 'category:=`$c`').toList();
+      filterParts.add(
+        orParts.length == 1 ? orParts.first : '(${orParts.join(' || ')})',
+      );
+    }
+
+    final params = <String, String>{
+      'q': query.trim().isEmpty ? '*' : query.trim(),
+      'query_by': 'name,brand,type,description',
+      'sort_by': _sortBy(sort),
+      'per_page': hitsPerPage.toString(),
+      'page': (page + 1).toString(),
+      'filter_by': filterParts.join(' && '),
+      'include_fields':
+          'id,name,brand,type,category,price,stock,description,imageUrl,imageUrls,isAvailable,createdAt,nutrition',
+    };
+
+    try {
+      final data = await _fetch(params);
+      final rawHits = (data['hits'] as List?) ?? [];
+      final found = (data['found'] as num?)?.toInt() ?? 0;
+
+      final items = <MarketItem>[];
+      for (final h in rawHits) {
+        final doc = (h as Map)['document'] as Map<String, dynamic>;
+        final tsId = (doc['id'] as String?) ?? '';
+        final firestoreId = _extractId(tsId);
+        items.add(MarketItem.fromTypesense(doc, id: firestoreId));
+      }
+
+      final perPage = hitsPerPage > 0 ? hitsPerPage : 1;
+      final nbPages = (found / perPage).ceil().clamp(1, 9999);
+
+      return MarketSearchPage(
+        items: items,
+        page: page,
+        nbPages: nbPages,
+        total: found,
+      );
+    } catch (e) {
+      debugPrint('[MarketTypesense] searchItemsGlobal error: $e');
+      return MarketSearchPage.empty(page);
+    }
+  }
+
+  /// Global disjunctive facets: brand, type, category.
+  /// Single multi_search request with 3 facet queries.
+  Future<MarketGlobalFacets> fetchFacetsGlobal({
+    required String query,
+    List<String>? selectedBrands,
+    List<String>? selectedTypes,
+    List<String>? selectedCategories,
+  }) async {
+    const baseFilter = 'isAvailable:=true';
+
+    String? brandFilter;
+    if (selectedBrands != null && selectedBrands.isNotEmpty) {
+      final parts = selectedBrands.map((b) => 'brand:=`$b`').toList();
+      brandFilter = parts.length == 1 ? parts.first : '(${parts.join(' || ')})';
+    }
+    String? typeFilter;
+    if (selectedTypes != null && selectedTypes.isNotEmpty) {
+      final parts = selectedTypes.map((t) => 'type:=`$t`').toList();
+      typeFilter = parts.length == 1 ? parts.first : '(${parts.join(' || ')})';
+    }
+    String? categoryFilter;
+    if (selectedCategories != null && selectedCategories.isNotEmpty) {
+      final parts =
+          selectedCategories.map((c) => 'category:=`$c`').toList();
+      categoryFilter =
+          parts.length == 1 ? parts.first : '(${parts.join(' || ')})';
+    }
+
+    final q = query.trim().isEmpty ? '*' : query.trim();
+    const queryBy = 'name,brand,type,description';
+
+    final searches = <Map<String, dynamic>>[
+      // 0: Brand facets — exclude brand filter
+      {
+        'q': q,
+        'query_by': queryBy,
+        'per_page': 0,
+        'facet_by': 'brand',
+        'max_facet_values': 100,
+        'filter_by': [
+          baseFilter,
+          if (typeFilter != null) typeFilter,
+          if (categoryFilter != null) categoryFilter,
+        ].join(' && '),
+      },
+      // 1: Type facets — exclude type filter
+      {
+        'q': q,
+        'query_by': queryBy,
+        'per_page': 0,
+        'facet_by': 'type',
+        'max_facet_values': 100,
+        'filter_by': [
+          baseFilter,
+          if (brandFilter != null) brandFilter,
+          if (categoryFilter != null) categoryFilter,
+        ].join(' && '),
+      },
+      // 2: Category facets — exclude category filter
+      {
+        'q': q,
+        'query_by': queryBy,
+        'per_page': 0,
+        'facet_by': 'category',
+        'max_facet_values': 100,
+        'filter_by': [
+          baseFilter,
+          if (brandFilter != null) brandFilter,
+          if (typeFilter != null) typeFilter,
+        ].join(' && '),
+      },
+    ];
+
+    try {
+      final uri = Uri.https(_host, '/multi_search')
+          .replace(queryParameters: {'collection': _collection});
+
+      final resp = await _retryOptions.retry(
+        () async {
+          final r = await _client
+              .post(uri,
+                  headers: _headers, body: jsonEncode({'searches': searches}))
+              .timeout(const Duration(seconds: 6));
+          if (r.statusCode >= 500) {
+            throw HttpException(
+                'Typesense multi_search 5xx: ${r.statusCode}',
+                uri: uri);
+          }
+          return r;
+        },
+        retryIf: (e) =>
+            e is SocketException ||
+            e is TimeoutException ||
+            e is HttpException ||
+            e.toString().contains('Failed host lookup'),
+      );
+
+      if (resp.statusCode != 200) {
+        return MarketGlobalFacets.empty;
+      }
+
+      final body = jsonDecode(resp.body) as Map<String, dynamic>;
+      final results = (body['results'] as List?) ?? [];
+
+      List<MarketFacetValue> parseAt(int i, String fieldName) {
+        if (results.length <= i) return const [];
+        final facetCounts =
+            (results[i] as Map)['facet_counts'] as List? ?? [];
+        for (final facet in facetCounts) {
+          if ((facet as Map)['field_name'] == fieldName) {
+            return _parseFacets(facet['counts'] as List?);
+          }
+        }
+        return const [];
+      }
+
+      return MarketGlobalFacets(
+        brands: parseAt(0, 'brand'),
+        types: parseAt(1, 'type'),
+        categories: parseAt(2, 'category'),
+      );
+    } catch (e) {
+      debugPrint('[MarketTypesense] fetchFacetsGlobal error: $e');
+      return MarketGlobalFacets.empty;
+    }
   }
 
   // ============================================================================

@@ -10,6 +10,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../../constants/market_categories.dart';
+import '../../generated/l10n/app_localizations.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Local models
@@ -288,8 +289,9 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
       }
     } else {
       if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('PDF henüz hazır değil.')),
+          SnackBar(content: Text(l10n.marketReceiptPdfNotReady)),
         );
       }
     }
@@ -307,24 +309,24 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
 
   String _fmtDate(DateTime ts) => DateFormat('dd/MM/yyyy HH:mm').format(ts);
 
-  String _localizeStatus(String? status) {
+  String _localizeStatus(String? status, AppLocalizations l10n) {
     switch (status) {
       case 'pending':
-        return 'Beklemede';
+        return l10n.marketOrderStatusPending;
       case 'confirmed':
-        return 'Onaylandı';
+        return l10n.marketOrderStatusConfirmed;
       case 'preparing':
-        return 'Hazırlanıyor';
+        return l10n.marketOrderStatusPreparing;
       case 'out_for_delivery':
-        return 'Yolda';
+        return l10n.marketOrderStatusOutForDelivery;
       case 'delivered':
-        return 'Teslim Edildi';
+        return l10n.marketOrderStatusDelivered;
       case 'completed':
-        return 'Tamamlandı';
+        return l10n.marketOrderStatusCompleted;
       case 'rejected':
-        return 'Reddedildi';
+        return l10n.marketOrderStatusRejected;
       case 'cancelled':
-        return 'İptal';
+        return l10n.marketOrderStatusCancelled;
       default:
         return status ?? '';
     }
@@ -468,18 +470,18 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 60, 16, 16),
               child: Row(children: [
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      Text('Makbuz Detayı',
-                          style: TextStyle(
+                      Text(AppLocalizations.of(context)!.marketReceiptTitle,
+                          style: const TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.w800,
                               color: Colors.white)),
-                      Text('Nar24 Market',
-                          style: TextStyle(
+                      Text(AppLocalizations.of(context)!.marketBrandName,
+                          style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
                               color: Colors.white70)),
@@ -531,6 +533,7 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
   // ── Error ─────────────────────────────────────────────────────────────────
 
   Widget _buildError(bool isDark) {
+    final l10n = AppLocalizations.of(context)!;
     final isNotFound = _error == 'not_found';
     return Padding(
       padding: const EdgeInsets.all(32),
@@ -545,7 +548,10 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
               color: Colors.red),
         ),
         const SizedBox(height: 20),
-        Text(isNotFound ? 'Makbuz bulunamadı' : 'Yüklenirken hata oluştu',
+        Text(
+            isNotFound
+                ? l10n.marketReceiptNotFound
+                : l10n.marketReceiptLoadError,
             style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
@@ -562,7 +568,7 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
           ElevatedButton.icon(
             onPressed: _loadData,
             icon: const Icon(FeatherIcons.refreshCw, size: 16),
-            label: const Text('Tekrar Dene'),
+            label: Text(l10n.marketOrdersTryAgain),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
               foregroundColor: Colors.white,
@@ -575,8 +581,8 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
           const SizedBox(height: 20),
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child:
-                const Text('Geri Dön', style: TextStyle(color: Colors.green)),
+            child: Text(l10n.marketReceiptGoBack,
+                style: const TextStyle(color: Colors.green)),
           ),
         ],
       ]),
@@ -586,6 +592,7 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
   // ── Header card ───────────────────────────────────────────────────────────
 
   Widget _buildHeaderCard(bool isDark) {
+    final l10n = AppLocalizations.of(context)!;
     final r = _receipt!;
     return Container(
       width: double.infinity,
@@ -615,7 +622,7 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
               color: Colors.white, size: 28),
         ),
         const SizedBox(height: 14),
-        Text('Nar24 Market',
+        Text(l10n.marketBrandName,
             style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
@@ -645,7 +652,10 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
                 size: 14,
                 color: r.isPaid ? Colors.green : Colors.amber[700]),
             const SizedBox(width: 6),
-            Text(r.isPaid ? 'Online Ödendi' : 'Kapıda Ödeme',
+            Text(
+                r.isPaid
+                    ? l10n.marketOrderPaidOnline
+                    : l10n.marketOrderPaymentAtDoor,
                 style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -722,16 +732,17 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
   // ── Order info card ───────────────────────────────────────────────────────
 
   Widget _buildOrderInfoCard(bool isDark) {
+    final l10n = AppLocalizations.of(context)!;
     final r = _receipt!;
     return _section(
       isDark: isDark,
       icon: FeatherIcons.info,
       iconColor: Colors.green,
-      title: 'Sipariş Bilgileri',
+      title: l10n.marketReceiptOrderInfo,
       child: Column(children: [
         _infoRow(
             isDark,
-            'Sipariş No',
+            l10n.marketReceiptOrderNumber,
             Row(children: [
               Text(
                   '#${r.orderId.substring(0, r.orderId.length.clamp(0, 8)).toUpperCase()}',
@@ -752,7 +763,7 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
             ])),
         _infoRow(
             isDark,
-            'Ödeme Yöntemi',
+            l10n.marketReceiptPaymentMethod,
             Row(children: [
               Icon(
                   r.paymentMethod == 'card'
@@ -764,19 +775,24 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
                       : const Color(0xFFF59E0B)),
               const SizedBox(width: 5),
               _infoText(
-                  r.paymentMethod == 'card' ? 'Kart' : 'Kapıda Ödeme', isDark),
+                  r.paymentMethod == 'card'
+                      ? l10n.marketOrderPaymentCard
+                      : l10n.marketOrderPaymentAtDoor,
+                  isDark),
             ])),
         _infoRow(
             isDark,
-            'Teslimat',
-            Text('Teslimat',
-                style: TextStyle(
+            l10n.marketReceiptDelivery,
+            Text(l10n.marketReceiptDelivery,
+                style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                     color: Colors.green))),
         if (_meta.status != null && _meta.status!.isNotEmpty)
           _infoRow(
-              isDark, 'Durum', _infoText(_localizeStatus(_meta.status), isDark),
+              isDark,
+              l10n.marketReceiptStatus,
+              _infoText(_localizeStatus(_meta.status, l10n), isDark),
               isLast: true),
       ]),
     );
@@ -785,12 +801,13 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
   // ── Address card ──────────────────────────────────────────────────────────
 
   Widget _buildAddressCard(bool isDark) {
+    final l10n = AppLocalizations.of(context)!;
     final addr = _receipt!.deliveryAddress!;
     return _section(
       isDark: isDark,
       icon: FeatherIcons.mapPin,
       iconColor: const Color(0xFF10B981),
-      title: 'Teslimat Adresi',
+      title: l10n.marketReceiptDeliveryAddress,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12),
@@ -838,11 +855,12 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
   // ── Items card ────────────────────────────────────────────────────────────
 
   Widget _buildItemsCard(bool isDark) {
+    final l10n = AppLocalizations.of(context)!;
     return _section(
       isDark: isDark,
       icon: FeatherIcons.shoppingBag,
       iconColor: Colors.green,
-      title: 'Sipariş Edilen Ürünler',
+      title: l10n.marketReceiptOrderedItems,
       child: Column(children: [
         ..._items.asMap().entries.map((e) {
           final item = e.value;
@@ -874,7 +892,7 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                    Text('SİPARİŞ NOTU',
+                    Text(l10n.marketReceiptOrderNoteHeader,
                         style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
@@ -896,6 +914,7 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
   }
 
   Widget _buildItemRow(_MarketOrderItem item, bool isDark) {
+    final l10n = AppLocalizations.of(context)!;
     final cat = kMarketCategoryMap[item.category];
     return Container(
       padding: const EdgeInsets.all(12),
@@ -950,7 +969,8 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
           Padding(
             padding: const EdgeInsets.only(left: 44),
             child: Text(
-                '${item.price.toStringAsFixed(0)} ${_receipt!.currency} / adet',
+                l10n.marketReceiptPerUnit(
+                    '${item.price.toStringAsFixed(0)} ${_receipt!.currency}'),
                 style: TextStyle(
                     fontSize: 11,
                     color: isDark ? Colors.grey[500] : Colors.grey[400])),
@@ -963,12 +983,13 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
   // ── Summary card ──────────────────────────────────────────────────────────
 
   Widget _buildSummaryCard(bool isDark) {
+    final l10n = AppLocalizations.of(context)!;
     final r = _receipt!;
     return _section(
       isDark: isDark,
       icon: FeatherIcons.dollarSign,
       iconColor: Colors.green,
-      title: 'Fiyat Özeti',
+      title: l10n.marketReceiptPriceSummary,
       child: Column(children: [
         Container(
           padding: const EdgeInsets.all(12),
@@ -977,15 +998,15 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
           child: Column(children: [
             _infoRow(
                 isDark,
-                'Ara Toplam',
+                l10n.marketOrderSubtotalLabel,
                 _infoText(
                     '${r.subtotal.toStringAsFixed(0)} ${r.currency}', isDark)),
             _infoRow(
                 isDark,
-                'Teslimat Ücreti',
+                l10n.marketOrderDeliveryLabel,
                 Text(
                     r.deliveryFee == 0
-                        ? 'Ücretsiz'
+                        ? l10n.marketOrderDeliveryFree
                         : '${r.deliveryFee.toStringAsFixed(0)} ${r.currency}',
                     style: TextStyle(
                         fontSize: 12,
@@ -1013,7 +1034,7 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
           ),
           child:
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('Toplam',
+            Text(l10n.marketOrderTotalLabel,
                 style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -1030,7 +1051,10 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
           Icon(r.isPaid ? Icons.check_circle_outline : Icons.payments_outlined,
               size: 13, color: r.isPaid ? Colors.green : Colors.amber[700]),
           const SizedBox(width: 6),
-          Text(r.isPaid ? 'Online ödeme alındı' : 'Teslimat sırasında ödenecek',
+          Text(
+              r.isPaid
+                  ? l10n.marketReceiptOnlinePaymentReceived
+                  : l10n.marketReceiptPayDuringDelivery,
               style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w500,

@@ -15792,4 +15792,408 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get updating => 'Güncelleniyor...';
+
+  @override
+  String get marketBrandName => 'Nar24';
+
+  @override
+  String get marketNavNar24 => 'Nar24';
+
+  @override
+  String get marketNavCart => 'Sepet';
+
+  @override
+  String get marketNavMyOrders => 'Siparişlerim';
+
+  @override
+  String get marketNavProfile => 'Profil';
+
+  @override
+  String get marketCategoryTitle => 'Nar24 Market';
+
+  @override
+  String get marketCategoriesHeader => 'Kategoriler';
+
+  @override
+  String marketCategoriesCount(int count) {
+    return '$count kategori';
+  }
+
+  @override
+  String get marketCategoryFallbackTitle => 'Kategori';
+
+  @override
+  String get myMarketOrdersTitle => 'Siparişlerim';
+
+  @override
+  String get marketOrdersEmptyTitle => 'Henüz siparişiniz yok';
+
+  @override
+  String get marketOrdersEmptySubtitle => 'Siparişleriniz burada görünecek';
+
+  @override
+  String get marketOrdersTryAgain => 'Tekrar Dene';
+
+  @override
+  String get marketOrderLoadFailed => 'Siparişler yüklenemedi';
+
+  @override
+  String marketOrderItemCount(int count) {
+    return '$count ürün';
+  }
+
+  @override
+  String get marketOrderStatusPending => 'Beklemede';
+
+  @override
+  String get marketOrderStatusConfirmed => 'Onaylandı';
+
+  @override
+  String get marketOrderStatusPreparing => 'Hazırlanıyor';
+
+  @override
+  String get marketOrderStatusOutForDelivery => 'Yolda';
+
+  @override
+  String get marketOrderStatusDelivered => 'Teslim Edildi';
+
+  @override
+  String get marketOrderStatusCompleted => 'Tamamlandı';
+
+  @override
+  String get marketOrderStatusRejected => 'Reddedildi';
+
+  @override
+  String get marketOrderStatusCancelled => 'İptal';
+
+  @override
+  String get marketCheckoutTitle => 'Ödeme';
+
+  @override
+  String get marketCheckoutDeliveryAddress => 'Teslimat Adresi';
+
+  @override
+  String get marketCheckoutDeliveryAddressTitle => 'Teslimat Adresi';
+
+  @override
+  String get marketCheckoutNoAddress => 'Adres eklenmedi';
+
+  @override
+  String get marketCheckoutAddAddress => 'Adres Ekle';
+
+  @override
+  String get marketCheckoutOrderNote => 'Sipariş Notu';
+
+  @override
+  String get marketCheckoutOrderNoteTitle => 'Sipariş Notu';
+
+  @override
+  String get marketCheckoutNoteHint =>
+      'Siparişiniz için not ekleyin (opsiyonel)';
+
+  @override
+  String get marketCheckoutPaymentMethod => 'Ödeme Yöntemi';
+
+  @override
+  String get marketCheckoutYourOrder => 'Siparişiniz';
+
+  @override
+  String get marketCheckoutPlaceOrder => 'Siparişi Tamamla';
+
+  @override
+  String get marketCheckoutPayButton => 'Öde';
+
+  @override
+  String get marketCartTitle => 'Sepet';
+
+  @override
+  String marketCartItemCount(int count) {
+    return '$count ürün';
+  }
+
+  @override
+  String get marketCartClear => 'Temizle';
+
+  @override
+  String get marketCartOrderSummary => 'Sipariş Özeti';
+
+  @override
+  String get marketCartTotalLabel => 'Toplam';
+
+  @override
+  String get marketCartDeliveryFeeWillBeCalculated =>
+      'Teslimat ücreti ödeme adımında hesaplanacaktır';
+
+  @override
+  String get marketCartProceedToCheckout => 'Ödemeye Geç';
+
+  @override
+  String get marketCartClearDialogTitle => 'Sepeti Temizle';
+
+  @override
+  String get marketCartClearDialogBody =>
+      'Sepetinizi temizlemek istediğinize emin misiniz?';
+
+  @override
+  String get marketCartClearDialogCancel => 'İptal';
+
+  @override
+  String get marketCartEmptyTitle => 'Sepetiniz boş';
+
+  @override
+  String get marketCartEmptySubtitle => 'Alışverişe başlamak için ürün ekleyin';
+
+  @override
+  String get marketCartEmptyStartShopping => 'Alışverişe Başla';
+
+  @override
+  String get marketCartGoToMarket => 'Markete Git';
+
+  @override
+  String get marketSearchHint => 'Ara...';
+
+  @override
+  String get marketFacetBrand => 'Marka';
+
+  @override
+  String get marketFacetType => 'Tür';
+
+  @override
+  String get marketClearFilters => 'Filtreleri temizle';
+
+  @override
+  String get marketNoProductsFound => 'Ürün bulunamadı';
+
+  @override
+  String get marketSortDefault => 'Varsayılan';
+
+  @override
+  String get marketSortNameAsc => 'İsim (A-Z)';
+
+  @override
+  String get marketSortPriceAsc => 'Fiyat (Artan)';
+
+  @override
+  String get marketSortPriceDesc => 'Fiyat (Azalan)';
+
+  @override
+  String get marketOrderDateLabel => 'Tarih';
+
+  @override
+  String get marketOrderDeliveryLabel => 'Teslimat Ücreti';
+
+  @override
+  String get marketOrderDeliveryFree => 'Ücretsiz';
+
+  @override
+  String get marketOrderNumberLabel => 'Sipariş No';
+
+  @override
+  String get marketOrderPaidOnline => 'Online Ödendi';
+
+  @override
+  String get marketOrderPaymentAtDoor => 'Kapıda Ödeme';
+
+  @override
+  String get marketOrderPaymentCard => 'Kart';
+
+  @override
+  String get marketOrderPaymentMethodLabel => 'Ödeme Yöntemi';
+
+  @override
+  String get marketOrderPaymentStatusLabel => 'Ödeme Durumu';
+
+  @override
+  String get marketOrderPayOnDelivery => 'Kapıda Ödeme';
+
+  @override
+  String get marketOrderQuantityLabel => 'Adet';
+
+  @override
+  String get marketOrderReceivedNotifications =>
+      'Siparişinizle ilgili bildirimleri alacaksınız';
+
+  @override
+  String get marketOrderReceivedSupport =>
+      'Sorularınız için destek ile iletişime geçin';
+
+  @override
+  String get marketOrderReceivedTitle => 'Siparişiniz Alındı';
+
+  @override
+  String get marketOrderSubtotalLabel => 'Ara Toplam';
+
+  @override
+  String get marketOrderTotalLabel => 'Toplam';
+
+  @override
+  String get marketPaymentAtDoor => 'Kapıda Ödeme';
+
+  @override
+  String get marketPaymentCancelBody =>
+      'Ödemeyi iptal etmek istediğinize emin misiniz?';
+
+  @override
+  String get marketPaymentCancelConfirm => 'Evet, İptal';
+
+  @override
+  String get marketPaymentCancelContinue => 'Devam Et';
+
+  @override
+  String get marketPaymentCancelTitle => 'Ödemeyi İptal Et';
+
+  @override
+  String get marketPaymentErrorTitle => 'Ödeme Hatası';
+
+  @override
+  String get marketPaymentFailedTitle => 'Ödeme Başarısız';
+
+  @override
+  String get marketPaymentGoBack => 'Geri Dön';
+
+  @override
+  String get marketPaymentHeaderBadge => 'Güvenli Ödeme';
+
+  @override
+  String get marketPaymentInfoMissing => 'Ödeme bilgileri eksik';
+
+  @override
+  String get marketPaymentIsbankInfrastructure => 'İşbank Ödeme Altyapısı';
+
+  @override
+  String get marketPaymentLoadingPage => 'Ödeme sayfası yükleniyor...';
+
+  @override
+  String get marketPaymentMethodCard => 'Kredi / Banka Kartı';
+
+  @override
+  String get marketPaymentMethodCardSubtitle => 'Visa, MasterCard, Troy';
+
+  @override
+  String get marketPaymentMethodPayAtDoor => 'Kapıda Ödeme';
+
+  @override
+  String get marketPaymentMethodPayAtDoorSubtitle =>
+      'Teslimatta nakit veya kart';
+
+  @override
+  String get marketPaymentOrderLabel => 'Sipariş';
+
+  @override
+  String get marketPaymentOrderReceived => 'Siparişiniz alındı';
+
+  @override
+  String get marketPaymentPaid => 'Ödendi';
+
+  @override
+  String get marketPaymentPleaseWait => 'Lütfen bekleyin...';
+
+  @override
+  String get marketPaymentProcessingError => 'Ödeme işlenirken hata';
+
+  @override
+  String get marketPaymentRedirecting => 'Yönlendiriliyor...';
+
+  @override
+  String get marketPaymentReturnToMarket => 'Markete Dön';
+
+  @override
+  String get marketPaymentSecureSsl => 'SSL Güvenli';
+
+  @override
+  String get marketPaymentSecureTitle => 'Güvenli Ödeme';
+
+  @override
+  String get marketPaymentSuccessTitle => 'Ödeme Başarılı';
+
+  @override
+  String get marketPaymentTimeoutTitle => 'Ödeme Zaman Aşımı';
+
+  @override
+  String get marketPaymentTryAgain => 'Tekrar Dene';
+
+  @override
+  String get marketReceiptPdfNotReady => 'PDF henüz hazır değil.';
+
+  @override
+  String get marketReceiptTitle => 'Makbuz Detayı';
+
+  @override
+  String get marketReceiptNotFound => 'Makbuz bulunamadı';
+
+  @override
+  String get marketReceiptLoadError => 'Yüklenirken hata oluştu';
+
+  @override
+  String get marketReceiptGoBack => 'Geri Dön';
+
+  @override
+  String get marketReceiptOrderInfo => 'Sipariş Bilgileri';
+
+  @override
+  String get marketReceiptOrderNumber => 'Sipariş No';
+
+  @override
+  String get marketReceiptPaymentMethod => 'Ödeme Yöntemi';
+
+  @override
+  String get marketReceiptDelivery => 'Teslimat';
+
+  @override
+  String get marketReceiptStatus => 'Durum';
+
+  @override
+  String get marketReceiptDeliveryAddress => 'Teslimat Adresi';
+
+  @override
+  String get marketReceiptOrderedItems => 'Sipariş Edilen Ürünler';
+
+  @override
+  String get marketReceiptOrderNoteHeader => 'SİPARİŞ NOTU';
+
+  @override
+  String marketReceiptPerUnit(String price) {
+    return '$price / adet';
+  }
+
+  @override
+  String get marketReceiptPriceSummary => 'Fiyat Özeti';
+
+  @override
+  String get marketReceiptOnlinePaymentReceived => 'Online ödeme alındı';
+
+  @override
+  String get marketReceiptPayDuringDelivery => 'Teslimat sırasında ödenecek';
+
+  @override
+  String get marketPaymentSucceededOrderFailed =>
+      'Ödeme başarılı ancak sipariş oluşturulamadı';
+
+  @override
+  String get marketPaymentTimeout => 'Ödeme zaman aşımı';
+
+  @override
+  String get marketPaymentFailed => 'Ödeme başarısız';
+
+  @override
+  String get marketOutOfStock => 'Stokta yok';
+
+  @override
+  String get marketCheckoutAddressRequired =>
+      'Lütfen bir teslimat adresi seçin';
+
+  @override
+  String get marketCheckoutOrderCreationFailed => 'Sipariş oluşturulamadı';
+
+  @override
+  String get marketCheckoutPaymentInitFailed => 'Ödeme başlatılamadı';
+
+  @override
+  String get marketOrderDetailTitle => 'Sipariş Detayı';
+
+  @override
+  String get marketOrdersLoadError => 'Siparişler yüklenemedi';
+
+  @override
+  String get marketInfo => 'Bilgi';
 }

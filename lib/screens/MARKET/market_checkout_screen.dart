@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../constants/market_categories.dart';
 import '../../models/food_address.dart';
+import '../../generated/l10n/app_localizations.dart';
 import '../../providers/market_cart_provider.dart';
 import '../../user_provider.dart';
 
@@ -72,7 +73,7 @@ class _MarketCheckoutContentState extends State<_MarketCheckoutContent> {
 
   bool _validateForm() {
     if (_getFoodAddress() == null) {
-      setState(() => _error = 'Lütfen teslimat adresinizi ayarlayın.');
+      setState(() => _error = AppLocalizations.of(context)!.marketCheckoutAddressRequired);
       return false;
     }
     setState(() => _error = null);
@@ -124,7 +125,7 @@ class _MarketCheckoutContentState extends State<_MarketCheckoutContent> {
       }
     } on FirebaseFunctionsException catch (e) {
       if (mounted) {
-        setState(() => _error = e.message ?? 'Sipariş oluşturulamadı.');
+        setState(() => _error = e.message ?? AppLocalizations.of(context)!.marketCheckoutOrderCreationFailed);
       }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
@@ -175,7 +176,7 @@ class _MarketCheckoutContentState extends State<_MarketCheckoutContent> {
         }
       }
     } on FirebaseFunctionsException catch (e) {
-      if (mounted) setState(() => _error = e.message ?? 'Ödeme başlatılamadı.');
+      if (mounted) setState(() => _error = e.message ?? AppLocalizations.of(context)!.marketCheckoutPaymentInitFailed);
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -192,6 +193,7 @@ class _MarketCheckoutContentState extends State<_MarketCheckoutContent> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context)!;
 
     return Consumer<MarketCartProvider>(
       builder: (context, cart, _) {
@@ -243,7 +245,7 @@ class _MarketCheckoutContentState extends State<_MarketCheckoutContent> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                       child: Text(
-                        'Sipariş Onayı',
+                        l10n.marketCheckoutTitle,
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -255,7 +257,7 @@ class _MarketCheckoutContentState extends State<_MarketCheckoutContent> {
 
                     // ── Your Order ─────────────────────────────────────
                     _Section(
-                      title: 'SİPARİŞİNİZ',
+                      title: l10n.marketCheckoutYourOrder,
                       isDark: isDark,
                       child: Column(
                         children: cart.items
@@ -274,7 +276,7 @@ class _MarketCheckoutContentState extends State<_MarketCheckoutContent> {
 
                     // ── Delivery Address ───────────────────────────────
                     _Section(
-                      title: 'TESLİMAT ADRESİ',
+                      title: l10n.marketCheckoutDeliveryAddress,
                       isDark: isDark,
                       child: _AddressCard(
                         foodAddress: foodAddress,
@@ -285,7 +287,7 @@ class _MarketCheckoutContentState extends State<_MarketCheckoutContent> {
 
                     // ── Order Notes ────────────────────────────────────
                     _Section(
-                      title: 'SİPARİŞ NOTU',
+                      title: l10n.marketCheckoutOrderNote,
                       isDark: isDark,
                       child: TextField(
                         controller: _notesController,
@@ -293,7 +295,7 @@ class _MarketCheckoutContentState extends State<_MarketCheckoutContent> {
                         maxLength: 1000,
                         onChanged: (v) => setState(() => _orderNotes = v),
                         decoration: InputDecoration(
-                          hintText: 'Kapı kodu, yön tarifi vb...',
+                          hintText: l10n.marketCheckoutNoteHint,
                           hintStyle: TextStyle(
                             color: isDark ? Colors.grey[600] : Colors.grey[400],
                             fontSize: 13,
@@ -330,7 +332,7 @@ class _MarketCheckoutContentState extends State<_MarketCheckoutContent> {
 
                     // ── Payment Method ─────────────────────────────────
                     _Section(
-                      title: 'ÖDEME YÖNTEMİ',
+                      title: l10n.marketCheckoutPaymentMethod,
                       isDark: isDark,
                       child: Column(children: [
                         _PaymentMethodButton(
@@ -391,6 +393,7 @@ class _AddressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     if (foodAddress != null) {
       final addr = foodAddress!;
       final cityLine = [addr.city, addr.mainRegion]
@@ -483,7 +486,7 @@ class _AddressCard extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: Text(
-            'Teslimat adresi bulunamadı',
+            l10n.marketCheckoutNoAddress,
             style: TextStyle(
               fontSize: 13,
               color: isDark ? Colors.grey[400] : Colors.grey[500],
@@ -498,9 +501,9 @@ class _AddressCard extends StatelessWidget {
               color: Colors.green,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Text(
-              'Ekle',
-              style: TextStyle(
+            child: Text(
+              l10n.marketCheckoutAddAddress,
+              style: const TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
@@ -792,6 +795,7 @@ class _PaymentMethodButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isPay = method == _PaymentMethod.payAtDoor;
+    final l10n = AppLocalizations.of(context)!;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -832,7 +836,7 @@ class _PaymentMethodButton extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isPay ? 'Kapıda Ödeme' : 'Kredi / Banka Kartı',
+                  isPay ? l10n.marketPaymentMethodPayAtDoor : l10n.marketPaymentMethodCard,
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -843,8 +847,8 @@ class _PaymentMethodButton extends StatelessWidget {
                 ),
                 Text(
                   isPay
-                      ? 'Nakit veya kart ile kapıda ödeme'
-                      : 'Güvenli online ödeme',
+                      ? l10n.marketPaymentMethodPayAtDoorSubtitle
+                      : l10n.marketPaymentMethodCardSubtitle,
                   style: TextStyle(
                     fontSize: 11,
                     color: isDark ? Colors.grey[500] : Colors.grey[700],
@@ -888,6 +892,7 @@ class _StickyBottomBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final canSubmit = isFormValid && !isSubmitting;
     final isCard = paymentMethod == _PaymentMethod.card;
+    final l10n = AppLocalizations.of(context)!;
 
     return Container(
       decoration: BoxDecoration(
@@ -932,7 +937,7 @@ class _StickyBottomBar extends StatelessWidget {
         Row(children: [
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(
-              '$itemCount ürün',
+              l10n.marketCartItemCount(itemCount),
               style: TextStyle(
                 fontSize: 11,
                 color: isDark ? Colors.grey[500] : Colors.grey[700],
@@ -976,7 +981,7 @@ class _StickyBottomBar extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      isCard ? 'Ödeme Yap' : 'Sipariş Ver',
+                      isCard ? l10n.marketCheckoutPayButton : l10n.marketCheckoutPlaceOrder,
                       style: const TextStyle(
                           fontSize: 13, fontWeight: FontWeight.bold),
                     ),
@@ -1003,6 +1008,7 @@ class _OrderSuccessScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor:
           isDark ? const Color(0xFF1C1A29) : const Color(0xFFF5F5F5),
@@ -1035,7 +1041,7 @@ class _OrderSuccessScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Siparişiniz Alındı!',
+                  l10n.marketOrderReceivedTitle,
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -1050,7 +1056,7 @@ class _OrderSuccessScreen extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Siparişinizin durumu hakkında bildirimler alacaksınız.',
+                      l10n.marketOrderReceivedNotifications,
                       style: TextStyle(
                         fontSize: 12,
                         height: 1.4,
@@ -1067,7 +1073,7 @@ class _OrderSuccessScreen extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Herhangi bir sorun yaşarsanız destek ekibimize ulaşabilirsiniz.',
+                      l10n.marketOrderReceivedSupport,
                       style: TextStyle(
                         fontSize: 12,
                         height: 1.4,
@@ -1078,7 +1084,7 @@ class _OrderSuccessScreen extends StatelessWidget {
                 ]),
                 const SizedBox(height: 12),
                 Text(
-                  'Sipariş: ${orderId.substring(0, orderId.length.clamp(0, 8)).toUpperCase()}',
+                  '${l10n.marketPaymentOrderLabel}: ${orderId.substring(0, orderId.length.clamp(0, 8)).toUpperCase()}',
                   style: TextStyle(
                     fontSize: 11,
                     color: isDark ? Colors.grey[600] : Colors.grey[400],
@@ -1098,8 +1104,8 @@ class _OrderSuccessScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text('Markete Dön',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: Text(l10n.marketPaymentReturnToMarket,
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ]),
@@ -1121,6 +1127,7 @@ class _EmptyCartScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor:
           isDark ? const Color(0xFF1C1A29) : const Color(0xFFF5F5F5),
@@ -1131,7 +1138,7 @@ class _EmptyCartScreen extends StatelessWidget {
                 size: 64, color: isDark ? Colors.grey[600] : Colors.grey[300]),
             const SizedBox(height: 16),
             Text(
-              'Sepetiniz Boş',
+              l10n.marketCartEmptyTitle,
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -1140,7 +1147,7 @@ class _EmptyCartScreen extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Ürün ekleyerek alışverişe başlayın',
+              l10n.marketCartEmptyStartShopping,
               style: TextStyle(
                 fontSize: 13,
                 color: isDark ? Colors.grey[400] : Colors.grey[500],
@@ -1158,8 +1165,8 @@ class _EmptyCartScreen extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('Markete Git',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
+              child: Text(l10n.marketCartGoToMarket,
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
             ),
           ]),
         ),

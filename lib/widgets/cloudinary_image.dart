@@ -41,11 +41,6 @@ class CloudinaryImage extends StatelessWidget {
   final Duration fadeOutDuration;
   final bool useOldImageOnUrlChange;
 
-  /// Decode-size cap applied to the **primary** CDN request. Usually
-  /// unnecessary because Cloudinary already serves correctly-sized bytes,
-  /// but useful for disk-cache scoping in grid lists.
-  final int? primaryMaxDiskCacheWidth;
-
   /// Decode-size cap applied to the **fallback** request. The raw
   /// Firebase Storage original can be very large, so callers should set
   /// this to prevent memory spikes when CDN is unreachable.
@@ -71,7 +66,6 @@ class CloudinaryImage extends StatelessWidget {
     this.fadeInDuration = Duration.zero,
     this.fadeOutDuration = Duration.zero,
     this.useOldImageOnUrlChange = true,
-    this.primaryMaxDiskCacheWidth,
     this.fallbackMemCacheWidth,
     this.fallbackMemCacheHeight,
     this.placeholderBuilder,
@@ -115,7 +109,6 @@ class CloudinaryImage extends StatelessWidget {
       fadeInDuration: fadeInDuration,
       fadeOutDuration: fadeOutDuration,
       useOldImageOnUrlChange: useOldImageOnUrlChange,
-      primaryMaxDiskCacheWidth: CloudinaryUrl.widthFor(size),
       fallbackMemCacheWidth:
           fallbackMemCacheWidth ?? CloudinaryUrl.widthFor(size),
       fallbackMemCacheHeight: fallbackMemCacheHeight,
@@ -156,7 +149,6 @@ class CloudinaryImage extends StatelessWidget {
       fadeInDuration: fadeInDuration,
       fadeOutDuration: fadeOutDuration,
       useOldImageOnUrlChange: useOldImageOnUrlChange,
-      primaryMaxDiskCacheWidth: cdnWidth,
       fallbackMemCacheWidth: fallbackMemCacheWidth ?? cdnWidth,
       fallbackMemCacheHeight: fallbackMemCacheHeight,
       placeholderBuilder: placeholderBuilder,
@@ -234,7 +226,6 @@ class CloudinaryImage extends StatelessWidget {
       fadeInDuration: fadeInDuration,
       fadeOutDuration: fadeOutDuration,
       useOldImageOnUrlChange: useOldImageOnUrlChange,
-      primaryMaxDiskCacheWidth: cdnWidth,
       fallbackMemCacheWidth: fallbackMemCacheWidth ?? cdnWidth,
       fallbackMemCacheHeight: fallbackMemCacheHeight,
       placeholderBuilder: placeholderBuilder,
@@ -260,7 +251,6 @@ class CloudinaryImage extends StatelessWidget {
       fadeOutDuration: fadeOutDuration,
       useOldImageOnUrlChange: useOldImageOnUrlChange,
       filterQuality: filterQuality,
-      maxWidthDiskCache: primaryMaxDiskCacheWidth,
       placeholder: placeholder,
       errorWidget: (ctx, _, __) {
         if (fallback == null || fallback == primary) return error(ctx);

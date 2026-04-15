@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
 import 'package:provider/provider.dart';
 
+import '../../generated/l10n/app_localizations.dart';
 import '../../providers/market_cart_provider.dart';
 import 'market_category_screen.dart';
 import 'market_cart_screen.dart';
@@ -121,6 +122,7 @@ class _MarketShellScreenState extends State<MarketShellScreen> {
 
   Widget _buildBottomNavigation(bool dark, double bottomPad) {
     final cartCount = context.watch<MarketCartProvider>().itemCount;
+    final l10n = AppLocalizations.of(context)!;
 
     return Container(
       height: 55 + bottomPad,
@@ -148,23 +150,23 @@ class _MarketShellScreenState extends State<MarketShellScreen> {
         items: [
           BottomNavigationBarItem(
             icon: _buildNavItem(
-                FeatherIcons.home, 'Nar24', _selectedIndex == 0),
+                FeatherIcons.home, l10n.marketNavNar24, _selectedIndex == 0),
             label: '',
           ),
           BottomNavigationBarItem(
             icon: _buildNavItem(
-                FeatherIcons.shoppingBag, 'Cart', _selectedIndex == 1,
+                FeatherIcons.shoppingBag, l10n.marketNavCart, _selectedIndex == 1,
                 badgeCount: cartCount),
             label: '',
           ),
           BottomNavigationBarItem(
             icon: _buildNavItem(
-                FeatherIcons.clipboard, 'My Orders', _selectedIndex == 2),
+                FeatherIcons.clipboard, l10n.marketNavMyOrders, _selectedIndex == 2),
             label: '',
           ),
           BottomNavigationBarItem(
             icon: _buildNavItem(
-                FeatherIcons.user, 'Profile', _selectedIndex == 3),
+                FeatherIcons.user, l10n.marketNavProfile, _selectedIndex == 3),
             label: '',
           ),
         ],

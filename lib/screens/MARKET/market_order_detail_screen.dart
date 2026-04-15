@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:intl/intl.dart';
 import '../../constants/market_categories.dart';
+import '../../generated/l10n/app_localizations.dart';
 
 // ============================================================================
 // DATA MODELS (screen-local, richer than list model)
@@ -84,24 +85,24 @@ extension _StatusX on _Status {
     }
   }
 
-  String get label {
+  String labelFor(AppLocalizations l10n) {
     switch (this) {
       case _Status.pending:
-        return 'Beklemede';
+        return l10n.marketOrderStatusPending;
       case _Status.confirmed:
-        return 'Onaylandı';
+        return l10n.marketOrderStatusConfirmed;
       case _Status.rejected:
-        return 'Reddedildi';
+        return l10n.marketOrderStatusRejected;
       case _Status.preparing:
-        return 'Hazırlanıyor';
+        return l10n.marketOrderStatusPreparing;
       case _Status.outForDelivery:
-        return 'Yolda';
+        return l10n.marketOrderStatusOutForDelivery;
       case _Status.delivered:
-        return 'Teslim Edildi';
+        return l10n.marketOrderStatusDelivered;
       case _Status.completed:
-        return 'Tamamlandı';
+        return l10n.marketOrderStatusCompleted;
       case _Status.cancelled:
-        return 'İptal';
+        return l10n.marketOrderStatusCancelled;
     }
   }
 }
@@ -353,13 +354,13 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      const Text('Sipariş Detayı',
-                          style: TextStyle(
+                      Text(AppLocalizations.of(context)!.marketOrderDetailTitle,
+                          style: const TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.w800,
                               color: Colors.white)),
-                      const Text('Nar24 Market',
-                          style: TextStyle(
+                      Text(AppLocalizations.of(context)!.marketBrandName,
+                          style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
                               color: Colors.white70)),
@@ -386,6 +387,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
   // ── Order header ──────────────────────────────────────────────────────
   Widget _buildHeader(bool isDark) {
     final o = _order!;
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       margin: const EdgeInsets.all(16),
       decoration: _card(isDark),
@@ -409,7 +411,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
               child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Sipariş No',
+              Text(l10n.marketOrderNumberLabel,
                   style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -430,7 +432,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
           Expanded(
               child: _infoCell(
                   isDark,
-                  'Tarih',
+                  l10n.marketOrderDateLabel,
                   Text(_fmtDate(o.createdAt),
                       style: TextStyle(
                           fontSize: 12,
@@ -442,12 +444,12 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
           Expanded(
               child: _infoCell(
                   isDark,
-                  'Teslimat',
+                  l10n.marketOrderDeliveryLabel,
                   Row(children: [
                     Icon(Icons.location_on_outlined,
                         size: 13, color: Colors.green[600]),
                     const SizedBox(width: 4),
-                    Text('Teslimat',
+                    Text(l10n.marketOrderDeliveryLabel,
                         style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -459,7 +461,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
           Expanded(
               child: _infoCell(
                   isDark,
-                  'Ödeme Yöntemi',
+                  l10n.marketOrderPaymentMethodLabel,
                   Row(children: [
                     Icon(
                         o.paymentMethod == 'card'
@@ -470,7 +472,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
                             ? const Color(0xFF6366F1)
                             : const Color(0xFFF59E0B)),
                     const SizedBox(width: 4),
-                    Text(o.paymentMethod == 'card' ? 'Kart' : 'Kapıda',
+                    Text(o.paymentMethod == 'card' ? l10n.marketOrderPaymentCard : l10n.marketOrderPaymentAtDoor,
                         style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -482,8 +484,8 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
           Expanded(
               child: _infoCell(
                   isDark,
-                  'Ödeme Durumu',
-                  Text(o.isPaid ? 'Ödendi' : 'Beklemede',
+                  l10n.marketOrderPaymentStatusLabel,
+                  Text(o.isPaid ? l10n.marketPaymentPaid : l10n.marketOrderStatusPending,
                       style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -496,6 +498,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
   }
 
   Widget _statusBadge(_Status s) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -505,7 +508,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(s.icon, size: 10, color: s.color),
         const SizedBox(width: 4),
-        Text(s.label,
+        Text(s.labelFor(l10n),
             style: TextStyle(
                 fontSize: 10, fontWeight: FontWeight.w600, color: s.color)),
       ]),
@@ -546,6 +549,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
 
   Widget _buildItemCard(_Item item, bool isDark) {
     final cat = kMarketCategoryMap[item.category];
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: _card(isDark),
       padding: const EdgeInsets.all(16),
@@ -616,7 +620,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: Colors.green)),
-              Text('Adet: ${item.quantity}',
+              Text('${l10n.marketOrderQuantityLabel}: ${item.quantity}',
                   style: TextStyle(
                       fontSize: 11,
                       color: isDark ? Colors.grey[400] : Colors.grey[600])),
@@ -632,7 +636,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
             ),
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Toplam',
+              Text(l10n.marketOrderTotalLabel,
                   style: TextStyle(
                       fontSize: 10,
                       color: isDark ? Colors.grey[500] : Colors.grey[500])),
@@ -652,6 +656,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
   Widget _buildAddress(bool isDark) {
     final addr = _order!.deliveryAddress;
     if (addr == null) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 0),
       decoration: _card(isDark),
@@ -671,7 +676,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
                 color: Color(0xFF10B981), size: 20),
           ),
           const SizedBox(width: 12),
-          Text('Teslimat Adresi',
+          Text(l10n.marketCheckoutDeliveryAddressTitle,
               style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -730,6 +735,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
   Widget _buildNotes(bool isDark) {
     final notes = _order!.orderNotes;
     if (notes == null || notes.isEmpty) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 0),
       decoration: _card(isDark),
@@ -749,7 +755,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
                 color: Color(0xFFF59E0B), size: 20),
           ),
           const SizedBox(width: 12),
-          Text('Sipariş Notu',
+          Text(l10n.marketCheckoutOrderNoteTitle,
               style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -773,6 +779,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
   // ── Summary ───────────────────────────────────────────────────────────
   Widget _buildSummary(bool isDark) {
     final o = _order!;
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 0),
       decoration: _card(isDark),
@@ -790,7 +797,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
             child: const Icon(Icons.receipt, color: Colors.green, size: 20),
           ),
           const SizedBox(width: 12),
-          Text('Sipariş Özeti',
+          Text(l10n.marketCartOrderSummary,
               style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -803,12 +810,12 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
               color: _innerBg(isDark), borderRadius: BorderRadius.circular(8)),
           child: Column(children: [
             _summaryRow(
-                'Ara Toplam', '${_fmt(o.subtotal)} ${o.currency}', isDark),
+                l10n.marketOrderSubtotalLabel, '${_fmt(o.subtotal)} ${o.currency}', isDark),
             const SizedBox(height: 8),
             _summaryRow(
-                'Teslimat',
+                l10n.marketOrderDeliveryLabel,
                 o.deliveryFee == 0
-                    ? 'Ücretsiz'
+                    ? l10n.marketOrderDeliveryFree
                     : '${_fmt(o.deliveryFee)} ${o.currency}',
                 isDark,
                 valueColor:
@@ -820,7 +827,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
                     ? Colors.white.withOpacity(0.1)
                     : Colors.grey.withOpacity(0.2)),
             const SizedBox(height: 12),
-            _summaryRow('Toplam', '${_fmt(o.totalPrice)} ${o.currency}', isDark,
+            _summaryRow(l10n.marketOrderTotalLabel, '${_fmt(o.totalPrice)} ${o.currency}', isDark,
                 isTotal: true),
             const SizedBox(height: 10),
             Row(children: [
@@ -835,8 +842,8 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
               const SizedBox(width: 6),
               Text(
                   o.isPaid
-                      ? 'Online ödeme alındı'
-                      : 'Teslimat sırasında ödenecek',
+                      ? l10n.marketOrderPaidOnline
+                      : l10n.marketOrderPayOnDelivery,
                   style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
@@ -903,6 +910,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
   }
 
   Widget _buildError(bool isDark) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       margin: const EdgeInsets.all(20),
       padding: const EdgeInsets.all(24),
@@ -917,7 +925,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
           child: const Icon(Icons.error_outline, size: 32, color: Colors.red),
         ),
         const SizedBox(height: 16),
-        Text('Sipariş yüklenemedi',
+        Text(l10n.marketOrderLoadFailed,
             style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -932,7 +940,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
         ElevatedButton.icon(
           onPressed: _loadOrder,
           icon: const Icon(Icons.refresh, size: 16),
-          label: const Text('Tekrar Dene'),
+          label: Text(l10n.marketOrdersTryAgain),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.green,
             foregroundColor: Colors.white,

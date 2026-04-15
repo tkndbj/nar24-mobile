@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../constants/market_categories.dart';
+import '../../generated/l10n/app_localizations.dart';
 import '../../providers/market_cart_provider.dart';
 
 // =============================================================================
@@ -45,6 +46,7 @@ class _MarketCartContentState extends State<_MarketCartContent> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context)!;
 
     return Consumer<MarketCartProvider>(
       builder: (context, cart, _) {
@@ -52,9 +54,9 @@ class _MarketCartContentState extends State<_MarketCartContent> {
           backgroundColor:
               isDark ? const Color(0xFF1C1A29) : const Color(0xFFF5F5F5),
           appBar: AppBar(
-            title: const Text(
-              'Sepetim',
-              style: TextStyle(
+            title: Text(
+              l10n.marketCartTitle,
+              style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
               ),
@@ -173,10 +175,11 @@ class _TitleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       children: [
         Text(
-          'Sepetim',
+          l10n.marketCartTitle,
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
@@ -191,7 +194,7 @@ class _TitleRow extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
-            '$itemCount ürün',
+            l10n.marketCartItemCount(itemCount),
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w500,
@@ -203,7 +206,7 @@ class _TitleRow extends StatelessWidget {
         GestureDetector(
           onTap: onClearAll,
           child: Text(
-            'Temizle',
+            l10n.marketCartClear,
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
@@ -525,6 +528,7 @@ class _OrderSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final totals = cart.totals;
+    final l10n = AppLocalizations.of(context)!;
 
     return Container(
       width: double.infinity,
@@ -544,7 +548,7 @@ class _OrderSummary extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Sipariş Özeti',
+              l10n.marketCartOrderSummary,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
@@ -605,7 +609,7 @@ class _OrderSummary extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'TOPLAM',
+                      l10n.marketCartTotalLabel,
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
@@ -635,7 +639,7 @@ class _OrderSummary extends StatelessWidget {
                 ),
                 const Spacer(),
                 Text(
-                  'Teslimat ücreti hesaplanacak',
+                  l10n.marketCartDeliveryFeeWillBeCalculated,
                   style: TextStyle(
                     fontSize: 11,
                     color: isDark ? Colors.grey[600] : Colors.grey[600],
@@ -658,9 +662,9 @@ class _OrderSummary extends StatelessWidget {
                     borderRadius: BorderRadius.circular(0),
                   ),
                 ),
-                child: const Text(
-                  'Siparişe Devam Et',
-                  style: TextStyle(
+                child: Text(
+                  l10n.marketCartProceedToCheckout,
+                  style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: Colors.white,
@@ -692,6 +696,7 @@ class _ClearCartDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return GestureDetector(
       onTap: onCancel,
       child: Container(
@@ -730,7 +735,7 @@ class _ClearCartDialog extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Sepeti Temizle',
+                        l10n.marketCartClearDialogTitle,
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
@@ -739,7 +744,7 @@ class _ClearCartDialog extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Sepetinizdeki tüm ürünler silinecek. Devam etmek istiyor musunuz?',
+                        l10n.marketCartClearDialogBody,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 13,
@@ -781,7 +786,7 @@ class _ClearCartDialog extends StatelessWidget {
                             ),
                             alignment: Alignment.center,
                             child: Text(
-                              'Vazgeç',
+                              l10n.marketCartClearDialogCancel,
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -804,9 +809,9 @@ class _ClearCartDialog extends StatelessWidget {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             alignment: Alignment.center,
-                            child: const Text(
-                              'Temizle',
-                              style: TextStyle(
+                            child: Text(
+                              l10n.marketCartClear,
+                              style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
@@ -838,6 +843,7 @@ class _EmptyCart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -859,7 +865,7 @@ class _EmptyCart extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             Text(
-              'Sepetiniz Boş',
+              l10n.marketCartEmptyTitle,
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.bold,
@@ -868,7 +874,7 @@ class _EmptyCart extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Market ürünlerini keşfetmeye başlayın!',
+              l10n.marketCartEmptySubtitle,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,

@@ -15865,4 +15865,410 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get updating => 'Обновление...';
+
+  @override
+  String get marketBrandName => 'Nar24';
+
+  @override
+  String get marketNavNar24 => 'Nar24';
+
+  @override
+  String get marketNavCart => 'Корзина';
+
+  @override
+  String get marketNavMyOrders => 'Мои заказы';
+
+  @override
+  String get marketNavProfile => 'Профиль';
+
+  @override
+  String get marketCategoryTitle => 'Nar24 Маркет';
+
+  @override
+  String get marketCategoriesHeader => 'Категории';
+
+  @override
+  String marketCategoriesCount(int count) {
+    return '$count категорий';
+  }
+
+  @override
+  String get marketCategoryFallbackTitle => 'Категория';
+
+  @override
+  String get myMarketOrdersTitle => 'Мои заказы';
+
+  @override
+  String get marketOrdersEmptyTitle => 'У вас пока нет заказов';
+
+  @override
+  String get marketOrdersEmptySubtitle => 'Ваши заказы появятся здесь';
+
+  @override
+  String get marketOrdersTryAgain => 'Повторить';
+
+  @override
+  String get marketOrderLoadFailed => 'Не удалось загрузить заказы';
+
+  @override
+  String marketOrderItemCount(int count) {
+    return '$count товаров';
+  }
+
+  @override
+  String get marketOrderStatusPending => 'В ожидании';
+
+  @override
+  String get marketOrderStatusConfirmed => 'Подтверждено';
+
+  @override
+  String get marketOrderStatusPreparing => 'Готовится';
+
+  @override
+  String get marketOrderStatusOutForDelivery => 'В пути';
+
+  @override
+  String get marketOrderStatusDelivered => 'Доставлено';
+
+  @override
+  String get marketOrderStatusCompleted => 'Завершено';
+
+  @override
+  String get marketOrderStatusRejected => 'Отклонено';
+
+  @override
+  String get marketOrderStatusCancelled => 'Отменено';
+
+  @override
+  String get marketCheckoutTitle => 'Оформление заказа';
+
+  @override
+  String get marketCheckoutDeliveryAddress => 'Адрес доставки';
+
+  @override
+  String get marketCheckoutDeliveryAddressTitle => 'Адрес доставки';
+
+  @override
+  String get marketCheckoutNoAddress => 'Адрес не добавлен';
+
+  @override
+  String get marketCheckoutAddAddress => 'Добавить адрес';
+
+  @override
+  String get marketCheckoutOrderNote => 'Примечание к заказу';
+
+  @override
+  String get marketCheckoutOrderNoteTitle => 'Примечание к заказу';
+
+  @override
+  String get marketCheckoutNoteHint =>
+      'Добавьте примечание к заказу (необязательно)';
+
+  @override
+  String get marketCheckoutPaymentMethod => 'Способ оплаты';
+
+  @override
+  String get marketCheckoutYourOrder => 'Ваш заказ';
+
+  @override
+  String get marketCheckoutPlaceOrder => 'Оформить заказ';
+
+  @override
+  String get marketCheckoutPayButton => 'Оплатить';
+
+  @override
+  String get marketCartTitle => 'Корзина';
+
+  @override
+  String marketCartItemCount(int count) {
+    return '$count товаров';
+  }
+
+  @override
+  String get marketCartClear => 'Очистить';
+
+  @override
+  String get marketCartOrderSummary => 'Сводка заказа';
+
+  @override
+  String get marketCartTotalLabel => 'Итого';
+
+  @override
+  String get marketCartDeliveryFeeWillBeCalculated =>
+      'Стоимость доставки будет рассчитана при оформлении заказа';
+
+  @override
+  String get marketCartProceedToCheckout => 'Перейти к оформлению';
+
+  @override
+  String get marketCartClearDialogTitle => 'Очистить корзину';
+
+  @override
+  String get marketCartClearDialogBody =>
+      'Вы уверены, что хотите очистить корзину?';
+
+  @override
+  String get marketCartClearDialogCancel => 'Отмена';
+
+  @override
+  String get marketCartEmptyTitle => 'Ваша корзина пуста';
+
+  @override
+  String get marketCartEmptySubtitle => 'Добавьте товары, чтобы начать покупки';
+
+  @override
+  String get marketCartEmptyStartShopping => 'Начать покупки';
+
+  @override
+  String get marketCartGoToMarket => 'Перейти в маркет';
+
+  @override
+  String get marketSearchHint => 'Поиск...';
+
+  @override
+  String get marketFacetBrand => 'Бренд';
+
+  @override
+  String get marketFacetType => 'Тип';
+
+  @override
+  String get marketClearFilters => 'Сбросить фильтры';
+
+  @override
+  String get marketNoProductsFound => 'Товары не найдены';
+
+  @override
+  String get marketSortDefault => 'По умолчанию';
+
+  @override
+  String get marketSortNameAsc => 'Название (А-Я)';
+
+  @override
+  String get marketSortPriceAsc => 'Цена (по возрастанию)';
+
+  @override
+  String get marketSortPriceDesc => 'Цена (по убыванию)';
+
+  @override
+  String get marketOrderDateLabel => 'Дата';
+
+  @override
+  String get marketOrderDeliveryLabel => 'Стоимость доставки';
+
+  @override
+  String get marketOrderDeliveryFree => 'Бесплатно';
+
+  @override
+  String get marketOrderNumberLabel => 'Номер заказа';
+
+  @override
+  String get marketOrderPaidOnline => 'Оплачено онлайн';
+
+  @override
+  String get marketOrderPaymentAtDoor => 'Оплата при получении';
+
+  @override
+  String get marketOrderPaymentCard => 'Карта';
+
+  @override
+  String get marketOrderPaymentMethodLabel => 'Способ оплаты';
+
+  @override
+  String get marketOrderPaymentStatusLabel => 'Статус оплаты';
+
+  @override
+  String get marketOrderPayOnDelivery => 'Оплата при доставке';
+
+  @override
+  String get marketOrderQuantityLabel => 'Количество';
+
+  @override
+  String get marketOrderReceivedNotifications =>
+      'Вы будете получать уведомления о заказе';
+
+  @override
+  String get marketOrderReceivedSupport =>
+      'Обратитесь в поддержку, если у вас есть вопросы';
+
+  @override
+  String get marketOrderReceivedTitle => 'Заказ принят';
+
+  @override
+  String get marketOrderSubtotalLabel => 'Подытог';
+
+  @override
+  String get marketOrderTotalLabel => 'Итого';
+
+  @override
+  String get marketPaymentAtDoor => 'Оплата при получении';
+
+  @override
+  String get marketPaymentCancelBody =>
+      'Вы уверены, что хотите отменить платёж?';
+
+  @override
+  String get marketPaymentCancelConfirm => 'Да, отменить';
+
+  @override
+  String get marketPaymentCancelContinue => 'Продолжить';
+
+  @override
+  String get marketPaymentCancelTitle => 'Отменить платёж';
+
+  @override
+  String get marketPaymentErrorTitle => 'Ошибка оплаты';
+
+  @override
+  String get marketPaymentFailedTitle => 'Платёж не выполнен';
+
+  @override
+  String get marketPaymentGoBack => 'Назад';
+
+  @override
+  String get marketPaymentHeaderBadge => 'Безопасная оплата';
+
+  @override
+  String get marketPaymentInfoMissing => 'Отсутствуют данные для оплаты';
+
+  @override
+  String get marketPaymentIsbankInfrastructure =>
+      'Инфраструктура оплаты İşbank';
+
+  @override
+  String get marketPaymentLoadingPage => 'Загрузка страницы оплаты...';
+
+  @override
+  String get marketPaymentMethodCard => 'Кредитная / дебетовая карта';
+
+  @override
+  String get marketPaymentMethodCardSubtitle => 'Visa, MasterCard, Troy';
+
+  @override
+  String get marketPaymentMethodPayAtDoor => 'Оплата при получении';
+
+  @override
+  String get marketPaymentMethodPayAtDoorSubtitle =>
+      'Наличные или карта при доставке';
+
+  @override
+  String get marketPaymentOrderLabel => 'Заказ';
+
+  @override
+  String get marketPaymentOrderReceived => 'Ваш заказ принят';
+
+  @override
+  String get marketPaymentPaid => 'Оплачено';
+
+  @override
+  String get marketPaymentPleaseWait => 'Пожалуйста, подождите...';
+
+  @override
+  String get marketPaymentProcessingError => 'Ошибка при обработке платежа';
+
+  @override
+  String get marketPaymentRedirecting => 'Перенаправление...';
+
+  @override
+  String get marketPaymentReturnToMarket => 'Вернуться в маркет';
+
+  @override
+  String get marketPaymentSecureSsl => 'Защита SSL';
+
+  @override
+  String get marketPaymentSecureTitle => 'Безопасная оплата';
+
+  @override
+  String get marketPaymentSuccessTitle => 'Оплата успешна';
+
+  @override
+  String get marketPaymentTimeoutTitle => 'Время ожидания оплаты истекло';
+
+  @override
+  String get marketPaymentTryAgain => 'Повторить';
+
+  @override
+  String get marketReceiptPdfNotReady => 'PDF пока не готов.';
+
+  @override
+  String get marketReceiptTitle => 'Детали чека';
+
+  @override
+  String get marketReceiptNotFound => 'Чек не найден';
+
+  @override
+  String get marketReceiptLoadError => 'Ошибка загрузки';
+
+  @override
+  String get marketReceiptGoBack => 'Назад';
+
+  @override
+  String get marketReceiptOrderInfo => 'Информация о заказе';
+
+  @override
+  String get marketReceiptOrderNumber => 'Номер заказа';
+
+  @override
+  String get marketReceiptPaymentMethod => 'Способ оплаты';
+
+  @override
+  String get marketReceiptDelivery => 'Доставка';
+
+  @override
+  String get marketReceiptStatus => 'Статус';
+
+  @override
+  String get marketReceiptDeliveryAddress => 'Адрес доставки';
+
+  @override
+  String get marketReceiptOrderedItems => 'Заказанные товары';
+
+  @override
+  String get marketReceiptOrderNoteHeader => 'ПРИМЕЧАНИЕ К ЗАКАЗУ';
+
+  @override
+  String marketReceiptPerUnit(String price) {
+    return '$price / шт.';
+  }
+
+  @override
+  String get marketReceiptPriceSummary => 'Сводка цен';
+
+  @override
+  String get marketReceiptOnlinePaymentReceived => 'Онлайн-оплата получена';
+
+  @override
+  String get marketReceiptPayDuringDelivery => 'Будет оплачено при доставке';
+
+  @override
+  String get marketPaymentSucceededOrderFailed =>
+      'Оплата прошла, но заказ не создан';
+
+  @override
+  String get marketPaymentTimeout => 'Время ожидания оплаты истекло';
+
+  @override
+  String get marketPaymentFailed => 'Оплата не выполнена';
+
+  @override
+  String get marketOutOfStock => 'Нет в наличии';
+
+  @override
+  String get marketCheckoutAddressRequired =>
+      'Пожалуйста, выберите адрес доставки';
+
+  @override
+  String get marketCheckoutOrderCreationFailed => 'Не удалось создать заказ';
+
+  @override
+  String get marketCheckoutPaymentInitFailed =>
+      'Не удалось инициализировать оплату';
+
+  @override
+  String get marketOrderDetailTitle => 'Детали заказа';
+
+  @override
+  String get marketOrdersLoadError => 'Не удалось загрузить заказы';
+
+  @override
+  String get marketInfo => 'Инфо';
 }

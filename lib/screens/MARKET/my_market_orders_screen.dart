@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:intl/intl.dart';
 import '../../constants/market_categories.dart';
+import '../../generated/l10n/app_localizations.dart';
 
 // ============================================================================
 // ORDER MODEL (list-level — lightweight)
@@ -85,24 +86,24 @@ IconData _statusIcon(MarketOrderStatus s) {
   }
 }
 
-String _statusLabel(MarketOrderStatus s) {
+String _statusLabel(MarketOrderStatus s, AppLocalizations l10n) {
   switch (s) {
     case MarketOrderStatus.pending:
-      return 'Beklemede';
+      return l10n.marketOrderStatusPending;
     case MarketOrderStatus.confirmed:
-      return 'Onaylandı';
+      return l10n.marketOrderStatusConfirmed;
     case MarketOrderStatus.rejected:
-      return 'Reddedildi';
+      return l10n.marketOrderStatusRejected;
     case MarketOrderStatus.preparing:
-      return 'Hazırlanıyor';
+      return l10n.marketOrderStatusPreparing;
     case MarketOrderStatus.outForDelivery:
-      return 'Yolda';
+      return l10n.marketOrderStatusOutForDelivery;
     case MarketOrderStatus.delivered:
-      return 'Teslim Edildi';
+      return l10n.marketOrderStatusDelivered;
     case MarketOrderStatus.completed:
-      return 'Tamamlandı';
+      return l10n.marketOrderStatusCompleted;
     case MarketOrderStatus.cancelled:
-      return 'İptal';
+      return l10n.marketOrderStatusCancelled;
   }
 }
 
@@ -129,8 +130,8 @@ class _MarketOrder {
     required this.items,
   });
 
-  String get itemsPreview {
-    if (items.isEmpty) return '$itemCount ürün';
+  String itemsPreview(AppLocalizations l10n) {
+    if (items.isEmpty) return l10n.marketOrderItemCount(itemCount);
     final names = items.take(3).map((i) => i.name).join(', ');
     if (items.length > 3) return '$names...';
     return names;
@@ -272,7 +273,7 @@ class _MyMarketOrdersScreenState extends State<MyMarketOrdersScreen> {
       debugPrint('[MarketOrders] Fetch error: $e');
       if (!mounted) return;
       setState(() {
-        _error = 'Siparişler yüklenirken hata oluştu.';
+        _error = AppLocalizations.of(context)!.marketOrdersLoadError;
         _isLoadingInitial = false;
         _isLoadingMore = false;
       });
@@ -282,6 +283,7 @@ class _MyMarketOrdersScreenState extends State<MyMarketOrdersScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor:
@@ -296,9 +298,9 @@ class _MyMarketOrdersScreenState extends State<MyMarketOrdersScreen> {
           onPressed: () =>
               context.canPop() ? context.pop() : context.go('/'),
         ),
-        title: const Text(
-          'Market Siparişlerim',
-          style: TextStyle(
+        title: Text(
+          l10n.myMarketOrdersTitle,
+          style: const TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 18,
             color: Colors.white,
@@ -363,6 +365,7 @@ class _MyMarketOrdersScreenState extends State<MyMarketOrdersScreen> {
   }
 
   Widget _buildError(bool isDark) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -382,8 +385,8 @@ class _MyMarketOrdersScreenState extends State<MyMarketOrdersScreen> {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),
-            child: const Text('Tekrar Dene',
-                style: TextStyle(color: Colors.white)),
+            child: Text(l10n.marketOrdersTryAgain,
+                style: const TextStyle(color: Colors.white)),
           ),
         ]),
       ),
@@ -391,6 +394,7 @@ class _MyMarketOrdersScreenState extends State<MyMarketOrdersScreen> {
   }
 
   Widget _buildEmpty(bool isDark) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -406,14 +410,14 @@ class _MyMarketOrdersScreenState extends State<MyMarketOrdersScreen> {
                 size: 40, color: isDark ? Colors.grey[600] : Colors.green[300]),
           ),
           const SizedBox(height: 24),
-          Text('Henüz Siparişiniz Yok',
+          Text(l10n.marketOrdersEmptyTitle,
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.bold,
                 color: isDark ? Colors.white : Colors.grey[900],
               )),
           const SizedBox(height: 6),
-          Text('Market ürünlerini keşfetmeye başlayın!',
+          Text(l10n.marketOrdersEmptySubtitle,
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontSize: 13,
@@ -436,6 +440,7 @@ class _OrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final dateStr = DateFormat('dd/MM/yyyy').format(order.createdAt.toDate());
     final color = _statusColor(order.status);
 
@@ -482,7 +487,7 @@ class _OrderCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Nar24 Market',
+                          l10n.marketBrandName,
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
@@ -491,7 +496,7 @@ class _OrderCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          order.itemsPreview,
+                          order.itemsPreview(l10n),
                           style: TextStyle(
                               fontSize: 12,
                               color:
@@ -559,7 +564,7 @@ class _OrderCard extends StatelessWidget {
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
                       Icon(_statusIcon(order.status), size: 11, color: color),
                       const SizedBox(width: 4),
-                      Text(_statusLabel(order.status),
+                      Text(_statusLabel(order.status, l10n),
                           style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
@@ -579,7 +584,7 @@ class _OrderCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    order.isPaid ? 'Ödendi' : 'Kapıda',
+                    order.isPaid ? l10n.marketPaymentPaid : l10n.marketPaymentAtDoor,
                     style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,

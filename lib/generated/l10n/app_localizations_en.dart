@@ -15763,4 +15763,407 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get updating => 'Updating...';
+
+  @override
+  String get marketBrandName => 'Nar24';
+
+  @override
+  String get marketNavNar24 => 'Nar24';
+
+  @override
+  String get marketNavCart => 'Cart';
+
+  @override
+  String get marketNavMyOrders => 'My Orders';
+
+  @override
+  String get marketNavProfile => 'Profile';
+
+  @override
+  String get marketCategoryTitle => 'Nar24 Market';
+
+  @override
+  String get marketCategoriesHeader => 'Categories';
+
+  @override
+  String marketCategoriesCount(int count) {
+    return '$count categories';
+  }
+
+  @override
+  String get marketCategoryFallbackTitle => 'Category';
+
+  @override
+  String get myMarketOrdersTitle => 'My Orders';
+
+  @override
+  String get marketOrdersEmptyTitle => 'You don\'t have any orders yet';
+
+  @override
+  String get marketOrdersEmptySubtitle => 'Your orders will appear here';
+
+  @override
+  String get marketOrdersTryAgain => 'Try Again';
+
+  @override
+  String get marketOrderLoadFailed => 'Failed to load orders';
+
+  @override
+  String marketOrderItemCount(int count) {
+    return '$count items';
+  }
+
+  @override
+  String get marketOrderStatusPending => 'Pending';
+
+  @override
+  String get marketOrderStatusConfirmed => 'Confirmed';
+
+  @override
+  String get marketOrderStatusPreparing => 'Preparing';
+
+  @override
+  String get marketOrderStatusOutForDelivery => 'Out for Delivery';
+
+  @override
+  String get marketOrderStatusDelivered => 'Delivered';
+
+  @override
+  String get marketOrderStatusCompleted => 'Completed';
+
+  @override
+  String get marketOrderStatusRejected => 'Rejected';
+
+  @override
+  String get marketOrderStatusCancelled => 'Cancelled';
+
+  @override
+  String get marketCheckoutTitle => 'Checkout';
+
+  @override
+  String get marketCheckoutDeliveryAddress => 'Delivery Address';
+
+  @override
+  String get marketCheckoutDeliveryAddressTitle => 'Delivery Address';
+
+  @override
+  String get marketCheckoutNoAddress => 'No address added';
+
+  @override
+  String get marketCheckoutAddAddress => 'Add Address';
+
+  @override
+  String get marketCheckoutOrderNote => 'Order Note';
+
+  @override
+  String get marketCheckoutOrderNoteTitle => 'Order Note';
+
+  @override
+  String get marketCheckoutNoteHint => 'Add a note for your order (optional)';
+
+  @override
+  String get marketCheckoutPaymentMethod => 'Payment Method';
+
+  @override
+  String get marketCheckoutYourOrder => 'Your Order';
+
+  @override
+  String get marketCheckoutPlaceOrder => 'Place Order';
+
+  @override
+  String get marketCheckoutPayButton => 'Pay';
+
+  @override
+  String get marketCartTitle => 'Cart';
+
+  @override
+  String marketCartItemCount(int count) {
+    return '$count items';
+  }
+
+  @override
+  String get marketCartClear => 'Clear';
+
+  @override
+  String get marketCartOrderSummary => 'Order Summary';
+
+  @override
+  String get marketCartTotalLabel => 'Total';
+
+  @override
+  String get marketCartDeliveryFeeWillBeCalculated =>
+      'Delivery fee will be calculated at checkout';
+
+  @override
+  String get marketCartProceedToCheckout => 'Proceed to Checkout';
+
+  @override
+  String get marketCartClearDialogTitle => 'Clear Cart';
+
+  @override
+  String get marketCartClearDialogBody =>
+      'Are you sure you want to clear your cart?';
+
+  @override
+  String get marketCartClearDialogCancel => 'Cancel';
+
+  @override
+  String get marketCartEmptyTitle => 'Your cart is empty';
+
+  @override
+  String get marketCartEmptySubtitle => 'Add products to start shopping';
+
+  @override
+  String get marketCartEmptyStartShopping => 'Start Shopping';
+
+  @override
+  String get marketCartGoToMarket => 'Go to Market';
+
+  @override
+  String get marketSearchHint => 'Search...';
+
+  @override
+  String get marketFacetBrand => 'Brand';
+
+  @override
+  String get marketFacetType => 'Type';
+
+  @override
+  String get marketClearFilters => 'Clear filters';
+
+  @override
+  String get marketNoProductsFound => 'No products found';
+
+  @override
+  String get marketSortDefault => 'Default';
+
+  @override
+  String get marketSortNameAsc => 'Name (A-Z)';
+
+  @override
+  String get marketSortPriceAsc => 'Price (Low to High)';
+
+  @override
+  String get marketSortPriceDesc => 'Price (High to Low)';
+
+  @override
+  String get marketOrderDateLabel => 'Date';
+
+  @override
+  String get marketOrderDeliveryLabel => 'Delivery Fee';
+
+  @override
+  String get marketOrderDeliveryFree => 'Free';
+
+  @override
+  String get marketOrderNumberLabel => 'Order Number';
+
+  @override
+  String get marketOrderPaidOnline => 'Paid Online';
+
+  @override
+  String get marketOrderPaymentAtDoor => 'Pay at Door';
+
+  @override
+  String get marketOrderPaymentCard => 'Card';
+
+  @override
+  String get marketOrderPaymentMethodLabel => 'Payment Method';
+
+  @override
+  String get marketOrderPaymentStatusLabel => 'Payment Status';
+
+  @override
+  String get marketOrderPayOnDelivery => 'Pay on Delivery';
+
+  @override
+  String get marketOrderQuantityLabel => 'Quantity';
+
+  @override
+  String get marketOrderReceivedNotifications =>
+      'You will receive notifications about your order';
+
+  @override
+  String get marketOrderReceivedSupport =>
+      'Contact support if you have any questions';
+
+  @override
+  String get marketOrderReceivedTitle => 'Order Received';
+
+  @override
+  String get marketOrderSubtotalLabel => 'Subtotal';
+
+  @override
+  String get marketOrderTotalLabel => 'Total';
+
+  @override
+  String get marketPaymentAtDoor => 'Pay at Door';
+
+  @override
+  String get marketPaymentCancelBody =>
+      'Are you sure you want to cancel the payment?';
+
+  @override
+  String get marketPaymentCancelConfirm => 'Yes, Cancel';
+
+  @override
+  String get marketPaymentCancelContinue => 'Continue';
+
+  @override
+  String get marketPaymentCancelTitle => 'Cancel Payment';
+
+  @override
+  String get marketPaymentErrorTitle => 'Payment Error';
+
+  @override
+  String get marketPaymentFailedTitle => 'Payment Failed';
+
+  @override
+  String get marketPaymentGoBack => 'Go Back';
+
+  @override
+  String get marketPaymentHeaderBadge => 'Secure Payment';
+
+  @override
+  String get marketPaymentInfoMissing => 'Payment information is missing';
+
+  @override
+  String get marketPaymentIsbankInfrastructure =>
+      'Isbank Payment Infrastructure';
+
+  @override
+  String get marketPaymentLoadingPage => 'Loading payment page...';
+
+  @override
+  String get marketPaymentMethodCard => 'Credit / Debit Card';
+
+  @override
+  String get marketPaymentMethodCardSubtitle => 'Visa, MasterCard, Troy';
+
+  @override
+  String get marketPaymentMethodPayAtDoor => 'Pay at Door';
+
+  @override
+  String get marketPaymentMethodPayAtDoorSubtitle => 'Cash or card on delivery';
+
+  @override
+  String get marketPaymentOrderLabel => 'Order';
+
+  @override
+  String get marketPaymentOrderReceived => 'Your order has been received';
+
+  @override
+  String get marketPaymentPaid => 'Paid';
+
+  @override
+  String get marketPaymentPleaseWait => 'Please wait...';
+
+  @override
+  String get marketPaymentProcessingError => 'Error processing payment';
+
+  @override
+  String get marketPaymentRedirecting => 'Redirecting...';
+
+  @override
+  String get marketPaymentReturnToMarket => 'Return to Market';
+
+  @override
+  String get marketPaymentSecureSsl => 'SSL Secured';
+
+  @override
+  String get marketPaymentSecureTitle => 'Secure Payment';
+
+  @override
+  String get marketPaymentSuccessTitle => 'Payment Successful';
+
+  @override
+  String get marketPaymentTimeoutTitle => 'Payment Timeout';
+
+  @override
+  String get marketPaymentTryAgain => 'Try Again';
+
+  @override
+  String get marketReceiptPdfNotReady => 'PDF is not ready yet.';
+
+  @override
+  String get marketReceiptTitle => 'Receipt Details';
+
+  @override
+  String get marketReceiptNotFound => 'Receipt not found';
+
+  @override
+  String get marketReceiptLoadError => 'Error loading';
+
+  @override
+  String get marketReceiptGoBack => 'Go Back';
+
+  @override
+  String get marketReceiptOrderInfo => 'Order Information';
+
+  @override
+  String get marketReceiptOrderNumber => 'Order Number';
+
+  @override
+  String get marketReceiptPaymentMethod => 'Payment Method';
+
+  @override
+  String get marketReceiptDelivery => 'Delivery';
+
+  @override
+  String get marketReceiptStatus => 'Status';
+
+  @override
+  String get marketReceiptDeliveryAddress => 'Delivery Address';
+
+  @override
+  String get marketReceiptOrderedItems => 'Ordered Items';
+
+  @override
+  String get marketReceiptOrderNoteHeader => 'ORDER NOTE';
+
+  @override
+  String marketReceiptPerUnit(String price) {
+    return '$price / unit';
+  }
+
+  @override
+  String get marketReceiptPriceSummary => 'Price Summary';
+
+  @override
+  String get marketReceiptOnlinePaymentReceived => 'Online payment received';
+
+  @override
+  String get marketReceiptPayDuringDelivery => 'To be paid on delivery';
+
+  @override
+  String get marketPaymentSucceededOrderFailed =>
+      'Payment succeeded but order could not be created';
+
+  @override
+  String get marketPaymentTimeout => 'Payment timeout';
+
+  @override
+  String get marketPaymentFailed => 'Payment failed';
+
+  @override
+  String get marketOutOfStock => 'Out of stock';
+
+  @override
+  String get marketCheckoutAddressRequired =>
+      'Please select a delivery address';
+
+  @override
+  String get marketCheckoutOrderCreationFailed => 'Failed to create order';
+
+  @override
+  String get marketCheckoutPaymentInitFailed => 'Failed to initialize payment';
+
+  @override
+  String get marketOrderDetailTitle => 'Order Details';
+
+  @override
+  String get marketOrdersLoadError => 'Failed to load orders';
+
+  @override
+  String get marketInfo => 'Info';
 }
