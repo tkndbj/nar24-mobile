@@ -8,6 +8,18 @@ import 'package:intl/intl.dart';
 import '../../generated/l10n/app_localizations.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PAST ENTRY — wraps a doc with its source collection
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PastEntry {
+  final QueryDocumentSnapshot<Map<String, dynamic>> doc;
+  final String collection; // 'orders-food' | 'orders-market'
+  final Timestamp assignedAt;
+
+  const _PastEntry(this.doc, this.collection, this.assignedAt);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -22,12 +34,26 @@ class _PastFoodCargosScreenState extends State<PastFoodCargosScreen> {
   static const _pageSize = 10;
 
   final _firestore = FirebaseFirestore.instance;
-  final _orders = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
 
-  DocumentSnapshot? _lastDoc;
+  // Per-collection pagination state
+  final List<_PastEntry> _foodBuffer = [];
+  final List<_PastEntry> _marketBuffer = [];
+  DocumentSnapshot? _foodCursor;
+  DocumentSnapshot? _marketCursor;
+  bool _foodExhausted = false;
+  bool _marketExhausted = false;
+
+  // Items already released to the UI (ordered newest-first)
+  final List<_PastEntry> _displayed = [];
+
   bool _loading = false;
-  bool _hasMore = true;
   bool _initialLoad = true;
+
+  bool get _hasMore =>
+      !_foodExhausted ||
+      !_marketExhausted ||
+      _foodBuffer.isNotEmpty ||
+      _marketBuffer.isNotEmpty;
 
   @override
   void initState() {
@@ -35,12 +61,36 @@ class _PastFoodCargosScreenState extends State<PastFoodCargosScreen> {
     _fetchPage();
   }
 
-  Query<Map<String, dynamic>> _baseQuery(String uid) {
+  Query<Map<String, dynamic>> _baseQuery(String collection, String uid) {
     return _firestore
-        .collection('orders-food')
+        .collection(collection)
         .where('cargoUserId', isEqualTo: uid)
         .where('status', isEqualTo: 'delivered')
-        .orderBy('assignedAt', descending: true);
+        .orderBy('assignedAt', descending: true)
+        .limit(_pageSize);
+  }
+
+  Future<void> _fetchCollectionPage(
+    String collection,
+    String uid,
+    List<_PastEntry> buffer,
+    DocumentSnapshot? cursor,
+    void Function(DocumentSnapshot? newCursor, bool exhausted) onDone,
+  ) async {
+    var query = _baseQuery(collection, uid);
+    if (cursor != null) {
+      query = query.startAfterDocument(cursor);
+    }
+    final snap = await query.get();
+    for (final d in snap.docs) {
+      final ts = d.data()['assignedAt'] as Timestamp?;
+      if (ts == null) continue; // skip docs without sort key
+      buffer.add(_PastEntry(d, collection, ts));
+    }
+    onDone(
+      snap.docs.isNotEmpty ? snap.docs.last : cursor,
+      snap.docs.length < _pageSize,
+    );
   }
 
   Future<void> _fetchPage() async {
@@ -50,21 +100,57 @@ class _PastFoodCargosScreenState extends State<PastFoodCargosScreen> {
     setState(() => _loading = true);
 
     try {
-      var query = _baseQuery(user.uid).limit(_pageSize);
-      if (_lastDoc != null) {
-        query = query.startAfterDocument(_lastDoc!);
+      // Refill whichever buffer is empty — run in parallel when both need it.
+      final refills = <Future<void>>[];
+      if (_foodBuffer.isEmpty && !_foodExhausted) {
+        refills.add(_fetchCollectionPage(
+          'orders-food',
+          user.uid,
+          _foodBuffer,
+          _foodCursor,
+          (newCursor, exhausted) {
+            _foodCursor = newCursor;
+            _foodExhausted = exhausted;
+          },
+        ));
+      }
+      if (_marketBuffer.isEmpty && !_marketExhausted) {
+        refills.add(_fetchCollectionPage(
+          'orders-market',
+          user.uid,
+          _marketBuffer,
+          _marketCursor,
+          (newCursor, exhausted) {
+            _marketCursor = newCursor;
+            _marketExhausted = exhausted;
+          },
+        ));
+      }
+      await Future.wait(refills);
+
+      // Watermark cutoff: we can safely release items whose assignedAt is
+      // newer than OR equal to the older of the two buffer tails, because
+      // neither collection can still produce items above that cutoff.
+      // If a collection is exhausted, it has no influence on the cutoff.
+      Timestamp? cutoff;
+      if (!_foodExhausted && _foodBuffer.isNotEmpty) {
+        cutoff = _foodBuffer.last.assignedAt;
+      }
+      if (!_marketExhausted && _marketBuffer.isNotEmpty) {
+        final mTail = _marketBuffer.last.assignedAt;
+        if (cutoff == null || mTail.compareTo(cutoff) > 0) {
+          cutoff = mTail;
+        }
       }
 
-      final snapshot = await query.get();
-      final docs = snapshot.docs;
-
-      if (docs.isNotEmpty) {
-        _lastDoc = docs.last;
-      }
+      // Drain items >= cutoff from both buffers (null cutoff = drain all)
+      final released = <_PastEntry>[];
+      _drainBuffer(_foodBuffer, cutoff, released);
+      _drainBuffer(_marketBuffer, cutoff, released);
+      released.sort((a, b) => b.assignedAt.compareTo(a.assignedAt));
 
       setState(() {
-        _orders.addAll(docs);
-        _hasMore = docs.length == _pageSize;
+        _displayed.addAll(released);
         _initialLoad = false;
         _loading = false;
       });
@@ -84,6 +170,19 @@ class _PastFoodCargosScreenState extends State<PastFoodCargosScreen> {
           ),
         );
       }
+    }
+  }
+
+  void _drainBuffer(
+    List<_PastEntry> buffer,
+    Timestamp? cutoff,
+    List<_PastEntry> out,
+  ) {
+    while (buffer.isNotEmpty) {
+      if (cutoff != null && buffer.first.assignedAt.compareTo(cutoff) < 0) {
+        break;
+      }
+      out.add(buffer.removeAt(0));
     }
   }
 
@@ -116,7 +215,7 @@ class _PastFoodCargosScreenState extends State<PastFoodCargosScreen> {
       );
     }
 
-    if (_orders.isEmpty) {
+    if (_displayed.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -148,20 +247,22 @@ class _PastFoodCargosScreenState extends State<PastFoodCargosScreen> {
 
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-      itemCount: _orders.length + (_hasMore ? 1 : 0),
+      itemCount: _displayed.length + (_hasMore ? 1 : 0),
       itemBuilder: (context, index) {
-        if (index == _orders.length) {
+        if (index == _displayed.length) {
           return _LoadMoreButton(
             loading: _loading,
             onPressed: _fetchPage,
             loc: loc,
           );
         }
+        final entry = _displayed[index];
         return Padding(
           padding: const EdgeInsets.only(bottom: 16),
           child: _PastOrderCard(
-            data: _orders[index].data(),
-            orderId: _orders[index].id,
+            data: entry.doc.data(),
+            orderId: entry.doc.id,
+            collection: entry.collection,
             isDark: isDark,
             loc: loc,
           ),
@@ -228,15 +329,29 @@ class _LoadMoreButton extends StatelessWidget {
 class _PastOrderCard extends StatelessWidget {
   final Map<String, dynamic> data;
   final String orderId;
+  final String collection;
   final bool isDark;
   final AppLocalizations loc;
 
   const _PastOrderCard({
     required this.data,
     required this.orderId,
+    required this.collection,
     required this.isDark,
     required this.loc,
   });
+
+  bool get _isMarket => collection == 'orders-market';
+
+  String get _pickupName {
+    if (_isMarket) return (data['marketName'] as String?) ?? 'Market';
+    return (data['restaurantName'] as String?) ?? '—';
+  }
+
+  String? get _pickupImage {
+    if (_isMarket) return null;
+    return data['restaurantProfileImage'] as String?;
+  }
 
   String get _addressLine {
     final addr = data['deliveryAddress'] as Map<String, dynamic>?;
@@ -262,7 +377,9 @@ class _PastOrderCard extends StatelessWidget {
   }
 
   String _formatDeliveredAt() {
-    final ts = data['deliveredAt'];
+    // Prefer deliveredAt if it exists, fall back to updatedAt (courier_actions
+    // trigger stamps updatedAt when flipping to 'delivered').
+    final ts = data['deliveredAt'] ?? data['updatedAt'];
     if (ts == null) return '';
     final dt = (ts as Timestamp).toDate();
     final formatted = DateFormat('dd MMM yyyy, HH:mm').format(dt);
@@ -271,15 +388,14 @@ class _PastOrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final restaurantName = data['restaurantName'] as String? ?? '—';
-    final restaurantImage = data['restaurantProfileImage'] as String?;
+    final pickupName = _pickupName;
+    final pickupImage = _pickupImage;
     final buyerName = data['buyerName'] as String? ?? '—';
     final totalPrice = (data['totalPrice'] as num?)?.toDouble() ?? 0;
     final currency = data['currency'] as String? ?? 'TL';
     final isPaid = data['isPaid'] as bool? ?? false;
     final items = data['items'] as List<dynamic>? ?? const [];
-    final itemCount =
-        (data['itemCount'] as num?)?.toInt() ?? items.length;
+    final itemCount = (data['itemCount'] as num?)?.toInt() ?? items.length;
     final shortId = orderId.substring(0, 8).toUpperCase();
 
     return Container(
@@ -304,18 +420,25 @@ class _PastOrderCard extends StatelessWidget {
                   child: Container(
                     width: 44,
                     height: 44,
-                    color: isDark ? const Color(0xFF2D2B3F) : Colors.orange[50],
-                    child: restaurantImage != null && restaurantImage.isNotEmpty
+                    color: isDark
+                        ? const Color(0xFF2D2B3F)
+                        : (_isMarket ? Colors.indigo[50] : Colors.orange[50]),
+                    child: pickupImage != null && pickupImage.isNotEmpty
                         ? Image.network(
-                            restaurantImage,
+                            pickupImage,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Center(
-                              child:
-                                  Text('🍽️', style: TextStyle(fontSize: 22)),
+                            errorBuilder: (_, __, ___) => Center(
+                              child: Text(
+                                _isMarket ? '🛒' : '🍽️',
+                                style: const TextStyle(fontSize: 22),
+                              ),
                             ),
                           )
-                        : const Center(
-                            child: Text('🍽️', style: TextStyle(fontSize: 22)),
+                        : Center(
+                            child: Text(
+                              _isMarket ? '🛒' : '🍽️',
+                              style: const TextStyle(fontSize: 22),
+                            ),
                           ),
                   ),
                 ),
@@ -324,14 +447,39 @@ class _PastOrderCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        restaurantName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              pickupName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (_isMarket) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.indigo.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                'MARKET',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.indigo,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -382,7 +530,9 @@ class _PastOrderCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 _InfoRow(
-                  icon: Icons.fastfood_rounded,
+                  icon: _isMarket
+                      ? Icons.shopping_bag_rounded
+                      : Icons.fastfood_rounded,
                   label: loc.foodCargoItems,
                   value: _itemsSummary(itemCount),
                   isDark: isDark,
