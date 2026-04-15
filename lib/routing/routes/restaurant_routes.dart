@@ -10,6 +10,7 @@ import '../../screens/PAYMENT-RECEIPT/food_checkout_screen.dart';
 import '../../screens/PAYMENT-RECEIPT/isbank_food_payment_screen.dart';
 import '../../screens/PAYMENT-RECEIPT/food_order_detail_screen.dart';
 import '../../screens/RESTAURANTS/restaurant_list_food_screen.dart';
+import '../../screens/RESTAURANTS/restaurant_list_drink_screen.dart';
 import '../../screens/USER-PROFILE/my_food_orders.dart';
 
 class RestaurantRoutes {
@@ -129,6 +130,22 @@ class RestaurantRoutes {
             child: RestaurantListFoodScreen(
               restaurantId: restaurantId,
               editFoodId: editId,
+            ),
+            transitionsBuilder: _slideTransition,
+            transitionDuration: const Duration(milliseconds: 200),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/restaurant_list_drink_screen',
+        pageBuilder: (context, state) {
+          final restaurantId = state.uri.queryParameters['restaurantId'] ?? '';
+          final editId = state.uri.queryParameters['edit'];
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: RestaurantListDrinkScreen(
+              restaurantId: restaurantId,
+              editId: editId, // ← not editDrinkId
             ),
             transitionsBuilder: _slideTransition,
             transitionDuration: const Duration(milliseconds: 200),

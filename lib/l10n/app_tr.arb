@@ -5645,6 +5645,7 @@
 "foodStatusRejected": "Reddedildi",
 "foodStatusPreparing": "Hazırlanıyor",
 "foodStatusReady": "Hazır",
+"foodStatusOutForDelivery": "Yolda",
 "foodStatusDelivered": "Teslim Edildi",
 "foodStatusCompleted": "Tamamlandı",
 "foodStatusCancelled": "İptal Edildi",
@@ -5940,6 +5941,8 @@
 "foodCheckoutPlaceOrder": "Sipariş Ver",
 "foodCheckoutOrderPlaced": "Sipariş Verildi!",
 "foodCheckoutOrderConfirmed": "Siparişiniz onaylandı.",
+"foodCheckoutStatusUpdatesInfo": "Siparişinizin durumu güncellendikçe bildirim alacaksınız.",
+"foodCheckoutSupportInfo": "Yardıma mı ihtiyacınız var? Profil sayfasındaki Destek seçeneğinden 7/24 bize ulaşabilirsiniz.",
 "foodCheckoutOrderId": "Sipariş: {id}",
 "@foodCheckoutOrderId": {
   "placeholders": {
@@ -6731,5 +6734,22 @@
   "uploadOverlaySavingToDatabase": "Veritabanına kaydediliyor…",
   "uploadOverlayDoNotClose": "Lütfen uygulamayı kapatmayın",
   "cartLimitReached": "Sepetiniz dolu (maksimum 300 ürün). Yeni ürün eklemek için bazı ürünleri kaldırın.",
-  "favoritesLimitReached": "Favori sınırına ulaştınız (maksimum 500). Yeni eklemek için bazılarını kaldırın."
+  "favoritesLimitReached": "Favori sınırına ulaştınız (maksimum 500). Yeni eklemek için bazılarını kaldırın.",
+  "drinks": "İçecekler",
+"addDrink": "İçecek Ekle",
+"addDrinkTitle": "İçecek Ekle",
+"addDrinkSubtitle": "Menünüze yeni bir içecek ekleyin",
+"editDrinkTitle": "İçeceği Düzenle",
+"editDrinkSubtitle": "İçecek bilgilerini güncelleyin",
+"drinkDetails": "İçecek Bilgileri",
+"drinkName": "İçecek Adı",
+"drinkNamePlaceholder": "ör. Taze Portakal Suyu",
+"drinkNameRequired": "İçecek adı gerekli",
+"drinkNameMinLength": "Ad en az 2 karakter olmalıdır",
+"addDrinkSave": "İçecek Ekle",
+"updateDrink": "İçeceği Güncelle",
+"drinkAddSuccess": "İçecek başarıyla eklendi",
+"drinkAddError": "İçecek eklenemedi",
+"drinkUpdateSuccess": "İçecek başarıyla güncellendi",
+"updating": "Güncelleniyor..."
 }

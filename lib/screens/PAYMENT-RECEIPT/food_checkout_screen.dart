@@ -145,6 +145,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                       .map((e) => {'name': e.name, 'quantity': e.quantity})
                       .toList(),
                   'specialNotes': i.specialNotes ?? '',
+                  'foodCategory': i.foodCategory,
                 })
             .toList(),
         'paymentMethod': 'pay_at_door',
@@ -207,6 +208,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                       .map((e) => {'name': e.name, 'quantity': e.quantity})
                       .toList(),
                   'specialNotes': i.specialNotes ?? '',
+                  'foodCategory': i.foodCategory,
                 })
             .toList(),
         'deliveryType':
@@ -289,138 +291,141 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
             behavior: HitTestBehavior.opaque,
             onTap: () => FocusScope.of(context).unfocus(),
             child: Stack(
-            children: [
-              ListView(
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: const EdgeInsets.fromLTRB(0, 0, 0, 140),
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                    child: Text(loc.foodCheckoutTitle,
-                        style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white : Colors.grey[900])),
-                  ),
-                  const SizedBox(height: 10),
-
-                  // Restaurant Info
-                  if (cart.currentRestaurant != null) ...[
-                    _RestaurantInfoRow(
-                        restaurant: cart.currentRestaurant!,
-                        prepTime: prepTime,
-                        isDark: isDark),
-                    const SizedBox(height: 10),
-                  ],
-
-                  // Your Order
-                  _Section(
-                    title: loc.foodCheckoutYourOrder,
-                    isDark: isDark,
-                    child: Column(
-                        children: cart.items
-                            .map((item) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 10),
-                                  child: _CartItemRow(
-                                      item: item, isDark: isDark, cart: cart),
-                                ))
-                            .toList()),
-                  ),
-                  const SizedBox(height: 10),
-
-                  // Delivery Address — read-only from profile
-                  if (_deliveryType == DeliveryType.delivery) ...[
-                    _Section(
-                      title: loc.foodCheckoutDeliveryAddress,
-                      isDark: isDark,
-                      child: _FoodAddressCard(
-                          foodAddress: foodAddress, isDark: isDark),
+              children: [
+                ListView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.fromLTRB(0, 0, 0, 140),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: Text(loc.foodCheckoutTitle,
+                          style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.grey[900])),
                     ),
                     const SizedBox(height: 10),
-                  ],
 
-                  // Order Notes
-                  _Section(
-                    title: loc.foodCheckoutOrderNotes,
-                    isDark: isDark,
-                    child: TextField(
-                      controller: _notesController,
-                      maxLines: 2,
-                      maxLength: 1000,
-                      onChanged: (v) => setState(() => _orderNotes = v),
-                      decoration: InputDecoration(
-                        hintText: loc.foodCheckoutOrderNotesHint,
-                        hintStyle: TextStyle(
-                            color: isDark ? Colors.grey[600] : Colors.grey[400],
-                            fontSize: 13),
-                        filled: true,
-                        fillColor: isDark
-                            ? const Color(0xFF1A1D2E)
-                            : const Color(0xFFF3F4F6),
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                                color: isDark
-                                    ? const Color(0xFF2D2B3F)
-                                    : const Color(0xFFD1D5DB))),
-                        enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                                color: isDark
-                                    ? const Color(0xFF2D2B3F)
-                                    : const Color(0xFFD1D5DB))),
-                        focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.orange)),
-                        counterText: '',
+                    // Restaurant Info
+                    if (cart.currentRestaurant != null) ...[
+                      _RestaurantInfoRow(
+                          restaurant: cart.currentRestaurant!,
+                          prepTime: prepTime,
+                          isDark: isDark),
+                      const SizedBox(height: 10),
+                    ],
+
+                    // Your Order
+                    _Section(
+                      title: loc.foodCheckoutYourOrder,
+                      isDark: isDark,
+                      child: Column(
+                          children: cart.items
+                              .map((item) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: _CartItemRow(
+                                        item: item, isDark: isDark, cart: cart),
+                                  ))
+                              .toList()),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Delivery Address — read-only from profile
+                    if (_deliveryType == DeliveryType.delivery) ...[
+                      _Section(
+                        title: loc.foodCheckoutDeliveryAddress,
+                        isDark: isDark,
+                        child: _FoodAddressCard(
+                            foodAddress: foodAddress, isDark: isDark),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+
+                    // Order Notes
+                    _Section(
+                      title: loc.foodCheckoutOrderNotes,
+                      isDark: isDark,
+                      child: TextField(
+                        controller: _notesController,
+                        maxLines: 2,
+                        maxLength: 1000,
+                        onChanged: (v) => setState(() => _orderNotes = v),
+                        decoration: InputDecoration(
+                          hintText: loc.foodCheckoutOrderNotesHint,
+                          hintStyle: TextStyle(
+                              color:
+                                  isDark ? Colors.grey[600] : Colors.grey[400],
+                              fontSize: 13),
+                          filled: true,
+                          fillColor: isDark
+                              ? const Color(0xFF1A1D2E)
+                              : const Color(0xFFF3F4F6),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                  color: isDark
+                                      ? const Color(0xFF2D2B3F)
+                                      : const Color(0xFFD1D5DB))),
+                          enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                  color: isDark
+                                      ? const Color(0xFF2D2B3F)
+                                      : const Color(0xFFD1D5DB))),
+                          focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  const BorderSide(color: Colors.orange)),
+                          counterText: '',
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
+                    const SizedBox(height: 10),
 
-                  // Payment Method
-                  _Section(
-                    title: loc.foodCheckoutPaymentMethod,
-                    isDark: isDark,
-                    child: Column(children: [
-                      _PaymentMethodButton(
-                          method: PaymentMethod.payAtDoor,
-                          isSelected: _paymentMethod == PaymentMethod.payAtDoor,
-                          isDark: isDark,
-                          onTap: () => setState(
-                              () => _paymentMethod = PaymentMethod.payAtDoor)),
-                      const SizedBox(height: 8),
-                      _PaymentMethodButton(
-                          method: PaymentMethod.card,
-                          isSelected: _paymentMethod == PaymentMethod.card,
-                          isDark: isDark,
-                          onTap: () => setState(
-                              () => _paymentMethod = PaymentMethod.card)),
-                    ]),
-                  ),
-                ],
-              ),
-
-              // Sticky bottom bar
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: _StickyBottomBar(
-                  isDark: isDark,
-                  error: _error,
-                  subtotal: cart.totals.subtotal,
-                  currency: cart.totals.currency,
-                  itemCount: cart.totals.itemCount,
-                  isFormValid: formValid,
-                  isSubmitting: _isSubmitting,
-                  paymentMethod: _paymentMethod,
-                  onSubmit: () => _handleSubmit(cart),
+                    // Payment Method
+                    _Section(
+                      title: loc.foodCheckoutPaymentMethod,
+                      isDark: isDark,
+                      child: Column(children: [
+                        _PaymentMethodButton(
+                            method: PaymentMethod.payAtDoor,
+                            isSelected:
+                                _paymentMethod == PaymentMethod.payAtDoor,
+                            isDark: isDark,
+                            onTap: () => setState(() =>
+                                _paymentMethod = PaymentMethod.payAtDoor)),
+                        const SizedBox(height: 8),
+                        _PaymentMethodButton(
+                            method: PaymentMethod.card,
+                            isSelected: _paymentMethod == PaymentMethod.card,
+                            isDark: isDark,
+                            onTap: () => setState(
+                                () => _paymentMethod = PaymentMethod.card)),
+                      ]),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
+
+                // Sticky bottom bar
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: _StickyBottomBar(
+                    isDark: isDark,
+                    error: _error,
+                    subtotal: cart.totals.subtotal,
+                    currency: cart.totals.currency,
+                    itemCount: cart.totals.itemCount,
+                    isFormValid: formValid,
+                    isSubmitting: _isSubmitting,
+                    paymentMethod: _paymentMethod,
+                    onSubmit: () => _handleSubmit(cart),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -558,9 +563,7 @@ class _RestaurantInfoRow extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: isDark
-            ? const Color.fromARGB(255, 40, 38, 59)
-            : Colors.white,
+        color: isDark ? const Color.fromARGB(255, 40, 38, 59) : Colors.white,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.15),
@@ -625,9 +628,7 @@ class _Section extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: isDark
-            ? const Color.fromARGB(255, 40, 38, 59)
-            : Colors.white,
+        color: isDark ? const Color.fromARGB(255, 40, 38, 59) : Colors.white,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.15),
@@ -1057,38 +1058,54 @@ class _OrderSuccessScreen extends StatelessWidget {
           padding: const EdgeInsets.all(32),
           decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                  color: isDark
-                      ? Colors.white.withOpacity(0.08)
-                      : Colors.grey[200]!,
-                  width: 2.5)),
+              border: Border.all(color: Colors.white, width: 2.5)),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Image.asset('assets/images/foods/foodsuccess.png',
-                    width: 80,
-                    height: 80,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.15),
-                            shape: BoxShape.circle),
-                        child: const Icon(Icons.check_circle_rounded,
-                            size: 40, color: Colors.green)))),
+            Image.asset('assets/images/success.gif',
+                width: 170,
+                height: 170,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => Container(
+                    width: 170,
+                    height: 170,
+                    decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.15),
+                        shape: BoxShape.circle),
+                    child: const Icon(Icons.check_circle_rounded,
+                        size: 80, color: Colors.green))),
             const SizedBox(height: 16),
             Text(loc.foodCheckoutOrderPlaced,
                 style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                     color: isDark ? Colors.white : Colors.grey[900])),
-            const SizedBox(height: 6),
-            Text(loc.foodCheckoutOrderConfirmed,
-                style: TextStyle(
-                    fontSize: 13,
-                    color: isDark ? Colors.grey[400] : Colors.grey[500]),
-                textAlign: TextAlign.center),
+            const SizedBox(height: 18),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(Icons.notifications_active_rounded,
+                  size: 16,
+                  color: isDark ? Colors.orange[400] : Colors.orange[600]),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(loc.foodCheckoutStatusUpdatesInfo,
+                    style: TextStyle(
+                        fontSize: 12,
+                        height: 1.4,
+                        color: isDark ? Colors.grey[300] : Colors.grey[700])),
+              ),
+            ]),
+            const SizedBox(height: 10),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(Icons.support_agent_rounded,
+                  size: 16,
+                  color: isDark ? Colors.orange[400] : Colors.orange[600]),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(loc.foodCheckoutSupportInfo,
+                    style: TextStyle(
+                        fontSize: 12,
+                        height: 1.4,
+                        color: isDark ? Colors.grey[300] : Colors.grey[700])),
+              ),
+            ]),
             if (estimatedPrepTime > 0) ...[
               const SizedBox(height: 12),
               Container(
@@ -1212,9 +1229,8 @@ class _FoodCheckoutSkeleton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
-            color: isDark
-                ? const Color.fromARGB(255, 40, 38, 59)
-                : Colors.white,
+            color:
+                isDark ? const Color.fromARGB(255, 40, 38, 59) : Colors.white,
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.15),

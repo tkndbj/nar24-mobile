@@ -13016,6 +13016,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get foodStatusReady => 'Готов';
 
   @override
+  String get foodStatusOutForDelivery => 'В пути';
+
+  @override
   String get foodStatusDelivered => 'Доставлен';
 
   @override
@@ -13697,6 +13700,14 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get foodCheckoutOrderConfirmed => 'Ваш заказ подтверждён.';
+
+  @override
+  String get foodCheckoutStatusUpdatesInfo =>
+      'Вы будете получать push-уведомления по мере изменения статуса заказа.';
+
+  @override
+  String get foodCheckoutSupportInfo =>
+      'Нужна помощь? Вы можете связаться с нашей службой поддержки 24/7 через раздел «Поддержка» в профиле.';
 
   @override
   String foodCheckoutOrderId(String id) {
@@ -15802,4 +15813,56 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get favoritesLimitReached =>
       'Достигнут лимит избранного (максимум 500). Удалите некоторые, чтобы добавить новые.';
+
+  @override
+  String get drinks => 'Напитки';
+
+  @override
+  String get addDrink => 'Добавить напиток';
+
+  @override
+  String get addDrinkTitle => 'Добавить напиток';
+
+  @override
+  String get addDrinkSubtitle => 'Добавьте новый напиток в меню';
+
+  @override
+  String get editDrinkTitle => 'Редактировать напиток';
+
+  @override
+  String get editDrinkSubtitle => 'Обновите данные напитка';
+
+  @override
+  String get drinkDetails => 'Информация о напитке';
+
+  @override
+  String get drinkName => 'Название напитка';
+
+  @override
+  String get drinkNamePlaceholder => 'напр. Свежевыжатый апельсиновый сок';
+
+  @override
+  String get drinkNameRequired => 'Название напитка обязательно';
+
+  @override
+  String get drinkNameMinLength =>
+      'Название должно содержать минимум 2 символа';
+
+  @override
+  String get addDrinkSave => 'Добавить напиток';
+
+  @override
+  String get updateDrink => 'Обновить напиток';
+
+  @override
+  String get drinkAddSuccess => 'Напиток успешно добавлен';
+
+  @override
+  String get drinkAddError => 'Не удалось добавить напиток';
+
+  @override
+  String get drinkUpdateSuccess => 'Напиток успешно обновлён';
+
+  @override
+  String get updating => 'Обновление...';
 }

@@ -116,6 +116,45 @@ class FoodItem {
       );
 }
 
+class DrinkItem {
+  final String id;
+  final String restaurantId;
+  final String name;
+  final double price;
+  final bool isAvailable;
+  final Timestamp? createdAt;
+
+  const DrinkItem({
+    required this.id,
+    required this.restaurantId,
+    required this.name,
+    required this.price,
+    required this.isAvailable,
+    this.createdAt,
+  });
+
+  factory DrinkItem.fromDoc(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
+    return DrinkItem(
+      id: doc.id,
+      restaurantId: d['restaurantId'] as String? ?? '',
+      name: d['name'] as String? ?? '',
+      price: (d['price'] as num?)?.toDouble() ?? 0,
+      isAvailable: d['isAvailable'] as bool? ?? true,
+      createdAt: d['createdAt'] as Timestamp?,
+    );
+  }
+
+  DrinkItem copyWith({bool? isAvailable}) => DrinkItem(
+        id: id,
+        restaurantId: restaurantId,
+        name: name,
+        price: price,
+        isAvailable: isAvailable ?? this.isAvailable,
+        createdAt: createdAt,
+      );
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const _minDiscount = 5;
@@ -137,41 +176,53 @@ class _RestaurantFoodsTabState extends State<RestaurantFoodsTab> {
   final _firestore = FirebaseFirestore.instance;
 
   List<FoodItem> _foods = [];
+  List<DrinkItem> _drinks = [];
   bool _loading = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _fetchFoods();
+    _fetchMenu();
   }
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
 
-  Future<void> _fetchFoods() async {
+  Future<void> _fetchMenu() async {
     setState(() {
       _loading = true;
       _error = null;
     });
+
+    // Fetch foods
     try {
-      final snap = await _firestore
+      final foodSnap = await _firestore
           .collection('foods')
           .where('restaurantId', isEqualTo: widget.restaurantId)
           .orderBy('createdAt', descending: true)
           .get();
-
-      if (!mounted) return;
-      setState(() {
-        _foods = snap.docs.map(FoodItem.fromDoc).toList();
-        _loading = false;
-      });
+      if (mounted) {
+        _foods = foodSnap.docs.map(FoodItem.fromDoc).toList();
+      }
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
+      debugPrint('Failed to fetch foods: $e');
     }
+
+    // Fetch drinks
+    try {
+      final drinkSnap = await _firestore
+          .collection('drinks')
+          .where('restaurantId', isEqualTo: widget.restaurantId)
+          .orderBy('createdAt', descending: true)
+          .get();
+      if (mounted) {
+        _drinks = drinkSnap.docs.map(DrinkItem.fromDoc).toList();
+      }
+    } catch (e) {
+      debugPrint('Failed to fetch drinks: $e');
+    }
+
+    if (mounted) setState(() => _loading = false);
   }
 
   // ── Toggle Availability ───────────────────────────────────────────────────
@@ -196,6 +247,31 @@ class _RestaurantFoodsTabState extends State<RestaurantFoodsTab> {
         _foods = _foods
             .map((f) =>
                 f.id == food.id ? f.copyWith(isAvailable: food.isAvailable) : f)
+            .toList();
+      });
+      _showSnackBar(AppLocalizations.of(context).toggleError, isError: true);
+    }
+  }
+
+  Future<void> _toggleDrinkAvailability(DrinkItem drink) async {
+    final newVal = !drink.isAvailable;
+    setState(() {
+      _drinks = _drinks
+          .map((d) => d.id == drink.id ? d.copyWith(isAvailable: newVal) : d)
+          .toList();
+    });
+    try {
+      await _firestore
+          .collection('drinks')
+          .doc(drink.id)
+          .update({'isAvailable': newVal});
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _drinks = _drinks
+            .map((d) => d.id == drink.id
+                ? d.copyWith(isAvailable: drink.isAvailable)
+                : d)
             .toList();
       });
       _showSnackBar(AppLocalizations.of(context).toggleError, isError: true);
@@ -351,7 +427,7 @@ class _RestaurantFoodsTabState extends State<RestaurantFoodsTab> {
 
     return RefreshIndicator(
       color: const Color(0xFFFF6200),
-      onRefresh: _fetchFoods,
+      onRefresh: _fetchMenu,
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
@@ -383,14 +459,20 @@ class _RestaurantFoodsTabState extends State<RestaurantFoodsTab> {
                     )
                   else
                     const SizedBox.shrink(),
-                  _AddFoodButton(restaurantId: widget.restaurantId),
+                  Row(
+                    children: [
+                      _AddDrinkButton(restaurantId: widget.restaurantId),
+                      const SizedBox(width: 8),
+                      _AddFoodButton(restaurantId: widget.restaurantId),
+                    ],
+                  ),
                 ],
               ),
             ),
           ),
 
           // Empty state
-          if (_foods.isEmpty)
+          if (_foods.isEmpty && _drinks.isEmpty)
             SliverFillRemaining(
               child: _buildEmptyState(l10n, isDark),
             )
@@ -399,13 +481,13 @@ class _RestaurantFoodsTabState extends State<RestaurantFoodsTab> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
+                  // Food categories (unchanged)
                   ..._foodsByCategory.map((entry) {
                     final category = entry.key;
                     final items = entry.value;
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Category header
                         Padding(
                           padding: const EdgeInsets.only(top: 20, bottom: 10),
                           child: Row(
@@ -441,7 +523,6 @@ class _RestaurantFoodsTabState extends State<RestaurantFoodsTab> {
                             ],
                           ),
                         ),
-                        // Food cards
                         ...items.map((food) => Padding(
                               padding: const EdgeInsets.only(bottom: 10),
                               child: _FoodCard(
@@ -458,6 +539,66 @@ class _RestaurantFoodsTabState extends State<RestaurantFoodsTab> {
                       ],
                     );
                   }).toList(),
+
+                  // ── Drinks Section ──
+                  if (_drinks.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 28, bottom: 10),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF7ED),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.local_drink_outlined,
+                                size: 14, color: Color(0xFFFF6200)),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            l10n.drinks,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : Colors.grey[900],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? Colors.white.withOpacity(0.08)
+                                  : Colors.grey[100],
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              '${_drinks.length}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey[400],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    ..._drinks.map((drink) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _DrinkCard(
+                            drink: drink,
+                            isDark: isDark,
+                            onToggleAvailability: () =>
+                                _toggleDrinkAvailability(drink),
+                            onEdit: () => context.push(
+                                '/restaurant_list_drink_screen?edit=${drink.id}&restaurantId=${widget.restaurantId}'),
+                          ),
+                        )),
+                  ],
                 ]),
               ),
             ),
@@ -520,7 +661,7 @@ class _RestaurantFoodsTabState extends State<RestaurantFoodsTab> {
                 textAlign: TextAlign.center),
             const SizedBox(height: 16),
             TextButton.icon(
-              onPressed: _fetchFoods,
+              onPressed: _fetchMenu,
               icon: const Icon(Icons.refresh_rounded),
               label: Text(l10n.retry),
               style: TextButton.styleFrom(
@@ -819,8 +960,8 @@ class _FoodCard extends StatelessWidget {
                         const SizedBox(width: 2),
                         Text(
                           '${food.preparationTime!} ${l10n.minutes}',
-                          style: TextStyle(
-                              fontSize: 10, color: Colors.grey[400]),
+                          style:
+                              TextStyle(fontSize: 10, color: Colors.grey[400]),
                         ),
                       ],
                     ],
@@ -1124,8 +1265,7 @@ class _DiscountModalState extends State<_DiscountModal> {
                       ),
                       Text(
                         widget.food.name,
-                        style: TextStyle(
-                            fontSize: 11, color: Colors.grey[400]),
+                        style: TextStyle(fontSize: 11, color: Colors.grey[400]),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1238,8 +1378,8 @@ class _DiscountModalState extends State<_DiscountModal> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(l10n.originalPrice2,
-                          style: TextStyle(
-                              fontSize: 12, color: Colors.grey[500])),
+                          style:
+                              TextStyle(fontSize: 12, color: Colors.grey[500])),
                       Text(
                         '${_basePrice.toStringAsFixed(2)} TL',
                         style: TextStyle(
@@ -1426,3 +1566,205 @@ class _DatePickerTile extends StatelessWidget {
   }
 }
 
+// ─── Drink Card ───────────────────────────────────────────────────────────────
+
+class _DrinkCard extends StatelessWidget {
+  final DrinkItem drink;
+  final bool isDark;
+  final VoidCallback onToggleAvailability;
+  final VoidCallback onEdit;
+
+  const _DrinkCard({
+    required this.drink,
+    required this.isDark,
+    required this.onToggleAvailability,
+    required this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1B2E) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withOpacity(0.08)
+              : Colors.grey.withOpacity(0.12),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Icon placeholder (no image for drinks)
+          Container(
+            width: 64,
+            height: 80,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.orange.withOpacity(0.06)
+                  : const Color(0xFFFFF7ED).withOpacity(0.5),
+              borderRadius:
+                  const BorderRadius.horizontal(left: Radius.circular(16)),
+            ),
+            child: Icon(
+              Icons.local_drink_outlined,
+              size: 24,
+              color: Colors.orange[200],
+            ),
+          ),
+
+          // Info
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Name + availability
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          drink.name,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white : Colors.grey[900],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: onToggleAvailability,
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: drink.isAvailable
+                                    ? const Color(0xFFECFDF5)
+                                    : const Color(0xFFFEF2F2),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: BoxDecoration(
+                                      color: drink.isAvailable
+                                          ? const Color(0xFF34D399)
+                                          : const Color(0xFFF87171),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    drink.isAvailable
+                                        ? l10n.available
+                                        : l10n.unavailable,
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                      color: drink.isAvailable
+                                          ? const Color(0xFF059669)
+                                          : const Color(0xFFDC2626),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              l10n.tapToChange,
+                              style: TextStyle(
+                                  fontSize: 8, color: Colors.grey[400]),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  // Price
+                  Text(
+                    '${drink.price.toStringAsFixed(2)} TL',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : Colors.grey[900],
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Edit button
+                  GestureDetector(
+                    onTap: onEdit,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.edit_outlined,
+                            size: 13, color: Colors.grey[500]),
+                        const SizedBox(width: 4),
+                        Text(
+                          l10n.edit,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Add Drink Button ─────────────────────────────────────────────────────────
+
+class _AddDrinkButton extends StatelessWidget {
+  final String restaurantId;
+
+  const _AddDrinkButton({required this.restaurantId});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return OutlinedButton.icon(
+      onPressed: () => context
+          .push('/restaurant_list_drink_screen?restaurantId=$restaurantId'),
+      icon: const Icon(Icons.add_rounded, size: 15),
+      label: Text(
+        l10n.addDrink,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      ),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: isDark ? Colors.white70 : Colors.grey[700],
+        side: BorderSide(
+            color: isDark
+                ? Colors.white.withOpacity(0.15)
+                : Colors.grey.withOpacity(0.3)),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+}

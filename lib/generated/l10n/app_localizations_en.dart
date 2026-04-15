@@ -12919,6 +12919,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get foodStatusReady => 'Ready';
 
   @override
+  String get foodStatusOutForDelivery => 'On the way';
+
+  @override
   String get foodStatusDelivered => 'Delivered';
 
   @override
@@ -13596,6 +13599,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get foodCheckoutOrderConfirmed => 'Your order has been confirmed.';
+
+  @override
+  String get foodCheckoutStatusUpdatesInfo =>
+      'You\'ll receive push notifications as your order status is updated.';
+
+  @override
+  String get foodCheckoutSupportInfo =>
+      'Need help? You can reach our 24/7 support anytime from the Support option on your profile.';
 
   @override
   String foodCheckoutOrderId(String id) {
@@ -15701,4 +15712,55 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get favoritesLimitReached =>
       'You\'ve reached the favorites limit (max 500). Please remove some before adding new ones.';
+
+  @override
+  String get drinks => 'Drinks';
+
+  @override
+  String get addDrink => 'Add Drink';
+
+  @override
+  String get addDrinkTitle => 'Add Drink';
+
+  @override
+  String get addDrinkSubtitle => 'Add a new drink to your menu';
+
+  @override
+  String get editDrinkTitle => 'Edit Drink';
+
+  @override
+  String get editDrinkSubtitle => 'Update drink details';
+
+  @override
+  String get drinkDetails => 'Drink Details';
+
+  @override
+  String get drinkName => 'Drink Name';
+
+  @override
+  String get drinkNamePlaceholder => 'e.g. Fresh Orange Juice';
+
+  @override
+  String get drinkNameRequired => 'Drink name is required';
+
+  @override
+  String get drinkNameMinLength => 'Name must be at least 2 characters';
+
+  @override
+  String get addDrinkSave => 'Add Drink';
+
+  @override
+  String get updateDrink => 'Update Drink';
+
+  @override
+  String get drinkAddSuccess => 'Drink added successfully';
+
+  @override
+  String get drinkAddError => 'Failed to add drink';
+
+  @override
+  String get drinkUpdateSuccess => 'Drink updated successfully';
+
+  @override
+  String get updating => 'Updating...';
 }

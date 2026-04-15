@@ -151,9 +151,14 @@ class _MarketThinBannerState extends State<MarketThinBanner>
   }
 
  Widget _buildBannerImage(String source, double bannerHeight) {
-    return CloudinaryImage.banner(
-      source: source,
-      cdnWidth: _kThinBannerCdnWidth,
+    // Thin banners are very wide and short. The shared .banner factory
+    // pins maxWidthDiskCache to cdnWidth, which re-encodes bytes on disk
+    // write and occasionally produces corrupted cache entries for this
+    // extreme aspect ratio. Build the URL ourselves and go through
+    // fromResolvedUrl so no disk-cache re-encode is applied.
+    final cdnUrl = CloudinaryUrl.bannerCdn(source, width: _kThinBannerCdnWidth);
+    return CloudinaryImage.fromResolvedUrl(
+      url: cdnUrl,
       width: double.infinity,
       height: bannerHeight,
       fit: BoxFit.fill,

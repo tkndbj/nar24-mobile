@@ -29,6 +29,36 @@ import '../../services/restaurant_typesense_service.dart';
 import '../../widgets/cloudinary_image.dart';
 import '../../utils/cloudinary_url_builder.dart';
 
+class Drink {
+  final String id;
+  final String restaurantId;
+  final String name;
+  final double price;
+  final bool isAvailable;
+  final Timestamp? createdAt;
+
+  const Drink({
+    required this.id,
+    required this.restaurantId,
+    required this.name,
+    required this.price,
+    required this.isAvailable,
+    this.createdAt,
+  });
+
+  factory Drink.fromDoc(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
+    return Drink(
+      id: doc.id,
+      restaurantId: d['restaurantId'] as String? ?? '',
+      name: d['name'] as String? ?? '',
+      price: (d['price'] as num?)?.toDouble() ?? 0,
+      isAvailable: d['isAvailable'] as bool? ?? true,
+      createdAt: d['createdAt'] as Timestamp?,
+    );
+  }
+}
+
 class RestaurantDetailScreen extends StatefulWidget {
   final String restaurantId;
   const RestaurantDetailScreen({required this.restaurantId, super.key});
@@ -39,7 +69,6 @@ class RestaurantDetailScreen extends StatefulWidget {
 
 class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
   Restaurant? _restaurant;
-  List<Food> _foods = [];
   bool _loading = true;
 
   /// Whether the user was unauthenticated when they entered this screen.
@@ -75,44 +104,25 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
     }
   }
 
-  /// Mirrors fetchData in RestaurantDetailPage — Promise.all parallel fetch.
+  /// Fetches the restaurant doc. Foods are paginated inside the body.
   Future<void> _fetchData() async {
     if (widget.restaurantId.isEmpty) return;
 
     try {
-      final results = await Future.wait([
-        FirebaseFirestore.instance
-            .collection('restaurants')
-            .doc(widget.restaurantId)
-            .get(),
-        FirebaseFirestore.instance
-            .collection('foods')
-            .where('restaurantId', isEqualTo: widget.restaurantId)
-            .where('isAvailable', isEqualTo: true)
-            .get(),
-      ]);
-
-      final restaurantSnap =
-          results[0] as DocumentSnapshot<Map<String, dynamic>>;
-      final foodsSnap = results[1] as QuerySnapshot<Map<String, dynamic>>;
+      final restaurantSnap = await FirebaseFirestore.instance
+          .collection('restaurants')
+          .doc(widget.restaurantId)
+          .get();
 
       Restaurant? restaurant;
       if (restaurantSnap.exists) {
-        final d = restaurantSnap.data()!;
-        restaurant = Restaurant.fromMap(d, id: restaurantSnap.id);
-      }
-
-      final foodList = <Food>[];
-      for (final docSnap in foodsSnap.docs) {
-        final d = docSnap.data();
-        if (d['name'] == null) continue;
-        foodList.add(Food.fromMap(d, id: docSnap.id));
+        restaurant =
+            Restaurant.fromMap(restaurantSnap.data()!, id: restaurantSnap.id);
       }
 
       if (mounted) {
         setState(() {
           _restaurant = restaurant;
-          _foods = foodList;
           _loading = false;
         });
       }
@@ -135,10 +145,7 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
           isDark: Theme.of(context).brightness == Brightness.dark);
     }
 
-    return _RestaurantDetailBody(
-      restaurant: _restaurant,
-      foods: _foods,
-    );
+    return _RestaurantDetailBody(restaurant: _restaurant);
   }
 }
 
@@ -151,18 +158,17 @@ typedef _ActiveTab = String; // 'menu' | 'reviews' | 'info'
 
 class _RestaurantDetailBody extends StatefulWidget {
   final Restaurant? restaurant;
-  final List<Food> foods;
 
-  const _RestaurantDetailBody({
-    required this.restaurant,
-    required this.foods,
-  });
+  const _RestaurantDetailBody({required this.restaurant});
 
   @override
   State<_RestaurantDetailBody> createState() => _RestaurantDetailBodyState();
 }
 
 class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
+  static const int _pageSize = 10;
+  static const double _scrollTriggerThreshold = 400;
+
   // ── Tab — mirrors activeTab state ─────────────────────────────────────────
   _ActiveTab _activeTab = 'menu';
 
@@ -174,9 +180,24 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
   // ── Restaurant food categories from Typesense facets ─────────────────────
   List<String> _restaurantFoodCategories = [];
 
-  // ── Typesense results (null = use prop data) ──────────────────────────────
+  // ── Typesense results (null = use paginated Firestore data) ──────────────
   List<Food>? _typesenseResults;
   Timer? _searchDebounce;
+
+  // ── Paginated Firestore foods state ──────────────────────────────────────
+  List<Drink> _drinks = [];
+  bool _drinksLoaded = false;
+  final List<Food> _foods = [];
+  DocumentSnapshot<Map<String, dynamic>>? _lastFoodDoc;
+  bool _foodsInitialLoading = true;
+  bool _foodsLoadingMore = false;
+  bool _foodsHasMore = true;
+  int? _totalFoodCount;
+  // Increments on every reset so stale responses can be discarded.
+  int _loadSeq = 0;
+
+  // ── Scroll controller for infinite scroll ────────────────────────────────
+  late final ScrollController _scrollController;
 
   // ── Conflict dialog state — mirrors pendingConflict ───────────────────────
   _PendingConflict? _pendingConflict;
@@ -196,29 +217,26 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
     return map;
   }
 
-  /// Mirrors filteredFoods memo
+  /// Returns the list of foods to render.
+  /// Category filter is applied server-side (via paginated query), so no
+  /// additional client-side filtering is needed here.
   List<Food> _filteredFoods() {
     if (_typesenseResults != null) return _typesenseResults!;
-    if (_selectedIconCategory != null) {
-      return widget.foods
-          .where((f) => f.foodCategory == _selectedIconCategory)
-          .toList();
-    }
-    return widget.foods;
+    return _foods;
   }
 
   /// Mirrors hasActiveFilters memo
   bool get _hasActiveFilters =>
       _selectedIconCategory != null || _searchQuery.trim().isNotEmpty;
 
-  /// Mirrors groupedFoods memo.
-  /// Iterates FoodCategoryData.kCategories (same order as kCategories.forEach({ key }) in TS).
-  /// Returns null when hasActiveFilters (flat list instead).
+  /// Groups currently-loaded foods by category in kCategories order.
+  /// Returns null when hasActiveFilters (flat list instead). As more pages
+  /// load, items are progressively appended to their respective groups.
   Map<String, List<Food>>? _groupedFoods() {
     if (_hasActiveFilters) return null;
     final map = <String, List<Food>>{};
     for (final key in FoodCategoryData.kCategories) {
-      final items = widget.foods.where((f) => f.foodCategory == key).toList();
+      final items = _foods.where((f) => f.foodCategory == key).toList();
       if (items.isNotEmpty) map[key] = items;
     }
     return map.isEmpty ? null : map;
@@ -229,17 +247,130 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController()..addListener(_onScroll);
     _searchController.addListener(_onSearchChanged);
-    if (widget.restaurant != null) _fetchFoodCategories();
+    if (widget.restaurant != null) {
+      _fetchFoodCategories();
+      _loadFoodsPage(reset: true);
+      _fetchDrinks();
+    }
   }
 
   @override
   void dispose() {
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
     _searchController
       ..removeListener(_onSearchChanged)
       ..dispose();
     _searchDebounce?.cancel();
     super.dispose();
+  }
+
+  // ── Infinite scroll ───────────────────────────────────────────────────────
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    // Only paginate when browsing Firestore data — not during Typesense search.
+    if (_typesenseResults != null) return;
+    if (_activeTab != 'menu') return;
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - _scrollTriggerThreshold) {
+      _loadFoodsPage(reset: false);
+    }
+  }
+
+  Future<void> _fetchDrinks() async {
+    final r = widget.restaurant;
+    if (r == null) return;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('drinks')
+          .where('restaurantId', isEqualTo: r.id)
+          .where('isAvailable', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
+          .get();
+      if (mounted) {
+        setState(() {
+          _drinks = snap.docs.map(Drink.fromDoc).toList();
+          _drinksLoaded = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('[RestaurantDetail] Drinks fetch error: $e');
+      if (mounted) setState(() => _drinksLoaded = true);
+    }
+  }
+
+  Future<void> _loadFoodsPage({required bool reset}) async {
+    final r = widget.restaurant;
+    if (r == null) return;
+
+    if (!reset) {
+      if (_foodsLoadingMore || !_foodsHasMore) return;
+      if (_typesenseResults != null) return;
+    }
+
+    final int seq = reset ? (++_loadSeq) : _loadSeq;
+
+    setState(() {
+      if (reset) {
+        _foodsInitialLoading = true;
+        _foodsLoadingMore = false;
+        _foodsHasMore = true;
+        _foods.clear();
+        _lastFoodDoc = null;
+      } else {
+        _foodsLoadingMore = true;
+      }
+    });
+
+    try {
+      Query<Map<String, dynamic>> q = FirebaseFirestore.instance
+          .collection('foods')
+          .where('restaurantId', isEqualTo: r.id)
+          .where('isAvailable', isEqualTo: true);
+
+      if (_selectedIconCategory != null) {
+        q = q.where('foodCategory', isEqualTo: _selectedIconCategory);
+      }
+
+      // Order by document id for a stable cursor that requires no extra
+      // composite index beyond Firestore's automatic single-field indexes.
+      q = q.orderBy(FieldPath.documentId).limit(_pageSize);
+
+      if (!reset && _lastFoodDoc != null) {
+        q = q.startAfterDocument(_lastFoodDoc!);
+      }
+
+      final snap = await q.get();
+
+      // Discard stale response from an earlier reset.
+      if (!mounted || seq != _loadSeq) return;
+
+      final newFoods = <Food>[];
+      for (final d in snap.docs) {
+        final data = d.data();
+        if (data['name'] == null) continue;
+        newFoods.add(Food.fromMap(data, id: d.id));
+      }
+
+      setState(() {
+        _foods.addAll(newFoods);
+        if (snap.docs.isNotEmpty) _lastFoodDoc = snap.docs.last;
+        if (snap.docs.length < _pageSize) _foodsHasMore = false;
+        _foodsInitialLoading = false;
+        _foodsLoadingMore = false;
+      });
+    } catch (e) {
+      debugPrint('[RestaurantDetail] Paginate error: $e');
+      if (!mounted || seq != _loadSeq) return;
+      setState(() {
+        _foodsInitialLoading = false;
+        _foodsLoadingMore = false;
+      });
+    }
   }
 
   // ── Data fetching ─────────────────────────────────────────────────────────
@@ -302,6 +433,77 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
     final cart = context.read<FoodCartProvider>();
     final matching =
         cartItems.where((i) => i.originalFoodId == foodId).toList();
+    for (final item in matching) {
+      await cart.removeItem(item.foodId);
+    }
+  }
+
+  Future<void> _handleAddDrinkToCart(Drink drink) async {
+    if (FirebaseAuth.instance.currentUser == null) {
+      showCupertinoModalPopup(
+        context: context,
+        builder: (_) => LoginPromptModal(authService: AuthService()),
+      );
+      return;
+    }
+
+    final rawFoodAddress =
+        context.read<UserProvider>().profileData?['foodAddress'];
+    if (rawFoodAddress == null) {
+      final address =
+          await showFoodLocationPicker(context, isDismissible: true);
+      if (!mounted) return;
+      if (address != null) context.go('/restaurants');
+      return;
+    }
+
+    final cart = context.read<FoodCartProvider>();
+    final restaurant = widget.restaurant!;
+    final cartRestaurant = FoodCartRestaurant(
+      id: restaurant.id,
+      name: restaurant.name,
+      profileImageUrl: restaurant.profileImageUrl,
+    );
+
+    // Restaurant conflict check
+    if (cart.currentRestaurant != null &&
+        cart.currentRestaurant!.id != restaurant.id) {
+      _handleConflict(_PendingConflict(
+        food: Food(
+          id: drink.id,
+          name: drink.name,
+          price: drink.price,
+          foodCategory: 'drink',
+          foodType: 'drink',
+          restaurantId: drink.restaurantId,
+          isAvailable: true,
+        ),
+        restaurant: cartRestaurant,
+        quantity: 1,
+        extras: const [],
+        specialNotes: '',
+      ));
+      return;
+    }
+
+    await cart.addItem(
+      foodId: drink.id,
+      foodName: drink.name,
+      foodDescription: '',
+      price: drink.price,
+      imageUrl: '',
+      foodCategory: 'drink',
+      foodType: 'drink',
+      restaurant: cartRestaurant,
+      quantity: 1,
+    );
+  }
+
+  Future<void> _handleRemoveDrinkFromCart(
+      String drinkId, List<FoodCartItem> cartItems) async {
+    final cart = context.read<FoodCartProvider>();
+    final matching =
+        cartItems.where((i) => i.originalFoodId == drinkId).toList();
     for (final item in matching) {
       await cart.removeItem(item.foodId);
     }
@@ -437,6 +639,7 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
             onTap: () => FocusScope.of(context).unfocus(),
             behavior: HitTestBehavior.translucent,
             child: CustomScrollView(
+              controller: _scrollController,
               slivers: [
                 // ── Restaurant Header ─────────────────────────────────────
                 _RestaurantHeader(restaurant: restaurant, isDark: isDark),
@@ -472,7 +675,7 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
                       children: [
                         _TabAndSearchRow(
                           activeTab: _activeTab,
-                          foodCount: widget.foods.length,
+                          foodCount: _totalFoodCount ?? _foods.length,
                           isDark: isDark,
                           searchController: _searchController,
                           onTabChange: (tab) =>
@@ -487,14 +690,13 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
                             isDark: isDark,
                             categories: _restaurantFoodCategories,
                             onSelect: (cat) {
-                              setState(() {
-                                _selectedIconCategory = cat;
-                                if (_searchQuery.trim().isNotEmpty) {
-                                  _performSearch();
-                                } else {
-                                  _typesenseResults = null;
-                                }
-                              });
+                              setState(() => _selectedIconCategory = cat);
+                              if (_searchQuery.trim().isNotEmpty) {
+                                _performSearch();
+                              } else {
+                                setState(() => _typesenseResults = null);
+                                _loadFoodsPage(reset: true);
+                              }
                             },
                           ),
                         ],
@@ -505,32 +707,86 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
 
                 // ── Menu tab content ──────────────────────────────────────
                 if (_activeTab == 'menu') ...[
-                  // Food list
-                  if (filtered.isNotEmpty)
-                    grouped != null
-                        ? _GroupedFoodList(
-                            grouped: grouped,
-                            restaurant: restaurant,
-                            isDark: isDark,
-                            isOpen: isOpen,
-                            deliversToUser: deliversToUser,
-                            cartQtyMap: cartQtyMap,
-                            onConflict: _handleConflict,
-                            onRemove: (id) =>
-                                _handleRemoveFromCart(id, cart.items),
-                          )
-                        : _FlatFoodList(
-                            foods: filtered,
-                            restaurant: restaurant,
-                            isDark: isDark,
-                            isOpen: isOpen,
-                            deliversToUser: deliversToUser,
-                            cartQtyMap: cartQtyMap,
-                            onConflict: _handleConflict,
-                            onRemove: (id) =>
-                                _handleRemoveFromCart(id, cart.items),
-                          )
-                  else if (widget.foods.isEmpty)
+                  if (_foodsInitialLoading && _typesenseResults == null)
+                    const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 48),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: Colors.orange,
+                            strokeWidth: 2.5,
+                          ),
+                        ),
+                      ),
+                    )
+                  else if (filtered.isNotEmpty || _drinks.isNotEmpty) ...[
+                    // ── Foods (unchanged) ──
+                    if (filtered.isNotEmpty) ...[
+                      grouped != null
+                          ? _GroupedFoodList(
+                              grouped: grouped,
+                              restaurant: restaurant,
+                              isDark: isDark,
+                              isOpen: isOpen,
+                              deliversToUser: deliversToUser,
+                              cartQtyMap: cartQtyMap,
+                              onConflict: _handleConflict,
+                              onRemove: (id) =>
+                                  _handleRemoveFromCart(id, cart.items),
+                              bottomPadding:
+                                  (_drinks.isNotEmpty && !_hasActiveFilters)
+                                      ? 0
+                                      : 80,
+                            )
+                          : _FlatFoodList(
+                              foods: filtered,
+                              restaurant: restaurant,
+                              isDark: isDark,
+                              isOpen: isOpen,
+                              deliversToUser: deliversToUser,
+                              cartQtyMap: cartQtyMap,
+                              onConflict: _handleConflict,
+                              onRemove: (id) =>
+                                  _handleRemoveFromCart(id, cart.items),
+                              bottomPadding:
+                                  (_drinks.isNotEmpty && !_hasActiveFilters)
+                                      ? 0
+                                      : 80,
+                            ),
+                      if (_foodsLoadingMore && _typesenseResults == null)
+                        const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Center(
+                              child: SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  color: Colors.orange,
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+
+                    // ── Drinks section ──
+                    if (_drinks.isNotEmpty && !_hasActiveFilters)
+                      _DrinksList(
+                        drinks: _drinks,
+                        restaurant: restaurant,
+                        isDark: isDark,
+                        isOpen: isOpen,
+                        deliversToUser: deliversToUser,
+                        cartQtyMap: cartQtyMap,
+                        onAdd: _handleAddDrinkToCart,
+                        onRemove: (id) =>
+                            _handleRemoveDrinkFromCart(id, cart.items),
+                      ),
+                  ] else if (!_hasActiveFilters &&
+                      _foods.isEmpty &&
+                      _drinks.isEmpty)
                     SliverFillRemaining(child: _EmptyMenu(isDark: isDark))
                   else
                     SliverFillRemaining(
@@ -544,6 +800,7 @@ class _RestaurantDetailBodyState extends State<_RestaurantDetailBody> {
                             _selectedIconCategory = null;
                             _typesenseResults = null;
                           });
+                          _loadFoodsPage(reset: true);
                         },
                       ),
                     ),
@@ -776,9 +1033,12 @@ class _RestaurantHeader extends StatelessWidget {
                   ),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: (restaurant.profileImageStoragePath ?? restaurant.profileImageUrl) != null
+                child: (restaurant.profileImageStoragePath ??
+                            restaurant.profileImageUrl) !=
+                        null
                     ? CloudinaryImage.banner(
-                        source: restaurant.profileImageStoragePath ?? restaurant.profileImageUrl!,
+                        source: restaurant.profileImageStoragePath ??
+                            restaurant.profileImageUrl!,
                         cdnWidth: 200,
                         fit: BoxFit.cover,
                         errorBuilder: (_) => _Placeholder(isDark: isDark),
@@ -1155,6 +1415,7 @@ class _GroupedFoodList extends StatelessWidget {
   final Map<String, int> cartQtyMap;
   final ValueChanged<_PendingConflict> onConflict;
   final ValueChanged<String> onRemove;
+  final double bottomPadding;
 
   const _GroupedFoodList({
     required this.grouped,
@@ -1165,6 +1426,7 @@ class _GroupedFoodList extends StatelessWidget {
     required this.cartQtyMap,
     required this.onConflict,
     required this.onRemove,
+    this.bottomPadding = 80,
   });
 
   @override
@@ -1172,7 +1434,7 @@ class _GroupedFoodList extends StatelessWidget {
     final entries = grouped.entries.toList();
 
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(0, 10, 0, 80),
+      padding: EdgeInsets.fromLTRB(0, 10, 0, bottomPadding),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
           (context, idx) {
@@ -1235,6 +1497,7 @@ class _FlatFoodList extends StatelessWidget {
   final Map<String, int> cartQtyMap;
   final ValueChanged<_PendingConflict> onConflict;
   final ValueChanged<String> onRemove;
+  final double bottomPadding;
 
   const _FlatFoodList({
     required this.foods,
@@ -1245,12 +1508,13 @@ class _FlatFoodList extends StatelessWidget {
     required this.cartQtyMap,
     required this.onConflict,
     required this.onRemove,
+    this.bottomPadding = 80,
   });
 
   @override
   Widget build(BuildContext context) {
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(0, 10, 0, 80),
+      padding: EdgeInsets.fromLTRB(0, 10, 0, bottomPadding),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
           (context, i) => Padding(
@@ -1300,7 +1564,7 @@ class _FoodCard extends StatelessWidget {
 
   String get _displayType => food.foodType;
 
- void _openFullScreenImage(
+  void _openFullScreenImage(
       BuildContext context, String imageSource, String title) {
     Navigator.of(context).push(
       PageRouteBuilder(
@@ -2545,8 +2809,7 @@ class _InfoTab extends StatelessWidget {
 
   /// Returns a compact, grouped day representation like "Mon – Fri, Sat, Sun".
   /// Consecutive days are collapsed into a range.
-  List<String> _buildDayRanges(
-      List<String> workingDays, AppLocalizations loc) {
+  List<String> _buildDayRanges(List<String> workingDays, AppLocalizations loc) {
     // Fixed ordering so we can detect consecutive runs
     const order = [
       'monday',
@@ -2558,8 +2821,7 @@ class _InfoTab extends StatelessWidget {
       'sunday',
     ];
 
-    final activeLower =
-        workingDays.map((d) => d.toLowerCase()).toSet();
+    final activeLower = workingDays.map((d) => d.toLowerCase()).toSet();
 
     // Build sorted indices of active days
     final activeIndices = order
@@ -2676,7 +2938,6 @@ class _InfoTab extends StatelessWidget {
                 ],
               ),
             ),
-
         ],
       ),
     );
@@ -2823,8 +3084,7 @@ class _InfoChip extends StatelessWidget {
             : (isDark ? const Color(0xFF2D2B3F) : Colors.grey[100]),
         borderRadius: BorderRadius.circular(10),
         border: highlight
-            ? Border.all(
-                color: Colors.orange.withOpacity(0.35), width: 1)
+            ? Border.all(color: Colors.orange.withOpacity(0.35), width: 1)
             : null,
       ),
       child: Text(
@@ -2874,9 +3134,7 @@ class _WorkingDaysGrid extends StatelessWidget {
           decoration: BoxDecoration(
             color: active
                 ? Colors.orange
-                : (isDark
-                    ? const Color(0xFF2D2B3F)
-                    : Colors.grey[100]),
+                : (isDark ? const Color(0xFF2D2B3F) : Colors.grey[100]),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: active
@@ -2892,8 +3150,7 @@ class _WorkingDaysGrid extends StatelessWidget {
               short,
               style: TextStyle(
                 fontSize: 11,
-                fontWeight:
-                    active ? FontWeight.w700 : FontWeight.w400,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w400,
                 color: active
                     ? Colors.white
                     : (isDark ? Colors.grey[500] : Colors.grey[400]),
@@ -3213,7 +3470,7 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
               transformationController: _transformController,
               minScale: 1.0,
               maxScale: 4.0,
-                child: Hero(
+              child: Hero(
                 tag: widget.heroTag,
                 child: Image.network(
                   CloudinaryUrl.bannerCdn(widget.imageUrl, width: 1600),
@@ -3283,6 +3540,192 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                 ),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// DRINKS LIST  —  shown below food categories in menu tab
+// =============================================================================
+
+class _DrinksList extends StatelessWidget {
+  final List<Drink> drinks;
+  final Restaurant restaurant;
+  final bool isDark;
+  final bool isOpen;
+  final bool deliversToUser;
+  final Map<String, int> cartQtyMap;
+  final ValueChanged<Drink> onAdd;
+  final ValueChanged<String> onRemove;
+
+  const _DrinksList({
+    required this.drinks,
+    required this.restaurant,
+    required this.isDark,
+    required this.isOpen,
+    this.deliversToUser = true,
+    required this.cartQtyMap,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+    final bottomSafe = MediaQuery.of(context).padding.bottom;
+    return SliverPadding(
+      padding: EdgeInsets.fromLTRB(0, 0, 0, 110 + bottomSafe),
+      sliver: SliverList(
+        delegate: SliverChildListDelegate([
+          // Section header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.orange.withOpacity(0.12)
+                        : const Color(0xFFFFF7ED),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.local_drink_outlined,
+                      size: 14, color: Color(0xFFFF6200)),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  loc.drinks,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.grey[900],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Drink cards
+          ...drinks.map((drink) => _DrinkCard(
+                drink: drink,
+                restaurant: restaurant,
+                isDark: isDark,
+                isOpen: isOpen,
+                deliversToUser: deliversToUser,
+                cartQuantity: cartQtyMap[drink.id] ?? 0,
+                onAdd: () => onAdd(drink),
+                onRemove: () => onRemove(drink.id),
+              )),
+        ]),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// DRINK CARD  —  simple card: icon + name + price + add button
+// =============================================================================
+
+class _DrinkCard extends StatelessWidget {
+  final Drink drink;
+  final Restaurant restaurant;
+  final bool isDark;
+  final bool isOpen;
+  final bool deliversToUser;
+  final int cartQuantity;
+  final VoidCallback onAdd;
+  final VoidCallback onRemove;
+
+  const _DrinkCard({
+    required this.drink,
+    required this.restaurant,
+    required this.isDark,
+    required this.isOpen,
+    this.deliversToUser = true,
+    required this.cartQuantity,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color.fromARGB(255, 40, 38, 59) : Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            spreadRadius: 0,
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Drink icon
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.orange.withOpacity(0.08)
+                  : const Color(0xFFFFF7ED),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.local_drink_outlined,
+              size: 22,
+              color: isDark ? Colors.orange[300] : Colors.orange[400],
+            ),
+          ),
+          const SizedBox(width: 14),
+
+          // Name + price
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  drink.name,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.grey[900],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  loc.foodPriceTL(drink.price
+                      .toStringAsFixed(drink.price % 1 == 0 ? 0 : 2)),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.orange[400] : Colors.orange[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Add / in-cart button (reuses existing _CartButton)
+          _CartButton(
+            isOpen: isOpen,
+            deliversToUser: deliversToUser,
+            cartQuantity: cartQuantity,
+            isDark: isDark,
+            onAdd: onAdd,
+            onRemove: onRemove,
           ),
         ],
       ),

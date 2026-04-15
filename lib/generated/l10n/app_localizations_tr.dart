@@ -12942,6 +12942,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get foodStatusReady => 'Hazır';
 
   @override
+  String get foodStatusOutForDelivery => 'Yolda';
+
+  @override
   String get foodStatusDelivered => 'Teslim Edildi';
 
   @override
@@ -13622,6 +13625,14 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get foodCheckoutOrderConfirmed => 'Siparişiniz onaylandı.';
+
+  @override
+  String get foodCheckoutStatusUpdatesInfo =>
+      'Siparişinizin durumu güncellendikçe bildirim alacaksınız.';
+
+  @override
+  String get foodCheckoutSupportInfo =>
+      'Yardıma mı ihtiyacınız var? Profil sayfasındaki Destek seçeneğinden 7/24 bize ulaşabilirsiniz.';
 
   @override
   String foodCheckoutOrderId(String id) {
@@ -15730,4 +15741,55 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get favoritesLimitReached =>
       'Favori sınırına ulaştınız (maksimum 500). Yeni eklemek için bazılarını kaldırın.';
+
+  @override
+  String get drinks => 'İçecekler';
+
+  @override
+  String get addDrink => 'İçecek Ekle';
+
+  @override
+  String get addDrinkTitle => 'İçecek Ekle';
+
+  @override
+  String get addDrinkSubtitle => 'Menünüze yeni bir içecek ekleyin';
+
+  @override
+  String get editDrinkTitle => 'İçeceği Düzenle';
+
+  @override
+  String get editDrinkSubtitle => 'İçecek bilgilerini güncelleyin';
+
+  @override
+  String get drinkDetails => 'İçecek Bilgileri';
+
+  @override
+  String get drinkName => 'İçecek Adı';
+
+  @override
+  String get drinkNamePlaceholder => 'ör. Taze Portakal Suyu';
+
+  @override
+  String get drinkNameRequired => 'İçecek adı gerekli';
+
+  @override
+  String get drinkNameMinLength => 'Ad en az 2 karakter olmalıdır';
+
+  @override
+  String get addDrinkSave => 'İçecek Ekle';
+
+  @override
+  String get updateDrink => 'İçeceği Güncelle';
+
+  @override
+  String get drinkAddSuccess => 'İçecek başarıyla eklendi';
+
+  @override
+  String get drinkAddError => 'İçecek eklenemedi';
+
+  @override
+  String get drinkUpdateSuccess => 'İçecek başarıyla güncellendi';
+
+  @override
+  String get updating => 'Güncelleniyor...';
 }

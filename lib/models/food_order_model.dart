@@ -6,6 +6,7 @@ enum FoodOrderStatus {
   rejected,
   preparing,
   ready,
+  outForDelivery,
   delivered,
   completed,
   cancelled,
@@ -22,6 +23,9 @@ extension FoodOrderStatusX on FoodOrderStatus {
         return FoodOrderStatus.preparing;
       case 'ready':
         return FoodOrderStatus.ready;
+      case 'out_for_delivery':
+      case 'outForDelivery':
+        return FoodOrderStatus.outForDelivery;
       case 'delivered':
         return FoodOrderStatus.delivered;
       case 'completed':

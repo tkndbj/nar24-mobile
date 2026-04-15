@@ -17,6 +17,7 @@ enum _FoodOrderStatus {
   confirmed,
   preparing,
   ready,
+  outForDelivery,
   delivered,
   completed,
   cancelled,
@@ -35,6 +36,9 @@ extension _FoodOrderStatusX on _FoodOrderStatus {
         return _FoodOrderStatus.preparing;
       case 'ready':
         return _FoodOrderStatus.ready;
+      case 'out_for_delivery':
+      case 'outForDelivery':
+        return _FoodOrderStatus.outForDelivery;
       case 'delivered':
         return _FoodOrderStatus.delivered;
       case 'completed':
@@ -61,6 +65,8 @@ extension _FoodOrderStatusX on _FoodOrderStatus {
         return const Color(0xFFF97316);
       case _FoodOrderStatus.ready:
         return const Color(0xFF6366F1);
+      case _FoodOrderStatus.outForDelivery:
+        return const Color(0xFF3B82F6);
       case _FoodOrderStatus.delivered:
       case _FoodOrderStatus.completed:
         return const Color(0xFF10B981);
@@ -83,6 +89,8 @@ extension _FoodOrderStatusX on _FoodOrderStatus {
         return Icons.restaurant;
       case _FoodOrderStatus.ready:
         return Icons.shopping_bag_outlined;
+      case _FoodOrderStatus.outForDelivery:
+        return Icons.delivery_dining_rounded;
       case _FoodOrderStatus.delivered:
       case _FoodOrderStatus.completed:
         return Icons.check_circle;
@@ -105,6 +113,8 @@ extension _FoodOrderStatusX on _FoodOrderStatus {
         return l10n.foodStatusPreparing;
       case _FoodOrderStatus.ready:
         return l10n.foodStatusReady;
+      case _FoodOrderStatus.outForDelivery:
+        return l10n.foodStatusOutForDelivery;
       case _FoodOrderStatus.delivered:
         return l10n.foodStatusDelivered;
       case _FoodOrderStatus.completed:

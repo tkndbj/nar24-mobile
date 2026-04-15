@@ -24660,6 +24660,12 @@ abstract class AppLocalizations {
   /// **'Hazır'**
   String get foodStatusReady;
 
+  /// No description provided for @foodStatusOutForDelivery.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yolda'**
+  String get foodStatusOutForDelivery;
+
   /// No description provided for @foodStatusDelivered.
   ///
   /// In tr, this message translates to:
@@ -25865,6 +25871,18 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Siparişiniz onaylandı.'**
   String get foodCheckoutOrderConfirmed;
+
+  /// No description provided for @foodCheckoutStatusUpdatesInfo.
+  ///
+  /// In tr, this message translates to:
+  /// **'Siparişinizin durumu güncellendikçe bildirim alacaksınız.'**
+  String get foodCheckoutStatusUpdatesInfo;
+
+  /// No description provided for @foodCheckoutSupportInfo.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yardıma mı ihtiyacınız var? Profil sayfasındaki Destek seçeneğinden 7/24 bize ulaşabilirsiniz.'**
+  String get foodCheckoutSupportInfo;
 
   /// No description provided for @foodCheckoutOrderId.
   ///
@@ -29963,6 +29981,108 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Favori sınırına ulaştınız (maksimum 500). Yeni eklemek için bazılarını kaldırın.'**
   String get favoritesLimitReached;
+
+  /// No description provided for @drinks.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçecekler'**
+  String get drinks;
+
+  /// No description provided for @addDrink.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçecek Ekle'**
+  String get addDrink;
+
+  /// No description provided for @addDrinkTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçecek Ekle'**
+  String get addDrinkTitle;
+
+  /// No description provided for @addDrinkSubtitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Menünüze yeni bir içecek ekleyin'**
+  String get addDrinkSubtitle;
+
+  /// No description provided for @editDrinkTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçeceği Düzenle'**
+  String get editDrinkTitle;
+
+  /// No description provided for @editDrinkSubtitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçecek bilgilerini güncelleyin'**
+  String get editDrinkSubtitle;
+
+  /// No description provided for @drinkDetails.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçecek Bilgileri'**
+  String get drinkDetails;
+
+  /// No description provided for @drinkName.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçecek Adı'**
+  String get drinkName;
+
+  /// No description provided for @drinkNamePlaceholder.
+  ///
+  /// In tr, this message translates to:
+  /// **'ör. Taze Portakal Suyu'**
+  String get drinkNamePlaceholder;
+
+  /// No description provided for @drinkNameRequired.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçecek adı gerekli'**
+  String get drinkNameRequired;
+
+  /// No description provided for @drinkNameMinLength.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ad en az 2 karakter olmalıdır'**
+  String get drinkNameMinLength;
+
+  /// No description provided for @addDrinkSave.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçecek Ekle'**
+  String get addDrinkSave;
+
+  /// No description provided for @updateDrink.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçeceği Güncelle'**
+  String get updateDrink;
+
+  /// No description provided for @drinkAddSuccess.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçecek başarıyla eklendi'**
+  String get drinkAddSuccess;
+
+  /// No description provided for @drinkAddError.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçecek eklenemedi'**
+  String get drinkAddError;
+
+  /// No description provided for @drinkUpdateSuccess.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçecek başarıyla güncellendi'**
+  String get drinkUpdateSuccess;
+
+  /// No description provided for @updating.
+  ///
+  /// In tr, this message translates to:
+  /// **'Güncelleniyor...'**
+  String get updating;
 }
 
 class _AppLocalizationsDelegate

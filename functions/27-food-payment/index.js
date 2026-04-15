@@ -182,13 +182,36 @@ async function validateAndPriceFoodItems(tx, db, items, restaurantId) {
   let subtotal = 0;
   let maxPrepTime = 0;
 
-  // ✅ Parallel fetch all food docs at once
-  const foodRefs = items.map((item) => db.collection('foods').doc(item.foodId));
-  const foodSnaps = await Promise.all(foodRefs.map((ref) => tx.get(ref)));
+  // Separate foods and drinks for parallel fetch from correct collections
+  const foodIndices = [];
+  const drinkIndices = [];
+
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].foodCategory === 'drink') {
+      drinkIndices.push(i);
+    } else {
+      foodIndices.push(i);
+    }
+  }
+
+  // Parallel fetch from both collections
+  const foodRefs = foodIndices.map((i) => db.collection('foods').doc(items[i].foodId));
+  const drinkRefs = drinkIndices.map((i) => db.collection('drinks').doc(items[i].foodId));
+
+  const [foodSnaps, drinkSnaps] = await Promise.all([
+    Promise.all(foodRefs.map((ref) => tx.get(ref))),
+    Promise.all(drinkRefs.map((ref) => tx.get(ref))),
+  ]);
+
+  // Build a lookup: item index → snapshot
+  const snapByIndex = new Map();
+  foodIndices.forEach((idx, i) => snapByIndex.set(idx, foodSnaps[i]));
+  drinkIndices.forEach((idx, i) => snapByIndex.set(idx, drinkSnaps[i]));
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     const { foodId, quantity = 1, extras = [], specialNotes = '' } = item;
+    const isDrink = item.foodCategory === 'drink';
 
     if (!foodId || typeof foodId !== 'string') {
       throw new HttpsError('invalid-argument', 'Each item must have a valid foodId.');
@@ -197,86 +220,107 @@ async function validateAndPriceFoodItems(tx, db, items, restaurantId) {
       throw new HttpsError('invalid-argument', `Invalid quantity (${quantity}) for item ${foodId}.`);
     }
 
-    const foodSnap = foodSnaps[i];
+    const snap = snapByIndex.get(i);
 
-    if (!foodSnap.exists) {
-      throw new HttpsError('not-found', `Food item "${foodId}" not found.`);
+    if (!snap.exists) {
+      throw new HttpsError('not-found', `${isDrink ? 'Drink' : 'Food'} item "${foodId}" not found.`);
     }
 
-    const foodData = foodSnap.data();
+    const data = snap.data();
 
-    // Ensure food belongs to the correct restaurant
-    if (foodData.restaurantId !== restaurantId) {
+    // Ensure item belongs to the correct restaurant
+    if (data.restaurantId !== restaurantId) {
       throw new HttpsError(
         'invalid-argument',
-        `Food "${foodData.name}" does not belong to this restaurant.`
+        `"${data.name}" does not belong to this restaurant.`
       );
     }
 
-    // Ensure food is available
-    if (foodData.isAvailable === false) {
+    // Ensure item is available
+    if (data.isAvailable === false) {
       throw new HttpsError(
         'failed-precondition',
-        `"${foodData.name}" is currently unavailable.`
+        `"${data.name}" is currently unavailable.`
       );
     }
 
-    const allowedExtrasMap = new Map();
-    if (Array.isArray(foodData.extras)) {
-      for (const e of foodData.extras) {
-        if (e && typeof e.name === 'string') {
-          allowedExtrasMap.set(e.name, typeof e.price === 'number' ? e.price : 0);
+    if (isDrink) {
+      // Drinks have no extras, no preparation time
+      const itemTotal = data.price * quantity;
+      subtotal += itemTotal;
+
+      validatedItems.push({
+        foodId,
+        name: data.name || '',
+        description: '',
+        price: data.price,
+        imageUrl: '',
+        foodCategory: 'drink',
+        foodType: 'drink',
+        preparationTime: null,
+        quantity,
+        extras: [],
+        specialNotes: typeof specialNotes === 'string' ? specialNotes.substring(0, 500) : '',
+        itemTotal: Math.round(itemTotal * 100) / 100,
+      });
+    } else {
+      // Existing food validation logic (unchanged)
+      const allowedExtrasMap = new Map();
+      if (Array.isArray(data.extras)) {
+        for (const e of data.extras) {
+          if (e && typeof e.name === 'string') {
+            allowedExtrasMap.set(e.name, typeof e.price === 'number' ? e.price : 0);
+          }
         }
       }
-    }
 
-    const validatedExtras = [];
-    for (const ext of extras) {
-      if (!ext.name || typeof ext.name !== 'string') continue;
+      const validatedExtras = [];
+      for (const ext of extras) {
+        if (!ext.name || typeof ext.name !== 'string') continue;
 
-      if (!allowedExtrasMap.has(ext.name)) {
-        throw new HttpsError(
-          'invalid-argument',
-          `Extra "${ext.name}" is not available for "${foodData.name}".`
-        );
+        if (!allowedExtrasMap.has(ext.name)) {
+          throw new HttpsError(
+            'invalid-argument',
+            `Extra "${ext.name}" is not available for "${data.name}".`
+          );
+        }
+
+        const serverPrice = allowedExtrasMap.get(ext.name);
+
+        validatedExtras.push({
+          name: ext.name,
+          quantity: Math.max(1, Math.floor(ext.quantity) || 1),
+          price: serverPrice,
+        });
       }
 
-      const serverPrice = allowedExtrasMap.get(ext.name); // authoritative — ignore client price
+      const extrasTotal = validatedExtras.reduce(
+        (sum, e) => sum + e.price * e.quantity,
+        0
+      );
+      const itemTotal = (data.price + extrasTotal) * quantity;
 
-      validatedExtras.push({
-        name: ext.name,
-        quantity: Math.max(1, Math.floor(ext.quantity) || 1),
-        price: serverPrice,
+      subtotal += itemTotal;
+
+      if (data.preparationTime && data.preparationTime > maxPrepTime) {
+        maxPrepTime = data.preparationTime;
+      }
+
+      validatedItems.push({
+        foodId,
+        name: data.name || '',
+        description: data.description || '',
+        price: data.price,
+        imageUrl: data.imageUrl || '',
+        foodCategory: data.foodCategory || '',
+        foodType: data.foodType || '',
+        preparationTime: data.preparationTime || null,
+        quantity,
+        extras: validatedExtras,
+        specialNotes: typeof specialNotes === 'string' ? specialNotes.substring(0, 500) : '',
+        itemTotal: Math.round(itemTotal * 100) / 100,
       });
     }
-
-    // Server-authoritative price calculation
-    const extrasTotal = validatedExtras.reduce(
-      (sum, e) => sum + e.price * e.quantity,
-      0
-    );
-    const itemTotal = (foodData.price + extrasTotal) * quantity;
-
-    subtotal += itemTotal;
-
-    if (foodData.preparationTime && foodData.preparationTime > maxPrepTime) {
-      maxPrepTime = foodData.preparationTime;
-    }
-
-    validatedItems.push({
-      foodId,
-      name: foodData.name || '',
-      description: foodData.description || '',
-      price: foodData.price,
-      imageUrl: foodData.imageUrl || '',
-      foodCategory: foodData.foodCategory || '',
-      foodType: foodData.foodType || '',
-      preparationTime: foodData.preparationTime || null,
-      quantity,
-      extras: validatedExtras,
-      specialNotes: typeof specialNotes === 'string' ? specialNotes.substring(0, 500) : '',
-      itemTotal: Math.round(itemTotal * 100) / 100,
-    });
   }
 
   return {
@@ -736,6 +780,7 @@ export const initializeFoodPayment = onCall(
           quantity: i.quantity,
           extras: i.extras,
           specialNotes: i.specialNotes,
+          foodCategory: i.foodCategory,
         })),
         deliveryType: deliveryType || 'delivery',
         deliveryAddress: serverFoodAddress || null,

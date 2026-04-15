@@ -190,6 +190,8 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
         return Colors.orange;
       case FoodOrderStatus.ready:
         return Colors.indigo;
+      case FoodOrderStatus.outForDelivery:
+        return Colors.blue;
       case FoodOrderStatus.delivered:
       case FoodOrderStatus.completed:
         return const Color(0xFF00A86B);
@@ -210,6 +212,8 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
         return Icons.restaurant;
       case FoodOrderStatus.ready:
         return Icons.shopping_bag_outlined;
+      case FoodOrderStatus.outForDelivery:
+        return Icons.delivery_dining_rounded;
       case FoodOrderStatus.delivered:
       case FoodOrderStatus.completed:
         return Icons.check_circle;
@@ -230,6 +234,8 @@ class FoodOrdersTabState extends State<FoodOrdersTab>
         return l10n.foodStatusPreparing;
       case FoodOrderStatus.ready:
         return l10n.foodStatusReady;
+      case FoodOrderStatus.outForDelivery:
+        return l10n.foodStatusOutForDelivery;
       case FoodOrderStatus.delivered:
         return l10n.foodStatusDelivered;
       case FoodOrderStatus.completed:

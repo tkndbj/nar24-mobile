@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../generated/l10n/app_localizations.dart';
+import '../cloudinary_image.dart';
 
 const _kPageSize = 20;
 
@@ -343,41 +344,70 @@ class _ReviewCard extends StatelessWidget {
                 scrollDirection: Axis.horizontal,
                 itemCount: review.imageUrls.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (context, i) => GestureDetector(
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => Scaffold(
-                        backgroundColor: Colors.black,
-                        appBar: AppBar(
-                          backgroundColor: Colors.transparent,
-                          elevation: 0,
-                          leading: IconButton(
-                            icon: const Icon(Icons.close, color: Colors.white),
-                            onPressed: () => Navigator.of(context).pop(),
-                          ),
-                        ),
-                        body: Center(
-                          child: InteractiveViewer(
-                            child: Image.network(review.imageUrls[i]),
-                          ),
-                        ),
+                itemBuilder: (context, i) {
+                  final url = review.imageUrls[i];
+                  return GestureDetector(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => _ReviewImageViewer(url: url),
                       ),
                     ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      review.imageUrls[i],
+                    child: CloudinaryImage.fromUrl(
+                      url: url,
+                      // 2x the display size for crisp rendering on retina.
+                      cdnWidth: 160,
                       width: 64,
                       height: 64,
                       fit: BoxFit.cover,
+                      borderRadius: 8,
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// REVIEW IMAGE VIEWER  —  fullscreen pinch-to-zoom image viewer
+// =============================================================================
+
+class _ReviewImageViewer extends StatelessWidget {
+  final String url;
+  const _ReviewImageViewer({required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
+    // Cap at 1440 so huge-DPR devices don't request absurd sizes.
+    final cdnWidth =
+        (screenWidth * devicePixelRatio).clamp(720, 1440).round();
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          minScale: 1.0,
+          maxScale: 4.0,
+          child: CloudinaryImage.fromUrl(
+            url: url,
+            cdnWidth: cdnWidth,
+            fit: BoxFit.contain,
+          ),
+        ),
       ),
     );
   }
