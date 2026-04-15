@@ -15572,13 +15572,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get foodCargoDeliveredSuccess => 'Marked as delivered ✓';
 
   @override
+  String get foodCargoPickedUpSuccess => 'Marked as picked up ✓';
+
+  @override
   String get foodCargoCallCustomer => 'Call';
 
   @override
   String get foodCargoOpenMap => 'Map';
 
   @override
-  String get foodCargoMarkDelivered => 'Mark as Delivered';
+  String get foodCargoMarkPickedUp => 'Picked Up';
+
+  @override
+  String get foodCargoMarkDelivered => 'Delivered';
 
   @override
   String get foodCargoOrderId => 'Order';

@@ -16,6 +16,14 @@ const __dirname = path.dirname(__filename);
 
 const secretClient = new SecretManagerServiceClient();
 
+// ── Static pickup location for the physical market ──────────────────────────
+// Denormalized onto every orders-market doc so couriers can route to it the
+// same way they route to a restaurant. Update these values here whenever the
+// market moves.
+const MARKET_PICKUP_NAME = 'Nar24 Market';
+const MARKET_PICKUP_LAT = 35.1856;  // Nicosia city center
+const MARKET_PICKUP_LNG = 33.3823;
+
 async function getSecret(secretName) {
   const [version] = await secretClient.accessSecretVersion({ name: secretName });
   return version.payload.data.toString('utf8');
@@ -219,6 +227,11 @@ async function createMarketOrderCore(buyerId, requestData, paymentOrderId = null
       paymentMethod,
       paymentOrderId: paymentOrderId || null,
       isPaid: paymentMethod === 'card',
+
+      // Denormalized pickup location (static — couriers route here first)
+      marketName: MARKET_PICKUP_NAME,
+      marketLat: MARKET_PICKUP_LAT,
+      marketLng: MARKET_PICKUP_LNG,
 
       deliveryType: 'delivery',
       deliveryAddress: serverFoodAddress ? {
@@ -776,8 +789,11 @@ export const updateMarketOrderStatus = onCall(
       throw new HttpsError('permission-denied', 'Only admins can update market order status.');
     }
 
-    const { orderId, newStatus, paymentReceivedMethod } = request.data;
-    const ALLOWED_STATUSES = ['confirmed', 'rejected', 'preparing', 'out_for_delivery', 'delivered'];
+    const { orderId, newStatus } = request.data;
+    // Admin-settable statuses only. Courier-owned states
+    // ('accepted', 'out_for_delivery', 'delivered') are driven exclusively
+    // by the courier_actions trigger and are intentionally excluded here.
+    const ALLOWED_STATUSES = ['confirmed', 'rejected', 'preparing'];
 
     if (!orderId || !ALLOWED_STATUSES.includes(newStatus)) {
       throw new HttpsError('invalid-argument', 'Invalid orderId or status.');
@@ -798,8 +814,6 @@ export const updateMarketOrderStatus = onCall(
       const VALID_TRANSITIONS = {
         pending: ['confirmed', 'rejected'],
         confirmed: ['preparing', 'pending'],
-        preparing: ['out_for_delivery'],
-        out_for_delivery: ['delivered'],
       };
 
       const allowed = VALID_TRANSITIONS[order.status] || [];
@@ -813,9 +827,6 @@ export const updateMarketOrderStatus = onCall(
       tx.update(orderRef, {
         status: newStatus,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        ...(newStatus === 'delivered' ? { needsReview: true } : {}),
-        ...(newStatus === 'delivered' && paymentReceivedMethod &&
-            ['card', 'cash', 'iban'].includes(paymentReceivedMethod) ? { paymentReceivedMethod } : {}),
       });
 
       // Notify buyer
@@ -827,7 +838,7 @@ export const updateMarketOrderStatus = onCall(
           .doc();
 
         tx.set(notifRef, {
-          type: newStatus === 'delivered' ? 'market_order_delivered_review' : 'market_order_status_update',
+          type: 'market_order_status_update',
           payload: {
             orderId,
             orderStatus: newStatus,

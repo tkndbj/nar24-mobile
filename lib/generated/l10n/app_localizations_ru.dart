@@ -15673,10 +15673,16 @@ class AppLocalizationsRu extends AppLocalizations {
   String get foodCargoDeliveredSuccess => 'Отмечено как доставлено ✓';
 
   @override
+  String get foodCargoPickedUpSuccess => 'Отмечено как забрано ✓';
+
+  @override
   String get foodCargoCallCustomer => 'Звонок';
 
   @override
   String get foodCargoOpenMap => 'Карта';
+
+  @override
+  String get foodCargoMarkPickedUp => 'Забрал';
 
   @override
   String get foodCargoMarkDelivered => 'Доставлено';

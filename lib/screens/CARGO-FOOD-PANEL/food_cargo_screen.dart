@@ -701,6 +701,12 @@ class _PoolTab extends StatefulWidget {
   State<_PoolTab> createState() => _PoolTabState();
 }
 
+class _PoolOrder {
+  final QueryDocumentSnapshot<Map<String, dynamic>> doc;
+  final String collection; // 'orders-food' | 'orders-market'
+  const _PoolOrder(this.doc, this.collection);
+}
+
 class _PoolTabState extends State<_PoolTab> with AutomaticKeepAliveClientMixin {
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _callsStream;
 
@@ -714,6 +720,7 @@ class _PoolTabState extends State<_PoolTab> with AutomaticKeepAliveClientMixin {
   // transaction in _assignOrder handles it gracefully ("already taken").
 
   static const _kPageSize = 10;
+  static const _kMarketLivePageSize = 30;
 
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _livePageSub;
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _liveDocs = [];
@@ -723,6 +730,10 @@ class _PoolTabState extends State<_PoolTab> with AutomaticKeepAliveClientMixin {
   bool _initialLoading = true;
   String? _ordersError;
   final _scrollController = ScrollController();
+
+  // Market-orders live stream (display-only for now)
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _liveMarketSub;
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _liveMarketDocs = [];
 
   @override
   void initState() {
@@ -734,7 +745,28 @@ class _PoolTabState extends State<_PoolTab> with AutomaticKeepAliveClientMixin {
         .snapshots();
 
     _subscribeLivePage();
+    _subscribeMarketLive();
     _scrollController.addListener(_onScroll);
+  }
+
+  // ── Market pending orders (live, display-only) ────────────────────
+
+  void _subscribeMarketLive() {
+    _liveMarketSub = FirebaseFirestore.instance
+        .collection('orders-market')
+        .where('status', isEqualTo: 'pending')
+        .orderBy('updatedAt')
+        .limit(_kMarketLivePageSize)
+        .snapshots()
+        .listen(
+      (snap) {
+        if (!mounted) return;
+        setState(() => _liveMarketDocs = snap.docs);
+      },
+      onError: (_) {
+        // Silent — a market index miss shouldn't break the food pool
+      },
+    );
   }
 
   // ── Live first page (real-time) ───────────────────────────────────
@@ -831,19 +863,22 @@ class _PoolTabState extends State<_PoolTab> with AutomaticKeepAliveClientMixin {
 
   // ── Merged, deduped, sorted list ──────────────────────────────────
 
-  List<QueryDocumentSnapshot<Map<String, dynamic>>> get _allOrderDocs {
+  List<_PoolOrder> get _allOrderDocs {
     final seen = <String>{};
-    final all = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+    final all = <_PoolOrder>[];
     for (final d in _liveDocs) {
-      if (seen.add(d.id)) all.add(d);
+      if (seen.add(d.id)) all.add(_PoolOrder(d, 'orders-food'));
     }
     for (final d in _extraDocs) {
-      if (seen.add(d.id)) all.add(d);
+      if (seen.add(d.id)) all.add(_PoolOrder(d, 'orders-food'));
+    }
+    for (final d in _liveMarketDocs) {
+      if (seen.add(d.id)) all.add(_PoolOrder(d, 'orders-market'));
     }
     // Client-side sort keeps oldest-first (FIFO) regardless of merge order
     all.sort((a, b) {
-      final aTs = a.data()['updatedAt'] as Timestamp?;
-      final bTs = b.data()['updatedAt'] as Timestamp?;
+      final aTs = a.doc.data()['updatedAt'] as Timestamp?;
+      final bTs = b.doc.data()['updatedAt'] as Timestamp?;
       if (aTs == null) return 1;
       if (bTs == null) return -1;
       return aTs.compareTo(bTs);
@@ -857,6 +892,7 @@ class _PoolTabState extends State<_PoolTab> with AutomaticKeepAliveClientMixin {
   @override
   void dispose() {
     _livePageSub?.cancel();
+    _liveMarketSub?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -945,11 +981,13 @@ class _PoolTabState extends State<_PoolTab> with AutomaticKeepAliveClientMixin {
               );
             }
 
+            final poolOrder = orderDocs[orderIdx];
             return Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: _CargoOrderCard(
-                orderId: orderDocs[orderIdx].id,
-                data: orderDocs[orderIdx].data(),
+                orderId: poolOrder.doc.id,
+                data: poolOrder.doc.data(),
+                collection: poolOrder.collection,
                 isDark: widget.isDark,
                 isPool: true,
                 currentUser: widget.currentUser,
@@ -1284,7 +1322,7 @@ class _MyDeliveriesTab extends StatefulWidget {
 
 class _MyDeliveriesTabState extends State<_MyDeliveriesTab>
     with AutomaticKeepAliveClientMixin {
-  late final Stream<QuerySnapshot<Map<String, dynamic>>> _stream;
+  late Stream<List<_PoolOrder>> _stream;
   final _scrollController = ScrollController();
   final Map<String, GlobalKey> _cardKeys = {};
   final Set<String> _removedLocally = {};
@@ -1296,23 +1334,52 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab>
   @override
   void initState() {
     super.initState();
-    _stream = FirebaseFirestore.instance
-        .collection('orders-food')
-        .where('cargoUserId', isEqualTo: widget.currentUser.uid)
-        .where('status', isEqualTo: 'out_for_delivery')
-        .snapshots();
+    _stream = _buildStream(widget.currentUser.uid);
   }
 
   @override
   void didUpdateWidget(_MyDeliveriesTab old) {
     super.didUpdateWidget(old);
     if (old.currentUser.uid != widget.currentUser.uid) {
-      _stream = FirebaseFirestore.instance
-          .collection('orders-food')
-          .where('cargoUserId', isEqualTo: widget.currentUser.uid)
-          .where('status', isEqualTo: 'out_for_delivery')
-          .snapshots();
+      _stream = _buildStream(widget.currentUser.uid);
     }
+  }
+
+  Stream<List<_PoolOrder>> _buildStream(String uid) {
+    // Tab 2 now shows orders in two courier-held states:
+    //   'assigned'         — just assigned, not yet picked up
+    //   'out_for_delivery' — picked up, on the way
+    const inFlight = ['assigned', 'out_for_delivery'];
+
+    final foodStream = FirebaseFirestore.instance
+        .collection('orders-food')
+        .where('cargoUserId', isEqualTo: uid)
+        .where('status', whereIn: inFlight)
+        .snapshots();
+
+    final marketStream = FirebaseFirestore.instance
+        .collection('orders-market')
+        .where('cargoUserId', isEqualTo: uid)
+        .where('status', whereIn: inFlight)
+        .snapshots();
+
+    return Rx.combineLatest2<
+        QuerySnapshot<Map<String, dynamic>>,
+        QuerySnapshot<Map<String, dynamic>>,
+        List<_PoolOrder>>(foodStream, marketStream, (food, market) {
+      final all = <_PoolOrder>[
+        ...food.docs.map((d) => _PoolOrder(d, 'orders-food')),
+        ...market.docs.map((d) => _PoolOrder(d, 'orders-market')),
+      ];
+      all.sort((a, b) {
+        final aTs = a.doc.data()['assignedAt'] as Timestamp?;
+        final bTs = b.doc.data()['assignedAt'] as Timestamp?;
+        if (aTs == null) return 1;
+        if (bTs == null) return -1;
+        return aTs.compareTo(bTs);
+      });
+      return all;
+    });
   }
 
   void _listenForActionResult(String actionId, String orderId) {
@@ -1363,7 +1430,7 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab>
     super.build(context);
     final loc = AppLocalizations.of(context);
 
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+    return StreamBuilder<List<_PoolOrder>>(
       stream: _stream,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
@@ -1374,15 +1441,8 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab>
           return _ErrorView(message: 'Teslimatlar yüklenemedi: ${snap.error}');
         }
 
-        final docs = [...(snap.data?.docs ?? [])]
-          ..removeWhere((d) => _removedLocally.contains(d.id))
-          ..sort((a, b) {
-            final aTs = a.data()['assignedAt'] as Timestamp?;
-            final bTs = b.data()['assignedAt'] as Timestamp?;
-            if (aTs == null) return 1;
-            if (bTs == null) return -1;
-            return aTs.compareTo(bTs);
-          });
+        final docs = [...(snap.data ?? const <_PoolOrder>[])]
+          ..removeWhere((p) => _removedLocally.contains(p.doc.id));
 
         if (docs.isEmpty) {
           return _EmptyState(
@@ -1429,7 +1489,9 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab>
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
                   itemCount: docs.length,
                   itemBuilder: (_, i) {
-                    final docId = docs[i].id;
+                    final poolOrder = docs[i];
+                    final docId = poolOrder.doc.id;
+                    final collection = poolOrder.collection;
                     _cardKeys[docId] ??= GlobalKey();
                     final isHit = docId == widget.highlightedOrderId;
 
@@ -1450,14 +1512,17 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab>
                       padding: const EdgeInsets.only(bottom: 16),
                       child: _CargoOrderCard(
                         orderId: docId,
-                        data: docs[i].data(),
+                        data: poolOrder.doc.data(),
+                        collection: collection,
                         isDark: widget.isDark,
                         isPool: false,
                         currentUser: widget.currentUser,
                         isHighlighted: isHit,
                         onDeliveredLocally: (actionId) {
                           setState(() => _removedLocally.add(docId));
-                          _listenForActionResult(actionId, docId);
+                          if (actionId.isNotEmpty) {
+                            _listenForActionResult(actionId, docId);
+                          }
                         },
                       ),
                     );
@@ -1477,6 +1542,7 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab>
 class _CargoOrderCard extends StatefulWidget {
   final String orderId;
   final Map<String, dynamic> data;
+  final String collection; // 'orders-food' | 'orders-market'
   final bool isDark;
   final bool isPool;
   final User currentUser;
@@ -1486,6 +1552,7 @@ class _CargoOrderCard extends StatefulWidget {
   const _CargoOrderCard({
     required this.orderId,
     required this.data,
+    required this.collection,
     required this.isDark,
     required this.isPool,
     required this.currentUser,
@@ -1493,18 +1560,61 @@ class _CargoOrderCard extends StatefulWidget {
     this.onDeliveredLocally,
   });
 
+  bool get isMarket => collection == 'orders-market';
+
   @override
   State<_CargoOrderCard> createState() => _CargoOrderCardState();
 }
 
 class _CargoOrderCardState extends State<_CargoOrderCard> {
   bool _loading = false;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _actionSub;
+
+  @override
+  void dispose() {
+    _actionSub?.cancel();
+    super.dispose();
+  }
+
+  // Subscribe to a courier_action doc for completion/failure feedback.
+  // Used by pool-side actions (assign/pickup) where we want to surface
+  // "already_taken" or other errors to the courier via snackbar.
+  void _listenForActionResult(String actionId) {
+    _actionSub?.cancel();
+    _actionSub = FirebaseFirestore.instance
+        .collection('courier_actions')
+        .doc(actionId)
+        .snapshots()
+        .listen((snap) {
+      if (!snap.exists || !mounted) return;
+      final status = snap.data()?['status'] as String?;
+      if (status == 'completed') {
+        _actionSub?.cancel();
+      } else if (status == 'failed') {
+        _actionSub?.cancel();
+        final error = snap.data()?['error'] as String? ?? '';
+        final loc = AppLocalizations.of(context);
+        final msg = error == 'already_taken'
+            ? loc.foodCargoAlreadyTaken
+            : loc.foodCargoAssignError;
+        _showSnack(msg, isError: true);
+      }
+    });
+  }
 
   Map<String, dynamic>? get _address =>
       widget.data['deliveryAddress'] as Map<String, dynamic>?;
 
   List<dynamic> get _items =>
       widget.data['items'] as List<dynamic>? ?? const [];
+
+  String? _firstItemImage() {
+    if (_items.isEmpty) return null;
+    final first = _items.first;
+    if (first is! Map<String, dynamic>) return null;
+    final url = first['imageUrl'] as String?;
+    return (url != null && url.isNotEmpty) ? url : null;
+  }
 
   String get _customerPhone {
     final addr = _address;
@@ -1552,7 +1662,10 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
 
   Future<void> _assignOrder() async {
     final loc = AppLocalizations.of(context);
-    final restaurantName = widget.data['restaurantName'] as String? ?? '—';
+    final isMarket = widget.isMarket;
+    final restaurantName = isMarket
+        ? 'Market Sipariş'
+        : (widget.data['restaurantName'] as String? ?? '—');
     final city = _address?['city'] as String? ?? '—';
 
     final confirmed = await showCupertinoDialog<bool>(
@@ -1583,34 +1696,65 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
 
     setState(() => _loading = true);
     try {
-      final db = FirebaseFirestore.instance;
-      await db.runTransaction((tx) async {
-        final ref = db.collection('orders-food').doc(widget.orderId);
-        final snap = await tx.get(ref);
-        if (!snap.exists) throw Exception('not_found');
-        final currentStatus = snap.data()?['status'] as String?;
-        if (currentStatus != 'ready') {
-          throw Exception('already_taken');
-        }
-        final displayName = widget.currentUser.displayName ??
-            widget.currentUser.email ??
-            'Cargo';
-        tx.update(ref, {
-          'cargoUserId': widget.currentUser.uid,
-          'cargoName': displayName,
-          'status': 'out_for_delivery',
-          'assignedAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+      // Both food and market pickups go through courier_actions so the
+      // backend trigger can perform the status transition atomically and
+      // the write is offline-safe (Firestore queues until reconnect).
+      final uid = widget.currentUser.uid;
+      final displayName = widget.currentUser.displayName ??
+          widget.currentUser.email ??
+          'Courier';
+
+      final actionRef =
+          FirebaseFirestore.instance.collection('courier_actions').doc();
+      await actionRef.set({
+        'type': 'assign',
+        'collection': widget.collection,
+        'orderId': widget.orderId,
+        'courierId': uid,
+        'courierName': displayName,
+        'status': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
       });
+
+      _listenForActionResult(actionRef.id);
       CourierLocationService.instance.updateCurrentOrder(widget.orderId);
     } catch (e) {
       if (!context.mounted) return;
-      final loc = AppLocalizations.of(context);
-      final msg = e.toString().contains('already_taken')
-          ? loc.foodCargoAlreadyTaken
-          : loc.foodCargoAssignError;
-      _showSnack(msg, isError: true);
+      _showSnack(AppLocalizations.of(context).foodCargoAssignError,
+          isError: true);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _markPickedUp() async {
+    final loc = AppLocalizations.of(context);
+    setState(() => _loading = true);
+    try {
+      final uid = widget.currentUser.uid;
+      final displayName = widget.currentUser.displayName ??
+          widget.currentUser.email ??
+          'Courier';
+
+      final actionRef =
+          FirebaseFirestore.instance.collection('courier_actions').doc();
+      await actionRef.set({
+        'type': 'pickup',
+        'collection': widget.collection,
+        'orderId': widget.orderId,
+        'courierId': uid,
+        'courierName': displayName,
+        'status': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      _listenForActionResult(actionRef.id);
+      if (mounted) _showSnack(loc.foodCargoPickedUpSuccess);
+    } catch (_) {
+      if (mounted) {
+        _showSnack(AppLocalizations.of(context).foodCargoAssignError,
+            isError: true);
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -1624,7 +1768,6 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
 
     setState(() => _loading = true);
     try {
-      // Write action document — offline-safe, queues if no network
       final uid = FirebaseAuth.instance.currentUser!.uid;
       final displayName =
           FirebaseAuth.instance.currentUser!.displayName ?? 'Courier';
@@ -1633,6 +1776,7 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
           FirebaseFirestore.instance.collection('courier_actions').doc();
       await actionRef.set({
         'type': 'deliver',
+        'collection': widget.collection,
         'orderId': widget.orderId,
         'courierId': uid,
         'courierName': displayName,
@@ -1771,8 +1915,13 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
     final isDark = widget.isDark;
     final loc = AppLocalizations.of(context);
 
-    final restaurantName = widget.data['restaurantName'] as String? ?? '—';
-    final restaurantImage = widget.data['restaurantProfileImage'] as String?;
+    final isMarket = widget.isMarket;
+    final restaurantName = isMarket
+        ? 'Market Sipariş'
+        : (widget.data['restaurantName'] as String? ?? '—');
+    final restaurantImage = isMarket
+        ? _firstItemImage()
+        : widget.data['restaurantProfileImage'] as String?;
     final buyerName = widget.data['buyerName'] as String? ?? '—';
     final totalPrice = (widget.data['totalPrice'] as num?)?.toDouble() ?? 0;
     final currency = widget.data['currency'] as String? ?? 'TL';
@@ -1781,6 +1930,7 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
         (widget.data['itemCount'] as num?)?.toInt() ?? _items.length;
     final orderId = widget.orderId.substring(0, 8).toUpperCase();
     final isScanned = widget.data['sourceType'] == 'scanned_receipt';
+    final showMarketBadge = isMarket;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 400),
@@ -1847,6 +1997,21 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
                                       fontSize: 8,
                                       fontWeight: FontWeight.bold,
                                       color: Colors.purple)),
+                            ),
+                          if (showMarketBadge)
+                            Container(
+                              margin: const EdgeInsets.only(left: 6),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.indigo.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text('MARKET',
+                                  style: TextStyle(
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.indigo)),
                             ),
                         ],
                       ),
@@ -1946,8 +2111,11 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
                     loading: _loading,
                     isDark: isDark,
                     hasPhone: _customerPhone.isNotEmpty,
+                    orderStatus:
+                        (widget.data['status'] as String?) ?? 'assigned',
                     onCall: _callPhone,
                     onMap: _openMap,
+                    onPickedUp: _markPickedUp,
                     onDelivered: _markDelivered,
                     loc: loc,
                   ),
@@ -2010,8 +2178,10 @@ class _MyDeliveryActions extends StatelessWidget {
   final bool loading;
   final bool isDark;
   final bool hasPhone;
+  final String orderStatus;
   final VoidCallback onCall;
   final VoidCallback onMap;
+  final VoidCallback onPickedUp;
   final VoidCallback onDelivered;
   final AppLocalizations loc;
 
@@ -2019,14 +2189,25 @@ class _MyDeliveryActions extends StatelessWidget {
     required this.loading,
     required this.isDark,
     required this.hasPhone,
+    required this.orderStatus,
     required this.onCall,
     required this.onMap,
+    required this.onPickedUp,
     required this.onDelivered,
     required this.loc,
   });
 
   @override
   Widget build(BuildContext context) {
+    // accepted       → "Teslim Aldım"   (orange, calls onPickedUp)
+    // out_for_delivery → "Teslim Edildi" (green,  calls onDelivered)
+    final isPickedUp = orderStatus == 'out_for_delivery';
+    final label = isPickedUp
+        ? loc.foodCargoMarkDelivered
+        : loc.foodCargoMarkPickedUp;
+    final onTap = isPickedUp ? onDelivered : onPickedUp;
+    final btnColor = isPickedUp ? Colors.green : Colors.orange;
+
     return Row(
       children: [
         _IconActionBtn(
@@ -2049,11 +2230,11 @@ class _MyDeliveryActions extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: ElevatedButton(
-            onPressed: loading ? null : onDelivered,
+            onPressed: loading ? null : onTap,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
+              backgroundColor: btnColor,
               foregroundColor: Colors.white,
-              disabledBackgroundColor: Colors.green.withOpacity(0.5),
+              disabledBackgroundColor: btnColor.withOpacity(0.5),
               padding: const EdgeInsets.symmetric(vertical: 13),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
@@ -2065,7 +2246,7 @@ class _MyDeliveryActions extends StatelessWidget {
                     height: 16,
                     child: CircularProgressIndicator(
                         color: Colors.white, strokeWidth: 2))
-                : Text(loc.foodCargoMarkDelivered,
+                : Text(label,
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 13)),
           ),

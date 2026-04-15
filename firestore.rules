@@ -968,7 +968,11 @@ match /product_edit_applications/{editApplicationId} {
   allow create: if false; // Cloud Functions only
   allow update, delete: if false;
 }
-    
+  
+  match /marketReceipts/{receiptId} {
+  allow read: if request.auth != null && request.auth.uid == userId;
+  allow create, update, delete: if false;
+}
     
     match /referral/{referralDocId} {  
   allow create, update: if request.auth != null && (    
@@ -1255,6 +1259,31 @@ match /benefits/{benefitId} {
         // Allow authenticated users to delete their own food cart items
         allow delete: if request.auth != null && request.auth.uid == userId;
       }
+      
+      match /marketCart/{itemId} {
+  allow read: if request.auth != null && request.auth.uid == userId;
+
+  allow create: if request.auth != null
+                && request.auth.uid == userId
+                && request.resource.data.name is string
+                && request.resource.data.price is number
+                && request.resource.data.price >= 0
+                && request.resource.data.quantity is number
+                && request.resource.data.quantity >= 1
+                && request.resource.data.category is string
+                && request.resource.data.brand is string
+                && request.resource.data.type is string
+                && request.resource.data.addedAt == request.time;
+
+  allow update: if request.auth != null
+                && request.auth.uid == userId
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['quantity'])
+                && request.resource.data.quantity is number
+                && request.resource.data.quantity >= 1
+                && request.resource.data.quantity <= 99;
+
+  allow delete: if request.auth != null && request.auth.uid == userId;
+}
       
       // Food cart meta — stores current restaurant info for the food cart
 match /foodCartMeta/{metaDoc} {
@@ -1902,6 +1931,25 @@ match /foods/{foodId} {
   allow delete: if request.auth != null
     && isRestaurantMember(resource.data.restaurantId);
 }
+
+match /drinks/{drinkId} {
+  // Anyone can read (for customer-facing app)
+  allow read: if true;
+
+  // Create: must be a member of the restaurant
+  allow create: if request.auth != null
+    && request.resource.data.restaurantId is string
+    && isRestaurantMember(request.resource.data.restaurantId);
+
+  // Update: must be a member, cannot change restaurantId
+  allow update: if request.auth != null
+    && isRestaurantMember(resource.data.restaurantId)
+    && request.resource.data.restaurantId == resource.data.restaurantId;
+
+  // Delete: must be a member
+  allow delete: if request.auth != null
+    && isRestaurantMember(resource.data.restaurantId);
+}
   
 function isCargoCourier() {
   return request.auth != null && request.auth.token.foodcargoguy == true;
@@ -2076,6 +2124,11 @@ match /food_cache/{regionDoc} {
   allow write: if false; // Only Cloud Functions write
 }
 
+match /market-items/{itemId} {
+  allow read: if true;
+  allow create, update, delete: if isAdmin() || isSemiAdmin();
+}
+
 match /business-reports/{businessId} {
   // Allow read if user is a member of this business (shop or restaurant)
   allow read: if request.auth != null && (
@@ -2105,21 +2158,65 @@ match /{path=**}/food-reviews/{reviewId} {
   allow write: if false; // Cloud Functions only
 }
 
-match /courier_actions/{actionId} {
-  // Couriers can create their own actions
-  allow create: if request.auth != null
-    && request.auth.token.foodcargoguy == true
-    && request.resource.data.courierId == request.auth.uid
-    && request.resource.data.type in ['pickup', 'deliver']
-    && request.resource.data.orderId is string
-    && request.resource.data.status == 'pending';
+ match /courier_actions/{actionId} {                                                                                                                                                                             // Common field validation for all writers                                                                                                                                                                
+    allow create: if request.auth != null                                                                                                                                                                     
+      && request.resource.data.type in ['assign', 'pickup', 'deliver']
+      && request.resource.data.orderId is string
+      && request.resource.data.courierId is string
+      && request.resource.data.status == 'pending'
+      && (
+        !('collection' in request.resource.data.keys())
+        || request.resource.data.collection in ['orders-food', 'orders-market']
+      )
+      && (
+        // Self-service courier — must write their own uid as courierId
+        (
+          request.auth.token.foodcargoguy == true
+          && request.resource.data.courierId == request.auth.uid
+        )
+        ||
+        // Admin / semi-admin / master courier override — courierId is the
+        // target courier (any valid uid). Trigger still runs the same
+        // state-machine transaction, so race safety is preserved.
+        (
+          isAdmin() || isSemiAdmin() || request.auth.token.masterCourier == true
+        )
+      );
 
-  // Couriers can read their own actions (to listen for status updates)
-  allow read: if request.auth != null
-    && resource.data.courierId == request.auth.uid;
+    // Couriers read their own actions; admins/master-couriers read all
+    // (so they can listen for completed/failed results on docs they wrote).
+    allow read: if request.auth != null && (
+      resource.data.courierId == request.auth.uid
+      || isAdmin() || isSemiAdmin()
+      || request.auth.token.masterCourier == true
+    );
 
-  // Only Cloud Functions can update (to set completed/failed)
-  allow update, delete: if false;
+    // Only Cloud Functions can update (to set completed/failed)
+    allow update, delete: if false;
+  }
+
+ match /orders-market/{orderId} {                                                                                                                                                                                allow read: if request.auth != null && (
+      request.auth.uid == resource.data.buyerId                                                                                                                                                               
+      || isCargoCourier()
+      || request.auth.token.masterCourier == true
+      || isAdmin() || isSemiAdmin()
+    );
+    allow create, update, delete: if false; // Cloud Functions only
+  }
+
+match /pendingMarketPayments/{paymentId} {
+  allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+  allow write: if false;
+}
+
+match /nar24market/stats {
+  allow read: if true;
+  allow write: if false; // Cloud Functions only
+
+  match /reviews/{reviewId} {
+    allow read: if true;
+    allow write: if false; // Cloud Functions only
+  }
 }
 
 

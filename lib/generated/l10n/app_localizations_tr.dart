@@ -15600,10 +15600,16 @@ class AppLocalizationsTr extends AppLocalizations {
   String get foodCargoDeliveredSuccess => 'Teslim edildi olarak işaretlendi ✓';
 
   @override
+  String get foodCargoPickedUpSuccess => 'Teslim alındı ✓';
+
+  @override
   String get foodCargoCallCustomer => 'Ara';
 
   @override
   String get foodCargoOpenMap => 'Harita';
+
+  @override
+  String get foodCargoMarkPickedUp => 'Teslim Aldım';
 
   @override
   String get foodCargoMarkDelivered => 'Teslim Edildi';

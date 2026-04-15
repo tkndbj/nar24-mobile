@@ -29736,6 +29736,12 @@ abstract class AppLocalizations {
   /// **'Teslim edildi olarak işaretlendi ✓'**
   String get foodCargoDeliveredSuccess;
 
+  /// No description provided for @foodCargoPickedUpSuccess.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslim alındı ✓'**
+  String get foodCargoPickedUpSuccess;
+
   /// No description provided for @foodCargoCallCustomer.
   ///
   /// In tr, this message translates to:
@@ -29747,6 +29753,12 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Harita'**
   String get foodCargoOpenMap;
+
+  /// No description provided for @foodCargoMarkPickedUp.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teslim Aldım'**
+  String get foodCargoMarkPickedUp;
 
   /// No description provided for @foodCargoMarkDelivered.
   ///

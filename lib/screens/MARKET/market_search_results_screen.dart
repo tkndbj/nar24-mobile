@@ -3,8 +3,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../../constants/market_categories.dart';
 import '../../generated/l10n/app_localizations.dart';
+import '../../providers/market_cart_provider.dart';
 import '../../services/market_typesense_service.dart';
 import '../../services/typesense_service_manager.dart';
 import 'market_category_detail_screen.dart' show MarketItemCard;
@@ -224,6 +226,21 @@ class _MarketSearchResultsScreenState extends State<MarketSearchResultsScreen> {
                     : _buildGrid(isDark),
           ),
         ],
+      ),
+      floatingActionButton: Consumer<MarketCartProvider>(
+        builder: (context, cart, _) {
+          if (cart.itemCount == 0) return const SizedBox.shrink();
+          return FloatingActionButton.extended(
+            onPressed: () => context.push('/market-cart'),
+            backgroundColor: const Color(0xFF00A86B),
+            icon: const Icon(Icons.shopping_bag_rounded, color: Colors.white),
+            label: Text(
+              '${l10n.marketCartItemCount(cart.itemCount)} • ${cart.totals.subtotal.toStringAsFixed(0)} TL',
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          );
+        },
       ),
     );
   }

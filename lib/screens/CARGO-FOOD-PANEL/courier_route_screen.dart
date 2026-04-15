@@ -23,7 +23,12 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
   bool _loading = true;
   String? _error;
   Position? _currentPosition;
-  StreamSubscription? _ordersSubscription;
+  StreamSubscription? _foodOrdersSub;
+  StreamSubscription? _marketOrdersSub;
+  List<Map<String, dynamic>> _cachedFoodOrders = [];
+  List<Map<String, dynamic>> _cachedMarketOrders = [];
+  bool _foodReady = false;
+  bool _marketReady = false;
   String _lastOrderSignature = '';
 
   // Action busy states
@@ -57,7 +62,8 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
 
   @override
   void dispose() {
-    _ordersSubscription?.cancel();
+    _foodOrdersSub?.cancel();
+    _marketOrdersSub?.cancel();
     _mapController?.dispose();
     for (final sub in _actionListeners.values) {
       sub.cancel();
@@ -85,58 +91,122 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
       return;
     }
 
-    _ordersSubscription = FirebaseFirestore.instance
+    const inFlight = ['assigned', 'out_for_delivery'];
+
+    _foodOrdersSub = FirebaseFirestore.instance
         .collection('orders-food')
         .where('cargoUserId', isEqualTo: uid)
-        .where('status', isEqualTo: 'out_for_delivery')
+        .where('status', whereIn: inFlight)
         .snapshots()
         .listen((snap) {
-      final orders = snap.docs.map((d) {
-        final data = d.data();
-        return {
-          'orderId': d.id,
-          'restaurantName': data['restaurantName'] ?? '—',
-          'restaurantLat': data['restaurantLat'],
-          'restaurantLng': data['restaurantLng'],
-          'buyerName': data['buyerName'] ?? '—',
-          'buyerPhone': data['buyerPhone'] ?? '',
-          'totalPrice': data['totalPrice'] ?? 0,
-          'currency': data['currency'] ?? 'TL',
-          'isPaid': data['isPaid'] ?? false,
-          'deliveryAddress': data['deliveryAddress'],
-          'items': data['items'] ?? [],
-          'pickedUpFromRestaurant': data['pickedUpFromRestaurant'] ?? false,
-        };
-      }).toList();
-
-      // Clean up locally tracked orders that are now confirmed server-side
-      orders.removeWhere((o) => _locallyDelivered.contains(o['orderId']));
-      for (final o in orders) {
-        if (o['pickedUpFromRestaurant'] == true) {
-          _locallyPickedUp.remove(o['orderId']);
-        }
-      }
-      // Apply local optimistic pickups
-      for (final o in orders) {
-        if (_locallyPickedUp.contains(o['orderId'])) {
-          o['pickedUpFromRestaurant'] = true;
-        }
-      }
-
-      final sig = orders.map((o) {
-        final id = o['orderId'];
-        final p = o['pickedUpFromRestaurant'] == true ? '1' : '0';
-        return '$id:$p';
-      }).toList()..sort();
-      final sigStr = sig.join(',');
-
-      if (sigStr == _lastOrderSignature && _route != null) return;
-      _lastOrderSignature = sigStr;
-
-      _computeRoute(orders);
-    }, onError: (e) {
+      _cachedFoodOrders = snap.docs.map(_mapFoodDoc).toList();
+      _foodReady = true;
+      _mergeAndProcess();
+    }, onError: (_) {
+      if (!mounted) return;
       setState(() { _error = 'Siparişler yüklenemedi'; _loading = false; });
     });
+
+    _marketOrdersSub = FirebaseFirestore.instance
+        .collection('orders-market')
+        .where('cargoUserId', isEqualTo: uid)
+        .where('status', whereIn: inFlight)
+        .snapshots()
+        .listen((snap) {
+      _cachedMarketOrders = snap.docs.map(_mapMarketDoc).toList();
+      _marketReady = true;
+      _mergeAndProcess();
+    }, onError: (_) {
+      if (!mounted) return;
+      // Market stream failing shouldn't wipe food orders — just mark ready.
+      _marketReady = true;
+      _mergeAndProcess();
+    });
+  }
+
+  // ── Per-collection mappers ────────────────────────────────────────────────
+  //
+  // Both shapes emit the same normalized keys the CourierRouteService expects
+  // (`restaurantLat`/`restaurantLng`/`restaurantName`), so the service stays
+  // collection-agnostic. Market orders use the denormalized static pickup
+  // location stamped on the doc by functions/52-market-payment/index.js.
+
+  Map<String, dynamic> _mapFoodDoc(QueryDocumentSnapshot<Map<String, dynamic>> d) {
+    final data = d.data();
+    final status = (data['status'] as String?) ?? '';
+    return {
+      'orderId': d.id,
+      'collection': 'orders-food',
+      'status': status,
+      'restaurantName': data['restaurantName'] ?? '—',
+      'restaurantLat': data['restaurantLat'],
+      'restaurantLng': data['restaurantLng'],
+      'buyerName': data['buyerName'] ?? '—',
+      'buyerPhone': data['buyerPhone'] ?? '',
+      'totalPrice': data['totalPrice'] ?? 0,
+      'currency': data['currency'] ?? 'TL',
+      'isPaid': data['isPaid'] ?? false,
+      'deliveryAddress': data['deliveryAddress'],
+      'items': data['items'] ?? [],
+      'pickedUpFromRestaurant': status == 'out_for_delivery',
+    };
+  }
+
+  Map<String, dynamic> _mapMarketDoc(QueryDocumentSnapshot<Map<String, dynamic>> d) {
+    final data = d.data();
+    final status = (data['status'] as String?) ?? '';
+    return {
+      'orderId': d.id,
+      'collection': 'orders-market',
+      'status': status,
+      // Route service reads these keys — aliased from the static market fields.
+      'restaurantName': data['marketName'] ?? 'Market',
+      'restaurantLat': data['marketLat'],
+      'restaurantLng': data['marketLng'],
+      'buyerName': data['buyerName'] ?? '—',
+      'buyerPhone': data['buyerPhone'] ?? '',
+      'totalPrice': data['totalPrice'] ?? 0,
+      'currency': data['currency'] ?? 'TL',
+      'isPaid': data['isPaid'] ?? false,
+      'deliveryAddress': data['deliveryAddress'],
+      'items': data['items'] ?? [],
+      'pickedUpFromRestaurant': status == 'out_for_delivery',
+    };
+  }
+
+  void _mergeAndProcess() {
+    if (!_foodReady || !_marketReady) return;
+
+    final orders = <Map<String, dynamic>>[
+      ..._cachedFoodOrders,
+      ..._cachedMarketOrders,
+    ];
+
+    // Clean up locally tracked orders that are now confirmed server-side
+    orders.removeWhere((o) => _locallyDelivered.contains(o['orderId']));
+    for (final o in orders) {
+      if (o['pickedUpFromRestaurant'] == true) {
+        _locallyPickedUp.remove(o['orderId']);
+      }
+    }
+    // Apply local optimistic pickups
+    for (final o in orders) {
+      if (_locallyPickedUp.contains(o['orderId'])) {
+        o['pickedUpFromRestaurant'] = true;
+      }
+    }
+
+    final sig = orders.map((o) {
+      final id = o['orderId'];
+      final p = o['pickedUpFromRestaurant'] == true ? '1' : '0';
+      return '$id:$p';
+    }).toList()..sort();
+    final sigStr = sig.join(',');
+
+    if (sigStr == _lastOrderSignature && _route != null) return;
+    _lastOrderSignature = sigStr;
+
+    _computeRoute(orders);
   }
 
   // ── Compute route ─────────────────────────────────────────────────────────
@@ -176,6 +246,7 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
   Future<String> _writeAction({
     required String type,
     required String orderId,
+    required String collection,
     String? paymentMethod,
   }) async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
@@ -184,6 +255,7 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
     final docRef = FirebaseFirestore.instance.collection('courier_actions').doc();
     await docRef.set({
       'type': type,
+      'collection': collection,
       'orderId': orderId,
       'courierId': uid,
       'courierName': displayName,
@@ -245,7 +317,7 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
 
   // ── Mark pickup (offline-safe) ────────────────────────────────────────────
 
-  Future<void> _markPickedUp(String orderId, String restaurantName) async {
+  Future<void> _markPickedUp(String orderId, String restaurantName, String collection) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -278,7 +350,11 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
       _lastOrderSignature = '__pickup_$orderId';
 
       // Write action document (queues offline)
-      final actionId = await _writeAction(type: 'pickup', orderId: orderId);
+      final actionId = await _writeAction(
+        type: 'pickup',
+        orderId: orderId,
+        collection: collection,
+      );
 
       // Listen for server confirmation
       _listenForActionResult(actionId, orderId, false);
@@ -308,7 +384,7 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
 
   // ── Mark delivered (offline-safe) ─────────────────────────────────────────
 
-  Future<void> _markDelivered(String orderId, String buyerName) async {
+  Future<void> _markDelivered(String orderId, String buyerName, String collection) async {
     final paymentMethod = await _showPaymentSheet();
     if (paymentMethod == null || !mounted) return;
 
@@ -328,6 +404,7 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
       final actionId = await _writeAction(
         type: 'deliver',
         orderId: orderId,
+        collection: collection,
         paymentMethod: paymentMethod,
       );
 
@@ -684,6 +761,7 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
     final isLast = index == route.orderedStops.length - 1;
     final color = isPickup ? _pickupColor : _deliveryColor;
     final orderId = stop.orderId;
+    final collection = (stop.orderData?['collection'] as String?) ?? 'orders-food';
     final isBusy = isPickup ? _pickupBusyOrderId == orderId : _deliverBusyOrderId == orderId;
 
     String? itemsSummary;
@@ -764,8 +842,8 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
             SizedBox(width: double.infinity, height: 36,
               child: ElevatedButton.icon(
                 onPressed: isBusy ? null
-                    : isPickup ? () => _markPickedUp(orderId, stop.label)
-                    : () => _markDelivered(orderId, stop.label),
+                    : isPickup ? () => _markPickedUp(orderId, stop.label, collection)
+                    : () => _markDelivered(orderId, stop.label, collection),
                 icon: isBusy
                     ? const SizedBox(width: 14, height: 14,
                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))

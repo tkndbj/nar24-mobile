@@ -112,31 +112,38 @@ class _MarketCategoryScreenState extends State<MarketCategoryScreen>
       backgroundColor:
           isDark ? const Color(0xFF1C1A29) : const Color(0xFFF5F5F5),
       appBar: AppBar(
+        toolbarHeight: 72,
+        titleSpacing: 0,
         title: AnimatedBuilder(
           animation: _searchAnim,
           builder: (context, _) {
             final t = _searchAnim.value;
-            return Stack(
-              alignment: Alignment.centerLeft,
-              children: [
-                // Title (fades out as search opens)
-                IgnorePointer(
-                  ignoring: _searchOpen,
-                  child: Opacity(
-                    opacity: 1 - t,
-                    child: Text(
-                      l10n.marketCategoryTitle,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
+            return SizedBox(
+              height: 52,
+              child: Stack(
+                alignment: Alignment.centerLeft,
+                fit: StackFit.expand,
+                children: [
+                  // Title (fades out as search opens)
+                  IgnorePointer(
+                    ignoring: _searchOpen,
+                    child: Opacity(
+                      opacity: 1 - t,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          l10n.marketCategoryTitle,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                // Search field (fades/slides in). Mount only when opening.
-                if (_searchOpen)
-                  Positioned.fill(
-                    child: Opacity(
+                  // Search field (fades/slides in). Mount only when opening.
+                  if (_searchOpen)
+                    Opacity(
                       opacity: t,
                       child: Transform.translate(
                         offset: Offset(12 * (1 - t), 0),
@@ -148,8 +155,8 @@ class _MarketCategoryScreenState extends State<MarketCategoryScreen>
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             );
           },
         ),
@@ -267,20 +274,20 @@ class _AppBarSearchField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 46,
+      height: 52,
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.18),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       alignment: Alignment.center,
       child: TextField(
         controller: controller,
         focusNode: focusNode,
         textInputAction: TextInputAction.search,
         cursorColor: Colors.white,
-        cursorHeight: 20,
-        style: const TextStyle(color: Colors.white, fontSize: 15),
+        cursorHeight: 22,
+        style: const TextStyle(color: Colors.white, fontSize: 16),
         decoration: InputDecoration(
           border: InputBorder.none,
           isCollapsed: true,

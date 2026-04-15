@@ -6649,9 +6649,11 @@
   "foodCargoAlreadyTaken": "Bu sipariş başka bir kurye tarafından alındı",
   "foodCargoAssignError": "Bir hata oluştu. Lütfen tekrar deneyin.",
   "foodCargoDeliveredSuccess": "Teslim edildi olarak işaretlendi ✓",
+  "foodCargoPickedUpSuccess": "Teslim alındı ✓",
 
   "foodCargoCallCustomer": "Ara",
   "foodCargoOpenMap": "Harita",
+  "foodCargoMarkPickedUp": "Teslim Aldım",
   "foodCargoMarkDelivered": "Teslim Edildi",
 
   "foodCargoOrderId": "Sipariş",

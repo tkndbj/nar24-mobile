@@ -895,7 +895,7 @@ export { extractColorOnly, initializeIsbankAdPayment, isbankAdPaymentCallback, c
 export { expireSingleBoost, initializeBoostPayment, boostPaymentCallback, checkBoostPaymentStatus, recoverStuckBoostPayments } from './32-product-boost-payment/index.js';
 export { cleanupPaymentCollections } from './33-payment-cleanup/index.js';
 export { setMasterCourierClaim } from './34-master-courier/index.js';
-export { onDeliveryCompleted, recalcCourierStats, getCourierStatsSummary } from './35-courier-stats/index.js';
+export { onDeliveryCompleted, onMarketDeliveryCompleted, recalcCourierStats, getCourierStatsSummary } from './35-courier-stats/index.js';
 export { calculateDailyFoodAccounting, calculateWeeklyFoodAccounting, calculateMonthlyFoodAccounting } from './36-food-accounting/index.js';
 export { generateRestaurantReceiptBackground } from './37-restaurant-receipt/index.js';
 export { scheduleDiscountExpiry, restoreDiscountPrice } from './38-food-discount/index.js';

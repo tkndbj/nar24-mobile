@@ -1830,8 +1830,11 @@ export const updateFoodOrderStatus = onCall(
       throw new HttpsError('unauthenticated', 'Must be signed in.');
     }
 
-    const { orderId, newStatus, paymentReceivedMethod } = request.data;
-    const ALLOWED_STATUSES = ['accepted', 'rejected', 'preparing', 'ready', 'out_for_delivery', 'delivered'];
+    const { orderId, newStatus } = request.data;
+    // Restaurant-settable statuses only. Courier-owned states
+    // ('assigned', 'out_for_delivery', 'delivered') are driven exclusively by
+    // the courier_actions trigger and are intentionally excluded here.
+    const ALLOWED_STATUSES = ['accepted', 'rejected', 'ready', 'pending'];
 
     if (!orderId || !ALLOWED_STATUSES.includes(newStatus)) {
       throw new HttpsError('invalid-argument', 'Invalid orderId or status.');
@@ -1839,35 +1842,30 @@ export const updateFoodOrderStatus = onCall(
 
     const userRecord = await admin.auth().getUser(request.auth.uid);
     const restaurantClaims = userRecord.customClaims?.restaurants || {};
-    const isCargoCourier = userRecord.customClaims?.foodcargoguy === true;
-    
+
     const db = admin.firestore();
-    
+
     await db.runTransaction(async (tx) => {
       const orderRef = db.collection('orders-food').doc(orderId);
       const orderSnap = await tx.get(orderRef);
-    
+
       if (!orderSnap.exists) {
         throw new HttpsError('not-found', 'Order not found.');
       }
-    
+
       const order = orderSnap.data();
-    
-      const isRestaurantMember = order.restaurantId in restaurantClaims;
-      const isCargoDelivery = isCargoCourier &&
-        order.status === 'out_for_delivery' &&
-        newStatus === 'delivered' &&
-        order.cargoUserId === request.auth.uid;
-    
-      if (!isRestaurantMember && !isCargoDelivery) {
+
+      if (!(order.restaurantId in restaurantClaims)) {
         throw new HttpsError('permission-denied', 'You are not authorized to update this order.');
       }
 
+      // Admin/restaurant transitions only. Any attempt to transition out of a
+      // courier-owned state ('assigned', 'out_for_delivery', 'delivered')
+      // falls through the `|| []` fallback below and returns a clean
+      // failed-precondition error.
       const VALID_TRANSITIONS = {
         pending: ['accepted', 'rejected'],
-        accepted: ['ready', 'pending'],       // ← changed 'rejected' to 'pending'
-        ready: ['out_for_delivery'],
-        out_for_delivery: ['delivered'],
+        accepted: ['ready', 'pending'],
       };
 
       const allowed = VALID_TRANSITIONS[order.status] || [];
@@ -1881,11 +1879,6 @@ export const updateFoodOrderStatus = onCall(
       tx.update(orderRef, {
         status: newStatus,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        ...(newStatus === 'delivered' ? { needsReview: true } : {}),
-        ...(newStatus === 'delivered' && paymentReceivedMethod &&
-            ['card', 'cash', 'iban'].includes(paymentReceivedMethod) ?
-              { paymentReceivedMethod } :
-              {}),
       });
 
       // Only notify the buyer if one exists (scanned receipt orders have no buyerId)
@@ -1897,7 +1890,7 @@ export const updateFoodOrderStatus = onCall(
           .doc();
 
         tx.set(notifRef, {
-          type: newStatus === 'delivered' ? 'food_order_delivered_review' : 'food_order_status_update',
+          type: 'food_order_status_update',
           payload: {
             orderId,
             orderStatus: newStatus,

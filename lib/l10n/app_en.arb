@@ -6653,10 +6653,12 @@
   "foodCargoAlreadyTaken": "This order was already taken by another rider",
   "foodCargoAssignError": "Something went wrong. Please try again.",
   "foodCargoDeliveredSuccess": "Marked as delivered ✓",
+  "foodCargoPickedUpSuccess": "Marked as picked up ✓",
 
   "foodCargoCallCustomer": "Call",
   "foodCargoOpenMap": "Map",
-  "foodCargoMarkDelivered": "Mark as Delivered",
+  "foodCargoMarkPickedUp": "Picked Up",
+  "foodCargoMarkDelivered": "Delivered",
 
   "foodCargoOrderId": "Order",
   "foodCargoCustomer": "Customer",

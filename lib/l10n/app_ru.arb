@@ -6288,9 +6288,11 @@
   "foodCargoAlreadyTaken": "Этот заказ уже взял другой курьер",
   "foodCargoAssignError": "Что-то пошло не так. Попробуйте снова.",
   "foodCargoDeliveredSuccess": "Отмечено как доставлено ✓",
+  "foodCargoPickedUpSuccess": "Отмечено как забрано ✓",
 
   "foodCargoCallCustomer": "Звонок",
   "foodCargoOpenMap": "Карта",
+  "foodCargoMarkPickedUp": "Забрал",
   "foodCargoMarkDelivered": "Доставлено",
 
   "foodCargoOrderId": "Заказ",
