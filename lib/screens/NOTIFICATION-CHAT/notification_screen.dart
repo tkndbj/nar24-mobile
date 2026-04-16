@@ -13,7 +13,6 @@ import 'package:go_router/go_router.dart';
 import '../../models/notification.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../../services/firestore_read_tracker.dart';
-import '../PAYMENT-RECEIPT/dynamic_payment_screen.dart';
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
@@ -124,7 +123,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
       if (_lastDocument != null) q = q.startAfterDocument(_lastDocument!);
 
       final snap = await q.get();
-      FirestoreReadTracker.instance.trackRead('NotificationScreen', 'notifications (page, limit: $_limit)', snap.docs.length);
+      FirestoreReadTracker.instance.trackRead('NotificationScreen',
+          'notifications (page, limit: $_limit)', snap.docs.length);
 
       if (!mounted) return;
 
@@ -137,8 +137,11 @@ class _NotificationScreenState extends State<NotificationScreen> {
         final fetched = snap.docs
             .map((d) => d.data())
             .where((n) => n.type != 'message')
-            .where((n) => !((n.type == 'shop_invitation' || n.type == 'restaurant_invitation') &&
-    (n.status == 'accepted' || n.status == 'rejected' || n.status == 'cancelled')))
+            .where((n) => !((n.type == 'shop_invitation' ||
+                    n.type == 'restaurant_invitation') &&
+                (n.status == 'accepted' ||
+                    n.status == 'rejected' ||
+                    n.status == 'cancelled')))
             .toList();
 
         setState(() {
@@ -235,210 +238,217 @@ class _NotificationScreenState extends State<NotificationScreen> {
   }
 
   Future<void> _handleInvitationResponse(
-  NotificationModel notification, {
-  required bool accepted,
-}) async {
-  final l10n = AppLocalizations.of(context);
+    NotificationModel notification, {
+    required bool accepted,
+  }) async {
+    final l10n = AppLocalizations.of(context);
 
-  if (!accepted) {
+    if (!accepted) {
+      try {
+        final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+            .httpsCallable('handleShopInvitation');
+
+        await callable.call({
+          'invitationId': notification.invitationId,
+          'accepted': false,
+          'shopId': notification.shopId,
+          'role': notification.role,
+        });
+
+        if (!mounted) return;
+
+        setState(() {
+          _notifications.removeWhere((n) => n.id == notification.id);
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.invitationRejected)),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        if (e is FirebaseFunctionsException &&
+            (e.code == 'not-found' || e.code == 'failed-precondition')) {
+          setState(() {
+            _notifications.removeWhere((n) => n.id == notification.id);
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.invitationAlreadyResponded)),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text(l10n.errorOccurredWithDetails(e.toString()))),
+          );
+        }
+      }
+      return;
+    }
+
+    _showInvitationAcceptingModal(
+      notification.shopName ?? '',
+      isRestaurant: notification.businessType == 'restaurant',
+    );
+
     try {
       final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
           .httpsCallable('handleShopInvitation');
 
-      await callable.call({
+      final result = await callable.call({
         'invitationId': notification.invitationId,
-        'accepted': false,
+        'accepted': true,
         'shopId': notification.shopId,
         'role': notification.role,
       });
 
-      if (!mounted) return;
+      // Force-refresh the local JWT so new claims (shopId) take effect
+      final data = result.data as Map<String, dynamic>;
+      if (data['shouldRefreshToken'] == true) {
+        await FirebaseAuth.instance.currentUser?.getIdToken(true);
+      }
 
-      setState(() {
-        _notifications.removeWhere((n) => n.id == notification.id);
-      });
+      if (context.mounted) {
+        setState(() {
+          _notifications.removeWhere((n) => n.id == notification.id);
+        });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.invitationRejected)),
-      );
+        Navigator.of(context).pop();
+
+        if (notification.shopId != null) {
+          context.push('/seller-panel?shopId=${notification.shopId}&tab=0');
+        }
+      }
     } catch (e) {
-      if (!mounted) return;
-      if (e is FirebaseFunctionsException &&
-          (e.code == 'not-found' || e.code == 'failed-precondition')) {
-        setState(() {
-          _notifications.removeWhere((n) => n.id == notification.id);
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.invitationAlreadyResponded)),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.errorOccurredWithDetails(e.toString()))),
-        );
-      }
-    }
-    return;
-  }
-
-  _showInvitationAcceptingModal(
-  notification.shopName ?? '',
-  isRestaurant: notification.businessType == 'restaurant',
-);
-
-  try {
-    final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-        .httpsCallable('handleShopInvitation');
-
-    final result = await callable.call({
-      'invitationId': notification.invitationId,
-      'accepted': true,
-      'shopId': notification.shopId,
-      'role': notification.role,
-    });
-
-    // Force-refresh the local JWT so new claims (shopId) take effect
-    final data = result.data as Map<String, dynamic>;
-    if (data['shouldRefreshToken'] == true) {
-      await FirebaseAuth.instance.currentUser?.getIdToken(true);
-    }
-
-    if (context.mounted) {
-      setState(() {
-        _notifications.removeWhere((n) => n.id == notification.id);
-      });
-
-      Navigator.of(context).pop();
-
-      if (notification.shopId != null) {
-        context.push('/seller-panel?shopId=${notification.shopId}&tab=0');
-      }
-    }
-  } catch (e) {
-    if (context.mounted) {
-      Navigator.of(context).pop();
-      if (e is FirebaseFunctionsException &&
-          (e.code == 'not-found' || e.code == 'failed-precondition')) {
-        setState(() {
-          _notifications.removeWhere((n) => n.id == notification.id);
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.invitationAlreadyResponded)),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(l10n.errorOccurredWithDetails(e.toString())),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            duration: const Duration(seconds: 3),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        );
-      }
-    }
-  }
-}
-
-void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false}) {
-  final l10n = AppLocalizations.of(context);
-  final isDark = Theme.of(context).brightness == Brightness.dark;
-
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => Dialog(
-      backgroundColor: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: isDark ? const Color.fromARGB(255, 33, 31, 49) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.0, end: 1.0),
-              duration: const Duration(milliseconds: 1500),
-              builder: (context, value, child) {
-                return Transform.rotate(
-                  angle: value * 2 * 3.14159,
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF00A86B), Color(0xFF00D68F)],
-                      ),
-                      borderRadius: BorderRadius.circular(50),
-                    ),
-                    child: Icon(
-                      isRestaurant ? Icons.restaurant_rounded : Icons.store_rounded,
-                      color: Colors.white,
-                      size: 32,
-                    ),
+      if (context.mounted) {
+        Navigator.of(context).pop();
+        if (e is FirebaseFunctionsException &&
+            (e.code == 'not-found' || e.code == 'failed-precondition')) {
+          setState(() {
+            _notifications.removeWhere((n) => n.id == notification.id);
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.invitationAlreadyResponded)),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.error_outline,
+                      color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(l10n.errorOccurredWithDetails(e.toString())),
                   ),
-                );
-              },
-            ),
-            const SizedBox(height: 20),
-            Text(
-              isRestaurant
-                  ? (l10n.joiningRestaurant ?? 'Joining restaurant...')
-                  : (l10n.joiningShop ?? 'Joining shop...'),
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: isDark ? Colors.white : Colors.black87,
+                ],
               ),
-              textAlign: TextAlign.center,
+              backgroundColor: Colors.red.shade700,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(16),
+              duration: const Duration(seconds: 3),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
-            const SizedBox(height: 8),
-            Text(
-              entityName,
-              style: TextStyle(
-                fontSize: 14,
-                color: isDark ? Colors.white70 : Colors.grey.shade600,
+          );
+        }
+      }
+    }
+  }
+
+  void _showInvitationAcceptingModal(String entityName,
+      {bool isRestaurant = false}) {
+    final l10n = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color:
+                isDark ? const Color.fromARGB(255, 33, 31, 49) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 1500),
+                builder: (context, value, child) {
+                  return Transform.rotate(
+                    angle: value * 2 * 3.14159,
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF00A86B), Color(0xFF00D68F)],
+                        ),
+                        borderRadius: BorderRadius.circular(50),
+                      ),
+                      child: Icon(
+                        isRestaurant
+                            ? Icons.restaurant_rounded
+                            : Icons.store_rounded,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                    ),
+                  );
+                },
               ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 20),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                height: 8,
-                width: double.infinity,
-                color: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
-                child: TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0.0, end: 1.0),
-                  duration: const Duration(seconds: 2),
-                  builder: (context, value, child) {
-                    return LinearProgressIndicator(
-                      value: value,
-                      backgroundColor: Colors.transparent,
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                          Color(0xFF00A86B)),
-                    );
-                  },
+              const SizedBox(height: 20),
+              Text(
+                isRestaurant
+                    ? (l10n.joiningRestaurant ?? 'Joining restaurant...')
+                    : (l10n.joiningShop ?? 'Joining shop...'),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                entityName,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isDark ? Colors.white70 : Colors.grey.shade600,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 20),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  height: 8,
+                  width: double.infinity,
+                  color: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.0, end: 1.0),
+                    duration: const Duration(seconds: 2),
+                    builder: (context, value, child) {
+                      return LinearProgressIndicator(
+                        value: value,
+                        backgroundColor: Colors.transparent,
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                            Color(0xFF00A86B)),
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   void _handleNotificationTap(NotificationModel notification) async {
     final l10n = AppLocalizations.of(context);
@@ -473,6 +483,19 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
 
       case 'food_order_delivered_review':
         context.push('/my-reviews');
+        break;
+
+      case 'market_order_status_update':
+        context.push('/my-market-orders');
+        break;
+
+      case 'market_order_delivered_review':
+        final orderId = notification.orderId;
+        if (orderId != null) {
+          context.push('/market-order-detail/$orderId');
+        } else {
+          context.push('/my-market-orders');
+        }
         break;
 
       case 'order_delivered':
@@ -638,7 +661,6 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
         );
         break;
 
-
       case 'product_edit_approved':
         final productId = notification.productId;
         if (productId != null) {
@@ -730,7 +752,8 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
           try {
             final productSnapshot =
                 await _firestore.collection('products').doc(productId).get();
-            FirestoreReadTracker.instance.trackRead('NotificationScreen', 'product tap (product_review)', 1);
+            FirestoreReadTracker.instance.trackRead(
+                'NotificationScreen', 'product tap (product_review)', 1);
             if (!mounted) return;
             if (productSnapshot.exists) {
               final product = Product.fromDocument(productSnapshot);
@@ -776,8 +799,7 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
               content: Text(
                 l10n.invitationMessage(inviterName, shopName),
                 style: const TextStyle(
-                    fontSize: 16.0,
-                    fontWeight: FontWeight.w600),
+                    fontSize: 16.0, fontWeight: FontWeight.w600),
               ),
               actions: [
                 CupertinoDialogAction(
@@ -988,7 +1010,8 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
           try {
             final productSnapshot =
                 await _firestore.collection('products').doc(productId).get();
-            FirestoreReadTracker.instance.trackRead('NotificationScreen', 'product tap (out_of_stock)', 1);
+            FirestoreReadTracker.instance.trackRead(
+                'NotificationScreen', 'product tap (out_of_stock)', 1);
             if (!mounted) return;
             if (productSnapshot.exists) {
               final product = Product.fromDocument(productSnapshot);
@@ -1263,6 +1286,23 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                       } else if (type == 'food_order_delivered_review') {
                         message = l10n.notifFoodReviewBody(
                             notification.restaurantName ?? '');
+                      } else if (type == 'market_order_status_update') {
+                        switch (notification.orderStatus) {
+                          case 'out_for_delivery':
+                            message =
+                                l10n.notifMarketOrderStatusOutForDelivery ??
+                                    'Your market order is on the way!';
+                            break;
+                          case 'delivered':
+                            message = l10n.notifMarketOrderStatusDelivered ??
+                                'Your market order has been delivered.';
+                            break;
+                          default:
+                            message = '';
+                        }
+                      } else if (type == 'market_order_delivered_review') {
+                        message = l10n.notifMarketReviewBody ??
+                            'Your market order has arrived. Tap to leave a review!';
                       } else if (type == 'shop_approved') {
                         message = l10n.tapToVisitYourShop;
                       } else if (type == 'shop_disapproved') {
@@ -1331,6 +1371,14 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
                         case 'food_order_delivered_review':
                           notificationIcon = Icons.star_rounded;
                           iconColor = const Color(0xFFFB923C);
+                          break;
+                        case 'market_order_status_update':
+                          notificationIcon = Icons.shopping_cart_rounded;
+                          iconColor = const Color(0xFF3B82F6); // blue
+                          break;
+                        case 'market_order_delivered_review':
+                          notificationIcon = Icons.star_rounded;
+                          iconColor = const Color(0xFF60A5FA);
                           break;
                         case 'product_archived_by_admin':
                           notificationIcon = Icons.archive_rounded;
@@ -1632,6 +1680,10 @@ void _showInvitationAcceptingModal(String entityName, {bool isRestaurant = false
         return l10n.notifFoodOrderStatusTitle;
       case 'food_order_delivered_review':
         return l10n.notifFoodReviewTitle;
+      case 'market_order_status_update':
+        return l10n.notifMarketOrderStatusTitle ?? 'Market Order';
+      case 'market_order_delivered_review':
+        return l10n.notifMarketReviewTitle ?? 'Market Order Delivered! 🎉';
       case 'shipment':
         return l10n.shipment;
       case 'shop_approved':

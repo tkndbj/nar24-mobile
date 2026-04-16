@@ -15765,6 +15765,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get drinkAddError => 'Failed to add drink';
 
   @override
+  String get notifMarketOrderStatusOutForDelivery =>
+      'Your market order is on the way! 🛵';
+
+  @override
+  String get notifMarketOrderStatusDelivered =>
+      'Your market order has been delivered. 🎉';
+
+  @override
+  String get notifMarketReviewBody =>
+      'Your market order has arrived. Tap to leave a review! ⭐';
+
+  @override
+  String get notifMarketOrderStatusTitle => 'Market Order 🛒';
+
+  @override
+  String get notifMarketReviewTitle => 'Market Order Delivered! 🎉';
+
+  @override
   String get drinkUpdateSuccess => 'Drink updated successfully';
 
   @override

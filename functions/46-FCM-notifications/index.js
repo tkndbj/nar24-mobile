@@ -126,6 +126,22 @@ export const TEMPLATES = {
         title: 'New Review! ⭐',
         body: 'One of your customers left a {rating}-star review.',
       },
+      market_order_status_update_out_for_delivery: {
+        title: 'Out for Delivery 🛵',
+        body: 'Your market order is on the way!',
+      },
+      market_order_delivered_review: {
+        title: 'Market Order Delivered! 🎉',
+        body: 'Your market order has arrived. Tap to leave a review!',
+      },
+      food_order_status_update_out_for_delivery: {
+        title: 'Out for Delivery 🛵',
+        body: 'Your order from {restaurantName} is on the way!',
+      },
+      order_assigned: {
+        title: 'Order Assigned! 🎯',
+        body: '{restaurantName} — {itemCount} item(s), {totalPrice} {currency}',
+      },
       default: {
         title: 'New Notification',
         body: 'You have a new notification!',
@@ -253,6 +269,22 @@ export const TEMPLATES = {
         title: 'Yeni Değerlendirme! ⭐',
         body: 'Bir müşteriniz {rating} yıldız verdi.',
       },
+      market_order_status_update_out_for_delivery: {
+        title: 'Yolda 🛵',
+        body: 'Market siparişiniz yola çıktı!',
+      },
+      market_order_delivered_review: {
+        title: 'Market Siparişi Teslim Edildi! 🎉',
+        body: 'Market siparişiniz ulaştı. Değerlendirme yapmak için tıklayın!',
+      },
+      food_order_status_update_out_for_delivery: {
+        title: 'Yolda 🛵',
+        body: '{restaurantName} siparişiniz yola çıktı!',
+      },
+      order_assigned: {
+        title: 'Size Sipariş Atandı! 🎯',
+        body: '{restaurantName} — {itemCount} ürün, {totalPrice} {currency}',
+      },
       default: {
         title: 'Yeni Bildirim',
         body: 'Yeni bir bildiriminiz var!',
@@ -379,7 +411,23 @@ export const TEMPLATES = {
       restaurant_new_review: {
         title: 'Новый отзыв! ⭐',
         body: 'Один из ваших клиентов оставил оценку {rating} звезды.',
-      },  
+      }, 
+      market_order_status_update_out_for_delivery: {
+        title: 'В пути 🛵',
+        body: 'Ваш заказ из магазина в пути!',
+      },
+      market_order_delivered_review: {
+        title: 'Заказ из магазина доставлен! 🎉',
+        body: 'Ваш заказ из магазина прибыл. Нажмите, чтобы оставить отзыв!',
+      }, 
+      food_order_status_update_out_for_delivery: {
+        title: 'В пути 🛵',
+        body: 'Ваш заказ из {restaurantName} в пути!',
+      },
+      order_assigned: {
+        title: 'Вам назначен заказ! 🎯',
+        body: '{restaurantName} — {itemCount} товар(ов), {totalPrice} {currency}',
+      },
       default: {
         title: 'Новое Уведомление',
         body: 'У вас новое уведомление!',
@@ -417,6 +465,9 @@ export const TEMPLATES = {
     let type = originalType;
     if (type === 'food_order_status_update' && notificationData.payload?.orderStatus) {
       type = `food_order_status_update_${notificationData.payload.orderStatus}`;
+    }
+    if (type === 'market_order_status_update' && notificationData.payload?.orderStatus) {
+      type = `market_order_status_update_${notificationData.payload.orderStatus}`;
     }
     const tmpl = localeSet[type] || localeSet.default;
   
@@ -463,6 +514,18 @@ export const TEMPLATES = {
     title = title.replace('{restaurantName}', payload.restaurantName);
     body  = body .replace('{restaurantName}', payload.restaurantName);
   }
+  if (payload.itemCount !== undefined) {
+    title = title.replace('{itemCount}', String(payload.itemCount));
+    body = body.replace('{itemCount}', String(payload.itemCount));
+  }
+  if (payload.totalPrice !== undefined) {
+    title = title.replace('{totalPrice}', String(payload.totalPrice));
+    body = body.replace('{totalPrice}', String(payload.totalPrice));
+  }
+  if (payload.currency) {
+    title = title.replace('{currency}', payload.currency);
+    body = body.replace('{currency}', payload.currency);
+  }
   if (payload.orderStatus) {
     title = title.replace('{orderStatus}', payload.orderStatus);
     body  = body .replace('{orderStatus}', payload.orderStatus);
@@ -495,6 +558,16 @@ export const TEMPLATES = {
         route = `/seller_panel_reviews/${notificationData.shopId}`;
       }
       break;
+      case 'order_assigned':
+  // Courier app — deep-link to My Deliveries tab
+  route = '/food-cargo?tab=1';  // adjust to your actual route
+  break;
+  case 'market_order_status_update':
+    route = '/my-market-orders';
+    break;
+case 'market_order_delivered_review':
+  route = payload.orderId ? `/market-order-detail/${payload.orderId}` : '/my_market_orders';
+  break;
       case 'food_order_delivered_review':
         route = payload.orderId ? `/food-order-detail/${payload.orderId}` : '/orders?tab=food';
         break;
@@ -573,10 +646,18 @@ export const TEMPLATES = {
       android: {
         priority: 'high',
         notification: {
-          channelId: originalType === 'food_order_delivered_review' || originalType === 'food_order_status_update' ?
+          channelId: originalType === 'food_order_delivered_review' ||
+          originalType === 'food_order_status_update' ||
+          originalType === 'market_order_delivered_review' ||
+          originalType === 'market_order_status_update' ||
+          originalType === 'order_assigned' ?
             'food_orders_high' :
             'high_importance_channel',
-          sound: originalType === 'food_order_delivered_review' || originalType === 'food_order_status_update' ?
+          sound: originalType === 'food_order_delivered_review' ||
+          originalType === 'food_order_status_update' ||
+          originalType === 'market_order_delivered_review' ||
+          originalType === 'market_order_status_update' ||
+          originalType === 'order_assigned' ?
             'order_alert' :
             'default',
           icon: 'ic_notification',
@@ -585,7 +666,11 @@ export const TEMPLATES = {
       apns: {
         headers: {'apns-priority': '10'},
         payload: { aps: {
-          sound: originalType === 'food_order_delivered_review' || originalType === 'food_order_status_update' ?
+          sound: originalType === 'food_order_delivered_review' ||
+          originalType === 'food_order_status_update' ||
+          originalType === 'market_order_delivered_review' ||
+          originalType === 'market_order_status_update' ||
+          originalType === 'order_assigned' ?
             'order_alert.caf' :
             'default',
           badge: 1,

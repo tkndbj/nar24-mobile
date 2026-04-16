@@ -136,7 +136,7 @@ class NotificationModel {
       transactionId: data['transactionId'] as String?,
       invitationId: data['invitationId'] as String?,
       reason: data['reason'] as String?,
-      orderId: data['orderId'] as String?,
+      orderId: (data['payload']?['orderId'] ?? data['orderId']) as String?,
       senderId: data['senderId'] as String?,
       sellerId: data['sellerId'] as String?,
       needsUpdate: data['needsUpdate'] as bool?,

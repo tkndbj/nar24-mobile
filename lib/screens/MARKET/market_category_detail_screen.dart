@@ -7,14 +7,18 @@
 
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../auth_service.dart';
 import '../../services/market_typesense_service.dart';
 import '../../services/typesense_service_manager.dart';
 import '../../providers/market_cart_provider.dart';
 import '../../constants/market_categories.dart';
 import '../../generated/l10n/app_localizations.dart';
+import '../../widgets/login_modal.dart';
 
 // ============================================================================
 // SCREEN
@@ -694,7 +698,19 @@ class MarketItemCard extends StatelessWidget {
   final MarketItem item;
   final bool isDark;
 
-  const MarketItemCard({required this.item, required this.isDark});
+  const MarketItemCard({super.key, required this.item, required this.isDark});
+
+  /// Returns true if authenticated, false if login modal was shown.
+  bool _requireAuth(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) return true;
+    final authService = Provider.of<AuthService>(context, listen: false);
+    showCupertinoModalPopup(
+      context: context,
+      builder: (_) => LoginPromptModal(authService: authService),
+    );
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -859,7 +875,12 @@ class MarketItemCard extends StatelessWidget {
                       if (qtyInCart == 0)
                         _AddButton(
                           isOutOfStock: isOutOfStock,
-                          onTap: isOutOfStock ? null : () => cart.addItem(item),
+                          onTap: isOutOfStock
+                              ? null
+                              : () {
+                                  if (!_requireAuth(context)) return;
+                                  cart.addItem(item);
+                                },
                         )
                       else
                         _QuantityStepper(

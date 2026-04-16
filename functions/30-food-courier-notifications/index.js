@@ -24,7 +24,7 @@
  * ─────────────────────────────────────────────────────────────────
  */
 
-import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
+import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onSchedule as onScheduleFn } from 'firebase-functions/v2/scheduler';
 import admin from 'firebase-admin';
@@ -598,3 +598,119 @@ function buildMessages(type, restaurantName, itemCount, totalPrice, currency) {
     tr: `${restaurantName} — ${itemCount} ürün neredeyse hazır. Restorana gidebilirsiniz!`,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// New market order → notify all couriers via FCM topic
+// The Flutter pool already shows the card via live Firestore listener; this
+// trigger only handles the push notification side.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const onMarketOrderCreated = onDocumentCreated(
+  {
+    document: 'orders-market/{orderId}',
+    region: REGION,
+    memory: '256MiB',
+    timeoutSeconds: 30,
+  },
+  async (event) => {
+    const order = event.data?.data();
+    if (!order) return;
+
+    const orderId = event.params.orderId;
+    const itemCount = order.itemCount || 0;
+    const totalPrice = order.totalPrice || 0;
+    const currency = order.currency || 'TL';
+    const marketName = order.marketName || 'Market';
+
+    const db = admin.firestore();
+
+    // ── Write broadcast notification doc ─────────────────────────
+    const notifRef = db
+      .collection('food_courier_notifications')
+      .doc(`${orderId}_market_new`); // deterministic → idempotent
+
+    await notifRef.set({
+      type: 'market_order_new',
+      orderId,
+      sourceType: 'market',
+      restaurantName: marketName, // reuses existing field for display
+      restaurantProfileImage: '',
+      itemCount,
+      totalPrice,
+      currency,
+      deliveryCity: order.deliveryAddress?.city || '',
+      deliveryRegion: order.deliveryAddress?.mainRegion || '',
+      message_en: `${marketName} — ${itemCount} item(s), ${totalPrice} ${currency}. New market order!`,
+      message_tr: `${marketName} — ${itemCount} ürün, ${totalPrice} ${currency}. Yeni market siparişi!`,
+      isActive: true,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 30 * 60 * 1000),
+    }, { merge: false });
+
+    const message = {
+      topic: FCM_TOPIC_ALL_COURIERS,
+      notification: {
+        title: '🛒 Yeni Market Siparişi',
+        body: `${marketName} — ${itemCount} ürün, ${totalPrice} ${currency}`,
+      },
+      data: {
+        type: 'market_order_new',
+        orderId,
+        marketName,
+        itemCount: String(itemCount),
+        totalPrice: String(totalPrice),
+        currency,
+        click_action: 'FLUTTER_NOTIFICATION_CLICK',
+      },
+      android: {
+        priority: 'high',
+        notification: {
+          channelId: FCM_CHANNEL_ID,
+          sound: 'order_alert',
+          priority: 'max',
+          visibility: 'public',
+        },
+      },
+      apns: {
+        headers: { 'apns-priority': '10' },
+        payload: {
+          aps: {
+            'sound': 'order_alert.caf',
+            'badge': 1,
+            'content-available': 1,
+          },
+        },
+      },
+    };
+
+    try {
+      const id = await admin.messaging().send(message);
+      console.log(`[MarketCourierNotif] FCM sent for ${orderId}, messageId: ${id}`);
+    } catch (err) {
+      console.error('[MarketCourierNotif] FCM failed (non-fatal):', err.message);
+    }
+  }
+);
+
+export const onMarketOrderStatusChangeDeactivate = onDocumentUpdated(
+  {
+    document: 'orders-market/{orderId}',
+    region: REGION,
+    memory: '256MiB',
+    timeoutSeconds: 30,
+  },
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (before.status === after.status) return;
+
+    const terminalStatuses = ['assigned', 'out_for_delivery', 'delivered', 'cancelled', 'rejected'];
+    if (terminalStatuses.includes(after.status)) {
+      try {
+        await deactivateCourierNotification(admin.firestore(), event.params.orderId);
+      } catch (err) {
+        console.error('[MarketCourierNotif] Deactivate failed:', err);
+      }
+    }
+  }
+);

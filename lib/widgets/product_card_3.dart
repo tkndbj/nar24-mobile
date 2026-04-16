@@ -343,6 +343,7 @@ class _ProductImage extends StatelessWidget {
     return CachedNetworkImage(
       imageUrl: cdnUrl,
       fit: BoxFit.cover,
+      memCacheWidth: _cdnWidth,
       useOldImageOnUrlChange: true,
       filterQuality: FilterQuality.medium,
       placeholder: (_, __) => _buildShimmerPlaceholder(),

@@ -108,11 +108,11 @@ class _SellerPanelProductDetailState extends State<SellerPanelProductDetail> {
       _imagesPrecached = true;
 
       for (String url in widget.product.imageUrls) {
-        precacheImage(CachedNetworkImageProvider(url), context);
+        precacheImage(CachedNetworkImageProvider(url), context).catchError((_) {});
       }
       widget.product.colorImages.forEach((_, urls) {
         for (String url in urls) {
-          precacheImage(CachedNetworkImageProvider(url), context);
+          precacheImage(CachedNetworkImageProvider(url), context).catchError((_) {});
         }
       });
     }

@@ -12,6 +12,8 @@ import '../../providers/shop_provider.dart';
 import '../../widgets/product_list_sliver.dart';
 import '../FILTER-SCREENS/shop_detail_filter_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/cloudinary_image.dart';
+import '../../utils/cloudinary_url_builder.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../services/translation_service.dart';
 import 'package:shimmer/shimmer.dart';
@@ -446,9 +448,15 @@ class _ShopAppBar extends StatelessWidget {
   Widget _buildAppBar(
       BuildContext context, Map<String, dynamic> shopData, bool isDark) {
     final l10n = AppLocalizations.of(context);
-    final coverImageUrls =
-        (shopData['coverImageUrls'] as List?)?.cast<String>() ?? [];
-    final profileImageUrl = shopData['profileImageUrl'] ?? '';
+    // Prefer storage paths (post-migration), fall back to URLs
+    final coverImageSources = () {
+      final paths = (shopData['coverImageStoragePaths'] as List?)?.cast<String>();
+      if (paths != null && paths.isNotEmpty) return paths;
+      return (shopData['coverImageUrls'] as List?)?.cast<String>() ?? <String>[];
+    }();
+    final profileImageSource =
+        (shopData['profileImageStoragePath'] as String?) ??
+        (shopData['profileImageUrl'] as String? ?? '');
     final shopName = shopData['name'] ?? l10n.shop;
     final rating = (shopData['averageRating'] as num?)?.toDouble() ?? 0.0;
     final shopId = context.read<ShopProvider>().shopDoc?.id ?? '';
@@ -466,7 +474,7 @@ class _ShopAppBar extends StatelessWidget {
       ),
       title: Row(
         children: [
-          _ShopAvatar(imageUrl: profileImageUrl),
+          _ShopAvatar(imageSource: profileImageSource),
           const SizedBox(width: 8),
           Expanded(
             child: ValueListenableBuilder<bool>(
@@ -491,7 +499,7 @@ class _ShopAppBar extends StatelessWidget {
       ),
       flexibleSpace: FlexibleSpaceBar(
         background: _CoverImage(
-          coverImageUrls: coverImageUrls,
+          coverImageSources: coverImageSources,
           rating: rating,
         ),
       ),
@@ -500,38 +508,52 @@ class _ShopAppBar extends StatelessWidget {
 }
 
 class _ShopAvatar extends StatelessWidget {
-  final String imageUrl;
+  final String imageSource;
 
-  const _ShopAvatar({required this.imageUrl});
+  const _ShopAvatar({required this.imageSource});
 
   @override
   Widget build(BuildContext context) {
-    return CachedNetworkImage(
-      imageUrl: imageUrl,
-      imageBuilder: (_, imageProvider) => CircleAvatar(
-        radius: 20,
-        backgroundImage: imageProvider,
-      ),
-      placeholder: (_, __) => Shimmer.fromColors(
-        baseColor: Colors.grey[300]!,
-        highlightColor: Colors.grey[100]!,
-        child: const CircleAvatar(radius: 20, backgroundColor: Colors.grey),
-      ),
-      errorWidget: (_, __, ___) => const CircleAvatar(
+    if (imageSource.isEmpty) {
+      return const CircleAvatar(
         radius: 20,
         backgroundColor: Colors.grey,
-        child: Icon(Icons.error, size: 20),
+        child: Icon(Icons.person, size: 20),
+      );
+    }
+    return ClipOval(
+      child: SizedBox(
+        width: 40,
+        height: 40,
+        child: CloudinaryImage.banner(
+          source: imageSource,
+          cdnWidth: 200,
+          width: 40,
+          height: 40,
+          fit: BoxFit.cover,
+          useOldImageOnUrlChange: true,
+          placeholderBuilder: (_) => Shimmer.fromColors(
+            baseColor: Colors.grey[300]!,
+            highlightColor: Colors.grey[100]!,
+            child: const CircleAvatar(radius: 20, backgroundColor: Colors.grey),
+          ),
+          errorBuilder: (_) => const CircleAvatar(
+            radius: 20,
+            backgroundColor: Colors.grey,
+            child: Icon(Icons.error, size: 20),
+          ),
+        ),
       ),
     );
   }
 }
 
 class _CoverImage extends StatelessWidget {
-  final List<String> coverImageUrls;
+  final List<String> coverImageSources;
   final double rating;
 
   const _CoverImage({
-    required this.coverImageUrls,
+    required this.coverImageSources,
     required this.rating,
   });
 
@@ -539,7 +561,7 @@ class _CoverImage extends StatelessWidget {
   Widget build(BuildContext context) {
     return RepaintBoundary(
       child: GestureDetector(
-        onTap: coverImageUrls.isEmpty
+        onTap: coverImageSources.isEmpty
             ? null
             : () => _openFullScreenViewer(context),
         child: Stack(
@@ -557,21 +579,21 @@ class _CoverImage extends StatelessWidget {
   }
 
   Widget _buildCoverImage() {
-    if (coverImageUrls.isEmpty) {
+    if (coverImageSources.isEmpty) {
       return Container(color: Colors.grey);
     }
 
-    return CachedNetworkImage(
-      imageUrl: coverImageUrls[0],
+    return CloudinaryImage.banner(
+      source: coverImageSources[0],
+      cdnWidth: 800,
       fit: BoxFit.cover,
-      memCacheHeight: 800,
-      memCacheWidth: 800,
-      placeholder: (_, __) => Shimmer.fromColors(
+      useOldImageOnUrlChange: true,
+      placeholderBuilder: (_) => Shimmer.fromColors(
         baseColor: Colors.grey[300]!,
         highlightColor: Colors.grey[100]!,
         child: Container(color: Colors.grey),
       ),
-      errorWidget: (_, __, ___) => Container(
+      errorBuilder: (_) => Container(
         color: Colors.grey,
         child: const Icon(Icons.error),
       ),
@@ -579,11 +601,18 @@ class _CoverImage extends StatelessWidget {
   }
 
   void _openFullScreenViewer(BuildContext context) {
+    // For full-screen viewer, resolve URLs for display
+    final urls = coverImageSources.map((source) {
+      if (CloudinaryUrl.isStoragePath(source)) {
+        return CloudinaryUrl.firebaseStorageUrl(source);
+      }
+      return source;
+    }).toList();
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => FullScreenImageViewer(
-          imageUrls: coverImageUrls,
+          imageUrls: urls,
           initialIndex: 0,
         ),
       ),

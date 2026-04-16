@@ -323,6 +323,7 @@ class _OptimizedProductImage extends StatelessWidget {
       fit: BoxFit.cover,
       width: imageWidth,
       height: imageHeight,
+      memCacheWidth: _cdnWidth,
       fadeInDuration: Duration.zero,
       fadeOutDuration: Duration.zero,
       useOldImageOnUrlChange: true,

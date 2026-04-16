@@ -225,16 +225,17 @@ class _ProductCardState extends State<ProductCard> {
               widget.product.imageStoragePaths.first,
               size: ProductImageSize.detail,
             ),
+            maxWidth: CloudinaryUrl.widthFor(ProductImageSize.detail),
           ),
           context,
-        );
+        ).catchError((_) {});
       } catch (e) {}
     } else if (_imageUrls.isNotEmpty) {
       try {
         precacheImage(
           CachedNetworkImageProvider(_imageUrls.first),
           context,
-        );
+        ).catchError((_) {});
       } catch (e) {}
     }
 

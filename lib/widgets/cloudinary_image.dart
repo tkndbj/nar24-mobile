@@ -11,6 +11,10 @@
 //   3. Honor the global kill switch (CloudinaryUrl.enabled = false)
 //      without double-fetching: in that mode the primary URL is
 //      already the Firebase Storage URL and fallback is skipped.
+//   4. Cap decoded bitmap size via memCacheWidth on BOTH primary and
+//      fallback paths to prevent memory-pressure codec corruption.
+//      Safe because every CDN width has a unique URL (no cache key
+//      collisions).
 //
 // Do not render product/banner images with CachedNetworkImage directly
 // anywhere else in the app. Go through this widget so the fallback
@@ -41,6 +45,13 @@ class CloudinaryImage extends StatelessWidget {
   final Duration fadeOutDuration;
   final bool useOldImageOnUrlChange;
 
+  /// Decode-size cap applied to the **primary** CDN image. Caps the
+  /// decoded bitmap in Flutter's ImageCache so the codec doesn't
+  /// corrupt frames under memory pressure. Safe on CDN images because
+  /// each width bucket has a unique URL (no cache-key collisions).
+  final int? memCacheWidth;
+  final int? memCacheHeight;
+
   /// Decode-size cap applied to the **fallback** request. The raw
   /// Firebase Storage original can be very large, so callers should set
   /// this to prevent memory spikes when CDN is unreachable.
@@ -66,6 +77,8 @@ class CloudinaryImage extends StatelessWidget {
     this.fadeInDuration = Duration.zero,
     this.fadeOutDuration = Duration.zero,
     this.useOldImageOnUrlChange = true,
+    this.memCacheWidth,
+    this.memCacheHeight,
     this.fallbackMemCacheWidth,
     this.fallbackMemCacheHeight,
     this.placeholderBuilder,
@@ -97,6 +110,7 @@ class CloudinaryImage extends StatelessWidget {
     CloudinaryErrorBuilder? errorBuilder,
   }) {
     final resolved = CloudinaryUrl.resolveProduct(source, size: size);
+    final cdnW = CloudinaryUrl.widthFor(size);
     return CloudinaryImage._(
       key: key,
       primary: resolved.primary,
@@ -109,8 +123,8 @@ class CloudinaryImage extends StatelessWidget {
       fadeInDuration: fadeInDuration,
       fadeOutDuration: fadeOutDuration,
       useOldImageOnUrlChange: useOldImageOnUrlChange,
-      fallbackMemCacheWidth:
-          fallbackMemCacheWidth ?? CloudinaryUrl.widthFor(size),
+      memCacheWidth: cdnW,
+      fallbackMemCacheWidth: fallbackMemCacheWidth ?? cdnW,
       fallbackMemCacheHeight: fallbackMemCacheHeight,
       placeholderBuilder: placeholderBuilder,
       errorBuilder: errorBuilder,
@@ -149,6 +163,7 @@ class CloudinaryImage extends StatelessWidget {
       fadeInDuration: fadeInDuration,
       fadeOutDuration: fadeOutDuration,
       useOldImageOnUrlChange: useOldImageOnUrlChange,
+      memCacheWidth: cdnWidth,
       fallbackMemCacheWidth: fallbackMemCacheWidth ?? cdnWidth,
       fallbackMemCacheHeight: fallbackMemCacheHeight,
       placeholderBuilder: placeholderBuilder,
@@ -170,6 +185,8 @@ class CloudinaryImage extends StatelessWidget {
     Duration fadeInDuration = Duration.zero,
     Duration fadeOutDuration = Duration.zero,
     bool useOldImageOnUrlChange = true,
+    int? memCacheWidth,
+    int? memCacheHeight,
     int? fallbackMemCacheWidth,
     int? fallbackMemCacheHeight,
     CloudinaryPlaceholderBuilder? placeholderBuilder,
@@ -187,6 +204,8 @@ class CloudinaryImage extends StatelessWidget {
       fadeInDuration: fadeInDuration,
       fadeOutDuration: fadeOutDuration,
       useOldImageOnUrlChange: useOldImageOnUrlChange,
+      memCacheWidth: memCacheWidth,
+      memCacheHeight: memCacheHeight,
       fallbackMemCacheWidth: fallbackMemCacheWidth,
       fallbackMemCacheHeight: fallbackMemCacheHeight,
       placeholderBuilder: placeholderBuilder,
@@ -226,6 +245,7 @@ class CloudinaryImage extends StatelessWidget {
       fadeInDuration: fadeInDuration,
       fadeOutDuration: fadeOutDuration,
       useOldImageOnUrlChange: useOldImageOnUrlChange,
+      memCacheWidth: cdnWidth,
       fallbackMemCacheWidth: fallbackMemCacheWidth ?? cdnWidth,
       fallbackMemCacheHeight: fallbackMemCacheHeight,
       placeholderBuilder: placeholderBuilder,
@@ -251,6 +271,8 @@ class CloudinaryImage extends StatelessWidget {
       fadeOutDuration: fadeOutDuration,
       useOldImageOnUrlChange: useOldImageOnUrlChange,
       filterQuality: filterQuality,
+      memCacheWidth: memCacheWidth,
+      memCacheHeight: memCacheHeight,
       placeholder: placeholder,
       errorWidget: (ctx, _, __) {
         if (fallback == null || fallback == primary) return error(ctx);

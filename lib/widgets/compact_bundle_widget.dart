@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../utils/cloudinary_url_builder.dart';
+import 'cloudinary_image.dart';
 import '../generated/l10n/app_localizations.dart';
 import '../models/product.dart';
 import '../models/bundle.dart';
@@ -363,13 +364,18 @@ class _CompactBundleProductCard extends StatelessWidget {
                   child: Container(
                     width: 60,
                     height: 60,
-                    child: product.imageUrls.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: product.imageUrls.first,
+                    child: product.imageStoragePaths.isNotEmpty ||
+                            product.imageUrls.isNotEmpty
+                        ? CloudinaryImage.product(
+                            source: product.imageStoragePaths.isNotEmpty
+                                ? product.imageStoragePaths.first
+                                : product.imageUrls.first,
+                            size: ProductImageSize.thumbnail,
+                            width: 60,
+                            height: 60,
                             fit: BoxFit.cover,
-                            memCacheHeight: 60, // Optimize memory usage
-                            memCacheWidth: 60,
-                            placeholder: (context, url) => Container(
+                            useOldImageOnUrlChange: true,
+                            placeholderBuilder: (_) => Container(
                               color: isDark
                                   ? Colors.grey.shade800
                                   : Colors.grey.shade200,
@@ -381,7 +387,7 @@ class _CompactBundleProductCard extends StatelessWidget {
                                 size: 16,
                               ),
                             ),
-                            errorWidget: (context, url, error) => Container(
+                            errorBuilder: (_) => Container(
                               color: isDark
                                   ? Colors.grey.shade800
                                   : Colors.grey.shade200,

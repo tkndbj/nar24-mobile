@@ -15794,6 +15794,24 @@ class AppLocalizationsTr extends AppLocalizations {
   String get drinkAddError => 'İçecek eklenemedi';
 
   @override
+  String get notifMarketOrderStatusOutForDelivery =>
+      'Market siparişiniz yola çıktı! 🛵';
+
+  @override
+  String get notifMarketOrderStatusDelivered =>
+      'Market siparişiniz teslim edildi. 🎉';
+
+  @override
+  String get notifMarketReviewBody =>
+      'Market siparişiniz ulaştı. Değerlendirme yapmak için tıklayın! ⭐';
+
+  @override
+  String get notifMarketOrderStatusTitle => 'Market Siparişi 🛒';
+
+  @override
+  String get notifMarketReviewTitle => 'Market Siparişi Teslim Edildi! 🎉';
+
+  @override
   String get drinkUpdateSuccess => 'İçecek başarıyla güncellendi';
 
   @override

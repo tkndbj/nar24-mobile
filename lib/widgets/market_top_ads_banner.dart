@@ -277,7 +277,7 @@ class _AdsBannerWidgetState extends State<AdsBannerWidget>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final cdnUrl = CloudinaryUrl.bannerCdn(source, width: _kAdsBannerCdnWidth);
-        final provider = CachedNetworkImageProvider(cdnUrl);
+        final provider = CachedNetworkImageProvider(cdnUrl, maxWidth: _kAdsBannerCdnWidth);
         precacheImage(provider, context).catchError((error) {
           debugPrint('Failed to prefetch image: $source, error: $error');
         });

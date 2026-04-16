@@ -30084,6 +30084,36 @@ abstract class AppLocalizations {
   /// **'İçecek eklenemedi'**
   String get drinkAddError;
 
+  /// No description provided for @notifMarketOrderStatusOutForDelivery.
+  ///
+  /// In tr, this message translates to:
+  /// **'Market siparişiniz yola çıktı! 🛵'**
+  String get notifMarketOrderStatusOutForDelivery;
+
+  /// No description provided for @notifMarketOrderStatusDelivered.
+  ///
+  /// In tr, this message translates to:
+  /// **'Market siparişiniz teslim edildi. 🎉'**
+  String get notifMarketOrderStatusDelivered;
+
+  /// No description provided for @notifMarketReviewBody.
+  ///
+  /// In tr, this message translates to:
+  /// **'Market siparişiniz ulaştı. Değerlendirme yapmak için tıklayın! ⭐'**
+  String get notifMarketReviewBody;
+
+  /// No description provided for @notifMarketOrderStatusTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Market Siparişi 🛒'**
+  String get notifMarketOrderStatusTitle;
+
+  /// No description provided for @notifMarketReviewTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Market Siparişi Teslim Edildi! 🎉'**
+  String get notifMarketReviewTitle;
+
   /// No description provided for @drinkUpdateSuccess.
   ///
   /// In tr, this message translates to:

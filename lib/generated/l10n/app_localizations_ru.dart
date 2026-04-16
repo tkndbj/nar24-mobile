@@ -15867,6 +15867,24 @@ class AppLocalizationsRu extends AppLocalizations {
   String get drinkAddError => 'Не удалось добавить напиток';
 
   @override
+  String get notifMarketOrderStatusOutForDelivery =>
+      'Ваш заказ из магазина в пути! 🛵';
+
+  @override
+  String get notifMarketOrderStatusDelivered =>
+      'Ваш заказ из магазина доставлен. 🎉';
+
+  @override
+  String get notifMarketReviewBody =>
+      'Ваш заказ из магазина прибыл. Нажмите, чтобы оставить отзыв! ⭐';
+
+  @override
+  String get notifMarketOrderStatusTitle => 'Заказ из магазина 🛒';
+
+  @override
+  String get notifMarketReviewTitle => 'Заказ из магазина доставлен! 🎉';
+
+  @override
   String get drinkUpdateSuccess => 'Напиток успешно обновлён';
 
   @override

@@ -131,8 +131,13 @@ class _MarketThinBannerState extends State<MarketThinBanner>
       if (!_cachedUrls.contains(source)) {
         _cachedUrls.add(source);
         final cdnUrl = CloudinaryUrl.bannerCdn(source, width: _kThinBannerCdnWidth);
-        final provider = CachedNetworkImageProvider(cdnUrl);
-        precacheImage(provider, context);
+        final provider = CachedNetworkImageProvider(
+          cdnUrl,
+          maxWidth: _kThinBannerCdnWidth,
+        );
+        precacheImage(provider, context).catchError((_) {
+          _cachedUrls.remove(source);
+        });
       }
 
       items.add(ThinBannerItem(
@@ -162,6 +167,8 @@ class _MarketThinBannerState extends State<MarketThinBanner>
       width: double.infinity,
       height: bannerHeight,
       fit: BoxFit.fill,
+      memCacheWidth: _kThinBannerCdnWidth,
+      fallbackMemCacheWidth: _kThinBannerCdnWidth,
       placeholderBuilder: (_) => Container(
         width: double.infinity,
         height: bannerHeight,

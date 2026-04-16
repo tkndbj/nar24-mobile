@@ -97,7 +97,7 @@ export const processCourierAction = onDocumentCreated(
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function processAssign(db, actionRef, actionData, collection) {
-  const { orderId, courierId, courierName } = actionData;
+  const { orderId, courierId, courierName, assignedBy } = actionData;
   const poolStatus = collection === 'orders-food' ? 'ready' : 'pending';
 
   await db.runTransaction(async (tx) => {
@@ -121,7 +121,6 @@ async function processAssign(db, actionRef, actionData, collection) {
 
     const order = orderSnap.data();
 
-    // Idempotent: if this same courier already assigned to it, treat as success
     if (order.status === 'assigned' && order.cargoUserId === courierId) {
       tx.update(actionRef, {
         status: 'completed',
@@ -155,12 +154,37 @@ async function processAssign(db, actionRef, actionData, collection) {
       cargoName: courierName || 'Courier',
       assignedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      assignedBy: assignedBy || 'self',
     });
 
     tx.update(actionRef, {
       status: 'completed',
       processedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+
+    if (assignedBy === 'master') {
+      // ── Write in-app notification for the courier ─────────────
+      const courierNotifRef = db
+        .collection('users')
+        .doc(courierId)
+        .collection('notifications')
+        .doc();
+
+      tx.set(courierNotifRef, {
+        type: 'order_assigned',
+        payload: {
+          orderId,
+          collection,
+          restaurantName: order.restaurantName || order.marketName || 'Order',
+          itemCount: order.itemCount || 0,
+          totalPrice: order.totalPrice || 0,
+          currency: order.currency || 'TL',
+          isMarket: collection === 'orders-market',
+        },
+        isRead: false,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
   });
 
   console.log(`[CourierAction] Assign completed: ${collection}/${orderId}`);
@@ -227,6 +251,31 @@ async function processPickup(db, actionRef, actionData, collection) {
       pickedUpAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+
+    // ── Notify buyer that their order is on the way ────────────────────
+if (order.buyerId) {
+  const isMarket = collection === 'orders-market';
+  const notifRef = db
+    .collection('users')
+    .doc(order.buyerId)
+    .collection('notifications')
+    .doc();
+
+  tx.set(notifRef, {
+    type: isMarket ? 'market_order_status_update' : 'food_order_status_update',
+    payload: {
+      orderId,
+      orderStatus: 'out_for_delivery',
+      previousStatus: 'assigned',
+      ...(isMarket ? {} : {
+        restaurantId: order.restaurantId,
+        restaurantName: order.restaurantName,
+      }),
+    },
+    isRead: false,
+    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
 
     tx.update(actionRef, {
       status: 'completed',

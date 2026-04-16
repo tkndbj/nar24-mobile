@@ -121,7 +121,7 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
 
       try {
         final cdnUrl = CloudinaryUrl.bannerCdn(source, width: _imageCacheWidth);
-        final provider = CachedNetworkImageProvider(cdnUrl);
+        final provider = CachedNetworkImageProvider(cdnUrl, maxWidth: _imageCacheWidth);
         precacheImage(provider, context).catchError((_) {
           _prefetchedUrls.remove(source);
         });

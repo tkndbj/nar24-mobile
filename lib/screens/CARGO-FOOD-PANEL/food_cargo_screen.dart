@@ -84,11 +84,19 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _tabController = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final routerState = GoRouterState.of(context);
+      final tabParam = routerState.uri.queryParameters['tab'];
+      if (tabParam == '1') {
+        _tabController.animateTo(1);
+      }
+    });
     _courierNotifsStream = FirebaseFirestore.instance
         .collection('food_courier_notifications')
         .where('isActive', isEqualTo: true)
         .orderBy('createdAt', descending: true)
-        .limit(30)
+        .limit(10)
         .snapshots()
         .asBroadcastStream(); // allows multiple listeners on one connection
     _setupFcm();
@@ -120,13 +128,23 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
     final body = message.notification?.body ?? '';
     final isOrderReady = type == 'order_ready';
     final isCourierCall = type == 'courier_call';
+    final isMarketNew = type == 'market_order_new';
+    final isAssigned = type == 'order_assigned';
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
             Text(
-              isCourierCall ? '🛵' : (isOrderReady ? '📦' : '⏳'),
+              isCourierCall
+                  ? '🛵'
+                  : isOrderReady
+                      ? '📦'
+                      : isMarketNew
+                          ? '🛒'
+                          : isAssigned
+                              ? '🎯'
+                              : '⏳',
               style: const TextStyle(fontSize: 22),
             ),
             const SizedBox(width: 12),
@@ -148,7 +166,13 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
         ),
         backgroundColor: isCourierCall
             ? Colors.green[800]
-            : (isOrderReady ? Colors.green[800] : Colors.orange[800]),
+            : isOrderReady
+                ? Colors.green[800]
+                : isMarketNew
+                    ? Colors.blue[800]
+                    : isAssigned
+                        ? Colors.purple[800]
+                        : Colors.orange[800],
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 5),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -183,7 +207,11 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
     if (!mounted) return;
     final type = message.data['type'] as String? ?? '';
     if (type == 'courier_call') {
-      _tabController.animateTo(0);
+      _tabController.animateTo(0); // Pool tab — courier call is there
+    } else if (type == 'order_assigned') {
+      _tabController.animateTo(1); // My Deliveries — assigned orders are there
+    } else if (type == 'market_order_new' || type == 'order_ready') {
+      _tabController.animateTo(0); // Pool tab — new pickable orders
     } else {
       setState(() => _notifPanelOpen = true);
     }
@@ -547,9 +575,22 @@ class _NotifCard extends StatelessWidget {
     final msgTr = data['message_tr'] as String? ?? '';
     final createdAt = data['createdAt'] as Timestamp?;
     final isOrderReady = type == 'order_ready';
-    final color = isOrderReady ? Colors.green : Colors.orange;
-    final emoji = isOrderReady ? '📦' : '⏳';
-    final label = isOrderReady ? 'HAZIR' : 'YAKINDA HAZIR';
+    final isMarketNew = type == 'market_order_new';
+    final color = isOrderReady
+        ? Colors.green
+        : isMarketNew
+            ? Colors.blue
+            : Colors.orange;
+    final emoji = isOrderReady
+        ? '📦'
+        : isMarketNew
+            ? '🛒'
+            : '⏳';
+    final label = isOrderReady
+        ? 'HAZIR'
+        : isMarketNew
+            ? 'YENİ MARKET'
+            : 'YAKINDA HAZIR';
     final timeStr =
         createdAt != null ? DateFormat('HH:mm').format(createdAt.toDate()) : '';
 
@@ -1712,6 +1753,7 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
         'orderId': widget.orderId,
         'courierId': uid,
         'courierName': displayName,
+        'assignedBy': 'self',
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -2202,9 +2244,8 @@ class _MyDeliveryActions extends StatelessWidget {
     // accepted       → "Teslim Aldım"   (orange, calls onPickedUp)
     // out_for_delivery → "Teslim Edildi" (green,  calls onDelivered)
     final isPickedUp = orderStatus == 'out_for_delivery';
-    final label = isPickedUp
-        ? loc.foodCargoMarkDelivered
-        : loc.foodCargoMarkPickedUp;
+    final label =
+        isPickedUp ? loc.foodCargoMarkDelivered : loc.foodCargoMarkPickedUp;
     final onTap = isPickedUp ? onDelivered : onPickedUp;
     final btnColor = isPickedUp ? Colors.green : Colors.orange;
 
