@@ -15850,6 +15850,26 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
+  String get marketReviewsLabel => 'Değerlendirmeler';
+
+  @override
+  String get marketReviewsSheetTitle => 'Market Değerlendirmeleri';
+
+  @override
+  String get marketReviewsEmptyTitle => 'Henüz değerlendirme yok';
+
+  @override
+  String get marketReviewsEmptySubtitle => 'Deneyiminizi ilk paylaşan siz olun';
+
+  @override
+  String get marketReviewsErrorLoad => 'Değerlendirmeler yüklenemedi';
+
+  @override
+  String marketReviewsCount(int count) {
+    return '$count değerlendirme';
+  }
+
+  @override
   String get marketCategoryFallbackTitle => 'Kategori';
 
   @override

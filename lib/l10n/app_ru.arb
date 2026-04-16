@@ -6411,6 +6411,15 @@
 "@marketCategoriesCount": {
   "placeholders": { "count": { "type": "int" } }
 },
+"marketReviewsLabel": "Отзывы",
+"marketReviewsSheetTitle": "Отзывы о маркете",
+"marketReviewsEmptyTitle": "Пока нет отзывов",
+"marketReviewsEmptySubtitle": "Будьте первым, кто поделится впечатлениями",
+"marketReviewsErrorLoad": "Не удалось загрузить отзывы",
+"marketReviewsCount": "{count} отзывов",
+"@marketReviewsCount": {
+  "placeholders": { "count": { "type": "int" } }
+},
 "marketCategoryFallbackTitle": "Категория",
 "myMarketOrdersTitle": "Мои заказы",
 "marketOrdersEmptyTitle": "У вас пока нет заказов",

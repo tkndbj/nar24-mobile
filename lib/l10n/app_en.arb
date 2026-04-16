@@ -6776,6 +6776,15 @@
 "@marketCategoriesCount": {
   "placeholders": { "count": { "type": "int" } }
 },
+"marketReviewsLabel": "Reviews",
+"marketReviewsSheetTitle": "Market Reviews",
+"marketReviewsEmptyTitle": "No reviews yet",
+"marketReviewsEmptySubtitle": "Be the first to share your experience",
+"marketReviewsErrorLoad": "Failed to load reviews",
+"marketReviewsCount": "{count} reviews",
+"@marketReviewsCount": {
+  "placeholders": { "count": { "type": "int" } }
+},
 "marketCategoryFallbackTitle": "Category",
 "myMarketOrdersTitle": "My Orders",
 "marketOrdersEmptyTitle": "You don't have any orders yet",

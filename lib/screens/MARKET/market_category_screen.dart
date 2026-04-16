@@ -1,9 +1,11 @@
 // lib/screens/market/market_category_screen.dart
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../constants/market_categories.dart';
 import '../../generated/l10n/app_localizations.dart';
+import '../../widgets/cloudinary_image.dart';
 
 const Map<String, String> _kCategoryAssetBySlug = {
   'alcohol-cigarette': 'assets/images/market-items/cigaretteandalcohol.png',
@@ -102,6 +104,16 @@ class _MarketCategoryScreenState extends State<MarketCategoryScreen>
     context.push('/market-search?q=${Uri.encodeQueryComponent(trimmed)}');
   }
 
+  void _openReviewsSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      builder: (_) => const _MarketReviewsSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -198,21 +210,36 @@ class _MarketCategoryScreenState extends State<MarketCategoryScreen>
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Text(
-                      l10n.marketCategoriesHeader,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            l10n.marketCategoriesHeader,
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            l10n.marketCategoriesCount(
+                                kMarketCategories.length),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: isDark
+                                  ? Colors.grey[400]
+                                  : Colors.grey[600],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      l10n.marketCategoriesCount(kMarketCategories.length),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
-                      ),
+                    _ReviewsChip(
+                      label: l10n.marketReviewsLabel,
+                      isDark: isDark,
+                      onTap: () => _openReviewsSheet(context),
                     ),
                   ],
                 ),
@@ -369,6 +396,623 @@ class _CategoryTile extends StatelessWidget {
                   color: isDark ? Colors.grey[300] : Colors.grey[800],
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// REVIEWS CHIP (header action)
+// ============================================================================
+
+class _ReviewsChip extends StatelessWidget {
+  final String label;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _ReviewsChip({
+    required this.label,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: isDark
+                ? const Color(0xFF00A86B).withOpacity(0.18)
+                : const Color(0xFF00A86B).withOpacity(0.10),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: const Color(0xFF00A86B).withOpacity(0.35),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('⭐', style: TextStyle(fontSize: 13)),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isDark
+                      ? const Color(0xFF4ADE80)
+                      : const Color(0xFF007A4D),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// MARKET REVIEWS BOTTOM SHEET
+// ============================================================================
+
+class _MarketReviewsSheet extends StatelessWidget {
+  const _MarketReviewsSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context)!;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.9,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, scrollController) {
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1C1A29) : Colors.white,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 10, bottom: 6),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[400],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              // Header row
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        l10n.marketReviewsSheetTitle,
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : Colors.grey[900],
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.close_rounded,
+                        color: isDark ? Colors.grey[300] : Colors.grey[700],
+                      ),
+                      onPressed: () => Navigator.of(context).pop(),
+                      tooltip: MaterialLocalizations.of(context)
+                          .closeButtonTooltip,
+                    ),
+                  ],
+                ),
+              ),
+              Divider(
+                height: 1,
+                color: isDark ? Colors.grey[800] : Colors.grey[200],
+              ),
+              Expanded(
+                child: _MarketReviewsList(
+                  scrollController: scrollController,
+                  isDark: isDark,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ============================================================================
+// MARKET REVIEW MODEL (mirrors functions/52-market-payment/index.js schema)
+// ============================================================================
+
+class _MarketReview {
+  final String id;
+  final String buyerName;
+  final int rating;
+  final String comment;
+  final List<String> imageUrls;
+  final Timestamp? timestamp;
+
+  const _MarketReview({
+    required this.id,
+    required this.buyerName,
+    required this.rating,
+    required this.comment,
+    required this.imageUrls,
+    this.timestamp,
+  });
+
+  factory _MarketReview.fromDoc(
+      DocumentSnapshot<Map<String, dynamic>> doc) {
+    final d = doc.data() ?? const {};
+    return _MarketReview(
+      id: doc.id,
+      buyerName: (d['buyerName'] as String?) ?? '',
+      rating: (d['rating'] as num?)?.toInt() ?? 0,
+      comment: (d['comment'] as String?) ?? '',
+      imageUrls: (d['imageUrls'] as List<dynamic>?)
+              ?.whereType<String>()
+              .toList() ??
+          const [],
+      timestamp: d['timestamp'] as Timestamp?,
+    );
+  }
+}
+
+// ============================================================================
+// PAGINATED REVIEWS LIST (cursor-based, infinite scroll, page size 15)
+// ============================================================================
+
+class _MarketReviewsList extends StatefulWidget {
+  final ScrollController scrollController;
+  final bool isDark;
+
+  const _MarketReviewsList({
+    required this.scrollController,
+    required this.isDark,
+  });
+
+  @override
+  State<_MarketReviewsList> createState() => _MarketReviewsListState();
+}
+
+class _MarketReviewsListState extends State<_MarketReviewsList> {
+  static const int _kPageSize = 15;
+  static const double _kLoadMoreThreshold = 300;
+
+  final List<_MarketReview> _reviews = [];
+  DocumentSnapshot<Map<String, dynamic>>? _lastDoc;
+  bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.scrollController.addListener(_onScroll);
+    _fetchPage(reset: true);
+  }
+
+  @override
+  void dispose() {
+    widget.scrollController.removeListener(_onScroll);
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!widget.scrollController.hasClients) return;
+    final position = widget.scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - _kLoadMoreThreshold) {
+      _fetchPage(reset: false);
+    }
+  }
+
+  Future<void> _fetchPage({required bool reset}) async {
+    if (!reset) {
+      if (_isLoadingMore || !_hasMore || _isLoading) return;
+    }
+
+    if (mounted) {
+      setState(() {
+        if (reset) {
+          _isLoading = true;
+          _hasError = false;
+          _hasMore = true;
+          _lastDoc = null;
+          _reviews.clear();
+        } else {
+          _isLoadingMore = true;
+        }
+      });
+    }
+
+    try {
+      Query<Map<String, dynamic>> q = FirebaseFirestore.instance
+          .collection('nar24market')
+          .doc('stats')
+          .collection('reviews')
+          .orderBy('timestamp', descending: true)
+          .limit(_kPageSize);
+
+      if (!reset && _lastDoc != null) {
+        q = q.startAfterDocument(_lastDoc!);
+      }
+
+      final snapshot = await q.get();
+      final fetched =
+          snapshot.docs.map(_MarketReview.fromDoc).toList(growable: false);
+
+      if (!mounted) return;
+      setState(() {
+        if (snapshot.docs.isNotEmpty) {
+          _lastDoc = snapshot.docs.last;
+        }
+        _hasMore = snapshot.docs.length == _kPageSize;
+        _reviews.addAll(fetched);
+      });
+    } catch (e) {
+      debugPrint('[MarketReviewsList] Fetch error: $e');
+      if (!mounted) return;
+      setState(() => _hasError = true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isLoadingMore = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    if (_isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation(Color(0xFF00A86B)),
+          ),
+        ),
+      );
+    }
+
+    if (_hasError && _reviews.isEmpty) {
+      return _ReviewsErrorState(
+        isDark: widget.isDark,
+        message: l10n.marketReviewsErrorLoad,
+        retryLabel: l10n.marketOrdersTryAgain,
+        onRetry: () => _fetchPage(reset: true),
+      );
+    }
+
+    if (_reviews.isEmpty) {
+      return _ReviewsEmptyState(
+        isDark: widget.isDark,
+        title: l10n.marketReviewsEmptyTitle,
+        subtitle: l10n.marketReviewsEmptySubtitle,
+      );
+    }
+
+    final itemCount = _reviews.length + (_hasMore || _isLoadingMore ? 1 : 0);
+
+    return ListView.separated(
+      controller: widget.scrollController,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      itemCount: itemCount,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        if (index >= _reviews.length) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: const AlwaysStoppedAnimation(Color(0xFF00A86B)),
+                  backgroundColor:
+                      const Color(0xFF00A86B).withOpacity(0.15),
+                ),
+              ),
+            ),
+          );
+        }
+        return _MarketReviewCard(
+          review: _reviews[index],
+          isDark: widget.isDark,
+        );
+      },
+    );
+  }
+}
+
+// ============================================================================
+// REVIEW CARD
+// ============================================================================
+
+class _MarketReviewCard extends StatelessWidget {
+  final _MarketReview review;
+  final bool isDark;
+
+  const _MarketReviewCard({required this.review, required this.isDark});
+
+  String _maskName(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    return parts.asMap().entries.map((entry) {
+      final i = entry.key;
+      final part = entry.value;
+      if (part.length <= 1) return part;
+      if (i == 0) return part[0] + '*' * (part.length - 1);
+      if (i == parts.length - 1) {
+        return '*' * (part.length - 1) + part[part.length - 1];
+      }
+      return '*' * part.length;
+    }).join(' ');
+  }
+
+  String _timeAgo(Timestamp ts) {
+    final diff = DateTime.now().difference(ts.toDate());
+    if (diff.inMinutes < 1) return 'now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
+    if (diff.inDays < 30) return '${diff.inDays}d';
+    final months = (diff.inDays / 30).floor();
+    if (months < 12) return '${months}mo';
+    return '${(months / 12).floor()}y';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final displayName = review.buyerName.isNotEmpty
+        ? _maskName(review.buyerName)
+        : AppLocalizations.of(context)!.anonymous;
+    final timeText =
+        review.timestamp != null ? _timeAgo(review.timestamp!) : '';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF2D2B3F) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.grey[800] : Colors.grey[100],
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.person_rounded,
+                  size: 18,
+                  color: isDark ? Colors.grey[400] : Colors.grey[500],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : Colors.grey[900],
+                      ),
+                    ),
+                    if (timeText.isNotEmpty)
+                      Text(
+                        timeText,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color:
+                              isDark ? Colors.grey[500] : Colors.grey[400],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(5, (i) {
+                  final filled = i < review.rating;
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 1),
+                    child: Icon(
+                      Icons.star_rounded,
+                      size: 14,
+                      color: filled
+                          ? Colors.amber
+                          : (isDark ? Colors.grey[700] : Colors.grey[300]),
+                    ),
+                  );
+                }),
+              ),
+            ],
+          ),
+          if (review.comment.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              review.comment,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.45,
+                color: isDark ? Colors.grey[300] : Colors.grey[700],
+              ),
+            ),
+          ],
+          if (review.imageUrls.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 64,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: review.imageUrls.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, i) {
+                  return CloudinaryImage.fromUrl(
+                    url: review.imageUrls[i],
+                    cdnWidth: 160,
+                    width: 64,
+                    height: 64,
+                    fit: BoxFit.cover,
+                    borderRadius: 8,
+                  );
+                },
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// EMPTY + ERROR STATES
+// ============================================================================
+
+class _ReviewsEmptyState extends StatelessWidget {
+  final bool isDark;
+  final String title;
+  final String subtitle;
+
+  const _ReviewsEmptyState({
+    required this.isDark,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.grey[800] : Colors.grey[100],
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                Icons.chat_bubble_outline_rounded,
+                size: 28,
+                color: isDark ? Colors.grey[600] : Colors.grey[400],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : Colors.grey[900],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: isDark ? Colors.grey[400] : Colors.grey[500],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewsErrorState extends StatelessWidget {
+  final bool isDark;
+  final String message;
+  final String retryLabel;
+  final VoidCallback onRetry;
+
+  const _ReviewsErrorState({
+    required this.isDark,
+    required this.message,
+    required this.retryLabel,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.error_outline_rounded,
+              size: 40,
+              color: isDark ? Colors.grey[500] : Colors.grey[400],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.grey[300] : Colors.grey[700],
+              ),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: onRetry,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF00A86B),
+                side: const BorderSide(color: Color(0xFF00A86B)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: Text(retryLabel),
             ),
           ],
         ),

@@ -15923,6 +15923,26 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String get marketReviewsLabel => 'Отзывы';
+
+  @override
+  String get marketReviewsSheetTitle => 'Отзывы о маркете';
+
+  @override
+  String get marketReviewsEmptyTitle => 'Пока нет отзывов';
+
+  @override
+  String get marketReviewsEmptySubtitle => 'Будьте первым, кто поделится впечатлениями';
+
+  @override
+  String get marketReviewsErrorLoad => 'Не удалось загрузить отзывы';
+
+  @override
+  String marketReviewsCount(int count) {
+    return '$count отзывов';
+  }
+
+  @override
   String get marketCategoryFallbackTitle => 'Категория';
 
   @override

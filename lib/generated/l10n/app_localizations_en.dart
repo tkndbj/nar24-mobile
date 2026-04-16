@@ -15821,6 +15821,26 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get marketReviewsLabel => 'Reviews';
+
+  @override
+  String get marketReviewsSheetTitle => 'Market Reviews';
+
+  @override
+  String get marketReviewsEmptyTitle => 'No reviews yet';
+
+  @override
+  String get marketReviewsEmptySubtitle => 'Be the first to share your experience';
+
+  @override
+  String get marketReviewsErrorLoad => 'Failed to load reviews';
+
+  @override
+  String marketReviewsCount(int count) {
+    return '$count reviews';
+  }
+
+  @override
   String get marketCategoryFallbackTitle => 'Category';
 
   @override

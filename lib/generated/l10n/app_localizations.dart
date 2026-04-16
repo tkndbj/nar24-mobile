@@ -30186,6 +30186,42 @@ abstract class AppLocalizations {
   /// **'{count} kategori'**
   String marketCategoriesCount(int count);
 
+  /// No description provided for @marketReviewsLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Değerlendirmeler'**
+  String get marketReviewsLabel;
+
+  /// No description provided for @marketReviewsSheetTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Market Değerlendirmeleri'**
+  String get marketReviewsSheetTitle;
+
+  /// No description provided for @marketReviewsEmptyTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Henüz değerlendirme yok'**
+  String get marketReviewsEmptyTitle;
+
+  /// No description provided for @marketReviewsEmptySubtitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Deneyiminizi ilk paylaşan siz olun'**
+  String get marketReviewsEmptySubtitle;
+
+  /// No description provided for @marketReviewsErrorLoad.
+  ///
+  /// In tr, this message translates to:
+  /// **'Değerlendirmeler yüklenemedi'**
+  String get marketReviewsErrorLoad;
+
+  /// No description provided for @marketReviewsCount.
+  ///
+  /// In tr, this message translates to:
+  /// **'{count} değerlendirme'**
+  String marketReviewsCount(int count);
+
   /// No description provided for @marketCategoryFallbackTitle.
   ///
   /// In tr, this message translates to:

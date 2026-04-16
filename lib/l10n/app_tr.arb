@@ -6772,6 +6772,15 @@
 "@marketCategoriesCount": {
   "placeholders": { "count": { "type": "int" } }
 },
+"marketReviewsLabel": "Değerlendirmeler",
+"marketReviewsSheetTitle": "Market Değerlendirmeleri",
+"marketReviewsEmptyTitle": "Henüz değerlendirme yok",
+"marketReviewsEmptySubtitle": "Deneyiminizi ilk paylaşan siz olun",
+"marketReviewsErrorLoad": "Değerlendirmeler yüklenemedi",
+"marketReviewsCount": "{count} değerlendirme",
+"@marketReviewsCount": {
+  "placeholders": { "count": { "type": "int" } }
+},
 "marketCategoryFallbackTitle": "Kategori",
 "myMarketOrdersTitle": "Siparişlerim",
 "marketOrdersEmptyTitle": "Henüz siparişiniz yok",

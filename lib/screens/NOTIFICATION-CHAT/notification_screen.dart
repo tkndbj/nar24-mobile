@@ -492,7 +492,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
       case 'market_order_delivered_review':
         final orderId = notification.orderId;
         if (orderId != null) {
-          context.push('/market-order-detail/$orderId');
+          context.push('/my-reviews');
         } else {
           context.push('/my-market-orders');
         }
