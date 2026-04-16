@@ -3587,6 +3587,11 @@ class AppLocalizationsRu extends AppLocalizations {
       'Пожалуйста, укажите рейтинг и текст отзыва';
 
   @override
+  String photosOptionalUpTo(String count) {
+    return 'Фотографии (по желанию, до $count)';
+  }
+
+  @override
   String get selectFootwearGender => 'Выберите пол';
 
   @override
@@ -15932,7 +15937,8 @@ class AppLocalizationsRu extends AppLocalizations {
   String get marketReviewsEmptyTitle => 'Пока нет отзывов';
 
   @override
-  String get marketReviewsEmptySubtitle => 'Будьте первым, кто поделится впечатлениями';
+  String get marketReviewsEmptySubtitle =>
+      'Будьте первым, кто поделится впечатлениями';
 
   @override
   String get marketReviewsErrorLoad => 'Не удалось загрузить отзывы';

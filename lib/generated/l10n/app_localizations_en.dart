@@ -3560,6 +3560,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'Please provide a rating and review text';
 
   @override
+  String photosOptionalUpTo(String count) {
+    return 'Photos (optional, up to $count)';
+  }
+
+  @override
   String get selectFootwearGender => 'Select gender';
 
   @override
@@ -15830,7 +15835,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get marketReviewsEmptyTitle => 'No reviews yet';
 
   @override
-  String get marketReviewsEmptySubtitle => 'Be the first to share your experience';
+  String get marketReviewsEmptySubtitle =>
+      'Be the first to share your experience';
 
   @override
   String get marketReviewsErrorLoad => 'Failed to load reviews';

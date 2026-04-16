@@ -41,9 +41,18 @@ class MyProductsProvider extends ChangeNotifier {
   Timer? _searchDebounce;
   Timer? _cacheCleanupTimer;
 
+  // Lifecycle guard: prevents notifyListeners() or state writes from firing
+  // after dispose() — e.g. when a Firestore await resolves post-pop.
+  bool _disposed = false;
+
   MyProductsProvider() {
     _initialize();
     _startCacheCleanup();
+  }
+
+  void _safeNotify() {
+    if (_disposed) return;
+    notifyListeners();
   }
 
   // Getters
@@ -126,6 +135,8 @@ class MyProductsProvider extends ChangeNotifier {
           .orderBy('createdAt', descending: true)
           .get();
 
+      if (_disposed) return;
+
       _products =
           snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
       _isLoading = false;
@@ -137,27 +148,30 @@ class MyProductsProvider extends ChangeNotifier {
         _productCache[product.id] = _CachedProduct(product, now);
       }
 
-      notifyListeners();
+      _safeNotify();
     } catch (e) {
       debugPrint('Error fetching products: $e');
+      if (_disposed) return;
       _isLoading = false;
       _error = e.toString();
-      notifyListeners();
+      _safeNotify();
     }
   }
 
   /// Call this after product create, update, or delete to refresh the list.
   Future<void> refresh() async {
+    if (_disposed) return;
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
 
     _isRefreshing = true;
-    notifyListeners();
+    _safeNotify();
 
     await _fetchProducts(userId);
 
+    if (_disposed) return;
     _isRefreshing = false;
-    notifyListeners();
+    _safeNotify();
   }
 
   /// Removes a product from the local list immediately (optimistic update).
@@ -165,29 +179,35 @@ class MyProductsProvider extends ChangeNotifier {
   void removeProductLocally(String productId) {
     _products.removeWhere((p) => p.id == productId);
     _productCache.remove(productId);
-    notifyListeners();
+    _safeNotify();
   }
 
   void updateSelectedDateRange(DateTimeRange? range) {
+    if (range == selectedDateRange) return;
     selectedDateRange = range;
     // Clear transaction cache when date range changes
     _transactionCache.clear();
-    notifyListeners();
+    _safeNotify();
   }
 
   void setSearchQuery(String query) {
-    searchQuery = query.trim().toLowerCase();
-    notifyListeners();
+    final normalized = query.trim().toLowerCase();
+    if (normalized == searchQuery) return;
+    searchQuery = normalized;
+    _safeNotify();
   }
 
   void setTransactionSearchQuery(String query) {
-    transactionSearchQuery = query.trim().toLowerCase();
-    notifyListeners();
+    final normalized = query.trim().toLowerCase();
+    if (normalized == transactionSearchQuery) return;
+    transactionSearchQuery = normalized;
+    _safeNotify();
   }
 
   void setSearchMode(bool isSearchMode) {
+    if (_isSearchMode == isSearchMode) return;
     _isSearchMode = isSearchMode;
-    notifyListeners();
+    _safeNotify();
   }
 
   List<Map<String, dynamic>> filterTransactions(
@@ -329,6 +349,13 @@ class MyProductsProvider extends ChangeNotifier {
 
       final snapshot = await query.get();
 
+      if (_disposed) {
+        return {
+          'transactions': <Map<String, dynamic>>[],
+          'lastDoc': null,
+        };
+      }
+
       final transactions = snapshot.docs
           .map((doc) => {
                 'id': doc.id,
@@ -431,6 +458,8 @@ class MyProductsProvider extends ChangeNotifier {
               .where(FieldPath.documentId, whereIn: batchIds)
               .get();
 
+          if (_disposed) return result;
+
           for (final doc in snapshot.docs) {
             final product = Product.fromDocument(doc);
             result[product.id] = product;
@@ -492,6 +521,8 @@ class MyProductsProvider extends ChangeNotifier {
               .where(FieldPath.documentId, whereIn: batchIds)
               .get();
 
+          if (_disposed) return result;
+
           for (final doc in snapshot.docs) {
             final product = Product.fromDocument(doc);
             result[product.id] = product;
@@ -538,6 +569,7 @@ class MyProductsProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _searchDebounce?.cancel();
     _cacheCleanupTimer?.cancel();
     clearCache();

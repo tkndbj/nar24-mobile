@@ -99,6 +99,11 @@ class _MarketCategoryDetailScreenState
     _scrollController.addListener(_onScroll);
     _typesense = TypeSenseServiceManager.instance.marketService;
 
+    // Stale-while-revalidate: seed chips instantly from cache if available.
+    // _initialLoad() will refresh in the background and overwrite _facets.
+    final cached = _typesense.cachedUnfilteredFacets(widget.categorySlug);
+    if (cached != null) _facets = cached;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initialLoad();
     });

@@ -1278,6 +1278,12 @@
   "subSubcategory": "Подкатегория",
   "submittingReview": "Отправка отзыва...",
   "pleaseProvideRatingAndReview": "Пожалуйста, укажите рейтинг и текст отзыва",
+  "photosOptionalUpTo": "Фотографии (по желанию, до {count})",
+  "@photosOptionalUpTo": {
+    "placeholders": {
+      "count": { "type": "String" }
+    }
+  },
   "selectFootwearGender": "Выберите пол",
   "footwearGender": "Пол",
   "orderDetails": "Детали заказа",

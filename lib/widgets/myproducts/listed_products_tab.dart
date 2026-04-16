@@ -470,7 +470,9 @@ class _SearchBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final onSurface = theme.colorScheme.onSurface;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -503,12 +505,12 @@ class _SearchBox extends StatelessWidget {
             prefixIcon: Icon(
               Icons.search_rounded,
               size: 22,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+              color: onSurface.withOpacity(0.5),
             ),
             hintText: hint,
             hintStyle: TextStyle(
               fontSize: 15,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+              color: onSurface.withOpacity(0.4),
             ),
             contentPadding:
                 const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
@@ -560,21 +562,24 @@ class _ProductListItem extends StatefulWidget {
 
 class _ProductListItemState extends State<_ProductListItem>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _overlayController;
-  late final Animation<Offset> _overlayAnimation;
+  // Lazily allocated so that items which never open the stats overlay
+  // don't pay for an AnimationController up front. With large lists this
+  // dramatically reduces first-frame work.
+  AnimationController? _overlayController;
+  Animation<Offset>? _overlayAnimation;
 
-  @override
-  void initState() {
-    super.initState();
-    _overlayController = AnimationController(
+  void _ensureOverlayController() {
+    if (_overlayController != null) return;
+    final controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
+    _overlayController = controller;
     _overlayAnimation = Tween<Offset>(
       begin: const Offset(0, 1),
       end: Offset.zero,
     ).animate(CurvedAnimation(
-      parent: _overlayController,
+      parent: controller,
       curve: Curves.easeInOut,
     ));
   }
@@ -583,15 +588,16 @@ class _ProductListItemState extends State<_ProductListItem>
   void didUpdateWidget(_ProductListItem oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isOverlayOpen && !oldWidget.isOverlayOpen) {
-      _overlayController.forward();
+      _ensureOverlayController();
+      _overlayController!.forward();
     } else if (!widget.isOverlayOpen && oldWidget.isOverlayOpen) {
-      _overlayController.reverse();
+      _overlayController?.reverse();
     }
   }
 
   @override
   void dispose() {
-    _overlayController.dispose();
+    _overlayController?.dispose();
     super.dispose();
   }
 
@@ -648,12 +654,12 @@ class _ProductListItemState extends State<_ProductListItem>
                     l10n: widget.l10n,
                   ),
                 ),
-              if (widget.isOverlayOpen)
+              if (widget.isOverlayOpen && _overlayAnimation != null)
                 Positioned.fill(
                   child: _StatsOverlay(
                     product: product,
                     isDark: widget.isDark,
-                    animation: _overlayAnimation,
+                    animation: _overlayAnimation!,
                     onClose: widget.onToggleOverlay,
                     l10n: widget.l10n,
                   ),

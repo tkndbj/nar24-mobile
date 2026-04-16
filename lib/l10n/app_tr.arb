@@ -1348,6 +1348,12 @@
   "subSubcategory": "Alt-alt Kategori",
   "submittingReview": "Değerlendirme gönderiliyor...",
   "pleaseProvideRatingAndReview": "Lütfen bir değerlendirme ve yorum metni sağlayın",
+  "photosOptionalUpTo": "Fotoğraflar (isteğe bağlı, en fazla {count})",
+  "@photosOptionalUpTo": {
+    "placeholders": {
+      "count": { "type": "String" }
+    }
+  },
   "selectFootwearGender": "Cinsiyet seçin",
   "footwearGender": "Cinsiyet",
   "orderDetails": "Sipariş Detayları",

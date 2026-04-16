@@ -628,9 +628,12 @@ class _MyCouponsAndBenefitsScreenState
     final isLoading = _isLoadingUsedCoupons || _isLoadingUsedBenefits;
     final hasError = _usedError != null;
     final isEmpty = _usedCoupons.isEmpty && _usedBenefits.isEmpty;
-    final isInitialLoad = !_initialUsedCouponsLoaded;
 
-    if (isInitialLoad && isLoading) {
+    // Show shimmer until the first fetch actually completes. The tab-change
+    // listener triggers loading lazily, so this also covers the gap between
+    // the tab being built and the loading flags being set — otherwise the
+    // empty state would flash before any data has been requested.
+    if (_userId != null && !_initialUsedCouponsLoaded) {
       return _buildShimmerList(isDark);
     }
 

@@ -159,6 +159,11 @@ class MarketTypesenseService {
 
   static const _collection = 'market_items';
 
+  /// In-memory cache of unfiltered facets per category.
+  /// Stale-while-revalidate: consumers read synchronously for instant paint,
+  /// then refresh in the background via [fetchFacets].
+  static final Map<String, MarketFacets> _unfilteredFacetCache = {};
+
   Timer? _debounceTimer;
   static const _debounceDuration = Duration(milliseconds: 300);
 
@@ -683,12 +688,29 @@ class MarketTypesenseService {
         }
       }
 
-      return MarketFacets(brands: brandFacets, types: typeFacets);
+      final result = MarketFacets(brands: brandFacets, types: typeFacets);
+
+      // Cache only the "first paint" state — no query, no selected filters.
+      // Any filter combination is dynamic and not worth caching.
+      final isUnfiltered = query.trim().isEmpty &&
+          (selectedBrands == null || selectedBrands.isEmpty) &&
+          (selectedTypes == null || selectedTypes.isEmpty);
+      if (isUnfiltered) {
+        _unfilteredFacetCache[category] = result;
+      }
+
+      return result;
     } catch (e) {
       debugPrint('[MarketTypesense] fetchFacets error: $e');
       return MarketFacets.empty;
     }
   }
+
+  /// Returns cached unfiltered facets for [category], or null if never fetched.
+  /// Use this for instant chip render on screen entry, then call [fetchFacets]
+  /// to revalidate in the background.
+  MarketFacets? cachedUnfilteredFacets(String category) =>
+      _unfilteredFacetCache[category];
 
   // ============================================================================
   // HEALTH CHECK

@@ -3566,6 +3566,11 @@ class AppLocalizationsTr extends AppLocalizations {
       'Lütfen bir değerlendirme ve yorum metni sağlayın';
 
   @override
+  String photosOptionalUpTo(String count) {
+    return 'Fotoğraflar (isteğe bağlı, en fazla $count)';
+  }
+
+  @override
   String get selectFootwearGender => 'Cinsiyet seçin';
 
   @override

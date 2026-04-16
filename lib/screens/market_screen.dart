@@ -1119,7 +1119,10 @@ class MarketScreenState extends State<MarketScreen>
     }
   }
 
-  /// Optimized filter tab switching
+  /// Manual filter tab switching (invoked when the user taps a button in the
+  /// FilterSortRow). Runs the same logic as the swipe flow synchronously so
+  /// content loads immediately, rather than waiting for the PageView's
+  /// debounced onPageChanged handler.
   void switchToFilterTab(String filterType) {
     final idx = _filterTabIndices[filterType];
     if (idx == null) {
@@ -1141,20 +1144,38 @@ class MarketScreenState extends State<MarketScreen>
       return;
     }
 
+    // Already on this tab — nothing to do
+    if (_currentPage == idx) return;
+
     if (kDebugMode) {
       debugPrint(
           '🎯 Switching to filter tab: $filterType (index: $idx, dynamic: $isDynamic)');
     }
 
-    _currentPage = idx;
+    // Cancel any pending debounced page change from a prior swipe so the
+    // subsequent onPageChanged from jumpToPage doesn't race with us.
+    _pageDebounce.cancel();
+
+    // Pre-mark indices so PageView.builder doesn't flash a placeholder when
+    // jumping far from the current page.
+    _builtFilterIndices.add(idx);
+    if (idx > 0) _builtFilterIndices.add(idx - 1);
+    if (idx < _filterViews.length - 1) _builtFilterIndices.add(idx + 1);
+
+    // Update state reactively so dependent UI (banner color, etc.) refreshes.
+    setState(() {
+      _currentPage = idx;
+    });
 
     if (_pageController.hasClients) {
       _pageController.jumpToPage(idx);
     }
 
-    final dynamicFilter = isDynamic ? _getDynamicFilterById(filterType) : null;
-    _specialFilterProvider?.setSpecialFilter(filterType,
-        dynamicFilter: dynamicFilter);
+    // Run the same logic the swipe path runs (setSpecialFilter, lazy-load,
+    // fetch if empty, scroll to button). All operations are idempotent, so
+    // the onPageChanged-triggered debounced call that fires afterwards is a
+    // harmless no-op.
+    _handlePageChange(idx, debounced: true);
   }
 
   /// Optimized scroll to filter button

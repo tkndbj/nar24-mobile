@@ -444,19 +444,17 @@ class _FilterSortRowState extends State<FilterSortRow> {
   void _handleDynamicFilterTap(FilterItem f, DynamicFilter filter,
       SpecialFilterProviderMarket specialProv) {
     try {
-      // Set the filter first
-      specialProv.setSpecialFilter(f.type, dynamicFilter: filter);
-
-      // Then try to switch tabs with retry
+      // switchToFilterTab owns setSpecialFilter + fetch + page jump.
+      // If MarketState is unavailable (shouldn't happen), fall back to just
+      // setting the filter so the home-feed view still updates.
       if (_marketState != null) {
         _marketState!.switchToFilterTab(f.type);
       } else {
-        debugPrint('⚠️ MarketState is null, cannot switch tab');
+        debugPrint('⚠️ MarketState is null, falling back to setSpecialFilter');
+        specialProv.setSpecialFilter(f.type, dynamicFilter: filter);
       }
     } catch (e) {
       debugPrint('❌ Error handling dynamic filter tap: $e');
-
-      // Fallback: just set the filter without tab switching
       try {
         specialProv.setSpecialFilter(f.type, dynamicFilter: filter);
       } catch (e2) {
@@ -513,8 +511,13 @@ class _FilterSortRowState extends State<FilterSortRow> {
 
   return GestureDetector(
     onTap: () {
-      specialProv.setSpecialFilter(f.type);
-      _marketState?.switchToFilterTab(f.type);
+      // switchToFilterTab owns setSpecialFilter + fetch + page jump.
+      // Fallback to direct setSpecialFilter if MarketState is unavailable.
+      if (_marketState != null) {
+        _marketState!.switchToFilterTab(f.type);
+      } else {
+        specialProv.setSpecialFilter(f.type);
+      }
     },
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),

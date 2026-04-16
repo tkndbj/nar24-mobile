@@ -20,13 +20,21 @@ import 'package:shimmer/shimmer.dart';
 import '../../widgets/productdetail/full_screen_image_viewer.dart';
 import 'package:go_router/go_router.dart';
 
-/// Shop Detail Screen - Main entry point
+/// Shop Detail Screen - Main entry point.
 ///
 /// Architecture:
-/// - Dynamic tabs: Home tab only shown if shop has home images
-/// - Tabs with no data show empty states
-/// - TabController created only after shop data is available to determine tab configuration
-/// - All async data loading handled by ShopProvider
+/// - Dynamic tabs: Home tab only shown if shop has home images,
+///   Collections tab only if the shop has collections.
+/// - A single shared header (cover [SliverAppBar], search field, tab bar) is
+///   rendered outside the [TabBarView] via [NestedScrollView.headerSliverBuilder].
+///   This keeps the cover visually fixed during horizontal tab swipes while
+///   still collapsing on vertical scroll.
+/// - Each tab's body is a lightweight [CustomScrollView] containing only its
+///   body slivers. [AutomaticKeepAliveClientMixin] preserves scroll position
+///   and per-tile state (e.g. review translations) across tab switches.
+/// - The compound perf issues of the previous NestedScrollView revision
+///   (AnimatedBuilder on tabController.animation, heavy selectors in the
+///   header, per-tab duplicated header) have been removed.
 class ShopDetailScreen extends StatefulWidget {
   final MockDocumentSnapshot? shopDoc;
   final String? shopId;
@@ -49,10 +57,10 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
   late final TextEditingController _searchController;
   late final FocusNode _searchFocusNode;
   late final ScrollController _scrollController;
+  final ValueNotifier<bool> _isScrolled = ValueNotifier<bool>(false);
 
   Timer? _searchDebounce;
   Timer? _loadingTimeout;
-  final ValueNotifier<bool> _isScrolled = ValueNotifier<bool>(false);
 
   static const Duration _searchDebounceDelay = Duration(milliseconds: 300);
   static const Duration _loadingTimeoutDuration = Duration(seconds: 10);
@@ -95,9 +103,10 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
   }
 
   void _onScroll() {
-    final isScrolled = _scrollController.offset > 50;
-    if (isScrolled != _isScrolled.value) {
-      _isScrolled.value = isScrolled;
+    if (!_scrollController.hasClients) return;
+    final scrolled = _scrollController.offset > 50;
+    if (scrolled != _isScrolled.value) {
+      _isScrolled.value = scrolled;
     }
   }
 
@@ -117,6 +126,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
     _searchDebounce?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _isScrolled.dispose();
     super.dispose();
@@ -210,7 +220,6 @@ class _TabConfiguration {
 }
 
 /// Determines tab configuration from shop data, then creates tabbed content.
-/// This widget acts as a bridge between the shop data and the TabController.
 class _ShopContentWithTabs extends StatelessWidget {
   final TextEditingController searchController;
   final FocusNode searchFocusNode;
@@ -228,7 +237,6 @@ class _ShopContentWithTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Use Selector to only rebuild when homeImageUrls presence changes
     return Selector<ShopProvider, _TabConfiguration>(
       selector: (_, provider) {
         final shopData = provider.shopDoc?.data();
@@ -241,7 +249,7 @@ class _ShopContentWithTabs extends StatelessWidget {
         );
       },
       builder: (context, tabConfig, _) {
-        // ValueKey ensures widget is fully recreated when tab config changes
+        // ValueKey ensures the TabController is recreated when tab count changes.
         return _TabbedContent(
           key: ValueKey(tabConfig),
           tabConfiguration: tabConfig,
@@ -256,8 +264,8 @@ class _ShopContentWithTabs extends StatelessWidget {
   }
 }
 
-/// Owns the TabController - recreated when tab configuration changes via ValueKey.
-/// This ensures TabController.length always matches the actual tab count.
+/// Owns the [TabController] and renders the [NestedScrollView] whose header
+/// slivers are shared across all tabs.
 class _TabbedContent extends StatefulWidget {
   final _TabConfiguration tabConfiguration;
   final TextEditingController searchController;
@@ -301,58 +309,24 @@ class _TabbedContentState extends State<_TabbedContent>
 
   @override
   Widget build(BuildContext context) {
-    return _ShopContent(
-      tabController: _tabController,
-      hasHomeTab: widget.tabConfiguration.hasHomeImages,
-      hasCollectionsTab: widget.tabConfiguration.hasCollections,
-      searchController: widget.searchController,
-      searchFocusNode: widget.searchFocusNode,
-      scrollController: widget.scrollController,
-      isScrolled: widget.isScrolled,
-      onDismissKeyboard: widget.onDismissKeyboard,
-    );
-  }
-}
+    final hasHomeTab = widget.tabConfiguration.hasHomeImages;
+    final hasCollectionsTab = widget.tabConfiguration.hasCollections;
 
-/// Main content with NestedScrollView
-class _ShopContent extends StatelessWidget {
-  final TabController tabController;
-  final bool hasHomeTab;
-  final bool hasCollectionsTab;
-  final TextEditingController searchController;
-  final FocusNode searchFocusNode;
-  final ScrollController scrollController;
-  final ValueListenable<bool> isScrolled;
-  final VoidCallback onDismissKeyboard;
-
-  const _ShopContent({
-    required this.tabController,
-    required this.hasHomeTab,
-    required this.hasCollectionsTab,
-    required this.searchController,
-    required this.searchFocusNode,
-    required this.scrollController,
-    required this.isScrolled,
-    required this.onDismissKeyboard,
-  });
-
-  @override
-  Widget build(BuildContext context) {
     return NestedScrollView(
-      controller: scrollController,
+      controller: widget.scrollController,
       headerSliverBuilder: (context, _) => [
-        _ShopAppBar(isScrolled: isScrolled),
+        _ShopAppBar(isScrolled: widget.isScrolled),
         SliverToBoxAdapter(
           child: _SearchField(
-            controller: searchController,
-            focusNode: searchFocusNode,
+            controller: widget.searchController,
+            focusNode: widget.searchFocusNode,
           ),
         ),
         SliverToBoxAdapter(
           child: Column(
             children: [
               _TabBarSection(
-                tabController: tabController,
+                tabController: _tabController,
                 hasHomeTab: hasHomeTab,
                 hasCollectionsTab: hasCollectionsTab,
               ),
@@ -360,39 +334,21 @@ class _ShopContent extends StatelessWidget {
             ],
           ),
         ),
-        SliverToBoxAdapter(
-          child: AnimatedBuilder(
-            animation: tabController.animation!,
-            child: _FilterSection(onDismissKeyboard: onDismissKeyboard),
-            builder: (context, child) {
-              final allProductsIndex = hasHomeTab ? 1 : 0;
-              final distance =
-                  (tabController.animation!.value - allProductsIndex)
-                      .abs()
-                      .clamp(0.0, 1.0);
-              final t = 1.0 - distance;
-              if (t == 0.0) return const SizedBox.shrink();
-              return ClipRect(
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  heightFactor: t,
-                  child: Opacity(opacity: t, child: child),
-                ),
-              );
-            },
-          ),
-        ),
       ],
-      body: _TabContent(
-        tabController: tabController,
-        hasHomeTab: hasHomeTab,
-        hasCollectionsTab: hasCollectionsTab,
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          if (hasHomeTab) const _HomeTab(),
+          _ProductsTab(onDismissKeyboard: widget.onDismissKeyboard),
+          if (hasCollectionsTab) const _CollectionsTab(),
+          const _ReviewsTab(),
+        ],
       ),
     );
   }
 }
 
-/// Shop App Bar with cover image and shop info
+/// Shop App Bar with cover image and shop info.
 class _ShopAppBar extends StatelessWidget {
   final ValueListenable<bool> isScrolled;
 
@@ -416,7 +372,7 @@ class _ShopAppBar extends StatelessWidget {
   Widget _buildShimmerAppBar(BuildContext context) {
     return SliverAppBar(
       pinned: true,
-      expandedHeight: MediaQuery.of(context).size.height * 0.15,
+      expandedHeight: MediaQuery.sizeOf(context).height * 0.15,
       leading: const _BackButton(iconColor: Colors.white),
       flexibleSpace: FlexibleSpaceBar(
         background: Shimmer.fromColors(
@@ -448,22 +404,22 @@ class _ShopAppBar extends StatelessWidget {
   Widget _buildAppBar(
       BuildContext context, Map<String, dynamic> shopData, bool isDark) {
     final l10n = AppLocalizations.of(context);
-    // Prefer storage paths (post-migration), fall back to URLs
+    // Prefer storage paths (post-migration), fall back to URLs.
     final coverImageSources = () {
-      final paths = (shopData['coverImageStoragePaths'] as List?)?.cast<String>();
+      final paths =
+          (shopData['coverImageStoragePaths'] as List?)?.cast<String>();
       if (paths != null && paths.isNotEmpty) return paths;
       return (shopData['coverImageUrls'] as List?)?.cast<String>() ?? <String>[];
     }();
     final profileImageSource =
         (shopData['profileImageStoragePath'] as String?) ??
-        (shopData['profileImageUrl'] as String? ?? '');
+            (shopData['profileImageUrl'] as String? ?? '');
     final shopName = shopData['name'] ?? l10n.shop;
     final rating = (shopData['averageRating'] as num?)?.toDouble() ?? 0.0;
-    final shopId = context.read<ShopProvider>().shopDoc?.id ?? '';
 
     return SliverAppBar(
       pinned: true,
-      expandedHeight: MediaQuery.of(context).size.height * 0.25,
+      expandedHeight: MediaQuery.sizeOf(context).height * 0.25,
       leading: ValueListenableBuilder<bool>(
         valueListenable: isScrolled,
         builder: (_, scrolled, __) {
@@ -601,7 +557,7 @@ class _CoverImage extends StatelessWidget {
   }
 
   void _openFullScreenViewer(BuildContext context) {
-    // For full-screen viewer, resolve URLs for display
+    // For full-screen viewer, resolve URLs for display.
     final urls = coverImageSources.map((source) {
       if (CloudinaryUrl.isStoragePath(source)) {
         return CloudinaryUrl.firebaseStorageUrl(source);
@@ -663,7 +619,7 @@ class _BackButton extends StatelessWidget {
   }
 }
 
-/// Search field
+/// Search field.
 class _SearchField extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
@@ -728,7 +684,7 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-/// Tab bar section - dynamically shows/hides Home tab
+/// Tab bar section - dynamically shows/hides Home and Collections tabs.
 class _TabBarSection extends StatelessWidget {
   final TabController tabController;
   final bool hasHomeTab;
@@ -768,7 +724,7 @@ class _TabBarSection extends StatelessWidget {
   }
 }
 
-/// Filter section
+/// Filter section - only rendered on the Products tab.
 class _FilterSection extends StatelessWidget {
   final VoidCallback onDismissKeyboard;
 
@@ -1049,7 +1005,6 @@ class _FilterButtonWithBadge extends StatelessWidget {
       ),
     ).then((result) {
       if (result != null) {
-        // Parse spec filters from result
         final rawSpecFilters = result['specFilters'];
         final specFilters = <String, List<String>>{};
         if (rawSpecFilters is Map) {
@@ -1077,60 +1032,91 @@ class _FilterButtonWithBadge extends StatelessWidget {
   }
 }
 
-/// Tab content - dynamically includes/excludes Home tab
-class _TabContent extends StatelessWidget {
-  final TabController tabController;
-  final bool hasHomeTab;
-  final bool hasCollectionsTab;
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
 
-  const _TabContent({
-    required this.tabController,
-    required this.hasHomeTab,
-    required this.hasCollectionsTab,
+/// Pulls refresh and load-more setup into one place. Each tab wraps its
+/// body slivers in a keep-alive scrollable that participates in the
+/// [NestedScrollView] coordinator (no explicit ScrollController).
+class _TabScrollBody extends StatefulWidget {
+  final List<Widget> slivers;
+  final double? cacheExtent;
+  final NotificationListenerCallback<ScrollNotification>? onScroll;
+
+  const _TabScrollBody({
+    required this.slivers,
+    this.cacheExtent,
+    this.onScroll,
   });
 
   @override
+  State<_TabScrollBody> createState() => _TabScrollBodyState();
+}
+
+class _TabScrollBodyState extends State<_TabScrollBody>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
-    return TabBarView(
-      controller: tabController,
-      children: [
-        if (hasHomeTab) _HomeTab(),
-        _ProductsTab(),
-        if (hasCollectionsTab) _CollectionsTab(),
-        _ReviewsTab(),
-      ],
+    super.build(context);
+    final scrollView = CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      cacheExtent: widget.cacheExtent,
+      slivers: widget.slivers,
+    );
+
+    final refreshable = RefreshIndicator(
+      edgeOffset: 100,
+      onRefresh: () => context.read<ShopProvider>().refreshShopDetail(),
+      child: scrollView,
+    );
+
+    if (widget.onScroll == null) return refreshable;
+    return NotificationListener<ScrollNotification>(
+      onNotification: (n) {
+        widget.onScroll!(n);
+        return false;
+      },
+      child: refreshable,
     );
   }
 }
 
-/// Home tab
+/// Home tab - renders the shop's home images.
 class _HomeTab extends StatelessWidget {
+  const _HomeTab();
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
-    return Selector<ShopProvider, List<String>>(
-      selector: (_, p) {
-        final shopData = p.shopDoc?.data();
-        return (shopData?['homeImageUrls'] as List?)?.cast<String>() ?? [];
-      },
-      builder: (context, homeUrls, _) {
-        if (homeUrls.isEmpty) {
-          return _EmptyState(
-            icon: Icons.home_outlined,
-            message: l10n.noHomeContent ?? 'No home content available',
-          );
-        }
-
-        return _RefreshableList(
-          child: ListView.builder(
-            itemCount: homeUrls.length,
-            itemBuilder: (context, index) {
-              return _HomeImage(imageUrl: homeUrls[index]);
-            },
-          ),
-        );
-      },
+    return _TabScrollBody(
+      slivers: [
+        Selector<ShopProvider, List<String>>(
+          selector: (_, p) {
+            final shopData = p.shopDoc?.data();
+            return (shopData?['homeImageUrls'] as List?)?.cast<String>() ?? [];
+          },
+          builder: (context, homeUrls, _) {
+            if (homeUrls.isEmpty) {
+              return SliverFillRemaining(
+                hasScrollBody: false,
+                child: _EmptyState(
+                  icon: Icons.home_outlined,
+                  message: l10n.noHomeContent ?? 'No home content available',
+                ),
+              );
+            }
+            return SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => _HomeImage(imageUrl: homeUrls[index]),
+                childCount: homeUrls.length,
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 }
@@ -1157,7 +1143,8 @@ class _HomeImage extends StatelessWidget {
         imageUrl: imageUrl,
         width: double.infinity,
         fit: BoxFit.cover,
-        placeholder: (_, __) => Container(height: 200, color: Colors.grey[300]),
+        placeholder: (_, __) =>
+            Container(height: 200, color: Colors.grey[300]),
         errorWidget: (_, __, ___) => Container(
           height: 200,
           color: Colors.grey[300],
@@ -1168,168 +1155,183 @@ class _HomeImage extends StatelessWidget {
   }
 }
 
-/// Products tab (All Products)
-class _ProductsTab extends StatefulWidget {
-  const _ProductsTab();
+/// Products tab (All Products). Handles load-more via a [NotificationListener].
+class _ProductsTab extends StatelessWidget {
+  final VoidCallback onDismissKeyboard;
 
-  @override
-  State<_ProductsTab> createState() => _ProductsTabState();
-}
-
-class _ProductsTabState extends State<_ProductsTab>
-    with AutomaticKeepAliveClientMixin {
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    final provider = context.read<ShopProvider>();
-    final l10n = AppLocalizations.of(context);
-
-    return Selector<ShopProvider, ({bool isSearching, String searchQuery, String? selectedColor})>(
-      selector: (_, p) => (
-        isSearching: p.isSearching,
-        searchQuery: p.searchQuery,
-        selectedColor: p.selectedColorForDisplay,
-      ),
-      builder: (context, state, _) {
-        return ValueListenableBuilder<bool>(
-          valueListenable: provider.isLoadingProductsNotifier,
-          builder: (context, isLoading, _) {
-            if (isLoading) {
-              return const _ProductShimmerGrid();
-            }
-
-            return ValueListenableBuilder<List<ProductSummary>>(
-              valueListenable: provider.allProductSummariesNotifier,
-              builder: (context, summaries, _) {
-                final hasFilters = provider.totalFiltersApplied > 0;
-
-                return _RefreshableList(
-                  child: NotificationListener<ScrollNotification>(
-                    onNotification: (scrollInfo) =>
-                        _handleScroll(scrollInfo, provider),
-                    child: CustomScrollView(
-                      cacheExtent: 1000,
-                      slivers: [
-                        if (state.searchQuery.isNotEmpty)
-                          const SliverToBoxAdapter(
-                              child: _SearchResultsHeader()),
-                        if (hasFilters)
-                          SliverToBoxAdapter(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 8),
-                              child: ValueListenableBuilder<int>(
-                                valueListenable: provider.totalFoundNotifier,
-                                builder: (_, totalFound, __) {
-                                  final count = totalFound > 0
-                                      ? totalFound
-                                      : summaries.length;
-                                  return Text(
-                                    '$count ${l10n.productsFound}',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.grey[600],
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                        ProductListSliver(
-                          products: summaries,
-                          boostedProducts: const [],
-                          hasMore: false,
-                          isLoadingMore: false,
-                          screenName: 'shop_detail_screen',
-                          selectedColor: state.selectedColor,
-                        ),
-                        // Only show load-more spinner when actually loading AND there are more pages
-                        ValueListenableBuilder<bool>(
-                          valueListenable:
-                              provider.isLoadingMoreProductsNotifier,
-                          builder: (context, isLoadingMore, _) {
-                            return ValueListenableBuilder<bool>(
-                              valueListenable:
-                                  provider.hasMoreProductsNotifier,
-                              builder: (context, hasMore, _) {
-                                if (!isLoadingMore || !hasMore) {
-                                  return const SliverToBoxAdapter(
-                                      child: SizedBox.shrink());
-                                }
-                                return const SliverToBoxAdapter(
-                                  child: Padding(
-                                    padding: EdgeInsets.symmetric(vertical: 24),
-                                    child: Center(
-                                      child: SizedBox(
-                                        width: 24,
-                                        height: 24,
-                                        child: CircularProgressIndicator(
-                                            strokeWidth: 2.5),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
+  const _ProductsTab({required this.onDismissKeyboard});
 
   bool _handleScroll(ScrollNotification scrollInfo, ShopProvider provider) {
     if (!provider.isLoadingMoreProducts &&
         provider.hasMoreProducts &&
         provider.searchQuery.isEmpty &&
-        scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent - 200) {
+        scrollInfo.metrics.pixels >=
+            scrollInfo.metrics.maxScrollExtent - 200) {
       provider.loadMoreProducts();
     }
     return false;
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.read<ShopProvider>();
+
+    return ValueListenableBuilder<bool>(
+      valueListenable: provider.isLoadingProductsNotifier,
+      builder: (context, isLoading, _) {
+        return _TabScrollBody(
+          cacheExtent: 1000,
+          onScroll: (n) => _handleScroll(n, provider),
+          slivers: isLoading
+              ? const [_ProductShimmerSliver()]
+              : _buildProductSlivers(context, provider),
+        );
+      },
+    );
+  }
+
+  List<Widget> _buildProductSlivers(
+      BuildContext context, ShopProvider provider) {
+    final l10n = AppLocalizations.of(context);
+
+    return [
+      SliverToBoxAdapter(
+        child: _FilterSection(onDismissKeyboard: onDismissKeyboard),
+      ),
+      // Search results header — independent rebuild scope.
+      Selector<ShopProvider, String>(
+        selector: (_, p) => p.searchQuery,
+        builder: (_, query, __) {
+          if (query.isEmpty) {
+            return const SliverToBoxAdapter(child: SizedBox.shrink());
+          }
+          return const SliverToBoxAdapter(child: _SearchResultsHeader());
+        },
+      ),
+      // Filter count row — independent rebuild scope.
+      Selector<ShopProvider, int>(
+        selector: (_, p) => p.totalFiltersApplied,
+        builder: (_, total, __) {
+          if (total == 0) {
+            return const SliverToBoxAdapter(child: SizedBox.shrink());
+          }
+          return SliverToBoxAdapter(
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: ValueListenableBuilder<int>(
+                valueListenable: provider.totalFoundNotifier,
+                builder: (_, totalFound, __) {
+                  return ValueListenableBuilder<List<ProductSummary>>(
+                    valueListenable: provider.allProductSummariesNotifier,
+                    builder: (_, summaries, __) {
+                      final count =
+                          totalFound > 0 ? totalFound : summaries.length;
+                      return Text(
+                        '$count ${l10n.productsFound}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[600],
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          );
+        },
+      ),
+      // Products grid.
+      ValueListenableBuilder<List<ProductSummary>>(
+        valueListenable: provider.allProductSummariesNotifier,
+        builder: (context, summaries, _) {
+          return Selector<ShopProvider, String?>(
+            selector: (_, p) => p.selectedColorForDisplay,
+            builder: (context, selectedColor, _) {
+              return ProductListSliver(
+                products: summaries,
+                boostedProducts: const [],
+                hasMore: false,
+                isLoadingMore: false,
+                screenName: 'shop_detail_screen',
+                selectedColor: selectedColor,
+              );
+            },
+          );
+        },
+      ),
+      // Load-more spinner — visible only when actively loading more pages.
+      ValueListenableBuilder<bool>(
+        valueListenable: provider.isLoadingMoreProductsNotifier,
+        builder: (context, isLoadingMore, _) {
+          return ValueListenableBuilder<bool>(
+            valueListenable: provider.hasMoreProductsNotifier,
+            builder: (context, hasMore, _) {
+              if (!isLoadingMore || !hasMore) {
+                return const SliverToBoxAdapter(child: SizedBox.shrink());
+              }
+              return const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child:
+                          CircularProgressIndicator(strokeWidth: 2.5),
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    ];
+  }
 }
 
-/// Collections tab
+/// Collections tab.
 class _CollectionsTab extends StatelessWidget {
+  const _CollectionsTab();
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
-    return Selector<ShopProvider, List<Map<String, dynamic>>>(
-      selector: (_, p) => p.collections,
-      builder: (context, collections, _) {
-        if (collections.isEmpty) {
-          return _EmptyState(
-            icon: Icons.collections_outlined,
-            message: l10n.noCollections ?? 'No collections available',
-          );
-        }
-
-        final shopId = context.read<ShopProvider>().shopDoc?.id ?? '';
-
-        return _RefreshableList(
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: collections.length,
-            itemBuilder: (context, index) {
-              return _CollectionCard(
-                collection: collections[index],
-                shopId: shopId,
+    return _TabScrollBody(
+      slivers: [
+        Selector<ShopProvider, List<Map<String, dynamic>>>(
+          selector: (_, p) => p.collections,
+          builder: (context, collections, _) {
+            if (collections.isEmpty) {
+              return SliverFillRemaining(
+                hasScrollBody: false,
+                child: _EmptyState(
+                  icon: Icons.collections_outlined,
+                  message: l10n.noCollections ?? 'No collections available',
+                ),
               );
-            },
-          ),
-        );
-      },
+            }
+
+            final shopId = context.read<ShopProvider>().shopDoc?.id ?? '';
+
+            return SliverPadding(
+              padding: const EdgeInsets.all(16),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => _CollectionCard(
+                    collection: collections[index],
+                    shopId: shopId,
+                  ),
+                  childCount: collections.length,
+                ),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 }
@@ -1457,74 +1459,70 @@ class _CollectionImage extends StatelessWidget {
   }
 }
 
-/// Reviews tab
-class _ReviewsTab extends StatefulWidget {
-  @override
-  State<_ReviewsTab> createState() => _ReviewsTabState();
-}
+/// Reviews tab. Load-more is triggered via a [NotificationListener] on the
+/// body scrollable.
+class _ReviewsTab extends StatelessWidget {
+  const _ReviewsTab();
 
-class _ReviewsTabState extends State<_ReviewsTab> {
-  final ScrollController _scrollController = ScrollController();
-
-  @override
-  void initState() {
-    super.initState();
-    _scrollController.addListener(_onScroll);
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _onScroll() {
-    final provider = context.read<ShopProvider>();
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 300 &&
+  bool _handleScroll(ScrollNotification scrollInfo, ShopProvider provider) {
+    if (scrollInfo.metrics.pixels >=
+            scrollInfo.metrics.maxScrollExtent - 300 &&
         !provider.isLoadingMoreReviews &&
         provider.hasMoreReviews) {
       provider.loadMoreReviews();
     }
+    return false;
   }
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
     final provider = context.read<ShopProvider>();
+    final l10n = AppLocalizations.of(context);
 
     return ValueListenableBuilder<bool>(
       valueListenable: provider.isLoadingReviewsNotifier,
       builder: (context, isLoading, _) {
-        if (isLoading) {
-          return const Center(child: CircularProgressIndicator());
-        }
+        return _TabScrollBody(
+          onScroll: (n) => _handleScroll(n, provider),
+          slivers: isLoading
+              ? const [
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                ]
+              : _buildReviewSlivers(context, provider, l10n),
+        );
+      },
+    );
+  }
 
-        return Selector<ShopProvider, List<Map<String, dynamic>>>(
-          selector: (_, p) => p.reviews,
-          builder: (context, reviews, _) {
-            if (reviews.isEmpty) {
-              return _EmptyState(
+  List<Widget> _buildReviewSlivers(
+    BuildContext context,
+    ShopProvider provider,
+    AppLocalizations l10n,
+  ) {
+    return [
+      Selector<ShopProvider, List<Map<String, dynamic>>>(
+        selector: (_, p) => p.reviews,
+        builder: (context, reviews, _) {
+          if (reviews.isEmpty) {
+            return SliverFillRemaining(
+              hasScrollBody: false,
+              child: _EmptyState(
                 icon: Icons.rate_review_outlined,
                 message: l10n.noReviewsYet,
-              );
-            }
+              ),
+            );
+          }
 
-            final shopId = provider.shopDoc?.id ?? '';
-            final isLoadingMore = provider.isLoadingMoreReviews;
+          final shopId = provider.shopDoc?.id ?? '';
 
-            return _RefreshableList(
-              child: ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.all(16),
-                itemCount: reviews.length + (isLoadingMore ? 1 : 0),
-                itemBuilder: (context, index) {
-                  if (index == reviews.length) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
+          return SliverPadding(
+            padding: const EdgeInsets.all(16),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
                   final review = reviews[index];
                   return _ReviewTile(
                     review: review,
@@ -1532,12 +1530,29 @@ class _ReviewsTabState extends State<_ReviewsTab> {
                     reviewId: review['id'] ?? '',
                   );
                 },
+                childCount: reviews.length,
               ),
-            );
-          },
-        );
-      },
-    );
+            ),
+          );
+        },
+      ),
+      // Load-more spinner. Backed by a Selector because the provider doesn't
+      // expose a dedicated ValueListenable for this flag.
+      Selector<ShopProvider, bool>(
+        selector: (_, p) => p.isLoadingMoreReviews,
+        builder: (_, isLoadingMore, __) {
+          if (!isLoadingMore) {
+            return const SliverToBoxAdapter(child: SizedBox.shrink());
+          }
+          return const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        },
+      ),
+    ];
   }
 }
 
@@ -1606,9 +1621,8 @@ class _ReviewTileState extends State<_ReviewTile> {
                 reviewText,
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onSurface,
-                  backgroundColor: isDark
-                      ? Colors.grey[700]
-                      : Colors.grey[300],
+                  backgroundColor:
+                      isDark ? Colors.grey[700] : Colors.grey[300],
                 ),
               ),
             )
@@ -1706,7 +1720,6 @@ class _ReviewTileState extends State<_ReviewTile> {
       }
     }
   }
-
 }
 
 class _StarRating extends StatelessWidget {
@@ -1735,7 +1748,9 @@ class _StarRating extends StatelessWidget {
   }
 }
 
-/// Search results header
+// ─── Shared building blocks ───────────────────────────────────────────────────
+
+/// Search results header shown above the products list when a query is active.
 class _SearchResultsHeader extends StatelessWidget {
   const _SearchResultsHeader();
 
@@ -1779,22 +1794,6 @@ class _SearchResultsHeader extends StatelessWidget {
   }
 }
 
-/// Reusable components
-class _RefreshableList extends StatelessWidget {
-  final Widget child;
-
-  const _RefreshableList({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return RefreshIndicator(
-      edgeOffset: 100,
-      onRefresh: () => context.read<ShopProvider>().refreshShopDetail(),
-      child: child,
-    );
-  }
-}
-
 class _EmptyState extends StatelessWidget {
   final IconData icon;
   final String message;
@@ -1832,43 +1831,43 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-class _ProductShimmerGrid extends StatelessWidget {
-  const _ProductShimmerGrid();
+/// Sliver-form products shimmer so the shared header stays visible during
+/// product loading.
+class _ProductShimmerSliver extends StatelessWidget {
+  const _ProductShimmerSliver();
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Shimmer.fromColors(
-      baseColor:
-          isDark ? const Color.fromARGB(255, 40, 37, 58) : Colors.grey[300]!,
-      highlightColor:
-          isDark ? const Color.fromARGB(255, 60, 57, 78) : Colors.grey[100]!,
-      child: CustomScrollView(
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.all(16),
-            sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 0.7,
-              ),
-              delegate: SliverChildBuilderDelegate(
-                (_, __) => Container(
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? const Color.fromARGB(255, 40, 37, 58)
-                        : Colors.grey[300],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                childCount: 6,
+    return SliverPadding(
+      padding: const EdgeInsets.all(16),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 0.7,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (_, __) => Shimmer.fromColors(
+            baseColor: isDark
+                ? const Color.fromARGB(255, 40, 37, 58)
+                : Colors.grey[300]!,
+            highlightColor: isDark
+                ? const Color.fromARGB(255, 60, 57, 78)
+                : Colors.grey[100]!,
+            child: Container(
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color.fromARGB(255, 40, 37, 58)
+                    : Colors.grey[300],
+                borderRadius: BorderRadius.circular(8),
               ),
             ),
           ),
-        ],
+          childCount: 6,
+        ),
       ),
     );
   }
@@ -1892,7 +1891,7 @@ class _ShimmerLoadingView extends StatelessWidget {
         child: Column(
           children: [
             Container(
-              height: kToolbarHeight + MediaQuery.of(context).padding.top,
+              height: kToolbarHeight + MediaQuery.paddingOf(context).top,
               color: isDark
                   ? const Color.fromARGB(255, 40, 37, 58)
                   : Colors.grey.shade300,

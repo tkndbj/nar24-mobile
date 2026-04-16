@@ -17,6 +17,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../utils/image_compression_utils.dart';
 
 const int _kMaxImages = 3;
+const int _kMinReviewChars = 5;
 const int _kMaxFileSizeBytes = 5 * 1024 * 1024; // 5MB
 const List<String> _kValidExtensions = [
   '.jpg',
@@ -814,6 +815,9 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) {
+          final canSubmit = localRating > 0 &&
+              textController.text.trim().length >= _kMinReviewChars;
+
           Future<void> pickImage() async {
             if (selectedImages.length >= _kMaxImages) return;
             final picked = await ImagePicker().pickImage(
@@ -1000,13 +1004,14 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                                     maxLines: 4,
                                     decoration:
                                         const BoxDecoration(border: Border()),
+                                    onChanged: (_) => setModalState(() {}),
                                   ),
                                 ),
                                 const SizedBox(height: 16),
 
                                 // Image section
                                 Text(
-                                  'Photos (optional, up to $_kMaxImages)',
+                                  l10n.photosOptionalUpTo('$_kMaxImages'),
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
@@ -1121,9 +1126,10 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                                 const SizedBox(width: 16),
                                 Expanded(
                                   child: CupertinoButton(
-                                    color: const Color(0xFFF97316),
-                                    onPressed: localRating == 0 ||
-                                            textController.text.trim().isEmpty
+                                    color: canSubmit
+                                        ? const Color(0xFFF97316)
+                                        : CupertinoColors.inactiveGray,
+                                    onPressed: !canSubmit
                                         ? null
                                         : () {
                                             Navigator.pop(ctx);
@@ -1281,6 +1287,9 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) {
+          final canSubmit = localRating > 0 &&
+              textController.text.trim().length >= _kMinReviewChars;
+
           Future<void> pickImage() async {
             if (selectedImages.length >= _kMaxImages) return;
             final picked = await ImagePicker().pickImage(
@@ -1465,13 +1474,14 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                                     maxLines: 4,
                                     decoration:
                                         const BoxDecoration(border: Border()),
+                                    onChanged: (_) => setModalState(() {}),
                                   ),
                                 ),
                                 const SizedBox(height: 16),
 
                                 // Image section
                                 Text(
-                                  'Photos (optional, up to $_kMaxImages)',
+                                  l10n.photosOptionalUpTo('$_kMaxImages'),
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
@@ -1583,9 +1593,10 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                                 const SizedBox(width: 16),
                                 Expanded(
                                   child: CupertinoButton(
-                                    color: const Color(0xFF00A86B),
-                                    onPressed: localRating == 0 ||
-                                            textController.text.trim().isEmpty
+                                    color: canSubmit
+                                        ? const Color(0xFF00A86B)
+                                        : CupertinoColors.inactiveGray,
+                                    onPressed: !canSubmit
                                         ? null
                                         : () {
                                             Navigator.pop(ctx);

@@ -7156,6 +7156,12 @@ abstract class AppLocalizations {
   /// **'Lütfen bir değerlendirme ve yorum metni sağlayın'**
   String get pleaseProvideRatingAndReview;
 
+  /// No description provided for @photosOptionalUpTo.
+  ///
+  /// In tr, this message translates to:
+  /// **'Fotoğraflar (isteğe bağlı, en fazla {count})'**
+  String photosOptionalUpTo(String count);
+
   /// No description provided for @selectFootwearGender.
   ///
   /// In tr, this message translates to:

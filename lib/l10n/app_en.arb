@@ -1475,6 +1475,12 @@
   "noProductsFoundDescription": "Try adjusting your filters or check back later",
   "tryAgain": "Try Again",
   "pleaseProvideRatingAndReview": "Please provide a rating and review text",
+  "photosOptionalUpTo": "Photos (optional, up to {count})",
+  "@photosOptionalUpTo": {
+    "placeholders": {
+      "count": { "type": "String" }
+    }
+  },
   "addNew": "Add New",
   "deletingProduct": "Deleting product...",
 "deleteProductConfirmation": "This action cannot be undone. The product will be permanently deleted.",
