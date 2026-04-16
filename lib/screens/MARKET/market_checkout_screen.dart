@@ -116,12 +116,12 @@ class _MarketCheckoutContentState extends State<_MarketCheckoutContent> {
 
       final data = result.data as Map<String, dynamic>;
       if (data['success'] == true) {
-        await cart.clearCart();
         if (mounted) {
           setState(() => _orderSuccess = _OrderSuccess(
                 orderId: data['orderId'] as String,
               ));
         }
+        await cart.clearCart();
       }
     } on FirebaseFunctionsException catch (e) {
       if (mounted) {

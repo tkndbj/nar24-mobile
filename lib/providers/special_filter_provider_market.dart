@@ -921,17 +921,23 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       _filterProductIds[filterType] = <String>{};
     }
 
-    final currentProducts = _filterProducts[filterType] ?? [];
-    final currentProductIds = _filterProductIds[filterType] ?? <String>{};
+    final previousProducts = _filterProducts[filterType] ?? const [];
+    final previousProductIds = _filterProductIds[filterType] ?? <String>{};
+
+    final updatedProductIds = <String>{...previousProductIds};
+    final addedProducts = <ProductSummary>[];
 
     for (var product in newProducts) {
-      if (currentProductIds.add(product.id)) {
-        currentProducts.add(product);
+      if (updatedProductIds.add(product.id)) {
+        addedProducts.add(product);
       }
     }
 
-    _filterProducts[filterType] = currentProducts;
-    _filterProductIds[filterType] = currentProductIds;
+    _filterProducts[filterType] = <ProductSummary>[
+      ...previousProducts,
+      ...addedProducts,
+    ];
+    _filterProductIds[filterType] = updatedProductIds;
   }
 
   void _cacheResults(List<ProductSummary> newProducts, String filterType, int page) {
@@ -959,17 +965,23 @@ class SpecialFilterProviderMarket with ChangeNotifier {
         _filterProductIds[filterType] = <String>{};
       }
 
-      final currentProducts = _filterProducts[filterType] ?? [];
-      final currentProductIds = _filterProductIds[filterType] ?? <String>{};
+      final previousProducts = _filterProducts[filterType] ?? const [];
+      final previousProductIds = _filterProductIds[filterType] ?? <String>{};
+
+      final updatedProductIds = <String>{...previousProductIds};
+      final addedProducts = <ProductSummary>[];
 
       for (var product in fallbackProducts) {
-        if (currentProductIds.add(product.id)) {
-          currentProducts.add(product);
+        if (updatedProductIds.add(product.id)) {
+          addedProducts.add(product);
         }
       }
 
-      _filterProducts[filterType] = currentProducts;
-      _filterProductIds[filterType] = currentProductIds;
+      _filterProducts[filterType] = <ProductSummary>[
+        ...previousProducts,
+        ...addedProducts,
+      ];
+      _filterProductIds[filterType] = updatedProductIds;
 
       _updateProductStream(filterType);
     } else {
@@ -1031,17 +1043,25 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       _filterProductIds[filterType] = <String>{};
     }
 
-    final currentProducts = _filterProducts[filterType] ?? [];
-    final currentProductIds = _filterProductIds[filterType] ?? <String>{};
+    final previousProducts = _filterProducts[filterType] ?? const [];
+    final previousProductIds = _filterProductIds[filterType] ?? <String>{};
+
+    final updatedProductIds = <String>{...previousProductIds};
+    final addedProducts = <ProductSummary>[];
 
     for (var product in newProducts) {
-      if (currentProductIds.add(product.id)) {
-        currentProducts.add(product);
+      if (updatedProductIds.add(product.id)) {
+        addedProducts.add(product);
       }
     }
 
-    _filterProducts[filterType] = currentProducts;
-    _filterProductIds[filterType] = currentProductIds;
+    final mergedProducts = <ProductSummary>[
+      ...previousProducts,
+      ...addedProducts,
+    ];
+
+    _filterProducts[filterType] = mergedProducts;
+    _filterProductIds[filterType] = updatedProductIds;
 
     final cacheKey = '$filterType|$page';
     _productCache[cacheKey] = List.from(newProducts);
@@ -1049,7 +1069,7 @@ class SpecialFilterProviderMarket with ChangeNotifier {
     _lastFetched[filterType] = DateTime.now();
 
     if (filterType == specialFilter) {
-      _productIdsSubject.add(currentProducts.map((p) => p.id).toList());
+      _productIdsSubject.add(mergedProducts.map((p) => p.id).toList());
     }
     _updateFilterHasMoreState(filterType, newProducts.length >= limit);
   }
@@ -1289,31 +1309,42 @@ class SpecialFilterProviderMarket with ChangeNotifier {
       }
     }
 
-    final currentProducts = _filterProducts[filterType] ?? [];
-    final currentProductIds = _filterProductIds[filterType] ?? <String>{};
-    final currentSubcategoryProducts = _subcategoryProducts[filterType] ?? [];
+    final previousProducts = _filterProducts[filterType] ?? const [];
+    final previousProductIds = _filterProductIds[filterType] ?? <String>{};
+    final previousSubcategoryProducts =
+        _subcategoryProducts[filterType] ?? const [];
+
+    final updatedProductIds = <String>{...previousProductIds};
+    final addedProducts = <ProductSummary>[];
 
     for (var subcat in subcatData) {
       final products = subcat['products'] as List<ProductSummary>;
       for (var product in products) {
-        if (currentProductIds.add(product.id)) {
-          currentProducts.add(product);
+        if (updatedProductIds.add(product.id)) {
+          addedProducts.add(product);
         }
       }
     }
 
-    currentSubcategoryProducts.addAll(subcatData);
+    final mergedProducts = <ProductSummary>[
+      ...previousProducts,
+      ...addedProducts,
+    ];
+    final mergedSubcategoryProducts = <Map<String, dynamic>>[
+      ...previousSubcategoryProducts,
+      ...subcatData,
+    ];
 
-    _filterProducts[filterType] = currentProducts;
-    _filterProductIds[filterType] = currentProductIds;
-    _subcategoryProducts[filterType] = currentSubcategoryProducts;
+    _filterProducts[filterType] = mergedProducts;
+    _filterProductIds[filterType] = updatedProductIds;
+    _subcategoryProducts[filterType] = mergedSubcategoryProducts;
 
     final cacheKey = '$filterType|$page';
-    _productCache[cacheKey] = List.from(currentProducts);
+    _productCache[cacheKey] = List.from(mergedProducts);
     _cacheTimestamps[cacheKey] = DateTime.now();
 
     if (filterType == specialFilter) {
-      _productIdsSubject.add(currentProducts.map((p) => p.id).toList());
+      _productIdsSubject.add(mergedProducts.map((p) => p.id).toList());
     }
     _updateFilterHasMoreState(filterType, subcategories.length > endIndex);
   }

@@ -159,7 +159,6 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
 
       final data = result.data as Map<String, dynamic>;
       if (data['success'] == true) {
-        await cart.clearCart();
         if (mounted) {
           setState(() => _orderSuccess = _OrderSuccess(
                 orderId: data['orderId'] as String,
@@ -168,6 +167,7 @@ class _FoodCheckoutContentState extends State<_FoodCheckoutContent> {
                         _estimatedPrepTime(cart.items),
               ));
         }
+        await cart.clearCart();
       }
     } on FirebaseFunctionsException catch (e) {
       if (mounted)
