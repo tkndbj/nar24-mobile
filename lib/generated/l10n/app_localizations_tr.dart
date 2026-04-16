@@ -15812,6 +15812,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get notifMarketReviewTitle => 'Market Siparişi Teslim Edildi! 🎉';
 
   @override
+  String get marketReview => 'Market Değerlendirmesi';
+
+  @override
+  String get writeMarketReview => 'Marketi Değerlendir';
+
+  @override
   String get drinkUpdateSuccess => 'İçecek başarıyla güncellendi';
 
   @override
@@ -16220,4 +16226,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get marketInfo => 'Bilgi';
+
+  @override
+  String get marketOrders => 'Market Siparişleri';
 }

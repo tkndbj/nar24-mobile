@@ -6761,6 +6761,8 @@
 "notifMarketReviewBody": "Your market order has arrived. Tap to leave a review! ⭐",
 "notifMarketOrderStatusTitle": "Market Order 🛒",
 "notifMarketReviewTitle": "Market Order Delivered! 🎉",
+"marketReview": "Market Review",
+"writeMarketReview": "Review Market",
 "drinkUpdateSuccess": "Drink updated successfully",
 "updating": "Updating...",
 "marketBrandName": "Nar24",
@@ -6903,5 +6905,6 @@
 "marketCheckoutPaymentInitFailed": "Failed to initialize payment",
 "marketOrderDetailTitle": "Order Details",
 "marketOrdersLoadError": "Failed to load orders",
-"marketInfo": "Info"
+"marketInfo": "Info",
+"marketOrders": "Market Orders"
 }

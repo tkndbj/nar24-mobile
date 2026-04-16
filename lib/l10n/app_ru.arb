@@ -6396,6 +6396,8 @@
 "notifMarketReviewBody": "Ваш заказ из магазина прибыл. Нажмите, чтобы оставить отзыв! ⭐",
 "notifMarketOrderStatusTitle": "Заказ из магазина 🛒",
 "notifMarketReviewTitle": "Заказ из магазина доставлен! 🎉",
+"marketReview": "Отзыв о маркете",
+"writeMarketReview": "Оценить маркет",
 "drinkUpdateSuccess": "Напиток успешно обновлён",
 "updating": "Обновление...",
 "marketBrandName": "Nar24",
@@ -6538,5 +6540,6 @@
 "marketCheckoutPaymentInitFailed": "Не удалось инициализировать оплату",
 "marketOrderDetailTitle": "Детали заказа",
 "marketOrdersLoadError": "Не удалось загрузить заказы",
-"marketInfo": "Инфо"
+"marketInfo": "Инфо",
+"marketOrders": "Заказы магазина"
 }

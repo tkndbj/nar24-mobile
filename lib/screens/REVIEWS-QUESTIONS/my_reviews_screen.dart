@@ -14,8 +14,6 @@ import '../../models/review_dialog_view_model.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../../utils/image_compression_utils.dart';
 
 const int _kMaxImages = 3;
@@ -32,6 +30,85 @@ const List<String> _kValidExtensions = [
 // ─────────────────────────────────────────────────────────────────────────────
 // Local models
 // ─────────────────────────────────────────────────────────────────────────────
+
+class MarketPendingReview {
+  final String id;
+  final List<Map<String, dynamic>> items;
+  final double totalPrice;
+  final String currency;
+  final Timestamp createdAt;
+
+  const MarketPendingReview({
+    required this.id,
+    required this.items,
+    required this.totalPrice,
+    required this.currency,
+    required this.createdAt,
+  });
+
+  factory MarketPendingReview.fromDoc(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
+    final rawItems = d['items'];
+    final items = rawItems is List
+        ? rawItems
+            .whereType<Map<String, dynamic>>()
+            .map((i) => {
+                  'name': i['name'] ?? '',
+                  'quantity': i['quantity'] ?? 1,
+                  'brand': i['brand'] ?? '',
+                })
+            .toList()
+        : <Map<String, dynamic>>[];
+    return MarketPendingReview(
+      id: doc.id,
+      items: items,
+      totalPrice: (d['totalPrice'] as num?)?.toDouble() ?? 0,
+      currency: d['currency'] as String? ?? 'TL',
+      createdAt: d['createdAt'] as Timestamp? ?? Timestamp.now(),
+    );
+  }
+
+  String get itemsPreview {
+    final preview = items.take(2).map((i) {
+      final qty = (i['quantity'] as num?)?.toInt() ?? 1;
+      final name = i['name'] as String? ?? '';
+      return qty > 1 ? '${qty}× $name' : name;
+    }).join(', ');
+    return items.length > 2 ? '$preview +${items.length - 2}' : preview;
+  }
+}
+
+class MarketReview {
+  final String id;
+  final String orderId;
+  final double rating;
+  final String comment;
+  final Timestamp timestamp;
+  final List<String> imageUrls;
+
+  const MarketReview({
+    required this.id,
+    required this.orderId,
+    required this.rating,
+    required this.comment,
+    required this.timestamp,
+    required this.imageUrls,
+  });
+
+  factory MarketReview.fromDoc(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
+    return MarketReview(
+      id: doc.id,
+      orderId: d['orderId'] as String? ?? '',
+      rating: (d['rating'] as num?)?.toDouble() ?? 0,
+      comment: d['comment'] as String? ?? '',
+      timestamp: d['timestamp'] as Timestamp? ?? Timestamp.now(),
+      imageUrls:
+          (d['imageUrls'] as List<dynamic>?)?.whereType<String>().toList() ??
+              [],
+    );
+  }
+}
 
 class FoodPendingReview {
   final String id;
@@ -132,7 +209,7 @@ class FoodReview {
 // Filter enum (added food)
 // ─────────────────────────────────────────────────────────────────────────────
 
-enum ReviewFilter { all, product, seller, food }
+enum ReviewFilter { all, product, seller, food, market }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Screen
@@ -182,6 +259,20 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
   bool _myFoodLoading = false;
   bool _myFoodInitialLoading = true;
 
+  // ── Pending market reviews ─────────────────────────────────────────────
+  final List<MarketPendingReview> _marketPending = [];
+  DocumentSnapshot? _marketPendingLastDoc;
+  bool _marketPendingHasMore = true;
+  bool _marketPendingLoading = false;
+  bool _marketPendingInitialLoading = true;
+
+  // ── My market reviews ──────────────────────────────────────────────────
+  final List<MarketReview> _myMarketReviews = [];
+  DocumentSnapshot? _myMarketLastDoc;
+  bool _myMarketHasMore = true;
+  bool _myMarketLoading = false;
+  bool _myMarketInitialLoading = true;
+
   @override
   void initState() {
     super.initState();
@@ -194,6 +285,8 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
     _fetchMyReviewPage();
     _fetchFoodPendingPage();
     _fetchMyFoodReviewsPage();
+    _fetchMarketPendingPage();
+    _fetchMyMarketReviewsPage();
   }
 
   @override
@@ -207,29 +300,30 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
   // ── Scroll listeners ────────────────────────────────────────────────────────
 
   void _pendingOnScroll() {
+    if (_pendingController.position.pixels <
+        _pendingController.position.maxScrollExtent - 200) return;
+
     final provider = context.read<ReviewProvider>();
-    if (_pendingController.position.pixels >=
-            _pendingController.position.maxScrollExtent - 200 &&
-        provider.canLoadMore) {
-      provider.loadMore();
-    }
-    if (_pendingController.position.pixels >=
-            _pendingController.position.maxScrollExtent - 200 &&
-        !_foodPendingLoading &&
-        _foodPendingHasMore) {
-      _fetchFoodPendingPage();
-    }
+    if (provider.canLoadMore) provider.loadMore();
+    if (!_foodPendingLoading && _foodPendingHasMore) _fetchFoodPendingPage();
+    if (!_marketPendingLoading && _marketPendingHasMore)
+      _fetchMarketPendingPage();
   }
 
   void _myOnScroll() {
-    if (_myController.position.pixels >=
-        _myController.position.maxScrollExtent - 200) {
-      if (!_myLoading && _myHasMore) _fetchMyReviewPage();
-      if (!_myFoodLoading &&
-          _myFoodHasMore &&
-          (_filter == ReviewFilter.all || _filter == ReviewFilter.food)) {
-        _fetchMyFoodReviewsPage();
-      }
+    if (_myController.position.pixels <
+        _myController.position.maxScrollExtent - 200) return;
+
+    if (!_myLoading && _myHasMore) _fetchMyReviewPage();
+    if (!_myFoodLoading &&
+        _myFoodHasMore &&
+        (_filter == ReviewFilter.all || _filter == ReviewFilter.food)) {
+      _fetchMyFoodReviewsPage();
+    }
+    if (!_myMarketLoading &&
+        _myMarketHasMore &&
+        (_filter == ReviewFilter.all || _filter == ReviewFilter.market)) {
+      _fetchMyMarketReviewsPage();
     }
   }
 
@@ -261,7 +355,8 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
               .where('productId', isEqualTo: null);
           break;
         case ReviewFilter.food:
-          // No product reviews to show in food-only filter
+        case ReviewFilter.market:
+          // No product/seller reviews to show in food-only or market-only filter
           if (mounted) {
             setState(() {
               _myLoading = false;
@@ -417,6 +512,106 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
     }
   }
 
+  // ── Fetch market pending reviews ────────────────────────────────────────
+
+  Future<void> _fetchMarketPendingPage({bool reset = false}) async {
+    if (!_marketPendingHasMore || _marketPendingLoading) return;
+    setState(() => _marketPendingLoading = true);
+
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) {
+        if (mounted) setState(() => _marketPendingLoading = false);
+        return;
+      }
+
+      Query q = FirebaseFirestore.instance
+          .collection('orders-market')
+          .where('buyerId', isEqualTo: uid)
+          .where('needsReview', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
+          .limit(_pageSize);
+
+      if (_marketPendingLastDoc != null) {
+        q = q.startAfterDocument(_marketPendingLastDoc!);
+      }
+
+      final snap = await q.get();
+
+      if (snap.docs.length < _pageSize) _marketPendingHasMore = false;
+      if (snap.docs.isNotEmpty) _marketPendingLastDoc = snap.docs.last;
+
+      final newItems =
+          snap.docs.map((d) => MarketPendingReview.fromDoc(d)).toList();
+
+      if (mounted) {
+        setState(() {
+          _marketPending.addAll(newItems);
+          _marketPendingLoading = false;
+          _marketPendingInitialLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching market pending reviews: $e');
+      if (mounted) {
+        setState(() {
+          _marketPendingLoading = false;
+          _marketPendingInitialLoading = false;
+        });
+      }
+    }
+  }
+
+  // ── Fetch my market reviews ─────────────────────────────────────────────
+
+  Future<void> _fetchMyMarketReviewsPage({bool reset = false}) async {
+    if (!_myMarketHasMore || _myMarketLoading) return;
+    setState(() => _myMarketLoading = true);
+
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) {
+        if (mounted) setState(() => _myMarketLoading = false);
+        return;
+      }
+
+      Query q = FirebaseFirestore.instance
+          .collection('nar24market')
+          .doc('stats')
+          .collection('reviews')
+          .where('buyerId', isEqualTo: uid)
+          .orderBy('timestamp', descending: true)
+          .limit(_pageSize);
+
+      if (_myMarketLastDoc != null) {
+        q = q.startAfterDocument(_myMarketLastDoc!);
+      }
+
+      final snap = await q.get();
+
+      if (snap.docs.length < _pageSize) _myMarketHasMore = false;
+      if (snap.docs.isNotEmpty) _myMarketLastDoc = snap.docs.last;
+
+      final newItems = snap.docs.map((d) => MarketReview.fromDoc(d)).toList();
+
+      if (mounted) {
+        setState(() {
+          _myMarketReviews.addAll(newItems);
+          _myMarketLoading = false;
+          _myMarketInitialLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching market reviews: $e');
+      if (mounted) {
+        setState(() {
+          _myMarketLoading = false;
+          _myMarketInitialLoading = false;
+        });
+      }
+    }
+  }
+
   // ── Reset helpers ───────────────────────────────────────────────────────────
 
   void _resetProductReviews() {
@@ -431,6 +626,13 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
     _myFoodLastDoc = null;
     _myFoodHasMore = true;
     _myFoodInitialLoading = true;
+  }
+
+  void _resetMarketReviews() {
+    _myMarketReviews.clear();
+    _myMarketLastDoc = null;
+    _myMarketHasMore = true;
+    _myMarketInitialLoading = true;
   }
 
   // ── Date picker ─────────────────────────────────────────────────────────────
@@ -474,9 +676,11 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
         _currentEndDate = picked.end;
         _resetProductReviews();
         _resetFoodReviews();
+        _resetMarketReviews();
       });
       await _fetchMyReviewPage();
       await _fetchMyFoodReviewsPage();
+      await _fetchMyMarketReviewsPage();
     }
   }
 
@@ -1001,8 +1205,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
           if (!mounted) return;
           Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content:
-                Text(l10n.imageRejectedWithNumber('${i + 1}')),
+            content: Text(l10n.imageRejectedWithNumber('${i + 1}')),
             backgroundColor: Colors.red,
           ));
           return;
@@ -1037,6 +1240,461 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
         _myFoodInitialLoading = true;
       });
       await _fetchMyFoodReviewsPage();
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.message ?? l10n.errorSubmittingReview),
+        backgroundColor: Colors.red,
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(l10n.errorSubmittingReview),
+        backgroundColor: Colors.red,
+      ));
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Market review bottom sheet
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<void> _showMarketReviewBottomSheet(MarketPendingReview order) async {
+    final l10n = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    double localRating = 0;
+    final textController = TextEditingController();
+    final List<File> selectedImages = [];
+
+    String? validateFile(File file) {
+      final size = file.lengthSync();
+      if (size > _kMaxFileSizeBytes) return 'Image must be under 5 MB.';
+      final name = file.path.toLowerCase();
+      final valid = _kValidExtensions.any((ext) => name.endsWith(ext));
+      if (!valid) return 'Only JPG, PNG, HEIC, or WEBP images are allowed.';
+      return null;
+    }
+
+    await showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          Future<void> pickImage() async {
+            if (selectedImages.length >= _kMaxImages) return;
+            final picked = await ImagePicker().pickImage(
+              source: ImageSource.gallery,
+              imageQuality: 85,
+            );
+            if (picked == null) return;
+            final file = File(picked.path);
+            final error = validateFile(file);
+            if (error != null) {
+              if (ctx.mounted) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(content: Text(error), backgroundColor: Colors.red),
+                );
+              }
+              return;
+            }
+            setModalState(() => selectedImages.add(file));
+          }
+
+          return GestureDetector(
+            onTap: () => FocusScope.of(ctx).unfocus(),
+            child: Padding(
+              padding:
+                  EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+              child: Material(
+                color: Colors.transparent,
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Container(
+                    margin: const EdgeInsets.all(16),
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(ctx).size.height * 0.85,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color.fromARGB(255, 33, 31, 49)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Header
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: isDark
+                                    ? Colors.grey.shade700
+                                    : Colors.grey.shade300,
+                                width: 0.5,
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color:
+                                      const Color(0xFF00A86B).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(Icons.storefront_rounded,
+                                    color: Color(0xFF00A86B), size: 18),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      l10n.marketReview,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark
+                                            ? Colors.white
+                                            : Colors.black,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Nar24 Market',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isDark
+                                            ? Colors.grey[400]
+                                            : Colors.grey[600],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        Flexible(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Items preview
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? Colors.white.withOpacity(0.05)
+                                        : const Color(0xFFF8FAFC),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    order.itemsPreview,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: isDark
+                                          ? Colors.grey[400]
+                                          : Colors.grey[600],
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+
+                                // Stars
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: List.generate(
+                                    5,
+                                    (idx) => GestureDetector(
+                                      onTap: () => setModalState(() =>
+                                          localRating = (idx + 1).toDouble()),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(4),
+                                        child: Icon(
+                                          idx < localRating
+                                              ? Icons.star_rounded
+                                              : Icons.star_outline_rounded,
+                                          color: Colors.amber,
+                                          size: 32,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+
+                                // Text input
+                                Container(
+                                  width: double.infinity,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? const Color.fromARGB(255, 45, 43, 61)
+                                        : Colors.grey.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                        color: isDark
+                                            ? Colors.grey.shade600
+                                            : Colors.grey.shade300),
+                                  ),
+                                  child: CupertinoTextField(
+                                    controller: textController,
+                                    placeholder: l10n.pleaseEnterYourReview ??
+                                        'Write your review...',
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 8),
+                                    style: TextStyle(
+                                      color: isDark
+                                          ? Colors.white
+                                          : Colors.black87,
+                                      fontSize: 14,
+                                    ),
+                                    cursorColor:
+                                        isDark ? Colors.white : Colors.black,
+                                    maxLines: 4,
+                                    decoration:
+                                        const BoxDecoration(border: Border()),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+
+                                // Image section
+                                Text(
+                                  'Photos (optional, up to $_kMaxImages)',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark
+                                        ? Colors.grey[400]
+                                        : Colors.grey[600],
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    ...selectedImages.map(
+                                      (file) => Padding(
+                                        padding:
+                                            const EdgeInsets.only(right: 8),
+                                        child: Stack(
+                                          children: [
+                                            ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              child: Image.file(
+                                                file,
+                                                width: 64,
+                                                height: 64,
+                                                fit: BoxFit.cover,
+                                              ),
+                                            ),
+                                            Positioned(
+                                              top: 2,
+                                              right: 2,
+                                              child: GestureDetector(
+                                                onTap: () => setModalState(() =>
+                                                    selectedImages
+                                                        .remove(file)),
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.all(3),
+                                                  decoration:
+                                                      const BoxDecoration(
+                                                    color: Colors.red,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: const Icon(Icons.close,
+                                                      color: Colors.white,
+                                                      size: 12),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    if (selectedImages.length < _kMaxImages)
+                                      GestureDetector(
+                                        onTap: pickImage,
+                                        child: Container(
+                                          width: 64,
+                                          height: 64,
+                                          decoration: BoxDecoration(
+                                            border: Border.all(
+                                              color: isDark
+                                                  ? Colors.grey.shade600
+                                                  : Colors.grey.shade300,
+                                              width: 1.5,
+                                            ),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            color: isDark
+                                                ? Colors.white.withOpacity(0.05)
+                                                : Colors.grey.shade50,
+                                          ),
+                                          child: Icon(
+                                            Icons.add_photo_alternate_rounded,
+                                            size: 28,
+                                            color: isDark
+                                                ? Colors.grey[400]
+                                                : Colors.grey[500],
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // Buttons
+                        SafeArea(
+                          top: false,
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: CupertinoButton(
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: Text(
+                                      l10n.cancel,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: isDark
+                                            ? Colors.white
+                                            : Colors.black,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: CupertinoButton(
+                                    color: const Color(0xFF00A86B),
+                                    onPressed: localRating == 0 ||
+                                            textController.text.trim().isEmpty
+                                        ? null
+                                        : () {
+                                            Navigator.pop(ctx);
+                                            _submitMarketReview(
+                                              order: order,
+                                              rating: localRating,
+                                              comment:
+                                                  textController.text.trim(),
+                                              images: List.from(selectedImages),
+                                            );
+                                          },
+                                    child: Text(
+                                      l10n.submit,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ── Submit market review ────────────────────────────────────────────────
+
+  Future<void> _submitMarketReview({
+    required MarketPendingReview order,
+    required double rating,
+    required String comment,
+    List<File> images = const [],
+  }) async {
+    final l10n = AppLocalizations.of(context);
+    _showLoadingModal(l10n);
+
+    try {
+      final approvedUrls = <String>[];
+      final storage = FirebaseStorage.instance;
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+
+      for (int i = 0; i < images.length; i++) {
+        final compressed =
+            await ImageCompressionUtils.ecommerceCompress(images[i]);
+        final fileToUpload = compressed ?? images[i];
+
+        final path =
+            'market_reviews/$uid/${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
+        final ref = storage.ref().child(path);
+        await ref.putFile(fileToUpload);
+        final url = await ref.getDownloadURL();
+
+        final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+            .httpsCallable('moderateImage');
+        final result = await callable.call({'imageUrl': url});
+        final data = result.data as Map<String, dynamic>;
+
+        if (data['approved'] == true) {
+          approvedUrls.add(url);
+        } else {
+          await ref.delete();
+          if (!mounted) return;
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(l10n.imageRejectedWithNumber('${i + 1}')),
+            backgroundColor: Colors.red,
+          ));
+          return;
+        }
+      }
+
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+          .httpsCallable('submitMarketReview');
+
+      await callable.call({
+        'orderId': order.id,
+        'rating': rating,
+        'comment': comment,
+        'imageUrls': approvedUrls,
+      });
+
+      if (!mounted) return;
+      Navigator.of(context).pop();
+
+      setState(() {
+        _marketPending.removeWhere((o) => o.id == order.id);
+      });
+
+      _showSuccessSnackbar(l10n);
+
+      setState(() {
+        _myMarketReviews.clear();
+        _myMarketLastDoc = null;
+        _myMarketHasMore = true;
+        _myMarketInitialLoading = true;
+      });
+      await _fetchMyMarketReviewsPage();
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
       Navigator.of(context).pop();
@@ -1180,8 +1838,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
         unselectedLabelColor: Theme.of(context).brightness == Brightness.light
             ? Colors.grey[600]
             : Colors.grey[400],
-        labelStyle:
-            TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+        labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
         unselectedLabelStyle:
             TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
         overlayColor: WidgetStateProperty.all(Colors.transparent),
@@ -1247,16 +1904,28 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
               _filter = (_filter == value) ? ReviewFilter.all : value;
               _resetProductReviews();
               _resetFoodReviews();
-              if (_filter != ReviewFilter.food) {
+              _resetMarketReviews();
+              if (_filter != ReviewFilter.food &&
+                  _filter != ReviewFilter.market) {
                 _myHasMore = true;
               }
               if (_filter == ReviewFilter.all || _filter == ReviewFilter.food) {
                 _myFoodHasMore = true;
               }
+              if (_filter == ReviewFilter.all ||
+                  _filter == ReviewFilter.market) {
+                _myMarketHasMore = true;
+              }
             });
-            if (_filter != ReviewFilter.food) _fetchMyReviewPage();
+            if (_filter != ReviewFilter.food &&
+                _filter != ReviewFilter.market) {
+              _fetchMyReviewPage();
+            }
             if (_filter == ReviewFilter.all || _filter == ReviewFilter.food) {
               _fetchMyFoodReviewsPage();
+            }
+            if (_filter == ReviewFilter.all || _filter == ReviewFilter.market) {
+              _fetchMyMarketReviewsPage();
             }
           },
         ),
@@ -1265,19 +1934,20 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          chip(l10n.product, ReviewFilter.product, Colors.orange),
-          const SizedBox(width: 8),
-          chip(l10n.seller, ReviewFilter.seller, Colors.orange),
-          const SizedBox(width: 8),
-          chip(
-            l10n.food,
-            ReviewFilter.food,
-            const Color(0xFFF97316),
-          ),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            chip(l10n.product, ReviewFilter.product, Colors.orange),
+            const SizedBox(width: 8),
+            chip(l10n.seller, ReviewFilter.seller, Colors.orange),
+            const SizedBox(width: 8),
+            chip(l10n.food, ReviewFilter.food, const Color(0xFFF97316)),
+            const SizedBox(width: 8),
+            chip(l10n.market, ReviewFilter.market, const Color(0xFF00A86B)),
+          ],
+        ),
       ),
     );
   }
@@ -1350,7 +2020,8 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
   // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildPendingList(List pending, bool isDark, AppLocalizations l10n) {
-    final totalPending = pending.length + _foodPending.length;
+    final totalPending =
+        pending.length + _foodPending.length + _marketPending.length;
 
     if (totalPending == 0 && !_foodPendingLoading) {
       return Center(
@@ -1372,8 +2043,10 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
     return ListView.separated(
       controller: _pendingController,
       padding: const EdgeInsets.only(top: 8.0),
-      itemCount:
-          pending.length + _foodPending.length + (_foodPendingLoading ? 1 : 0),
+      itemCount: pending.length +
+          _foodPending.length +
+          _marketPending.length +
+          ((_foodPendingLoading || _marketPendingLoading) ? 1 : 0),
       separatorBuilder: (_, __) => const SizedBox(height: 16),
       itemBuilder: (context, index) {
         // Product/seller pending items first
@@ -1394,6 +2067,13 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
         final foodIndex = index - pending.length;
         if (foodIndex < _foodPending.length) {
           return _buildFoodPendingCard(_foodPending[foodIndex], isDark, l10n);
+        }
+
+        // Market pending items
+        final marketIndex = index - pending.length - _foodPending.length;
+        if (marketIndex < _marketPending.length) {
+          return _buildMarketPendingCard(
+              _marketPending[marketIndex], isDark, l10n);
         }
 
         // Loading shimmer
@@ -1460,8 +2140,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                       icon: const Icon(Icons.rate_review, size: 18),
                       label: Text(l10n.writeYourReview,
                           style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600),
+                              fontSize: 13, fontWeight: FontWeight.w600),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
                       style: ElevatedButton.styleFrom(
@@ -1493,8 +2172,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                       label: Text(
                         pr.isShopProduct ? l10n.shopReview : l10n.sellerReview3,
                         style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600),
+                            fontSize: 13, fontWeight: FontWeight.w600),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1616,12 +2294,112 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
               icon: const Icon(Icons.star_rounded, size: 18),
               label: Text(
                 l10n.writeRestaurantReview,
-                style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600),
+                style:
+                    const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFF97316),
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 48),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMarketPendingCard(
+      MarketPendingReview order, bool isDark, AppLocalizations l10n) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: isDark ? const Color.fromARGB(255, 33, 31, 49) : Colors.white,
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 2,
+              offset: const Offset(0, 1)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: const Color(0xFF00A86B).withOpacity(0.1),
+                  ),
+                  child: const Icon(Icons.storefront_rounded,
+                      color: Color(0xFF00A86B), size: 28),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Nar24 Market',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        order.itemsPreview,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${order.totalPrice.toStringAsFixed(0)} ${order.currency}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF00A86B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  '${order.createdAt.toDate().day}/'
+                  '${order.createdAt.toDate().month}/'
+                  '${order.createdAt.toDate().year}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.grey[500] : Colors.grey[400],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: ElevatedButton.icon(
+              onPressed: () => _showMarketReviewBottomSheet(order),
+              icon: const Icon(Icons.star_rounded, size: 18),
+              label: Text(
+                l10n.writeMarketReview,
+                style:
+                    const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00A86B),
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 48),
                 shape: RoundedRectangleBorder(
@@ -1641,12 +2419,15 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
   Widget _buildMyReviewsList(bool isDark, AppLocalizations l10n) {
     final Widget content;
 
-    if (_myInitialLoading && _myFoodInitialLoading) {
+    if (_myInitialLoading && _myFoodInitialLoading && _myMarketInitialLoading) {
       content = _buildShimmerList(isDark);
     } else {
       final showFood =
           _filter == ReviewFilter.all || _filter == ReviewFilter.food;
-      final showProduct = _filter != ReviewFilter.food;
+      final showProduct =
+          _filter != ReviewFilter.food && _filter != ReviewFilter.market;
+      final showMarket =
+          _filter == ReviewFilter.all || _filter == ReviewFilter.market;
 
       final displayedDocs = showProduct
           ? _myDocs.where((doc) {
@@ -1663,7 +2444,9 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
           : <QueryDocumentSnapshot<Map<String, dynamic>>>[];
 
       final foodReviews = showFood ? _myFoodReviews : <FoodReview>[];
-      final totalCount = displayedDocs.length + foodReviews.length;
+      final marketReviews = showMarket ? _myMarketReviews : <MarketReview>[];
+      final totalCount =
+          displayedDocs.length + foodReviews.length + marketReviews.length;
 
       if (totalCount == 0 && !_myLoading && !_myFoodLoading) {
         content = Center(
@@ -1687,7 +2470,8 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
           padding: const EdgeInsets.only(top: 8.0),
           itemCount: displayedDocs.length +
               foodReviews.length +
-              (_myLoading || _myFoodLoading ? 1 : 0),
+              marketReviews.length +
+              (_myLoading || _myFoodLoading || _myMarketLoading ? 1 : 0),
           separatorBuilder: (_, __) => const SizedBox(height: 16),
           itemBuilder: (context, index) {
             // Product / seller reviews
@@ -1700,6 +2484,14 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
             final foodIndex = index - displayedDocs.length;
             if (foodIndex < foodReviews.length) {
               return _buildFoodReviewCard(foodReviews[foodIndex], isDark, l10n);
+            }
+
+            // Market reviews
+            final marketIndex =
+                index - displayedDocs.length - foodReviews.length;
+            if (marketIndex < marketReviews.length) {
+              return _buildMarketReviewCard(
+                  marketReviews[marketIndex], isDark, l10n);
             }
 
             // Loading shimmer
@@ -1772,7 +2564,8 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                             fontSize: 16),
                       ),
                       TextSpan(
-                        text: data['sellerName'] as String? ?? l10n.unknownSeller,
+                        text:
+                            data['sellerName'] as String? ?? l10n.unknownSeller,
                         style: TextStyle(
                             fontWeight: FontWeight.normal,
                             color: isDark ? Colors.white : Colors.black,
@@ -1897,8 +2690,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        review.restaurantName ??
-                            l10n.restaurantReview,
+                        review.restaurantName ?? l10n.restaurantReview,
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -1906,6 +2698,136 @@ class _MyReviewsScreenState extends State<MyReviewsScreen>
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: List.generate(
+                          5,
+                          (idx) => Icon(
+                            idx < review.rating
+                                ? Icons.star_rounded
+                                : Icons.star_outline_rounded,
+                            color: Colors.amber,
+                            size: 15,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  '${review.timestamp.toDate().day}/'
+                  '${review.timestamp.toDate().month}/'
+                  '${review.timestamp.toDate().year}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.grey[500] : Colors.grey[400],
+                  ),
+                ),
+              ],
+            ),
+            if (review.comment.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF1C1A29)
+                      : const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child:
+                    Text(review.comment, style: const TextStyle(fontSize: 14)),
+              ),
+            ],
+            if (review.imageUrls.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 80,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: review.imageUrls.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) => GestureDetector(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => Scaffold(
+                          backgroundColor: Colors.black,
+                          appBar: AppBar(
+                            backgroundColor: Colors.transparent,
+                            elevation: 0,
+                            leading: const BackButton(color: Colors.white),
+                          ),
+                          body: Center(
+                            child: InteractiveViewer(
+                              child: Image.network(review.imageUrls[i]),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        review.imageUrls[i],
+                        width: 80,
+                        height: 80,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMarketReviewCard(
+      MarketReview review, bool isDark, AppLocalizations l10n) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: isDark ? const Color.fromARGB(255, 33, 31, 49) : Colors.white,
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 2,
+              offset: const Offset(0, 1)),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00A86B).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.storefront_rounded,
+                      color: Color(0xFF00A86B), size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Nar24 Market',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
                       ),
                       const SizedBox(height: 3),
                       Row(

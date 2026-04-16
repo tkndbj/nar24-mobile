@@ -1,4 +1,5 @@
-import {onDocumentCreated} from 'firebase-functions/v2/firestore';
+import {onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import {onCall, HttpsError} from 'firebase-functions/v2/https';
 import admin from 'firebase-admin';
 import {getMessaging} from 'firebase-admin/messaging';
@@ -434,6 +435,14 @@ export const TEMPLATES = {
       },
     },
   };
+
+  const URGENT_NOTIFICATION_TYPES = new Set([
+    'food_order_delivered_review',
+    'food_order_status_update',
+    'market_order_delivered_review',
+    'market_order_status_update',
+    'order_assigned',
+  ]);
   
   export const sendNotificationOnCreation = onDocumentCreated({
     region: 'europe-west3',
@@ -473,67 +482,18 @@ export const TEMPLATES = {
   
     let title = tmpl.title;
     let body = tmpl.body;
-    if (notificationData.productName) {
-      title = title.replace('{productName}', notificationData.productName);
-      body = body .replace('{productName}', notificationData.productName);
-    }
-    if (notificationData.itemType) {
-      title = title.replace('{itemType}', notificationData.itemType);
-      body = body .replace('{itemType}', notificationData.itemType);
-    }
-    if (notificationData.campaignName) {
-      title = title.replace('{campaignName}', notificationData.campaignName);
-      body = body.replace('{campaignName}', notificationData.campaignName);
-    }
-    if (notificationData.campaignDescription) {
-      title = title.replace('{campaignDescription}', notificationData.campaignDescription);
-      body = body.replace('{campaignDescription}', notificationData.campaignDescription);
-    }
-    if (notificationData.shopName) {
-      title = title.replace('{shopName}', notificationData.shopName);
-      body = body.replace('{shopName}', notificationData.shopName);
-    }
-    if (notificationData.role) {
-      title = title.replace('{role}', notificationData.role);
-      body = body.replace('{role}', notificationData.role);
-    }
-    if (notificationData.adTypeLabel) {
-      title = title.replace('{adTypeLabel}', notificationData.adTypeLabel);
-      body = body.replace('{adTypeLabel}', notificationData.adTypeLabel);
-    }
-    if (notificationData.rejectionReason) {
-      title = title.replace('{rejectionReason}', notificationData.rejectionReason);
-      body = body.replace('{rejectionReason}', notificationData.rejectionReason);
-    }
-    if (notificationData.receiptNo) {
-      title = title.replace('{receiptNo}', notificationData.receiptNo);
-      body = body.replace('{receiptNo}', notificationData.receiptNo);
-    }
     const payload = notificationData.payload || {};
-  if (payload.restaurantName) {
-    title = title.replace('{restaurantName}', payload.restaurantName);
-    body  = body .replace('{restaurantName}', payload.restaurantName);
-  }
-  if (payload.itemCount !== undefined) {
-    title = title.replace('{itemCount}', String(payload.itemCount));
-    body = body.replace('{itemCount}', String(payload.itemCount));
-  }
-  if (payload.totalPrice !== undefined) {
-    title = title.replace('{totalPrice}', String(payload.totalPrice));
-    body = body.replace('{totalPrice}', String(payload.totalPrice));
-  }
-  if (payload.currency) {
-    title = title.replace('{currency}', payload.currency);
-    body = body.replace('{currency}', payload.currency);
-  }
-  if (payload.orderStatus) {
-    title = title.replace('{orderStatus}', payload.orderStatus);
-    body  = body .replace('{orderStatus}', payload.orderStatus);
-  }
-  if (payload.orderId) {
-    title = title.replace('{orderId}', payload.orderId);
-    body  = body .replace('{orderId}', payload.orderId);
-  }
+    const replacementSources = { ...notificationData, ...payload };
+
+    for (const [key, value] of Object.entries(replacementSources)) {
+      if (value === undefined || value === null || typeof value === 'object') continue;
+      const placeholder = `{${key}}`;
+      if (title.includes(placeholder) || body.includes(placeholder)) {
+        const strValue = String(value);
+        title = title.replace(placeholder, strValue);
+        body = body.replace(placeholder, strValue);
+      }
+    }
   
     // 3) Compute the deep-link route for GoRouter
     //    (defaults to your in-app notifications list)
@@ -565,9 +525,9 @@ export const TEMPLATES = {
   case 'market_order_status_update':
     route = '/my-market-orders';
     break;
-case 'market_order_delivered_review':
-  route = payload.orderId ? `/market-order-detail/${payload.orderId}` : '/my_market_orders';
-  break;
+    case 'market_order_delivered_review':
+      route = payload.orderId ? `/market-order-detail/${payload.orderId}` : '/my-market-orders';
+      break;
       case 'food_order_delivered_review':
         route = payload.orderId ? `/food-order-detail/${payload.orderId}` : '/orders?tab=food';
         break;
@@ -638,7 +598,8 @@ case 'market_order_delivered_review':
         JSON.stringify(value);
     });
   
-    // 5) Construct and send the multicast message
+    const isUrgent = URGENT_NOTIFICATION_TYPES.has(originalType);
+
     const message = {
       tokens,
       notification: {title, body},
@@ -646,33 +607,15 @@ case 'market_order_delivered_review':
       android: {
         priority: 'high',
         notification: {
-          channelId: originalType === 'food_order_delivered_review' ||
-          originalType === 'food_order_status_update' ||
-          originalType === 'market_order_delivered_review' ||
-          originalType === 'market_order_status_update' ||
-          originalType === 'order_assigned' ?
-            'food_orders_high' :
-            'high_importance_channel',
-          sound: originalType === 'food_order_delivered_review' ||
-          originalType === 'food_order_status_update' ||
-          originalType === 'market_order_delivered_review' ||
-          originalType === 'market_order_status_update' ||
-          originalType === 'order_assigned' ?
-            'order_alert' :
-            'default',
+          channelId: isUrgent ? 'food_orders_high' : 'high_importance_channel',
+          sound: isUrgent ? 'order_alert' : 'default',
           icon: 'ic_notification',
         },
       },
       apns: {
         headers: {'apns-priority': '10'},
         payload: { aps: {
-          sound: originalType === 'food_order_delivered_review' ||
-          originalType === 'food_order_status_update' ||
-          originalType === 'market_order_delivered_review' ||
-          originalType === 'market_order_status_update' ||
-          originalType === 'order_assigned' ?
-            'order_alert.caf' :
-            'default',
+          sound: isUrgent ? 'order_alert.caf' : 'default',
           badge: 1,
         }},
       },
@@ -1619,3 +1562,171 @@ case 'market_order_delivered_review':
       }
     },
   );
+
+  /**
+ * notification-cleanup.js
+ *
+ * Scheduled cleanup of old notification documents across all collections.
+ * Runs daily at 03:00 (low-traffic window).
+ *
+ * Target collections:
+ *   • users/{uid}/notifications     — buyer/courier/seller personal notifications
+ *   • restaurant_notifications      — restaurant owner notifications
+ *   • shop_notifications            — shop member notifications
+ *   • food_courier_notifications    — courier broadcast pool notifications
+ *   • courier_calls                 — restaurant-to-courier call requests
+ *   • courier_actions               — courier state-transition action docs
+ *
+ * Safety:
+ *   • Each collection is processed independently — one failure doesn't stop others
+ *   • collectionGroup query on `notifications` is guarded by parent-path check
+ *     to ensure only `users/{uid}/notifications` docs are touched
+ *   • Processes in batches of 500 (Firestore batch limit)
+ *   • Graceful time-limit: stops before timeout and resumes next run
+ *   • Only deletes — never updates or reads business-critical fields
+ */
+
+const REGION = 'europe-west3';
+const BATCH_SIZE = 500;
+const RETENTION_DAYS = 30;
+const MAX_RUNTIME_MS = 270 * 1000; // 4.5 min — leaves 30s buffer before 5 min timeout
+
+const CLEANUP_TARGETS = [
+  {
+    type: 'collectionGroup',
+    name: 'notifications',
+    timestampField: 'timestamp',
+    label: 'User notifications',
+    parentGuard: 'users',
+  },
+  {
+    type: 'collection',
+    name: 'restaurant_notifications',
+    timestampField: 'timestamp',
+    label: 'Restaurant notifications',
+  },
+  {
+    type: 'collection',
+    name: 'shop_notifications',
+    timestampField: 'timestamp',
+    label: 'Shop notifications',
+  },
+  {
+    type: 'collection',
+    name: 'food_courier_notifications',
+    timestampField: 'createdAt',
+    label: 'Courier broadcast notifications',
+  },
+  {
+    type: 'collection',
+    name: 'courier_calls',
+    timestampField: 'createdAt',
+    label: 'Courier calls',
+  },
+  {
+    type: 'collection',
+    name: 'courier_actions',
+    timestampField: 'createdAt',
+    label: 'Courier actions',
+  },
+];
+
+export const cleanupOldNotifications = onSchedule(
+  {
+    schedule: 'every day 03:00',
+    timeZone: 'Europe/Nicosia',
+    region: REGION,
+    memory: '512MiB',
+    timeoutSeconds: 300,
+  },
+  async () => {
+    const db = admin.firestore();
+    const cutoff = admin.firestore.Timestamp.fromMillis(
+      Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000,
+    );
+    const startTime = Date.now();
+
+    console.log(`[Cleanup] Starting. Deleting docs older than ${RETENTION_DAYS} days.`);
+
+    let grandTotal = 0;
+    let timedOut = false;
+
+    for (const target of CLEANUP_TARGETS) {
+      if (timedOut) break;
+
+      try {
+        const { deleted, hitTimeLimit } = await cleanupTarget(
+          db, target, cutoff, startTime,
+        );
+        grandTotal += deleted;
+        if (hitTimeLimit) {
+          timedOut = true;
+          console.log(`[Cleanup] Time limit reached during "${target.label}" — will continue next run.`);
+        }
+      } catch (err) {
+        // Log and continue — one collection failure must not block others
+        console.error(`[Cleanup] ${target.label} FAILED:`, err.message);
+      }
+    }
+
+    console.log(
+      `[Cleanup] Complete. Total deleted: ${grandTotal}${timedOut ? ' (partial — will resume next run)' : ''}`,
+    );
+  },
+);
+
+async function cleanupTarget(db, target, cutoff, globalStartTime) {
+  const baseRef =
+    target.type === 'collectionGroup' ? db.collectionGroup(target.name) : db.collection(target.name);
+
+  let totalDeleted = 0;
+
+  let hasMoreDocs = true;
+while (hasMoreDocs) {
+    // ── Time guard ─────────────────────────────────────────────────
+    if (Date.now() - globalStartTime > MAX_RUNTIME_MS) {
+      return { deleted: totalDeleted, hitTimeLimit: true };
+    }
+
+    // ── Fetch a batch of old docs ─────────────────────────────────
+    const snap = await baseRef
+      .where(target.timestampField, '<', cutoff)
+      .limit(BATCH_SIZE)
+      .get();
+
+      if (snap.empty) {
+        hasMoreDocs = false;
+        continue;
+      }
+
+    // ── Build the delete batch ────────────────────────────────────
+    const batch = db.batch();
+    let batchCount = 0;
+
+    for (const doc of snap.docs) {
+      // Safety: for collectionGroup queries, verify the doc lives
+      // under the expected root collection (e.g. "users/")
+      if (target.parentGuard && !doc.ref.path.startsWith(target.parentGuard + '/')) {
+        continue;
+      }
+
+      batch.delete(doc.ref);
+      batchCount++;
+    }
+
+    // ── Commit ────────────────────────────────────────────────────
+    if (batchCount > 0) {
+      await batch.commit();
+      totalDeleted += batchCount;
+    }
+
+    // If this page was smaller than BATCH_SIZE, there are no more docs
+    if (snap.size < BATCH_SIZE) hasMoreDocs = false;
+  }
+
+  if (totalDeleted > 0) {
+    console.log(`[Cleanup] ${target.label}: deleted ${totalDeleted} docs`);
+  }
+
+  return { deleted: totalDeleted, hitTimeLimit: false };
+}

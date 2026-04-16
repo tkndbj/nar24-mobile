@@ -30114,6 +30114,18 @@ abstract class AppLocalizations {
   /// **'Market Siparişi Teslim Edildi! 🎉'**
   String get notifMarketReviewTitle;
 
+  /// No description provided for @marketReview.
+  ///
+  /// In tr, this message translates to:
+  /// **'Market Değerlendirmesi'**
+  String get marketReview;
+
+  /// No description provided for @writeMarketReview.
+  ///
+  /// In tr, this message translates to:
+  /// **'Marketi Değerlendir'**
+  String get writeMarketReview;
+
   /// No description provided for @drinkUpdateSuccess.
   ///
   /// In tr, this message translates to:
@@ -30899,6 +30911,12 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Bilgi'**
   String get marketInfo;
+
+  /// No description provided for @marketOrders.
+  ///
+  /// In tr, this message translates to:
+  /// **'Market Siparişleri'**
+  String get marketOrders;
 }
 
 class _AppLocalizationsDelegate

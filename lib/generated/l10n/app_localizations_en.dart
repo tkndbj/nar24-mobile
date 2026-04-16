@@ -15783,6 +15783,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notifMarketReviewTitle => 'Market Order Delivered! 🎉';
 
   @override
+  String get marketReview => 'Market Review';
+
+  @override
+  String get writeMarketReview => 'Review Market';
+
+  @override
   String get drinkUpdateSuccess => 'Drink updated successfully';
 
   @override
@@ -16190,4 +16196,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get marketInfo => 'Info';
+
+  @override
+  String get marketOrders => 'Market Orders';
 }

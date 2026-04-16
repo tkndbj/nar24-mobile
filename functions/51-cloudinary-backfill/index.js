@@ -120,6 +120,15 @@ const MIGRATION_TARGETS = {
     { collection: 'vitrin_product_applications',    fields: [{ from: 'imageUrls', to: 'imageStoragePaths', type: 'array' }, { from: 'videoUrl', to: 'videoStoragePath', type: 'single' }, { from: 'colorImages', to: 'colorImageStoragePaths', type: 'colorMap' }] },
     { collection: 'vitrin_edit_product_applications', fields: [{ from: 'imageUrls', to: 'imageStoragePaths', type: 'array' }, { from: 'videoUrl', to: 'videoStoragePath', type: 'single' }, { from: 'colorImages', to: 'colorImageStoragePaths', type: 'colorMap' }] },
   ],
+  marketItems: [
+    {
+      collection: 'market-items',
+      fields: [
+        { from: 'imageUrl',  to: 'imageStoragePath',  type: 'single' },
+        { from: 'imageUrls', to: 'imageStoragePaths', type: 'array' },
+      ],
+    },
+  ],
 };
 
 // ── Extract path from any field type ────────────────────────────────

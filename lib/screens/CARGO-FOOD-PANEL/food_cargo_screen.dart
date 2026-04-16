@@ -98,7 +98,7 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
         .orderBy('createdAt', descending: true)
         .limit(10)
         .snapshots()
-        .asBroadcastStream(); // allows multiple listeners on one connection
+        .shareReplay(maxSize: 1);
     _setupFcm();
     _setupUnreadStream();
     CourierLocationService.instance.startTracking();

@@ -15885,6 +15885,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get notifMarketReviewTitle => 'Заказ из магазина доставлен! 🎉';
 
   @override
+  String get marketReview => 'Отзыв о маркете';
+
+  @override
+  String get writeMarketReview => 'Оценить маркет';
+
+  @override
   String get drinkUpdateSuccess => 'Напиток успешно обновлён';
 
   @override
@@ -16295,4 +16301,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get marketInfo => 'Инфо';
+
+  @override
+  String get marketOrders => 'Заказы магазина';
 }

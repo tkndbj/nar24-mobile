@@ -6757,6 +6757,8 @@
 "notifMarketReviewBody": "Market siparişiniz ulaştı. Değerlendirme yapmak için tıklayın! ⭐",
 "notifMarketOrderStatusTitle": "Market Siparişi 🛒",
 "notifMarketReviewTitle": "Market Siparişi Teslim Edildi! 🎉",
+"marketReview": "Market Değerlendirmesi",
+"writeMarketReview": "Marketi Değerlendir",
 "drinkUpdateSuccess": "İçecek başarıyla güncellendi",
 "updating": "Güncelleniyor...",
 "marketBrandName": "Nar24",
@@ -6899,5 +6901,6 @@
 "marketCheckoutPaymentInitFailed": "Ödeme başlatılamadı",
 "marketOrderDetailTitle": "Sipariş Detayı",
 "marketOrdersLoadError": "Siparişler yüklenemedi",
-"marketInfo": "Bilgi"
+"marketInfo": "Bilgi",
+"marketOrders": "Market Siparişleri"
 }

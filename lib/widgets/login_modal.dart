@@ -63,9 +63,9 @@ class LoginPromptModal extends StatelessWidget {
               final User? user = result['user'];
 
               if (user != null) {
-                // Pop the login modal (guard: auth listener may have already dismissed it)
-                if (rootNavigator.mounted && Navigator.of(context).canPop()) {
-                  Navigator.of(context).pop();
+                // Pop the login modal using the root navigator we captured
+                if (rootNavigator.mounted) {
+                  rootNavigator.pop();
                 }
 
                 // Check if this Google user needs to accept agreements
@@ -80,7 +80,7 @@ class LoginPromptModal extends StatelessWidget {
                   }
                 }
               } else {
-                if (rootNavigator.mounted) Navigator.of(context).pop();
+                if (rootNavigator.mounted) rootNavigator.pop();
               }
             } catch (e) {
               scaffoldMessenger.showSnackBar(
@@ -120,9 +120,9 @@ class LoginPromptModal extends StatelessWidget {
                 final User? user = result['user'];
 
                 if (user != null) {
-                  // Pop the login modal (guard: auth listener may have already dismissed it)
-                  if (rootNavigator.mounted && Navigator.of(context).canPop()) {
-                    Navigator.of(context).pop();
+                  // Pop the login modal using the root navigator we captured
+                  if (rootNavigator.mounted) {
+                    rootNavigator.pop();
                   }
 
                   // Check if this Apple user needs to accept agreements
@@ -137,7 +137,7 @@ class LoginPromptModal extends StatelessWidget {
                     }
                   }
                 } else {
-                  if (rootNavigator.mounted) Navigator.of(context).pop();
+                  if (rootNavigator.mounted) rootNavigator.pop();
                 }
               } catch (e) {
                 scaffoldMessenger.showSnackBar(

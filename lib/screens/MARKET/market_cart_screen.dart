@@ -8,6 +8,8 @@ import 'package:provider/provider.dart';
 import '../../constants/market_categories.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../providers/market_cart_provider.dart';
+import '../../utils/cloudinary_url_builder.dart';
+import '../../widgets/cloudinary_image.dart';
 
 // =============================================================================
 // ENTRY POINT
@@ -267,10 +269,12 @@ class _MarketCartItemCard extends StatelessWidget {
                   width: 72,
                   height: 72,
                   child: item.imageUrl.isNotEmpty
-                      ? Image.network(
-                          item.imageUrl,
+                      ? CloudinaryImage.fromUrl(
+                          url: item.imageUrl,
+                          cdnWidth: CloudinaryUrl.widthFor(
+                              ProductImageSize.thumbnail),
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
+                          errorBuilder: (_) =>
                               _Placeholder(category: category, isDark: isDark),
                         )
                       : _Placeholder(category: category, isDark: isDark),

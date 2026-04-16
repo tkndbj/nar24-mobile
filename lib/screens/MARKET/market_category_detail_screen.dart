@@ -18,6 +18,8 @@ import '../../services/typesense_service_manager.dart';
 import '../../providers/market_cart_provider.dart';
 import '../../constants/market_categories.dart';
 import '../../generated/l10n/app_localizations.dart';
+import '../../utils/cloudinary_url_builder.dart';
+import '../../widgets/cloudinary_image.dart';
 import '../../widgets/login_modal.dart';
 
 // ============================================================================
@@ -757,10 +759,12 @@ class MarketItemCard extends StatelessWidget {
                             ),
                             child: Hero(
                               tag: 'market-item-${item.id}',
-                              child: Image.network(
-                                item.imageUrl,
+                              child: CloudinaryImage.fromUrl(
+                                url: item.imageUrl,
+                                cdnWidth: CloudinaryUrl.widthFor(
+                                    ProductImageSize.card),
                                 fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) =>
+                                errorBuilder: (_) =>
                                     _imagePlaceholder(isDark),
                               ),
                             ),
@@ -961,10 +965,12 @@ class MarketItemCard extends StatelessWidget {
                                     ? const Color(0xFF2D2B3F)
                                     : Colors.grey[100],
                                 child: item.imageUrl.isNotEmpty
-                                    ? Image.network(
-                                        item.imageUrl,
+                                    ? CloudinaryImage.fromUrl(
+                                        url: item.imageUrl,
+                                        cdnWidth: CloudinaryUrl.widthFor(
+                                            ProductImageSize.detail),
                                         fit: BoxFit.contain,
-                                        errorBuilder: (_, __, ___) =>
+                                        errorBuilder: (_) =>
                                             _imagePlaceholder(isDark),
                                       )
                                     : _imagePlaceholder(isDark),
@@ -1373,10 +1379,11 @@ class _FullScreenImage extends StatelessWidget {
               child: Center(
                 child: Hero(
                   tag: heroTag,
-                  child: Image.network(
-                    imageUrl,
+                  child: CloudinaryImage.fromUrl(
+                    url: imageUrl,
+                    cdnWidth: CloudinaryUrl.widthFor(ProductImageSize.zoom),
                     fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Icon(
+                    errorBuilder: (_) => const Icon(
                       Icons.broken_image_outlined,
                       color: Colors.white54,
                       size: 64,

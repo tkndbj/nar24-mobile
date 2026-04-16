@@ -928,7 +928,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ],
                   ),
-                  // Food orders row for shop owners
+                  // Food orders + Market orders row for shop owners
                   if (userOwnsShop) ...[
                     const SizedBox(height: 10),
                     Row(
@@ -939,6 +939,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             label: localization.foodOrders,
                             onTap: isAuthenticated
                                 ? () => context.push('/my_food_orders')
+                                : () => _handleUnauthenticatedTap(context),
+                            theme: theme,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _buildRectButton(
+                            icon: FeatherIcons.shoppingBag,
+                            label: localization.marketOrders,
+                            onTap: isAuthenticated
+                                ? () => context.push('/my-market-orders')
+                                : () => _handleUnauthenticatedTap(context),
+                            theme: theme,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildRectButton(
+                            icon: FeatherIcons.shoppingBag,
+                            label: localization.marketOrders,
+                            onTap: isAuthenticated
+                                ? () => context.push('/my-market-orders')
                                 : () => _handleUnauthenticatedTap(context),
                             theme: theme,
                           ),
