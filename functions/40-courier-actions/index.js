@@ -29,8 +29,10 @@
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import admin from 'firebase-admin';
 import { getRedisClient } from '../shared/redis.js';
+import { logInfo, logWarn, logError, startTimer } from '../shared/logger.js';
 
 const REGION = 'europe-west3';
+const COMPONENT = 'courier_action';
 
 // ── Redis helpers (fire-and-forget — never fail the Firestore transaction) ──
 // Load counter and rolling-assignment ZSET feed the auto-assignment fairness
@@ -38,7 +40,7 @@ const REGION = 'europe-west3';
 // been transitioned in Firestore, and the scheduled retry/rebalancer will
 // eventually correct the index state on the next heartbeat.
 
-async function redisIncrLoad(courierId, delta) {
+async function redisIncrLoad(courierId, delta, dispatchId) {
   try {
     const pipeline = getRedisClient().pipeline();
     pipeline.hincrby(`courier:${courierId}`, 'load', delta);
@@ -50,11 +52,19 @@ async function redisIncrLoad(courierId, delta) {
     );
     await pipeline.exec();
   } catch (err) {
-    console.warn('[CourierAction] Redis load update failed (non-fatal):', err.message);
+    logWarn({
+      component: COMPONENT,
+      event: 'redis.load_update_failed',
+      courierId,
+      dispatchId,
+      delta,
+      reason: 'redis_error',
+      message: err.message,
+    });
   }
 }
 
-async function redisRecordAssign(courierId, orderId) {
+async function redisRecordAssign(courierId, orderId, dispatchId) {
   try {
     const now = Date.now();
     const pipeline = getRedisClient().pipeline();
@@ -68,7 +78,15 @@ async function redisRecordAssign(courierId, orderId) {
     pipeline.expire(`courier:${courierId}:assigns`, 2 * 60 * 60);
     await pipeline.exec();
   } catch (err) {
-    console.warn('[CourierAction] Redis assigns ZADD failed (non-fatal):', err.message);
+    logWarn({
+      component: COMPONENT,
+      event: 'redis.zadd_failed',
+      courierId,
+      orderId,
+      dispatchId,
+      reason: 'redis_error',
+      message: err.message,
+    });
   }
 }
 
@@ -92,6 +110,7 @@ export const processCourierAction = onDocumentCreated(
   async (event) => {
     const actionData = event.data.data();
     const actionId = event.params.actionId;
+    const dispatchId = actionData.dispatchId || null;
     const db = admin.firestore();
     const actionRef = db.collection('courier_actions').doc(actionId);
 
@@ -104,6 +123,13 @@ export const processCourierAction = onDocumentCreated(
           error: 'Missing required fields',
           processedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+        logError({
+          component: COMPONENT,
+          event: 'action.invalid',
+          actionId,
+          dispatchId,
+          reason: 'missing_fields',
+        });
         return;
       }
 
@@ -114,26 +140,64 @@ export const processCourierAction = onDocumentCreated(
           error: `Invalid collection: ${actionData.collection}`,
           processedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+        logError({
+          component: COMPONENT,
+          event: 'action.invalid',
+          actionId,
+          dispatchId,
+          orderId,
+          reason: 'invalid_collection',
+          collectionInput: actionData.collection,
+        });
         return;
       }
 
+      logInfo({
+        component: COMPONENT,
+        event: 'action.received',
+        actionId,
+        dispatchId,
+        type,
+        orderId,
+        collection,
+        courierId,
+        assignedBy: actionData.assignedBy || null,
+      });
+
       if (type === 'assign') {
-        await processAssign(db, actionRef, actionData, collection);
+        await processAssign(db, actionRef, actionData, collection, actionId);
       } else if (type === 'pickup') {
-        await processPickup(db, actionRef, actionData, collection);
+        await processPickup(db, actionRef, actionData, collection, actionId);
       } else if (type === 'deliver') {
-        await processDelivery(db, actionRef, actionData, collection);
+        await processDelivery(db, actionRef, actionData, collection, actionId);
       } else if (type === 'unassign') {
-        await processUnassign(db, actionRef, actionData, collection);
+        await processUnassign(db, actionRef, actionData, collection, actionId);
       } else {
         await actionRef.update({
           status: 'failed',
           error: `Unknown action type: ${type}`,
           processedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+        logError({
+          component: COMPONENT,
+          event: 'action.invalid',
+          actionId,
+          dispatchId,
+          orderId,
+          type,
+          reason: 'unknown_type',
+        });
       }
     } catch (error) {
-      console.error(`[CourierAction] Error processing ${actionId}:`, error);
+      logError({
+        component: COMPONENT,
+        event: 'action.exception',
+        actionId,
+        dispatchId,
+        reason: 'exception',
+        message: error.message,
+        stack: error.stack,
+      });
       await actionRef.update({
         status: 'failed',
         error: error.message || 'Unknown error',
@@ -161,7 +225,7 @@ function allowedSourceStatus(collection, assignedBy) {
   return ['ready', 'accepted']; // master/self accept either ready or accepted
 }
 
-async function processAssign(db, actionRef, actionData, collection) {
+async function processAssign(db, actionRef, actionData, collection, actionId) {
   const {
     orderId,
     courierId,
@@ -170,14 +234,26 @@ async function processAssign(db, actionRef, actionData, collection) {
     suppressNotification,
     reassignHop,
   } = actionData;
+  const dispatchId = actionData.dispatchId || null;
+  const stop = startTimer();
 
   const allowed = allowedSourceStatus(collection, assignedBy);
   let didAssign = false;
+  // For the auto path, the dispatcher (CF-54 selectCandidate) has already
+  // pre-reserved +1 on this courier's load. This function owns that
+  // reservation: on success we let it stand (skip the usual +1 bump), on
+  // any failure branch we release it (-1). A null outcome means no Redis
+  // change is needed — either this is the master/self path, or a prior
+  // CF-40 invocation already settled the reservation.
+  const isAutoPath = assignedBy === 'auto';
+  let reservationOutcome = null; // 'commit' | 'release' | null (noop)
+  let terminalEvent = null; // {event, severity, reason?}
 
   await db.runTransaction(async (tx) => {
     const actionSnap = await tx.get(actionRef);
     if (actionSnap.data().status === 'completed') {
-      console.log(`[CourierAction] Assign ${orderId} already completed — skipping`);
+      reservationOutcome = null; // noop — prior invocation already handled it
+      terminalEvent = { event: 'action.idempotent', severity: 'info', reason: 'already_completed' };
       return;
     }
 
@@ -190,6 +266,8 @@ async function processAssign(db, actionRef, actionData, collection) {
         error: 'Order not found',
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      reservationOutcome = isAutoPath ? 'release' : null;
+      terminalEvent = { event: 'action.failed', severity: 'warn', reason: 'order_not_found' };
       return;
     }
 
@@ -201,6 +279,11 @@ async function processAssign(db, actionRef, actionData, collection) {
         note: 'Order was already assigned to this courier',
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      // Rare: duplicate auto dispatch that lost the race but picked the
+      // same courier. Load was counted by the winning dispatch — release
+      // this one.
+      reservationOutcome = isAutoPath ? 'release' : null;
+      terminalEvent = { event: 'action.idempotent', severity: 'info', reason: 'already_assigned_to_same_courier' };
       return;
     }
 
@@ -211,6 +294,8 @@ async function processAssign(db, actionRef, actionData, collection) {
         error: 'master_locked',
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      reservationOutcome = 'release';
+      terminalEvent = { event: 'action.failed', severity: 'warn', reason: 'master_locked' };
       return;
     }
 
@@ -220,6 +305,13 @@ async function processAssign(db, actionRef, actionData, collection) {
         error: 'already_taken',
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      reservationOutcome = isAutoPath ? 'release' : null;
+      terminalEvent = {
+        event: 'action.failed',
+        severity: 'warn',
+        reason: 'wrong_status',
+        observedStatus: order.status,
+      };
       return;
     }
 
@@ -229,6 +321,13 @@ async function processAssign(db, actionRef, actionData, collection) {
         error: 'already_taken',
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      reservationOutcome = isAutoPath ? 'release' : null;
+      terminalEvent = {
+        event: 'action.failed',
+        severity: 'warn',
+        reason: 'already_taken_by_other',
+        observedCourierId: order.cargoUserId,
+      };
       return;
     }
 
@@ -295,31 +394,64 @@ async function processAssign(db, actionRef, actionData, collection) {
     }
 
     didAssign = true;
+    reservationOutcome = 'commit';
+    terminalEvent = { event: 'action.completed', severity: 'info' };
   });
 
   if (didAssign) {
     // Fire-and-forget Redis index updates (outside transaction by design —
     // Firestore TX cannot include external IO).
-    await Promise.all([
-      redisIncrLoad(courierId, +1),
-      redisRecordAssign(courierId, orderId),
-    ]);
+    //
+    // Auto path: the dispatcher already reserved +1, so only record the
+    // rotation ZSET entry. Master/self path: bump +1 as before.
+    const updates = [redisRecordAssign(courierId, orderId, dispatchId)];
+    if (!isAutoPath) {
+      updates.push(redisIncrLoad(courierId, +1, dispatchId));
+    }
+    await Promise.all(updates);
+  } else if (reservationOutcome === 'release') {
+    // Auto-path failure: release the pre-reservation made by selectCandidate
+    // so the load counter doesn't drift upward.
+    await redisIncrLoad(courierId, -1, dispatchId);
   }
 
-  console.log(`[CourierAction] Assign completed: ${collection}/${orderId}`);
+  const latencyMs = stop();
+  const base = {
+    component: COMPONENT,
+    actionId,
+    dispatchId,
+    type: 'assign',
+    orderId,
+    collection,
+    courierId,
+    assignedBy: assignedBy || null,
+    reservationOutcome,
+    latencyMs,
+  };
+  if (terminalEvent) {
+    const payload = { ...base, event: terminalEvent.event };
+    if (terminalEvent.reason) payload.reason = terminalEvent.reason;
+    if (terminalEvent.observedStatus) payload.observedStatus = terminalEvent.observedStatus;
+    if (terminalEvent.observedCourierId) payload.observedCourierId = terminalEvent.observedCourierId;
+    if (terminalEvent.severity === 'warn') logWarn(payload);
+    else logInfo(payload);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PICKUP — assigned → out_for_delivery
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function processPickup(db, actionRef, actionData, collection) {
+async function processPickup(db, actionRef, actionData, collection, actionId) {
   const { orderId, courierId } = actionData;
+  const dispatchId = actionData.dispatchId || null;
+  const stop = startTimer();
+  let terminalEvent = null;
 
   await db.runTransaction(async (tx) => {
     const actionSnap = await tx.get(actionRef);
     if (actionSnap.data().status === 'completed') {
-      console.log(`[CourierAction] Pickup ${orderId} already completed — skipping`);
+      terminalEvent = { event: 'action.idempotent', severity: 'info', reason: 'already_completed' };
       return;
     }
 
@@ -332,6 +464,7 @@ async function processPickup(db, actionRef, actionData, collection) {
         error: 'Order not found',
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      terminalEvent = { event: 'action.failed', severity: 'warn', reason: 'order_not_found' };
       return;
     }
 
@@ -344,6 +477,7 @@ async function processPickup(db, actionRef, actionData, collection) {
         note: 'Order was already picked up',
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      terminalEvent = { event: 'action.idempotent', severity: 'info', reason: 'already_picked_up' };
       return;
     }
 
@@ -353,6 +487,12 @@ async function processPickup(db, actionRef, actionData, collection) {
         error: `Cannot pick up: order status is "${order.status}"`,
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      terminalEvent = {
+        event: 'action.failed',
+        severity: 'warn',
+        reason: 'wrong_status',
+        observedStatus: order.status,
+      };
       return;
     }
 
@@ -362,6 +502,12 @@ async function processPickup(db, actionRef, actionData, collection) {
         error: 'Courier not assigned to this order',
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      terminalEvent = {
+        event: 'action.failed',
+        severity: 'warn',
+        reason: 'courier_mismatch',
+        observedCourierId: order.cargoUserId || null,
+      };
       return;
     }
 
@@ -400,24 +546,46 @@ if (order.buyerId) {
       status: 'completed',
       processedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    terminalEvent = { event: 'action.completed', severity: 'info' };
   });
 
-  console.log(`[CourierAction] Pickup completed: ${collection}/${orderId}`);
+  const latencyMs = stop();
+  const base = {
+    component: COMPONENT,
+    actionId,
+    dispatchId,
+    type: 'pickup',
+    orderId,
+    collection,
+    courierId,
+    latencyMs,
+  };
+  if (terminalEvent) {
+    const payload = { ...base, event: terminalEvent.event };
+    if (terminalEvent.reason) payload.reason = terminalEvent.reason;
+    if (terminalEvent.observedStatus) payload.observedStatus = terminalEvent.observedStatus;
+    if (terminalEvent.observedCourierId) payload.observedCourierId = terminalEvent.observedCourierId;
+    if (terminalEvent.severity === 'warn') logWarn(payload);
+    else logInfo(payload);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DELIVERY — out_for_delivery → delivered
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function processDelivery(db, actionRef, actionData, collection) {
+async function processDelivery(db, actionRef, actionData, collection, actionId) {
   const { orderId, courierId, paymentMethod } = actionData;
+  const dispatchId = actionData.dispatchId || null;
   const isMarket = collection === 'orders-market';
+  const stop = startTimer();
   let didDeliver = false;
+  let terminalEvent = null;
 
   await db.runTransaction(async (tx) => {
     const actionSnap = await tx.get(actionRef);
     if (actionSnap.data().status === 'completed') {
-      console.log(`[CourierAction] Delivery ${orderId} already completed — skipping`);
+      terminalEvent = { event: 'action.idempotent', severity: 'info', reason: 'already_completed' };
       return;
     }
 
@@ -430,6 +598,7 @@ async function processDelivery(db, actionRef, actionData, collection) {
         error: 'Order not found',
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      terminalEvent = { event: 'action.failed', severity: 'warn', reason: 'order_not_found' };
       return;
     }
 
@@ -442,6 +611,7 @@ async function processDelivery(db, actionRef, actionData, collection) {
         note: 'Order was already delivered',
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      terminalEvent = { event: 'action.idempotent', severity: 'info', reason: 'already_delivered' };
       return;
     }
 
@@ -451,6 +621,12 @@ async function processDelivery(db, actionRef, actionData, collection) {
         error: `Cannot deliver: order status is "${order.status}"`,
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      terminalEvent = {
+        event: 'action.failed',
+        severity: 'warn',
+        reason: 'wrong_status',
+        observedStatus: order.status,
+      };
       return;
     }
 
@@ -460,6 +636,12 @@ async function processDelivery(db, actionRef, actionData, collection) {
         error: 'Courier not assigned to this order',
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      terminalEvent = {
+        event: 'action.failed',
+        severity: 'warn',
+        reason: 'courier_mismatch',
+        observedCourierId: order.cargoUserId || null,
+      };
       return;
     }
 
@@ -500,13 +682,32 @@ async function processDelivery(db, actionRef, actionData, collection) {
       status: 'completed',
       processedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    terminalEvent = { event: 'action.completed', severity: 'info' };
   });
 
   if (didDeliver) {
-    await redisIncrLoad(courierId, -1);
+    await redisIncrLoad(courierId, -1, dispatchId);
   }
 
-  console.log(`[CourierAction] Delivery completed: ${collection}/${orderId}`);
+  const latencyMs = stop();
+  const base = {
+    component: COMPONENT,
+    actionId,
+    dispatchId,
+    type: 'deliver',
+    orderId,
+    collection,
+    courierId,
+    latencyMs,
+  };
+  if (terminalEvent) {
+    const payload = { ...base, event: terminalEvent.event };
+    if (terminalEvent.reason) payload.reason = terminalEvent.reason;
+    if (terminalEvent.observedStatus) payload.observedStatus = terminalEvent.observedStatus;
+    if (terminalEvent.observedCourierId) payload.observedCourierId = terminalEvent.observedCourierId;
+    if (terminalEvent.severity === 'warn') logWarn(payload);
+    else logInfo(payload);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -524,15 +725,18 @@ async function processDelivery(db, actionRef, actionData, collection) {
 // counter so the follow-up assign doesn't double-count them.
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function processUnassign(db, actionRef, actionData, collection) {
+async function processUnassign(db, actionRef, actionData, collection, actionId) {
   const { orderId, courierId, reason, unassignedBy } = actionData;
+  const dispatchId = actionData.dispatchId || null;
   const revertStatus = collection === 'orders-food' ? 'accepted' : 'pending';
+  const stop = startTimer();
   let didUnassign = false;
+  let terminalEvent = null;
 
   await db.runTransaction(async (tx) => {
     const actionSnap = await tx.get(actionRef);
     if (actionSnap.data().status === 'completed') {
-      console.log(`[CourierAction] Unassign ${orderId} already completed — skipping`);
+      terminalEvent = { event: 'action.idempotent', severity: 'info', reason: 'already_completed' };
       return;
     }
 
@@ -545,6 +749,7 @@ async function processUnassign(db, actionRef, actionData, collection) {
         error: 'Order not found',
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      terminalEvent = { event: 'action.failed', severity: 'warn', reason: 'order_not_found' };
       return;
     }
 
@@ -558,6 +763,7 @@ async function processUnassign(db, actionRef, actionData, collection) {
         error: 'master_locked',
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      terminalEvent = { event: 'action.failed', severity: 'warn', reason: 'master_locked' };
       return;
     }
 
@@ -567,6 +773,12 @@ async function processUnassign(db, actionRef, actionData, collection) {
         error: `cannot_unassign_from_${order.status}`,
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      terminalEvent = {
+        event: 'action.failed',
+        severity: 'warn',
+        reason: `cannot_unassign_from_${order.status}`,
+        observedStatus: order.status,
+      };
       return;
     }
 
@@ -576,6 +788,12 @@ async function processUnassign(db, actionRef, actionData, collection) {
         error: 'courier_mismatch',
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      terminalEvent = {
+        event: 'action.failed',
+        severity: 'warn',
+        reason: 'courier_mismatch',
+        observedCourierId: order.cargoUserId || null,
+      };
       return;
     }
 
@@ -598,11 +816,32 @@ async function processUnassign(db, actionRef, actionData, collection) {
     });
 
     didUnassign = true;
+    terminalEvent = { event: 'action.completed', severity: 'info' };
   });
 
   if (didUnassign) {
-    await redisIncrLoad(courierId, -1);
+    await redisIncrLoad(courierId, -1, dispatchId);
   }
 
-  console.log(`[CourierAction] Unassign completed: ${collection}/${orderId}`);
+  const latencyMs = stop();
+  const base = {
+    component: COMPONENT,
+    actionId,
+    dispatchId,
+    type: 'unassign',
+    orderId,
+    collection,
+    courierId,
+    unassignedBy: unassignedBy || null,
+    unassignReason: reason || null,
+    latencyMs,
+  };
+  if (terminalEvent) {
+    const payload = { ...base, event: terminalEvent.event };
+    if (terminalEvent.reason) payload.reason = terminalEvent.reason;
+    if (terminalEvent.observedStatus) payload.observedStatus = terminalEvent.observedStatus;
+    if (terminalEvent.observedCourierId) payload.observedCourierId = terminalEvent.observedCourierId;
+    if (terminalEvent.severity === 'warn') logWarn(payload);
+    else logInfo(payload);
+  }
 }

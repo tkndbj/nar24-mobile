@@ -49,7 +49,10 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
   Stream<int>? _unreadCountStream;
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _courierNotifsStream;
   bool _isOnline = true;
+  bool _onShift = false;
+  bool _shiftBusy = false;
   StreamSubscription<bool>? _connSub;
+  StreamSubscription<bool>? _shiftSub;
   String? _highlightedOrderId;
 
   @override
@@ -68,13 +71,33 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
         .shareReplay(maxSize: 1);
     _setupFcm();
     _setupUnreadStream();
-    CourierLocationService.instance.startTracking();
+    // Opening this screen no longer implicitly starts a shift. bootOnShift()
+    // reads the persisted flag and only resumes tracking if the courier was
+    // on-shift in the previous session. Off-shift is the safe default — it
+    // means no dispatches will land until the courier opts in.
+    _onShift = CourierLocationService.instance.isOnShift;
+    CourierLocationService.instance.bootOnShift();
+    _shiftSub = CourierLocationService.instance.shiftStream.listen((onShift) {
+      if (mounted && _onShift != onShift) {
+        setState(() => _onShift = onShift);
+      }
+    });
     _connSub =
         CourierLocationService.instance.connectionStream.listen((connected) {
       if (mounted && _isOnline != connected) {
         setState(() => _isOnline = connected);
       }
     });
+  }
+
+  Future<void> _toggleShift(bool value) async {
+    if (_shiftBusy) return;
+    setState(() => _shiftBusy = true);
+    try {
+      await CourierLocationService.instance.setOnShift(value);
+    } finally {
+      if (mounted) setState(() => _shiftBusy = false);
+    }
   }
 
   // ── FCM ───────────────────────────────────────────────────────────────────
@@ -221,7 +244,10 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _connSub?.cancel();
-    CourierLocationService.instance.stopTracking();
+    _shiftSub?.cancel();
+    // Shift tracking now survives across screens — nav'ing to profile/etc.
+    // must not take the courier off-shift. Tracking is torn down only on
+    // explicit toggle-off or logout.
     _localReadController.close();
     super.dispose();
   }
@@ -247,7 +273,7 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
             Text(loc.foodCargoTitle,
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(width: 8),
-            _LiveBadge(isDark: isDark),
+            _ShiftBadge(isDark: isDark, onShift: _onShift),
           ],
         ),
         actions: [
@@ -307,10 +333,22 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
       ),
       body: Stack(
         children: [
-          _DeliveriesList(
-            currentUser: user,
-            isDark: isDark,
-            highlightedOrderId: _highlightedOrderId,
+          Column(
+            children: [
+              _ShiftToggleBar(
+                isDark: isDark,
+                onShift: _onShift,
+                busy: _shiftBusy,
+                onChanged: _toggleShift,
+              ),
+              Expanded(
+                child: _DeliveriesList(
+                  currentUser: user,
+                  isDark: isDark,
+                  highlightedOrderId: _highlightedOrderId,
+                ),
+              ),
+            ],
           ),
           if (!_isOnline)
             Positioned(
@@ -629,7 +667,9 @@ Future<void> _confirmLogout(BuildContext context, AppLocalizations loc) async {
   );
 
   try {
-    await CourierLocationService.instance.stopTracking();
+    // Clears the persisted shift flag + stops GPS, so the next login
+    // starts fresh off-shift.
+    await CourierLocationService.instance.setOnShift(false);
     await AuthService().logout();
     if (context.mounted) context.go('/');
   } catch (_) {
@@ -1594,17 +1634,18 @@ class _PaymentOptionBtn extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LIVE BADGE
+// SHIFT BADGE — shows LIVE when the courier is on-shift, OFF otherwise.
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _LiveBadge extends StatefulWidget {
+class _ShiftBadge extends StatefulWidget {
   final bool isDark;
-  const _LiveBadge({required this.isDark});
+  final bool onShift;
+  const _ShiftBadge({required this.isDark, required this.onShift});
   @override
-  State<_LiveBadge> createState() => _LiveBadgeState();
+  State<_ShiftBadge> createState() => _ShiftBadgeState();
 }
 
-class _LiveBadgeState extends State<_LiveBadge>
+class _ShiftBadgeState extends State<_ShiftBadge>
     with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
   late Animation<double> _fade;
@@ -1626,34 +1667,125 @@ class _LiveBadgeState extends State<_LiveBadge>
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _fade,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        decoration: BoxDecoration(
-          color: Colors.green.withOpacity(widget.isDark ? 0.15 : 0.12),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.green.withOpacity(0.3)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 6,
-              height: 6,
-              decoration: const BoxDecoration(
-                  color: Colors.green, shape: BoxShape.circle),
-            ),
-            const SizedBox(width: 4),
-            Text('LIVE',
-                style: TextStyle(
-                    fontSize: 10,
+    final color = widget.onShift ? Colors.green : Colors.grey;
+    final label = widget.onShift ? 'LIVE' : 'OFF';
+    final textColor = widget.onShift
+        ? (widget.isDark ? Colors.green[400] : Colors.green[700])
+        : (widget.isDark ? Colors.grey[400] : Colors.grey[600]);
+
+    final badge = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(widget.isDark ? 0.15 : 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 4),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                  letterSpacing: 0.5)),
+        ],
+      ),
+    );
+
+    // Only pulse when live — a blinking "OFF" badge would be distracting.
+    if (!widget.onShift) return badge;
+    return FadeTransition(opacity: _fade, child: badge);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SHIFT TOGGLE BAR — prominent on/off control at the top of the cargo screen.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ShiftToggleBar extends StatelessWidget {
+  final bool isDark;
+  final bool onShift;
+  final bool busy;
+  final ValueChanged<bool> onChanged;
+
+  const _ShiftToggleBar({
+    required this.isDark,
+    required this.onShift,
+    required this.busy,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = onShift ? Colors.green : Colors.grey;
+    final title = onShift ? 'Vardiya Açık' : 'Vardiya Kapalı';
+    final subtitle = onShift
+        ? 'Size sipariş atanabilir'
+        : 'Sipariş almak için vardiyayı açın';
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark
+            ? accent.withOpacity(0.10)
+            : accent.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: accent.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            onShift
+                ? Icons.online_prediction_rounded
+                : Icons.pause_circle_outline_rounded,
+            color: accent,
+            size: 22,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color:
-                        widget.isDark ? Colors.green[400] : Colors.green[700],
-                    letterSpacing: 0.5)),
-          ],
-        ),
+                    color: isDark ? Colors.grey[100] : Colors.grey[900],
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          busy
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Switch.adaptive(
+                  value: onShift,
+                  onChanged: (v) => onChanged(v),
+                  activeColor: Colors.green,
+                ),
+        ],
       ),
     );
   }

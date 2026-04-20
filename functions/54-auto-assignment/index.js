@@ -20,10 +20,17 @@
 // ─────────
 //   1. Order trigger (food accepted / market created) → autoAssignOrder()
 //   2. Redis GEOSEARCH + HGETALL + ZCOUNT → picks best candidate
-//   3. Writes `courier_actions` doc with type:'assign', assignedBy:'auto'
-//   4. CF-40 does the atomic state transition, bumps Redis load, pushes
-//      in-app notification to the assigned courier (which fans out to FCM
-//      via CF-46).
+//   3. Pre-reserves the winner's load (+1) atomically in Redis. Concurrent
+//      dispatches (lunch rush) then see the updated counter and fan out
+//      across couriers instead of piling onto whoever scored best at t=0.
+//   4. Writes `courier_actions` doc with type:'assign', assignedBy:'auto'.
+//      If any step between reservation and this write fails, the caller
+//      releases the reservation (-1) so the counter doesn't drift.
+//   5. CF-40 does the atomic state transition and pushes the in-app notif
+//      (which fans out to FCM via CF-46). On auto-path success CF-40 does
+//      NOT re-bump load (already reserved); on auto-path failure branches
+//      (master_locked / already_taken / idempotent double-dispatch) it
+//      releases the reservation itself.
 //
 //   Scheduled rebalancer (every 60 s):
 //     scans `assigned + assignedBy:'auto' + canReassign:true` orders and
@@ -42,6 +49,9 @@ import { onValueWritten } from 'firebase-functions/v2/database';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import admin from 'firebase-admin';
 import { getRedisClient } from '../shared/redis.js';
+import { logInfo, logWarn, logError, newDispatchId, startTimer } from '../shared/logger.js';
+
+const COMPONENT = 'auto_assign';
 
 const REGION = 'europe-west3';
 const RTDB_REGION = 'europe-west1'; // Firebase RTDB location for this project
@@ -100,20 +110,93 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Optimistic load reservation
+//
+// selectCandidate bumps the winning courier's `load` BEFORE returning, so
+// concurrent dispatches observe the updated state and score a different
+// courier best. Without this, N parallel triggers reading load=0 for the
+// same courier all assign to them (the classic dispatch race).
+//
+// The CALLER owns the reservation until committed:
+//   • autoAssignOrder + autoAssignRebalance must call releaseReservation
+//     if any step between selectCandidate and the courier_actions write
+//     fails.
+//   • CF-40 processAssign skips the usual +1 on success for auto-path
+//     (already reserved) and releases -1 on its own failure branches.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function reserveCourier(courierId, dispatchId) {
+  try {
+    await getRedisClient().hincrby(`courier:${courierId}`, 'load', 1);
+    logInfo({ component: COMPONENT, event: 'reservation.reserved', courierId, dispatchId });
+  } catch (err) {
+    // Degraded mode: race still possible but dispatch itself continues.
+    logWarn({
+      component: COMPONENT,
+      event: 'reservation.reserve_failed',
+      courierId,
+      dispatchId,
+      reason: 'redis_error',
+      message: err.message,
+    });
+  }
+}
+
+async function releaseReservation(courierId, dispatchId) {
+  try {
+    const pipeline = getRedisClient().pipeline();
+    pipeline.hincrby(`courier:${courierId}`, 'load', -1);
+    // Clamp to zero — if a race left load negative, reset.
+    pipeline.eval(
+      'local v=redis.call(\'HGET\', KEYS[1], \'load\') if v and tonumber(v) < 0 then redis.call(\'HSET\', KEYS[1], \'load\', 0) end return 1',
+      1,
+      `courier:${courierId}`,
+    );
+    await pipeline.exec();
+    logInfo({ component: COMPONENT, event: 'reservation.released', courierId, dispatchId });
+  } catch (err) {
+    logWarn({
+      component: COMPONENT,
+      event: 'reservation.release_failed',
+      courierId,
+      dispatchId,
+      reason: 'redis_error',
+      message: err.message,
+    });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // CORE: pick best candidate from Redis
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function selectCandidate({ pickupLat, pickupLng, collection, excludeUid = null }) {
+async function selectCandidate({ pickupLat, pickupLng, collection, excludeUid = null, dispatchId }) {
   const redis = getRedisClient();
   const tiers = RADIUS_TIERS_BY_COLLECTION[collection] || RADIUS_TIERS_KM_FOOD;
 
   // Diagnostic: state of the geo index at dispatch time.
+  let indexSize = null;
   try {
-    const indexSize = await redis.zcard('couriers:geo');
-    console.log(`[AutoAssign][dbg] couriers:geo size=${indexSize} collection=${collection} pickup=(${pickupLat},${pickupLng}) tiers=${tiers.join('/')}`);
-  } catch (e) {
-    console.warn('[AutoAssign][dbg] zcard failed:', e.message);
+    indexSize = await redis.zcard('couriers:geo');
+  } catch (err) {
+    logWarn({
+      component: COMPONENT,
+      event: 'redis.zcard_failed',
+      dispatchId,
+      reason: 'redis_error',
+      message: err.message,
+    });
   }
+  logInfo({
+    component: COMPONENT,
+    event: 'select.started',
+    dispatchId,
+    collection,
+    pickupLat,
+    pickupLng,
+    indexSize,
+    tiers,
+  });
 
   // Progressive radius widening — small first so most dispatches stay cheap.
   for (const radius of tiers) {
@@ -129,11 +212,26 @@ async function selectCandidate({ pickupLat, pickupLng, collection, excludeUid = 
         'WITHDIST',
       );
     } catch (err) {
-      console.warn('[AutoAssign] GEOSEARCH failed:', err.message);
+      logError({
+        component: COMPONENT,
+        event: 'redis.geosearch_failed',
+        dispatchId,
+        collection,
+        radius,
+        reason: 'redis_error',
+        message: err.message,
+      });
       return null;
     }
 
-    console.log(`[AutoAssign][dbg] tier=${radius}km rows=${rows ? rows.length : 0}`);
+    logInfo({
+      component: COMPONENT,
+      event: 'select.tier_scanned',
+      dispatchId,
+      collection,
+      radius,
+      rowCount: rows ? rows.length : 0,
+    });
     if (!rows || rows.length === 0) continue;
 
     // rows: [[uid, distKmStr, [lngStr, latStr]], ...]
@@ -161,7 +259,13 @@ async function selectCandidate({ pickupLat, pickupLng, collection, excludeUid = 
     try {
       results = await pipeline.exec();
     } catch (err) {
-      console.warn('[AutoAssign] pipeline exec failed:', err.message);
+      logError({
+        component: COMPONENT,
+        event: 'redis.pipeline_failed',
+        dispatchId,
+        reason: 'redis_error',
+        message: err.message,
+      });
       return null;
     }
 
@@ -173,13 +277,17 @@ async function selectCandidate({ pickupLat, pickupLng, collection, excludeUid = 
 
       const isOnShift = state.isOnShift === '1' || state.isOnShift === 'true';
       if (!isOnShift) {
-        rejects.push(`${ordered[i].uid}:offshift(state.isOnShift=${state.isOnShift})`);
+        rejects.push({ courierId: ordered[i].uid, reason: 'off_shift' });
         continue;
       }
 
       const lastSeen = parseInt(state.lastSeen || '0', 10);
       if (lastSeen && now - lastSeen > COURIER_STALE_MS) {
-        rejects.push(`${ordered[i].uid}:stale(${Math.round((now - lastSeen) / 1000)}s)`);
+        rejects.push({
+          courierId: ordered[i].uid,
+          reason: 'stale_heartbeat',
+          staleSeconds: Math.round((now - lastSeen) / 1000),
+        });
         continue;
       }
 
@@ -204,10 +312,24 @@ async function selectCandidate({ pickupLat, pickupLng, collection, excludeUid = 
     }
 
     if (rejects.length) {
-      console.log(`[AutoAssign][dbg] tier=${radius}km rejected: ${rejects.join(', ')}`);
+      logInfo({
+        component: COMPONENT,
+        event: 'select.rejected_candidates',
+        dispatchId,
+        collection,
+        radius,
+        rejectCount: rejects.length,
+        rejects,
+      });
     }
 
-    if (best) return best;
+    if (best) {
+      // Pre-reserve load on the winner so concurrent dispatches route elsewhere.
+      // Caller MUST releaseReservation on any failure between here and the
+      // courier_actions doc being written.
+      await reserveCourier(best.uid, dispatchId);
+      return best;
+    }
   }
 
   return null;
@@ -217,66 +339,130 @@ async function selectCandidate({ pickupLat, pickupLng, collection, excludeUid = 
 // CORE: attempt to assign one order
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function autoAssignOrder(db, orderId, collection) {
-  if (!VALID_COLLECTIONS.has(collection)) return { ok: false, reason: 'invalid_collection' };
+async function autoAssignOrder(db, orderId, collection, { source = 'trigger' } = {}) {
+  const dispatchId = newDispatchId();
+  const stop = startTimer();
+
+  const emitSkip = (reason, extra = {}) => {
+    logInfo({
+      component: COMPONENT,
+      event: 'dispatch.skipped',
+      dispatchId,
+      orderId,
+      collection,
+      source,
+      reason,
+      latencyMs: stop(),
+      ...extra,
+    });
+  };
+
+  if (!VALID_COLLECTIONS.has(collection)) {
+    emitSkip('invalid_collection');
+    return { ok: false, reason: 'invalid_collection', dispatchId };
+  }
 
   const orderRef = db.collection(collection).doc(orderId);
   const orderSnap = await orderRef.get();
-  if (!orderSnap.exists) return { ok: false, reason: 'not_found' };
+  if (!orderSnap.exists) {
+    emitSkip('order_not_found');
+    return { ok: false, reason: 'not_found', dispatchId };
+  }
   const order = orderSnap.data();
 
   // Guardrails
-  if (order.cargoUserId) return { ok: false, reason: 'already_assigned' };
-  if (order.assignedBy === 'master') return { ok: false, reason: 'master_assigned' };
+  if (order.cargoUserId) {
+    emitSkip('already_assigned');
+    return { ok: false, reason: 'already_assigned', dispatchId };
+  }
+  if (order.assignedBy === 'master') {
+    emitSkip('master_assigned');
+    return { ok: false, reason: 'master_assigned', dispatchId };
+  }
   // Master explicitly pulled this order back — hands off until the master
   // re-assigns (which clears the stamp in CF-40 processAssign).
-  if (order.unassignedBy === 'master') return { ok: false, reason: 'master_unassigned' };
+  if (order.unassignedBy === 'master') {
+    emitSkip('master_unassigned');
+    return { ok: false, reason: 'master_unassigned', dispatchId };
+  }
 
   const expectedStatus = collection === 'orders-food' ? 'accepted' : 'pending';
   if (order.status !== expectedStatus) {
-    return { ok: false, reason: `wrong_status:${order.status}` };
+    emitSkip('wrong_status', { orderStatus: order.status });
+    return { ok: false, reason: `wrong_status:${order.status}`, dispatchId };
   }
 
   const pickup = pickupCoordsFor(order, collection);
-  if (!pickup) return { ok: false, reason: 'missing_pickup_coords' };
+  if (!pickup) {
+    emitSkip('missing_pickup_coords');
+    return { ok: false, reason: 'missing_pickup_coords', dispatchId };
+  }
 
   const best = await selectCandidate({
     pickupLat: pickup.lat,
     pickupLng: pickup.lng,
     collection,
+    dispatchId,
   });
 
   if (!best) {
-    console.log(`[AutoAssign][dbg] ${collection}/${orderId} → no_candidate`);
-    return { ok: false, reason: 'no_candidate' };
+    logInfo({
+      component: COMPONENT,
+      event: 'dispatch.no_candidate',
+      dispatchId,
+      orderId,
+      collection,
+      source,
+      latencyMs: stop(),
+    });
+    return { ok: false, reason: 'no_candidate', dispatchId };
   }
 
-  // Fetch courier display name (cheap single-doc read)
-  const courierSnap = await db.collection('users').doc(best.uid).get();
-  const courierName = courierSnap.exists ?
-    courierSnap.data().displayName || courierSnap.data().fullName || 'Courier' :
-    'Courier';
+  // best.uid's load is reserved (+1) inside selectCandidate. Everything from
+  // here until the courier_actions doc lands must either succeed (CF-40 owns
+  // the reservation) or release on failure so the counter doesn't drift.
+  let committed = false;
+  try {
+    const courierSnap = await db.collection('users').doc(best.uid).get();
+    const courierName = courierSnap.exists ?
+      courierSnap.data().displayName || courierSnap.data().fullName || 'Courier' :
+      'Courier';
 
-  const actionRef = db.collection('courier_actions').doc();
-  await actionRef.set({
-    type: 'assign',
-    collection,
-    orderId,
-    courierId: best.uid,
-    courierName,
-    assignedBy: 'auto',
-    status: 'pending',
-    autoAssignScore: best.score,
-    autoAssignDistanceKm: best.distKm,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+    const actionRef = db.collection('courier_actions').doc();
+    await actionRef.set({
+      type: 'assign',
+      collection,
+      orderId,
+      courierId: best.uid,
+      courierName,
+      assignedBy: 'auto',
+      status: 'pending',
+      autoAssignScore: best.score,
+      autoAssignDistanceKm: best.distKm,
+      dispatchId, // threaded into CF-40 logs
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    committed = true;
 
-  console.log(
-    `[AutoAssign] ${collection}/${orderId} → ${best.uid} ` +
-      `(dist=${best.distKm.toFixed(2)}km, load=${best.load}, recent=${best.recentAssigns}, score=${best.score.toFixed(2)})`
-  );
+    logInfo({
+      component: COMPONENT,
+      event: 'dispatch.dispatched',
+      dispatchId,
+      orderId,
+      collection,
+      source,
+      courierId: best.uid,
+      distKm: Number(best.distKm.toFixed(2)),
+      load: best.load,
+      recentAssigns: best.recentAssigns,
+      score: Number(best.score.toFixed(2)),
+      latencyMs: stop(),
+    });
 
-  return { ok: true, courierId: best.uid, score: best.score };
+    return { ok: true, courierId: best.uid, score: best.score, dispatchId };
+  } finally {
+    if (!committed) await releaseReservation(best.uid, dispatchId);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -303,9 +489,17 @@ export const autoAssignOnFoodAccepted = onDocumentUpdated(
 
     const orderId = event.params.orderId;
     try {
-      await autoAssignOrder(admin.firestore(), orderId, 'orders-food');
+      await autoAssignOrder(admin.firestore(), orderId, 'orders-food', { source: 'food_trigger' });
     } catch (err) {
-      console.error('[AutoAssign] food trigger failed:', orderId, err);
+      logError({
+        component: COMPONENT,
+        event: 'dispatch.trigger_failed',
+        orderId,
+        collection: 'orders-food',
+        source: 'food_trigger',
+        reason: 'exception',
+        message: err.message,
+      });
     }
   },
 );
@@ -331,9 +525,17 @@ export const autoAssignOnMarketCreated = onDocumentCreated(
 
     const orderId = event.params.orderId;
     try {
-      await autoAssignOrder(admin.firestore(), orderId, 'orders-market');
+      await autoAssignOrder(admin.firestore(), orderId, 'orders-market', { source: 'market_trigger' });
     } catch (err) {
-      console.error('[AutoAssign] market trigger failed:', orderId, err);
+      logError({
+        component: COMPONENT,
+        event: 'dispatch.trigger_failed',
+        orderId,
+        collection: 'orders-market',
+        source: 'market_trigger',
+        reason: 'exception',
+        message: err.message,
+      });
     }
   },
 );
@@ -369,7 +571,13 @@ export const autoAssignRetryUnassigned = onSchedule(
           .limit(50)
           .get()
           .catch((e) => {
-            console.warn('[AutoAssign] retry food query failed:', e.message);
+            logWarn({
+              component: COMPONENT,
+              event: 'retry.query_failed',
+              collection: 'orders-food',
+              reason: 'firestore_error',
+              message: e.message,
+            });
             return { empty: true, docs: [] };
           }),
       },
@@ -384,29 +592,49 @@ export const autoAssignRetryUnassigned = onSchedule(
           .limit(50)
           .get()
           .catch((e) => {
-            console.warn('[AutoAssign] retry market query failed:', e.message);
+            logWarn({
+              component: COMPONENT,
+              event: 'retry.query_failed',
+              collection: 'orders-market',
+              reason: 'firestore_error',
+              message: e.message,
+            });
             return { empty: true, docs: [] };
           }),
       },
     ];
 
     let attempted = 0;
+    let scanned = 0;
     for (const { coll, snap } of stale) {
       if (!snap || snap.empty) continue;
       for (const doc of snap.docs) {
+        scanned++;
         const data = doc.data();
         if (data.assignedBy === 'master') continue;
         if (data.unassignedBy === 'master') continue; // master pulled it back
         try {
-          const result = await autoAssignOrder(db, doc.id, coll);
+          const result = await autoAssignOrder(db, doc.id, coll, { source: 'retry' });
           if (result.ok) attempted++;
         } catch (err) {
-          console.error(`[AutoAssign] retry ${coll}/${doc.id} failed:`, err);
+          logError({
+            component: COMPONENT,
+            event: 'retry.order_failed',
+            orderId: doc.id,
+            collection: coll,
+            reason: 'exception',
+            message: err.message,
+          });
         }
       }
     }
 
-    if (attempted > 0) console.log(`[AutoAssign] retry assigned ${attempted} order(s)`);
+    logInfo({
+      component: COMPONENT,
+      event: 'retry.swept',
+      scanned,
+      dispatched: attempted,
+    });
   },
 );
 
@@ -435,7 +663,13 @@ export const autoAssignRebalance = onSchedule(
         .limit(50)
         .get()
         .catch((e) => {
-          console.warn('[AutoAssign] rebalance food query failed:', e.message);
+          logWarn({
+            component: COMPONENT,
+            event: 'rebalance.query_failed',
+            collection: 'orders-food',
+            reason: 'firestore_error',
+            message: e.message,
+          });
           return { empty: true, docs: [] };
         }),
       db
@@ -446,7 +680,13 @@ export const autoAssignRebalance = onSchedule(
         .limit(50)
         .get()
         .catch((e) => {
-          console.warn('[AutoAssign] rebalance market query failed:', e.message);
+          logWarn({
+            component: COMPONENT,
+            event: 'rebalance.query_failed',
+            collection: 'orders-market',
+            reason: 'firestore_error',
+            message: e.message,
+          });
           return { empty: true, docs: [] };
         }),
     ]);
@@ -461,12 +701,23 @@ export const autoAssignRebalance = onSchedule(
     if (jobs.length === 0) return;
 
     let reassigned = 0;
+    let scanned = 0;
     for (const { coll, doc } of jobs) {
+      scanned++;
+      const rebalanceId = newDispatchId();
       try {
         const order = doc.data();
         if (order.assignedBy === 'master') continue;
         if ((order.reassignHops || 0) >= REBALANCE_MAX_HOPS) {
           await doc.ref.update({ canReassign: false }).catch(() => {});
+          logInfo({
+            component: COMPONENT,
+            event: 'rebalance.skipped',
+            dispatchId: rebalanceId,
+            orderId: doc.id,
+            collection: coll,
+            reason: 'max_hops',
+          });
           continue;
         }
 
@@ -499,6 +750,15 @@ export const autoAssignRebalance = onSchedule(
           );
           if (distToPickup <= REBALANCE_COMMIT_RADIUS_KM) {
             await doc.ref.update({ canReassign: false }).catch(() => {});
+            logInfo({
+              component: COMPONENT,
+              event: 'rebalance.skipped',
+              dispatchId: rebalanceId,
+              orderId: doc.id,
+              collection: coll,
+              reason: 'near_pickup',
+              distToPickupKm: Number(distToPickup.toFixed(2)),
+            });
             continue;
           }
         }
@@ -530,68 +790,135 @@ export const autoAssignRebalance = onSchedule(
           pickupLng: pickup.lng,
           collection: coll,
           excludeUid: currentCourierId,
+          dispatchId: rebalanceId,
         });
 
-        if (!best) continue;
-
-        const improved =
-          currentScore - best.score >= REBALANCE_MIN_DELTA &&
-          best.score <= currentScore * REBALANCE_MIN_RATIO;
-        if (!improved) continue;
-
-        // Fetch new courier name
-        const nameSnap = await db.collection('users').doc(best.uid).get();
-        const newName = nameSnap.exists ?
-          nameSnap.data().displayName || nameSnap.data().fullName || 'Courier' :
-          'Courier';
-
-        // Chain: unassign (silent), then assign (silent, suppresses notif)
-        const unassignRef = db.collection('courier_actions').doc();
-        await unassignRef.set({
-          type: 'unassign',
-          collection: coll,
-          orderId: doc.id,
-          courierId: currentCourierId,
-          assignedBy: 'auto',
-          reason: 'rebalance',
-          status: 'pending',
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-        // Wait briefly for the unassign action to complete. We poll up to 3s.
-        let unassigned = false;
-        for (let i = 0; i < 15; i++) {
-          await new Promise((r) => setTimeout(r, 200));
-          const u = await unassignRef.get();
-          const s = u.data()?.status;
-          if (s === 'completed') {unassigned = true; break;}
-          if (s === 'failed')    break;
+        if (!best) {
+          logInfo({
+            component: COMPONENT,
+            event: 'rebalance.skipped',
+            dispatchId: rebalanceId,
+            orderId: doc.id,
+            collection: coll,
+            reason: 'no_candidate',
+          });
+          continue;
         }
-        if (!unassigned) continue;
 
-        const assignRef = db.collection('courier_actions').doc();
-        await assignRef.set({
-          type: 'assign',
-          collection: coll,
-          orderId: doc.id,
-          courierId: best.uid,
-          courierName: newName,
-          assignedBy: 'auto',
-          suppressNotification: true, // silent on rebalance (user preference)
-          status: 'pending',
-          autoAssignScore: best.score,
-          autoAssignDistanceKm: best.distKm,
-          reassignHop: (order.reassignHops || 0) + 1,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+        // best.uid is reserved (+1). Must release if we decide not to commit,
+        // or if the unassign/assign chain fails before CF-40 takes ownership.
+        let committed = false;
+        try {
+          const improved =
+            currentScore - best.score >= REBALANCE_MIN_DELTA &&
+            best.score <= currentScore * REBALANCE_MIN_RATIO;
+          if (!improved) {
+            logInfo({
+              component: COMPONENT,
+              event: 'rebalance.skipped',
+              dispatchId: rebalanceId,
+              orderId: doc.id,
+              collection: coll,
+              reason: 'not_improved',
+              currentScore: Number(currentScore.toFixed(2)),
+              candidateScore: Number(best.score.toFixed(2)),
+            });
+            continue;
+          }
 
-        reassigned++;
+          const nameSnap = await db.collection('users').doc(best.uid).get();
+          const newName = nameSnap.exists ?
+            nameSnap.data().displayName || nameSnap.data().fullName || 'Courier' :
+            'Courier';
+
+          const unassignRef = db.collection('courier_actions').doc();
+          await unassignRef.set({
+            type: 'unassign',
+            collection: coll,
+            orderId: doc.id,
+            courierId: currentCourierId,
+            assignedBy: 'auto',
+            reason: 'rebalance',
+            status: 'pending',
+            dispatchId: rebalanceId,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          // Wait briefly for the unassign action to complete. We poll up to 3s.
+          let unassigned = false;
+          for (let i = 0; i < 15; i++) {
+            await new Promise((r) => setTimeout(r, 200));
+            const u = await unassignRef.get();
+            const s = u.data()?.status;
+            if (s === 'completed') {unassigned = true; break;}
+            if (s === 'failed')    break;
+          }
+          if (!unassigned) {
+            logWarn({
+              component: COMPONENT,
+              event: 'rebalance.unassign_timeout',
+              dispatchId: rebalanceId,
+              orderId: doc.id,
+              collection: coll,
+              previousCourierId: currentCourierId,
+            });
+            continue;
+          }
+
+          const assignRef = db.collection('courier_actions').doc();
+          await assignRef.set({
+            type: 'assign',
+            collection: coll,
+            orderId: doc.id,
+            courierId: best.uid,
+            courierName: newName,
+            assignedBy: 'auto',
+            suppressNotification: true, // silent on rebalance (user preference)
+            status: 'pending',
+            autoAssignScore: best.score,
+            autoAssignDistanceKm: best.distKm,
+            reassignHop: (order.reassignHops || 0) + 1,
+            dispatchId: rebalanceId,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          committed = true;
+
+          logInfo({
+            component: COMPONENT,
+            event: 'rebalance.reassigned',
+            dispatchId: rebalanceId,
+            orderId: doc.id,
+            collection: coll,
+            previousCourierId: currentCourierId,
+            courierId: best.uid,
+            currentScore: Number(currentScore.toFixed(2)),
+            newScore: Number(best.score.toFixed(2)),
+            hop: (order.reassignHops || 0) + 1,
+          });
+
+          reassigned++;
+        } finally {
+          if (!committed) await releaseReservation(best.uid, rebalanceId);
+        }
       } catch (err) {
-        console.error(`[AutoAssign] rebalance ${coll}/${doc.id} failed:`, err);
+        logError({
+          component: COMPONENT,
+          event: 'rebalance.order_failed',
+          dispatchId: rebalanceId,
+          orderId: doc.id,
+          collection: coll,
+          reason: 'exception',
+          message: err.message,
+        });
       }
     }
 
-    if (reassigned > 0) console.log(`[AutoAssign] rebalanced ${reassigned} order(s)`);
+    logInfo({
+      component: COMPONENT,
+      event: 'rebalance.swept',
+      scanned,
+      reassigned,
+    });
   },
 );
 
@@ -621,7 +948,13 @@ export const mirrorCourierLocation = onValueWritten(
           .del(`courier:${uid}`)
           .exec();
       } catch (err) {
-        console.warn('[AutoAssign] mirror remove failed:', uid, err.message);
+        logWarn({
+          component: 'mirror',
+          event: 'mirror.remove_failed',
+          courierId: uid,
+          reason: 'redis_error',
+          message: err.message,
+        });
       }
       return;
     }
@@ -652,7 +985,50 @@ export const mirrorCourierLocation = onValueWritten(
 
       await pipeline.exec();
     } catch (err) {
-      console.warn('[AutoAssign] mirror write failed:', uid, err.message);
+      logWarn({
+        component: 'mirror',
+        event: 'mirror.write_failed',
+        courierId: uid,
+        reason: 'redis_error',
+        message: err.message,
+      });
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCHEDULED: fleet gauge — snapshots the dispatch pool size once a minute.
+//
+// Powers the ops dashboard's "couriers on-shift" chart and the alert
+// "on_shift == 0 during operating hours". Intentionally tiny — one Redis
+// call, one structured log line.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const logFleetMetrics = onSchedule(
+  {
+    schedule: 'every 1 minutes',
+    region: REGION,
+    memory: '256MiB',
+    timeoutSeconds: 30,
+    vpcConnector: 'nar24-vpc',
+    vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
+  },
+  async () => {
+    try {
+      const redis = getRedisClient();
+      const onShift = await redis.zcard('couriers:geo');
+      logInfo({
+        component: 'fleet',
+        event: 'fleet.gauge',
+        onShift,
+      });
+    } catch (err) {
+      logError({
+        component: 'fleet',
+        event: 'fleet.gauge_failed',
+        reason: 'redis_error',
+        message: err.message,
+      });
     }
   },
 );

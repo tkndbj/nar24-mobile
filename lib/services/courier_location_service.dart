@@ -6,10 +6,21 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+// Shift state is the courier's explicit opt-in to receive auto-assignments.
+// It is independent of `isOnline` (which follows app foreground / connection).
+// The auto-assigner in CF-54 requires BOTH online and on-shift to dispatch.
+const String _kPrefOnShift = 'courier.onShift';
 
 class CourierLocationService {
   CourierLocationService._();
   static final CourierLocationService instance = CourierLocationService._();
+
+  // Broadcasts shift-state changes so UIs can reactively update their toggle
+  // without re-reading SharedPreferences.
+  final _shiftController = StreamController<bool>.broadcast();
+  bool _onShift = false;
 
   // ── Config ────────────────────────────────────────────────────────────────
 
@@ -38,12 +49,49 @@ class CourierLocationService {
 
  bool get isTracking => _tracking;
 
+  /// Current shift state (explicit courier opt-in).
+  bool get isOnShift => _onShift;
+
+  /// Emits the latest shift state whenever it changes.
+  Stream<bool> get shiftStream => _shiftController.stream;
+
   /// RTDB connection state — true when the device has an active
   /// connection to Firebase.  The screen uses this for an offline banner.
   Stream<bool> get connectionStream => _db
       .ref('.info/connected')
       .onValue
       .map((event) => event.snapshot.value as bool? ?? false);
+
+  /// Read the persisted shift flag and, if the courier was on-shift last
+  /// session, resume tracking. Call this once from the cargo screen's
+  /// initState instead of calling startTracking() directly — the unconditional
+  /// start is replaced by an opt-in model.
+  Future<void> bootOnShift() async {
+    final prefs = await SharedPreferences.getInstance();
+    final wasOn = prefs.getBool(_kPrefOnShift) ?? false;
+    _onShift = wasOn;
+    _shiftController.add(wasOn);
+    if (wasOn) {
+      await startTracking();
+    }
+  }
+
+  /// Toggle the courier's shift. On-shift → GPS tracking resumes and the
+  /// dispatcher can route orders to them. Off-shift → tracking stops and the
+  /// backend removes them from the geo index on the next mirror tick.
+  Future<void> setOnShift(bool value) async {
+    if (_onShift == value) return;
+    _onShift = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kPrefOnShift, value);
+    _shiftController.add(value);
+
+    if (value) {
+      await startTracking();
+    } else {
+      await stopTracking();
+    }
+  }
 
   /// Call from FoodCargoScreen.initState().
   /// Requests permission if needed then starts the GPS stream.
@@ -74,7 +122,7 @@ class CourierLocationService {
 
     await locRef.update({
       'isOnline': true,
-      'isOnShift': true,
+      'isOnShift': _onShift,
       'currentOrderId': _currentOrderId,
     });
 
@@ -188,7 +236,7 @@ class CourierLocationService {
     // Re-mark as online (onDisconnect may have fired if connection dropped)
     await _db.ref('courier_locations/$uid').update({
       'isOnline': true,
-      'isOnShift': true,
+      'isOnShift': _onShift,
     });
 
      await _positionSub?.cancel();
@@ -256,7 +304,7 @@ class CourierLocationService {
         'heading': pos.heading, // degrees 0–360
         'speed': (pos.speed * 3.6).roundToDouble(), // m/s → km/h
         'isOnline': true,
-        'isOnShift': true,
+        'isOnShift': _onShift,
         'currentOrderId': _currentOrderId,
         'updatedAt': ServerValue.timestamp, // server-side ms timestamp
       });
@@ -270,7 +318,7 @@ class CourierLocationService {
     try {
       await _db.ref('courier_locations/$uid').update({
         'isOnline': true,
-        'isOnShift': true,
+        'isOnShift': _onShift,
         'updatedAt': ServerValue.timestamp,
       });
     } catch (e) {

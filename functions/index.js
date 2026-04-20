@@ -920,4 +920,5 @@ export {
   autoAssignRetryUnassigned,
   autoAssignRebalance,
   mirrorCourierLocation,
+  logFleetMetrics,
 } from './54-auto-assignment/index.js';
