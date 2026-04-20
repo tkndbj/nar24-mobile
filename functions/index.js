@@ -914,3 +914,10 @@ export { deleteCloudinaryCache } from './50-cloudinary/index.js';
 export { migrateImagePaths } from './51-cloudinary-backfill/index.js';
 export { processMarketOrder, initializeMarketPayment, marketPaymentCallback, checkMarketPaymentStatus, updateMarketOrderStatus, submitMarketReview, generateMarketReceiptBackground } from './52-market-payment/index.js';
 export { calculateDailyMarketAccounting, calculateWeeklyMarketAccounting, calculateMonthlyMarketAccounting } from './53-market-accounting/index.js';
+export {
+  autoAssignOnFoodAccepted,
+  autoAssignOnMarketCreated,
+  autoAssignRetryUnassigned,
+  autoAssignRebalance,
+  mirrorCourierLocation,
+} from './54-auto-assignment/index.js';

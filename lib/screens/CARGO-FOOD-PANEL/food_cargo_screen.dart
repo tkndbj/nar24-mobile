@@ -1,4 +1,15 @@
-// lib/screens/food/food_cargo_screen.dart
+// lib/screens/CARGO-FOOD-PANEL/food_cargo_screen.dart
+//
+// Single-view courier screen. Orders are auto-assigned to the courier by the
+// backend (CF-54); the courier never self-assigns. This screen only shows the
+// courier's own in-flight deliveries (status ∈ {assigned, out_for_delivery})
+// and lets them mark pickup / delivery.
+//
+// Push notifications about newly assigned orders arrive per-device via the
+// CF-46 FCM fan-out that watches users/{uid}/notifications. No topic
+// subscription is required.
+
+import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,56 +17,18 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
+import 'package:rxdart/rxdart.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../auth_service.dart';
 import '../../generated/l10n/app_localizations.dart';
-import 'package:rxdart/rxdart.dart';
 import '../../services/courier_location_service.dart';
 import './courier_route_screen.dart';
-import 'dart:async';
 
-const _kFcmTopic = 'food_couriers';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// COURIER CALL MODEL
-// ─────────────────────────────────────────────────────────────────────────────
-
-class CourierCall {
-  final String id;
-  final String restaurantId;
-  final String restaurantName;
-  final String restaurantProfileImage;
-  final String callNote;
-  final String status; // waiting | accepted | completed
-  final String? acceptedBy;
-  final Timestamp? createdAt;
-
-  const CourierCall({
-    required this.id,
-    required this.restaurantId,
-    required this.restaurantName,
-    required this.restaurantProfileImage,
-    required this.callNote,
-    required this.status,
-    this.acceptedBy,
-    this.createdAt,
-  });
-
-  factory CourierCall.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final d = doc.data()!;
-    return CourierCall(
-      id: doc.id,
-      restaurantId: d['restaurantId'] as String? ?? '',
-      restaurantName: d['restaurantName'] as String? ?? '',
-      restaurantProfileImage: d['restaurantProfileImage'] as String? ?? '',
-      callNote: d['callNote'] as String? ?? '',
-      status: d['status'] as String? ?? 'waiting',
-      acceptedBy: d['acceptedBy'] as String?,
-      createdAt: d['createdAt'] as Timestamp?,
-    );
-  }
-}
+// Legacy pool-era topic. We unsubscribe on init so lingering subscriptions
+// on existing devices go away — targeted per-device pushes replace it.
+const _kLegacyPoolTopic = 'food_couriers';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCREEN
@@ -69,29 +42,23 @@ class FoodCargoScreen extends StatefulWidget {
 }
 
 class _FoodCargoScreenState extends State<FoodCargoScreen>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+    with WidgetsBindingObserver {
   final _messaging = FirebaseMessaging.instance;
   bool _notifPanelOpen = false;
   final _localReadController = BehaviorSubject<DateTime?>.seeded(null);
   Stream<int>? _unreadCountStream;
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _courierNotifsStream;
-  late final TabController _tabController;
   bool _isOnline = true;
   StreamSubscription<bool>? _connSub;
+  String? _highlightedOrderId;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _tabController = TabController(length: 2, vsync: this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final routerState = GoRouterState.of(context);
-      final tabParam = routerState.uri.queryParameters['tab'];
-      if (tabParam == '1') {
-        _tabController.animateTo(1);
-      }
-    });
+    // Per-courier notification feed (written by CF-40 / CF-46 via
+    // users/{uid}/notifications → this legacy collection is kept for the
+    // in-app bell list so the UI shows platform-wide heads-up messages).
     _courierNotifsStream = FirebaseFirestore.instance
         .collection('food_courier_notifications')
         .where('isActive', isEqualTo: true)
@@ -104,8 +71,9 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
     CourierLocationService.instance.startTracking();
     _connSub =
         CourierLocationService.instance.connectionStream.listen((connected) {
-      if (mounted && _isOnline != connected)
+      if (mounted && _isOnline != connected) {
         setState(() => _isOnline = connected);
+      }
     });
   }
 
@@ -113,7 +81,11 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
 
   Future<void> _setupFcm() async {
     await _messaging.requestPermission(alert: true, badge: true, sound: true);
-    await _messaging.subscribeToTopic(_kFcmTopic);
+    // Clean up the obsolete pool-era topic subscription. Safe to call even if
+    // the device was never subscribed.
+    try {
+      await _messaging.unsubscribeFromTopic(_kLegacyPoolTopic);
+    } catch (_) {}
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
     FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
     final initial = await _messaging.getInitialMessage();
@@ -126,27 +98,16 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
     final type = data['type'] as String? ?? '';
     final title = message.notification?.title ?? '';
     final body = message.notification?.body ?? '';
-    final isOrderReady = type == 'order_ready';
-    final isCourierCall = type == 'courier_call';
-    final isMarketNew = type == 'market_order_new';
     final isAssigned = type == 'order_assigned';
+
+    final bgColor = isAssigned ? Colors.purple[800] : Colors.orange[800];
+    final emoji = isAssigned ? '🎯' : '🔔';
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
-            Text(
-              isCourierCall
-                  ? '🛵'
-                  : isOrderReady
-                      ? '📦'
-                      : isMarketNew
-                          ? '🛒'
-                          : isAssigned
-                              ? '🎯'
-                              : '⏳',
-              style: const TextStyle(fontSize: 22),
-            ),
+            Text(emoji, style: const TextStyle(fontSize: 22)),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -164,15 +125,7 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
             ),
           ],
         ),
-        backgroundColor: isCourierCall
-            ? Colors.green[800]
-            : isOrderReady
-                ? Colors.green[800]
-                : isMarketNew
-                    ? Colors.blue[800]
-                    : isAssigned
-                        ? Colors.purple[800]
-                        : Colors.orange[800],
+        backgroundColor: bgColor,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 5),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -180,8 +133,11 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
           label: 'VIEW',
           textColor: Colors.white,
           onPressed: () {
-            if (isCourierCall) {
-              _tabController.animateTo(0);
+            if (isAssigned) {
+              final orderId = data['orderId'] as String?;
+              if (orderId != null && orderId.isNotEmpty) {
+                setState(() => _highlightedOrderId = orderId);
+              }
             } else {
               setState(() => _notifPanelOpen = true);
               _markAllAsRead();
@@ -205,13 +161,14 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
 
   void _handleNotificationTap(RemoteMessage message) {
     if (!mounted) return;
-    final type = message.data['type'] as String? ?? '';
-    if (type == 'courier_call') {
-      _tabController.animateTo(0); // Pool tab — courier call is there
-    } else if (type == 'order_assigned') {
-      _tabController.animateTo(1); // My Deliveries — assigned orders are there
-    } else if (type == 'market_order_new' || type == 'order_ready') {
-      _tabController.animateTo(0); // Pool tab — new pickable orders
+    final data = message.data;
+    final type = data['type'] as String? ?? '';
+
+    if (type == 'order_assigned') {
+      final orderId = data['orderId'] as String?;
+      if (orderId != null && orderId.isNotEmpty) {
+        setState(() => _highlightedOrderId = orderId);
+      }
     } else {
       setState(() => _notifPanelOpen = true);
     }
@@ -223,15 +180,13 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    final notifsStream = _courierNotifsStream;
-
     final readStream = FirebaseFirestore.instance
         .collection('courier_notification_reads')
         .doc(uid)
         .snapshots();
 
     _unreadCountStream = Rx.combineLatest3(
-      notifsStream,
+      _courierNotifsStream,
       readStream,
       _localReadController.stream,
       (QuerySnapshot notifs, DocumentSnapshot read, DateTime? localReadAt) {
@@ -262,19 +217,14 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
     }
   }
 
-  // ── Lifecycle ─────────────────────────────────────────────────────────────
-
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _connSub?.cancel();
     CourierLocationService.instance.stopTracking();
-    _tabController.dispose();
     _localReadController.close();
     super.dispose();
   }
-
-  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -301,7 +251,6 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
           ],
         ),
         actions: [
-          // Notification bell
           StreamBuilder<int>(
             stream: _unreadCountStream,
             builder: (context, snap) {
@@ -352,40 +301,17 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
           IconButton(
             icon: const Icon(Icons.logout_rounded),
             tooltip: loc.foodCargoLogout,
-            onPressed: () async {
-              await _confirmLogout(context, loc);
-              await _messaging.unsubscribeFromTopic(_kFcmTopic);
-            },
+            onPressed: () => _confirmLogout(context, loc),
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: Colors.orange,
-          unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[500],
-          indicatorColor: Colors.orange,
-          indicatorSize: TabBarIndicatorSize.label,
-          tabs: [
-            Tab(text: loc.foodCargoPoolTab),
-            Tab(text: loc.foodCargoMyDeliveriesTab),
-          ],
-        ),
       ),
       body: Stack(
         children: [
-          TabBarView(
-            controller: _tabController,
-            children: [
-              _PoolTab(
-                currentUser: user,
-                isDark: isDark,
-              ),
-              _MyDeliveriesTab(
-                currentUser: user,
-                isDark: isDark,
-              ),
-            ],
+          _DeliveriesList(
+            currentUser: user,
+            isDark: isDark,
+            highlightedOrderId: _highlightedOrderId,
           ),
-          // ── Offline banner ──────────────────────────────────────
           if (!_isOnline)
             Positioned(
               top: 0,
@@ -574,23 +500,9 @@ class _NotifCard extends StatelessWidget {
     final deliveryCity = data['deliveryCity'] as String? ?? '';
     final msgTr = data['message_tr'] as String? ?? '';
     final createdAt = data['createdAt'] as Timestamp?;
-    final isOrderReady = type == 'order_ready';
-    final isMarketNew = type == 'market_order_new';
-    final color = isOrderReady
-        ? Colors.green
-        : isMarketNew
-            ? Colors.blue
-            : Colors.orange;
-    final emoji = isOrderReady
-        ? '📦'
-        : isMarketNew
-            ? '🛒'
-            : '⏳';
-    final label = isOrderReady
-        ? 'HAZIR'
-        : isMarketNew
-            ? 'YENİ MARKET'
-            : 'YAKINDA HAZIR';
+    final color = type == 'heads_up' ? Colors.orange : Colors.blue;
+    final emoji = type == 'heads_up' ? '⏳' : '🔔';
+    final label = type == 'heads_up' ? 'YAKINDA HAZIR' : 'BİLDİRİM';
     final timeStr =
         createdAt != null ? DateFormat('HH:mm').format(createdAt.toDate()) : '';
 
@@ -717,7 +629,7 @@ Future<void> _confirmLogout(BuildContext context, AppLocalizations loc) async {
   );
 
   try {
-    await CourierLocationService.instance.stopTracking(); // ← ADD THIS
+    await CourierLocationService.instance.stopTracking();
     await AuthService().logout();
     if (context.mounted) context.go('/');
   } catch (_) {
@@ -726,644 +638,37 @@ Future<void> _confirmLogout(BuildContext context, AppLocalizations loc) async {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POOL TAB — shows courier call cards at top, then ready orders below
+// DELIVERY ORDER DOC WRAPPER (couples a Firestore doc with its collection)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _PoolTab extends StatefulWidget {
-  final User currentUser;
-  final bool isDark;
-
-  const _PoolTab({
-    required this.currentUser,
-    required this.isDark,
-  });
-
-  @override
-  State<_PoolTab> createState() => _PoolTabState();
-}
-
-class _PoolOrder {
+class _OrderDoc {
   final QueryDocumentSnapshot<Map<String, dynamic>> doc;
   final String collection; // 'orders-food' | 'orders-market'
-  const _PoolOrder(this.doc, this.collection);
-}
-
-class _PoolTabState extends State<_PoolTab> with AutomaticKeepAliveClientMixin {
-  late final Stream<QuerySnapshot<Map<String, dynamic>>> _callsStream;
-
-  // ── Paginated ready-orders state ──────────────────────────────────
-  //
-  // Page 1 is a live snapshot (real-time adds/removes as orders become
-  // ready or get taken).  Subsequent pages are fetched on-demand via
-  // one-time gets when the courier scrolls near the bottom.
-  //
-  // If a stale extra-page order was already taken, the existing
-  // transaction in _assignOrder handles it gracefully ("already taken").
-
-  static const _kPageSize = 10;
-  static const _kMarketLivePageSize = 30;
-
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _livePageSub;
-  List<QueryDocumentSnapshot<Map<String, dynamic>>> _liveDocs = [];
-  final List<QueryDocumentSnapshot<Map<String, dynamic>>> _extraDocs = [];
-  bool _hasMore = true;
-  bool _loadingMore = false;
-  bool _initialLoading = true;
-  String? _ordersError;
-  final _scrollController = ScrollController();
-
-  // Market-orders live stream (display-only for now)
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _liveMarketSub;
-  List<QueryDocumentSnapshot<Map<String, dynamic>>> _liveMarketDocs = [];
-
-  @override
-  void initState() {
-    super.initState();
-
-    _callsStream = FirebaseFirestore.instance
-        .collection('courier_calls')
-        .where('isActive', isEqualTo: true)
-        .snapshots();
-
-    _subscribeLivePage();
-    _subscribeMarketLive();
-    _scrollController.addListener(_onScroll);
-  }
-
-  // ── Market pending orders (live, display-only) ────────────────────
-
-  void _subscribeMarketLive() {
-    _liveMarketSub = FirebaseFirestore.instance
-        .collection('orders-market')
-        .where('status', isEqualTo: 'pending')
-        .orderBy('updatedAt')
-        .limit(_kMarketLivePageSize)
-        .snapshots()
-        .listen(
-      (snap) {
-        if (!mounted) return;
-        setState(() => _liveMarketDocs = snap.docs);
-      },
-      onError: (_) {
-        // Silent — a market index miss shouldn't break the food pool
-      },
-    );
-  }
-
-  // ── Live first page (real-time) ───────────────────────────────────
-
-  void _subscribeLivePage() {
-    _livePageSub = FirebaseFirestore.instance
-        .collection('orders-food')
-        .where('status', isEqualTo: 'ready')
-        .orderBy('updatedAt') // ← requires composite index
-        .limit(_kPageSize)
-        .snapshots()
-        .listen(
-      (snap) {
-        if (!mounted) return;
-        final liveIds = snap.docs.map((d) => d.id).toSet();
-        setState(() {
-          _liveDocs = snap.docs;
-          _initialLoading = false;
-          _ordersError = null;
-
-          // Drop extras that rotated back into the live page
-          _extraDocs.removeWhere((d) => liveIds.contains(d.id));
-
-          // If live page isn't full and no extras loaded → nothing left
-          if (snap.docs.length < _kPageSize && _extraDocs.isEmpty) {
-            _hasMore = false;
-          } else if (snap.docs.length >= _kPageSize) {
-            // Live page is full — there *might* be more beyond it
-            _hasMore = true;
-          }
-        });
-      },
-      onError: (e) {
-        if (!mounted) return;
-        setState(() {
-          _initialLoading = false;
-          _ordersError = e.toString();
-        });
-      },
-    );
-  }
-
-  // ── Infinite-scroll trigger ───────────────────────────────────────
-
-  void _onScroll() {
-    if (!_hasMore || _loadingMore) return;
-    final pos = _scrollController.position;
-    if (pos.pixels >= pos.maxScrollExtent - 300) {
-      _loadMoreOrders();
-    }
-  }
-
-  // ── Next page (one-time fetch) ────────────────────────────────────
-
-  Future<void> _loadMoreOrders() async {
-    if (_loadingMore || !_hasMore) return;
-
-    // Cursor = last extra doc, or last live doc if no extras yet
-    final cursor = _extraDocs.isNotEmpty
-        ? _extraDocs.last
-        : (_liveDocs.isNotEmpty ? _liveDocs.last : null);
-    if (cursor == null) return;
-
-    setState(() => _loadingMore = true);
-
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('orders-food')
-          .where('status', isEqualTo: 'ready')
-          .orderBy('updatedAt')
-          .startAfterDocument(cursor)
-          .limit(_kPageSize)
-          .get();
-
-      if (!mounted) return;
-
-      // Dedup against everything already displayed
-      final existingIds = {
-        ..._liveDocs.map((d) => d.id),
-        ..._extraDocs.map((d) => d.id),
-      };
-      final fresh =
-          snap.docs.where((d) => !existingIds.contains(d.id)).toList();
-
-      setState(() {
-        _extraDocs.addAll(fresh);
-        _hasMore = snap.docs.length >= _kPageSize;
-        _loadingMore = false;
-      });
-    } catch (_) {
-      if (mounted) setState(() => _loadingMore = false);
-    }
-  }
-
-  // ── Merged, deduped, sorted list ──────────────────────────────────
-
-  List<_PoolOrder> get _allOrderDocs {
-    final seen = <String>{};
-    final all = <_PoolOrder>[];
-    for (final d in _liveDocs) {
-      if (seen.add(d.id)) all.add(_PoolOrder(d, 'orders-food'));
-    }
-    for (final d in _extraDocs) {
-      if (seen.add(d.id)) all.add(_PoolOrder(d, 'orders-food'));
-    }
-    for (final d in _liveMarketDocs) {
-      if (seen.add(d.id)) all.add(_PoolOrder(d, 'orders-market'));
-    }
-    // Client-side sort keeps oldest-first (FIFO) regardless of merge order
-    all.sort((a, b) {
-      final aTs = a.doc.data()['updatedAt'] as Timestamp?;
-      final bTs = b.doc.data()['updatedAt'] as Timestamp?;
-      if (aTs == null) return 1;
-      if (bTs == null) return -1;
-      return aTs.compareTo(bTs);
-    });
-    return all;
-  }
-
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  void dispose() {
-    _livePageSub?.cancel();
-    _liveMarketSub?.cancel();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  // ── Build ─────────────────────────────────────────────────────────
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    final loc = AppLocalizations.of(context);
-    final myUid = widget.currentUser.uid;
-
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: _callsStream,
-      builder: (context, callSnap) {
-        final visibleCalls = (callSnap.data?.docs ?? [])
-            .map((d) => CourierCall.fromDoc(d))
-            .where((c) =>
-                c.status == 'waiting' ||
-                (c.status == 'accepted' && c.acceptedBy == myUid))
-            .toList();
-
-        // Both still loading → show spinner
-        if (_initialLoading &&
-            callSnap.connectionState == ConnectionState.waiting) {
-          return const _Loader();
-        }
-
-        // Firestore error on orders stream
-        if (_ordersError != null && _liveDocs.isEmpty && _extraDocs.isEmpty) {
-          return _ErrorView(message: _ordersError!);
-        }
-
-        final orderDocs = _allOrderDocs;
-        final hasContent = visibleCalls.isNotEmpty || orderDocs.isNotEmpty;
-
-        if (!hasContent) {
-          return _EmptyState(
-            emoji: '📦',
-            title: loc.foodCargoPoolEmpty,
-            subtitle: loc.foodCargoPoolEmptySub,
-            isDark: widget.isDark,
-          );
-        }
-
-        final totalItems = visibleCalls.length + orderDocs.length;
-
-        return ListView.builder(
-          controller: _scrollController,
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-          itemCount: totalItems + (_hasMore ? 1 : 0),
-          itemBuilder: (_, i) {
-            // ── Courier-call cards first ─────────────────────────────
-            if (i < visibleCalls.length) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: _CourierCallCard(
-                  key: ValueKey(
-                      '${visibleCalls[i].id}_${visibleCalls[i].status}'),
-                  call: visibleCalls[i],
-                  currentUser: widget.currentUser,
-                  isDark: widget.isDark,
-                ),
-              );
-            }
-
-            // ── Ready-order cards ───────────────────────────────────
-            final orderIdx = i - visibleCalls.length;
-
-            // Sentinel item at the end → loading indicator
-            if (orderIdx >= orderDocs.length) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Center(
-                  child: _loadingMore
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.orange,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                ),
-              );
-            }
-
-            final poolOrder = orderDocs[orderIdx];
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: _CargoOrderCard(
-                orderId: poolOrder.doc.id,
-                data: poolOrder.doc.data(),
-                collection: poolOrder.collection,
-                isDark: widget.isDark,
-                isPool: true,
-                currentUser: widget.currentUser,
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
+  _OrderDoc(this.doc, this.collection);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COURIER CALL CARD
+// DELIVERIES LIST — courier's in-flight orders (assigned + out_for_delivery)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _CourierCallCard extends StatefulWidget {
-  final CourierCall call;
-  final User currentUser;
-  final bool isDark;
-
-  const _CourierCallCard({
-    super.key,
-    required this.call,
-    required this.currentUser,
-    required this.isDark,
-  });
-
-  @override
-  State<_CourierCallCard> createState() => _CourierCallCardState();
-}
-
-class _CourierCallCardState extends State<_CourierCallCard> {
-  bool _loading = false;
-  bool _acceptedLocally = false;
-
-  bool get _isMyCall =>
-      _acceptedLocally ||
-      (widget.call.status == 'accepted' &&
-          widget.call.acceptedBy == widget.currentUser.uid);
-
-  String _timeAgo() {
-    final ts = widget.call.createdAt;
-    if (ts == null) return '';
-    final diff = DateTime.now().difference(ts.toDate());
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
-    return '${diff.inHours}h ago';
-  }
-
-  Future<void> _acceptCall() async {
-    setState(() => _loading = true);
-    try {
-      final db = FirebaseFirestore.instance;
-      await db.runTransaction((tx) async {
-        final ref = db.collection('courier_calls').doc(widget.call.id);
-        final snap = await tx.get(ref);
-        if (!snap.exists) throw Exception('not_found');
-        final current = snap.data()!;
-        if (current['status'] != 'waiting') {
-          throw Exception('already_accepted');
-        }
-        final displayName = widget.currentUser.displayName ??
-            widget.currentUser.email ??
-            'Courier';
-        tx.update(ref, {
-          'status': 'accepted',
-          'acceptedBy': widget.currentUser.uid,
-          'acceptedByName': displayName,
-          'acceptedAt': FieldValue.serverTimestamp(),
-        });
-      });
-      // Optimistically mark as accepted so UI switches immediately,
-      // without waiting for the Firestore stream round-trip.
-      if (mounted) setState(() => _acceptedLocally = true);
-    } catch (e) {
-      if (!mounted) return;
-      final msg = e.toString().contains('already_accepted')
-          ? 'Bu çağrı zaten kabul edildi.'
-          : 'Çağrı kabul edilemedi. Tekrar deneyin.';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(msg),
-        backgroundColor: Colors.red[700],
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ));
-    } finally {
-      // Always reset loading — the ValueKey + stream update handles the UI switch
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = widget.isDark;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1C2A1E) : const Color(0xFFF0FBF4),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: _isMyCall
-              ? Colors.orange.withOpacity(0.6)
-              : Colors.green.withOpacity(0.4),
-          width: _isMyCall ? 2 : 1.5,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Header ────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-            child: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    color: isDark ? const Color(0xFF2D2B3F) : Colors.green[50],
-                    child: widget.call.restaurantProfileImage.isNotEmpty
-                        ? Image.network(
-                            widget.call.restaurantProfileImage,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Center(
-                                child: Text('🍽️',
-                                    style: TextStyle(fontSize: 22))),
-                          )
-                        : const Center(
-                            child: Text('🍽️', style: TextStyle(fontSize: 22))),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.call.restaurantName,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 15),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: (_isMyCall ? Colors.orange : Colors.green)
-                                  .withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              _isMyCall ? 'KABUL ETTİN' : 'KURYE BEKLİYOR',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                color: _isMyCall ? Colors.orange : Colors.green,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _timeAgo(),
-                            style: TextStyle(
-                              fontSize: 10,
-                              color:
-                                  isDark ? Colors.grey[500] : Colors.grey[500],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                _PulsingDot(color: _isMyCall ? Colors.orange : Colors.green),
-              ],
-            ),
-          ),
-
-          // ── Note ──────────────────────────────────────
-          if (widget.call.callNote.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              child: Row(
-                children: [
-                  Icon(Icons.notes_rounded,
-                      size: 13,
-                      color: isDark ? Colors.grey[500] : Colors.grey[500]),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      widget.call.callNote,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          Divider(
-            height: 1,
-            color: isDark ? const Color(0xFF2D2B3F) : const Color(0xFFE5E7EB),
-          ),
-
-          // ── Action button ──────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-            child: SizedBox(
-              width: double.infinity,
-              child: _isMyCall
-                  ? Container(
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(isDark ? 0.12 : 0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border:
-                            Border.all(color: Colors.orange.withOpacity(0.3)),
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.check_circle_rounded,
-                              size: 18, color: Colors.orange),
-                          SizedBox(width: 6),
-                          Text('Restorana Git',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                  color: Colors.orange)),
-                        ],
-                      ),
-                    )
-                  : ElevatedButton.icon(
-                      onPressed: _loading ? null : _acceptCall,
-                      icon: _loading
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2))
-                          : const Icon(Icons.delivery_dining_rounded, size: 18),
-                      label: const Text('Çağrıyı Kabul Et',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 14)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: Colors.green.withOpacity(0.5),
-                        padding: const EdgeInsets.symmetric(vertical: 13),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        elevation: 0,
-                      ),
-                    ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PULSING DOT
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PulsingDot extends StatefulWidget {
-  final Color color;
-  const _PulsingDot({required this.color});
-  @override
-  State<_PulsingDot> createState() => _PulsingDotState();
-}
-
-class _PulsingDotState extends State<_PulsingDot>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _anim;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl =
-        AnimationController(vsync: this, duration: const Duration(seconds: 1))
-          ..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.4, end: 1.0).animate(_ctrl);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => FadeTransition(
-        opacity: _anim,
-        child: Container(
-          width: 10,
-          height: 10,
-          decoration:
-              BoxDecoration(color: widget.color, shape: BoxShape.circle),
-        ),
-      );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MY DELIVERIES TAB
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _MyDeliveriesTab extends StatefulWidget {
+class _DeliveriesList extends StatefulWidget {
   final User currentUser;
   final bool isDark;
   final String? highlightedOrderId;
 
-  const _MyDeliveriesTab({
+  const _DeliveriesList({
     required this.currentUser,
     required this.isDark,
     this.highlightedOrderId,
   });
 
   @override
-  State<_MyDeliveriesTab> createState() => _MyDeliveriesTabState();
+  State<_DeliveriesList> createState() => _DeliveriesListState();
 }
 
-class _MyDeliveriesTabState extends State<_MyDeliveriesTab>
+class _DeliveriesListState extends State<_DeliveriesList>
     with AutomaticKeepAliveClientMixin {
-  late Stream<List<_PoolOrder>> _stream;
+  late Stream<List<_OrderDoc>> _stream;
   final _scrollController = ScrollController();
   final Map<String, GlobalKey> _cardKeys = {};
   final Set<String> _removedLocally = {};
@@ -1379,17 +684,14 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab>
   }
 
   @override
-  void didUpdateWidget(_MyDeliveriesTab old) {
+  void didUpdateWidget(_DeliveriesList old) {
     super.didUpdateWidget(old);
     if (old.currentUser.uid != widget.currentUser.uid) {
       _stream = _buildStream(widget.currentUser.uid);
     }
   }
 
-  Stream<List<_PoolOrder>> _buildStream(String uid) {
-    // Tab 2 now shows orders in two courier-held states:
-    //   'assigned'         — just assigned, not yet picked up
-    //   'out_for_delivery' — picked up, on the way
+  Stream<List<_OrderDoc>> _buildStream(String uid) {
     const inFlight = ['assigned', 'out_for_delivery'];
 
     final foodStream = FirebaseFirestore.instance
@@ -1407,10 +709,10 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab>
     return Rx.combineLatest2<
         QuerySnapshot<Map<String, dynamic>>,
         QuerySnapshot<Map<String, dynamic>>,
-        List<_PoolOrder>>(foodStream, marketStream, (food, market) {
-      final all = <_PoolOrder>[
-        ...food.docs.map((d) => _PoolOrder(d, 'orders-food')),
-        ...market.docs.map((d) => _PoolOrder(d, 'orders-market')),
+        List<_OrderDoc>>(foodStream, marketStream, (food, market) {
+      final all = <_OrderDoc>[
+        ...food.docs.map((d) => _OrderDoc(d, 'orders-food')),
+        ...market.docs.map((d) => _OrderDoc(d, 'orders-market')),
       ];
       all.sort((a, b) {
         final aTs = a.doc.data()['assignedAt'] as Timestamp?;
@@ -1439,7 +741,6 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab>
         _actionListeners[actionId]?.cancel();
         _actionListeners.remove(actionId);
 
-        // Revert optimistic removal — order reappears via stream
         setState(() => _removedLocally.remove(orderId));
 
         final error = snap.data()?['error'] as String? ?? 'Bilinmeyen hata';
@@ -1471,7 +772,7 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab>
     super.build(context);
     final loc = AppLocalizations.of(context);
 
-    return StreamBuilder<List<_PoolOrder>>(
+    return StreamBuilder<List<_OrderDoc>>(
       stream: _stream,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
@@ -1482,7 +783,7 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab>
           return _ErrorView(message: 'Teslimatlar yüklenemedi: ${snap.error}');
         }
 
-        final docs = [...(snap.data ?? const <_PoolOrder>[])]
+        final docs = [...(snap.data ?? const <_OrderDoc>[])]
           ..removeWhere((p) => _removedLocally.contains(p.doc.id));
 
         if (docs.isEmpty) {
@@ -1496,7 +797,6 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab>
 
         return Column(
           children: [
-            // Route button
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: SizedBox(
@@ -1523,16 +823,15 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab>
                 ),
               ),
             ),
-            // Order list
             Expanded(
               child: ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
                   itemCount: docs.length,
                   itemBuilder: (_, i) {
-                    final poolOrder = docs[i];
-                    final docId = poolOrder.doc.id;
-                    final collection = poolOrder.collection;
+                    final order = docs[i];
+                    final docId = order.doc.id;
+                    final collection = order.collection;
                     _cardKeys[docId] ??= GlobalKey();
                     final isHit = docId == widget.highlightedOrderId;
 
@@ -1553,10 +852,9 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab>
                       padding: const EdgeInsets.only(bottom: 16),
                       child: _CargoOrderCard(
                         orderId: docId,
-                        data: poolOrder.doc.data(),
+                        data: order.doc.data(),
                         collection: collection,
                         isDark: widget.isDark,
-                        isPool: false,
                         currentUser: widget.currentUser,
                         isHighlighted: isHit,
                         onDeliveredLocally: (actionId) {
@@ -1577,15 +875,14 @@ class _MyDeliveriesTabState extends State<_MyDeliveriesTab>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ORDER CARD
+// ORDER CARD — single layout, auto-assigned only (no self-assign button)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _CargoOrderCard extends StatefulWidget {
   final String orderId;
   final Map<String, dynamic> data;
-  final String collection; // 'orders-food' | 'orders-market'
+  final String collection;
   final bool isDark;
-  final bool isPool;
   final User currentUser;
   final bool isHighlighted;
   final void Function(String actionDocId)? onDeliveredLocally;
@@ -1595,7 +892,6 @@ class _CargoOrderCard extends StatefulWidget {
     required this.data,
     required this.collection,
     required this.isDark,
-    required this.isPool,
     required this.currentUser,
     this.isHighlighted = false,
     this.onDeliveredLocally,
@@ -1609,39 +905,6 @@ class _CargoOrderCard extends StatefulWidget {
 
 class _CargoOrderCardState extends State<_CargoOrderCard> {
   bool _loading = false;
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _actionSub;
-
-  @override
-  void dispose() {
-    _actionSub?.cancel();
-    super.dispose();
-  }
-
-  // Subscribe to a courier_action doc for completion/failure feedback.
-  // Used by pool-side actions (assign/pickup) where we want to surface
-  // "already_taken" or other errors to the courier via snackbar.
-  void _listenForActionResult(String actionId) {
-    _actionSub?.cancel();
-    _actionSub = FirebaseFirestore.instance
-        .collection('courier_actions')
-        .doc(actionId)
-        .snapshots()
-        .listen((snap) {
-      if (!snap.exists || !mounted) return;
-      final status = snap.data()?['status'] as String?;
-      if (status == 'completed') {
-        _actionSub?.cancel();
-      } else if (status == 'failed') {
-        _actionSub?.cancel();
-        final error = snap.data()?['error'] as String? ?? '';
-        final loc = AppLocalizations.of(context);
-        final msg = error == 'already_taken'
-            ? loc.foodCargoAlreadyTaken
-            : loc.foodCargoAssignError;
-        _showSnack(msg, isError: true);
-      }
-    });
-  }
 
   Map<String, dynamic>? get _address =>
       widget.data['deliveryAddress'] as Map<String, dynamic>?;
@@ -1701,74 +964,6 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
     return '$parts$overflow';
   }
 
-  Future<void> _assignOrder() async {
-    final loc = AppLocalizations.of(context);
-    final isMarket = widget.isMarket;
-    final restaurantName = isMarket
-        ? 'Market Sipariş'
-        : (widget.data['restaurantName'] as String? ?? '—');
-    final city = _address?['city'] as String? ?? '—';
-
-    final confirmed = await showCupertinoDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => CupertinoAlertDialog(
-            title: Text(loc.foodCargoTakeConfirmTitle),
-            content: Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(loc.foodCargoTakeConfirmBody(restaurantName, city)),
-            ),
-            actions: [
-              CupertinoDialogAction(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: Text(loc.foodCargoCancel),
-              ),
-              CupertinoDialogAction(
-                isDefaultAction: true,
-                onPressed: () => Navigator.of(context).pop(true),
-                child: Text(loc.foodCargoTakeConfirmOk),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-
-    if (!confirmed || !context.mounted) return;
-
-    setState(() => _loading = true);
-    try {
-      // Both food and market pickups go through courier_actions so the
-      // backend trigger can perform the status transition atomically and
-      // the write is offline-safe (Firestore queues until reconnect).
-      final uid = widget.currentUser.uid;
-      final displayName = widget.currentUser.displayName ??
-          widget.currentUser.email ??
-          'Courier';
-
-      final actionRef =
-          FirebaseFirestore.instance.collection('courier_actions').doc();
-      await actionRef.set({
-        'type': 'assign',
-        'collection': widget.collection,
-        'orderId': widget.orderId,
-        'courierId': uid,
-        'courierName': displayName,
-        'assignedBy': 'self',
-        'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      _listenForActionResult(actionRef.id);
-      CourierLocationService.instance.updateCurrentOrder(widget.orderId);
-    } catch (e) {
-      if (!context.mounted) return;
-      _showSnack(AppLocalizations.of(context).foodCargoAssignError,
-          isError: true);
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
   Future<void> _markPickedUp() async {
     final loc = AppLocalizations.of(context);
     setState(() => _loading = true);
@@ -1790,7 +985,6 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      _listenForActionResult(actionRef.id);
       if (mounted) _showSnack(loc.foodCargoPickedUpSuccess);
     } catch (_) {
       if (mounted) {
@@ -1830,7 +1024,7 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
       CourierLocationService.instance.updateCurrentOrder(null);
       widget.onDeliveredLocally?.call(actionRef.id);
       if (mounted) _showSnack(loc.foodCargoDeliveredSuccess);
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         _showSnack(AppLocalizations.of(context).foodCargoAssignError,
             isError: true);
@@ -1840,7 +1034,6 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
     }
   }
 
-// ── ADD this new helper method right below _markDelivered ──────────
   Future<String?> _showPaymentSheet() {
     final isDark = widget.isDark;
     return showModalBottomSheet<String>(
@@ -1857,7 +1050,6 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Drag handle
             Center(
               child: Container(
                 width: 40,
@@ -2024,7 +1216,6 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis),
                           ),
-                          // Badge for scanned receipt orders
                           if (isScanned)
                             Container(
                               margin: const EdgeInsets.only(left: 6),
@@ -2143,24 +1334,18 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
                   isDark ? const Color(0xFF2D2B3F) : const Color(0xFFE5E7EB)),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-            child: widget.isPool
-                ? _PoolActions(
-                    loading: _loading,
-                    onAssign: _assignOrder,
-                    loc: loc,
-                  )
-                : _MyDeliveryActions(
-                    loading: _loading,
-                    isDark: isDark,
-                    hasPhone: _customerPhone.isNotEmpty,
-                    orderStatus:
-                        (widget.data['status'] as String?) ?? 'assigned',
-                    onCall: _callPhone,
-                    onMap: _openMap,
-                    onPickedUp: _markPickedUp,
-                    onDelivered: _markDelivered,
-                    loc: loc,
-                  ),
+            child: _MyDeliveryActions(
+              loading: _loading,
+              isDark: isDark,
+              hasPhone: _customerPhone.isNotEmpty,
+              orderStatus:
+                  (widget.data['status'] as String?) ?? 'assigned',
+              onCall: _callPhone,
+              onMap: _openMap,
+              onPickedUp: _markPickedUp,
+              onDelivered: _markDelivered,
+              loc: loc,
+            ),
           ),
         ],
       ),
@@ -2171,50 +1356,6 @@ class _CargoOrderCardState extends State<_CargoOrderCard> {
 // ─────────────────────────────────────────────────────────────────────────────
 // ACTION WIDGETS
 // ─────────────────────────────────────────────────────────────────────────────
-
-class _PoolActions extends StatelessWidget {
-  final bool loading;
-  final VoidCallback onAssign;
-  final AppLocalizations loc;
-
-  const _PoolActions(
-      {required this.loading, required this.onAssign, required this.loc});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: loading ? null : onAssign,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.orange,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: Colors.orange.withOpacity(0.5),
-          padding: const EdgeInsets.symmetric(vertical: 13),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          elevation: 0,
-        ),
-        child: loading
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                    color: Colors.white, strokeWidth: 2))
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.delivery_dining_rounded, size: 18),
-                  const SizedBox(width: 6),
-                  Text(loc.foodCargoTakeOrder,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 14)),
-                ],
-              ),
-      ),
-    );
-  }
-}
 
 class _MyDeliveryActions extends StatelessWidget {
   final bool loading;
@@ -2241,8 +1382,8 @@ class _MyDeliveryActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // accepted       → "Teslim Aldım"   (orange, calls onPickedUp)
-    // out_for_delivery → "Teslim Edildi" (green,  calls onDelivered)
+    // assigned           → "Teslim Aldım"  (orange, calls onPickedUp)
+    // out_for_delivery   → "Teslim Edildi" (green, calls onDelivered)
     final isPickedUp = orderStatus == 'out_for_delivery';
     final label =
         isPickedUp ? loc.foodCargoMarkDelivered : loc.foodCargoMarkPickedUp;
