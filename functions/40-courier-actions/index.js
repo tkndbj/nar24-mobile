@@ -14,9 +14,14 @@
 //   'assign'    — pool/accepted → assigned        (sets cargo* fields)
 //   'pickup'    — assigned → out_for_delivery      ("Teslim Aldım" button)
 //   'deliver'   — out_for_delivery → delivered     ("Teslim Edildi" button)
-//   'unassign'  — assigned → (accepted|pending)    used only by the
-//                 auto-assignment rebalancer. Hard-blocked for
-//                 assignedBy:'master' orders.
+//   'unassign'  — assigned → (accepted|pending)    used by the auto-
+//                 assignment rebalancer and by the master panel.
+//                 Master-assigned orders can only be unassigned when the
+//                 action carries `unassignedBy: 'master'`; any other
+//                 caller is rejected with `master_locked`. When the
+//                 master unassigns, `unassignedBy: 'master'` is mirrored
+//                 onto the order so the auto-assigner leaves it alone
+//                 until a new assign lands (which clears the stamp).
 //
 // Each action doc includes `collection` ∈ {'orders-food', 'orders-market'}.
 // For backward compatibility, a missing collection defaults to 'orders-food'.
@@ -81,6 +86,8 @@ export const processCourierAction = onDocumentCreated(
     region: REGION,
     memory: '256MiB',
     timeoutSeconds: 30,
+    vpcConnector: 'nar24-vpc',
+    vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
   },
   async (event) => {
     const actionData = event.data.data();
@@ -232,6 +239,10 @@ async function processAssign(db, actionRef, actionData, collection) {
       assignedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       assignedBy: assignedBy || 'self',
+      // Any fresh assign cancels a prior master-unassign stamp — the
+      // order is live again, auto-assigner & rebalancer can act as usual
+      // (subject to the assignedBy:'master' lock for master assigns).
+      unassignedBy: admin.firestore.FieldValue.delete(),
     };
 
     // Only auto-assigned orders are eligible for rebalance. Master-assigned
@@ -501,14 +512,20 @@ async function processDelivery(db, actionRef, actionData, collection) {
 // ─────────────────────────────────────────────────────────────────────────────
 // UNASSIGN — assigned → accepted (food) / pending (market)
 //
-// Used exclusively by the auto-assignment rebalancer. Blocks on master-
-// assigned orders so operator-level assignments are never overwritten by the
-// background system. Decrements the previous courier's load counter so the
-// follow-up assign doesn't double-count them.
+// Two callers:
+//   • auto-assignment rebalancer (silent, for fairness re-routing)
+//   • master panel (explicit operator pull-back via unassignedBy:'master')
+//
+// A master-assigned order can only be unassigned when the action itself
+// carries `unassignedBy: 'master'`; the rebalancer is blocked on those.
+// When the master unassigns, `unassignedBy: 'master'` is mirrored onto the
+// order so the auto-assigner skips it until the master re-assigns (or
+// otherwise clears the stamp). Decrements the previous courier's load
+// counter so the follow-up assign doesn't double-count them.
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function processUnassign(db, actionRef, actionData, collection) {
-  const { orderId, courierId, reason } = actionData;
+  const { orderId, courierId, reason, unassignedBy } = actionData;
   const revertStatus = collection === 'orders-food' ? 'accepted' : 'pending';
   let didUnassign = false;
 
@@ -533,8 +550,9 @@ async function processUnassign(db, actionRef, actionData, collection) {
 
     const order = orderSnap.data();
 
-    // Hard block — operator-controlled assignments are off-limits.
-    if (order.assignedBy === 'master') {
+    // Master-assigned orders are immutable to non-master callers. The
+    // master panel overrides this by sending `unassignedBy: 'master'`.
+    if (order.assignedBy === 'master' && unassignedBy !== 'master') {
       tx.update(actionRef, {
         status: 'failed',
         error: 'master_locked',
@@ -569,6 +587,9 @@ async function processUnassign(db, actionRef, actionData, collection) {
       assignedBy: null,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       ...(reason ? { lastUnassignReason: reason } : {}),
+      // Only the master path stamps this — rebalancer unassigns must
+      // stay auto-assignable on the next tick.
+      ...(unassignedBy === 'master' ? { unassignedBy: 'master' } : {}),
     });
 
     tx.update(actionRef, {

@@ -2119,6 +2119,30 @@ match /food-accounting-monthly/{docId} {
   allow write: if false; // Cloud Functions only
 }
 
+match /market-accounting-daily/{docId} {
+  allow read: if request.auth != null && (
+    isAdmin() || isSemiAdmin()
+    || request.auth.token.masterCourier == true
+  );
+  allow write: if false; // Cloud Functions only
+}
+
+match /market-accounting-weekly/{docId} {
+  allow read: if request.auth != null && (
+    isAdmin() || isSemiAdmin()
+    || request.auth.token.masterCourier == true
+  );
+  allow write: if false; // Cloud Functions only
+}
+
+match /market-accounting-monthly/{docId} {
+  allow read: if request.auth != null && (
+    isAdmin() || isSemiAdmin()
+    || request.auth.token.masterCourier == true
+  );
+  allow write: if false; // Cloud Functions only
+}
+
 match /food_cache/{regionDoc} {
   allow read: if true;  // Public cache, no auth needed
   allow write: if false; // Only Cloud Functions write
@@ -2159,14 +2183,25 @@ match /{path=**}/food-reviews/{reviewId} {
 }
 
  match /courier_actions/{actionId} {                                                                                                                                                                             // Common field validation for all writers                                                                                                                                                                
-    allow create: if request.auth != null                                                                                                                                                                     
-      && request.resource.data.type in ['assign', 'pickup', 'deliver']
+    allow create: if request.auth != null
+      && request.resource.data.type in ['assign', 'unassign', 'pickup', 'deliver']
       && request.resource.data.orderId is string
       && request.resource.data.courierId is string
       && request.resource.data.status == 'pending'
       && (
         !('collection' in request.resource.data.keys())
         || request.resource.data.collection in ['orders-food', 'orders-market']
+      )
+      && (
+        // `unassignedBy:'master'` freezes an order against auto-reassignment
+        // (CF-40 stamps the order, CF-54 then skips it). Only admin/master
+        // writers may set this field — otherwise a courier could forge it
+        // to escape a master-pinned order or block auto-dispatch.
+        !('unassignedBy' in request.resource.data.keys())
+        || (
+          request.resource.data.unassignedBy == 'master'
+          && (isAdmin() || isSemiAdmin() || request.auth.token.masterCourier == true)
+        )
       )
       && (
         // Self-service courier — must write their own uid as courierId

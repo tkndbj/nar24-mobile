@@ -249,6 +249,10 @@ async function createMarketOrderCore(buyerId, requestData, paymentOrderId = null
       orderNotes: typeof orderNotes === 'string' ? orderNotes.substring(0, 1000) : '',
       needsReview: false,
       status: 'pending', // pending → confirmed → preparing → out_for_delivery → delivered
+      // Explicit null so the auto-assigner retry sweep's
+      // `where('cargoUserId', '==', null)` query matches this doc.
+      // Firestore `== null` does NOT match missing fields.
+      cargoUserId: null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };

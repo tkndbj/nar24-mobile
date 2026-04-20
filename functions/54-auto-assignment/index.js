@@ -47,7 +47,18 @@ const REGION = 'europe-west3';
 const RTDB_REGION = 'europe-west1'; // Firebase RTDB location for this project
 
 // ── Tuning constants ────────────────────────────────────────────────────────
-const RADIUS_TIERS_KM    = [5, 10, 25];   // progressive widening
+// Food dispatches go out from many restaurants (spread across the delivery
+// zone), so a tight 25 km ceiling keeps the pool relevant. Market dispatches
+// all originate from a single central warehouse, so the furthest ring must
+// cover the whole service area — otherwise couriers working the far side of
+// the island are permanently unreachable. Scoring still penalises distance,
+// so far-away couriers only win when no one closer is free.
+const RADIUS_TIERS_KM_FOOD   = [5, 10, 25];
+const RADIUS_TIERS_KM_MARKET = [10, 25, 75];
+const RADIUS_TIERS_BY_COLLECTION = {
+  'orders-food': RADIUS_TIERS_KM_FOOD,
+  'orders-market': RADIUS_TIERS_KM_MARKET,
+};
 const CANDIDATE_LIMIT    = 20;            // top-N per GEOSEARCH
 const SOFT_LOAD_REF      = 3;             // load beyond this costs more
 const W_DISTANCE         = 1.0;           // km → score
@@ -92,11 +103,20 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 // CORE: pick best candidate from Redis
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function selectCandidate({ pickupLat, pickupLng, excludeUid = null }) {
+async function selectCandidate({ pickupLat, pickupLng, collection, excludeUid = null }) {
   const redis = getRedisClient();
+  const tiers = RADIUS_TIERS_BY_COLLECTION[collection] || RADIUS_TIERS_KM_FOOD;
+
+  // Diagnostic: state of the geo index at dispatch time.
+  try {
+    const indexSize = await redis.zcard('couriers:geo');
+    console.log(`[AutoAssign][dbg] couriers:geo size=${indexSize} collection=${collection} pickup=(${pickupLat},${pickupLng}) tiers=${tiers.join('/')}`);
+  } catch (e) {
+    console.warn('[AutoAssign][dbg] zcard failed:', e.message);
+  }
 
   // Progressive radius widening — small first so most dispatches stay cheap.
-  for (const radius of RADIUS_TIERS_KM) {
+  for (const radius of tiers) {
     let rows;
     try {
       rows = await redis.geosearch(
@@ -113,6 +133,7 @@ async function selectCandidate({ pickupLat, pickupLng, excludeUid = null }) {
       return null;
     }
 
+    console.log(`[AutoAssign][dbg] tier=${radius}km rows=${rows ? rows.length : 0}`);
     if (!rows || rows.length === 0) continue;
 
     // rows: [[uid, distKmStr, [lngStr, latStr]], ...]
@@ -145,15 +166,22 @@ async function selectCandidate({ pickupLat, pickupLng, excludeUid = null }) {
     }
 
     let best = null;
+    const rejects = [];
     for (let i = 0; i < ordered.length; i++) {
       const state = results[i * 2][1] || {};
       const recentAssigns = parseInt(results[i * 2 + 1][1] || '0', 10);
 
       const isOnShift = state.isOnShift === '1' || state.isOnShift === 'true';
-      if (!isOnShift) continue;
+      if (!isOnShift) {
+        rejects.push(`${ordered[i].uid}:offshift(state.isOnShift=${state.isOnShift})`);
+        continue;
+      }
 
       const lastSeen = parseInt(state.lastSeen || '0', 10);
-      if (lastSeen && now - lastSeen > COURIER_STALE_MS) continue;
+      if (lastSeen && now - lastSeen > COURIER_STALE_MS) {
+        rejects.push(`${ordered[i].uid}:stale(${Math.round((now - lastSeen) / 1000)}s)`);
+        continue;
+      }
 
       const load = Math.max(0, parseInt(state.load || '0', 10));
 
@@ -173,6 +201,10 @@ async function selectCandidate({ pickupLat, pickupLng, excludeUid = null }) {
       if (!best || score < best.score) {
         best = { ...c, load, recentAssigns, score };
       }
+    }
+
+    if (rejects.length) {
+      console.log(`[AutoAssign][dbg] tier=${radius}km rejected: ${rejects.join(', ')}`);
     }
 
     if (best) return best;
@@ -196,6 +228,9 @@ async function autoAssignOrder(db, orderId, collection) {
   // Guardrails
   if (order.cargoUserId) return { ok: false, reason: 'already_assigned' };
   if (order.assignedBy === 'master') return { ok: false, reason: 'master_assigned' };
+  // Master explicitly pulled this order back — hands off until the master
+  // re-assigns (which clears the stamp in CF-40 processAssign).
+  if (order.unassignedBy === 'master') return { ok: false, reason: 'master_unassigned' };
 
   const expectedStatus = collection === 'orders-food' ? 'accepted' : 'pending';
   if (order.status !== expectedStatus) {
@@ -208,9 +243,13 @@ async function autoAssignOrder(db, orderId, collection) {
   const best = await selectCandidate({
     pickupLat: pickup.lat,
     pickupLng: pickup.lng,
+    collection,
   });
 
-  if (!best) return { ok: false, reason: 'no_candidate' };
+  if (!best) {
+    console.log(`[AutoAssign][dbg] ${collection}/${orderId} → no_candidate`);
+    return { ok: false, reason: 'no_candidate' };
+  }
 
   // Fetch courier display name (cheap single-doc read)
   const courierSnap = await db.collection('users').doc(best.uid).get();
@@ -250,6 +289,8 @@ export const autoAssignOnFoodAccepted = onDocumentUpdated(
     region: REGION,
     memory: '256MiB',
     timeoutSeconds: 30,
+    vpcConnector: 'nar24-vpc',
+    vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
   },
   async (event) => {
     const before = event.data?.before?.data();
@@ -258,6 +299,7 @@ export const autoAssignOnFoodAccepted = onDocumentUpdated(
     if (before.status === after.status) return;
     if (after.status !== 'accepted') return;
     if (after.cargoUserId) return; // already taken (e.g. master override)
+    if (after.unassignedBy === 'master') return; // master pulled it back
 
     const orderId = event.params.orderId;
     try {
@@ -278,6 +320,8 @@ export const autoAssignOnMarketCreated = onDocumentCreated(
     region: REGION,
     memory: '256MiB',
     timeoutSeconds: 30,
+    vpcConnector: 'nar24-vpc',
+    vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
   },
   async (event) => {
     const order = event.data?.data();
@@ -304,6 +348,8 @@ export const autoAssignRetryUnassigned = onSchedule(
     region: REGION,
     memory: '256MiB',
     timeoutSeconds: 120,
+    vpcConnector: 'nar24-vpc',
+    vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
   },
   async () => {
     const db = admin.firestore();
@@ -350,6 +396,7 @@ export const autoAssignRetryUnassigned = onSchedule(
       for (const doc of snap.docs) {
         const data = doc.data();
         if (data.assignedBy === 'master') continue;
+        if (data.unassignedBy === 'master') continue; // master pulled it back
         try {
           const result = await autoAssignOrder(db, doc.id, coll);
           if (result.ok) attempted++;
@@ -373,6 +420,8 @@ export const autoAssignRebalance = onSchedule(
     region: REGION,
     memory: '256MiB',
     timeoutSeconds: 120,
+    vpcConnector: 'nar24-vpc',
+    vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
   },
   async () => {
     const db = admin.firestore();
@@ -479,6 +528,7 @@ export const autoAssignRebalance = onSchedule(
         const best = await selectCandidate({
           pickupLat: pickup.lat,
           pickupLng: pickup.lng,
+          collection: coll,
           excludeUid: currentCourierId,
         });
 
@@ -554,6 +604,8 @@ export const mirrorCourierLocation = onValueWritten(
     ref: '/courier_locations/{uid}',
     region: RTDB_REGION,
     memory: '256MiB',
+    vpcConnector: 'nar24-vpc',
+    vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
   },
   async (event) => {
     const uid = event.params.uid;

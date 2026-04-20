@@ -486,6 +486,10 @@ restaurantLng: restaurantData.longitude || null,
       estimatedPrepTime,
       needsReview: false,
       status: 'pending', // pending → confirmed → preparing → ready → delivered / completed
+      // Explicit null so the auto-assigner retry sweep's
+      // `where('cargoUserId', '==', null)` query matches this doc.
+      // Firestore `== null` does NOT match missing fields.
+      cargoUserId: null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
