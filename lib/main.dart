@@ -63,6 +63,7 @@ import 'services/courier_location_service.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'utils/cloudinary_url_builder.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
+import 'services/category_cache_service.dart';
 
 /// Background message handler for FCM.
 ///
@@ -407,6 +408,9 @@ Future<void> main() async {
                 ChangeNotifierProvider<MarketLayoutService>(
                   create: (_) => MarketLayoutService(),
                 ),
+                ChangeNotifierProvider<CategoryCacheService>(
+  create: (_) => CategoryCacheService(),
+),
                 ChangeNotifierProvider<ProfileProvider>(
                   create: (_) => ProfileProvider(
                     Provider.of<UserProvider>(_, listen: false),

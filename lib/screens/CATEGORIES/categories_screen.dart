@@ -12,6 +12,9 @@ import '../../models/product_summary.dart';
 import '../../route_observer.dart';
 import '../../services/typesense_service_manager.dart';
 import '../../widgets/product_card_shimmer.dart';
+// ✅ CHANGE 1: Add these two imports
+import '../../models/category_structure.dart';
+import '../../services/category_cache_service.dart';
 
 class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({Key? key}) : super(key: key);
@@ -36,7 +39,13 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
       DeviceOrientation.portraitDown,
     ]);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // ✅ CHANGE 2: initialize category service before fetching products
+    // Was: WidgetsBinding.instance.addPostFrameCallback((_) {
+    //        _initializeBuyerCategory();
+    //      });
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Provider.of<CategoryCacheService>(context, listen: false)
+          .initialize();
       _initializeBuyerCategory();
     });
   }
@@ -55,28 +64,31 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
     setState(() {
       _expandedSubcategories.clear();
     });
-    // Re-fetch to get cached or fresh products
     _fetchProductsForBuyerCategory(_selectedBuyerCategory);
   }
 
   Future<void> _initializeBuyerCategory() async {
-    // Fetch products for the selected buyer category
     await _fetchProductsForBuyerCategory(_selectedBuyerCategory);
-
-    // Scroll the sidebar into view smoothly
     _scrollToSelectedCategory();
   }
 
   void _scrollToSelectedCategory() {
     if (!mounted || !_scrollController.hasClients) return;
 
+    // ✅ CHANGE 3: get categories from service instead of AllInOneCategoryData
+    // Was: final buyerCategories =
+    //          AllInOneCategoryData.kBuyerCategories.map((c) => c['key']!).toList();
+    final structure =
+        Provider.of<CategoryCacheService>(context, listen: false).structure;
+    if (structure == null) return;
     final buyerCategories =
-        AllInOneCategoryData.kBuyerCategories.map((c) => c['key']!).toList();
+        structure.kBuyerCategories.map((c) => c['key']!).toList();
+
     final catIndex =
         buyerCategories.indexWhere((c) => c == _selectedBuyerCategory);
 
     if (catIndex != -1) {
-      final offset = catIndex * 80.0; // Match the actual tile height
+      final offset = catIndex * 80.0;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
           _scrollController.animateTo(
@@ -99,8 +111,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
     try {
       final marketProvider =
           Provider.of<MarketProvider>(context, listen: false);
-
-      // Fetch products using the provider method (now with built-in caching)
       final products =
           await marketProvider.fetchProductsForBuyerCategory(buyerCategory);
 
@@ -181,16 +191,37 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
-    // Use buyer categories
+    // ✅ CHANGE 4: get structure from provider
+    // Was: (nothing — data came directly from AllInOneCategoryData)
+    final structure =
+        Provider.of<CategoryCacheService>(context, listen: false).structure;
+
+    // ✅ CHANGE 5: show loading spinner while categories are being fetched
+    // Was: (nothing — static data was always available instantly)
+    if (structure == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // ✅ CHANGE 6: use structure.kBuyerCategories instead of AllInOneCategoryData.kBuyerCategories
+    // Was: final buyerCategories =
+    //          AllInOneCategoryData.kBuyerCategories.map((c) => c['key']!).toList();
     final buyerCategories =
-        AllInOneCategoryData.kBuyerCategories.map((c) => c['key']!).toList();
+        structure.kBuyerCategories.map((c) => c['key']!).toList();
+
+    // Localization stays the same — AllInOneCategoryData still handles key→text translation
     final localizedBuyerCategories = buyerCategories
         .map((k) => AllInOneCategoryData.localizeBuyerCategoryKey(k, l10n))
         .toList();
 
-    // Get buyer subcategories
+    // ✅ CHANGE 7: use structure.getSubcategories() instead of AllInOneCategoryData.kBuyerSubcategories[...]
+    // Was: final buyerSubcategories =
+    //          AllInOneCategoryData.kBuyerSubcategories[_selectedBuyerCategory] ?? [];
     final buyerSubcategories =
-        AllInOneCategoryData.kBuyerSubcategories[_selectedBuyerCategory] ?? [];
+        structure.getSubcategories(_selectedBuyerCategory);
+
+    // Localization stays the same
     final localizedBuyerSubs = buyerSubcategories
         .map((s) => AllInOneCategoryData.localizeBuyerSubcategoryKey(
             _selectedBuyerCategory, s, l10n))
@@ -200,7 +231,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Sidebar with buyer categories - Fixed scrolling issues
+          // ── Sidebar ── no changes here except buyerCategories source (handled above)
           Container(
             width: 100.0,
             color: Theme.of(context).brightness == Brightness.light
@@ -209,7 +240,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
             child: ListView.builder(
               controller: _scrollController,
               physics: const BouncingScrollPhysics(),
-              padding: EdgeInsets.zero, // Remove default padding
+              padding: EdgeInsets.zero,
               itemCount: localizedBuyerCategories.length,
               itemBuilder: (ctx, i) {
                 final rawBuyerCategory = buyerCategories[i];
@@ -217,27 +248,24 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                 final isSelected = rawBuyerCategory == _selectedBuyerCategory;
 
                 return SizedBox(
-                  height: 80.0, // Fixed height to prevent layout shifts
+                  height: 80.0,
                   child: Material(
                     color: isSelected
                         ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
                         : Colors.transparent,
                     child: InkWell(
                       onTap: () async {
-                        // Prevent multiple rapid taps
                         if (_selectedBuyerCategory == rawBuyerCategory) return;
 
                         setState(() {
                           _selectedBuyerCategory = rawBuyerCategory;
                           _selectedBuyerSubcategory = null;
                           _expandedSubcategories.clear();
-                          _displayProducts = []; // Clear immediately
+                          _displayProducts = [];
                         });
 
-                        // Fetch products if not cached
                         if (_displayProducts.isEmpty) {
-                          await _fetchProductsForBuyerCategory(
-                              rawBuyerCategory);
+                          await _fetchProductsForBuyerCategory(rawBuyerCategory);
                         }
                       },
                       child: Padding(
@@ -277,22 +305,27 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
             ),
           ),
 
-          // Main content area
+          // ── Main content ──
           Expanded(
             child: SingleChildScrollView(
               padding: EdgeInsets.zero,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Build expansion tiles for buyer subcategories
                   ...localizedBuyerSubs.asMap().entries.map((e) {
                     final idx = e.key;
                     final localizedSubcategory = e.value;
                     final rawBuyerSubcategory = buyerSubcategories[idx];
-                    final subSubcategories = AllInOneCategoryData
-                                .kBuyerSubSubcategories[_selectedBuyerCategory]
-                            ?[rawBuyerSubcategory] ??
-                        [];
+
+                    // ✅ CHANGE 8: use structure.getSubSubcategories() instead of
+                    //              AllInOneCategoryData.kBuyerSubSubcategories[...][...]
+                    // Was: final subSubcategories = AllInOneCategoryData
+                    //          .kBuyerSubSubcategories[_selectedBuyerCategory]
+                    //          ?[rawBuyerSubcategory] ?? [];
+                    final subSubcategories = structure.getSubSubcategories(
+                      _selectedBuyerCategory,
+                      rawBuyerSubcategory,
+                    );
 
                     return Column(
                       children: [
@@ -319,7 +352,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                               } else {
                                 _expandedSubcategories
                                     .remove(rawBuyerSubcategory);
-                                // Reset to main category products when collapsed
                                 _displayProducts = [];
                                 _fetchProductsForBuyerCategory(
                                     _selectedBuyerCategory);
@@ -333,6 +365,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                             final subSubIdx = subSubEntry.key;
                             final subSubcategory = subSubEntry.value;
 
+                            // Localization stays the same
                             final localizedSubSubcategory = AllInOneCategoryData
                                 .localizeBuyerSubSubcategoryKey(
                               _selectedBuyerCategory,
@@ -358,13 +391,22 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                                   onTap: () {
                                     if (!mounted) return;
 
-                                    final mapping = AllInOneCategoryData
-                                        .getBuyerToProductMapping(
+                                    // ✅ CHANGE 9: use structure.getBuyerToProductMapping()
+                                    //              instead of AllInOneCategoryData.getBuyerToProductMapping()
+                                    // Was: final mapping = AllInOneCategoryData
+                                    //          .getBuyerToProductMapping(
+                                    //            _selectedBuyerCategory,
+                                    //            rawBuyerSubcategory,
+                                    //            subSubcategory,
+                                    //          );
+                                    final mapping =
+                                        structure.getBuyerToProductMapping(
                                       _selectedBuyerCategory,
                                       rawBuyerSubcategory,
                                       subSubcategory,
                                     );
 
+                                    // Everything below is unchanged
                                     final screen =
                                         (_selectedBuyerCategory == 'Women' ||
                                                 _selectedBuyerCategory == 'Men')
@@ -399,7 +441,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                                                     rawBuyerSubcategory,
                                               );
 
-                                    // Use Navigator.push with proper error handling
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
@@ -439,41 +480,31 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                     );
                   }).toList(),
 
+                  // ── Shimmer and product grid are completely unchanged ──
+
                   if (_isLoadingProducts)
                     Padding(
                       padding: const EdgeInsets.only(top: 10),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          // Tablet detection and orientation
                           final bool isTablet = constraints.maxWidth >= 600;
                           final bool isLandscape =
                               MediaQuery.of(context).orientation ==
                                   Orientation.landscape;
                           final bool isTabletPortrait =
                               isTablet && !isLandscape;
-
-                          // Horizontal spacing
                           final double crossAxisSpacing = isTablet ? 6.0 : 8.0;
-
-                          // Vertical gap: tablet portrait increased (16px), tablet landscape (6px), mobile unchanged (18px)
                           final double mainAxisSpacing =
                               isTabletPortrait ? 16.0 : (isTablet ? 6.0 : 18.0);
-
-                          // Image height: increased for better tall/narrow image display
                           final double imageHeight = isTabletPortrait
-                              ? 262.0 // Increased from 238
-                              : (isTablet
-                                  ? 132.0
-                                  : 155.0); // Increased from 120/140
+                              ? 262.0
+                              : (isTablet ? 132.0 : 155.0);
 
-                          // For tablet portrait, use MaxCrossAxisExtent with explicit mainAxisExtent for precise control
                           if (isTabletPortrait) {
-                            // Calculate item width based on 4 columns
                             final double availableWidth = constraints.maxWidth -
                                 16 -
                                 (3 * crossAxisSpacing);
                             final double itemWidth = availableWidth / 4;
-                            // Card height = image height + text content (~95px for price, name, etc.)
                             final double itemHeight = imageHeight + 95;
 
                             return GridView.builder(
@@ -498,11 +529,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                             );
                           }
 
-                          // Mobile and tablet landscape: use original approach
                           final int crossAxisCount = isTablet ? 5 : 2;
-                          final double childAspectRatio = isTablet
-                              ? 0.50
-                              : 0.46; // Decreased for taller cards
+                          final double childAspectRatio =
+                              isTablet ? 0.50 : 0.46;
 
                           return GridView.builder(
                             padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -531,36 +560,24 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                       padding: const EdgeInsets.only(top: 10),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          // Tablet detection and orientation
                           final bool isTablet = constraints.maxWidth >= 600;
                           final bool isLandscape =
                               MediaQuery.of(context).orientation ==
                                   Orientation.landscape;
                           final bool isTabletPortrait =
                               isTablet && !isLandscape;
-
-                          // Horizontal spacing
                           final double crossAxisSpacing = isTablet ? 6.0 : 8.0;
-
-                          // Vertical gap: tablet portrait increased (16px), tablet landscape (6px), mobile unchanged (18px)
                           final double mainAxisSpacing =
                               isTabletPortrait ? 16.0 : (isTablet ? 6.0 : 18.0);
-
-                          // Image height: increased for better tall/narrow image display
                           final double imageHeight = isTabletPortrait
-                              ? 262.0 // Increased from 238
-                              : (isTablet
-                                  ? 132.0
-                                  : 155.0); // Increased from 120/140
+                              ? 262.0
+                              : (isTablet ? 132.0 : 155.0);
 
-                          // For tablet portrait, use MaxCrossAxisExtent with explicit mainAxisExtent for precise control
                           if (isTabletPortrait) {
-                            // Calculate item width based on 4 columns
                             final double availableWidth = constraints.maxWidth -
                                 16 -
                                 (3 * crossAxisSpacing);
                             final double itemWidth = availableWidth / 4;
-                            // Card height = image height + text content (~95px for price, name, etc.)
                             final double itemHeight = imageHeight + 95;
 
                             return GridView.builder(
@@ -589,11 +606,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                             );
                           }
 
-                          // Mobile and tablet landscape: use original approach
                           final int crossAxisCount = isTablet ? 5 : 2;
-                          final double childAspectRatio = isTablet
-                              ? 0.50
-                              : 0.46; // Decreased for taller cards
+                          final double childAspectRatio =
+                              isTablet ? 0.50 : 0.46;
 
                           return GridView.builder(
                             padding: const EdgeInsets.symmetric(horizontal: 8),

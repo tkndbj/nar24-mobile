@@ -5353,6 +5353,26 @@ class AllInOneCategoryData {
     return true;
   }
 
+  static Map<String, dynamic> toJson() {
+  return {
+    'buyerCategories': kBuyerCategories.map((cat) {
+      final key = cat['key']!;
+      return {
+        'key': key,
+        'image': cat['image'] ?? '',
+        'subcategories': (kBuyerSubcategories[key] ?? []).map((sub) {
+          return {
+            'key': sub,
+            'subSubcategories':
+                kBuyerSubSubcategories[key]?[sub] ?? [],
+          };
+        }).toList(),
+      };
+    }).toList(),
+    'buyerToProductMapping': kBuyerToProductCategoryMapping,
+  };
+}
+
   // ------------------------------------------------------
   // LOCALIZATION HELPERS FOR BUYER CATEGORIES
   // ------------------------------------------------------
