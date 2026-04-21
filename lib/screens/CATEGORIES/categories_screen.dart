@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
 import 'package:provider/provider.dart';
-import '../../constants/all_in_one_category_data.dart';
+// ✅ AllInOneCategoryData no longer needed for localization — REMOVED
 import '../../generated/l10n/app_localizations.dart';
 import '../../providers/market_provider.dart';
 import '../../providers/dynamic_market_provider.dart';
@@ -12,7 +12,6 @@ import '../../models/product_summary.dart';
 import '../../route_observer.dart';
 import '../../services/typesense_service_manager.dart';
 import '../../widgets/product_card_shimmer.dart';
-// ✅ CHANGE 1: Add these two imports
 import '../../models/category_structure.dart';
 import '../../services/category_cache_service.dart';
 
@@ -39,10 +38,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
       DeviceOrientation.portraitDown,
     ]);
 
-    // ✅ CHANGE 2: initialize category service before fetching products
-    // Was: WidgetsBinding.instance.addPostFrameCallback((_) {
-    //        _initializeBuyerCategory();
-    //      });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await Provider.of<CategoryCacheService>(context, listen: false)
           .initialize();
@@ -75,15 +70,12 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
   void _scrollToSelectedCategory() {
     if (!mounted || !_scrollController.hasClients) return;
 
-    // ✅ CHANGE 3: get categories from service instead of AllInOneCategoryData
-    // Was: final buyerCategories =
-    //          AllInOneCategoryData.kBuyerCategories.map((c) => c['key']!).toList();
     final structure =
         Provider.of<CategoryCacheService>(context, listen: false).structure;
     if (structure == null) return;
+
     final buyerCategories =
         structure.kBuyerCategories.map((c) => c['key']!).toList();
-
     final catIndex =
         buyerCategories.indexWhere((c) => c == _selectedBuyerCategory);
 
@@ -189,49 +181,30 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
+    // ✅ Get current language code for label resolution
+    final String langCode = Localizations.localeOf(context).languageCode;
 
-    // ✅ CHANGE 4: get structure from provider
-    // Was: (nothing — data came directly from AllInOneCategoryData)
     final structure =
         Provider.of<CategoryCacheService>(context, listen: false).structure;
 
-    // ✅ CHANGE 5: show loading spinner while categories are being fetched
-    // Was: (nothing — static data was always available instantly)
     if (structure == null) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    // ✅ CHANGE 6: use structure.kBuyerCategories instead of AllInOneCategoryData.kBuyerCategories
-    // Was: final buyerCategories =
-    //          AllInOneCategoryData.kBuyerCategories.map((c) => c['key']!).toList();
-    final buyerCategories =
-        structure.kBuyerCategories.map((c) => c['key']!).toList();
+    // ✅ Now returns List<BuyerCategory> — has .getLabel()
+    final buyerCategories = structure.buyerCategories;
 
-    // Localization stays the same — AllInOneCategoryData still handles key→text translation
-    final localizedBuyerCategories = buyerCategories
-        .map((k) => AllInOneCategoryData.localizeBuyerCategoryKey(k, l10n))
-        .toList();
-
-    // ✅ CHANGE 7: use structure.getSubcategories() instead of AllInOneCategoryData.kBuyerSubcategories[...]
-    // Was: final buyerSubcategories =
-    //          AllInOneCategoryData.kBuyerSubcategories[_selectedBuyerCategory] ?? [];
+    // ✅ Now returns List<BuyerSubcategory> — has .getLabel()
     final buyerSubcategories =
         structure.getSubcategories(_selectedBuyerCategory);
-
-    // Localization stays the same
-    final localizedBuyerSubs = buyerSubcategories
-        .map((s) => AllInOneCategoryData.localizeBuyerSubcategoryKey(
-            _selectedBuyerCategory, s, l10n))
-        .toList();
 
     return Scaffold(
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Sidebar ── no changes here except buyerCategories source (handled above)
+          // ── Sidebar ──────────────────────────────────────────────────────
           Container(
             width: 100.0,
             color: Theme.of(context).brightness == Brightness.light
@@ -241,11 +214,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
               controller: _scrollController,
               physics: const BouncingScrollPhysics(),
               padding: EdgeInsets.zero,
-              itemCount: localizedBuyerCategories.length,
+              itemCount: buyerCategories.length,
               itemBuilder: (ctx, i) {
-                final rawBuyerCategory = buyerCategories[i];
-                final localizedBuyerCategory = localizedBuyerCategories[i];
-                final isSelected = rawBuyerCategory == _selectedBuyerCategory;
+                final cat = buyerCategories[i];
+                final isSelected = cat.key == _selectedBuyerCategory;
 
                 return SizedBox(
                   height: 80.0,
@@ -255,17 +227,17 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                         : Colors.transparent,
                     child: InkWell(
                       onTap: () async {
-                        if (_selectedBuyerCategory == rawBuyerCategory) return;
+                        if (_selectedBuyerCategory == cat.key) return;
 
                         setState(() {
-                          _selectedBuyerCategory = rawBuyerCategory;
+                          _selectedBuyerCategory = cat.key;
                           _selectedBuyerSubcategory = null;
                           _expandedSubcategories.clear();
                           _displayProducts = [];
                         });
 
                         if (_displayProducts.isEmpty) {
-                          await _fetchProductsForBuyerCategory(rawBuyerCategory);
+                          await _fetchProductsForBuyerCategory(cat.key);
                         }
                       },
                       child: Padding(
@@ -275,14 +247,15 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              _getIconForBuyerCategory(rawBuyerCategory),
+                              _getIconForBuyerCategory(cat.key),
                               color:
                                   isSelected ? Colors.orange : Colors.grey[500],
                               size: 20,
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              localizedBuyerCategory,
+                              // ✅ CHANGE: was AllInOneCategoryData.localizeBuyerCategoryKey(cat.key, l10n)
+                              cat.getLabel(langCode),
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 10,
@@ -305,39 +278,35 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
             ),
           ),
 
-          // ── Main content ──
+          // ── Main content ─────────────────────────────────────────────────
           Expanded(
             child: SingleChildScrollView(
               padding: EdgeInsets.zero,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ...localizedBuyerSubs.asMap().entries.map((e) {
+                  ...buyerSubcategories.asMap().entries.map((e) {
                     final idx = e.key;
-                    final localizedSubcategory = e.value;
-                    final rawBuyerSubcategory = buyerSubcategories[idx];
+                    final sub = e.value; // BuyerSubcategory object
 
-                    // ✅ CHANGE 8: use structure.getSubSubcategories() instead of
-                    //              AllInOneCategoryData.kBuyerSubSubcategories[...][...]
-                    // Was: final subSubcategories = AllInOneCategoryData
-                    //          .kBuyerSubSubcategories[_selectedBuyerCategory]
-                    //          ?[rawBuyerSubcategory] ?? [];
+                    // ✅ CHANGE: was AllInOneCategoryData.kBuyerSubSubcategories[...][...]
+                    // Now returns List<BuyerSubSubcategory>
                     final subSubcategories = structure.getSubSubcategories(
                       _selectedBuyerCategory,
-                      rawBuyerSubcategory,
+                      sub.key,
                     );
 
                     return Column(
                       children: [
                         ExpansionTile(
                           key: ValueKey(
-                              '${_selectedBuyerCategory}_$rawBuyerSubcategory'),
+                              '${_selectedBuyerCategory}_${sub.key}'),
                           title: Text(
-                            localizedSubcategory,
+                            // ✅ CHANGE: was AllInOneCategoryData.localizeBuyerSubcategoryKey(...)
+                            sub.getLabel(langCode),
                             style: TextStyle(
                               fontSize: 14,
-                              color: _expandedSubcategories
-                                      .contains(rawBuyerSubcategory)
+                              color: _expandedSubcategories.contains(sub.key)
                                   ? Colors.orange
                                   : Theme.of(context).colorScheme.onSurface,
                             ),
@@ -348,31 +317,18 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                           onExpansionChanged: (expanded) {
                             setState(() {
                               if (expanded) {
-                                _expandedSubcategories.add(rawBuyerSubcategory);
+                                _expandedSubcategories.add(sub.key);
                               } else {
-                                _expandedSubcategories
-                                    .remove(rawBuyerSubcategory);
+                                _expandedSubcategories.remove(sub.key);
                                 _displayProducts = [];
                                 _fetchProductsForBuyerCategory(
                                     _selectedBuyerCategory);
                               }
                             });
                           },
-                          children: subSubcategories
-                              .asMap()
-                              .entries
-                              .map((subSubEntry) {
+                          children: subSubcategories.asMap().entries.map((subSubEntry) {
                             final subSubIdx = subSubEntry.key;
-                            final subSubcategory = subSubEntry.value;
-
-                            // Localization stays the same
-                            final localizedSubSubcategory = AllInOneCategoryData
-                                .localizeBuyerSubSubcategoryKey(
-                              _selectedBuyerCategory,
-                              rawBuyerSubcategory,
-                              subSubcategory,
-                              l10n,
-                            );
+                            final subSub = subSubEntry.value; // BuyerSubSubcategory
 
                             return Column(
                               children: [
@@ -380,7 +336,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                                   contentPadding:
                                       const EdgeInsets.only(left: 32),
                                   title: Text(
-                                    localizedSubSubcategory,
+                                    // ✅ CHANGE: was AllInOneCategoryData.localizeBuyerSubSubcategoryKey(...)
+                                    subSub.getLabel(langCode),
                                     style: TextStyle(
                                       fontSize: 14,
                                       color: Theme.of(context)
@@ -391,55 +348,45 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                                   onTap: () {
                                     if (!mounted) return;
 
-                                    // ✅ CHANGE 9: use structure.getBuyerToProductMapping()
-                                    //              instead of AllInOneCategoryData.getBuyerToProductMapping()
-                                    // Was: final mapping = AllInOneCategoryData
-                                    //          .getBuyerToProductMapping(
-                                    //            _selectedBuyerCategory,
-                                    //            rawBuyerSubcategory,
-                                    //            subSubcategory,
-                                    //          );
                                     final mapping =
                                         structure.getBuyerToProductMapping(
                                       _selectedBuyerCategory,
-                                      rawBuyerSubcategory,
-                                      subSubcategory,
+                                      sub.key,
+                                      subSub.key,
                                     );
 
-                                    // Everything below is unchanged
-                                    final screen =
-                                        (_selectedBuyerCategory == 'Women' ||
-                                                _selectedBuyerCategory == 'Men')
-                                            ? DynamicMarketScreen(
-                                                category: mapping['category'] ??
-                                                    _selectedBuyerCategory,
-                                                selectedSubcategory:
-                                                    mapping['subcategory'],
-                                                selectedSubSubcategory:
-                                                    mapping['subSubcategory'],
-                                                displayName:
-                                                    localizedSubSubcategory,
-                                                buyerCategory:
-                                                    _selectedBuyerCategory,
-                                                buyerSubcategory:
-                                                    rawBuyerSubcategory,
-                                              )
-                                            : DynamicMarketScreen(
-                                                category: mapping['category'] ??
-                                                    _selectedBuyerCategory,
-                                                selectedSubcategory:
-                                                    mapping['subcategory'] ??
-                                                        rawBuyerSubcategory,
-                                                selectedSubSubcategory:
-                                                    mapping['subSubcategory'] ??
-                                                        subSubcategory,
-                                                displayName:
-                                                    localizedSubSubcategory,
-                                                buyerCategory:
-                                                    _selectedBuyerCategory,
-                                                buyerSubcategory:
-                                                    rawBuyerSubcategory,
-                                              );
+                                    // ✅ displayName now uses label too
+                                    final displayName = subSub.getLabel(langCode);
+
+                                    final screen = (_selectedBuyerCategory ==
+                                                'Women' ||
+                                            _selectedBuyerCategory == 'Men')
+                                        ? DynamicMarketScreen(
+                                            category: mapping['category'] ??
+                                                _selectedBuyerCategory,
+                                            selectedSubcategory:
+                                                mapping['subcategory'],
+                                            selectedSubSubcategory:
+                                                mapping['subSubcategory'],
+                                            displayName: displayName,
+                                            buyerCategory:
+                                                _selectedBuyerCategory,
+                                            buyerSubcategory: sub.key,
+                                          )
+                                        : DynamicMarketScreen(
+                                            category: mapping['category'] ??
+                                                _selectedBuyerCategory,
+                                            selectedSubcategory:
+                                                mapping['subcategory'] ??
+                                                    sub.key,
+                                            selectedSubSubcategory:
+                                                mapping['subSubcategory'] ??
+                                                    subSub.key,
+                                            displayName: displayName,
+                                            buyerCategory:
+                                                _selectedBuyerCategory,
+                                            buyerSubcategory: sub.key,
+                                          );
 
                                     Navigator.push(
                                       context,
@@ -470,7 +417,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                             );
                           }).toList(),
                         ),
-                        if (idx < localizedBuyerSubs.length - 1)
+                        if (idx < buyerSubcategories.length - 1)
                           const Divider(
                             height: 1,
                             thickness: 1,
@@ -480,7 +427,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                     );
                   }).toList(),
 
-                  // ── Shimmer and product grid are completely unchanged ──
+                  // ── Shimmer and product grid — completely unchanged ───────
 
                   if (_isLoadingProducts)
                     Padding(
@@ -494,8 +441,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                           final bool isTabletPortrait =
                               isTablet && !isLandscape;
                           final double crossAxisSpacing = isTablet ? 6.0 : 8.0;
-                          final double mainAxisSpacing =
-                              isTabletPortrait ? 16.0 : (isTablet ? 6.0 : 18.0);
+                          final double mainAxisSpacing = isTabletPortrait
+                              ? 16.0
+                              : (isTablet ? 6.0 : 18.0);
                           final double imageHeight = isTabletPortrait
                               ? 262.0
                               : (isTablet ? 132.0 : 155.0);
@@ -506,7 +454,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                                 (3 * crossAxisSpacing);
                             final double itemWidth = availableWidth / 4;
                             final double itemHeight = imageHeight + 95;
-
                             return GridView.builder(
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 8),
@@ -520,18 +467,12 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                                 mainAxisSpacing: mainAxisSpacing,
                                 crossAxisSpacing: crossAxisSpacing,
                               ),
-                              itemBuilder: (ctx, i) {
-                                return ProductCardShimmer(
-                                  portraitImageHeight: imageHeight,
-                                  scaleFactor: 0.9,
-                                );
-                              },
+                              itemBuilder: (ctx, i) => ProductCardShimmer(
+                                portraitImageHeight: imageHeight,
+                                scaleFactor: 0.9,
+                              ),
                             );
                           }
-
-                          final int crossAxisCount = isTablet ? 5 : 2;
-                          final double childAspectRatio =
-                              isTablet ? 0.50 : 0.46;
 
                           return GridView.builder(
                             padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -540,17 +481,15 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                             itemCount: 6,
                             gridDelegate:
                                 SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: crossAxisCount,
+                              crossAxisCount: isTablet ? 5 : 2,
                               mainAxisSpacing: mainAxisSpacing,
                               crossAxisSpacing: crossAxisSpacing,
-                              childAspectRatio: childAspectRatio,
+                              childAspectRatio: isTablet ? 0.50 : 0.46,
                             ),
-                            itemBuilder: (ctx, i) {
-                              return ProductCardShimmer(
-                                portraitImageHeight: imageHeight,
-                                scaleFactor: isTablet ? 0.9 : 1.0,
-                              );
-                            },
+                            itemBuilder: (ctx, i) => ProductCardShimmer(
+                              portraitImageHeight: imageHeight,
+                              scaleFactor: isTablet ? 0.9 : 1.0,
+                            ),
                           );
                         },
                       ),
@@ -567,8 +506,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                           final bool isTabletPortrait =
                               isTablet && !isLandscape;
                           final double crossAxisSpacing = isTablet ? 6.0 : 8.0;
-                          final double mainAxisSpacing =
-                              isTabletPortrait ? 16.0 : (isTablet ? 6.0 : 18.0);
+                          final double mainAxisSpacing = isTabletPortrait
+                              ? 16.0
+                              : (isTablet ? 6.0 : 18.0);
                           final double imageHeight = isTabletPortrait
                               ? 262.0
                               : (isTablet ? 132.0 : 155.0);
@@ -579,7 +519,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                                 (3 * crossAxisSpacing);
                             final double itemWidth = availableWidth / 4;
                             final double itemHeight = imageHeight + 95;
-
                             return GridView.builder(
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 8),
@@ -606,10 +545,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                             );
                           }
 
-                          final int crossAxisCount = isTablet ? 5 : 2;
-                          final double childAspectRatio =
-                              isTablet ? 0.50 : 0.46;
-
                           return GridView.builder(
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                             shrinkWrap: true,
@@ -617,10 +552,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> with RouteAware {
                             itemCount: _displayProducts.length,
                             gridDelegate:
                                 SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: crossAxisCount,
+                              crossAxisCount: isTablet ? 5 : 2,
                               mainAxisSpacing: mainAxisSpacing,
                               crossAxisSpacing: crossAxisSpacing,
-                              childAspectRatio: childAspectRatio,
+                              childAspectRatio: isTablet ? 0.50 : 0.46,
                             ),
                             itemBuilder: (ctx, i) {
                               final prod = _displayProducts[i];

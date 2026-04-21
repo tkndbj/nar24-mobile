@@ -852,7 +852,7 @@ export {rebuildRelatedProducts} from './6-related_products/index.js';
 export {trackProductClick, flushClicks} from './7-click-analytics/index.js';
 export {validateCartCheckout, updateCartCache} from './8-cart-validation/index.js';
 export {calculateCartTotals} from './9-cart-total-price/index.js';
-export {clampNegativeMetrics} from './10-cart&favorite-metrics/index.js';
+export {trackCartFavEvent, flushCartFavEvents} from './10-cart&favorite-metrics/index.js';
 export {
   batchUserActivity,
   cleanupOldActivityEvents,

@@ -31,13 +31,19 @@ class CategoryCacheService extends ChangeNotifier {
         // Version matches → use local cache, zero extra reads
         final cached = prefs.getString(_dataKey);
         if (cached != null) {
-          _structure = CategoryStructure.fromJson(jsonDecode(cached));
-          notifyListeners();
-          return;
+          // ✅ CHANGE 1: wrap in try/catch — corrupt JSON won't crash the app
+          try {
+            _structure = CategoryStructure.fromJson(jsonDecode(cached));
+            notifyListeners();
+            return;
+          } catch (e) {
+            debugPrint('CategoryCacheService: corrupt cache, re-fetching: $e');
+            // Fall through to fetch fresh from Firestore
+          }
         }
       }
 
-      // Version mismatch → fetch full structure (1 more read)
+      // Version mismatch OR corrupt cache → fetch full structure (1 more read)
       final structSnap = await FirebaseFirestore.instance
           .collection('categories')
           .doc('structure')
@@ -56,9 +62,15 @@ class CategoryCacheService extends ChangeNotifier {
       // Fall through to local cache
       final cached = prefs.getString(_dataKey);
       if (cached != null) {
-        _structure = CategoryStructure.fromJson(jsonDecode(cached));
-        notifyListeners();
-        return;
+        // ✅ CHANGE 2: wrap in try/catch — corrupt JSON in fallback won't crash either
+        try {
+          _structure = CategoryStructure.fromJson(jsonDecode(cached));
+          notifyListeners();
+          return;
+        } catch (e) {
+          debugPrint('CategoryCacheService: corrupt cache in fallback: $e');
+          // Fall through to bundled defaults
+        }
       }
     }
 

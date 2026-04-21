@@ -5,7 +5,7 @@ const db = admin.firestore();
 
 async function main() {
   const snap = await db.collection('products').get();
-  let fixed = 0, scanned = 0;
+  let fixed = 0; let scanned = 0;
 
   for (const doc of snap.docs) {
     scanned++;
@@ -35,4 +35,4 @@ async function main() {
   console.log(`Scanned ${scanned}, fixed ${fixed}`);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => {console.error(e); process.exit(1);});

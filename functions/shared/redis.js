@@ -242,6 +242,79 @@ export async function drainClicks() {
 }
 
 // ============================================================================
+// CART & FAVORITE EVENT BUFFERING
+// ============================================================================
+
+const CART_COUNTS_KEY = 'cart:counts';         // hash: "collection:productId" → net delta
+const FAV_COUNTS_KEY = 'fav:counts';           // hash: "collection:productId" → net delta
+const SHOP_CART_ADDS_KEY = 'shop:cart_adds';   // hash: shopId → count (adds only)
+const SHOP_FAV_ADDS_KEY = 'shop:fav_adds';     // hash: shopId → count (adds only)
+
+export async function bufferCartFavEvents(events) {
+  const client = getRedisClient();
+  const pipeline = client.pipeline();
+
+  for (const {productId, collection, shopId, type, delta} of events) {
+    const field = `${collection}:${productId}`;
+
+    if (type === 'cart') {
+      pipeline.hincrby(CART_COUNTS_KEY, field, delta);
+      // Shop-level tracks ADDS ONLY (mirrors current Firestore behavior)
+      if (shopId && delta > 0) {
+        pipeline.hincrby(SHOP_CART_ADDS_KEY, shopId, delta);
+      }
+    } else if (type === 'favorite') {
+      pipeline.hincrby(FAV_COUNTS_KEY, field, delta);
+      if (shopId && delta > 0) {
+        pipeline.hincrby(SHOP_FAV_ADDS_KEY, shopId, delta);
+      }
+    }
+  }
+
+  await pipeline.exec();
+}
+
+/**
+ * Atomically grab all buffered cart/fav events and clear the buffers.
+ */
+export async function drainCartFavEvents() {
+  const client = getRedisClient();
+  const ts = Date.now();
+  const tempCart = `${CART_COUNTS_KEY}:drain:${ts}`;
+  const tempFav = `${FAV_COUNTS_KEY}:drain:${ts}`;
+  const tempShopCart = `${SHOP_CART_ADDS_KEY}:drain:${ts}`;
+  const tempShopFav = `${SHOP_FAV_ADDS_KEY}:drain:${ts}`;
+
+  let cart = {};
+  let fav = {};
+  let shopCart = {};
+  let shopFav = {};
+
+  const renameAndRead = async (src, dst) => {
+    try {
+      await client.rename(src, dst);
+      return await client.hgetall(dst);
+    } catch (e) {
+      if (!e.message.includes('no such key')) throw e;
+      return {};
+    }
+  };
+
+  cart = await renameAndRead(CART_COUNTS_KEY, tempCart);
+  fav = await renameAndRead(FAV_COUNTS_KEY, tempFav);
+  shopCart = await renameAndRead(SHOP_CART_ADDS_KEY, tempShopCart);
+  shopFav = await renameAndRead(SHOP_FAV_ADDS_KEY, tempShopFav);
+
+  return {
+    cart,
+    fav,
+    shopCart,
+    shopFav,
+    tempKeys: [tempCart, tempFav, tempShopCart, tempShopFav],
+  };
+}
+
+// ============================================================================
 // SHARED: Delete drain temp keys after successful Firestore flush
 // ============================================================================
 
