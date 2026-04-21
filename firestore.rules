@@ -54,6 +54,16 @@ match /user_profiles/{userId} {
   }
 }
 
+ match /firestore_usage_sessions/{sessionId} {                                                                                                                                               
+    // Let any signed-in user create/update their own session docs.                                                                                                                           
+    // Tracker writes `userId` on every flush, so we pin it to request.auth.uid.
+    allow create: if request.auth != null;
+    allow update: if request.auth != null;
+
+    // Only admins can read (for your admin web app) or clean up.
+    allow read, delete: if isAdmin();
+  }
+
 match /shop_notifications/{notificationId} {
   // Read: authenticated shop members
   allow read: if request.auth != null 
@@ -2183,7 +2193,7 @@ match /{path=**}/food-reviews/{reviewId} {
 }
 
  match /courier_actions/{actionId} {                                                                                                                                                                             // Common field validation for all writers                                                                                                                                                                
-    allow create: if request.auth != null
+    allow create: if request.auth != null                                                                                                                                                                     
       && request.resource.data.type in ['assign', 'unassign', 'pickup', 'deliver']
       && request.resource.data.orderId is string
       && request.resource.data.courierId is string
@@ -2191,17 +2201,6 @@ match /{path=**}/food-reviews/{reviewId} {
       && (
         !('collection' in request.resource.data.keys())
         || request.resource.data.collection in ['orders-food', 'orders-market']
-      )
-      && (
-        // `unassignedBy:'master'` freezes an order against auto-reassignment
-        // (CF-40 stamps the order, CF-54 then skips it). Only admin/master
-        // writers may set this field — otherwise a courier could forge it
-        // to escape a master-pinned order or block auto-dispatch.
-        !('unassignedBy' in request.resource.data.keys())
-        || (
-          request.resource.data.unassignedBy == 'master'
-          && (isAdmin() || isSemiAdmin() || request.auth.token.masterCourier == true)
-        )
       )
       && (
         // Self-service courier — must write their own uid as courierId

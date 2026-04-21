@@ -3,7 +3,8 @@ import 'package:provider/provider.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../providers/seller_panel_provider.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../utils/cloudinary_url_builder.dart';
+import '../cloudinary_image.dart';
 
 /// Shipment status enum matching Firestore structure
 enum ShipmentStatus {
@@ -452,14 +453,15 @@ class _ShipmentItemCard extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: imageUrl.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: imageUrl,
+                    ? CloudinaryImage.product(
+                        source: imageUrl,
+                        size: ProductImageSize.thumbnail,
                         width: 80,
                         height: 80,
                         fit: BoxFit.cover,
-                        placeholder: (_, __) =>
+                        placeholderBuilder: (_) =>
                             _ImagePlaceholder(isDarkMode: isDarkMode),
-                        errorWidget: (_, __, ___) =>
+                        errorBuilder: (_) =>
                             _ImageError(isDarkMode: isDarkMode),
                       )
                     : _ImagePlaceholder(isDarkMode: isDarkMode),

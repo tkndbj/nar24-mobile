@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
@@ -9,6 +8,7 @@ import '../../generated/l10n/app_localizations.dart';
 import '../providers/cart_provider.dart';
 import '../providers/favorite_product_provider.dart';
 import '../utils/cloudinary_url_builder.dart';
+import 'cloudinary_image.dart';
 
 class ProductCard3 extends StatefulWidget {
   final String imageUrl;
@@ -299,11 +299,6 @@ class _ProductImage extends StatelessWidget {
   final MediaQueryData mediaQuery;
   final ThemeData theme;
 
-  // Target width for Cloudinary — 90dp × 3 DPR ≈ 270px, thumbnail (200) covers it.
-  static const int _cdnWidth = 200;
-  // Fallback-only cache cap (raw Firebase originals may be huge).
-  static const int _fallbackCacheWidth = 270;
-
   const _ProductImage({
     super.key,
     required this.state,
@@ -316,6 +311,7 @@ class _ProductImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final imageWidth = 90 * effectiveScaleFactor;
+    final url = state._displayImageUrl;
 
     return ClipRRect(
       borderRadius: BorderRadius.only(
@@ -327,42 +323,18 @@ class _ProductImage extends StatelessWidget {
         child: SizedBox(
           width: imageWidth,
           height: imageHeight,
-          child: _buildCdnImage(state._displayImageUrl),
+          child: url.isEmpty
+              ? _buildError()
+              : CloudinaryImage.product(
+                  source: url,
+                  size: ProductImageSize.thumbnail,
+                  width: imageWidth,
+                  height: imageHeight,
+                  placeholderBuilder: (_) => _buildShimmerPlaceholder(),
+                  errorBuilder: (_) => _buildError(),
+                ),
         ),
       ),
-    );
-  }
-
-  /// CDN primary + Firebase Storage fallback.
-  /// Cloudinary serves ~200w bytes → decode is clean, no memCacheWidth needed.
-  /// Fallback branch only kicks in if the CDN request errors out.
-  Widget _buildCdnImage(String url) {
-    if (url.isEmpty) return _buildError();
-    final cdnUrl = CloudinaryUrl.fromUrl(url, width: _cdnWidth);
-
-    return CachedNetworkImage(
-      imageUrl: cdnUrl,
-      fit: BoxFit.cover,
-      memCacheWidth: _cdnWidth,
-      useOldImageOnUrlChange: true,
-      filterQuality: FilterQuality.medium,
-      placeholder: (_, __) => _buildShimmerPlaceholder(),
-      fadeInDuration: Duration.zero,
-      fadeOutDuration: Duration.zero,
-      errorWidget: (_, __, ___) {
-        if (cdnUrl == url) return _buildError();
-        return CachedNetworkImage(
-          imageUrl: url,
-          fit: BoxFit.cover,
-          memCacheWidth: _fallbackCacheWidth,
-          useOldImageOnUrlChange: true,
-          filterQuality: FilterQuality.medium,
-          placeholder: (_, __) => _buildShimmerPlaceholder(),
-          errorWidget: (_, __, ___) => _buildError(),
-          fadeInDuration: Duration.zero,
-          fadeOutDuration: Duration.zero,
-        );
-      },
     );
   }
 

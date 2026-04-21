@@ -4,7 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../generated/l10n/app_localizations.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../utils/cloudinary_url_builder.dart';
+import '../cloudinary_image.dart';
 import '../../providers/boost_analysis_provider.dart';
 
 /// Modern color scheme
@@ -267,15 +268,16 @@ final String currency = 'TL';
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
                       child: productImage != null
-                          ? CachedNetworkImage(
-                              imageUrl: productImage,
+                          ? CloudinaryImage.product(
+                              source: productImage,
+                              size: ProductImageSize.thumbnail,
                               fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
+                              placeholderBuilder: (context) => Container(
                                 color: Colors.grey[300],
                                 child:
                                     const Icon(Icons.image, color: Colors.grey),
                               ),
-                              errorWidget: (context, url, error) => Container(
+                              errorBuilder: (context) => Container(
                                 color: Colors.grey[300],
                                 child: const Icon(Icons.broken_image,
                                     color: Colors.grey),

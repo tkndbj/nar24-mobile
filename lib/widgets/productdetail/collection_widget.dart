@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../utils/cloudinary_url_builder.dart';
+import '../cloudinary_image.dart';
 import 'package:go_router/go_router.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../models/product.dart';
@@ -350,10 +351,11 @@ class _CollectionProductCard extends StatelessWidget {
                 width: 80,
                 height: 80,
                 child: product.imageUrls.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: product.imageUrls.first,
+                    ? CloudinaryImage.product(
+                        source: product.imageUrls.first,
+                        size: ProductImageSize.thumbnail,
                         fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
+                        placeholderBuilder: (context) => Container(
                           color: isDark
                               ? Colors.grey.shade800
                               : Colors.grey.shade200,
@@ -364,7 +366,7 @@ class _CollectionProductCard extends StatelessWidget {
                             size: 20,
                           ),
                         ),
-                        errorWidget: (context, url, error) => Container(
+                        errorBuilder: (context) => Container(
                           color: isDark
                               ? Colors.grey.shade800
                               : Colors.grey.shade200,

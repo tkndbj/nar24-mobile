@@ -17,6 +17,7 @@ import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../services/favorites_sharing_service.dart';
+import '../../services/firestore_read_tracker.dart';
 import '../market_screen.dart';
 import '../../widgets/product_option_selector.dart';
 
@@ -320,6 +321,10 @@ Future<void> _resetPaginationAndLoad() async {
             .where(FieldPath.documentId, whereIn: chunk)
             .get(),
       ]);
+      FirestoreReadTracker.instance.trackRead(
+          'favorite_product_screen',
+          'hydrate favorites batch (${chunk.length})',
+          futures[0].docs.length + futures[1].docs.length);
 
       for (final snapshot in futures) {
         for (final doc in snapshot.docs) {
@@ -414,6 +419,8 @@ Future<void> _addSelectedToCart() async {
           .doc(cachedProduct.id)
           .get(),
     ]);
+    FirestoreReadTracker.instance.trackRead(
+        'favorite_product_screen', 'fresh product fetch before add-to-cart', 2);
 
     final shopProductDoc = results[0];
     final productDoc = results[1];
@@ -576,6 +583,8 @@ Future<void> _showTransferBasketDialog() async {
         .doc(currentUser.uid)
         .collection('favorite_baskets')
         .get();
+    FirestoreReadTracker.instance.trackRead('favorite_product_screen',
+        'list favorite baskets (transfer)', basketsSnapshot.docs.length);
 
     final baskets = basketsSnapshot.docs.map((doc) {
       return {
@@ -685,6 +694,10 @@ Future<void> _showTransferBasketDialog() async {
           .doc(currentUser.uid)
           .collection('favorites')
           .get();
+      FirestoreReadTracker.instance.trackRead(
+          'favorite_product_screen',
+          'default favorites count (share)',
+          defaultFavoritesSnapshot.docs.length);
       final defaultFavoritesCount = defaultFavoritesSnapshot.docs.length;
 
       final basketsSnapshot = await _firestore
@@ -692,11 +705,17 @@ Future<void> _showTransferBasketDialog() async {
           .doc(currentUser.uid)
           .collection('favorite_baskets')
           .get();
+      FirestoreReadTracker.instance.trackRead('favorite_product_screen',
+          'list favorite baskets (share)', basketsSnapshot.docs.length);
 
       List<Map<String, dynamic>> basketsWithCounts = [];
       for (var basketDoc in basketsSnapshot.docs) {
         final basketFavoritesSnapshot =
             await basketDoc.reference.collection('favorites').get();
+        FirestoreReadTracker.instance.trackRead(
+            'favorite_product_screen',
+            'basket favorites count (share)',
+            basketFavoritesSnapshot.docs.length);
         final basketData = basketDoc.data();
         basketsWithCounts.add({
           'id': basketDoc.id,

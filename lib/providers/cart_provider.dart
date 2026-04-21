@@ -9,6 +9,7 @@ import '../models/product.dart';
 import '../services/cart_validation_service.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../services/cart_favorite_metrics_service.dart';
+import '../services/firestore_read_tracker.dart';
 import '../services/user_activity_service.dart';
 import '../services/lifecycle_aware.dart';
 import '../services/app_lifecycle_manager.dart';
@@ -450,6 +451,8 @@ void _sortCartItems(List<Map<String, dynamic>> items) {
           .orderBy('addedAt', descending: true)
           .limit(20)
           .get(const GetOptions(source: Source.server));
+      FirestoreReadTracker.instance.trackRead(
+          'cart_provider', 'initial cart page', snapshot.docs.length);
 
       await _buildCartItemsFromDocs(snapshot.docs);
 
@@ -695,6 +698,8 @@ void _sortCartItems(List<Map<String, dynamic>> items) {
     try {
       final productDoc =
           await _firestore.collection('shop_products').doc(productId).get();
+      FirestoreReadTracker.instance
+          .trackRead('cart_provider', 'add to cart by id', 1);
 
       if (!productDoc.exists) {
         return 'Product not found';
@@ -908,6 +913,8 @@ Future<String> addToCart({
           .collection('cart')
           .doc(productId)
           .get();
+      FirestoreReadTracker.instance
+          .trackRead('cart_provider', 'cart doc pre-remove (analytics)', 1);
 
       final cartData = cartDoc.data();
       final shopId = cartData?['shopId'] as String?;
@@ -993,6 +1000,8 @@ Future<String> addToCart({
           .doc(productId)
           .get(const GetOptions(source: Source.server))
           .then((doc) {
+        FirestoreReadTracker.instance
+            .trackRead('cart_provider', 'rollback optimistic remove', 1);
         if (doc.exists) {
           final newIds = Set<String>.from(cartProductIdsNotifier.value)
             ..add(productId);
@@ -1202,6 +1211,8 @@ Future<String> addToCart({
           .orderBy('addedAt', descending: true)
           .limit(20)
           .get(const GetOptions(source: Source.server));
+      FirestoreReadTracker.instance
+          .trackRead('cart_provider', 'cart refresh', snapshot.docs.length);
 
       await _buildCartItemsFromDocs(snapshot.docs);
 
@@ -1529,6 +1540,8 @@ final result = await callable.call({
       }
 
       final snapshot = await query.get(const GetOptions(source: Source.server));
+      FirestoreReadTracker.instance
+          .trackRead('cart_provider', 'cart page load', snapshot.docs.length);
 
       if (snapshot.docs.isEmpty) {
         _hasMore = false;

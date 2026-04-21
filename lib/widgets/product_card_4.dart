@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
@@ -8,6 +7,7 @@ import 'package:shimmer/shimmer.dart';
 import '../providers/cart_provider.dart';
 import '../providers/favorite_product_provider.dart';
 import '../utils/cloudinary_url_builder.dart';
+import 'cloudinary_image.dart';
 
 /// Production-grade ProductCard4 with optimized image rendering
 ///
@@ -279,10 +279,6 @@ class _OptimizedProductImage extends StatelessWidget {
   final String imageUrl;
   final bool hasValidImage;
 
-  // Target width for Cloudinary — 90dp × 3 DPR ≈ 270px, thumbnail (200) covers it.
-  static const int _cdnWidth = 200;
-  // Fallback-only cache cap for raw Firebase originals.
-  static const int _fallbackCacheWidth = 270;
   static const double imageHeight = 80.0;
   static const double imageWidth = 90.0;
   static const double borderRadius = 8.0;
@@ -306,45 +302,17 @@ class _OptimizedProductImage extends StatelessWidget {
           width: imageWidth,
           height: imageHeight,
           child: hasValidImage
-              ? _buildCdnImage(imageUrl)
+              ? CloudinaryImage.product(
+                  source: imageUrl,
+                  size: ProductImageSize.thumbnail,
+                  width: imageWidth,
+                  height: imageHeight,
+                  placeholderBuilder: (_) => const _ImagePlaceholder(),
+                  errorBuilder: (_) => const _ImageErrorWidget(),
+                )
               : const _ImagePlaceholder(),
         ),
       ),
-    );
-  }
-
-  /// CDN primary + Firebase Storage fallback.
-  /// Cloudinary serves ~200w bytes → decode is clean, no memCacheWidth needed.
-  Widget _buildCdnImage(String url) {
-    final cdnUrl = CloudinaryUrl.fromUrl(url, width: _cdnWidth);
-
-    return CachedNetworkImage(
-      imageUrl: cdnUrl,
-      fit: BoxFit.cover,
-      width: imageWidth,
-      height: imageHeight,
-      memCacheWidth: _cdnWidth,
-      fadeInDuration: Duration.zero,
-      fadeOutDuration: Duration.zero,
-      useOldImageOnUrlChange: true,
-      filterQuality: FilterQuality.medium,
-      placeholder: (_, __) => const _ImagePlaceholder(),
-      errorWidget: (_, __, ___) {
-        if (cdnUrl == url) return const _ImageErrorWidget();
-        return CachedNetworkImage(
-          imageUrl: url,
-          fit: BoxFit.cover,
-          width: imageWidth,
-          height: imageHeight,
-          memCacheWidth: _fallbackCacheWidth,
-          fadeInDuration: Duration.zero,
-          fadeOutDuration: Duration.zero,
-          useOldImageOnUrlChange: true,
-          filterQuality: FilterQuality.medium,
-          placeholder: (_, __) => const _ImagePlaceholder(),
-          errorWidget: (_, __, ___) => const _ImageErrorWidget(),
-        );
-      },
     );
   }
 }

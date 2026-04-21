@@ -1,7 +1,8 @@
 // lib/widgets/shareable_product_card.dart
 
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../utils/cloudinary_url_builder.dart';
+import 'cloudinary_image.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../models/product.dart';
 import '../generated/l10n/app_localizations.dart';
@@ -92,17 +93,18 @@ class ShareableProductCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             child: AspectRatio(
               aspectRatio: 1.0,
-              child: CachedNetworkImage(
-                imageUrl:
+              child: CloudinaryImage.product(
+                source:
                     product.imageUrls.isNotEmpty ? product.imageUrls.first : '',
+                size: ProductImageSize.card,
                 fit: BoxFit.cover,
-                placeholder: (context, url) => Container(
+                placeholderBuilder: (context) => Container(
                   color: Colors.grey[200],
                   child: const Center(
                     child: CircularProgressIndicator(),
                   ),
                 ),
-                errorWidget: (context, url, error) => Container(
+                errorBuilder: (context) => Container(
                   color: Colors.grey[200],
                   child: const Icon(
                     Icons.image_not_supported,

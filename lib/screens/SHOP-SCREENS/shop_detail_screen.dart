@@ -11,7 +11,6 @@ import '../../models/mock_document_snapshot.dart';
 import '../../providers/shop_provider.dart';
 import '../../widgets/product_list_sliver.dart';
 import '../FILTER-SCREENS/shop_detail_filter_screen.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../widgets/cloudinary_image.dart';
 import '../../utils/cloudinary_url_builder.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -1139,13 +1138,14 @@ class _HomeImage extends StatelessWidget {
           context.push('/product/$linkedProductId');
         }
       },
-      child: CachedNetworkImage(
-        imageUrl: imageUrl,
+      child: CloudinaryImage.banner(
+        source: imageUrl,
+        cdnWidth: 800,
         width: double.infinity,
         fit: BoxFit.cover,
-        placeholder: (_, __) =>
+        placeholderBuilder: (_) =>
             Container(height: 200, color: Colors.grey[300]),
-        errorWidget: (_, __, ___) => Container(
+        errorBuilder: (_) => Container(
           height: 200,
           color: Colors.grey[300],
           child: const Icon(Icons.error),
@@ -1439,11 +1439,12 @@ class _CollectionImage extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: imageUrl != null && imageUrl!.isNotEmpty
-            ? CachedNetworkImage(
-                imageUrl: imageUrl!,
+            ? CloudinaryImage.fromUrl(
+                url: imageUrl!,
+                cdnWidth: 200,
                 fit: BoxFit.cover,
-                placeholder: (_, __) => _buildPlaceholder(),
-                errorWidget: (_, __, ___) => _buildPlaceholder(),
+                placeholderBuilder: (_) => _buildPlaceholder(),
+                errorBuilder: (_) => _buildPlaceholder(),
               )
             : _buildPlaceholder(),
       ),

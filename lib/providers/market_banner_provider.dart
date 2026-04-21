@@ -2,6 +2,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../services/firestore_read_tracker.dart';
 
 class MarketBannerProvider extends ChangeNotifier {
   static const int _batchSize = 20;
@@ -69,6 +70,8 @@ class MarketBannerProvider extends ChangeNotifier {
       }
 
       final snap = await query.get();
+      FirestoreReadTracker.instance.trackRead(
+          'market_banner_provider', 'banners page', snap.docs.length);
 
       if (snap.docs.length < _batchSize) {
         _hasMore = false;

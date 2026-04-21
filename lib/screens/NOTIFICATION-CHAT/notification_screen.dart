@@ -26,7 +26,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Pagination variables
-  final int _limit = 20;
+  final int _limit = 10;
   DocumentSnapshot? _lastDocument;
   bool _isLoading = false;
   bool _hasMore = true;

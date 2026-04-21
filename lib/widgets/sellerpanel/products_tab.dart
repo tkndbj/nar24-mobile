@@ -8,6 +8,7 @@ import 'package:shimmer/shimmer.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../constants/all_in_one_category_data.dart';
 import '../../providers/seller_panel_provider.dart';
+import '../../services/firestore_read_tracker.dart';
 import '../../widgets/product_card_4.dart';
 import '../../models/product.dart';
 import 'dart:async';
@@ -391,6 +392,8 @@ class FilterBar extends StatelessWidget {
                   .collection('seller_info')
                   .doc('info')
                   .get();
+              FirestoreReadTracker.instance
+                  .trackRead('products_tab', 'seller_info check', 1);
 
               if (sellerInfoDoc.exists) {
                 context.push(
@@ -1059,6 +1062,8 @@ class ProductsList extends StatelessWidget {
           .collection('shop_products')
           .doc(productId)
           .get();
+      FirestoreReadTracker.instance
+          .trackRead('products_tab', 'product boost check', 1);
 
       if (productDoc.exists && productDoc.data()?['isBoosted'] == true) {
         if (!context.mounted) return;

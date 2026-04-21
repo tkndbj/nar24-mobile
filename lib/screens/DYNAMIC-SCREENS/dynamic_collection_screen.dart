@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/cloudinary_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../generated/l10n/app_localizations.dart';
@@ -10,6 +10,7 @@ import '../../services/typesense_service_manager.dart';
 import '../../services/typesense_service.dart';
 import '../../utils/attribute_localization_utils.dart';
 import '../../utils/color_localization.dart';
+import '../../services/firestore_read_tracker.dart';
 
 class DynamicCollectionScreen extends StatefulWidget {
   final String collectionId;
@@ -125,6 +126,8 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
           .collection('collections')
           .doc(widget.collectionId)
           .get();
+      FirestoreReadTracker.instance.trackRead(
+          'dynamic_collection_screen', 'collection metadata', 1);
 
       if (!collectionDoc.exists) {
         _showError('Collection not found');
@@ -222,6 +225,8 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
           .collection('shop_products')
           .where(FieldPath.documentId, whereIn: batch)
           .get();
+      FirestoreReadTracker.instance.trackRead('dynamic_collection_screen',
+          'shop_products by ID batch (${batch.length})', snapshot.docs.length);
 
       for (final doc in snapshot.docs) {
         try {
@@ -835,10 +840,11 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
           children: [
             // Cover image
             imageUrl != null
-                ? CachedNetworkImage(
-                    imageUrl: imageUrl,
+                ? CloudinaryImage.fromUrl(
+                    url: imageUrl,
+                    cdnWidth: 800,
                     fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
+                    placeholderBuilder: (context) => Container(
                       color:
                           isDark ? Colors.grey.shade800 : Colors.grey.shade300,
                       child: Icon(
@@ -847,7 +853,7 @@ class _DynamicCollectionScreenState extends State<DynamicCollectionScreen> {
                         size: 60,
                       ),
                     ),
-                    errorWidget: (context, url, error) => Container(
+                    errorBuilder: (context) => Container(
                       color:
                           isDark ? Colors.grey.shade800 : Colors.grey.shade300,
                       child: Icon(
@@ -1032,15 +1038,16 @@ class _FullScreenImageView extends StatelessWidget {
           // Full screen image
           Center(
             child: InteractiveViewer(
-              child: CachedNetworkImage(
-                imageUrl: imageUrl,
+              child: CloudinaryImage.fromUrl(
+                url: imageUrl,
+                cdnWidth: 1600,
                 fit: BoxFit.contain,
-                placeholder: (context, url) => const Center(
+                placeholderBuilder: (context) => const Center(
                   child: CircularProgressIndicator(
                     color: Colors.white,
                   ),
                 ),
-                errorWidget: (context, url, error) => const Center(
+                errorBuilder: (context) => const Center(
                   child: Icon(
                     Icons.error_outline,
                     color: Colors.white,

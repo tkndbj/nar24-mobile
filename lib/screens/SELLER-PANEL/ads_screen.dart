@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/cloudinary_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -1492,10 +1492,11 @@ class _AdsScreenState extends State<AdsScreen>
               aspectRatio: isTabletLandscape
                   ? 2.8
                   : (isTablet ? 2.2 : _getAspectRatio(submission.adType)),
-              child: CachedNetworkImage(
-                imageUrl: submission.imageUrl,
+              child: CloudinaryImage.banner(
+                source: submission.imageUrl,
+                cdnWidth: 800,
                 fit: BoxFit.cover,
-                placeholder: (context, url) => Container(
+                placeholderBuilder: (context) => Container(
                   color: isDark
                       ? const Color(0xFF2D3748)
                       : const Color(0xFFF7FAFC),
@@ -1503,7 +1504,7 @@ class _AdsScreenState extends State<AdsScreen>
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ),
-                errorWidget: (context, url, error) => Container(
+                errorBuilder: (context) => Container(
                   color: isDark
                       ? const Color(0xFF2D3748)
                       : const Color(0xFFF7FAFC),

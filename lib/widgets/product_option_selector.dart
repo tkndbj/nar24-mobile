@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../utils/cloudinary_url_builder.dart';
+import 'cloudinary_image.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/product.dart';
@@ -929,16 +930,16 @@ class _ProductOptionSelectorState extends State<ProductOptionSelector> {
                       ? ColorFilter.mode(Colors.grey, BlendMode.saturation)
                       : ColorFilter.mode(
                           Colors.transparent, BlendMode.multiply),
-                  child: CachedNetworkImage(
-                    imageUrl: url,
+                  child: CloudinaryImage.product(
+                    source: url,
+                    size: ProductImageSize.thumbnail,
                     width: 80,
                     height: 80,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
+                    placeholderBuilder: (context) => Container(
                       color: Colors.grey[200],
                       child: const Icon(Icons.image, color: Colors.grey),
                     ),
-                    errorWidget: (context, url, error) => Container(
+                    errorBuilder: (context) => Container(
                       color: Colors.grey[200],
                       child: const Icon(Icons.error, color: Colors.red),
                     ),

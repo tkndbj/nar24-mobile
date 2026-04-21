@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/cloudinary_image.dart';
 import '../../generated/l10n/app_localizations.dart';
 import 'isbank_ads_images_payment_screen.dart';
 
@@ -258,16 +258,17 @@ class _DynamicPaymentScreenState extends State<DynamicPaymentScreen> {
                           ),
                           child: AspectRatio(
                             aspectRatio: _getAspectRatio(widget.adType),
-                            child: CachedNetworkImage(
-                              imageUrl: widget.imageUrl,
+                            child: CloudinaryImage.banner(
+                              source: widget.imageUrl,
+                              cdnWidth: 800,
                               fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
+                              placeholderBuilder: (context) => Container(
                                 color: isDark ? const Color(0xFF2D3748) : const Color(0xFFF7FAFC),
                                 child: const Center(
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 ),
                               ),
-                              errorWidget: (context, url, error) => Container(
+                              errorBuilder: (context) => Container(
                                 color: isDark ? const Color(0xFF2D3748) : const Color(0xFFF7FAFC),
                                 child: const Icon(Icons.error_outline_rounded),
                               ),

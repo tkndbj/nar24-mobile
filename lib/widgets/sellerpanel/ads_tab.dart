@@ -9,6 +9,7 @@ import 'dart:async';
 import '../../generated/l10n/app_localizations.dart';
 import '../../constants/all_in_one_category_data.dart';
 import '../../providers/seller_panel_provider.dart';
+import '../../services/firestore_read_tracker.dart';
 import '../../widgets/product_card_4.dart';
 import '../../models/product.dart';
 
@@ -1196,6 +1197,8 @@ class _ProductItemState extends State<_ProductItem> {
           .collection('shop_products')
           .doc(widget.product.id)
           .get();
+      FirestoreReadTracker.instance
+          .trackRead('ads_tab', 'boost status revalidation', 1);
 
       if (!context.mounted) return;
 

@@ -663,7 +663,9 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
       final combined = <ProductSummary>[];
       final seen = <String>{};
 
+      int totalReads = 0;
       for (final snapshot in snapshots) {
+        totalReads += snapshot.docs.length;
         for (final doc in snapshot.docs) {
           if (combined.length >= hitsPerPage) break;
           if (seen.add(doc.id)) {
@@ -671,6 +673,8 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
           }
         }
       }
+      FirestoreReadTracker.instance.trackRead(
+          'market_provider', 'firestore search fallback (4 parallel)', totalReads);
 
       _updateSearchResults(combined, page, hitsPerPage);
     } catch (e) {
@@ -811,8 +815,8 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
 
       _setBuyerCategoryCache(buyerCategory, allProducts);
 
-      FirestoreReadTracker.instance.trackRead('MarketProvider',
-          'buyerCategory:$buyerCategory (Firestore)', allProducts.length);
+      FirestoreReadTracker.instance.trackRead('market_provider',
+          'buyerCategory:$buyerCategory (market)', allProducts.length);
       return allProducts;
     } catch (e) {
       debugPrint(
@@ -971,6 +975,9 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
       // Cache the results in TERAS cache before returning
       _setBuyerCategoryTerasCache(buyerCategory, allProducts);
 
+      FirestoreReadTracker.instance.trackRead('market_provider',
+          'buyerCategory:$buyerCategory (teras)', allProducts.length);
+
       debugPrint(
           'Total fetched ${allProducts.length} products for buyer category: $buyerCategory');
       return allProducts;
@@ -1052,6 +1059,8 @@ class MarketProvider with ChangeNotifier, LifecycleAwareMixin {
         writeCount: 1,
         metadata: {'user_type': user != null ? 'authenticated' : 'anonymous'},
       );
+      FirestoreReadTracker.instance
+          .trackWrite('market_provider', 'searches/add');
       debugPrint('Search term recorded: $searchTerm by user: $userId');
     } catch (e) {
       debugPrint('Error saving search term: $e');

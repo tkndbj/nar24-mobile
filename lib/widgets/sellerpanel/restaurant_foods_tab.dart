@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../utils/cloudinary_url_builder.dart';
+import '../cloudinary_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:intl/intl.dart';
@@ -762,12 +763,13 @@ class _FoodCard extends StatelessWidget {
                 ClipRRect(
                   borderRadius:
                       const BorderRadius.horizontal(left: Radius.circular(16)),
-                  child: CachedNetworkImage(
-                    imageUrl: food.imageUrl,
+                  child: CloudinaryImage.product(
+                    source: food.imageUrl,
+                    size: ProductImageSize.thumbnail,
                     width: 96,
                     height: 96,
                     fit: BoxFit.cover,
-                    errorWidget: (_, __, ___) => Container(
+                    errorBuilder: (_) => Container(
                       width: 96,
                       height: 96,
                       color: isDark

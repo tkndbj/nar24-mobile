@@ -58,6 +58,7 @@ import 'services/coupon_service.dart';
 import 'services/search_config_service.dart';
 import 'providers/food_cart_provider.dart';
 import 'services/firestore_read_tracker.dart';
+import 'utils/app_image_cache_manager.dart';
 import 'services/courier_location_service.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'utils/cloudinary_url_builder.dart';
@@ -100,11 +101,6 @@ Future<void> main() async {
   // Initialize the app lifecycle manager FIRST
   // This coordinates all provider lifecycles for smooth background/foreground transitions
   AppLifecycleManager.instance.initialize();
-
-  // Debug-only: track all Firestore reads/writes
-  if (kDebugMode) {
-    FirestoreReadTracker.instance.initialize();
-  }
 
   // 🔒 NOW add orientation lock AFTER binding initialization
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
@@ -248,6 +244,15 @@ Future<void> main() async {
     }
   }
 
+  // Firestore usage tracker — writes one aggregated doc per session.
+  // Runs in debug and release builds; intended to be removed after a few
+  // months of production observation. Placed after the Firebase try/catch
+  // so it runs even when Firebase.initializeApp throws `duplicate-app`
+  // (the native SDK may have auto-initialized the default app already).
+  if (Firebase.apps.isNotEmpty) {
+    await FirestoreReadTracker.instance.initialize();
+  }
+
   // ── Cloudinary init — must run regardless of Firebase init path ──
   //
   // Reliability contract:
@@ -290,6 +295,13 @@ Future<void> main() async {
     storageBucket: 'emlak-mobile-app.appspot.com',
     enabled: cloudinaryEnabled,
   );
+
+  // Warm up the shared image cache singleton so the SQLite index opens
+  // during startup instead of on first product list render. Every image
+  // widget (CloudinaryImage, any direct CachedNetworkImage) routes
+  // through this manager — one disk cache, one in-flight queue, one
+  // eviction path for corruption recovery.
+  AppImageCacheManager();
 
   // ── Services that only need Firebase to be running (not freshly initialized) ──
   try {
@@ -606,6 +618,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       // Flush pending data before going to background
       ImpressionBatcher().flush();
       UserActivityService.instance.forceFlush();
+      FirestoreReadTracker.instance.flushNow();
 
       CourierLocationService.instance.onAppPaused();
 

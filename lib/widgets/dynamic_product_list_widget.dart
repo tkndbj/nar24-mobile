@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import '../../models/product_summary.dart';
+import '../../services/firestore_read_tracker.dart';
 import 'product_card.dart';
 
 class DynamicProductListsWidget extends StatefulWidget {
@@ -70,6 +71,8 @@ class _DynamicProductListsWidgetState extends State<DynamicProductListsWidget>
           .where('isActive', isEqualTo: true)
           .orderBy('order')
           .get();
+      FirestoreReadTracker.instance.trackRead('dynamic_product_list_widget',
+          'dynamic lists config', snapshot.docs.length);
 
       if (!mounted) return;
 
@@ -346,6 +349,10 @@ class _ProductListSectionState extends State<_ProductListSection> {
                   .get();
             },
           );
+          FirestoreReadTracker.instance.trackRead(
+              'dynamic_product_list_widget',
+              'shop_products by ID batch (${batch.length})',
+              batchDocs.docs.length);
 
           for (var doc in batchDocs.docs) {
             if (!mounted || fetchedCount >= maxProducts) break;
@@ -376,6 +383,10 @@ class _ProductListSectionState extends State<_ProductListSection> {
                 .get();
           },
         );
+        FirestoreReadTracker.instance.trackRead(
+            'dynamic_product_list_widget',
+            'shop products by shopId',
+            snapshot.docs.length);
 
         if (mounted) {
           products =

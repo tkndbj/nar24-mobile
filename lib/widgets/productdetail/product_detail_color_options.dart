@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/product_detail_provider.dart';
 import '../../models/product.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../utils/cloudinary_url_builder.dart';
+import '../cloudinary_image.dart';
 
 class ProductDetailColorOptions extends StatelessWidget {
   final Product product;
@@ -98,13 +99,14 @@ class ProductDetailColorOptions extends StatelessWidget {
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: CachedNetworkImage(
-                              imageUrl: imageUrl,
+                            child: CloudinaryImage.product(
+                              source: imageUrl,
+                              size: ProductImageSize.thumbnail,
                               fit: BoxFit.cover,
-                              placeholder: (context, url) => const Center(
+                              placeholderBuilder: (context) => const Center(
                                 child: CircularProgressIndicator(),
                               ),
-                              errorWidget: (context, url, error) => Container(
+                              errorBuilder: (context) => Container(
                                 color: Theme.of(context).colorScheme.surface,
                                 child: const Icon(
                                   Icons.image_not_supported,

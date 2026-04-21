@@ -8,6 +8,7 @@ import 'package:flutter_spinkit/flutter_spinkit.dart';
 
 import '../SHOP-SCREENS/shop_screen.dart'; // For navigating to ShopScreen when no favorites
 import '../../widgets/shop/shop_card_widget.dart';
+import '../../services/firestore_read_tracker.dart';
 
 class FavoriteShopScreen extends StatefulWidget {
   const FavoriteShopScreen({Key? key}) : super(key: key);
@@ -46,6 +47,8 @@ class _FavoriteShopScreenState extends State<FavoriteShopScreen> {
             .doc(user.uid)
             .collection('favoriteShops')
             .get();
+        FirestoreReadTracker.instance.trackRead('favorite_shop_screen',
+            'favorite shop ids', favoriteSnapshot.docs.length);
 
         setState(() {
           _favoriteShopIds = favoriteSnapshot.docs.map((doc) => doc.id).toSet();
@@ -72,6 +75,10 @@ class _FavoriteShopScreenState extends State<FavoriteShopScreen> {
                 .collection('shops')
                 .where(FieldPath.documentId, whereIn: batch)
                 .get();
+            FirestoreReadTracker.instance.trackRead(
+                'favorite_shop_screen',
+                'shops by ID batch (${batch.length})',
+                shopSnapshot.docs.length);
             allShops.addAll(shopSnapshot.docs);
           }
 

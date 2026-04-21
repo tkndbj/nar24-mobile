@@ -5,6 +5,7 @@ import '../../providers/product_detail_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../screens/REVIEWS-QUESTIONS/all_reviews_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../cloudinary_image.dart';
 import '../../services/translation_service.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -726,9 +727,11 @@ class __ReviewTileState extends State<_ReviewTile> {
                 child: SizedBox(
                   width: imageSize,
                   height: imageSize,
-                  child: CachedNetworkImage(
-                    imageUrl: imageUrls[index],
-                    placeholder: (context, url) => Container(
+                  child: CloudinaryImage.fromUrl(
+                    url: imageUrls[index],
+                    cdnWidth: 200,
+                    fit: BoxFit.cover,
+                    placeholderBuilder: (context) => Container(
                       color: Colors.grey[300],
                       child: const Center(
                         child: SizedBox(
@@ -738,9 +741,8 @@ class __ReviewTileState extends State<_ReviewTile> {
                         ),
                       ),
                     ),
-                    errorWidget: (context, url, error) =>
+                    errorBuilder: (context) =>
                         const Icon(Icons.error, size: 14),
-                    fit: BoxFit.cover,
                   ),
                 ),
               ),

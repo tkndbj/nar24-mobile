@@ -15,6 +15,7 @@ import '../../models/food_address.dart';
 import '../../models/restaurant.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../providers/food_cart_provider.dart';
+import '../../services/firestore_read_tracker.dart';
 import '../../user_provider.dart';
 import '../../utils/food_localization.dart';
 import '../../utils/restaurant_utils.dart';
@@ -79,6 +80,8 @@ class _FoodCartContentState extends State<_FoodCartContent> {
             .collection('restaurants')
             .doc(restaurantId)
             .get(const GetOptions(source: Source.server));
+        FirestoreReadTracker.instance
+            .trackRead('food_cart', 'restaurant checkout validation', 1);
         if (!context.mounted || doc.data() == null) return;
 
         final restaurant = Restaurant.fromMap(doc.data()!, id: doc.id);

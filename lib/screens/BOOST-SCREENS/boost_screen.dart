@@ -4,7 +4,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../utils/cloudinary_url_builder.dart';
+import '../../widgets/cloudinary_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'boost_payment_webview.dart';
@@ -569,19 +570,20 @@ class _BoostScreenState extends State<BoostScreen>
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8.0),
                     child: imageUrl.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: imageUrl,
+                        ? CloudinaryImage.product(
+                            source: imageUrl,
+                            size: ProductImageSize.thumbnail,
                             width: 40,
                             height: 40,
                             fit: BoxFit.cover,
-                            placeholder: (_, __) => Container(
+                            placeholderBuilder: (_) => Container(
                               width: 40,
                               height: 40,
                               color: Colors.grey[200],
                               child: const Icon(Icons.image,
                                   size: 20, color: Colors.grey),
                             ),
-                            errorWidget: (_, __, ___) => Container(
+                            errorBuilder: (_) => Container(
                               width: 40,
                               height: 40,
                               color: Colors.grey[200],
@@ -680,12 +682,13 @@ class _BoostScreenState extends State<BoostScreen>
               topRight: Radius.circular(16.0),
             ),
             child: imageUrl.isNotEmpty
-                ? CachedNetworkImage(
-                    imageUrl: imageUrl,
+                ? CloudinaryImage.product(
+                    source: imageUrl,
+                    size: ProductImageSize.card,
                     width: double.infinity,
                     height: imageHeight,
                     fit: BoxFit.cover,
-                    placeholder: (_, __) => Container(
+                    placeholderBuilder: (_) => Container(
                       height: imageHeight,
                       color: Colors.grey[200],
                       child: const Center(
@@ -696,7 +699,7 @@ class _BoostScreenState extends State<BoostScreen>
                         ),
                       ),
                     ),
-                    errorWidget: (_, __, ___) => Container(
+                    errorBuilder: (_) => Container(
                       height: imageHeight,
                       color: Colors.grey[200],
                       child: const Icon(
