@@ -389,7 +389,8 @@ class _MarketCategoryDetailScreenState
                     // ── App bar ──────────────────────────────────────
                     SliverAppBar(
                       title: Text(
-                        category?.labelTr ?? l10n.marketCategoryFallbackTitle,
+                        category?.localizedLabel(l10n) ??
+                            l10n.marketCategoryFallbackTitle,
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
@@ -1014,7 +1015,7 @@ class MarketItemCard extends StatelessWidget {
                                     : Colors.grey[800],
                               ),
                             ),
-                          ..._buildNutritionSection(isDark),
+                          ..._buildNutritionSection(sheetContext, isDark),
                         ],
                       ),
                     ),
@@ -1028,9 +1029,11 @@ class MarketItemCard extends StatelessWidget {
     );
   }
 
-  List<Widget> _buildNutritionSection(bool isDark) {
+  List<Widget> _buildNutritionSection(BuildContext context, bool isDark) {
     final n = item.nutrition;
     if (n.isEmpty) return const [];
+
+    final l10n = AppLocalizations.of(context)!;
 
     int? asInt(dynamic v) {
       if (v is int) return v;
@@ -1040,13 +1043,13 @@ class MarketItemCard extends StatelessWidget {
     }
 
     final labels = <String, String>{
-      'calories': 'Calories',
-      'protein': 'Protein',
-      'carbs': 'Carbs',
-      'sugar': 'Sugar',
-      'fat': 'Fat',
-      'fiber': 'Fiber',
-      'salt': 'Salt',
+      'calories': l10n.marketNutritionCalories,
+      'protein': l10n.marketNutritionProtein,
+      'carbs': l10n.marketNutritionCarbs,
+      'sugar': l10n.marketNutritionSugar,
+      'fat': l10n.marketNutritionFat,
+      'fiber': l10n.marketNutritionFiber,
+      'salt': l10n.marketNutritionSalt,
     };
     final units = <String, String>{
       'calories': 'kcal',
@@ -1075,7 +1078,7 @@ class MarketItemCard extends StatelessWidget {
       Row(
         children: [
           Text(
-            'Nutrition Facts',
+            l10n.marketNutritionFacts,
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
@@ -1085,7 +1088,7 @@ class MarketItemCard extends StatelessWidget {
           if (servingSize != null && servingSize.isNotEmpty) ...[
             const SizedBox(width: 8),
             Text(
-              'per ${servingSize}g',
+              l10n.marketNutritionPerServing(servingSize),
               style: TextStyle(
                 fontSize: 12,
                 color: isDark ? Colors.grey[400] : Colors.grey[600],

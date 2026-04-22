@@ -118,6 +118,34 @@ class _AddressesScreenState extends State<AddressesScreen>
     return StreamBuilder<QuerySnapshot>(
       stream: addressesRef.snapshots(),
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Scaffold(
+            backgroundColor:
+                isDarkMode ? const Color(0xFF0F0F0F) : const Color(0xFFF8F9FA),
+            appBar: _buildAppBar(localization, isDarkMode),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 48,
+                    color: isDarkMode ? Colors.white54 : Colors.black45,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    localization.somethingWentWrong,
+                    style: TextStyle(
+                      color: isDarkMode ? Colors.white70 : Colors.black54,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
         if (!snapshot.hasData) {
           return Scaffold(
             backgroundColor:

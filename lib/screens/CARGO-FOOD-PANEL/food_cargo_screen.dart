@@ -713,6 +713,7 @@ class _DeliveriesListState extends State<_DeliveriesList>
   final Map<String, GlobalKey> _cardKeys = {};
   final Set<String> _removedLocally = {};
   final Map<String, StreamSubscription> _actionListeners = {};
+  StreamSubscription<List<_OrderDoc>>? _notifCountSub;
 
   @override
   bool get wantKeepAlive => true;
@@ -721,6 +722,7 @@ class _DeliveriesListState extends State<_DeliveriesList>
   void initState() {
     super.initState();
     _stream = _buildStream(widget.currentUser.uid);
+    _attachNotifCountSub();
   }
 
   @override
@@ -728,7 +730,22 @@ class _DeliveriesListState extends State<_DeliveriesList>
     super.didUpdateWidget(old);
     if (old.currentUser.uid != widget.currentUser.uid) {
       _stream = _buildStream(widget.currentUser.uid);
+      _attachNotifCountSub();
     }
+  }
+
+  // Feeds the live active-order count to the foreground service so the
+  // persistent notification shows "N aktif teslimat · son güncelleme HH:mm".
+  // Uses the shared-replay stream so this doesn't open a second Firestore
+  // listener pair.
+  void _attachNotifCountSub() {
+    _notifCountSub?.cancel();
+    _notifCountSub = _stream.listen((orders) {
+      final count = orders.where(
+        (o) => !_removedLocally.contains(o.doc.id),
+      ).length;
+      CourierLocationService.instance.updateActiveOrderCount(count);
+    });
   }
 
   Stream<List<_OrderDoc>> _buildStream(String uid) {
@@ -762,7 +779,7 @@ class _DeliveriesListState extends State<_DeliveriesList>
         return aTs.compareTo(bTs);
       });
       return all;
-    });
+    }).shareReplay(maxSize: 1);
   }
 
   void _listenForActionResult(String actionId, String orderId) {
@@ -800,6 +817,7 @@ class _DeliveriesListState extends State<_DeliveriesList>
 
   @override
   void dispose() {
+    _notifCountSub?.cancel();
     for (final sub in _actionListeners.values) {
       sub.cancel();
     }

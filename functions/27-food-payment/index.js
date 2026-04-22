@@ -446,6 +446,13 @@ restaurantPhone: restaurantData.contactNo || '',
 restaurantProfileImage: restaurantData.profileImageUrl || '',
 restaurantLat: restaurantData.latitude || null,
 restaurantLng: restaurantData.longitude || null,
+// Denormalized for area analytics (CF-55). Read-only snapshot at order
+// creation time — won't be retroactively updated if the restaurant moves.
+// Restaurant doc uses `city` for the broader district ("Gazimağusa") and
+// `subcity` for the specific neighborhood ("Karakol"). These map to the
+// buyer's `deliveryAddress.mainRegion` and `.city` respectively.
+restaurantCity: restaurantData.city || '',
+restaurantSubcity: restaurantData.subcity || '',
 
       // Items (embedded array — food orders are typically small)
       items: validatedItems,

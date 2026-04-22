@@ -213,6 +213,11 @@ export const createScannedRestaurantOrder = onCall(
       restaurantPhone: restaurant.contactNo || '',
       restaurantLat: restaurant.latitude || null,
       restaurantLng: restaurant.longitude || null,
+      // Denormalized for area analytics (CF-55). Restaurant doc uses
+      // `city` for the broader district and `subcity` for the neighborhood,
+      // matching buyer's deliveryAddress.mainRegion + .city respectively.
+      restaurantCity: restaurant.city || '',
+      restaurantSubcity: restaurant.subcity || '',
 
       // No courier yet — assigned when courier takes from pool
       cargoUserId: null,

@@ -13,9 +13,18 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
-<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-<uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
-    
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+    <!-- Keeps the GPS service alive while the courier is on shift and the
+         device is locked. WAKE_LOCK is requested by flutter_foreground_task;
+         POST_NOTIFICATIONS is mandatory on Android 13+ for the persistent
+         on-shift notification; RECEIVE_BOOT_COMPLETED lets us autoresume
+         tracking after a reboot when the shift flag is still on. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -104,8 +113,21 @@
         </activity>
 
         <!-- Meta data for Firebase and Google Play services -->
-        <meta-data android:name="flutterEmbedding" android:value="2" />        
-        <meta-data android:name="com.google.android.gms.version" android:value="@integer/google_play_services_version" />                
+        <meta-data android:name="flutterEmbedding" android:value="2" />
+        <meta-data android:name="com.google.android.gms.version" android:value="@integer/google_play_services_version" />
+
+        <!-- Courier location foreground service.
+             The plugin declares the service itself, but Android 14+ requires
+             `foregroundServiceType` to be pinned by the app. We override it
+             here with `tools:replace` so the merged manifest ships with
+             type=location, and set stopWithTask=false so swipe-closing the
+             app doesn't kill GPS while the courier is still on shift. -->
+        <service
+            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:foregroundServiceType="location"
+            android:exported="false"
+            android:stopWithTask="false"
+            tools:replace="android:foregroundServiceType,android:stopWithTask" />
     </application>
 
     <!-- Package visibility settings for querying text processing activities -->

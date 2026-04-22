@@ -16330,4 +16330,106 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get marketOrders => 'Заказы магазина';
+
+  @override
+  String get marketNutritionFacts => 'Пищевая ценность';
+
+  @override
+  String marketNutritionPerServing(String servingSize) {
+    return 'на $servingSizeг';
+  }
+
+  @override
+  String get marketNutritionCalories => 'Калории';
+
+  @override
+  String get marketNutritionProtein => 'Белки';
+
+  @override
+  String get marketNutritionCarbs => 'Углеводы';
+
+  @override
+  String get marketNutritionSugar => 'Сахар';
+
+  @override
+  String get marketNutritionFat => 'Жиры';
+
+  @override
+  String get marketNutritionFiber => 'Клетчатка';
+
+  @override
+  String get marketNutritionSalt => 'Соль';
+
+  @override
+  String get marketOrderNotFound => 'Заказ не найден.';
+
+  @override
+  String get marketOrderLoadFailedDescription =>
+      'Пожалуйста, проверьте соединение и попробуйте ещё раз.';
+
+  @override
+  String get marketCategoryAlcoholCigarette => 'Алкоголь и сигареты';
+
+  @override
+  String get marketCategorySnack => 'Закуски';
+
+  @override
+  String get marketCategoryDrinks => 'Напитки';
+
+  @override
+  String get marketCategoryWater => 'Вода';
+
+  @override
+  String get marketCategoryFruitVegetables => 'Фрукты и овощи';
+
+  @override
+  String get marketCategoryFood => 'Еда';
+
+  @override
+  String get marketCategoryMeatChickenFish => 'Мясо, курица и рыба';
+
+  @override
+  String get marketCategoryBasicFood => 'Основные продукты';
+
+  @override
+  String get marketCategoryDairyBreakfast => 'Молочные продукты и завтрак';
+
+  @override
+  String get marketCategoryBakery => 'Выпечка';
+
+  @override
+  String get marketCategoryIceCream => 'Мороженое';
+
+  @override
+  String get marketCategoryFitForm => 'Фит и форма';
+
+  @override
+  String get marketCategoryHomeCare => 'Уход за домом';
+
+  @override
+  String get marketCategoryHomeLite => 'Товары для дома';
+
+  @override
+  String get marketCategoryPersonalCare => 'Личная гигиена';
+
+  @override
+  String get marketCategoryTechnology => 'Техника';
+
+  @override
+  String get marketCategorySexualHealth => 'Сексуальное здоровье';
+
+  @override
+  String get marketCategoryBaby => 'Детское';
+
+  @override
+  String get marketCategoryClothing => 'Одежда';
+
+  @override
+  String get marketCategoryStationery => 'Канцтовары';
+
+  @override
+  String get marketCategoryPet => 'Зоотовары';
+
+  @override
+  String get marketCategoryTools => 'Инструменты';
 }

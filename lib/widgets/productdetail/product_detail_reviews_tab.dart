@@ -77,8 +77,10 @@ class _ProductDetailReviewsTabState extends State<ProductDetailReviewsTab> {
             return _buildLoadingState(context);
           }
 
-          // Hide entire widget if no reviews
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          // Hide entire widget on error or if no reviews
+          if (snapshot.hasError ||
+              !snapshot.hasData ||
+              snapshot.data!.isEmpty) {
             return const SizedBox.shrink();
           }
 

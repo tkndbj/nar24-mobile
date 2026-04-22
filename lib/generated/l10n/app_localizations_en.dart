@@ -16225,4 +16225,106 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get marketOrders => 'Market Orders';
+
+  @override
+  String get marketNutritionFacts => 'Nutrition Facts';
+
+  @override
+  String marketNutritionPerServing(String servingSize) {
+    return 'per ${servingSize}g';
+  }
+
+  @override
+  String get marketNutritionCalories => 'Calories';
+
+  @override
+  String get marketNutritionProtein => 'Protein';
+
+  @override
+  String get marketNutritionCarbs => 'Carbs';
+
+  @override
+  String get marketNutritionSugar => 'Sugar';
+
+  @override
+  String get marketNutritionFat => 'Fat';
+
+  @override
+  String get marketNutritionFiber => 'Fiber';
+
+  @override
+  String get marketNutritionSalt => 'Salt';
+
+  @override
+  String get marketOrderNotFound => 'Order not found.';
+
+  @override
+  String get marketOrderLoadFailedDescription =>
+      'Please check your connection and try again.';
+
+  @override
+  String get marketCategoryAlcoholCigarette => 'Alcohol & Cigarette';
+
+  @override
+  String get marketCategorySnack => 'Snack';
+
+  @override
+  String get marketCategoryDrinks => 'Drinks';
+
+  @override
+  String get marketCategoryWater => 'Water';
+
+  @override
+  String get marketCategoryFruitVegetables => 'Fruit & Vegetables';
+
+  @override
+  String get marketCategoryFood => 'Food';
+
+  @override
+  String get marketCategoryMeatChickenFish => 'Meat, Chicken & Fish';
+
+  @override
+  String get marketCategoryBasicFood => 'Basic Food';
+
+  @override
+  String get marketCategoryDairyBreakfast => 'Dairy & Breakfast';
+
+  @override
+  String get marketCategoryBakery => 'Bakery';
+
+  @override
+  String get marketCategoryIceCream => 'Ice Cream';
+
+  @override
+  String get marketCategoryFitForm => 'Fit & Form';
+
+  @override
+  String get marketCategoryHomeCare => 'Home Care';
+
+  @override
+  String get marketCategoryHomeLite => 'Home Lite';
+
+  @override
+  String get marketCategoryPersonalCare => 'Personal Care';
+
+  @override
+  String get marketCategoryTechnology => 'Technology';
+
+  @override
+  String get marketCategorySexualHealth => 'Sexual Health';
+
+  @override
+  String get marketCategoryBaby => 'Baby';
+
+  @override
+  String get marketCategoryClothing => 'Clothing';
+
+  @override
+  String get marketCategoryStationery => 'Stationery';
+
+  @override
+  String get marketCategoryPet => 'Pet';
+
+  @override
+  String get marketCategoryTools => 'Tools';
 }

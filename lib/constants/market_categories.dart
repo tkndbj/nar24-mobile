@@ -2,6 +2,8 @@
 
 import 'package:flutter/material.dart';
 
+import '../generated/l10n/app_localizations.dart';
+
 class MarketCategory {
   final String slug;
   final String label;
@@ -157,3 +159,56 @@ const kMarketCategories = <MarketCategory>[
 final kMarketCategoryMap = Map<String, MarketCategory>.fromEntries(
   kMarketCategories.map((c) => MapEntry(c.slug, c)),
 );
+
+extension MarketCategoryL10n on MarketCategory {
+  String localizedLabel(AppLocalizations l10n) {
+    switch (slug) {
+      case 'alcohol-cigarette':
+        return l10n.marketCategoryAlcoholCigarette;
+      case 'snack':
+        return l10n.marketCategorySnack;
+      case 'drinks':
+        return l10n.marketCategoryDrinks;
+      case 'water':
+        return l10n.marketCategoryWater;
+      case 'fruit-vegetables':
+        return l10n.marketCategoryFruitVegetables;
+      case 'food':
+        return l10n.marketCategoryFood;
+      case 'meat-chicken-fish':
+        return l10n.marketCategoryMeatChickenFish;
+      case 'basic-food':
+        return l10n.marketCategoryBasicFood;
+      case 'dairy-breakfast':
+        return l10n.marketCategoryDairyBreakfast;
+      case 'bakery':
+        return l10n.marketCategoryBakery;
+      case 'ice-cream':
+        return l10n.marketCategoryIceCream;
+      case 'fit-form':
+        return l10n.marketCategoryFitForm;
+      case 'home-care':
+        return l10n.marketCategoryHomeCare;
+      case 'home-lite':
+        return l10n.marketCategoryHomeLite;
+      case 'personal-care':
+        return l10n.marketCategoryPersonalCare;
+      case 'technology':
+        return l10n.marketCategoryTechnology;
+      case 'sexual-health':
+        return l10n.marketCategorySexualHealth;
+      case 'baby':
+        return l10n.marketCategoryBaby;
+      case 'clothing':
+        return l10n.marketCategoryClothing;
+      case 'stationery':
+        return l10n.marketCategoryStationery;
+      case 'pet':
+        return l10n.marketCategoryPet;
+      case 'tools':
+        return l10n.marketCategoryTools;
+      default:
+        return labelTr;
+    }
+  }
+}

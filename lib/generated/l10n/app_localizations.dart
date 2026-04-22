@@ -30959,6 +30959,204 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Market Siparişleri'**
   String get marketOrders;
+
+  /// No description provided for @marketNutritionFacts.
+  ///
+  /// In tr, this message translates to:
+  /// **'Besin Değerleri'**
+  String get marketNutritionFacts;
+
+  /// No description provided for @marketNutritionPerServing.
+  ///
+  /// In tr, this message translates to:
+  /// **'{servingSize}g başına'**
+  String marketNutritionPerServing(String servingSize);
+
+  /// No description provided for @marketNutritionCalories.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kalori'**
+  String get marketNutritionCalories;
+
+  /// No description provided for @marketNutritionProtein.
+  ///
+  /// In tr, this message translates to:
+  /// **'Protein'**
+  String get marketNutritionProtein;
+
+  /// No description provided for @marketNutritionCarbs.
+  ///
+  /// In tr, this message translates to:
+  /// **'Karbonhidrat'**
+  String get marketNutritionCarbs;
+
+  /// No description provided for @marketNutritionSugar.
+  ///
+  /// In tr, this message translates to:
+  /// **'Şeker'**
+  String get marketNutritionSugar;
+
+  /// No description provided for @marketNutritionFat.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yağ'**
+  String get marketNutritionFat;
+
+  /// No description provided for @marketNutritionFiber.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lif'**
+  String get marketNutritionFiber;
+
+  /// No description provided for @marketNutritionSalt.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tuz'**
+  String get marketNutritionSalt;
+
+  /// No description provided for @marketOrderNotFound.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sipariş bulunamadı.'**
+  String get marketOrderNotFound;
+
+  /// No description provided for @marketOrderLoadFailedDescription.
+  ///
+  /// In tr, this message translates to:
+  /// **'Lütfen bağlantınızı kontrol edip tekrar deneyin.'**
+  String get marketOrderLoadFailedDescription;
+
+  /// No description provided for @marketCategoryAlcoholCigarette.
+  ///
+  /// In tr, this message translates to:
+  /// **'Alkol & Sigara'**
+  String get marketCategoryAlcoholCigarette;
+
+  /// No description provided for @marketCategorySnack.
+  ///
+  /// In tr, this message translates to:
+  /// **'Atıştırmalık'**
+  String get marketCategorySnack;
+
+  /// No description provided for @marketCategoryDrinks.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçecekler'**
+  String get marketCategoryDrinks;
+
+  /// No description provided for @marketCategoryWater.
+  ///
+  /// In tr, this message translates to:
+  /// **'Su'**
+  String get marketCategoryWater;
+
+  /// No description provided for @marketCategoryFruitVegetables.
+  ///
+  /// In tr, this message translates to:
+  /// **'Meyve & Sebze'**
+  String get marketCategoryFruitVegetables;
+
+  /// No description provided for @marketCategoryFood.
+  ///
+  /// In tr, this message translates to:
+  /// **'Gıda'**
+  String get marketCategoryFood;
+
+  /// No description provided for @marketCategoryMeatChickenFish.
+  ///
+  /// In tr, this message translates to:
+  /// **'Et, Tavuk & Balık'**
+  String get marketCategoryMeatChickenFish;
+
+  /// No description provided for @marketCategoryBasicFood.
+  ///
+  /// In tr, this message translates to:
+  /// **'Temel Gıda'**
+  String get marketCategoryBasicFood;
+
+  /// No description provided for @marketCategoryDairyBreakfast.
+  ///
+  /// In tr, this message translates to:
+  /// **'Süt Ürünleri & Kahvaltılık'**
+  String get marketCategoryDairyBreakfast;
+
+  /// No description provided for @marketCategoryBakery.
+  ///
+  /// In tr, this message translates to:
+  /// **'Fırın & Unlu Mamüller'**
+  String get marketCategoryBakery;
+
+  /// No description provided for @marketCategoryIceCream.
+  ///
+  /// In tr, this message translates to:
+  /// **'Dondurma'**
+  String get marketCategoryIceCream;
+
+  /// No description provided for @marketCategoryFitForm.
+  ///
+  /// In tr, this message translates to:
+  /// **'Fit & Form'**
+  String get marketCategoryFitForm;
+
+  /// No description provided for @marketCategoryHomeCare.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ev Bakım'**
+  String get marketCategoryHomeCare;
+
+  /// No description provided for @marketCategoryHomeLite.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ev Gereçleri'**
+  String get marketCategoryHomeLite;
+
+  /// No description provided for @marketCategoryPersonalCare.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kişisel Bakım'**
+  String get marketCategoryPersonalCare;
+
+  /// No description provided for @marketCategoryTechnology.
+  ///
+  /// In tr, this message translates to:
+  /// **'Teknoloji'**
+  String get marketCategoryTechnology;
+
+  /// No description provided for @marketCategorySexualHealth.
+  ///
+  /// In tr, this message translates to:
+  /// **'Cinsel Sağlık'**
+  String get marketCategorySexualHealth;
+
+  /// No description provided for @marketCategoryBaby.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bebek'**
+  String get marketCategoryBaby;
+
+  /// No description provided for @marketCategoryClothing.
+  ///
+  /// In tr, this message translates to:
+  /// **'Giyim'**
+  String get marketCategoryClothing;
+
+  /// No description provided for @marketCategoryStationery.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kırtasiye'**
+  String get marketCategoryStationery;
+
+  /// No description provided for @marketCategoryPet.
+  ///
+  /// In tr, this message translates to:
+  /// **'Evcil Hayvan'**
+  String get marketCategoryPet;
+
+  /// No description provided for @marketCategoryTools.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hırdavat & Alet'**
+  String get marketCategoryTools;
 }
 
 class _AppLocalizationsDelegate

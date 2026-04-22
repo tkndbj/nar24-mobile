@@ -970,6 +970,11 @@ class _SellerPanelUserPermissionState
                 .where('status', isEqualTo: 'pending')
                 .snapshots(),
             builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return _buildEmptyState(
+                    Icons.error_outline, l10n.somethingWentWrong);
+              }
+
               if (!snapshot.hasData) {
                 return _buildPendingShimmer(isDarkMode);
               }

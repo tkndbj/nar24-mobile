@@ -141,6 +141,29 @@ class _SellerInfoScreenState extends State<SellerInfoScreen> {
       body: StreamBuilder<DocumentSnapshot>(
         stream: docRef.snapshots(),
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 48,
+                    color: isDarkMode ? Colors.white54 : Colors.black45,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    localization.somethingWentWrong,
+                    style: TextStyle(
+                      color: isDarkMode ? Colors.white70 : Colors.black54,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
           if (!snapshot.hasData) {
             return Center(
               child: Column(

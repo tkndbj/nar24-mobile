@@ -16254,4 +16254,106 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get marketOrders => 'Market Siparişleri';
+
+  @override
+  String get marketNutritionFacts => 'Besin Değerleri';
+
+  @override
+  String marketNutritionPerServing(String servingSize) {
+    return '${servingSize}g başına';
+  }
+
+  @override
+  String get marketNutritionCalories => 'Kalori';
+
+  @override
+  String get marketNutritionProtein => 'Protein';
+
+  @override
+  String get marketNutritionCarbs => 'Karbonhidrat';
+
+  @override
+  String get marketNutritionSugar => 'Şeker';
+
+  @override
+  String get marketNutritionFat => 'Yağ';
+
+  @override
+  String get marketNutritionFiber => 'Lif';
+
+  @override
+  String get marketNutritionSalt => 'Tuz';
+
+  @override
+  String get marketOrderNotFound => 'Sipariş bulunamadı.';
+
+  @override
+  String get marketOrderLoadFailedDescription =>
+      'Lütfen bağlantınızı kontrol edip tekrar deneyin.';
+
+  @override
+  String get marketCategoryAlcoholCigarette => 'Alkol & Sigara';
+
+  @override
+  String get marketCategorySnack => 'Atıştırmalık';
+
+  @override
+  String get marketCategoryDrinks => 'İçecekler';
+
+  @override
+  String get marketCategoryWater => 'Su';
+
+  @override
+  String get marketCategoryFruitVegetables => 'Meyve & Sebze';
+
+  @override
+  String get marketCategoryFood => 'Gıda';
+
+  @override
+  String get marketCategoryMeatChickenFish => 'Et, Tavuk & Balık';
+
+  @override
+  String get marketCategoryBasicFood => 'Temel Gıda';
+
+  @override
+  String get marketCategoryDairyBreakfast => 'Süt Ürünleri & Kahvaltılık';
+
+  @override
+  String get marketCategoryBakery => 'Fırın & Unlu Mamüller';
+
+  @override
+  String get marketCategoryIceCream => 'Dondurma';
+
+  @override
+  String get marketCategoryFitForm => 'Fit & Form';
+
+  @override
+  String get marketCategoryHomeCare => 'Ev Bakım';
+
+  @override
+  String get marketCategoryHomeLite => 'Ev Gereçleri';
+
+  @override
+  String get marketCategoryPersonalCare => 'Kişisel Bakım';
+
+  @override
+  String get marketCategoryTechnology => 'Teknoloji';
+
+  @override
+  String get marketCategorySexualHealth => 'Cinsel Sağlık';
+
+  @override
+  String get marketCategoryBaby => 'Bebek';
+
+  @override
+  String get marketCategoryClothing => 'Giyim';
+
+  @override
+  String get marketCategoryStationery => 'Kırtasiye';
+
+  @override
+  String get marketCategoryPet => 'Evcil Hayvan';
+
+  @override
+  String get marketCategoryTools => 'Hırdavat & Alet';
 }

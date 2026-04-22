@@ -254,6 +254,13 @@ Future<void> main() async {
     await FirestoreReadTracker.instance.initialize();
   }
 
+  // CourierLocationService is intentionally NOT initialised here — it
+  // lazy-inits the first time a courier reaches FoodCargoScreen (via
+  // bootOnShift) or explicitly toggles shift. Buyers, restaurant owners
+  // and admins never pay the cost — no notification channel registered,
+  // no port opened, no foreground-service plugin state visible in their
+  // system settings.
+
   // ── Cloudinary init — must run regardless of Firebase init path ──
   //
   // Reliability contract:

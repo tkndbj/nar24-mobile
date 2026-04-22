@@ -365,7 +365,7 @@ class _FacetChipsBar extends StatelessWidget {
         selected: selectedCategories,
         onToggle: onToggleCategory,
         labelFormatter: (slug) =>
-            kMarketCategoryMap[slug]?.labelTr ?? slug,
+            kMarketCategoryMap[slug]?.localizedLabel(l10n) ?? slug,
       ));
     }
     if (facets.brands.isNotEmpty) {

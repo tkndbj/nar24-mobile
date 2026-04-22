@@ -931,7 +931,10 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
                 fontWeight: FontWeight.w600,
                 color: isDark ? Colors.white : const Color(0xFF1A1A1A))),
         const SizedBox(height: 6),
-        Text(_error!,
+        Text(
+            (_error?.contains('Order not found') ?? false)
+                ? l10n.marketOrderNotFound
+                : l10n.marketOrderLoadFailedDescription,
             style: TextStyle(
                 fontSize: 13,
                 color: isDark ? Colors.grey[400] : Colors.grey[600]),

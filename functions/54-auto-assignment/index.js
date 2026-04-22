@@ -75,6 +75,25 @@ const W_DISTANCE         = 1.0;           // km → score
 const W_LOAD             = 1.5;           // each active order
 const W_ROTATION         = 0.8;           // each recent assign in last 30m
 const ROTATION_WINDOW_MS = 30 * 60 * 1000;
+// Heading-awareness (Level 1 on-path bonus).
+//
+// For couriers already carrying at least one order, we have an idea of where
+// they're heading (their immediate next stop — pickup if not-yet-picked-up,
+// else delivery address). If the *new* pickup bearing from the courier's
+// current position aligns with that existing heading, inserting this order
+// into their route is cheap. If it's opposite, it's a backtrack.
+//
+// Bonuses/penalties are absolute score deltas, sized to be meaningful without
+// overwhelming raw distance (a <30° on-path match is worth ~3 km of proximity).
+const W_HEADING_ONPATH   = -3.0;          // <30°  from heading (big bonus)
+const W_HEADING_MOSTLY   = -1.5;          // <60°  from heading (partial)
+const W_HEADING_AGAINST  = +2.0;          // >120° from heading (backtrack)
+const HEADING_ONPATH_DEG  = 30;
+const HEADING_MOSTLY_DEG  = 60;
+const HEADING_AGAINST_DEG = 120;
+// Courier must be ≥100 m from their next stop for the bearing to be
+// informative. Sub-100 m bearings are GPS noise.
+const HEADING_MIN_LEG_KM = 0.1;
 const REBALANCE_MIN_DELTA        = 1.5;   // absolute score improvement required
 const REBALANCE_MIN_RATIO        = 0.75;  // new must also be ≤ old × 0.75
 const REBALANCE_COMMIT_RADIUS_KM = 0.5;   // courier already near pickup → lock
@@ -107,6 +126,133 @@ function haversineKm(lat1, lng1, lat2, lng2) {
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// Initial bearing from point 1 to point 2, in degrees [0, 360).
+// Standard great-circle formula. Accurate enough for <300 km hops; we only
+// use this to compare directions, never to navigate.
+function bearingDeg(lat1, lng1, lat2, lng2) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const toDeg = (r) => (r * 180) / Math.PI;
+  const φ1 = toRad(lat1);
+  const φ2 = toRad(lat2);
+  const Δλ = toRad(lng2 - lng1);
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x =
+    Math.cos(φ1) * Math.sin(φ2) -
+    Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+
+// Absolute angular difference in [0, 180] — handles the 359° ↔ 1° wrap.
+function angularDiff(a, b) {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+}
+
+// Returns the scoring delta for how aligned `newPickup` is with the
+// courier's existing heading (courier → nextStop). Returns 0 when the
+// heuristic can't be applied (no stop, too close to stop, bad input).
+function headingDelta({ courierLat, courierLng, nextStop, newPickupLat, newPickupLng }) {
+  if (!nextStop) return 0;
+  const legKm = haversineKm(courierLat, courierLng, nextStop.lat, nextStop.lng);
+  if (legKm < HEADING_MIN_LEG_KM) return 0; // sub-100m = GPS noise
+
+  const existingBearing = bearingDeg(
+    courierLat, courierLng,
+    nextStop.lat, nextStop.lng,
+  );
+  const newBearing = bearingDeg(
+    courierLat, courierLng,
+    newPickupLat, newPickupLng,
+  );
+  const diff = angularDiff(existingBearing, newBearing);
+
+  if (diff <= HEADING_ONPATH_DEG) return W_HEADING_ONPATH;
+  if (diff <= HEADING_MOSTLY_DEG) return W_HEADING_MOSTLY;
+  if (diff >= HEADING_AGAINST_DEG) return W_HEADING_AGAINST;
+  return 0;
+}
+
+// Batch-fetches the "next immediate stop" for each loaded candidate courier.
+// For an order in status:
+//   'assigned'          → the courier hasn't picked up yet; next stop = pickup
+//                         (restaurant for food, warehouse for market)
+//   'out_for_delivery'  → picked up; next stop = delivery address
+//
+// If a courier has multiple active orders, we pick the NEAREST stop as the
+// proxy for their immediate direction of travel. That's the stop they're
+// most plausibly heading to next.
+//
+// Issues one pair of Firestore queries per candidate in parallel. Bounded by
+// CANDIDATE_LIMIT (20), so worst case ~40 reads per dispatch. Runs only for
+// candidates with load>0, typically 3-8 of them.
+async function fetchNextStops(db, courierIds, courierPositions) {
+  if (!courierIds.length) return new Map();
+  const statuses = ['assigned', 'out_for_delivery'];
+  const perCourier = await Promise.all(
+    courierIds.map(async (uid) => {
+      try {
+        const [foodSnap, marketSnap] = await Promise.all([
+          db.collection('orders-food')
+            .where('cargoUserId', '==', uid)
+            .where('status', 'in', statuses)
+            .get(),
+          db.collection('orders-market')
+            .where('cargoUserId', '==', uid)
+            .where('status', 'in', statuses)
+            .get(),
+        ]);
+        const stops = [];
+        const ingest = (doc, isMarket) => {
+          const o = doc.data();
+          if (o.status === 'assigned') {
+            // Next stop is the pickup location.
+            const lat = isMarket ? o.marketLat : o.restaurantLat;
+            const lng = isMarket ? o.marketLng : o.restaurantLng;
+            if (typeof lat === 'number' && typeof lng === 'number') {
+              stops.push({ lat, lng });
+            }
+          } else if (o.status === 'out_for_delivery') {
+            const loc = o.deliveryAddress && o.deliveryAddress.location;
+            if (loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
+              stops.push({ lat: loc.latitude, lng: loc.longitude });
+            }
+          }
+        };
+        foodSnap.docs.forEach((d) => ingest(d, false));
+        marketSnap.docs.forEach((d) => ingest(d, true));
+        if (!stops.length) return [uid, null];
+
+        // Pick the stop nearest to the courier's current position — that's
+        // their imminent destination.
+        const pos = courierPositions.get(uid);
+        if (!pos) return [uid, stops[0]]; // fall back to first stop
+        let best = stops[0];
+        let bestKm = haversineKm(pos.lat, pos.lng, best.lat, best.lng);
+        for (let i = 1; i < stops.length; i++) {
+          const km = haversineKm(pos.lat, pos.lng, stops[i].lat, stops[i].lng);
+          if (km < bestKm) {
+            bestKm = km;
+            best = stops[i];
+          }
+        }
+        return [uid, best];
+      } catch (err) {
+        // Per-courier failure is isolated — we just treat that courier as
+        // "no heading info" and fall back to raw-distance scoring for them.
+        logWarn({
+          component: COMPONENT,
+          event: 'heading.fetch_failed',
+          courierId: uid,
+          reason: 'firestore_error',
+          message: err.message,
+        });
+        return [uid, null];
+      }
+    }),
+  );
+  return new Map(perCourier);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -170,7 +316,7 @@ async function releaseReservation(courierId, dispatchId) {
 // CORE: pick best candidate from Redis
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function selectCandidate({ pickupLat, pickupLng, collection, excludeUid = null, dispatchId }) {
+async function selectCandidate({ db, pickupLat, pickupLng, collection, excludeUid = null, dispatchId }) {
   const redis = getRedisClient();
   const tiers = RADIUS_TIERS_BY_COLLECTION[collection] || RADIUS_TIERS_KM_FOOD;
 
@@ -269,8 +415,15 @@ async function selectCandidate({ pickupLat, pickupLng, collection, excludeUid = 
       return null;
     }
 
-    let best = null;
+    // ── Two-pass scoring ─────────────────────────────────────────────
+    // Pass 1: filter to candidates that are on-shift + fresh heartbeat,
+    //          resolve their base state (load, recentAssigns).
+    // Between passes: for loaded candidates, batch-fetch "next stop" from
+    //          Firestore to enable the heading-aware bonus.
+    // Pass 2: compute final score (base + heading delta) and pick best.
     const rejects = [];
+    const active = [];                       // candidates that passed filters
+    const courierPositions = new Map();      // uid → {lat, lng}
     for (let i = 0; i < ordered.length; i++) {
       const state = results[i * 2][1] || {};
       const recentAssigns = parseInt(results[i * 2 + 1][1] || '0', 10);
@@ -292,22 +445,64 @@ async function selectCandidate({ pickupLat, pickupLng, collection, excludeUid = 
       }
 
       const load = Math.max(0, parseInt(state.load || '0', 10));
+      active.push({ ...ordered[i], load, recentAssigns });
+      courierPositions.set(ordered[i].uid, { lat: ordered[i].lat, lng: ordered[i].lng });
+    }
 
+    if (active.length === 0) {
+      if (rejects.length) {
+        logInfo({
+          component: COMPONENT,
+          event: 'select.rejected_candidates',
+          dispatchId,
+          collection,
+          radius,
+          rejectCount: rejects.length,
+          rejects,
+        });
+      }
+      continue;
+    }
+
+    // Fetch next-stop destinations for loaded candidates so scoring can
+    // apply the on-path bonus. Idle couriers (load == 0) skip this lookup
+    // entirely — they have no existing heading to align against.
+    //
+    // Firestore failure is isolated per-courier inside fetchNextStops, so
+    // a partial outage only degrades heading-awareness for affected
+    // couriers; base scoring still runs.
+    const loadedUids = active.filter((c) => c.load > 0).map((c) => c.uid);
+    let nextStopByUid = new Map();
+    if (db && loadedUids.length > 0) {
+      nextStopByUid = await fetchNextStops(db, loadedUids, courierPositions);
+    }
+
+    let best = null;
+    for (const c of active) {
       // Soft cap: beyond SOFT_LOAD_REF, each extra order costs more (not
       // forbidden — someone still has to take the order).
       const loadPenalty =
-        load <= SOFT_LOAD_REF ?
-          load * W_LOAD :
-          SOFT_LOAD_REF * W_LOAD + (load - SOFT_LOAD_REF) * W_LOAD * 2;
+        c.load <= SOFT_LOAD_REF ?
+          c.load * W_LOAD :
+          SOFT_LOAD_REF * W_LOAD + (c.load - SOFT_LOAD_REF) * W_LOAD * 2;
 
-      const c = ordered[i];
+      const nextStop = nextStopByUid.get(c.uid) || null;
+      const hDelta = headingDelta({
+        courierLat: c.lat,
+        courierLng: c.lng,
+        nextStop,
+        newPickupLat: pickupLat,
+        newPickupLng: pickupLng,
+      });
+
       const score =
         c.distKm * W_DISTANCE +
         loadPenalty +
-        recentAssigns * W_ROTATION;
+        c.recentAssigns * W_ROTATION +
+        hDelta;
 
       if (!best || score < best.score) {
-        best = { ...c, load, recentAssigns, score };
+        best = { ...c, score, headingDelta: hDelta, hasHeading: !!nextStop };
       }
     }
 
@@ -399,6 +594,7 @@ async function autoAssignOrder(db, orderId, collection, { source = 'trigger' } =
   }
 
   const best = await selectCandidate({
+    db,
     pickupLat: pickup.lat,
     pickupLng: pickup.lng,
     collection,
@@ -456,6 +652,8 @@ async function autoAssignOrder(db, orderId, collection, { source = 'trigger' } =
       load: best.load,
       recentAssigns: best.recentAssigns,
       score: Number(best.score.toFixed(2)),
+      headingDelta: Number((best.headingDelta || 0).toFixed(2)),
+      hasHeading: !!best.hasHeading,
       latencyMs: stop(),
     });
 
@@ -780,12 +978,36 @@ export const autoAssignRebalance = onSchedule(
           currentLoad <= SOFT_LOAD_REF ?
             currentLoad * W_LOAD :
             SOFT_LOAD_REF * W_LOAD + (currentLoad - SOFT_LOAD_REF) * W_LOAD * 2;
+
+        // Apply the same heading-delta the candidate will receive so the
+        // two scores are directly comparable. Without this, candidates get
+        // an implicit free bonus and the rebalancer fires spuriously. Only
+        // possible when we know the current courier's position.
+        let currentHeadingDelta = 0;
+        if (currentPos) {
+          const currentStops = await fetchNextStops(
+            db,
+            [currentCourierId],
+            new Map([[currentCourierId, currentPos]]),
+          );
+          const currentStop = currentStops.get(currentCourierId);
+          currentHeadingDelta = headingDelta({
+            courierLat: currentPos.lat,
+            courierLng: currentPos.lng,
+            nextStop: currentStop,
+            newPickupLat: pickup.lat,
+            newPickupLng: pickup.lng,
+          });
+        }
+
         const currentScore =
           (currentDist ?? Infinity) * W_DISTANCE +
           currentLoadPenalty +
-          currentRecent * W_ROTATION;
+          currentRecent * W_ROTATION +
+          currentHeadingDelta;
 
         const best = await selectCandidate({
+          db,
           pickupLat: pickup.lat,
           pickupLng: pickup.lng,
           collection: coll,
