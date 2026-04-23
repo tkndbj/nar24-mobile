@@ -41,10 +41,10 @@ class _SwitchCourierButtonState extends State<SwitchCourierButton> {
             ? 'Передать курьеру Nar24'
             : 'Switch to Nar24 Courier');
     final body = locale == 'tr'
-        ? 'Bu siparişi Nar24 kuryesine aktarmak istediğinize emin misiniz? Kargo ücreti hesabınızdan kesilecektir.'
+        ? 'Bu siparişi Nar24 kuryesine aktarmak istediğinize emin misiniz?'
         : (locale == 'ru'
-            ? 'Передать этот заказ курьеру Nar24? Стоимость доставки будет удержана с вашего счёта.'
-            : 'Switch this order to a Nar24 courier? The shipment fee will be deducted from your payout.');
+            ? 'Передать этот заказ курьеру Nar24?'
+            : 'Switch this order to a Nar24 courier?');
     final confirmText = locale == 'tr'
         ? 'Onayla'
         : (locale == 'ru' ? 'Подтвердить' : 'Confirm');
