@@ -25188,6 +25188,54 @@ abstract class AppLocalizations {
   /// **'Kategoriler'**
   String get categoryBreakdown;
 
+  /// No description provided for @restaurantPayout.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sizin Kazancınız'**
+  String get restaurantPayout;
+
+  /// No description provided for @commissionPaid.
+  ///
+  /// In tr, this message translates to:
+  /// **'Nar24 Komisyonu'**
+  String get commissionPaid;
+
+  /// No description provided for @shipmentFeePaid.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kargo Ücreti'**
+  String get shipmentFeePaid;
+
+  /// No description provided for @platformFeesTotal.
+  ///
+  /// In tr, this message translates to:
+  /// **'Toplam Platform Ücretleri'**
+  String get platformFeesTotal;
+
+  /// No description provided for @courierUsage.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kurye Kullanımı'**
+  String get courierUsage;
+
+  /// No description provided for @courierOurs.
+  ///
+  /// In tr, this message translates to:
+  /// **'Nar24 Kuryesi ile'**
+  String get courierOurs;
+
+  /// No description provided for @courierTheirs.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kendi Kuryenizle'**
+  String get courierTheirs;
+
+  /// No description provided for @legacyOrdersNotice.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bu dönemde {count} eski sipariş komisyon detayı içermiyor.'**
+  String legacyOrdersNotice(String count);
+
   /// No description provided for @noDeliveryLabel.
   ///
   /// In tr, this message translates to:

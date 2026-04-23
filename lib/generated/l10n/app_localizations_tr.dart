@@ -13231,6 +13231,32 @@ class AppLocalizationsTr extends AppLocalizations {
   String get categoryBreakdown => 'Kategoriler';
 
   @override
+  String get restaurantPayout => 'Sizin Kazancınız';
+
+  @override
+  String get commissionPaid => 'Nar24 Komisyonu';
+
+  @override
+  String get shipmentFeePaid => 'Kargo Ücreti';
+
+  @override
+  String get platformFeesTotal => 'Toplam Platform Ücretleri';
+
+  @override
+  String get courierUsage => 'Kurye Kullanımı';
+
+  @override
+  String get courierOurs => 'Nar24 Kuryesi ile';
+
+  @override
+  String get courierTheirs => 'Kendi Kuryenizle';
+
+  @override
+  String legacyOrdersNotice(String count) {
+    return 'Bu dönemde $count eski sipariş komisyon detayı içermiyor.';
+  }
+
+  @override
   String get noDeliveryLabel => 'Bölgenize teslimat yapılmıyor';
 
   @override

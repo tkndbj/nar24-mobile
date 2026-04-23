@@ -887,7 +887,7 @@ export {
 export { computeRankingScores } from './24-promotion-score/index.js';
 export { addProductsToCampaign, removeProductFromCampaign, updateCampaignProductDiscount } from './25-shop-campaign/index.js';
 export { submitProduct, submitProductEdit } from './26-list-product/index.js';
-export { processFoodOrder, initializeFoodPayment, foodPaymentCallback, checkFoodPaymentStatus, generateFoodReceiptBackground, updateFoodOrderStatus, submitRestaurantReview } from './27-food-payment/index.js';
+export { processFoodOrder, initializeFoodPayment, foodPaymentCallback, checkFoodPaymentStatus, generateFoodReceiptBackground, updateFoodOrderStatus, submitRestaurantReview, switchFoodOrderCourier } from './27-food-payment/index.js';
 export { sendShopInvitation, handleShopInvitation, revokeShopAccess, leaveShop, cancelShopInvitation, backfillShopClaims, setAdminClaim } from './28-shop-invitation/index.js';
 export { initializeIsbankPayment, isbankPaymentCallback, checkIsbankPaymentStatus, clearPurchasedCartItems, processOrderNotification, recoverStuckPayments, processPostOrderWork } from './29-product-payment/index.js';
 export { onFoodOrderStatusChange, informFoodCourier, cleanupExpiredCourierNotifications, callFoodCourier, createScannedRestaurantOrder, cleanupExpiredCourierCalls } from './30-food-courier-notifications/index.js';
@@ -919,7 +919,7 @@ export {
   autoAssignOnMarketCreated,
   autoAssignRetryUnassigned,
   autoAssignRebalance,
-  mirrorCourierLocation,
+  mirrorCourierLocations,
   logFleetMetrics,
 } from './54-auto-assignment/index.js';
 export { getAreaAnalytics } from './55-area-analytics/index.js';

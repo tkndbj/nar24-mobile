@@ -94,12 +94,12 @@ function initAggregate(restaurantId, restaurantName) {
     restaurantName: restaurantName || '',
     // Order counts
     totalOrders: 0,
-    completedOrders: 0, // status === 'delivered'
-    activeOrders: 0, // all non-rejected, non-delivered (in-flight)
-    cancelledOrders: 0, // status === 'rejected'
-    // Revenue — rejected orders are excluded from all revenue fields
-    grossRevenue: 0, // active + completed
-    deliveredRevenue: 0, // completed only (fully settled)
+    completedOrders: 0,
+    activeOrders: 0,
+    cancelledOrders: 0,
+    // Revenue
+    grossRevenue: 0,
+    deliveredRevenue: 0,
     subtotalRevenue: 0,
     deliveryFeeRevenue: 0,
     totalItemsSold: 0,
@@ -111,17 +111,43 @@ function initAggregate(restaurantId, restaurantName) {
       card: { count: 0, amount: 0 },
       cash: { count: 0, amount: 0 },
       iban: { count: 0, amount: 0 },
-      unknown: { count: 0, amount: 0 }, // delivered orders where courier didn't record it
+      unknown: { count: 0, amount: 0 },
     },
     deliveryTypeBreakdown: {
       delivery: { count: 0, amount: 0 },
       pickup: { count: 0, amount: 0 },
     },
-    statusBreakdown: {}, // dynamic — { [status]: { count, amount } }
-    // ── Transient ──────────────────────────────────────────────────────────
-    _itemMap: new Map(), // name → { quantity, revenue }  (stripped on finalise)
+    statusBreakdown: {},
+ 
+    // ── NEW: Platform economics (from immutable fees snapshot) ───────
+    // All figures are derived from order.fees, which is frozen at accept
+    // time by updateFoodOrderStatus. Rate changes never affect these.
+    //
+    // platformRevenue  = commission + shipment fee collected by Nar24
+    // restaurantPayout = subtotal − commission − shipment fee
+    platformRevenue: 0,
+    commissionRevenue: 0,
+    shipmentFeeRevenue: 0,
+    restaurantPayout: 0,
+    // Orders created before Step 3 have no fees snapshot — tracked
+    // separately so the admin can see the blast radius.
+    ordersWithoutFeesSnapshot: 0,
+ 
+    // ── NEW: Courier-type breakdown ──────────────────────────────────
+    // 'ours'   → Nar24 courier, shipment fee applied, auto-dispatched
+    // 'theirs' → restaurant's own courier, no shipment fee
+    // 'legacy' → pre-Step-3 orders with no courierType field
+    courierTypeBreakdown: {
+      ours: { count: 0, amount: 0, platformRevenue: 0 },
+      theirs: { count: 0, amount: 0, platformRevenue: 0 },
+      legacy: { count: 0, amount: 0, platformRevenue: 0 },
+    },
+ 
+    // ── Transient ────────────────────────────────────────────────────
+    _itemMap: new Map(),
   };
 }
+
 
 function accumulateOrder(agg, order) {
   const status  = order.status        || 'unknown';
@@ -179,6 +205,37 @@ if (status === COMPLETED_STATUS) {
   const dKey = delType === 'pickup' ? 'pickup' : 'delivery';
   agg.deliveryTypeBreakdown[dKey].count++;
   agg.deliveryTypeBreakdown[dKey].amount = round2(agg.deliveryTypeBreakdown[dKey].amount + total);
+
+    // ── Platform economics (from frozen fees snapshot) ─────────────────
+  // Reads the fees snapshot written by updateFoodOrderStatus. Orders
+  // created before Step 3 won't have it — counted separately.
+  const fees = order.fees;
+  if (fees && typeof fees === 'object') {
+    const commAmt = Number(fees.commissionAmount)   || 0;
+    const shipAmt = Number(fees.shipmentFeeApplied) || 0;
+    const platRev = Number(fees.platformRevenue)    || 0;
+    const restPay = Number(fees.restaurantPayout)   || 0;
+ 
+    agg.commissionRevenue  = round2(agg.commissionRevenue  + commAmt);
+    agg.shipmentFeeRevenue = round2(agg.shipmentFeeRevenue + shipAmt);
+    agg.platformRevenue    = round2(agg.platformRevenue    + platRev);
+    agg.restaurantPayout   = round2(agg.restaurantPayout   + restPay);
+  } else {
+    agg.ordersWithoutFeesSnapshot++;
+  }
+ 
+  // Courier-type breakdown. 'legacy' catches pre-Step-3 orders where
+  // courierType was never set — useful for spotting tail orders after
+  // the migration.
+  const ctKey = order.courierType === 'ours'   ? 'ours' : order.courierType === 'theirs' ? 'theirs' : 'legacy';
+  agg.courierTypeBreakdown[ctKey].count++;
+  agg.courierTypeBreakdown[ctKey].amount = round2(
+    agg.courierTypeBreakdown[ctKey].amount + total,
+  );
+  agg.courierTypeBreakdown[ctKey].platformRevenue = round2(
+    agg.courierTypeBreakdown[ctKey].platformRevenue +
+      (fees?.platformRevenue || 0),
+  );
 
   // ── Item-level aggregation ────────────────────────────────────────────────
   agg.totalItemsSold += (order.itemCount || 0);
@@ -254,6 +311,26 @@ function rollupToPlatform(platform, restaurant) {
       revenue: round2(prev.revenue + v.revenue),
     });
   }
+    // ── NEW: Platform economics rollup ─────────────────────────────────
+    platform.platformRevenue    = round2(platform.platformRevenue    + restaurant.platformRevenue);
+    platform.commissionRevenue  = round2(platform.commissionRevenue  + restaurant.commissionRevenue);
+    platform.shipmentFeeRevenue = round2(platform.shipmentFeeRevenue + restaurant.shipmentFeeRevenue);
+    platform.restaurantPayout   = round2(platform.restaurantPayout   + restaurant.restaurantPayout);
+    platform.ordersWithoutFeesSnapshot += restaurant.ordersWithoutFeesSnapshot;
+   
+    // Courier-type breakdown rollup
+    for (const [ctKey, v] of Object.entries(restaurant.courierTypeBreakdown)) {
+      if (!platform.courierTypeBreakdown[ctKey]) {
+        platform.courierTypeBreakdown[ctKey] = { count: 0, amount: 0, platformRevenue: 0 };
+      }
+      platform.courierTypeBreakdown[ctKey].count          += v.count;
+      platform.courierTypeBreakdown[ctKey].amount          = round2(
+        platform.courierTypeBreakdown[ctKey].amount + v.amount,
+      );
+      platform.courierTypeBreakdown[ctKey].platformRevenue = round2(
+        platform.courierTypeBreakdown[ctKey].platformRevenue + v.platformRevenue,
+      );
+    }
 }
 
 function finaliseAggregate(agg, periodKey, periodStart, periodEnd) {

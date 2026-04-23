@@ -98,6 +98,52 @@ function resolveCollection(actionData) {
   return col;
 }
 
+// ── Rate limit ────────────────────────────────────────────────────────────
+// Per-courier sliding window to cap damage from a buggy / hostile client.
+// Only applies to courier-initiated actions; system-generated assigns
+// (auto-dispatcher, master panel, rebalancer) are already bounded by their
+// producer and can legitimately burst (e.g. a shift starting + 3 rapid
+// auto-dispatches to the same courier).
+//
+// Window: 60 s. Limit: 30 actions. A legitimate courier doing 3 orders in
+// rapid succession uses ~6 actions (assign ack + pickup + deliver × 3) — far
+// below the ceiling. A retry-storm client trips at 30 and all further
+// writes fast-fail in ~5 ms with no transaction / notification cost.
+
+const RATE_LIMIT_WINDOW_SEC = 60;
+const RATE_LIMIT_MAX_ACTIONS = 30;
+
+function shouldRateLimit(actionData) {
+  if (actionData.assignedBy === 'auto') return false;
+  if (actionData.assignedBy === 'master') return false;
+  if (actionData.unassignedBy === 'master') return false;
+  return true;
+}
+
+async function checkCourierRateLimit(courierId) {
+  try {
+    const redis = getRedisClient();
+    const key = `rate:courier:${courierId}`;
+    const count = await redis.incr(key);
+    if (count === 1) {
+      // First action in window — stamp TTL so the counter self-expires.
+      await redis.expire(key, RATE_LIMIT_WINDOW_SEC);
+    }
+    return { ok: count <= RATE_LIMIT_MAX_ACTIONS, count };
+  } catch (err) {
+    // Redis outage: fail open. A short blip allowing through real traffic
+    // is strictly safer than blocking every courier action.
+    logWarn({
+      component: COMPONENT,
+      event: 'rate_limit.check_failed',
+      courierId,
+      reason: 'redis_error',
+      message: err.message,
+    });
+    return { ok: true, count: 0 };
+  }
+}
+
 export const processCourierAction = onDocumentCreated(
   {
     document: 'courier_actions/{actionId}',
@@ -150,6 +196,31 @@ export const processCourierAction = onDocumentCreated(
           collectionInput: actionData.collection,
         });
         return;
+      }
+
+      if (shouldRateLimit(actionData)) {
+        const rate = await checkCourierRateLimit(courierId);
+        if (!rate.ok) {
+          await actionRef.update({
+            status: 'failed',
+            error: 'rate_limited',
+            processedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          logWarn({
+            component: COMPONENT,
+            event: 'action.rate_limited',
+            actionId,
+            dispatchId,
+            type,
+            orderId,
+            collection,
+            courierId,
+            count: rate.count,
+            limit: RATE_LIMIT_MAX_ACTIONS,
+            windowSec: RATE_LIMIT_WINDOW_SEC,
+          });
+          return;
+        }
       }
 
       logInfo({
@@ -287,17 +358,28 @@ async function processAssign(db, actionRef, actionData, collection, actionId) {
       return;
     }
 
-    // Auto-assigner must never override a master-assigned order.
-    if (assignedBy === 'auto' && order.assignedBy === 'master') {
-      tx.update(actionRef, {
-        status: 'failed',
-        error: 'master_locked',
-        processedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      reservationOutcome = 'release';
-      terminalEvent = { event: 'action.failed', severity: 'warn', reason: 'master_locked' };
-      return;
-    }
+   // Master cannot assign a courier to an order where the restaurant chose
+// their own courier. Defense-in-depth: the admin UI blocks this before
+// writing the action doc, but we refuse at the CF layer too.
+if (
+  assignedBy === 'master' &&
+  collection === 'orders-food' &&
+  order.courierType === 'theirs'
+) {
+  tx.update(actionRef, {
+    status: 'failed',
+    error: 'restaurant_uses_own_courier',
+    processedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  // Master path doesn't pre-reserve, so nothing to release.
+  reservationOutcome = null;
+  terminalEvent = {
+    event: 'action.failed',
+    severity: 'warn',
+    reason: 'restaurant_uses_own_courier',
+  };
+  return;
+}
 
     if (!allowed.includes(order.status)) {
       tx.update(actionRef, {

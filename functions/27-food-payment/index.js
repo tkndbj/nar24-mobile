@@ -1834,72 +1834,166 @@ async function generateFoodReceipt(data) {
   });
 }
 
+// ─── Constants ─────────────────────────────────────────────────────
+const RATES_VERSION = 1;
+const VALID_COURIER_TYPES = new Set(['ours', 'theirs']);
+ 
+// Restaurant-settable statuses only. Courier-owned states
+// ('assigned', 'out_for_delivery', 'delivered') are driven exclusively by
+// the courier_actions trigger and are intentionally excluded here.
+const ALLOWED_STATUSES = ['accepted', 'rejected', 'ready', 'pending'];
+ 
+// Admin/restaurant transitions only. Any attempt to transition out of a
+// courier-owned state falls through the `|| []` fallback and returns a
+// clean failed-precondition error.
+const VALID_TRANSITIONS = {
+  pending: ['accepted', 'rejected'],
+  accepted: ['ready', 'pending'],
+};
+ 
+// ─── Helpers ───────────────────────────────────────────────────────
+
+function money(n) {
+  return Math.round(n * 100) / 100;
+}
+
+function buildFeesSnapshot({ subtotal, commissionRate, shipmentFeeRate, courierType }) {
+  const safeSubtotal = Math.max(0, Number(subtotal) || 0);
+  const safeCommissionRate = Math.max(0, Number(commissionRate) || 0);
+  const safeShipmentFeeRate = Math.max(0, Number(shipmentFeeRate) || 0);
+ 
+  const commissionAmount = money((safeSubtotal * safeCommissionRate) / 100);
+  const shipmentFeeApplied = courierType === 'ours' ? money(safeShipmentFeeRate) : 0;
+ 
+  const platformRevenue = money(commissionAmount + shipmentFeeApplied);
+  const restaurantPayout = money(
+    safeSubtotal - commissionAmount - shipmentFeeApplied,
+  );
+ 
+  return {
+    // Snapshots (frozen)
+    subtotal: money(safeSubtotal),
+    commissionRate: safeCommissionRate,
+    shipmentFeeRate: money(safeShipmentFeeRate),
+    courierType,
+ 
+    // Computed
+    commissionAmount,
+    shipmentFeeApplied,
+    platformRevenue,
+    restaurantPayout,
+ 
+    // Metadata
+    status: 'finalized',
+    calculatedAt: admin.firestore.Timestamp.now(),
+    ratesVersion: RATES_VERSION,
+  };
+}
+
 export const updateFoodOrderStatus = onCall(
   { region: REGION, memory: '512MiB', concurrency: 80, timeoutSeconds: 30 },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be signed in.');
     }
-
-    const { orderId, newStatus } = request.data;
-    // Restaurant-settable statuses only. Courier-owned states
-    // ('assigned', 'out_for_delivery', 'delivered') are driven exclusively by
-    // the courier_actions trigger and are intentionally excluded here.
-    const ALLOWED_STATUSES = ['accepted', 'rejected', 'ready', 'pending'];
-
+ 
+    const { orderId, newStatus, courierType } = request.data || {};
+ 
     if (!orderId || !ALLOWED_STATUSES.includes(newStatus)) {
       throw new HttpsError('invalid-argument', 'Invalid orderId or status.');
     }
-
+ 
+    // ── courierType validation — ONLY when accepting ──────────────
+    // For any other transition, courierType is ignored (liberal-in, strict-out).
+    if (newStatus === 'accepted') {
+      if (!courierType) {
+        throw new HttpsError(
+          'invalid-argument',
+          'courierType is required when accepting an order.',
+        );
+      }
+      if (!VALID_COURIER_TYPES.has(courierType)) {
+        throw new HttpsError(
+          'invalid-argument',
+          `courierType must be "ours" or "theirs", got "${courierType}".`,
+        );
+      }
+    }
+ 
     const userRecord = await admin.auth().getUser(request.auth.uid);
     const restaurantClaims = userRecord.customClaims?.restaurants || {};
-
+ 
     const db = admin.firestore();
-
+ 
     await db.runTransaction(async (tx) => {
       const orderRef = db.collection('orders-food').doc(orderId);
       const orderSnap = await tx.get(orderRef);
-
+ 
       if (!orderSnap.exists) {
         throw new HttpsError('not-found', 'Order not found.');
       }
-
+ 
       const order = orderSnap.data();
-
+ 
       if (!(order.restaurantId in restaurantClaims)) {
-        throw new HttpsError('permission-denied', 'You are not authorized to update this order.');
+        throw new HttpsError(
+          'permission-denied',
+          'You are not authorized to update this order.',
+        );
       }
-
-      // Admin/restaurant transitions only. Any attempt to transition out of a
-      // courier-owned state ('assigned', 'out_for_delivery', 'delivered')
-      // falls through the `|| []` fallback below and returns a clean
-      // failed-precondition error.
-      const VALID_TRANSITIONS = {
-        pending: ['accepted', 'rejected'],
-        accepted: ['ready', 'pending'],
-      };
-
+ 
       const allowed = VALID_TRANSITIONS[order.status] || [];
       if (!allowed.includes(newStatus)) {
         throw new HttpsError(
           'failed-precondition',
-          `Cannot transition from "${order.status}" to "${newStatus}".`
+          `Cannot transition from "${order.status}" to "${newStatus}".`,
         );
       }
-
-      tx.update(orderRef, {
+ 
+      // ── Build the order update ────────────────────────────────
+      const orderUpdate = {
         status: newStatus,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-
-      // Only notify the buyer if one exists (scanned receipt orders have no buyerId)
+      };
+ 
+      // ── Fees snapshot — ONLY on pending → accepted transition ─
+      // This is the single writable window for the `fees` object. Every
+      // subsequent touch of this order (ready, unassign, etc.) leaves
+      // fees alone. Accounting treats it as immutable from here on.
+      if (newStatus === 'accepted' && order.status === 'pending') {
+        // Read restaurant doc inside the same transaction so rates can't
+        // change between our read and the order write.
+        const restaurantRef = db.collection('restaurants').doc(order.restaurantId);
+        const restaurantSnap = await tx.get(restaurantRef);
+ 
+        // Defaults to 0 if restaurant doc missing or fields unset.
+        // Admin is responsible for setting rates via the commissions page;
+        // if they haven't, the order still flows through (silent rate=0).
+        const restaurantData = restaurantSnap.exists ? restaurantSnap.data() : {};
+        const commissionRate = Number(restaurantData.ourComission) || 0;
+        const shipmentFeeRate = Number(restaurantData.ourShipmentFee) || 0;
+ 
+        const fees = buildFeesSnapshot({
+          subtotal: order.subtotal,
+          commissionRate,
+          shipmentFeeRate,
+          courierType,
+        });
+ 
+        orderUpdate.courierType = courierType;
+        orderUpdate.fees = fees;
+      }
+ 
+      tx.update(orderRef, orderUpdate);
+ 
+      // ── Buyer notification (unchanged from before) ─────────────
       if (order.buyerId) {
         const notifRef = db
           .collection('users')
           .doc(order.buyerId)
           .collection('notifications')
           .doc();
-
+ 
         tx.set(notifRef, {
           type: 'food_order_status_update',
           payload: {
@@ -1914,9 +2008,9 @@ export const updateFoodOrderStatus = onCall(
         });
       }
     });
-
+ 
     return { success: true };
-  }
+  },
 );
 
 export const submitRestaurantReview = onCall(
@@ -2023,4 +2117,121 @@ tx.set(notifRef, {
 
     return { success: true };
   }
+);
+
+// Statuses where a flip is still meaningful. After 'assigned', a courier is
+// already on the way (either the restaurant's own or Nar24's — can't flip).
+const FLIPPABLE_STATUSES = new Set(['accepted', 'ready']);
+ 
+export const switchFoodOrderCourier = onCall(
+  { region: REGION, memory: '256MiB', concurrency: 80, timeoutSeconds: 30 },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be signed in.');
+    }
+ 
+    const { orderId } = request.data || {};
+    if (!orderId || typeof orderId !== 'string') {
+      throw new HttpsError('invalid-argument', 'orderId is required.');
+    }
+ 
+    const userRecord = await admin.auth().getUser(request.auth.uid);
+    const restaurantClaims = userRecord.customClaims?.restaurants || {};
+ 
+    const db = admin.firestore();
+    const orderRef = db.collection('orders-food').doc(orderId);
+ 
+    await db.runTransaction(async (tx) => {
+      const orderSnap = await tx.get(orderRef);
+      if (!orderSnap.exists) {
+        throw new HttpsError('not-found', 'Order not found.');
+      }
+ 
+      const order = orderSnap.data();
+ 
+      // ── Authorization ──────────────────────────────────────────
+      if (!(order.restaurantId in restaurantClaims)) {
+        throw new HttpsError(
+          'permission-denied',
+          'You are not authorized to update this order.',
+        );
+      }
+ 
+      // ── Status gate ────────────────────────────────────────────
+      if (!FLIPPABLE_STATUSES.has(order.status)) {
+        throw new HttpsError(
+          'failed-precondition',
+          `Cannot switch courier on an order in status "${order.status}".`,
+        );
+      }
+ 
+      // ── courierType gate ───────────────────────────────────────
+      if (order.courierType === 'ours') {
+        throw new HttpsError(
+          'already-exists',
+          'This order is already set to use Nar24 courier.',
+        );
+      }
+      if (order.courierType !== 'theirs') {
+        // Legacy order from before Step 3, or corrupted state.
+        throw new HttpsError(
+          'failed-precondition',
+          'This order has no courier type set. Please contact support.',
+        );
+      }
+ 
+      // ── Fees snapshot sanity ───────────────────────────────────
+      const fees = order.fees;
+      if (!fees || typeof fees !== 'object') {
+        throw new HttpsError(
+          'failed-precondition',
+          'This order is missing fee information. Please contact support.',
+        );
+      }
+ 
+      // ── Recompute fees using the FROZEN shipmentFeeRate ────────
+      // We do NOT re-read from the restaurant doc. The rate the restaurant
+      // agreed to at accept time is locked in — flipping the courier type
+      // cannot retroactively introduce a different shipment fee.
+      //
+      // The only field that changes is:
+      //   - courierType: 'theirs' → 'ours'
+      //   - shipmentFeeApplied: 0 → money(fees.shipmentFeeRate)
+      //   - platformRevenue + restaurantPayout: recomputed
+      //
+      // Commission is unchanged (commissionRate × subtotal, independent of
+      // courier type).
+      const subtotal = Number(fees.subtotal) || 0;
+      const commissionAmount = Number(fees.commissionAmount) || 0;
+      const shipmentFeeRate = Number(fees.shipmentFeeRate) || 0;
+ 
+      const shipmentFeeApplied = money(shipmentFeeRate);
+      const platformRevenue = money(commissionAmount + shipmentFeeApplied);
+      const restaurantPayout = money(
+        subtotal - commissionAmount - shipmentFeeApplied,
+      );
+ 
+      const updatedFees = {
+        ...fees,
+        courierType: 'ours',
+        shipmentFeeApplied,
+        platformRevenue,
+        restaurantPayout,
+        // Keep status: 'finalized' — this is still a locked snapshot, just
+        // updated for the courier switch. The original calculatedAt stays.
+      };
+ 
+      // ── Write ──────────────────────────────────────────────────
+      tx.update(orderRef, {
+        courierType: 'ours',
+        fees: updatedFees,
+        switchedCourierAt: admin.firestore.FieldValue.serverTimestamp(),
+        // Bump updatedAt so autoAssignRetryUnassigned sees the order as
+        // fresh and picks it up on the next sweep.
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+ 
+    return { success: true };
+  },
 );

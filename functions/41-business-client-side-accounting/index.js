@@ -148,6 +148,15 @@ async function aggregateRestaurantOrders(db, restaurantId, start, end) {
   let grossRevenue = 0; let deliveredRevenue = 0; let subtotalRevenue = 0; let deliveryFeeRevenue = 0;
   let totalItemsSold = 0;
 
+  let commissionPaid = 0;
+  let shipmentFeePaid = 0;
+  let restaurantPayout = 0;
+  let ordersWithoutFeesSnapshot = 0;
+ 
+  // ── NEW: Courier-type counts (order count only, not money) ────────
+  let ordersWithOurCourier = 0;    // courierType === 'ours'
+  let ordersWithTheirCourier = 0;  // courierType === 'theirs'
+
   const paymentBreakdown = {
     card: { count: 0, amount: 0 },
     pay_at_door: { count: 0, amount: 0 },
@@ -230,6 +239,12 @@ async function aggregateRestaurantOrders(db, restaurantId, start, end) {
       deliveryTypeBreakdown[dKey].count++;
       deliveryTypeBreakdown[dKey].amount = round2(deliveryTypeBreakdown[dKey].amount + total);
 
+       // ── Courier-type counts (non-cancelled orders only) ──────────
+      // Cancelled orders never actually used a courier, so they're
+      // excluded from this breakdown. Matches admin food-accounting.
+      if (order.courierType === 'ours')   ordersWithOurCourier++;
+      if (order.courierType === 'theirs') ordersWithTheirCourier++;
+
       // Items
       totalItemsSold += (order.itemCount || 0);
       if (Array.isArray(order.items)) {
@@ -241,6 +256,17 @@ async function aggregateRestaurantOrders(db, restaurantId, start, end) {
             revenue: round2(prev.revenue + (item.itemTotal || 0)),
           });
         }
+      }
+       // ── Platform economics (from frozen fees snapshot) ────────────
+      // Only accumulates for non-cancelled orders because cancelled
+      // orders hit `continue` above and never reach this point.
+      const fees = order.fees;
+      if (fees && typeof fees === 'object') {
+        commissionPaid    = round2(commissionPaid    + (Number(fees.commissionAmount)   || 0));
+        shipmentFeePaid   = round2(shipmentFeePaid   + (Number(fees.shipmentFeeApplied) || 0));
+        restaurantPayout  = round2(restaurantPayout  + (Number(fees.restaurantPayout)   || 0));
+      } else {
+        ordersWithoutFeesSnapshot++;
       }
     }
 
@@ -261,7 +287,7 @@ async function aggregateRestaurantOrders(db, restaurantId, start, end) {
     completedOrders,
     activeOrders,
     cancelledOrders,
-    grossRevenue,
+    grossRevenue,            // customer-paid (unchanged)
     deliveredRevenue,
     subtotalRevenue,
     deliveryFeeRevenue,
@@ -272,6 +298,27 @@ async function aggregateRestaurantOrders(db, restaurantId, start, end) {
     deliveryTypeBreakdown,
     statusBreakdown,
     topItems,
+ 
+    // ── NEW: platform economics (restaurant's view) ────────────────
+    // These sum ONLY over non-cancelled orders, matching how
+    // grossRevenue behaves. Cancelled orders produce no commission.
+    commissionPaid,         // total commission taken by Nar24
+    shipmentFeePaid,        // total shipment fees paid for Nar24 couriers
+    platformFeesTotal: round2(commissionPaid + shipmentFeePaid),
+    restaurantPayout,       // ← THIS is what the restaurant actually earns
+ 
+    // Data-quality / migration signal: any pre-Step-3 orders in range?
+    ordersWithoutFeesSnapshot,
+ 
+      // ── NEW: courier-type counts (non-cancelled orders only) ───────
+    // Matches admin food-accounting behavior.
+    courierTypeBreakdown: {
+      ours: ordersWithOurCourier,
+      theirs: ordersWithTheirCourier,
+      // legacy = non-cancelled orders that have no courierType field.
+      // Cancelled orders are excluded from this breakdown entirely.
+      legacy: (totalOrders - cancelledOrders) - ordersWithOurCourier - ordersWithTheirCourier,
+    },
   };
 }
 

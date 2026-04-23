@@ -45,7 +45,6 @@
 //     `courier_locations/{uid}` (RTDB) → Redis GEO + HASH.
 
 import { onDocumentUpdated, onDocumentCreated } from 'firebase-functions/v2/firestore';
-import { onValueWritten } from 'firebase-functions/v2/database';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import admin from 'firebase-admin';
 import { getRedisClient } from '../shared/redis.js';
@@ -54,7 +53,6 @@ import { logInfo, logWarn, logError, newDispatchId, startTimer } from '../shared
 const COMPONENT = 'auto_assign';
 
 const REGION = 'europe-west3';
-const RTDB_REGION = 'europe-west1'; // Firebase RTDB location for this project
 
 // ── Tuning constants ────────────────────────────────────────────────────────
 // Food dispatches go out from many restaurants (spread across the delivery
@@ -99,7 +97,10 @@ const REBALANCE_MIN_RATIO        = 0.75;  // new must also be ≤ old × 0.75
 const REBALANCE_COMMIT_RADIUS_KM = 0.5;   // courier already near pickup → lock
 const REBALANCE_MAX_HOPS         = 2;
 const STALE_UNASSIGNED_MS = 30 * 1000;    // retry threshold
-const COURIER_STALE_MS    = 2 * 60 * 1000; // drop from index if no heartbeat
+// With a 60 s mirror tick, we need a margin >2× the tick to avoid scoring
+// against couriers whose off-shift event hasn't propagated yet. 3 min gives
+// us one full missed tick of headroom before dispatch sees a ghost.
+const COURIER_STALE_MS    = 3 * 60 * 1000;
 
 const VALID_COLLECTIONS = new Set(['orders-food', 'orders-market']);
 
@@ -684,6 +685,7 @@ export const autoAssignOnFoodAccepted = onDocumentUpdated(
     if (after.status !== 'accepted') return;
     if (after.cargoUserId) return; // already taken (e.g. master override)
     if (after.unassignedBy === 'master') return; // master pulled it back
+    if (after.courierType !== 'ours') return; // restaurant using own courier — skip
 
     const orderId = event.params.orderId;
     try {
@@ -765,6 +767,7 @@ export const autoAssignRetryUnassigned = onSchedule(
           .collection('orders-food')
           .where('status', '==', 'accepted')
           .where('cargoUserId', '==', null)
+          .where('courierType', '==', 'ours')
           .where('updatedAt', '<', cutoff)
           .limit(50)
           .get()
@@ -811,6 +814,7 @@ export const autoAssignRetryUnassigned = onSchedule(
         const data = doc.data();
         if (data.assignedBy === 'master') continue;
         if (data.unassignedBy === 'master') continue; // master pulled it back
+        if (coll === 'orders-food' && data.courierType !== 'ours') continue;
         try {
           const result = await autoAssignOrder(db, doc.id, coll, { source: 'retry' });
           if (result.ok) attempted++;
@@ -1145,74 +1149,204 @@ export const autoAssignRebalance = onSchedule(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RTDB → Redis mirror of courier location
+// RTDB → Redis mirror of courier locations (scheduled sweep)
+//
+// Replaces the per-write onValueWritten trigger. A single scheduled invocation
+// reads the /courier_locations tree once per tick and pipelines one Redis
+// batch for the whole fleet, so CF cost scales with fleet size — not with
+// GPS write frequency. At 100 couriers this is ~1,440 invocations/day
+// instead of ~150K.
+//
+// Freshness trade-off: shift-on / shift-off propagates into the dispatch
+// index within 60 s (the tick interval). Well under COURIER_STALE_MS (3 min)
+// so `selectCandidate` never sees a racing mismatch, even if one tick runs
+// late.
+//
+// Deletion behaviour: when a courier account is removed, their
+// `/courier_locations/{uid}` node disappears. The cron skips them; their
+// Redis entries age out naturally — `selectCandidate`'s stale_heartbeat
+// filter (`now - lastSeen > COURIER_STALE_MS`) rejects them at dispatch
+// time. Negligibly larger ZSET, no correctness impact.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const mirrorCourierLocation = onValueWritten(
+export const mirrorCourierLocations = onSchedule(
   {
-    ref: '/courier_locations/{uid}',
-    region: RTDB_REGION,
+    schedule: 'every 1 minutes',
+    region: REGION,
     memory: '256MiB',
+    // Headroom for slow RTDB reads + slow Redis pipelines on the same tick.
+    // Early-return cost is zero; a timeout mid-pipeline leaves Redis partly
+    // updated until the next tick heals it.
+    timeoutSeconds: 180,
     vpcConnector: 'nar24-vpc',
     vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
   },
-  async (event) => {
-    const uid = event.params.uid;
+  async () => {
     const redis = getRedisClient();
-    const after = event.data.after.val();
+    const tickStart = Date.now();
 
-    // Courier gone → remove from indexes so they stop being picked.
-    if (!after) {
+    // Skip records older than this — apps uninstalled, dormant accounts.
+    // Still processed (so we can DEL them from Redis) but never indexed.
+    const DORMANT_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24h
+
+    // ── Step 1: read RTDB ────────────────────────────────────────────
+    let rtdbSnap;
+    const rtdbStart = Date.now();
+    try {
+      rtdbSnap = await admin.database().ref('/courier_locations').get();
+    } catch (err) {
+      logError({
+        component: 'mirror',
+        event: 'mirror.rtdb_read_failed',
+        reason: 'rtdb_error',
+        message: err.message,
+      });
+      return;
+    }
+    const rtdbMs = Date.now() - rtdbStart;
+
+    const couriers = rtdbSnap.exists() ? (rtdbSnap.val() || {}) : {};
+    const rtdbUids = new Set(Object.keys(couriers));
+
+    // ── Step 2: reconcile against previous Redis index ───────────────
+    // Any uid that was in `couriers:geo` last tick but isn't in RTDB now
+    // (courier deleted, record expired) must be purged from Redis —
+    // otherwise the ZSET leaks forever.
+    let priorIndexUids;
+    try {
+      priorIndexUids = await redis.zrange('couriers:geo', 0, -1);
+    } catch (err) {
+      logWarn({
+        component: 'mirror',
+        event: 'mirror.zrange_failed',
+        reason: 'redis_error',
+        message: err.message,
+      });
+      priorIndexUids = [];
+    }
+
+  // Chunk the pipeline so no single exec() issues more than this many
+    // commands. Protects against unbounded pipeline growth on first-run
+    // reconciliation (thousands of accumulated leaked keys) and on fleet
+    // growth. 500 ops = ~4 per courier × 125 couriers per flush; well
+    // within Memorystore / ioredis comfort zones.
+    const PIPELINE_CHUNK_SIZE = 500;
+
+    let indexed = 0;
+    let unindexed = 0;
+    let dormant = 0;
+    let purged = 0;
+    let pipeline = redis.pipeline();
+    let opsInPipeline = 0;
+    let totalRedisMs = 0;
+    let flushCount = 0;
+    let pipelineFailed = false;
+
+    // Flushes the current pipeline and starts a fresh one. Accumulates
+    // timing and failure state across chunks so the final log line reflects
+    // the whole tick, not just the last flush.
+    const flushPipeline = async () => {
+      if (opsInPipeline === 0) return;
+      const flushStart = Date.now();
       try {
-        await redis
-          .multi()
-          .zrem('couriers:geo', uid)
-          .del(`courier:${uid}`)
-          .exec();
+        await pipeline.exec();
       } catch (err) {
-        logWarn({
+        pipelineFailed = true;
+        logError({
           component: 'mirror',
-          event: 'mirror.remove_failed',
-          courierId: uid,
+          event: 'mirror.pipeline_failed',
           reason: 'redis_error',
+          flushIndex: flushCount,
           message: err.message,
         });
       }
-      return;
+      totalRedisMs += Date.now() - flushStart;
+      flushCount++;
+      pipeline = redis.pipeline();
+      opsInPipeline = 0;
+    };
+
+    const maybeFlush = async () => {
+      if (opsInPipeline >= PIPELINE_CHUNK_SIZE) {
+        await flushPipeline();
+      }
+    };
+
+    // Purge couriers that vanished from RTDB entirely.
+    for (const uid of priorIndexUids) {
+      if (!rtdbUids.has(uid)) {
+        pipeline.zrem('couriers:geo', uid);
+        pipeline.del(`courier:${uid}`);
+        // Note: we leave `courier:{uid}:assigns` alone — the rotation
+        // window is 30 min so it ages out naturally and may still be
+        // needed if the courier returns shortly.
+        opsInPipeline += 2;
+        purged++;
+        await maybeFlush();
+      }
     }
 
-    const lat = typeof after.lat === 'number' ? after.lat : null;
-    const lng = typeof after.lng === 'number' ? after.lng : null;
-    const isOnline  = after.isOnline  === true;
-    const isOnShift = after.isOnShift === true;
+    // ── Step 3: process RTDB records ─────────────────────────────────
+    for (const uid of rtdbUids) {
+      const c = couriers[uid] || {};
+      const lat = typeof c.lat === 'number' ? c.lat : null;
+      const lng = typeof c.lng === 'number' ? c.lng : null;
+      const isOnline  = c.isOnline  === true;
+      const isOnShift = c.isOnShift === true;
+      // Use the courier's own write timestamp as `lastSeen` — more accurate
+      // than the CF invocation time. Falls back to now() if RTDB hasn't
+      // stamped it (shouldn't happen, but defensive).
+      const updatedAt = typeof c.updatedAt === 'number' ? c.updatedAt : Date.now();
+      const age = tickStart - updatedAt;
 
-    try {
-      const pipeline = redis.pipeline();
+      // Dormant: hasn't written in >24h. Skip indexing, purge any stale
+      // Redis entries, move on. Keeps the index lean even if RTDB
+      // accumulates orphaned records.
+      if (age > DORMANT_THRESHOLD_MS) {
+        pipeline.zrem('couriers:geo', uid);
+        pipeline.del(`courier:${uid}`);
+        opsInPipeline += 2;
+        dormant++;
+        await maybeFlush();
+        continue;
+      }
 
       if (!isOnline || !isOnShift || lat === null || lng === null) {
         pipeline.zrem('couriers:geo', uid);
+        unindexed++;
       } else {
         pipeline.geoadd('couriers:geo', lng, lat, uid);
+        indexed++;
       }
 
       pipeline.hset(`courier:${uid}`, {
         isOnShift: isOnShift ? '1' : '0',
         isOnline: isOnline  ? '1' : '0',
-        lastSeen: String(Date.now()),
-        ...(typeof after.speed === 'number' ? { speed: String(after.speed) } : {}),
+        lastSeen: String(updatedAt),
+        ...(typeof c.speed === 'number' ? { speed: String(c.speed) } : {}),
       });
-
-      // Ensure a load key exists (does NOT overwrite live counter).
+      // Initialise load only if not already set — we must not stomp the live
+      // counter maintained by CF-40 and selectCandidate reservations.
       pipeline.hsetnx(`courier:${uid}`, 'load', '0');
+      opsInPipeline += 3;
+      await maybeFlush();
+    }
 
-      await pipeline.exec();
-    } catch (err) {
-      logWarn({
+    // ── Step 4: final flush ──────────────────────────────────────────
+    await flushPipeline();
+
+    if (!pipelineFailed) {
+      logInfo({
         component: 'mirror',
-        event: 'mirror.write_failed',
-        courierId: uid,
-        reason: 'redis_error',
-        message: err.message,
+        event: 'mirror.swept',
+        count: rtdbUids.size,
+        indexed,
+        unindexed,
+        dormant,
+        purged,
+        rtdbReadMs: rtdbMs,
+        redisPipelineMs: totalRedisMs,
+        flushCount,
       });
     }
   },

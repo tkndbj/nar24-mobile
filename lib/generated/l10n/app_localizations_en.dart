@@ -13208,6 +13208,32 @@ class AppLocalizationsEn extends AppLocalizations {
   String get categoryBreakdown => 'Categories';
 
   @override
+  String get restaurantPayout => 'Your Earnings';
+
+  @override
+  String get commissionPaid => 'Nar24 Commission';
+
+  @override
+  String get shipmentFeePaid => 'Courier Fee';
+
+  @override
+  String get platformFeesTotal => 'Total Platform Fees';
+
+  @override
+  String get courierUsage => 'Courier Usage';
+
+  @override
+  String get courierOurs => 'Using Nar24 Courier';
+
+  @override
+  String get courierTheirs => 'Using Own Courier';
+
+  @override
+  String legacyOrdersNotice(String count) {
+    return '$count legacy orders in this period lack commission details.';
+  }
+
+  @override
   String get noDeliveryLabel => 'Does not deliver to your area';
 
   @override

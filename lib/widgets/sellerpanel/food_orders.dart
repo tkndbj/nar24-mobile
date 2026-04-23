@@ -6,9 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
-
+import './courier_choice_modal.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../utils/food_localization.dart';
+import './switch_courier_button.dart';
 
 const _kPageSize = 15;
 const _kInformCooldownMs = 5 * 60 * 1000; // mirrors Cloud Function
@@ -211,6 +212,7 @@ class _FoodOrder {
   final bool isPaid;
   final String orderNotes;
   final int estimatedPrepTime;
+  final String? courierType;
   final Timestamp? createdAt;
   final Timestamp? updatedAt;
   final Timestamp? lastInformedAt;
@@ -232,6 +234,7 @@ class _FoodOrder {
     required this.isPaid,
     required this.orderNotes,
     required this.estimatedPrepTime,
+    this.courierType,
     this.createdAt,
     this.updatedAt,
     this.lastInformedAt,
@@ -286,6 +289,7 @@ class _FoodOrder {
       isPaid: d['isPaid'] as bool? ?? false,
       orderNotes: d['orderNotes'] as String? ?? '',
       estimatedPrepTime: (d['estimatedPrepTime'] as num?)?.toInt() ?? 0,
+      courierType: d['courierType'] as String?,
       createdAt: d['createdAt'] as Timestamp?,
       updatedAt: d['updatedAt'] as Timestamp?,
       lastInformedAt: d['lastInformedAt'] as Timestamp?,
@@ -570,6 +574,43 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
       await FirebaseFunctions.instanceFor(region: 'europe-west3')
           .httpsCallable('updateFoodOrderStatus')
           .call({'orderId': orderId, 'newStatus': _statusToString(newStatus)});
+    } catch (e) {
+      if (mounted) {
+        final locale = Localizations.localeOf(context).languageCode;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              locale == 'tr' ? 'Güncelleme başarısız' : 'Failed to update'),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _updatingTo.remove(orderId));
+    }
+  }
+
+  // Accept flow — shows the courier choice sheet, then calls the CF with
+// the selected courierType. Runs *through* the existing _updatingTo map
+// so the UI loading states still work.
+  Future<void> _acceptOrder(String orderId) async {
+    if (_updatingTo.containsKey(orderId)) return;
+
+    final choice = await showCourierChoiceSheet(
+      context: context,
+      restaurantId: widget.restaurantId,
+    );
+    if (choice == null) return; // User dismissed — do nothing.
+    if (!mounted) return;
+
+    setState(() => _updatingTo[orderId] = _OrderStatus.accepted);
+    try {
+      await FirebaseFunctions.instanceFor(region: 'europe-west3')
+          .httpsCallable('updateFoodOrderStatus')
+          .call({
+        'orderId': orderId,
+        'newStatus': 'accepted',
+        'courierType': courierTypeToString(choice),
+      });
     } catch (e) {
       if (mounted) {
         final locale = Localizations.localeOf(context).languageCode;
@@ -926,7 +967,12 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
             isExpanded: _expandedIds.contains(order.id),
             updatingTo: _updatingTo[order.id],
             onTap: () => _toggleExpand(order.id),
-            onUpdateStatus: _updateStatus,
+            onUpdateStatus: (id, status) {
+              if (status == _OrderStatus.accepted) {
+                return _acceptOrder(id);
+              }
+              return _updateStatus(id, status);
+            },
             onInformCourier: _informCourier,
             onPrintReceipt: _printReceipt,
           );
@@ -1441,6 +1487,14 @@ class _OrderCard extends StatelessWidget {
                   onTap: () => onInformCourier(order.id),
                 ),
               ],
+              if (order.courierType == 'theirs') ...[
+                const SizedBox(width: 8),
+                SwitchCourierButton(
+                  orderId: order.id,
+                  locale: locale,
+                  variant: 'compact',
+                ),
+              ],
               const SizedBox(width: 8),
               _ActionBtn(
                 label: locale == 'tr' ? 'Geri Al' : 'Undo',
@@ -1456,24 +1510,55 @@ class _OrderCard extends StatelessWidget {
             // ── READY: "Waiting for cargo" text only — no button.
             // FIX 10: mirrors Next.js isReady block which shows text, not a button.
             if (_isReady)
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text(
-                    locale == 'tr'
-                        ? 'Kargo bekleniyor'
-                        : (locale == 'ru'
-                            ? 'Ожидание курьера'
-                            : 'Waiting for cargo'),
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: isDark
-                            ? Colors.grey[500]
-                            : const Color(0xFF9CA3AF)),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
+              order.courierType == 'theirs'
+                  ? Expanded(
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Text(
+                                locale == 'tr'
+                                    ? 'Kendi kuryeniz yolda'
+                                    : (locale == 'ru'
+                                        ? 'Ваш курьер в пути'
+                                        : 'Your courier is on the way'),
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark
+                                        ? Colors.grey[500]
+                                        : const Color(0xFF9CA3AF)),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SwitchCourierButton(
+                            orderId: order.id,
+                            locale: locale,
+                            variant: 'compact',
+                          ),
+                        ],
+                      ),
+                    )
+                  : Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(
+                          locale == 'tr'
+                              ? 'Kargo bekleniyor'
+                              : (locale == 'ru'
+                                  ? 'Ожидание курьера'
+                                  : 'Waiting for cargo'),
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: isDark
+                                  ? Colors.grey[500]
+                                  : const Color(0xFF9CA3AF)),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
           ]),
           if (_isAccepted) ...[
             const SizedBox(height: 8),

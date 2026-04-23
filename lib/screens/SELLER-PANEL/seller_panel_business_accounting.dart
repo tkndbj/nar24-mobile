@@ -720,6 +720,15 @@ class _SellerPanelBusinessAccountingState
     'sellerCount': 'Satıcı Sayısı',
     'categoriesSheet': 'Kategoriler', 'category': 'Kategori',
     'productCount': 'Ürün Adedi', 'salesCount': 'Satış Adedi',
+    'earningsBreakdown': 'Kazanç Dağılımı',
+    'restaurantPayout': 'Sizin Kazancınız',
+    'commissionPaid': 'Nar24 Komisyonu',
+    'shipmentFeePaid': 'Kargo Ücreti',
+    'platformFeesTotal': 'Toplam Platform Ücretleri',
+    'courierSheet': 'Kurye Kullanımı',
+    'courierOurs': 'Nar24 Kuryesi',
+    'courierTheirs': 'Kendi Kuryeniz',
+    'legacyOrders': 'Eski Sipariş Sayısı',
   };
   const en = {
     'period': 'Period', 'start': 'Start', 'end': 'End',
@@ -742,6 +751,15 @@ class _SellerPanelBusinessAccountingState
     'sellerCount': 'Seller Count',
     'categoriesSheet': 'Categories', 'category': 'Category',
     'productCount': 'Product Count', 'salesCount': 'Sales Count',
+    'earningsBreakdown': 'Earnings Breakdown',
+    'restaurantPayout': 'Your Earnings',
+    'commissionPaid': 'Nar24 Commission',
+    'shipmentFeePaid': 'Courier Fee',
+    'platformFeesTotal': 'Total Platform Fees',
+    'courierSheet': 'Courier Usage',
+    'courierOurs': 'Nar24 Courier',
+    'courierTheirs': 'Own Courier',
+    'legacyOrders': 'Legacy Orders',
   };
   const ru = {
     'period': 'Период', 'start': 'Начало', 'end': 'Конец',
@@ -764,6 +782,15 @@ class _SellerPanelBusinessAccountingState
     'sellerCount': 'Кол-во продавцов',
     'categoriesSheet': 'Категории', 'category': 'Категория',
     'productCount': 'Кол-во единиц', 'salesCount': 'Кол-во продаж',
+    'earningsBreakdown': 'Структура доходов',
+    'restaurantPayout': 'Ваш доход',
+    'commissionPaid': 'Комиссия Nar24',
+    'shipmentFeePaid': 'Стоимость доставки',
+    'platformFeesTotal': 'Всего платформенных сборов',
+    'courierSheet': 'Использование курьеров',
+    'courierOurs': 'Курьер Nar24',
+    'courierTheirs': 'Свой курьер',
+    'legacyOrders': 'Старые заказы',
   };
   if (lang == 'en') return en;
   if (lang == 'ru') return ru;
@@ -796,6 +823,13 @@ class _SellerPanelBusinessAccountingState
         [l['deliveryFee'], (data['deliveryFeeRevenue'] as num?)?.toDouble() ?? 0],
         [l['avgOrder'], (data['averageOrderValue'] as num?)?.toDouble() ?? 0],
         [l['totalItemsSold'], data['totalItemsSold'] ?? 0],
+        ['', ''],
+        [l['earningsBreakdown'], ''],
+        [l['restaurantPayout'], (data['restaurantPayout'] as num?)?.toDouble() ?? 0],
+        [l['commissionPaid'], (data['commissionPaid'] as num?)?.toDouble() ?? 0],
+        [l['shipmentFeePaid'], (data['shipmentFeePaid'] as num?)?.toDouble() ?? 0],
+        [l['platformFeesTotal'], (data['platformFeesTotal'] as num?)?.toDouble() ?? 0],
+        [l['legacyOrders'], data['ordersWithoutFeesSnapshot'] ?? 0],
       ]) {
         summary.appendRow(row.map((e) => TextCellValue(e.toString())).toList());
       }
@@ -839,6 +873,21 @@ class _SellerPanelBusinessAccountingState
             TextCellValue('${i['quantity'] ?? 0}'),
             TextCellValue(_fmt(i['revenue'])),
           ]);
+        }
+      }
+
+      if (data['courierTypeBreakdown'] != null) {
+        final sheet = ex[l['courierSheet']!];
+        sheet.appendRow([l['type']!, l['count']!]
+            .map(TextCellValue.new).toList());
+        final ctb = data['courierTypeBreakdown'] as Map<String, dynamic>;
+        for (final key in ['ours', 'theirs']) {
+          if (ctb.containsKey(key)) {
+            sheet.appendRow([
+              TextCellValue(key == 'ours' ? l['courierOurs']! : l['courierTheirs']!),
+              TextCellValue('${ctb[key] ?? 0}'),
+            ]);
+          }
         }
       }
     } else {
@@ -1009,6 +1058,59 @@ const SizedBox(height: 20),
             Icons.cancel_rounded, const Color(0xFFE53935)),
       ], isDark),
       const SizedBox(height: 12),
+      if ((d['restaurantPayout'] != null) ||
+          (d['commissionPaid'] != null) ||
+          (d['shipmentFeePaid'] != null))
+        _grid([
+          _M(
+            l10n.restaurantPayout,
+            '₺${_fmt(d['restaurantPayout'])}',
+            Icons.account_balance_wallet_rounded,
+            const Color(0xFF14B8A6),
+          ),
+          _M(
+            l10n.commissionPaid,
+            '₺${_fmt(d['commissionPaid'])}',
+            Icons.percent_rounded,
+            const Color(0xFFF59E0B),
+          ),
+          _M(
+            l10n.shipmentFeePaid,
+            '₺${_fmt(d['shipmentFeePaid'])}',
+            Icons.local_shipping_outlined,
+            const Color(0xFF7C3AED),
+          ),
+          _M(
+            l10n.platformFeesTotal,
+            '₺${_fmt(d['platformFeesTotal'])}',
+            Icons.receipt_long_outlined,
+            const Color(0xFFEF4444),
+          ),
+        ], isDark),
+      if ((d['ordersWithoutFeesSnapshot'] as int? ?? 0) > 0) ...[
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEF3C7),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFFCD34D)),
+          ),
+          child: Row(children: [
+            const Icon(Icons.info_outline, size: 14, color: Color(0xFF92400E)),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                l10n.legacyOrdersNotice(
+                    '${d['ordersWithoutFeesSnapshot']}'),
+                style: const TextStyle(
+                    fontSize: 11, color: Color(0xFF92400E)),
+              ),
+            ),
+          ]),
+        ),
+      ],
+      const SizedBox(height: 12),
       _grid([
         _M(l10n.grossRevenue,
             '₺${_fmt(d['grossRevenue'])}',
@@ -1042,6 +1144,20 @@ const SizedBox(height: 20),
           {
             'delivery': l10n.deliveryLabel,
             'pickup': l10n.pickupLabel,
+          },
+        ),
+        const SizedBox(height: 16),
+      ],
+      if (d['courierTypeBreakdown'] != null &&
+          (d['courierTypeBreakdown'] as Map).isNotEmpty) ...[
+        _section(l10n.courierUsage, isDark),
+        const SizedBox(height: 8),
+        _courierTypeCards(
+          d['courierTypeBreakdown'] as Map<String, dynamic>,
+          isDark,
+          {
+            'ours': l10n.courierOurs,
+            'theirs': l10n.courierTheirs,
           },
         ),
         const SizedBox(height: 16),
@@ -1222,6 +1338,48 @@ const SizedBox(height: 20),
               ),
             ],
           ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _courierTypeCards(
+    Map<String, dynamic> breakdown,
+    bool isDark,
+    Map<String, String> labels,
+  ) {
+    return Column(
+      children: breakdown.entries
+          .where((e) => labels.containsKey(e.key))
+          .map((e) {
+        final count = (e.value as num?)?.toInt() ?? 0;
+        final label = labels[e.key] ?? e.key;
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.white.withOpacity(0.05)
+                : const Color(0xFFF8F8F8),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(children: [
+            Expanded(
+              child: Text(label,
+                  style: TextStyle(
+                      fontWeight: FontWeight.w500, fontSize: 14)),
+            ),
+            Text(
+              '$count',
+              style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: e.key == 'ours'
+                      ? const Color(0xFF10B981)
+                      : const Color(0xFF3B82F6)),
+            ),
+          ]),
         );
       }).toList(),
     );

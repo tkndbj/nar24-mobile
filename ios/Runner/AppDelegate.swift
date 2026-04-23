@@ -3,7 +3,8 @@ import Flutter
 import Firebase
 import FirebaseMessaging
 import UserNotifications
-import GoogleMaps  // ← ADD THIS
+import GoogleMaps
+import flutter_foreground_task
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -13,7 +14,7 @@ import GoogleMaps  // ← ADD THIS
     ) -> Bool {
         // Configure Firebase first
         FirebaseApp.configure()
-        
+
         // Configure Google Maps from Info.plist
         if let apiKey = Bundle.main.object(forInfoDictionaryKey: "GoogleMapsAPIKey") as? String {
             GMSServices.provideAPIKey(apiKey)
@@ -21,13 +22,24 @@ import GoogleMaps  // ← ADD THIS
         } else {
             print("❌ Google Maps API key not found in Info.plist")
         }
-        
+
         // Firebase Messaging setup
         Messaging.messaging().delegate = self
         UNUserNotificationCenter.current().delegate = self
         application.registerForRemoteNotifications()
-        
+
         GeneratedPluginRegistrant.register(with: self)
+
+        // Required for flutter_foreground_task's background Dart isolate
+        // (CourierTrackingHandler). Without this the plugin bails out before
+        // booting the isolate, so Firebase/RTDB writes from onStart never
+        // happen and the admin panel sees the courier as offline.
+        SwiftFlutterForegroundTaskPlugin.setPluginRegistrantCallback { registry in
+            if !registry.hasPlugin("io.flutter.plugins") {
+                GeneratedPluginRegistrant.register(with: registry)
+            }
+        }
+
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
     

@@ -8,6 +8,8 @@ import 'package:shimmer/shimmer.dart';
 import '../../screens/CARGO-FOOD-PANEL/receipt_scanner.dart';
 import '../../generated/l10n/app_localizations.dart';
 import '../../utils/food_localization.dart';
+import './courier_choice_modal.dart';
+import './switch_courier_button.dart';
 
 // ─── Order status ─────────────────────────────────────────────────────────────
 
@@ -76,7 +78,7 @@ class _PendingOrder {
   final String currency;
   final _OrderStatus status;
   final Timestamp? createdAt;
-
+  final String? courierType;
   const _PendingOrder({
     required this.id,
     required this.buyerName,
@@ -84,6 +86,7 @@ class _PendingOrder {
     required this.totalPrice,
     required this.currency,
     required this.status,
+    this.courierType,
     this.createdAt,
   });
 
@@ -114,6 +117,7 @@ class _PendingOrder {
       totalPrice: (d['totalPrice'] as num?)?.toDouble() ?? 0.0,
       currency: d['currency'] as String? ?? 'TL',
       status: _parseStatus(d['status'] as String?),
+      courierType: d['courierType'] as String?,
       createdAt: d['createdAt'] as Timestamp?,
     );
   }
@@ -919,6 +923,7 @@ class _PendingOrdersSectionState extends State<_PendingOrdersSection> {
 
   // ── Cloud Function call ───────────────────────────────────────────────────
 
+// Generic status update — used for reject (and anything else non-accept)
   Future<void> _updateStatus(String orderId, String newStatus) async {
     if (_updatingTo.containsKey(orderId)) return;
     setState(() => _updatingTo[orderId] = newStatus);
@@ -929,6 +934,43 @@ class _PendingOrdersSectionState extends State<_PendingOrdersSection> {
           .call({'orderId': orderId, 'newStatus': newStatus});
     } catch (e) {
       debugPrint('_PendingOrdersSection._updateStatus: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(widget.l10n.restaurantDashboardUpdateFailed),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _updatingTo.remove(orderId));
+    }
+  }
+
+// Accept flow — shows the courier choice sheet first, then calls the CF
+// with the selected courierType.
+  Future<void> _acceptOrder(String orderId) async {
+    if (_updatingTo.containsKey(orderId)) return;
+
+    final choice = await showCourierChoiceSheet(
+      context: context,
+      restaurantId: widget.restaurantId,
+    );
+    if (choice == null) return; // User dismissed — order stays pending.
+    if (!mounted) return;
+
+    setState(() => _updatingTo[orderId] = 'accepted');
+    try {
+      await FirebaseFunctions.instanceFor(region: 'europe-west3')
+          .httpsCallable('updateFoodOrderStatus')
+          .call({
+        'orderId': orderId,
+        'newStatus': 'accepted',
+        'courierType': courierTypeToString(choice),
+      });
+    } catch (e) {
+      debugPrint('_PendingOrdersSection._acceptOrder: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1015,8 +1057,7 @@ class _PendingOrdersSectionState extends State<_PendingOrdersSection> {
                               l10n: widget.l10n,
                               isDark: widget.isDark,
                               updatingTo: _updatingTo[order.id],
-                              onAccept: () =>
-                                  _updateStatus(order.id, 'accepted'),
+                              onAccept: () => _acceptOrder(order.id),
                               onReject: () =>
                                   _updateStatus(order.id, 'rejected'),
                             ),

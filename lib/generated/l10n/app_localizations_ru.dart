@@ -13304,6 +13304,32 @@ class AppLocalizationsRu extends AppLocalizations {
   String get categoryBreakdown => 'Категории';
 
   @override
+  String get restaurantPayout => 'Ваш доход';
+
+  @override
+  String get commissionPaid => 'Комиссия Nar24';
+
+  @override
+  String get shipmentFeePaid => 'Стоимость доставки';
+
+  @override
+  String get platformFeesTotal => 'Всего платформенных сборов';
+
+  @override
+  String get courierUsage => 'Использование курьеров';
+
+  @override
+  String get courierOurs => 'Курьером Nar24';
+
+  @override
+  String get courierTheirs => 'Своим курьером';
+
+  @override
+  String legacyOrdersNotice(String count) {
+    return '$count старых заказов в этом периоде не содержат деталей комиссии.';
+  }
+
+  @override
   String get noDeliveryLabel => 'Не доставляет в ваш район';
 
   @override

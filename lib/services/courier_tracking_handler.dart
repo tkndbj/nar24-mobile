@@ -116,11 +116,31 @@ class CourierTrackingHandler extends TaskHandler {
       debugPrint('[CourierService] RTDB presence setup failed: $e');
     }
 
+    // iOS requires explicit AppleSettings for GPS to keep flowing while the
+    // screen is locked or the app is backgrounded. `allowBackgroundLocationUpdates`
+    // flips CLLocationManager.allowsBackgroundLocationUpdates; the Info.plist
+    // UIBackgroundModes→location entry is the prerequisite for that flag to
+    // be legal. Auto-pause is disabled so Core Location doesn't silence the
+    // stream when the courier idles at a restaurant — CF-54 drops couriers
+    // after 120 s of silence.
+    final LocationSettings locationSettings =
+        defaultTargetPlatform == TargetPlatform.iOS
+            ? AppleSettings(
+                accuracy: LocationAccuracy.high,
+                activityType: ActivityType.automotiveNavigation,
+                distanceFilter: 10,
+                pauseLocationUpdatesAutomatically: false,
+                showBackgroundLocationIndicator: true,
+                allowBackgroundLocationUpdates: true,
+              )
+            : AndroidSettings(
+                accuracy: LocationAccuracy.high,
+                distanceFilter: 10,
+                intervalDuration: const Duration(seconds: 10),
+              );
+
     _posSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 10, // OS-level pre-filter (metres)
-      ),
+      locationSettings: locationSettings,
     ).listen(
       _onPosition,
       onError: (e) => debugPrint('[CourierService] GPS stream error: $e'),

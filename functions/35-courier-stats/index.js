@@ -24,6 +24,12 @@ function durationMs(order, deliveredAt) {
 // delivery triggers. Orders in both collections carry the same
 // cargoUserId / cargoName / assignedAt / totalPrice / paymentReceivedMethod
 // fields after the lifecycle refactor, so a single aggregator is enough.
+//
+// Idempotent via a `statsAggregated` flag on the order doc. CF retries (or
+// duplicate invocations) read the flag inside the transaction and no-op if
+// it's already set, so counters can't drift under at-least-once delivery.
+// The flag write re-fires this trigger, but the `before.status === after.status`
+// guard in handleDeliveryUpdate catches it and returns before reaching here.
 
 async function aggregateDelivery(orderData, orderId, collection) {
   const courierId = orderData.cargoUserId;
@@ -44,11 +50,16 @@ async function aggregateDelivery(orderData, orderId, collection) {
 
   const isMarket = collection === 'orders-market';
 
-  const batch = db.batch();
+  const orderRef   = db.collection(collection).doc(orderId);
+  const dailyRef   = db.collection('courier_daily_stats').doc(`${courierId}_${dateKey}`);
+  const alltimeRef = db.collection('courier_alltime_stats').doc(courierId);
 
-  batch.set(
-    db.collection('courier_daily_stats').doc(`${courierId}_${dateKey}`),
-    {
+  const committed = await db.runTransaction(async (tx) => {
+    const orderSnap = await tx.get(orderRef);
+    if (!orderSnap.exists) return false;
+    if (orderSnap.data().statsAggregated === true) return false;
+
+    tx.set(dailyRef, {
       courierId,
       courierName: orderData.cargoName || 'Courier',
       date: dateKey,
@@ -65,13 +76,9 @@ async function aggregateDelivery(orderData, orderId, collection) {
       orderIds: admin.firestore.FieldValue.arrayUnion(orderId),
       lastDeliveryAt: now,
       updatedAt: now,
-    },
-    { merge: true },
-  );
+    }, { merge: true });
 
-  batch.set(
-    db.collection('courier_alltime_stats').doc(courierId),
-    {
+    tx.set(alltimeRef, {
       courierId,
       courierName: orderData.cargoName || 'Courier',
       totalDeliveries: inc(1),
@@ -86,15 +93,24 @@ async function aggregateDelivery(orderData, orderId, collection) {
       totalDeliveryTimeMs: inc(ms),
       lastDeliveryAt: now,
       updatedAt: now,
-    },
-    { merge: true },
-  );
+    }, { merge: true });
 
-  await batch.commit();
-  console.log(`[CourierStats] ${collection}/${orderId} courier=${courierId} date=${dateKey}`);
+    tx.update(orderRef, { statsAggregated: true });
+    return true;
+  });
+
+  if (committed) {
+    console.log(`[CourierStats] ${collection}/${orderId} courier=${courierId} date=${dateKey}`);
+  } else {
+    console.log(`[CourierStats] ${collection}/${orderId} skipped (already aggregated)`);
+  }
 }
 
-// ── Trigger helper: fetches fresh data if paymentReceivedMethod not yet written
+// ── Trigger helper: fires on status transition to 'delivered'
+//
+// CF-40 processDelivery writes `status: 'delivered'` and `paymentReceivedMethod`
+// in the same transaction, so `after` already has both fields. No grace-period
+// refetch needed.
 
 async function handleDeliveryUpdate(event, collection) {
   const before = event.data.before.data();
@@ -102,20 +118,7 @@ async function handleDeliveryUpdate(event, collection) {
   if (before.status === after.status || after.status !== 'delivered') return;
   if (!after.cargoUserId) return;
 
-  // Wait for paymentReceivedMethod if not yet written
-  let orderData = after;
-  if (!orderData.paymentReceivedMethod) {
-    await new Promise((resolve) => setTimeout(resolve, 3000)); // 3s grace
-    const freshSnap = await admin.firestore()
-      .collection(collection)
-      .doc(event.params.orderId)
-      .get();
-    if (freshSnap.exists) {
-      orderData = freshSnap.data();
-    }
-  }
-
-  await aggregateDelivery(orderData, event.params.orderId, collection);
+  await aggregateDelivery(after, event.params.orderId, collection);
 }
 
 // ── Trigger: food order delivered ─────────────────────────────────────────
