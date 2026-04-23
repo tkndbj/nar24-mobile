@@ -98,6 +98,19 @@ bool firebaseInitialized = false;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Bound Flutter's in-memory decoded bitmap cache. Default is 100 MB / 1000
+  // entries — too tight for a product-grid app, so eviction races with live
+  // decodes and produces garbled frames. 150 MB fits ~2 screens of 400w
+  // cards plus a detail view without churn.
+  PaintingBinding.instance.imageCache
+    ..maximumSize = 400
+    ..maximumSizeBytes = 150 << 20;
+
+  // Flush decoded bitmaps on OS low-memory + when backgrounded. Disk cache
+  // is untouched, so re-entry decodes from disk, not the network.
+  WidgetsBinding.instance.addObserver(_ImageCachePressureObserver());
+
   tz.initializeTimeZones();
   // Initialize the app lifecycle manager FIRST
   // This coordinates all provider lifecycles for smooth background/foreground transitions
@@ -867,4 +880,20 @@ class L10n {
     const Locale('en'),
     const Locale('ru'),
   ];
+}
+
+class _ImageCachePressureObserver with WidgetsBindingObserver {
+  @override
+  void didHaveMemoryPressure() {
+    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      PaintingBinding.instance.imageCache.clear();
+    }
+  }
 }

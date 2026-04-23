@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import '../services/ad_analytics_service.dart';
+import '../utils/app_image_cache_manager.dart';
 import '../utils/cloudinary_url_builder.dart';
 import 'cloudinary_image.dart';
 
@@ -134,6 +135,7 @@ class _MarketThinBannerState extends State<MarketThinBanner>
         final provider = CachedNetworkImageProvider(
           cdnUrl,
           maxWidth: _kThinBannerCdnWidth,
+          cacheManager: AppImageCacheManager(),
         );
         precacheImage(provider, context).catchError((_) {
           _cachedUrls.remove(source);

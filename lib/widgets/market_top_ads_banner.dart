@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import '../services/ad_analytics_service.dart';
+import '../utils/app_image_cache_manager.dart';
 import '../utils/cloudinary_url_builder.dart';
 import 'cloudinary_image.dart';
 
@@ -277,7 +278,11 @@ class _AdsBannerWidgetState extends State<AdsBannerWidget>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final cdnUrl = CloudinaryUrl.bannerCdn(source, width: _kAdsBannerCdnWidth);
-        final provider = CachedNetworkImageProvider(cdnUrl, maxWidth: _kAdsBannerCdnWidth);
+        final provider = CachedNetworkImageProvider(
+          cdnUrl,
+          maxWidth: _kAdsBannerCdnWidth,
+          cacheManager: AppImageCacheManager(),
+        );
         precacheImage(provider, context).catchError((error) {
           debugPrint('Failed to prefetch image: $source, error: $error');
         });

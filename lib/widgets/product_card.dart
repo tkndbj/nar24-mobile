@@ -19,6 +19,7 @@ import 'dart:ui';
 import '../services/click_tracking_service.dart';
 import '../services/user_activity_service.dart';
 import '../utils/cloudinary_url_builder.dart';
+import '../utils/app_image_cache_manager.dart';
 import 'cloudinary_image.dart';
 
 class ProductCard extends StatefulWidget {
@@ -69,11 +70,13 @@ class _ProductCardState extends State<ProductCard> {
   late List<String> _imageUrls;
   late int _imageCount;
 
+  // Returns raw sources (storage paths or legacy URLs). Resolution into
+  // a Cloudinary URL + Firebase fallback is done inside CloudinaryImage
+  // so the fallback actually exists — wrapping them here would hide the
+  // storage path and break fallback recovery.
   static List<String> _resolveImageUrls(ProductSummary product) {
     if (product.imageStoragePaths.isNotEmpty) {
-      return product.imageStoragePaths
-          .map((p) => CloudinaryUrl.product(p, size: ProductImageSize.card))
-          .toList();
+      return product.imageStoragePaths;
     }
     return product.imageUrls;
   }
@@ -188,10 +191,8 @@ class _ProductCardState extends State<ProductCard> {
 
   List<String> _getCurrentImageUrls() {
     if (_selectedColor != null) {
-      // Prefer storage paths for color images
       if (widget.product.colorImageStoragePaths.containsKey(_selectedColor!)) {
-        final path = widget.product.colorImageStoragePaths[_selectedColor!]!;
-        return [CloudinaryUrl.product(path, size: ProductImageSize.card)];
+        return [widget.product.colorImageStoragePaths[_selectedColor!]!];
       }
       if (widget.product.colorImages.containsKey(_selectedColor!) &&
           widget.product.colorImages[_selectedColor!]!.isNotEmpty) {
@@ -216,7 +217,8 @@ class _ProductCardState extends State<ProductCard> {
     final repo = context.read<ProductRepository>();
 
     // Precache the detail-size URL (800w) — that's what the detail screen
-    // renders, so warming the card-size (400w) cache would be a wasted fetch.
+    // renders. Must route through AppImageCacheManager so the detail screen
+    // reads from the same disk cache instead of re-downloading.
     if (widget.product.imageStoragePaths.isNotEmpty) {
       try {
         precacheImage(
@@ -226,6 +228,7 @@ class _ProductCardState extends State<ProductCard> {
               size: ProductImageSize.detail,
             ),
             maxWidth: CloudinaryUrl.widthFor(ProductImageSize.detail),
+            cacheManager: AppImageCacheManager(),
           ),
           context,
         ).catchError((_) {});
@@ -233,7 +236,10 @@ class _ProductCardState extends State<ProductCard> {
     } else if (_imageUrls.isNotEmpty) {
       try {
         precacheImage(
-          CachedNetworkImageProvider(_imageUrls.first),
+          CachedNetworkImageProvider(
+            _imageUrls.first,
+            cacheManager: AppImageCacheManager(),
+          ),
           context,
         ).catchError((_) {});
       } catch (e) {}

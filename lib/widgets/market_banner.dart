@@ -7,6 +7,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:go_router/go_router.dart';
 import '../services/ad_analytics_service.dart';
 import '../providers/market_banner_provider.dart';
+import '../utils/app_image_cache_manager.dart';
 import '../utils/cloudinary_url_builder.dart';
 import 'cloudinary_image.dart';
 
@@ -121,7 +122,11 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
 
       try {
         final cdnUrl = CloudinaryUrl.bannerCdn(source, width: _imageCacheWidth);
-        final provider = CachedNetworkImageProvider(cdnUrl, maxWidth: _imageCacheWidth);
+        final provider = CachedNetworkImageProvider(
+          cdnUrl,
+          maxWidth: _imageCacheWidth,
+          cacheManager: AppImageCacheManager(),
+        );
         precacheImage(provider, context).catchError((_) {
           _prefetchedUrls.remove(source);
         });
