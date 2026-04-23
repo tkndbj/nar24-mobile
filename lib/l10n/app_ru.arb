@@ -6398,6 +6398,12 @@
 "editDrinkTitle": "Редактировать напиток",
 "editDrinkSubtitle": "Обновите данные напитка",
 "drinkDetails": "Информация о напитке",
+"notifFoodOrderStatusOutForDelivery": "Ваш заказ из {restaurantName} в пути!",
+"@notifFoodOrderStatusOutForDelivery": {
+  "placeholders": {
+    "restaurantName": { "type": "String" }
+  }
+},
 "drinkName": "Название напитка",
 "drinkNamePlaceholder": "напр. Свежевыжатый апельсиновый сок",
 "drinkNameRequired": "Название напитка обязательно",

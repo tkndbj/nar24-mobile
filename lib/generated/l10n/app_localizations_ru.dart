@@ -15873,6 +15873,11 @@ class AppLocalizationsRu extends AppLocalizations {
   String get drinkDetails => 'Информация о напитке';
 
   @override
+  String notifFoodOrderStatusOutForDelivery(String restaurantName) {
+    return 'Ваш заказ из $restaurantName в пути!';
+  }
+
+  @override
   String get drinkName => 'Название напитка';
 
   @override

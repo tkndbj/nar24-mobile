@@ -30090,6 +30090,12 @@ abstract class AppLocalizations {
   /// **'İçecek Bilgileri'**
   String get drinkDetails;
 
+  /// No description provided for @notifFoodOrderStatusOutForDelivery.
+  ///
+  /// In tr, this message translates to:
+  /// **'{restaurantName} siparişiniz yola çıktı!'**
+  String notifFoodOrderStatusOutForDelivery(String restaurantName);
+
   /// No description provided for @drinkName.
   ///
   /// In tr, this message translates to:

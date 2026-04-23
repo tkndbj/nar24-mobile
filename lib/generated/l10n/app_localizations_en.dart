@@ -15772,6 +15772,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get drinkDetails => 'Drink Details';
 
   @override
+  String notifFoodOrderStatusOutForDelivery(String restaurantName) {
+    return 'Your order from $restaurantName is on the way!';
+  }
+
+  @override
   String get drinkName => 'Drink Name';
 
   @override

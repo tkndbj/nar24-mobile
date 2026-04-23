@@ -1277,6 +1277,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
                           case 'ready':
                             message = l10n.notifFoodOrderStatusReady(name);
                             break;
+                          case 'out_for_delivery':
+                            message =
+                                l10n.notifFoodOrderStatusOutForDelivery(name);
+                            break;
                           case 'delivered':
                             message = l10n.notifFoodOrderStatusDelivered(name);
                             break;

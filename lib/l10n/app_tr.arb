@@ -6759,6 +6759,12 @@
 "editDrinkTitle": "İçeceği Düzenle",
 "editDrinkSubtitle": "İçecek bilgilerini güncelleyin",
 "drinkDetails": "İçecek Bilgileri",
+"notifFoodOrderStatusOutForDelivery": "{restaurantName} siparişiniz yola çıktı!",
+"@notifFoodOrderStatusOutForDelivery": {
+  "placeholders": {
+    "restaurantName": { "type": "String" }
+  }
+},
 "drinkName": "İçecek Adı",
 "drinkNamePlaceholder": "ör. Taze Portakal Suyu",
 "drinkNameRequired": "İçecek adı gerekli",

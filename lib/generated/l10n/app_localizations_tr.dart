@@ -15801,6 +15801,11 @@ class AppLocalizationsTr extends AppLocalizations {
   String get drinkDetails => 'İçecek Bilgileri';
 
   @override
+  String notifFoodOrderStatusOutForDelivery(String restaurantName) {
+    return '$restaurantName siparişiniz yola çıktı!';
+  }
+
+  @override
   String get drinkName => 'İçecek Adı';
 
   @override

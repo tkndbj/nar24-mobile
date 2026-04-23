@@ -6763,6 +6763,12 @@
 "editDrinkTitle": "Edit Drink",
 "editDrinkSubtitle": "Update drink details",
 "drinkDetails": "Drink Details",
+"notifFoodOrderStatusOutForDelivery": "Your order from {restaurantName} is on the way!",
+"@notifFoodOrderStatusOutForDelivery": {
+  "placeholders": {
+    "restaurantName": { "type": "String" }
+  }
+},
 "drinkName": "Drink Name",
 "drinkNamePlaceholder": "e.g. Fresh Orange Juice",
 "drinkNameRequired": "Drink name is required",
