@@ -504,6 +504,12 @@ class AuthService {
       // Background FCM registration
       _queueBackgroundTask(() => _registerFcmToken(user.uid));
       _queueBackgroundTask(() => _syncLanguageToFirestore(user.uid));
+      // Best-effort self-heal for orphaned Auth users (e.g. edge cases where
+      // registerWithEmailPassword created the Auth user but Firestore write
+      // was interrupted before rollback could run).
+      _queueBackgroundTask(() async {
+        await ensureUserDocument();
+      });
 
       return {
         'user': user,
@@ -707,7 +713,20 @@ class AuthService {
       final isNewUser = firebaseCred.additionalUserInfo?.isNewUser ?? false;
 
       if (isNewUser) {
-        await _createUserDocument(user);
+        // New users: doc MUST be created before we return success. If the
+        // server call fails after retries, sign out to avoid an orphaned
+        // Auth account. Next attempt starts clean.
+        try {
+          await _ensureUserDocument();
+        } catch (e) {
+          await _auth.signOut();
+          try {
+            await _googleSignIn.disconnect();
+          } catch (_) {}
+          _currentGoogleUser = null;
+          rethrow;
+        }
+
         _queueBackgroundTask(() => _registerFcmToken(user.uid));
         _queueBackgroundTask(() => _syncLanguageToFirestore(user.uid));
 
@@ -718,6 +737,12 @@ class AuthService {
           'needs2FA': false,
         };
       }
+
+      // Existing user: best-effort self-heal in background. If the doc was
+      // somehow lost, UserProvider.fetchUserData also self-heals on launch.
+      _queueBackgroundTask(() async {
+        await ensureUserDocument();
+      });
 
       final results = await Future.wait([
         _checkProfileCompletion(user),
@@ -862,11 +887,16 @@ class AuthService {
       bool needsName = displayName == null || displayName.isEmpty;
 
       if (isNewUser) {
+        // New users: doc MUST be created before we return success. If the
+        // server call fails after retries, sign out to avoid an orphaned
+        // Auth account. Apple Sign-In updateDisplayName above has already
+        // populated the Auth displayName, which the server callable reads
+        // canonically via admin.auth().getUser(uid).
         try {
-          await _createUserDocument(user,
-              displayName: displayName, email: email);
+          await _ensureUserDocument();
         } catch (e) {
-          if (kDebugMode) debugPrint('Failed to create user document: $e');
+          await _auth.signOut();
+          rethrow;
         }
 
         _queueBackgroundTask(() => _registerFcmToken(user.uid));
@@ -884,6 +914,11 @@ class AuthService {
           'needs2FA': false,
         };
       }
+
+      // Existing Apple user: best-effort self-heal in background.
+      _queueBackgroundTask(() async {
+        await ensureUserDocument();
+      });
 
       // Existing user - wrap in try-catch
       try {
@@ -1063,60 +1098,76 @@ class AuthService {
     }
   }
 
-  Future<void> _createUserDocument(User user,
-      {String? displayName, String? email}) async {
-    const maxRetries = 3;
+  /// Invokes the server-side `ensureUserDocument` callable with retries.
+  /// The callable is idempotent: safe to call any number of times. On new
+  /// Auth users it creates the Firestore doc; on existing users it patches
+  /// missing required fields (email, createdAt, referralCode, languageCode,
+  /// verification sync). Throws on terminal failure after all retries.
+  Future<Map<String, dynamic>> _ensureUserDocument({
+    String? languageCode,
+    int maxRetries = 3,
+  }) async {
+    final lang = languageCode ?? await _getCurrentLanguageCode();
+
+    Object? lastError;
+    StackTrace? lastStack;
 
     for (var attempt = 1; attempt <= maxRetries; attempt++) {
+      if (_isDisposed) break;
+
       try {
-        final docRef =
-            FirebaseFirestore.instance.collection('users').doc(user.uid);
-        final existingDoc = await docRef.get();
-        final existingData = existingDoc.data();
+        final callable = _functions.httpsCallable('ensureUserDocument');
+        final result = await callable.call(<String, dynamic>{
+          if (lang.isNotEmpty) 'languageCode': lang,
+        }).timeout(const Duration(seconds: 15));
 
-        final languageCode =
-            existingData?['languageCode'] ?? await _getCurrentLanguageCode();
-
-        // ✅ FIX: Don't fallback to email prefix - use placeholder instead
-        String? finalDisplayName = displayName;
-        if (finalDisplayName == null || finalDisplayName.isEmpty) {
-          finalDisplayName = user.displayName;
-        }
-        // Don't use email as name - leave as null or 'User'
-        if (finalDisplayName == null ||
-            finalDisplayName.isEmpty ||
-            finalDisplayName.contains('@')) {
-          finalDisplayName = null; // Will trigger name completion screen
+        if (kDebugMode) {
+          debugPrint(
+              '✅ ensureUserDocument ok (attempt $attempt, created=${result.data['created']})');
         }
 
-        await docRef.set({
-          'displayName': finalDisplayName, // Can be null
-          'email': email ?? user.email ?? '',
-          'isNew': true,
-          'createdAt': FieldValue.serverTimestamp(),
-          'emailVerifiedAt':
-              user.emailVerified ? FieldValue.serverTimestamp() : null,
-          'languageCode': languageCode,
-        }, SetOptions(merge: true));
+        return Map<String, dynamic>.from(result.data as Map);
+      } catch (e, stack) {
+        lastError = e;
+        lastStack = stack;
 
-        // Verify creation
-        final verifyDoc = await docRef.get();
-        if (verifyDoc.exists) {
-          if (kDebugMode) debugPrint('User document created for ${user.uid}');
-          return;
+        if (kDebugMode) {
+          debugPrint('⚠️ ensureUserDocument attempt $attempt failed: $e');
         }
 
-        throw Exception('Document verification failed');
-      } catch (e) {
-        if (kDebugMode)
-          debugPrint('User document creation attempt $attempt failed: $e');
-
-        if (attempt >= maxRetries) {
-          rethrow;
+        if (attempt < maxRetries) {
+          await Future.delayed(
+              Duration(milliseconds: 500 * (1 << (attempt - 1))));
         }
-
-        await Future.delayed(Duration(milliseconds: 250 * (1 << attempt)));
       }
+    }
+
+    if (!kDebugMode && lastError != null) {
+      FirebaseCrashlytics.instance.recordError(
+        lastError,
+        lastStack,
+        reason: 'ensureUserDocument failed after $maxRetries attempts',
+      );
+    }
+
+    throw FirebaseAuthException(
+      code: 'ensure-user-document-failed',
+      message: 'Failed to initialize user profile. Please try again.',
+    );
+  }
+
+  /// Public self-heal entry point (callable from UserProvider on app startup
+  /// or whenever the client detects a missing users/{uid} doc for an
+  /// authenticated user). Returns null on terminal failure; caller can
+  /// decide how to react.
+  Future<Map<String, dynamic>?> ensureUserDocument({
+    String? languageCode,
+  }) async {
+    try {
+      return await _ensureUserDocument(languageCode: languageCode);
+    } catch (e) {
+      if (kDebugMode) debugPrint('ensureUserDocument (public) failed: $e');
+      return null;
     }
   }
 

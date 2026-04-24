@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/lifecycle_aware.dart';
 import 'services/app_lifecycle_manager.dart';
@@ -326,7 +327,13 @@ class UserProvider with ChangeNotifier, LifecycleAwareMixin {
           _updateUserDataFromDoc(serverDoc);
           _syncLanguageToFirestore(uid, serverDoc.data());
         } else {
-          await _createDefaultUserDoc();
+          // Orphan Auth user with no Firestore doc — heal via server-side
+          // callable and refetch. If the heal fails we fall back to local
+          // defaults so the UI isn't stuck; next launch/resume retries.
+          final healed = await _healMissingUserDoc(uid);
+          if (!healed) {
+            await _createDefaultUserDoc();
+          }
         }
 
         FirestoreReadTracker.instance
@@ -447,6 +454,52 @@ class UserProvider with ChangeNotifier, LifecycleAwareMixin {
     }
   }
 
+  /// Invokes the server-side `ensureUserDocument` callable to materialize a
+  /// missing users/{uid} doc for an already-authenticated user, then
+  /// refetches. Returns true on success (doc now exists and state is
+  /// populated), false otherwise — caller falls back to local defaults.
+  Future<bool> _healMissingUserDoc(String uid) async {
+    try {
+      if (kDebugMode) {
+        debugPrint('🔧 Healing missing user doc for $uid');
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      final lang = prefs.getString('locale') ?? 'tr';
+
+      final callable = FirebaseFunctions
+          .instanceFor(region: 'europe-west3')
+          .httpsCallable('ensureUserDocument');
+
+      await callable.call(<String, dynamic>{
+        'languageCode': lang,
+      }).timeout(const Duration(seconds: 15));
+
+      // Auth context may have changed while the call was in-flight.
+      if (_user?.uid != uid) return false;
+
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get(const GetOptions(source: Source.server))
+          .timeout(const Duration(seconds: 10));
+
+      if (_user?.uid != uid) return false;
+
+      if (doc.exists) {
+        _updateUserDataFromDoc(doc);
+        _syncLanguageToFirestore(uid, doc.data());
+        if (kDebugMode) debugPrint('✅ User doc healed for $uid');
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      if (kDebugMode) debugPrint('⚠️ Failed to heal user doc: $e');
+      return false;
+    }
+  }
+
   Future<void> _createDefaultUserDoc() async {
     if (_user == null) return;
 
@@ -555,6 +608,12 @@ class UserProvider with ChangeNotifier, LifecycleAwareMixin {
 
         if (doc.exists) {
           _updateUserDataFromDoc(doc);
+          notifyListeners();
+        } else {
+          // Doc missing during background sync (rare: heal failed earlier
+          // or doc was deleted). Attempt silent heal; state update happens
+          // inside _healMissingUserDoc on success.
+          await _healMissingUserDoc(uid);
           notifyListeners();
         }
         return;

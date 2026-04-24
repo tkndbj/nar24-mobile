@@ -29454,6 +29454,18 @@ abstract class AppLocalizations {
   /// **'İsteğe bağlı ekstraları seçin ve fiyatlarını belirleyin.'**
   String get extrasHint;
 
+  /// No description provided for @addYourOwnExtra.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kendin ekle'**
+  String get addYourOwnExtra;
+
+  /// No description provided for @customExtraNamePlaceholder.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ekstra adı'**
+  String get customExtraNamePlaceholder;
+
   /// No description provided for @preparationTime.
   ///
   /// In tr, this message translates to:
@@ -31211,6 +31223,66 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Hırdavat & Alet'**
   String get marketCategoryTools;
+
+  /// No description provided for @deleteFood.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemeği Sil'**
+  String get deleteFood;
+
+  /// No description provided for @deleteFoodConfirmation.
+  ///
+  /// In tr, this message translates to:
+  /// **'\"{name}\" adlı yemeği silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.'**
+  String deleteFoodConfirmation(String name);
+
+  /// No description provided for @deleteDrink.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçeceği Sil'**
+  String get deleteDrink;
+
+  /// No description provided for @deleteDrinkConfirmation.
+  ///
+  /// In tr, this message translates to:
+  /// **'\"{name}\" adlı içeceği silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.'**
+  String deleteDrinkConfirmation(String name);
+
+  /// No description provided for @deletingFood.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek siliniyor...'**
+  String get deletingFood;
+
+  /// No description provided for @deletingDrink.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçecek siliniyor...'**
+  String get deletingDrink;
+
+  /// No description provided for @foodDeletedSuccess.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek başarıyla silindi'**
+  String get foodDeletedSuccess;
+
+  /// No description provided for @drinkDeletedSuccess.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçecek başarıyla silindi'**
+  String get drinkDeletedSuccess;
+
+  /// No description provided for @deleteFoodFailed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yemek silinemedi. Lütfen tekrar deneyin.'**
+  String get deleteFoodFailed;
+
+  /// No description provided for @deleteDrinkFailed.
+  ///
+  /// In tr, this message translates to:
+  /// **'İçecek silinemedi. Lütfen tekrar deneyin.'**
+  String get deleteDrinkFailed;
 }
 
 class _AppLocalizationsDelegate

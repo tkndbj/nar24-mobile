@@ -6592,6 +6592,8 @@
   }
 },
 "extrasHint": "Select optional extras and set their prices.",
+"addYourOwnExtra": "Add your own",
+"customExtraNamePlaceholder": "Name your extra",
 "preparationTime": "Preparation Time",
 "preparationTimePlaceholder": "e.g. 25",
 "editFoodTitle": "Edit Food",
@@ -6972,5 +6974,25 @@
 "marketCategoryClothing": "Clothing",
 "marketCategoryStationery": "Stationery",
 "marketCategoryPet": "Pet",
-"marketCategoryTools": "Tools"
+"marketCategoryTools": "Tools",
+"deleteFood": "Delete Food",
+"deleteFoodConfirmation": "Are you sure you want to delete \"{name}\"? This action cannot be undone.",
+"@deleteFoodConfirmation": {
+  "placeholders": {
+    "name": { "type": "String" }
+  }
+},
+"deleteDrink": "Delete Drink",
+"deleteDrinkConfirmation": "Are you sure you want to delete \"{name}\"? This action cannot be undone.",
+"@deleteDrinkConfirmation": {
+  "placeholders": {
+    "name": { "type": "String" }
+  }
+},
+"deletingFood": "Deleting food...",
+"deletingDrink": "Deleting drink...",
+"foodDeletedSuccess": "Food deleted successfully",
+"drinkDeletedSuccess": "Drink deleted successfully",
+"deleteFoodFailed": "Failed to delete food. Please try again.",
+"deleteDrinkFailed": "Failed to delete drink. Please try again."
 }

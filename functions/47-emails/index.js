@@ -2030,6 +2030,99 @@ export const registerWithEmailPassword = onCall(
         subject: 'Ваш магазин одобрен',
       },
     };
-  
+
     return content[languageCode] || content.tr;
   }
+
+// Idempotent, transactional creation/patching of users/{uid}.
+// Safe to call any number of times from any auth path — never clobbers
+// existing fields, only fills in what's missing. This is the canonical
+// path for user doc creation and self-healing on orphan Auth accounts.
+export const ensureUserDocument = onCall(
+    {region: 'europe-west3'},
+    async (request) => {
+      if (!request.auth || !request.auth.uid) {
+        throw new HttpsError(
+            'unauthenticated',
+            'Must be signed in to ensure user document.',
+        );
+      }
+
+      const uid = request.auth.uid;
+      const clientLanguageCode =
+        typeof request.data?.languageCode === 'string' &&
+        request.data.languageCode.length > 0 ?
+          request.data.languageCode :
+          null;
+
+      let userRecord;
+      try {
+        userRecord = await admin.auth().getUser(uid);
+      } catch (err) {
+        throw new HttpsError(
+            'internal',
+            'Failed to read Auth user: ' + err.message,
+        );
+      }
+
+      const docRef = admin.firestore().collection('users').doc(uid);
+      let created = false;
+
+      try {
+        await admin.firestore().runTransaction(async (tx) => {
+          const snap = await tx.get(docRef);
+          const existing = snap.exists ? snap.data() || {} : null;
+          const now = admin.firestore.FieldValue.serverTimestamp();
+
+          const payload = {};
+
+          if (!existing) {
+            created = true;
+            // Fresh doc — write full defaults.
+            payload.email = userRecord.email || '';
+            payload.displayName = userRecord.displayName || null;
+            payload.isNew = true;
+            payload.isVerified = !!userRecord.emailVerified;
+            payload.referralCode = uid;
+            payload.createdAt = now;
+            payload.languageCode = clientLanguageCode || 'tr';
+            if (userRecord.emailVerified) {
+              payload.emailVerifiedAt = now;
+            }
+          } else {
+            // Existing doc — patch only missing required fields.
+            if (existing.email == null || existing.email === '') {
+              if (userRecord.email) payload.email = userRecord.email;
+            }
+            if (existing.createdAt == null) payload.createdAt = now;
+            if (existing.referralCode == null) payload.referralCode = uid;
+            if (existing.languageCode == null) {
+              payload.languageCode = clientLanguageCode || 'tr';
+            }
+            // Sync verification if Auth is verified but doc isn't marked.
+            if (userRecord.emailVerified && existing.isVerified !== true) {
+              payload.isVerified = true;
+              if (existing.emailVerifiedAt == null) {
+                payload.emailVerifiedAt = now;
+              }
+            }
+          }
+
+          if (Object.keys(payload).length > 0) {
+            tx.set(docRef, payload, {merge: true});
+          }
+        });
+      } catch (err) {
+        throw new HttpsError(
+            'internal',
+            'Failed to ensure user document: ' + err.message,
+        );
+      }
+
+      return {
+        ok: true,
+        created,
+        uid,
+      };
+    },
+);

@@ -15421,6 +15421,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get extrasHint => 'Select optional extras and set their prices.';
 
   @override
+  String get addYourOwnExtra => 'Add your own';
+
+  @override
+  String get customExtraNamePlaceholder => 'Name your extra';
+
+  @override
   String get preparationTime => 'Preparation Time';
 
   @override
@@ -16358,4 +16364,38 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get marketCategoryTools => 'Tools';
+
+  @override
+  String get deleteFood => 'Delete Food';
+
+  @override
+  String deleteFoodConfirmation(String name) {
+    return 'Are you sure you want to delete \"$name\"? This action cannot be undone.';
+  }
+
+  @override
+  String get deleteDrink => 'Delete Drink';
+
+  @override
+  String deleteDrinkConfirmation(String name) {
+    return 'Are you sure you want to delete \"$name\"? This action cannot be undone.';
+  }
+
+  @override
+  String get deletingFood => 'Deleting food...';
+
+  @override
+  String get deletingDrink => 'Deleting drink...';
+
+  @override
+  String get foodDeletedSuccess => 'Food deleted successfully';
+
+  @override
+  String get drinkDeletedSuccess => 'Drink deleted successfully';
+
+  @override
+  String get deleteFoodFailed => 'Failed to delete food. Please try again.';
+
+  @override
+  String get deleteDrinkFailed => 'Failed to delete drink. Please try again.';
 }

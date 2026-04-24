@@ -963,13 +963,25 @@ class _SellerPanelState extends State<SellerPanel>
                         key: ValueKey(provider.selectedShopBusinessType),
                         children: isRestaurant
                             ? [
+                                // Per-tab ValueKey(restaurantId) forces a fresh
+                                // State when switching between restaurants, so
+                                // tabs that fetch in initState (Foods, Settings)
+                                // don't show stale data from the previous one.
                                 RestaurantDashboardTab(
+                                    key: ValueKey(
+                                        'rest_dashboard_${provider.selectedShop!.id}'),
                                     restaurantId: provider.selectedShop!.id),
                                 FoodOrdersTab(
+                                    key: ValueKey(
+                                        'rest_orders_${provider.selectedShop!.id}'),
                                     restaurantId: provider.selectedShop!.id),
                                 RestaurantFoodsTab(
+                                    key: ValueKey(
+                                        'rest_foods_${provider.selectedShop!.id}'),
                                     restaurantId: provider.selectedShop!.id),
                                 RestaurantReviewsTab(
+                                  key: ValueKey(
+                                      'rest_reviews_${provider.selectedShop!.id}'),
                                   restaurantId: provider.selectedShop!.id,
                                   averageRating: (provider.selectedShop!.data()
                                                   as Map<String, dynamic>)[
@@ -984,6 +996,8 @@ class _SellerPanelState extends State<SellerPanel>
                                           0,
                                 ),
                                 RestaurantSettingsTab(
+                                    key: ValueKey(
+                                        'rest_settings_${provider.selectedShop!.id}'),
                                     restaurantId: provider.selectedShop!.id),
                               ]
                             : [

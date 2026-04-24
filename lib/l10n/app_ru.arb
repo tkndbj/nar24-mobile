@@ -6232,6 +6232,8 @@
 "selectCategoryFirst": "Сначала выберите категорию",
 "extrasSelected": "{count} выбрано",
 "extrasHint": "Выберите дополнения и установите их цены.",
+"addYourOwnExtra": "Добавить своё",
+"customExtraNamePlaceholder": "Название дополнения",
 "preparationTime": "Время приготовления",
 "preparationTimePlaceholder": "напр. 25",
 "editFoodTitle": "Редактировать блюдо",
@@ -6607,5 +6609,25 @@
 "marketCategoryClothing": "Одежда",
 "marketCategoryStationery": "Канцтовары",
 "marketCategoryPet": "Зоотовары",
-"marketCategoryTools": "Инструменты"
+"marketCategoryTools": "Инструменты",
+"deleteFood": "Удалить блюдо",
+"deleteFoodConfirmation": "Вы уверены, что хотите удалить \"{name}\"? Это действие невозможно отменить.",
+"@deleteFoodConfirmation": {
+  "placeholders": {
+    "name": { "type": "String" }
+  }
+},
+"deleteDrink": "Удалить напиток",
+"deleteDrinkConfirmation": "Вы уверены, что хотите удалить \"{name}\"? Это действие невозможно отменить.",
+"@deleteDrinkConfirmation": {
+  "placeholders": {
+    "name": { "type": "String" }
+  }
+},
+"deletingFood": "Удаление блюда...",
+"deletingDrink": "Удаление напитка...",
+"foodDeletedSuccess": "Блюдо успешно удалено",
+"drinkDeletedSuccess": "Напиток успешно удалён",
+"deleteFoodFailed": "Не удалось удалить блюдо. Повторите попытку.",
+"deleteDrinkFailed": "Не удалось удалить напиток. Повторите попытку."
 }

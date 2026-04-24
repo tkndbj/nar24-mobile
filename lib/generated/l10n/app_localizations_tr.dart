@@ -15449,6 +15449,12 @@ class AppLocalizationsTr extends AppLocalizations {
       'İsteğe bağlı ekstraları seçin ve fiyatlarını belirleyin.';
 
   @override
+  String get addYourOwnExtra => 'Kendin ekle';
+
+  @override
+  String get customExtraNamePlaceholder => 'Ekstra adı';
+
+  @override
   String get preparationTime => 'Hazırlık Süresi';
 
   @override
@@ -16387,4 +16393,38 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get marketCategoryTools => 'Hırdavat & Alet';
+
+  @override
+  String get deleteFood => 'Yemeği Sil';
+
+  @override
+  String deleteFoodConfirmation(String name) {
+    return '\"$name\" adlı yemeği silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.';
+  }
+
+  @override
+  String get deleteDrink => 'İçeceği Sil';
+
+  @override
+  String deleteDrinkConfirmation(String name) {
+    return '\"$name\" adlı içeceği silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.';
+  }
+
+  @override
+  String get deletingFood => 'Yemek siliniyor...';
+
+  @override
+  String get deletingDrink => 'İçecek siliniyor...';
+
+  @override
+  String get foodDeletedSuccess => 'Yemek başarıyla silindi';
+
+  @override
+  String get drinkDeletedSuccess => 'İçecek başarıyla silindi';
+
+  @override
+  String get deleteFoodFailed => 'Yemek silinemedi. Lütfen tekrar deneyin.';
+
+  @override
+  String get deleteDrinkFailed => 'İçecek silinemedi. Lütfen tekrar deneyin.';
 }

@@ -45,6 +45,7 @@ class _RestaurantListFoodScreenState extends State<RestaurantListFoodScreen> {
   String _foodType = '';
   Map<String, double> _selectedExtras = {}; // extra key → price
   Map<String, String> _extrasRawText = {}; // extra key → raw input text
+  final List<_CustomExtra> _customExtras = []; // user-defined extras
   File? _imageFile;
   String? _existingImageUrl;
   bool _isCompressing = false;
@@ -75,6 +76,9 @@ class _RestaurantListFoodScreenState extends State<RestaurantListFoodScreen> {
     _nameFocus.dispose();
     _descFocus.dispose();
     _priceFocus.dispose();
+    for (final c in _customExtras) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -109,30 +113,49 @@ class _RestaurantListFoodScreenState extends State<RestaurantListFoodScreen> {
       final newCategory = d['foodCategory'] as String? ?? '';
       final newType = d['foodType'] as String? ?? '';
 
-      // Rebuild extras map from [{name, price}] array
+      // Split loaded extras into predefined (known keys for this category)
+      // and custom (user-defined free-form entries).
+      final availableForCategory =
+          FoodExtrasData.kExtras[newCategory] ?? const <String>[];
       final Map<String, double> extrasMap = {};
+      final List<_CustomExtra> loadedCustom = [];
       final rawExtras = d['extras'] as List? ?? [];
       for (final ex in rawExtras) {
+        String name = '';
+        double price = 0;
         if (ex is Map<String, dynamic>) {
-          final name = ex['name'] as String? ?? '';
-          final price = (ex['price'] as num?)?.toDouble() ?? 0;
-          if (name.isNotEmpty) extrasMap[name] = price;
-        } else if (ex is String && ex.isNotEmpty) {
-          extrasMap[ex] = 0; // legacy plain-string extras
+          name = ex['name'] as String? ?? '';
+          price = (ex['price'] as num?)?.toDouble() ?? 0;
+        } else if (ex is String) {
+          name = ex;
+        }
+        if (name.isEmpty) continue;
+        if (availableForCategory.contains(name)) {
+          extrasMap[name] = price;
+        } else {
+          loadedCustom.add(_CustomExtra(name: name, price: price));
         }
       }
 
       final existingUrl = d['imageUrl'] as String?;
 
+      String priceToText(double p) => p == 0
+          ? ''
+          : (p == p.truncateToDouble() ? p.toInt().toString() : p.toString());
+
       // Build raw text map from extras for editing
-      final Map<String, String> rawTextMap = {};
-      for (final entry in extrasMap.entries) {
-        rawTextMap[entry.key] = entry.value == 0
-            ? ''
-            : (entry.value == entry.value.truncateToDouble()
-                ? entry.value.toInt().toString()
-                : entry.value.toString());
+      final Map<String, String> rawTextMap = {
+        for (final entry in extrasMap.entries) entry.key: priceToText(entry.value),
+      };
+
+      // Dispose any controllers created before fetch completed, then adopt
+      // the loaded custom extras.
+      for (final c in _customExtras) {
+        c.dispose();
       }
+      _customExtras
+        ..clear()
+        ..addAll(loadedCustom);
 
       setState(() {
         _category = newCategory;
@@ -267,9 +290,18 @@ Future<void> _pickImage() async {
         'preparationTime': _prepTimeController.text.trim().isNotEmpty
             ? int.tryParse(_prepTimeController.text.trim())
             : null,
-        'extras': _selectedExtras.entries
-            .map((e) => {'name': e.key, 'price': e.value})
-            .toList(),
+        'extras': [
+          ..._selectedExtras.entries
+              .map((e) => {'name': e.key, 'price': e.value}),
+          ..._customExtras
+              .map((c) => {
+                    'name': c.nameCtl.text.trim(),
+                    'price': double.tryParse(
+                            c.priceCtl.text.trim().replaceAll(',', '.')) ??
+                        0,
+                  })
+              .where((m) => (m['name'] as String).isNotEmpty),
+        ],
       };
 
       final firestore = FirebaseFirestore.instance;
@@ -386,7 +418,7 @@ Future<void> _pickImage() async {
               const SizedBox(height: 12),
               _buildCategorySection(isDark, l10n),
               const SizedBox(height: 12),
-              if (_foodType.isNotEmpty && _availableExtras.isNotEmpty) ...[
+              if (_foodType.isNotEmpty) ...[
                 _buildExtrasSection(isDark, l10n),
                 const SizedBox(height: 12),
               ],
@@ -803,6 +835,10 @@ Future<void> _pickImage() async {
                 _foodType = '';
                 _selectedExtras = {};
                 _extrasRawText = {};
+                for (final c in _customExtras) {
+                  c.dispose();
+                }
+                _customExtras.clear();
                 _errors.remove('category');
                 _errors.remove('foodType');
               });
@@ -909,7 +945,10 @@ Future<void> _pickImage() async {
   // ── Extras Section ────────────────────────────────────────────────────────
 
   Widget _buildExtrasSection(bool isDark, AppLocalizations l10n) {
-    final selectedCount = _selectedExtras.length;
+    final customNamedCount = _customExtras
+        .where((c) => c.nameCtl.text.trim().isNotEmpty)
+        .length;
+    final selectedCount = _selectedExtras.length + customNamedCount;
     return _SectionCard(
       isDark: isDark,
       child: Column(
@@ -1091,7 +1130,173 @@ Future<void> _pickImage() async {
               );
             }).toList(),
           ),
+          if (_customExtras.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Column(
+              children: [
+                for (int i = 0; i < _customExtras.length; i++) ...[
+                  _buildCustomExtraRow(i, isDark, l10n),
+                  if (i != _customExtras.length - 1)
+                    const SizedBox(height: 8),
+                ],
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+          _buildAddYourOwnButton(isDark, l10n),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCustomExtraRow(int index, bool isDark, AppLocalizations l10n) {
+    final entry = _customExtras[index];
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          flex: 5,
+          child: TextField(
+            controller: entry.nameCtl,
+            textCapitalization: TextCapitalization.words,
+            onChanged: (v) {
+              // Title-case: capitalise first letter of each word
+              final titled = v
+                  .split(' ')
+                  .map((w) =>
+                      w.isNotEmpty ? w[0].toUpperCase() + w.substring(1) : '')
+                  .join(' ');
+              if (titled != v) {
+                entry.nameCtl.value = entry.nameCtl.value.copyWith(
+                  text: titled,
+                  selection: TextSelection.collapsed(offset: titled.length),
+                );
+              }
+              // Rebuild so the header count reflects named entries.
+              setState(() {});
+            },
+            style: const TextStyle(fontSize: 12),
+            decoration: InputDecoration(
+              hintText: l10n.customExtraNamePlaceholder,
+              hintStyle: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.grey[500] : Colors.grey[400]),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide:
+                    BorderSide(color: const Color(0xFFFDBA74).withOpacity(0.5)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide:
+                    BorderSide(color: const Color(0xFFFDBA74).withOpacity(0.5)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(
+                    color: Color(0xFFFF6200), width: 1.5),
+              ),
+              filled: true,
+              fillColor: isDark
+                  ? Colors.white.withOpacity(0.04)
+                  : const Color(0xFFFFF7ED).withOpacity(0.5),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          flex: 3,
+          child: TextField(
+            controller: entry.priceCtl,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              TextInputFormatter.withFunction((oldValue, newValue) {
+                final normalized = newValue.text.replaceAll(',', '.');
+                if (normalized.isEmpty ||
+                    RegExp(r'^\d{0,4}\.?\d{0,2}$').hasMatch(normalized)) {
+                  return newValue.copyWith(text: normalized);
+                }
+                return oldValue;
+              }),
+            ],
+            style: const TextStyle(fontSize: 11),
+            decoration: InputDecoration(
+              hintText: '0.00',
+              hintStyle: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? Colors.grey[500] : Colors.grey[400]),
+              suffixText: l10n.currency,
+              suffixStyle:
+                  TextStyle(fontSize: 10, color: Colors.grey[400]),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide:
+                    BorderSide(color: const Color(0xFFFDBA74).withOpacity(0.5)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide:
+                    BorderSide(color: const Color(0xFFFDBA74).withOpacity(0.5)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(
+                    color: Color(0xFFFF6200), width: 1.5),
+              ),
+              filled: true,
+              fillColor: isDark
+                  ? Colors.white.withOpacity(0.04)
+                  : const Color(0xFFFFF7ED).withOpacity(0.5),
+            ),
+          ),
+        ),
+        IconButton(
+          icon: Icon(Icons.close_rounded,
+              size: 18, color: Colors.grey[500]),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          splashRadius: 18,
+          onPressed: () {
+            setState(() {
+              _customExtras.removeAt(index).dispose();
+            });
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAddYourOwnButton(bool isDark, AppLocalizations l10n) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () {
+          setState(() => _customExtras.add(_CustomExtra()));
+        },
+        icon: const Icon(Icons.add_rounded,
+            size: 16, color: Color(0xFFEA580C)),
+        label: Text(
+          l10n.addYourOwnExtra,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFFEA580C),
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          side: BorderSide(color: const Color(0xFFFDBA74).withOpacity(0.8)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10)),
+          backgroundColor: isDark
+              ? Colors.white.withOpacity(0.02)
+              : const Color(0xFFFFF7ED).withOpacity(0.4),
+        ),
       ),
     );
   }
@@ -1369,5 +1574,25 @@ class _FieldLabel extends StatelessWidget {
         color: Colors.grey[500],
       ),
     );
+  }
+}
+
+class _CustomExtra {
+  final TextEditingController nameCtl;
+  final TextEditingController priceCtl;
+
+  _CustomExtra({String name = '', double price = 0})
+      : nameCtl = TextEditingController(text: name),
+        priceCtl = TextEditingController(
+          text: price == 0
+              ? ''
+              : (price == price.truncateToDouble()
+                  ? price.toInt().toString()
+                  : price.toString()),
+        );
+
+  void dispose() {
+    nameCtl.dispose();
+    priceCtl.dispose();
   }
 }

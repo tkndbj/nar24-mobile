@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../../utils/cloudinary_url_builder.dart';
 import '../cloudinary_image.dart';
 import 'package:go_router/go_router.dart';
@@ -374,6 +375,226 @@ class _RestaurantFoodsTabState extends State<RestaurantFoodsTab> {
     }
   }
 
+  // ── Delete Food ───────────────────────────────────────────────────────────
+
+  Future<void> _deleteFood(FoodItem food) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await _showDeleteConfirmation(
+      title: l10n.deleteFood,
+      message: l10n.deleteFoodConfirmation(food.name),
+    );
+    if (confirmed != true || !mounted) return;
+
+    // Show blocking progress dialog
+    _showProgressDialog(l10n.deletingFood);
+
+    try {
+      await FirebaseFunctions.instanceFor(region: 'europe-west3')
+          .httpsCallable('removeFood')
+          .call({
+        'foodId': food.id,
+        'restaurantId': widget.restaurantId,
+      });
+
+      // Dismiss progress dialog
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+
+      // Remove from local list
+      if (mounted) {
+        setState(() => _foods.removeWhere((f) => f.id == food.id));
+        _showSnackBar(l10n.foodDeletedSuccess, isError: false);
+      }
+    } catch (e) {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+      if (mounted) {
+        _showSnackBar(l10n.deleteFoodFailed, isError: true);
+      }
+      debugPrint('Failed to delete food: $e');
+    }
+  }
+
+  // ── Delete Drink ──────────────────────────────────────────────────────────
+
+  Future<void> _deleteDrink(DrinkItem drink) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await _showDeleteConfirmation(
+      title: l10n.deleteDrink,
+      message: l10n.deleteDrinkConfirmation(drink.name),
+    );
+    if (confirmed != true || !mounted) return;
+
+    _showProgressDialog(l10n.deletingDrink);
+
+    try {
+      await FirebaseFunctions.instanceFor(region: 'europe-west3')
+          .httpsCallable('removeDrink')
+          .call({
+        'drinkId': drink.id,
+        'restaurantId': widget.restaurantId,
+      });
+
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+
+      if (mounted) {
+        setState(() => _drinks.removeWhere((d) => d.id == drink.id));
+        _showSnackBar(l10n.drinkDeletedSuccess, isError: false);
+      }
+    } catch (e) {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+      if (mounted) {
+        _showSnackBar(l10n.deleteDrinkFailed, isError: true);
+      }
+      debugPrint('Failed to delete drink: $e');
+    }
+  }
+
+  // ── Confirmation & Progress dialogs ───────────────────────────────────────
+
+  Future<bool?> _showDeleteConfirmation({
+    required String title,
+    required String message,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
+
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E1B2E) : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+        contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(isDark ? 0.18 : 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.warning_amber_rounded,
+                color: Color(0xFFDC2626),
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : Colors.grey[900],
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          message,
+          style: TextStyle(
+            fontSize: 13,
+            height: 1.45,
+            color: isDark ? Colors.white70 : Colors.grey[700],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.grey[600],
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            ),
+            child: Text(
+              l10n.cancel,
+              style:
+                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: Text(
+              l10n.delete,
+              style:
+                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showProgressDialog(String message) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      useRootNavigator: true,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: Dialog(
+          backgroundColor: isDark ? const Color(0xFF1E1B2E) : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(Color(0xFFFF6200)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  message,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? Colors.white : Colors.grey[800],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: const LinearProgressIndicator(
+                    minHeight: 4,
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(Color(0xFFFF6200)),
+                    backgroundColor: Color(0x22FF6200),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // ── Grouped foods by category ─────────────────────────────────────────────
 
   List<MapEntry<String, List<FoodItem>>> get _foodsByCategory {
@@ -535,6 +756,7 @@ class _RestaurantFoodsTabState extends State<RestaurantFoodsTab> {
                                 onEditFood: () => context.push(
                                     '/restaurant_list_food_screen?edit=${food.id}'),
                                 onDiscountTap: () => _showDiscountModal(food),
+                                onDelete: () => _deleteFood(food),
                               ),
                             )),
                       ],
@@ -597,6 +819,7 @@ class _RestaurantFoodsTabState extends State<RestaurantFoodsTab> {
                                 _toggleDrinkAvailability(drink),
                             onEdit: () => context.push(
                                 '/restaurant_list_drink_screen?edit=${drink.id}&restaurantId=${widget.restaurantId}'),
+                            onDelete: () => _deleteDrink(drink),
                           ),
                         )),
                   ],
@@ -727,6 +950,7 @@ class _FoodCard extends StatelessWidget {
   final VoidCallback onToggleAvailability;
   final VoidCallback onEditFood;
   final VoidCallback onDiscountTap;
+  final VoidCallback onDelete;
 
   const _FoodCard({
     required this.food,
@@ -735,6 +959,7 @@ class _FoodCard extends StatelessWidget {
     required this.onToggleAvailability,
     required this.onEditFood,
     required this.onDiscountTap,
+    required this.onDelete,
   });
 
   @override
@@ -1005,6 +1230,13 @@ class _FoodCard extends StatelessWidget {
                                 ? const Color(0xFFF59E0B)
                                 : Colors.grey[500]!),
                         onTap: onDiscountTap,
+                      ),
+                      const SizedBox(width: 16),
+                      _ActionBtn(
+                        icon: Icons.delete_outline_rounded,
+                        label: l10n.delete,
+                        color: const Color(0xFFDC2626),
+                        onTap: onDelete,
                       ),
                     ],
                   ),
@@ -1575,12 +1807,14 @@ class _DrinkCard extends StatelessWidget {
   final bool isDark;
   final VoidCallback onToggleAvailability;
   final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   const _DrinkCard({
     required this.drink,
     required this.isDark,
     required this.onToggleAvailability,
     required this.onEdit,
+    required this.onDelete,
   });
 
   @override
@@ -1709,25 +1943,23 @@ class _DrinkCard extends StatelessWidget {
 
                   const SizedBox(height: 8),
 
-                  // Edit button
-                  GestureDetector(
-                    onTap: onEdit,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.edit_outlined,
-                            size: 13, color: Colors.grey[500]),
-                        const SizedBox(width: 4),
-                        Text(
-                          l10n.edit,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                      ],
-                    ),
+                  // Action buttons
+                  Row(
+                    children: [
+                      _ActionBtn(
+                        icon: Icons.edit_outlined,
+                        label: l10n.edit,
+                        color: Colors.grey[500]!,
+                        onTap: onEdit,
+                      ),
+                      const SizedBox(width: 16),
+                      _ActionBtn(
+                        icon: Icons.delete_outline_rounded,
+                        label: l10n.delete,
+                        color: const Color(0xFFDC2626),
+                        onTap: onDelete,
+                      ),
+                    ],
                   ),
                 ],
               ),

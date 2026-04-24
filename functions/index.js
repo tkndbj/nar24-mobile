@@ -907,8 +907,8 @@ export { generateReceiptBackground } from './43-receipt-product-payment/index.js
 export { generatePDFReport } from './44-business-report-creation/index.js';
 export { startEmail2FA, verifyEmail2FA, resendEmail2FA, createTotpSecret, verifyTotp, disableTotp, hasTotp, cleanupExpiredVerificationData } from './45-2FA/index.js'; 
 export { sendNotificationOnCreation, sendRestaurantNotificationOnCreation, sendShopNotificationOnCreation, registerFcmToken, cleanupInvalidToken, removeFcmToken, createProductQuestionNotification, cleanupOldNotifications } from './46-FCM-notifications/index.js';
-export { registerWithEmailPassword, verifyEmailCode, resendEmailVerificationCode, sendPasswordResetEmail, sendReceiptEmail, sendReportEmail, shopWelcomeEmail } from './47-emails/index.js';
-export { removeShopProduct, deleteProduct, toggleProductPauseStatus } from './48-product-management/index.js';
+export { registerWithEmailPassword, verifyEmailCode, resendEmailVerificationCode, sendPasswordResetEmail, sendReceiptEmail, sendReportEmail, shopWelcomeEmail, ensureUserDocument } from './47-emails/index.js';
+export { removeShopProduct, deleteProduct, toggleProductPauseStatus, removeFood, removeDrink } from './48-product-management/index.js';
 export { incrementImpressionCount, flushImpressions } from './49-impression/index.js';
 export { deleteCloudinaryCache } from './50-cloudinary/index.js';
 export { migrateImagePaths } from './51-cloudinary-backfill/index.js';

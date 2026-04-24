@@ -6593,6 +6593,8 @@
 "selectCategoryFirst": "Önce bir kategori seçin",
 "extrasSelected": "{count} seçildi",
 "extrasHint": "İsteğe bağlı ekstraları seçin ve fiyatlarını belirleyin.",
+"addYourOwnExtra": "Kendin ekle",
+"customExtraNamePlaceholder": "Ekstra adı",
 "preparationTime": "Hazırlık Süresi",
 "preparationTimePlaceholder": "örn. 25",
 "editFoodTitle": "Yemeği Düzenle",
@@ -6968,5 +6970,25 @@
 "marketCategoryClothing": "Giyim",
 "marketCategoryStationery": "Kırtasiye",
 "marketCategoryPet": "Evcil Hayvan",
-"marketCategoryTools": "Hırdavat & Alet"
+"marketCategoryTools": "Hırdavat & Alet",
+"deleteFood": "Yemeği Sil",
+"deleteFoodConfirmation": "\"{name}\" adlı yemeği silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.",
+"@deleteFoodConfirmation": {
+  "placeholders": {
+    "name": { "type": "String" }
+  }
+},
+"deleteDrink": "İçeceği Sil",
+"deleteDrinkConfirmation": "\"{name}\" adlı içeceği silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.",
+"@deleteDrinkConfirmation": {
+  "placeholders": {
+    "name": { "type": "String" }
+  }
+},
+"deletingFood": "Yemek siliniyor...",
+"deletingDrink": "İçecek siliniyor...",
+"foodDeletedSuccess": "Yemek başarıyla silindi",
+"drinkDeletedSuccess": "İçecek başarıyla silindi",
+"deleteFoodFailed": "Yemek silinemedi. Lütfen tekrar deneyin.",
+"deleteDrinkFailed": "İçecek silinemedi. Lütfen tekrar deneyin."
 }

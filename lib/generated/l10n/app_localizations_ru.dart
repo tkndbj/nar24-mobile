@@ -15523,6 +15523,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get extrasHint => 'Выберите дополнения и установите их цены.';
 
   @override
+  String get addYourOwnExtra => 'Добавить своё';
+
+  @override
+  String get customExtraNamePlaceholder => 'Название дополнения';
+
+  @override
   String get preparationTime => 'Время приготовления';
 
   @override
@@ -16463,4 +16469,39 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get marketCategoryTools => 'Инструменты';
+
+  @override
+  String get deleteFood => 'Удалить блюдо';
+
+  @override
+  String deleteFoodConfirmation(String name) {
+    return 'Вы уверены, что хотите удалить \"$name\"? Это действие невозможно отменить.';
+  }
+
+  @override
+  String get deleteDrink => 'Удалить напиток';
+
+  @override
+  String deleteDrinkConfirmation(String name) {
+    return 'Вы уверены, что хотите удалить \"$name\"? Это действие невозможно отменить.';
+  }
+
+  @override
+  String get deletingFood => 'Удаление блюда...';
+
+  @override
+  String get deletingDrink => 'Удаление напитка...';
+
+  @override
+  String get foodDeletedSuccess => 'Блюдо успешно удалено';
+
+  @override
+  String get drinkDeletedSuccess => 'Напиток успешно удалён';
+
+  @override
+  String get deleteFoodFailed => 'Не удалось удалить блюдо. Повторите попытку.';
+
+  @override
+  String get deleteDrinkFailed =>
+      'Не удалось удалить напиток. Повторите попытку.';
 }
