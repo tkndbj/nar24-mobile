@@ -899,7 +899,7 @@ export { onDeliveryCompleted, onMarketDeliveryCompleted, recalcCourierStats, get
 export { calculateDailyFoodAccounting, calculateWeeklyFoodAccounting, calculateMonthlyFoodAccounting } from './36-food-accounting/index.js';
 export { generateRestaurantReceiptBackground } from './37-restaurant-receipt/index.js';
 export { scheduleDiscountExpiry, restoreDiscountPrice } from './38-food-discount/index.js';
-export { createTestCouriers, deleteTestCouriers, listTestCouriers } from './39-fake-accounts/index.js';
+export { createTestCouriers, deleteTestCouriers, listTestCouriers, updateTestCourierName } from './39-fake-accounts/index.js';
 export { processCourierAction } from './40-courier-actions/index.js';
 export { generateBusinessReport } from './41-business-client-side-accounting/index.js';
 export { moderateImage } from './42-moderate-image-vision-api/index.js';

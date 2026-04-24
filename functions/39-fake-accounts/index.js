@@ -273,3 +273,65 @@ export const listTestCouriers = onCall({
     password: 'Test123456',
   };
 });
+
+export const updateTestCourierName = onCall({
+  region: 'europe-west3',
+  maxInstances: 5,
+  timeoutSeconds: 30,
+  memory: '256MiB',
+}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const adminId = request.auth.uid;
+  const db = getFirestore();
+  const auth = getAuth();
+
+  // Verify caller is admin
+  const adminDoc = await db.collection('users').doc(adminId).get();
+  if (!adminDoc.exists || adminDoc.data()?.isAdmin !== true) {
+    throw new HttpsError('permission-denied', 'Only admins can update test couriers');
+  }
+
+  const { uid, displayName } = request.data || {};
+
+  // Validate inputs
+  if (typeof uid !== 'string' || !uid) {
+    throw new HttpsError('invalid-argument', 'uid is required');
+  }
+  const trimmed = String(displayName || '').trim();
+  if (trimmed.length < 1 || trimmed.length > 60) {
+    throw new HttpsError('invalid-argument', 'displayName must be 1–60 characters');
+  }
+
+  // CRITICAL: verify it's a test account before mutating
+  const userDoc = await db.collection('users').doc(uid).get();
+  if (!userDoc.exists || userDoc.data()?.isTestAccount !== true) {
+    throw new HttpsError('permission-denied', 'Can only rename test accounts');
+  }
+
+  const previousName = userDoc.data()?.displayName || '';
+
+  // Update Auth + Firestore
+  await auth.updateUser(uid, { displayName: trimmed });
+  await db.collection('users').doc(uid).update({
+    displayName: trimmed,
+    name: trimmed,
+    updatedAt: FieldValue.serverTimestamp(),
+    updatedByAdmin: adminId,
+  });
+
+  // Audit log
+  await db.collection('admin_audit_logs').add({
+    action: 'TEST_COURIER_RENAMED',
+    adminId,
+    adminEmail: adminDoc.data()?.email || 'unknown',
+    targetUid: uid,
+    previousName,
+    newName: trimmed,
+    timestamp: FieldValue.serverTimestamp(),
+  });
+
+  return { success: true, uid, displayName: trimmed };
+});
