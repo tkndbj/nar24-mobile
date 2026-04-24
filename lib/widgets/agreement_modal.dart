@@ -44,24 +44,49 @@ class AgreementModal extends StatefulWidget {
     }
   }
 
+  /// Global guard to prevent concurrent modal invocations from racing callsites
+  /// (e.g. registration_screen's explicit show + market_screen's postframe check
+  /// both firing after Google sign-in, which would stack two dialogs).
+  ///
+  /// Dart is single-threaded, so reading and setting this flag BEFORE any
+  /// `await` yields is atomic — the second caller will observe `true` and
+  /// skip the duplicate push.
+  static bool _isShowing = false;
+
   /// Shows the agreement modal as a non-dismissible dialog.
-  /// Returns true if agreements were accepted, false otherwise.
+  /// Returns true if agreements were accepted (or were already accepted),
+  /// false if another modal was already in flight or the user could not accept.
   static Future<bool> show(BuildContext context) async {
-    bool accepted = false;
+    if (_isShowing) return false;
+    _isShowing = true;
 
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false, // Cannot dismiss by tapping outside
-      barrierColor: Colors.black.withOpacity(0.7),
-      builder: (context) => AgreementModal(
-        onAccepted: () {
-          accepted = true;
-          Navigator.of(context).pop();
-        },
-      ),
-    );
+    try {
+      // Re-verify inside the lock: another flow may have just accepted
+      // (e.g. the user accepted on a concurrently-opened modal elsewhere).
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null &&
+          await hasAcceptedAgreements(currentUser.uid)) {
+        return true;
+      }
 
-    return accepted;
+      bool accepted = false;
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false, // Cannot dismiss by tapping outside
+        barrierColor: Colors.black.withOpacity(0.7),
+        builder: (context) => AgreementModal(
+          onAccepted: () {
+            accepted = true;
+            Navigator.of(context).pop();
+          },
+        ),
+      );
+
+      return accepted;
+    } finally {
+      _isShowing = false;
+    }
   }
 
   @override
