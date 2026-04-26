@@ -1660,17 +1660,42 @@ class _FoodCard extends StatelessWidget {
                       color: isDark ? Colors.grey[500] : Colors.grey[400]),
                 ),
 
-                // Description
+                // Description — tappable when text overflows 2 lines
                 if (food.description != null && food.description!.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      food.description!,
-                      style: TextStyle(
+                    child: LayoutBuilder(
+                      builder: (ctx, constraints) {
+                        final descStyle = TextStyle(
                           fontSize: 13,
-                          color: isDark ? Colors.grey[400] : Colors.grey[500]),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                          color: isDark ? Colors.grey[400] : Colors.grey[500],
+                        );
+                        final textPainter = TextPainter(
+                          text: TextSpan(
+                            text: food.description!,
+                            style: descStyle,
+                          ),
+                          maxLines: 2,
+                          textDirection: Directionality.of(ctx),
+                          textScaler: MediaQuery.textScalerOf(ctx),
+                        )..layout(maxWidth: constraints.maxWidth);
+                        final overflows = textPainter.didExceedMaxLines;
+
+                        final descText = Text(
+                          food.description!,
+                          style: descStyle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        );
+
+                        if (!overflows) return descText;
+
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => _showDescriptionSheet(ctx),
+                          child: descText,
+                        );
+                      },
                     ),
                   ),
 
@@ -1781,6 +1806,31 @@ class _FoodCard extends StatelessWidget {
     );
   }
 
+  void _showDescriptionSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => _FoodDescriptionSheet(
+        food: food,
+        isDark: isDark,
+        isOpen: isOpen,
+        deliversToUser: deliversToUser,
+        cartQuantity: cartQuantity,
+        onAddToCart: () {
+          Navigator.of(sheetContext).pop();
+          _openExtrasSheet(context);
+        },
+        onRemoveFromCart: () {
+          Navigator.of(sheetContext).pop();
+          onRemoveFromCart();
+        },
+      ),
+    );
+  }
+
   Future<void> _openExtrasSheet(BuildContext context) async {
     if (FirebaseAuth.instance.currentUser == null) {
       showCupertinoModalPopup(
@@ -1860,6 +1910,175 @@ class _FoodCard extends StatelessWidget {
                 specialNotes: specialNotes,
               );
         },
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// FOOD DESCRIPTION SHEET — expanded description with image + add-to-cart CTA
+// =============================================================================
+
+class _FoodDescriptionSheet extends StatelessWidget {
+  final Food food;
+  final bool isDark;
+  final bool isOpen;
+  final bool deliversToUser;
+  final int cartQuantity;
+  final VoidCallback onAddToCart;
+  final VoidCallback onRemoveFromCart;
+
+  const _FoodDescriptionSheet({
+    required this.food,
+    required this.isDark,
+    required this.isOpen,
+    required this.deliversToUser,
+    required this.cartQuantity,
+    required this.onAddToCart,
+    required this.onRemoveFromCart,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final loc = AppLocalizations.of(context);
+    final maxHeight = MediaQuery.of(context).size.height * 0.85;
+    final inCart = cartQuantity > 0;
+    final canInteract = isOpen && deliversToUser;
+
+    final String buttonLabel;
+    if (!isOpen) {
+      buttonLabel = loc.foodClosedButton;
+    } else if (!deliversToUser) {
+      buttonLabel = loc.addToCart;
+    } else if (inCart) {
+      buttonLabel = '${loc.foodAddLabel} ($cartQuantity)';
+    } else {
+      buttonLabel = loc.addToCart;
+    }
+
+    final VoidCallback? onPressed = !canInteract
+        ? null
+        : (inCart ? onRemoveFromCart : onAddToCart);
+
+    return Container(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      decoration: BoxDecoration(
+        color: isDark ? const Color.fromARGB(255, 40, 38, 59) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle
+            Container(
+              margin: const EdgeInsets.only(top: 8, bottom: 4),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.grey[700] : Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+
+            // Scrollable content
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (food.imageUrl != null) ...[
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: AspectRatio(
+                            aspectRatio: 16 / 10,
+                            child: CloudinaryImage.banner(
+                              source:
+                                  food.imageStoragePath ?? food.imageUrl!,
+                              cdnWidth: 800,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_) => Container(
+                                color: isDark
+                                    ? const Color(0xFF2D2B3F)
+                                    : Colors.grey[100],
+                                alignment: Alignment.center,
+                                child: const Text('🍽️',
+                                    style: TextStyle(fontSize: 48)),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                          20, food.imageUrl != null ? 16 : 8, 20, 4),
+                      child: Text(
+                        food.name,
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+
+                    if (food.description != null &&
+                        food.description!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                        child: Text(
+                          food.description!,
+                          style: TextStyle(
+                            fontSize: 14,
+                            height: 1.5,
+                            color:
+                                isDark ? Colors.grey[300] : Colors.grey[700],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Add-to-cart button — full width, near-sharp corners, orange
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: onPressed,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF6B00),
+                    disabledBackgroundColor: isDark
+                        ? const Color(0xFF2D2B3F)
+                        : Colors.grey[300],
+                    foregroundColor: Colors.white,
+                    disabledForegroundColor:
+                        isDark ? Colors.grey[500] : Colors.grey[600],
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    buttonLabel,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

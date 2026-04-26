@@ -898,6 +898,15 @@ for (int i = 0; i < validPicked.length; i++) {
   Future<void> _navigateToPreview() async {
     final l10n = AppLocalizations.of(context);
     if (!_formKey.currentState!.validate()) return;
+    if (_selectedCategory == null ||
+        _selectedCategory!.isEmpty ||
+        _selectedSubcategory == null ||
+        _selectedSubcategory!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.categoryRequired)),
+      );
+      return;
+    }
     if (_imageFiles.isEmpty && _existingImageUrls.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.pleaseUploadAtLeastOnePhoto)),

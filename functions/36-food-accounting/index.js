@@ -10,6 +10,7 @@ const TZ_OFFSET_MS = 3 * 60 * 60 * 1000; // Europe/Istanbul = UTC+3 (fixed, no D
 const PAGE_SIZE        = 500;                 // Firestore pagination limit
 const WRITE_BATCH_SIZE = 400;                 // Firestore batch write cap (< 500)
 const TOP_ITEMS_LIMIT  = 10;                  // Top-N items stored per restaurant
+const CONTRIBUTORS_LIMIT = 10;                // Top-N restaurant contributors per platform top-item
 
 const ORDERS_COLL  = 'orders-food';
 const DAILY_COLL   = 'food-accounting-daily';
@@ -145,6 +146,9 @@ function initAggregate(restaurantId, restaurantName) {
  
     // ── Transient ────────────────────────────────────────────────────
     _itemMap: new Map(),
+    // Platform-only: itemName → Map<restaurantId, {restaurantName, quantity, revenue}>.
+    // Populated during rollupToPlatform; empty on per-restaurant aggregates.
+    _itemContributors: new Map(),
   };
 }
 
@@ -310,6 +314,19 @@ function rollupToPlatform(platform, restaurant) {
       quantity: prev.quantity + v.quantity,
       revenue: round2(prev.revenue + v.revenue),
     });
+
+    // Track per-item contributors so the platform doc can surface
+    // which restaurants drove each top-selling item.
+    let contribMap = platform._itemContributors.get(name);
+    if (!contribMap) {
+      contribMap = new Map();
+      platform._itemContributors.set(name, contribMap);
+    }
+    contribMap.set(restaurant.restaurantId, {
+      restaurantName: restaurant.restaurantName || '',
+      quantity: v.quantity,
+      revenue: v.revenue,
+    });
   }
     // ── NEW: Platform economics rollup ─────────────────────────────────
     platform.platformRevenue    = round2(platform.platformRevenue    + restaurant.platformRevenue);
@@ -334,13 +351,23 @@ function rollupToPlatform(platform, restaurant) {
 }
 
 function finaliseAggregate(agg, periodKey, periodStart, periodEnd) {
-  const { _itemMap, ...doc } = agg;
+  const { _itemMap, _itemContributors, ...doc } = agg;
 
-  // Top-N items by quantity sold
+  // Top-N items by quantity sold. Platform aggregates also attach the
+  // top contributing restaurants per item from _itemContributors.
   doc.topItems = Array.from(_itemMap.entries())
     .map(([name, v]) => ({ name, ...v }))
     .sort((a, b) => b.quantity - a.quantity)
-    .slice(0, TOP_ITEMS_LIMIT);
+    .slice(0, TOP_ITEMS_LIMIT)
+    .map((item) => {
+      const contribMap = _itemContributors?.get(item.name);
+      if (!contribMap || contribMap.size === 0) return item;
+      const contributors = Array.from(contribMap.entries())
+        .map(([restaurantId, v]) => ({ restaurantId, ...v }))
+        .sort((a, b) => b.quantity - a.quantity)
+        .slice(0, CONTRIBUTORS_LIMIT);
+      return { ...item, contributors };
+    });
 
   const revenueOrderCount = doc.completedOrders + doc.activeOrders;
   doc.averageOrderValue   = revenueOrderCount > 0 ?
