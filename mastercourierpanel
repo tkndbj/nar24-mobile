@@ -1,1414 +1,702 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { auth, db } from "@/lib/firebase";
-import { functions } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
-import { httpsCallable } from "firebase/functions";
 import {
-  collection,
+  Plus,
+  Trash2,
+  ChevronDown,
+  ChevronLeft,
+  Layers,
+  X,
+  Upload,
+  AlertCircle,
+  CheckCircle2,
+  LayoutList,
+} from "lucide-react";
+import {
   doc,
   getDoc,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  limit,
-  startAfter,
-  Timestamp,
-  QueryDocumentSnapshot,
-  DocumentData,
-} from "@/lib/firestore-debug";
-import {
-  Award,
-  BarChart2,
-  CalendarDays,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  CreditCard,
-  Loader2,
-  Package,
-  RefreshCw,
-  ShoppingBag,
-  Store,
-  TrendingUp,
-  Truck,
-  UtensilsCrossed,
-  WifiOff,
-  XCircle,
-  Receipt,
-  AlertCircle,
-} from "lucide-react";
+  setDoc,
+  serverTimestamp,
+} from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { useAuth } from "@/contexts/AuthContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import { DEFAULT_CATEGORY_DATA } from "../defaultCategoryData";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-type PeriodType = "daily" | "weekly" | "monthly";
-type CategoryType = "yemek" | "market";
-type AuthState = "loading" | "allowed" | "denied";
-
-interface AccountingDoc {
-  restaurantId: string;
-  restaurantName: string;
-  restaurantCount?: number;
-  totalOrders: number;
-  completedOrders: number;
-  activeOrders: number;
-  cancelledOrders: number;
-  grossRevenue: number;
-  deliveredRevenue: number;
-  subtotalRevenue: number;
-  deliveryFeeRevenue: number;
-  averageOrderValue: number;
-  paymentBreakdown: {
-    card?: { count: number; amount: number };
-    pay_at_door?: { count: number; amount: number };
-  };
-  paymentReceivedBreakdown?: {
-    card?:    { count: number; amount: number };
-    cash?:    { count: number; amount: number };
-    iban?:    { count: number; amount: number };
-    unknown?: { count: number; amount: number };
-  };
-  deliveryTypeBreakdown: {
-    delivery?: { count: number; amount: number };
-    pickup?: { count: number; amount: number };
-  };
-  statusBreakdown: Record<string, { count: number; amount: number }>;
-  topItems: Array<{
-    name: string;
-    quantity: number;
-    revenue: number;
-    contributors?: Array<{
-      restaurantId: string;
-      restaurantName: string;
-      quantity: number;
-      revenue: number;
-    }>;
-  }>;
-  periodKey: string;
-  periodStart: Timestamp;
-  periodEnd: Timestamp;
-  calculatedAt: Timestamp;
+interface Labels {
+  tr: string;
+  en: string;
+  ru: string;
 }
 
-interface PeriodEntry {
-  docId: string;
-  periodKey: string;
-  totalOrders: number;
-  grossRevenue: number;
-  restaurantCount: number;
-  calculatedAt: Timestamp | null;
+interface BuyerSubSubcategory {
+  key: string;
+  labels: Labels;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+interface BuyerSubcategory {
+  key: string;
+  labels: Labels;
+  subSubcategories: BuyerSubSubcategory[];
+}
 
-const COLLS: Record<CategoryType, Record<PeriodType, string>> = {
-  yemek: {
-    daily: "food-accounting-daily",
-    weekly: "food-accounting-weekly",
-    monthly: "food-accounting-monthly",
-  },
-  market: {
-    daily: "market-accounting-daily",
-    weekly: "market-accounting-weekly",
-    monthly: "market-accounting-monthly",
-  },
-};
+interface BuyerCategory {
+  key: string;
+  image: string;
+  labels: Labels;
+  subcategories: BuyerSubcategory[];
+}
 
-const CF_FN: Record<CategoryType, Record<PeriodType, string>> = {
-  yemek: {
-    daily: "calculateDailyFoodAccounting",
-    weekly: "calculateWeeklyFoodAccounting",
-    monthly: "calculateMonthlyFoodAccounting",
-  },
-  market: {
-    daily: "calculateDailyMarketAccounting",
-    weekly: "calculateWeeklyMarketAccounting",
-    monthly: "calculateMonthlyMarketAccounting",
-  },
-};
+interface CategoryStructure {
+  buyerCategories: BuyerCategory[];
+  buyerToProductMapping: Record<string, Record<string, string>>;
+}
 
-const TR_MONTHS = [
-  "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
-  "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık",
+interface CategoryMeta {
+  version: string;
+  updatedAt: unknown;
+  updatedBy: string;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const SUPPORTED_LANGS = [
+  { code: "tr", flag: "🇹🇷", label: "Türkçe" },
+  { code: "en", flag: "🇬🇧", label: "English" },
+  { code: "ru", flag: "🇷🇺", label: "Русский" },
 ];
 
-const STATUS_TR: Record<string, string> = {
-  pending: "Beklemede",
-  accepted: "Kabul",
-  rejected: "Reddedildi",
-  preparing: "Hazırlanıyor",
-  ready: "Hazır",
-  out_for_delivery: "Yolda",
-  delivered: "Teslim",
-  unknown: "Bilinmiyor",
-};
+const ACCENT_COLORS = [
+  "bg-blue-500", "bg-violet-500", "bg-pink-500", "bg-orange-500",
+  "bg-emerald-500", "bg-cyan-500", "bg-amber-500", "bg-indigo-500",
+  "bg-teal-500", "bg-lime-500", "bg-red-500", "bg-slate-500",
+];
 
-const HIST_LIMIT = 20;
-const REST_UI_PAGE = 12;
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function fmt(n: number): string {
-  return n.toLocaleString("tr-TR", { maximumFractionDigits: 0 }) + " ₺";
+function getAccent(i: number) {
+  return ACCENT_COLORS[i % ACCENT_COLORS.length];
 }
 
-function fmtCount(n: number): string {
-  return n.toLocaleString("tr-TR");
+function generateVersion(): string {
+  return new Date().toISOString().slice(0, 16).replace("T", "-");
 }
 
-function fmtTs(ts: Timestamp | null): string {
-  if (!ts) return "—";
-  return ts.toDate().toLocaleDateString("tr-TR", {
-    day: "2-digit", month: "short", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
+function emptyLabels(): Labels {
+  return { tr: "", en: "", ru: "" };
 }
 
-function pLabel(type: PeriodType, key: string): string {
-    if (type === "daily") {
-      const [y, m, d] = key.split("-").map(Number);
-      if (!y || !m || !d) return key;
-      return new Date(y, m - 1, d).toLocaleDateString("tr-TR", {
-        weekday: "long", day: "numeric", month: "long", year: "numeric",
-      });
-    }
-    if (type === "weekly") {
-      const parts = key.split("-W");
-      const w = parseInt(parts[1] ?? "0");
-      return `${parts[0]} yılı · ${w || "?"}. Hafta`;
-    }
-    const [y, m] = key.split("-").map(Number);
-    const monthName = TR_MONTHS[m - 1];
-    if (!monthName) return key; // ← prevents crash here too
-    return `${monthName} ${y}`;
-  }
+// ─── Label Input Component ────────────────────────────────────────────────────
 
-function pLabelShort(type: PeriodType, key: string): string {
-    if (type === "daily") {
-      const [y, m, d] = key.split("-").map(Number);
-      if (!y || !m || !d) return key;
-      return new Date(y, m - 1, d).toLocaleDateString("tr-TR", {
-        day: "numeric", month: "short", year: "numeric",
-      });
-    }
-    if (type === "weekly") {
-      const parts = key.split("-W");
-      const w = parseInt(parts[1] ?? "0");
-      return `${w || "?"}. Hafta`;
-    }
-    const [y, m] = key.split("-").map(Number);
-    const monthName = TR_MONTHS[m - 1];
-    if (!monthName) return key; // ← prevents the crash
-    return `${monthName.slice(0, 3)} ${y}`;
-  }
-
-function getYesterday(): string {
-  const d = new Date(Date.now() - 86_400_000);
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, "0"),
-    String(d.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-
-function getLastWeek(): { year: number; week: number } {
-  const d = new Date(Date.now() - 7 * 86_400_000);
-  const jan4 = new Date(d.getFullYear(), 0, 4);
-  const dow = (jan4.getDay() + 6) % 7;
-  const mon = new Date(jan4.getTime() - dow * 86_400_000);
-  const week = Math.max(
-    1,
-    Math.min(53, 1 + Math.round((d.getTime() - mon.getTime()) / (7 * 86_400_000))),
-  );
-  return { year: d.getFullYear(), week };
-}
-
-function getLastMonth(): { year: number; month: number } {
-  const d = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1);
-  return { year: d.getFullYear(), month: d.getMonth() + 1 };
-}
-
-function yearRange(): number[] {
-  const cur = new Date().getFullYear();
-  const out: number[] = [];
-  for (let y = 2024; y <= cur; y++) out.push(y);
-  return out;
-}
-
-function completionRate(completed: number, total: number): string {
-  if (!total) return "0%";
-  return `${Math.round((completed / total) * 100)}%`;
-}
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function StatCard({
-  label,
-  value,
-  sub,
-  icon: Icon,
-  color,
+function LabelInputs({
+  labels,
+  onChange,
+  placeholder,
 }: {
-  label: string;
-  value: string;
-  sub?: string;
-  icon: React.ElementType;
-  color: "orange" | "emerald" | "blue" | "red" | "violet" | "gray" | "amber";
+  labels: Labels;
+  onChange: (lang: keyof Labels, value: string) => void;
+  placeholder?: string;
 }) {
-  const styles: Record<typeof color, { wrap: string; icon: string; val: string }> = {
-    orange:  { wrap: "bg-orange-50  border-orange-100",  icon: "text-orange-500",  val: "text-orange-800" },
-    emerald: { wrap: "bg-emerald-50 border-emerald-100", icon: "text-emerald-500", val: "text-emerald-800" },
-    blue:    { wrap: "bg-blue-50    border-blue-100",    icon: "text-blue-500",    val: "text-blue-800" },
-    red:     { wrap: "bg-red-50     border-red-100",     icon: "text-red-500",     val: "text-red-800" },
-    violet:  { wrap: "bg-violet-50  border-violet-100",  icon: "text-violet-500",  val: "text-violet-800" },
-    gray:    { wrap: "bg-gray-50    border-gray-100",    icon: "text-gray-400",    val: "text-gray-800" },
-    amber:   { wrap: "bg-amber-50   border-amber-100",   icon: "text-amber-500",   val: "text-amber-800" },
-  };
-  const s = styles[color];
   return (
-    <div className={`rounded-xl border p-4 ${s.wrap}`}>
-      <div className="flex items-center gap-1.5 mb-2">
-        <Icon className={`w-3.5 h-3.5 ${s.icon}`} />
-        <span className={`text-[10px] font-bold uppercase tracking-wider ${s.icon} opacity-80`}>
-          {label}
-        </span>
-      </div>
-      <p className={`text-xl font-bold ${s.val} leading-none`}>{value}</p>
-      {sub && <p className={`text-[11px] mt-1.5 ${s.icon} opacity-60`}>{sub}</p>}
+    <div className="flex flex-col gap-1.5">
+      {SUPPORTED_LANGS.map(({ code, flag, label }) => (
+        <div key={code} className="flex items-center gap-2">
+          <span className="text-sm w-6 text-center">{flag}</span>
+          <input
+            type="text"
+            value={labels[code as keyof Labels]}
+            onChange={(e) => onChange(code as keyof Labels, e.target.value)}
+            placeholder={`${label}${placeholder ? ` — ${placeholder}` : ""}`}
+            className="flex-1 text-xs border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+          />
+        </div>
+      ))}
     </div>
   );
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">
-      {children}
-    </h3>
-  );
-}
+// ─── Add Category Modal ───────────────────────────────────────────────────────
 
-function EmptyRight() {
+function AddModal({
+  title,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  onConfirm: (key: string, labels: Labels) => void;
+  onCancel: () => void;
+}) {
+  const [key, setKey] = useState("");
+  const [labels, setLabels] = useState<Labels>(emptyLabels());
+
+  function handleLabelChange(lang: keyof Labels, value: string) {
+    setLabels((prev) => ({ ...prev, [lang]: value }));
+  }
+
+  function handleConfirm() {
+    const k = key.trim() || labels.en.trim() || labels.tr.trim();
+    if (!k) return;
+    onConfirm(k, {
+      tr: labels.tr.trim() || k,
+      en: labels.en.trim() || k,
+      ru: labels.ru.trim() || k,
+    });
+  }
+
   return (
-    <div className="h-full flex flex-col items-center justify-center text-center px-8">
-      <div className="w-16 h-16 bg-orange-50 rounded-2xl flex items-center justify-center mb-4">
-        <BarChart2 className="w-7 h-7 text-orange-300" />
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+        <h3 className="text-sm font-bold text-gray-900 mb-4">{title}</h3>
+
+        <div className="mb-4">
+          <label className="text-xs font-semibold text-gray-500 mb-1.5 block">
+            Anahtar (key) — veritabanında saklanır
+          </label>
+          <input
+            type="text"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            placeholder="Örn: summer_collection"
+            className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          />
+          <p className="text-[10px] text-gray-400 mt-1">
+            Boş bırakılırsa İngilizce isim kullanılır
+          </p>
+        </div>
+
+        <div className="mb-5">
+          <label className="text-xs font-semibold text-gray-500 mb-1.5 block">
+            Görünen İsimler
+          </label>
+          <LabelInputs labels={labels} onChange={handleLabelChange} />
+        </div>
+
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            İptal
+          </button>
+          <button
+            onClick={handleConfirm}
+            className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Ekle
+          </button>
+        </div>
       </div>
-      <p className="text-[15px] font-semibold text-gray-700">Dönem Seçin</p>
-      <p className="text-[12px] text-gray-400 mt-1.5 leading-relaxed max-w-[200px]">
-        Sol panelden hesaplanmış bir dönem seçerek detayları görüntüleyin
-      </p>
     </div>
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function FoodAccountingPage() {
+export default function CategoriesPage() {
+  const { user } = useAuth();
   const router = useRouter();
 
-  // ── Auth ────────────────────────────────────────────────────────────────────
-  const [authState, setAuthState] = useState<AuthState>("loading");
+  const [structure, setStructure] = useState<CategoryStructure | null>(null);
+  const [meta, setMeta] = useState<CategoryMeta | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [expandedSubs, setExpandedSubs] = useState<Set<number>>(new Set());
+  const [hasChanges, setHasChanges] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [publishing, setPublishing] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "warn" } | null>(null);
 
-  // ── Category ────────────────────────────────────────────────────────────────
-  const [category, setCategory] = useState<CategoryType>("yemek");
+  // Modal state
+  const [addModal, setAddModal] = useState<{
+    type: "category" | "subcategory" | "subsubcategory";
+    subIdx?: number;
+  } | null>(null);
 
-  // ── Tabs ────────────────────────────────────────────────────────────────────
-  const [tab, setTab] = useState<PeriodType>("daily");
+  
+  // ── Toast ────────────────────────────────────────────────────────────────────
 
-  // ── Calculate form ──────────────────────────────────────────────────────────
-  const [selDate, setSelDate]     = useState(getYesterday());
-  const [selYear, setSelYear]     = useState(getLastWeek().year);
-  const [selWeek, setSelWeek]     = useState(getLastWeek().week);
-  const [selMYear, setSelMYear]   = useState(getLastMonth().year);
-  const [selMonth, setSelMonth]   = useState(getLastMonth().month);
-  const [calcBusy, setCalcBusy]   = useState(false);
-  const [calcMsg, setCalcMsg]     = useState<{ ok: boolean; text: string } | null>(null);
-
-  // ── History list ────────────────────────────────────────────────────────────
-  const [history, setHistory]         = useState<PeriodEntry[]>([]);
-  const [histLoading, setHistLoading] = useState(false);
-  const [histHasMore, setHistHasMore] = useState(false);
-  const histCursorRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
-
-  // ── Selected period ─────────────────────────────────────────────────────────
-  const [selKey, setSelKey]               = useState<string | null>(null);
-  const [platform, setPlatform]           = useState<AccountingDoc | null>(null);
-  const [platLoading, setPlatLoading]     = useState(false);
-  const [allRests, setAllRests]           = useState<AccountingDoc[]>([]);
-  const [restsLoading, setRestsLoading]   = useState(false);
-  const [restPage, setRestPage]           = useState(0);
-  const [expandedRests, setExpandedRests] = useState<Set<string>>(new Set());
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-  const selKeyRef = useRef<string | null>(null);
-
-  // Keep selKeyRef in sync
-  useEffect(() => { selKeyRef.current = selKey; }, [selKey]);
-
-  // ── Auth check ───────────────────────────────────────────────────────────────
-  useEffect(() => {
-    return onAuthStateChanged(auth, async (user) => {
-      if (!user) { setAuthState("denied"); return; }
-      try {
-        const t = await user.getIdTokenResult(true);
-        const c = t.claims || {};
-        setAuthState(
-          c.isAdmin === true || c.masterCourier === true ? "allowed" : "denied",
-        );
-      } catch {
-        setAuthState("denied");
-      }
-    });
+  const showToast = useCallback((msg: string, type: "success" | "warn" = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
   }, []);
 
-  const activeTabRef = useRef<PeriodType>(tab);
+  // ── Load ────────────────────────────────────────────────────────────────────
 
-  // ── Load history ─────────────────────────────────────────────────────────────
-  const loadHistPage = useCallback(async (type: PeriodType, reset: boolean) => {
-    activeTabRef.current = type;
-    setHistLoading(true);
-    try {
-      const cursor = reset ? null : histCursorRef.current;
-      const coll = collection(db, COLLS[category][type]);
-
-      const q = category === "market"
-        ? cursor
-          ? query(
-              coll,
-              orderBy("periodKey", "desc"),
-              startAfter(cursor),
-              limit(HIST_LIMIT + 1),
-            )
-          : query(
-              coll,
-              orderBy("periodKey", "desc"),
-              limit(HIST_LIMIT + 1),
-            )
-        : cursor
-          ? query(
-              coll,
-              where("restaurantId", "==", "_PLATFORM"),
-              orderBy("periodKey", "desc"),
-              startAfter(cursor),
-              limit(HIST_LIMIT + 1),
-            )
-          : query(
-              coll,
-              where("restaurantId", "==", "_PLATFORM"),
-              orderBy("periodKey", "desc"),
-              limit(HIST_LIMIT + 1),
-            );
-
-      const snap = await getDocs(q);
-      if (activeTabRef.current !== type) return;
-      const hasMore = snap.docs.length > HIST_LIMIT;
-      const pageDocs = snap.docs.slice(0, HIST_LIMIT);
-
-      if (hasMore && pageDocs.length > 0) {
-        histCursorRef.current = pageDocs[pageDocs.length - 1];
-      }
-
-      const items: PeriodEntry[] = pageDocs.map((d) => {
-        const data = d.data();
-        return {
-          docId: d.id,
-          periodKey: (data.periodKey as string) || "",
-          totalOrders: (data.totalOrders as number) || 0,
-          grossRevenue: (data.grossRevenue as number) || 0,
-          restaurantCount: (data.restaurantCount as number) || 0,
-          calculatedAt: (data.calculatedAt as Timestamp) || null,
-        };
-      });
-
-      setHistory((prev) => (reset ? items : [...prev, ...items]));
-      setHistHasMore(hasMore);
-    } catch (err) {
-      console.error("[FoodAccounting] History load error:", err);
-    } finally {
-      setHistLoading(false);
-    }
-  }, [category]);
-
-  // ── Reset on tab change ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (authState !== "allowed") return;
-    histCursorRef.current = null;
-    setHistory([]);
-    setHistHasMore(false);
-    setSelKey(null);
-    setPlatform(null);
-    setAllRests([]);
-    setExpandedRests(new Set());
-    setExpandedItems(new Set());
-    setCalcMsg(null);
-    loadHistPage(tab, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, category, authState]);
-
-  // ── Select period ────────────────────────────────────────────────────────────
-  const selectPeriod = useCallback(
-    async (key: string) => {
-      // Toggle off
-      if (selKeyRef.current === key) {
-        setSelKey(null);
-        setPlatform(null);
-        setAllRests([]);
-        setExpandedRests(new Set());
-        setExpandedItems(new Set());
-        return;
-      }
-
-      setSelKey(key);
-      setPlatform(null);
-      setAllRests([]);
-      setRestPage(0);
-      setExpandedRests(new Set());
-      setExpandedItems(new Set());
-
-      const coll = COLLS[category][tab];
-      const docPrefix = category === "market" ? "MARKET" : "PLATFORM";
-
-      // 1. Load summary doc directly by ID
-      setPlatLoading(true);
+    async function load() {
       try {
-        const snap = await getDoc(doc(db, coll, `${docPrefix}_${key}`));
-        if (snap.exists()) {
-          setPlatform(snap.data() as AccountingDoc);
-        }
-      } catch (err) {
-        console.error("[FoodAccounting] Platform doc error:", err);
+        const [metaSnap, structSnap] = await Promise.all([
+          getDoc(doc(db, "categories", "meta")),
+          getDoc(doc(db, "categories", "structure")),
+        ]);
+        setStructure(structSnap.exists()
+          ? (structSnap.data() as CategoryStructure)
+          : (DEFAULT_CATEGORY_DATA as CategoryStructure));
+        if (metaSnap.exists()) setMeta(metaSnap.data() as CategoryMeta);
+      } catch {
+        setStructure(DEFAULT_CATEGORY_DATA as CategoryStructure);
+        showToast("Firestore'dan yüklenemedi, varsayılan veri kullanılıyor.", "warn");
       } finally {
-        setPlatLoading(false);
+        setLoading(false);
       }
-
-      // 2. Load all restaurant docs for this period (only for yemek — market has no restaurants)
-      if (category === "yemek") {
-        setRestsLoading(true);
-        try {
-          const q = query(
-            collection(db, coll),
-            where("periodKey", "==", key),
-            limit(500),
-          );
-          const snap = await getDocs(q);
-          const rests: AccountingDoc[] = [];
-          snap.docs.forEach((d) => {
-            const data = d.data() as AccountingDoc;
-            if (data.restaurantId !== "_PLATFORM") {
-              rests.push(data);
-            }
-          });
-          rests.sort((a, b) => b.grossRevenue - a.grossRevenue);
-          setAllRests(rests);
-        } catch (err) {
-          console.error("[FoodAccounting] Restaurants load error:", err);
-        } finally {
-          setRestsLoading(false);
-        }
-      }
-    },
-    [tab, category],
-  );
-
-  // ── Calculate ────────────────────────────────────────────────────────────────
-  const handleCalculate = useCallback(async () => {
-    setCalcBusy(true);
-    setCalcMsg(null);
-
-    let payload: Record<string, unknown> = {};
-    let expectedKey = "";
-
-    if (tab === "daily") {
-      payload = { date: selDate };
-      expectedKey = selDate;
-    } else if (tab === "weekly") {
-      payload = { year: selYear, week: selWeek };
-      expectedKey = `${selYear}-W${String(selWeek).padStart(2, "0")}`;
-    } else {
-      payload = { year: selMYear, month: selMonth };
-      expectedKey = `${selMYear}-${String(selMonth).padStart(2, "0")}`;
     }
+    load();
+  }, [showToast]);
 
+
+  // ── Publish ──────────────────────────────────────────────────────────────────
+
+  async function handlePublish() {
+    if (!structure) return;
+    setPublishing(true);
     try {
-      const fn = httpsCallable(functions, CF_FN[category][tab]);
-      const result = await fn(payload);
-      const data = result.data as {
-        success?: boolean;
-        periodKey?: string;
-        restaurantCount?: number;
-        totalOrders?: number;
-        totalGrossRevenue?: number;
-        message?: string;
-      };
-
-      const periodKey = data.periodKey || expectedKey;
-
-      setCalcMsg({
-        ok: true,
-        text: data.message
-          ? data.message
-          : `${data.restaurantCount || 0} restoran · ${fmtCount(data.totalOrders || 0)} sipariş · ${fmt(data.totalGrossRevenue || 0)}`,
-      });
-
-      // Refresh history list
-      histCursorRef.current = null;
-      await loadHistPage(tab, true);
-
-      // Auto-select the freshly calculated period
-      selectPeriod(periodKey);
-    } catch (err: unknown) {
-      const msg = (err as { message?: string })?.message || "Hesaplama başarısız oldu.";
-      setCalcMsg({ ok: false, text: msg });
+      const version = generateVersion();
+      await Promise.all([
+        setDoc(doc(db, "categories", "structure"), structure),
+        setDoc(doc(db, "categories", "meta"), {
+          version,
+          updatedAt: serverTimestamp(),
+          updatedBy: user?.email ?? "admin",
+        }),
+      ]);
+      setMeta({ version, updatedAt: new Date(), updatedBy: user?.email ?? "admin" });
+      setHasChanges(false);
+      showToast("Firestore'a başarıyla yayınlandı!");
+    } catch {
+      showToast("Yayınlama başarısız. Tekrar deneyin.", "warn");
     } finally {
-      setCalcBusy(false);
+      setPublishing(false);
     }
-  }, [tab, category, selDate, selYear, selWeek, selMYear, selMonth, loadHistPage, selectPeriod]);
-
-  // ─── Render: auth states ──────────────────────────────────────────────────
-
-  if (authState === "loading") {
-    return (
-      <div className="h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-[3px] border-orange-200 border-t-orange-500 rounded-full animate-spin" />
-          <p className="text-[12px] text-gray-400 font-medium">Yükleniyor...</p>
-        </div>
-      </div>
-    );
   }
 
-  if (authState === "denied") {
+  // ── Mutations ────────────────────────────────────────────────────────────────
+
+  function update(updater: (draft: CategoryStructure) => void) {
+    setStructure((prev) => {
+      if (!prev) return prev;
+      const next = JSON.parse(JSON.stringify(prev)) as CategoryStructure;
+      updater(next);
+      return next;
+    });
+    setHasChanges(true);
+  }
+
+  // Category label edit
+  function updateCategoryLabel(i: number, lang: keyof Labels, value: string) {
+    update((d) => {
+      // ✅ Guard: initialize labels if missing
+      if (!d.buyerCategories[i].labels) {
+        d.buyerCategories[i].labels = { tr: "", en: "", ru: "" };
+      }
+      d.buyerCategories[i].labels[lang] = value;
+    });
+  }
+
+  function deleteBuyerCategory(i: number) {
+    const key = structure!.buyerCategories[i].key;
+    if (!confirm(`"${key}" silinsin mi?`)) return;
+    update((d) => { d.buyerCategories.splice(i, 1); });
+    if (selectedIndex === i) setSelectedIndex(null);
+    else if (selectedIndex !== null && selectedIndex > i) setSelectedIndex(selectedIndex - 1);
+    showToast(`"${key}" silindi`, "warn");
+  }
+
+  function addBuyerCategory(key: string, labels: Labels) {
+    update((d) => {
+      d.buyerCategories.push({ key, image: "", labels, subcategories: [] });
+    });
+    setSelectedIndex((structure?.buyerCategories.length ?? 0));
+    showToast(`"${labels.en}" eklendi`);
+    setAddModal(null);
+  }
+
+  // Subcategory label edit
+  function updateSubcategoryLabel(si: number, lang: keyof Labels, value: string) {
+    if (selectedIndex === null) return;
+    update((d) => {
+      // ✅ Guard: initialize labels if missing
+      if (!d.buyerCategories[selectedIndex].subcategories[si].labels) {
+        d.buyerCategories[selectedIndex].subcategories[si].labels = { tr: "", en: "", ru: "" };
+      }
+      d.buyerCategories[selectedIndex].subcategories[si].labels[lang] = value;
+    });
+  }
+
+  function addSubcategory(key: string, labels: Labels) {
+    if (selectedIndex === null) return;
+    update((d) => {
+      d.buyerCategories[selectedIndex].subcategories.push({
+        key, labels, subSubcategories: [],
+      });
+    });
+    showToast(`"${labels.en}" eklendi`);
+    setAddModal(null);
+  }
+
+  function deleteSubcategory(si: number) {
+    if (selectedIndex === null) return;
+    const key = structure!.buyerCategories[selectedIndex].subcategories[si].key;
+    if (!confirm(`"${key}" silinsin mi?`)) return;
+    update((d) => { d.buyerCategories[selectedIndex].subcategories.splice(si, 1); });
+    showToast(`"${key}" silindi`, "warn");
+  }
+
+  // Sub-subcategory
+  function addSubSubcategory(si: number, key: string, labels: Labels) {
+    if (selectedIndex === null) return;
+    update((d) => {
+      d.buyerCategories[selectedIndex].subcategories[si].subSubcategories.push({
+        key, labels,
+      });
+    });
+ 
+    setAddModal(null);
+    showToast(`"${labels.en}" eklendi`);
+  }
+
+  function deleteSubSubcategory(si: number, ti: number) {
+    if (selectedIndex === null) return;
+    update((d) => {
+      d.buyerCategories[selectedIndex].subcategories[si].subSubcategories.splice(ti, 1);
+    });
+  }
+
+  function toggleSub(si: number) {
+    setExpandedSubs((prev) => {
+      const next = new Set(prev);
+      if (next.has(si)) {
+        next.delete(si);
+      } else {
+        next.add(si);
+      }
+      return next;
+    });
+  }
+
+  // ── Stats ────────────────────────────────────────────────────────────────────
+
+  const stats = structure
+    ? structure.buyerCategories.reduce(
+        (acc, c) => {
+          acc.subs += c.subcategories.length;
+          c.subcategories.forEach((s) => (acc.subsubs += s.subSubcategories.length));
+          return acc;
+        },
+        { subs: 0, subsubs: 0 }
+      )
+    : { subs: 0, subsubs: 0 };
+
+  const selectedCat = selectedIndex !== null ? structure?.buyerCategories[selectedIndex] : null;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gray-50 px-4">
-        <div className="text-center max-w-sm">
-          <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <WifiOff className="w-6 h-6 text-red-400" />
+      <ProtectedRoute>
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-slate-500">Kategoriler yükleniyor...</p>
           </div>
-          <h2 className="text-base font-bold text-gray-900 mb-1.5">Erişim Reddedildi</h2>
-          <p className="text-[13px] text-gray-500 leading-relaxed">
-            Bu sayfaya erişmek için{" "}
-            <code className="bg-gray-100 px-1 rounded text-xs">isAdmin</code> veya{" "}
-            <code className="bg-gray-100 px-1 rounded text-xs">masterCourier</code>{" "}
-            yetkisine ihtiyacınız var.
-          </p>
         </div>
-      </div>
+      </ProtectedRoute>
     );
   }
-
-  // ─── Render: main layout ──────────────────────────────────────────────────
-
-  const years = yearRange();
-  const restTotalPages = Math.ceil(allRests.length / REST_UI_PAGE);
-  const restSlice = allRests.slice(restPage * REST_UI_PAGE, (restPage + 1) * REST_UI_PAGE);
 
   return (
-    <div className="h-[100dvh] pt-[55px] flex flex-col bg-gray-50 overflow-hidden">
+    <ProtectedRoute>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
 
-      {/* ── Page header + tabs ───────────────────────────────────────────── */}
-      <div className="flex-shrink-0 bg-white border-b border-gray-100 px-4 sm:px-6">
-        <div className="flex items-center py-3">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => router.back()}
-              className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center transition-colors"
-              title="Geri"
-            >
-              <ChevronLeft className="w-4 h-4 text-gray-600" />
-            </button>
-            <div className="w-8 h-8 bg-orange-50 rounded-xl flex items-center justify-center">
-              <UtensilsCrossed className="w-4 h-4 text-orange-500" />
+        {/* Header */}
+        <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-40">
+          <div className="max-w-[1400px] mx-auto px-6 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button onClick={() => router.back()} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+                <ChevronLeft className="w-4 h-4 text-gray-500" />
+              </button>
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center shadow-sm">
+                <Layers className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h1 className="text-sm font-bold text-gray-900 leading-tight">Kategori Yönetimi</h1>
+                <p className="text-[11px] text-gray-500 leading-tight">
+                  {meta ? `Son yayın: ${meta.version}` : "Henüz yayınlanmadı"}
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-[15px] font-bold text-gray-900 leading-tight">Muhasebe</h1>
-              <p className="text-[10px] text-gray-400">Günlük · Haftalık · Aylık satış analizi</p>
-            </div>
-          </div>
-
-          {/* Category tabs */}
-          <div className="flex bg-gray-100 rounded-xl p-0.5 ml-3">
-            {(["yemek", "market"] as CategoryType[]).map((c) => {
-              const labels: Record<CategoryType, string> = {
-                yemek: "Yemek",
-                market: "Market",
-              };
-              return (
-                <button
-                  key={c}
-                  onClick={() => setCategory(c)}
-                  className={`px-4 py-1.5 text-[12px] font-semibold rounded-lg transition-all ${
-                    category === c
-                      ? "bg-white text-orange-600 shadow-sm"
-                      : "text-gray-400 hover:text-gray-600"
-                  }`}
-                >
-                  {labels[c]}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Period tabs */}
-        <div className="flex gap-1 pb-0">
-          {(["daily", "weekly", "monthly"] as PeriodType[]).map((t) => {
-            const labels: Record<PeriodType, string> = {
-              daily: "Günlük",
-              weekly: "Haftalık",
-              monthly: "Aylık",
-            };
-            return (
+            <div className="flex items-center gap-3">
+              {hasChanges && (
+                <div className="flex items-center gap-1.5 text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span className="text-xs font-medium">Yayınlanmamış değişiklikler</span>
+                </div>
+              )}
               <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`px-4 py-2.5 text-[12px] font-semibold border-b-2 transition-all ${
-                  tab === t
-                    ? "border-orange-500 text-orange-600"
-                    : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200"
+                onClick={handlePublish}
+                disabled={!hasChanges || publishing}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold shadow-sm transition-all ${
+                  hasChanges && !publishing
+                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700"
+                    : "bg-gray-100 text-gray-400 cursor-not-allowed"
                 }`}
               >
-                {labels[t]}
+                {publishing
+                  ? <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  : <Upload className="w-3.5 h-3.5" />}
+                {publishing ? "Yayınlanıyor..." : "Firestore'a Yayınla"}
               </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Body ────────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-[340px_1fr]">
-
-        {/* ── Left panel ──────────────────────────────────────────────── */}
-        <div className="overflow-y-auto border-r border-gray-100 bg-white">
-          <div className="p-4 space-y-4">
-
-            {/* ── Calculate card ──────────────────────────────────────── */}
-            <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4">
-              <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-3">
-                Hesapla
-              </p>
-
-              {/* Date inputs */}
-              <div className="space-y-2 mb-3">
-              {tab === "daily" && (
-  <div>
-    <label className="text-[10px] font-semibold text-gray-400 block mb-1">
-      Tarih
-    </label>
-    <input
-      type="date"
-      value={selDate}      
-      onChange={(e) => setSelDate(e.target.value)}
-      className="w-full px-3 py-2 text-[12px] bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-orange-300 focus:border-orange-300"
-    />
-  </div>
-)}
-
-                {tab === "weekly" && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] font-semibold text-gray-400 block mb-1">Yıl</label>
-                      <select
-                        value={selYear}
-                        onChange={(e) => setSelYear(Number(e.target.value))}
-                        className="w-full px-3 py-2 text-[12px] bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-orange-300"
-                      >
-                        {years.map((y) => (
-                          <option key={y} value={y}>{y}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-semibold text-gray-400 block mb-1">Hafta</label>
-                      <select
-                        value={selWeek}
-                        onChange={(e) => setSelWeek(Number(e.target.value))}
-                        className="w-full px-3 py-2 text-[12px] bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-orange-300"
-                      >
-                        {Array.from({ length: 53 }, (_, i) => i + 1).map((w) => (
-                          <option key={w} value={w}>{w}. Hafta</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                )}
-
-                {tab === "monthly" && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] font-semibold text-gray-400 block mb-1">Yıl</label>
-                      <select
-                        value={selMYear}
-                        onChange={(e) => setSelMYear(Number(e.target.value))}
-                        className="w-full px-3 py-2 text-[12px] bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-orange-300"
-                      >
-                        {years.map((y) => (
-                          <option key={y} value={y}>{y}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-semibold text-gray-400 block mb-1">Ay</label>
-                      <select
-                        value={selMonth}
-                        onChange={(e) => setSelMonth(Number(e.target.value))}
-                        className="w-full px-3 py-2 text-[12px] bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-orange-300"
-                      >
-                        {TR_MONTHS.map((m, i) => (
-                          <option key={i + 1} value={i + 1}>{m}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Calculate button */}
-              <button
-                onClick={handleCalculate}
-                disabled={calcBusy}
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-orange-500 hover:bg-orange-600 text-white text-[12px] font-semibold rounded-xl transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {calcBusy ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Hesaplanıyor...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    Hesapla &amp; Kaydet
-                  </>
-                )}
-              </button>
-
-              {/* Calc result */}
-              {calcMsg && (
-                <div
-                  className={`mt-2.5 flex items-start gap-2 px-3 py-2.5 rounded-xl text-[11px] font-medium ${
-                    calcMsg.ok
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                      : "bg-red-50 text-red-600 border border-red-100"
-                  }`}
-                >
-                  {calcMsg.ok
-                    ? <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                    : <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                  }
-                  <span className="leading-relaxed">{calcMsg.text}</span>
-                </div>
-              )}
-
-              <p className="text-[10px] text-gray-400 mt-2.5 leading-relaxed">
-                Mevcut bir dönem yeniden hesaplandığında üzerine yazılır.
-              </p>
-            </div>
-
-            {/* ── History list ─────────────────────────────────────────── */}
-            <div>
-              <div className="flex items-center justify-between mb-2.5">
-                <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">
-                  Hesaplanan Dönemler
-                </p>
-                {histLoading && history.length === 0 && (
-                  <Loader2 className="w-3.5 h-3.5 text-orange-400 animate-spin" />
-                )}
-              </div>
-
-              {history.length === 0 && !histLoading ? (
-                <div className="flex flex-col items-center py-8 text-center">
-                  <CalendarDays className="w-8 h-8 text-gray-200 mb-2" />
-                  <p className="text-[12px] text-gray-400">Henüz hesaplanmış dönem yok</p>
-                  <p className="text-[11px] text-gray-300 mt-1">
-                    Yukarıdaki Hesapla butonunu kullanın
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  {history.map((entry) => {
-                    const isSelected = selKey === entry.periodKey;
-                    return (
-                      <button
-                        key={entry.docId}
-                        onClick={() => selectPeriod(entry.periodKey)}
-                        className={`w-full text-left rounded-xl border px-3 py-3 transition-all ${
-                          isSelected
-                            ? "bg-orange-50 border-orange-200 shadow-sm"
-                            : "bg-white border-gray-100 hover:border-gray-200 hover:bg-gray-50"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <p
-                            className={`text-[12px] font-semibold truncate ${
-                              isSelected ? "text-orange-700" : "text-gray-800"
-                            }`}
-                          >
-                            {pLabelShort(tab, entry.periodKey)}
-                          </p>
-                          {category === "yemek" && entry.restaurantCount > 0 && (
-                            <span className="text-[10px] text-gray-400 flex-shrink-0">
-                              {entry.restaurantCount} rest.
-                            </span>
-                          )}
-                          {category === "market" && (
-                            <span className="text-[10px] text-gray-400 flex-shrink-0">
-                              Nar24 Market
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between mt-1.5 gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] text-gray-500">
-                              {fmtCount(entry.totalOrders)} sipariş
-                            </span>
-                            <span className="text-[10px] text-gray-300">·</span>
-                            <span
-                              className={`text-[11px] font-semibold ${
-                                isSelected ? "text-orange-600" : "text-emerald-600"
-                              }`}
-                            >
-                              {fmt(entry.grossRevenue)}
-                            </span>
-                          </div>
-                          {entry.calculatedAt && (
-                            <span className="text-[10px] text-gray-400 flex-shrink-0">
-                              {fmtTs(entry.calculatedAt).split(" ").slice(0, 2).join(" ")}
-                            </span>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
-
-                  {/* Load more */}
-                  {histHasMore && (
-                    <button
-                      onClick={() => loadHistPage(tab, false)}
-                      disabled={histLoading}
-                      className="w-full py-2 text-[11px] font-medium text-orange-500 hover:text-orange-600 border border-dashed border-orange-200 rounded-xl hover:bg-orange-50 transition-colors disabled:opacity-50 mt-1"
-                    >
-                      {histLoading ? (
-                        <span className="flex items-center justify-center gap-1.5">
-                          <Loader2 className="w-3 h-3 animate-spin" /> Yükleniyor...
-                        </span>
-                      ) : (
-                        "Daha Fazla Yükle"
-                      )}
-                    </button>
-                  )}
-                </div>
-              )}
             </div>
           </div>
-        </div>
+        </header>
 
-        {/* ── Right panel ──────────────────────────────────────────────── */}
-        <div className="overflow-y-auto">
-          {!selKey ? (
-            <EmptyRight />
-          ) : platLoading ? (
-            <div className="flex items-center justify-center h-40">
-              <Loader2 className="w-6 h-6 text-orange-400 animate-spin" />
+        <main className="max-w-[1400px] mx-auto px-6 py-8">
+
+          {/* Stats */}
+          <div className="grid grid-cols-4 gap-3 mb-6">
+            {[
+              { label: "Alıcı Kategorileri", value: structure?.buyerCategories.length ?? 0 },
+              { label: "Alt Kategoriler", value: stats.subs },
+              { label: "Alt-Alt Kategoriler", value: stats.subsubs },
+            ].map((s) => (
+              <div key={s.label} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                <div className="text-xs text-gray-500 mb-1">{s.label}</div>
+                <div className="text-2xl font-bold text-gray-900">{s.value}</div>
+              </div>
+            ))}
+            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex items-center gap-3">
+              <div className={`w-2 h-2 rounded-full ${hasChanges ? "bg-amber-400" : "bg-emerald-400"}`} />
+              <div>
+                <div className="text-xs text-gray-500">Durum</div>
+                <div className={`text-xs font-semibold ${hasChanges ? "text-amber-600" : "text-emerald-600"}`}>
+                  {hasChanges ? "Yayınlanmamış" : "Güncel"}
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="p-4 sm:p-6 space-y-6">
+          </div>
 
-              {/* Period heading */}
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900 leading-tight">
-                    {pLabel(tab, selKey)}
-                  </h2>
-                  {platform && (
-                    <p className="text-[12px] text-gray-400 mt-1">
-                      Son hesaplama: {fmtTs(platform.calculatedAt)}
-                      {category === "yemek" && (platform.restaurantCount || allRests.length) > 0 && (
-                        <> · {platform.restaurantCount || allRests.length} restoran</>
-                      )}
-                      {category === "market" && (
-                        <> · Nar24 Market</>
-                      )}
-                    </p>
-                  )}
+          {/* Layout */}
+          <div className="grid grid-cols-[280px_1fr] gap-4 items-start">
+
+            {/* LEFT: Buyer category list */}
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                  <LayoutList className="w-4 h-4 text-gray-400" />
+                  <span className="text-xs font-semibold text-gray-700">Alıcı Kategorileri</span>
                 </div>
                 <button
-                  onClick={handleCalculate}
-                  disabled={calcBusy}
-                  title="Bu dönemi yeniden hesapla"
-                  className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-xl text-[11px] font-semibold text-orange-600 transition-colors disabled:opacity-50"
+                  onClick={() => setAddModal({ type: "category" })}
+                  className="flex items-center gap-1 text-[11px] text-blue-600 bg-blue-50 border border-blue-200 rounded-md px-2 py-1 hover:bg-blue-100 transition-colors font-medium"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${calcBusy ? "animate-spin" : ""}`} />
-                  <span className="hidden sm:inline">Yeniden Hesapla</span>
+                  <Plus className="w-3 h-3" /> Ekle
                 </button>
               </div>
+              <div className="max-h-[600px] overflow-y-auto">
+                {structure?.buyerCategories.map((cat, i) => (
+                  <button
+                    key={i}
+                    onClick={() => { setSelectedIndex(i); setExpandedSubs(new Set()); }}
+                    className={`w-full flex items-center justify-between px-4 py-3 text-left border-b border-gray-50 transition-colors group ${
+                      selectedIndex === i ? "bg-blue-50" : "hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-7 h-7 ${getAccent(i)} rounded-lg flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0`}>
+                        {cat.key.charAt(0)}
+                      </div>
+                      <div>
+                        {/* Show all 3 language labels in sidebar */}
+                        <div className="text-xs font-semibold text-gray-800">
+                          {cat.labels?.tr || cat.key}
+                        </div>
+                        <div className="text-[10px] text-gray-400">
+                          {cat.labels?.en} · {cat.subcategories.length} alt
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deleteBuyerCategory(i); }}
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-50 hover:text-red-500 text-gray-300 transition-all"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </button>
+                ))}
+              </div>
+            </div>
 
-              {platform ? (
+            {/* RIGHT: Editor */}
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm min-h-[400px]">
+              {!selectedCat ? (
+                <div className="flex flex-col items-center justify-center h-[400px] text-gray-400">
+                  <Layers className="w-10 h-10 mb-3 opacity-30" />
+                  <p className="text-sm font-medium">Sol taraftan bir kategori seçin</p>
+                </div>
+              ) : (
                 <>
-                  {/* ── Sipariş Özeti ─────────────────────────────────── */}
-                  <div>
-                    <SectionTitle>Sipariş Özeti</SectionTitle>
-                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                      <StatCard
-                        label="Toplam Sipariş"
-                        value={fmtCount(platform.totalOrders)}
-                        icon={ShoppingBag}
-                        color="orange"
-                      />
-                      <StatCard
-                        label="Brüt Ciro"
-                        value={fmt(platform.grossRevenue)}
-                        sub="İptal hariç"
-                        icon={TrendingUp}
-                        color="emerald"
-                      />
-                      <StatCard
-                        label="Teslim Edildi"
-                        value={fmtCount(platform.completedOrders)}
-                        sub={`${completionRate(platform.completedOrders, platform.totalOrders)} tamamlama`}
-                        icon={CheckCircle2}
-                        color="blue"
-                      />
-                      <StatCard
-                        label="İptal / Red"
-                        value={fmtCount(platform.cancelledOrders)}
-                        sub={platform.totalOrders > 0
-                          ? `%${Math.round((platform.cancelledOrders / platform.totalOrders) * 100)} iptal oranı`
-                          : undefined}
-                        icon={XCircle}
-                        color="red"
-                      />
-                      <StatCard
-                        label="Ort. Sipariş Tutarı"
-                        value={fmt(platform.averageOrderValue)}
-                        icon={Receipt}
-                        color="violet"
-                      />
-                      <StatCard
-                        label="Kargo Ücreti"
-                        value={fmt(platform.deliveryFeeRevenue)}
-                        icon={Truck}
-                        color="gray"
-                      />
-                    </div>
-                  </div>
-
-                  {/* ── Ödeme & Teslimat ──────────────────────────────── */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-                    {/* Payment breakdown */}
-                    <div>
-                      <SectionTitle>Ödeme Yöntemi</SectionTitle>
-                      <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-                        <div className="flex items-center gap-3 px-4 py-3">
-                          <div className="w-8 h-8 bg-violet-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <CreditCard className="w-4 h-4 text-violet-500" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[12px] font-semibold text-gray-800">Kredi / Banka Kartı</p>
-                            <p className="text-[11px] text-gray-400">
-                              {fmtCount(platform.paymentBreakdown?.card?.count ?? 0)} sipariş
-                            </p>
-                          </div>
-                          <p className="text-[13px] font-bold text-gray-900 flex-shrink-0">
-                            {fmt(platform.paymentBreakdown?.card?.amount ?? 0)}
-                          </p>
-                        </div>
-                        <div className="border-t border-gray-50 flex items-center gap-3 px-4 py-3">
-                          <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <ShoppingBag className="w-4 h-4 text-amber-500" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[12px] font-semibold text-gray-800">Kapıda Ödeme</p>
-                            <p className="text-[11px] text-gray-400">
-                              {fmtCount(platform.paymentBreakdown?.pay_at_door?.count ?? 0)} sipariş
-                            </p>
-                          </div>
-                          <p className="text-[13px] font-bold text-gray-900 flex-shrink-0">
-                            {fmt(platform.paymentBreakdown?.pay_at_door?.amount ?? 0)}
-                          </p>
-                        </div>
+                  {/* Editor header */}
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 ${getAccent(selectedIndex!)} rounded-xl flex items-center justify-center text-sm font-bold text-white`}>
+                        {selectedCat.key.charAt(0)}
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-gray-900">{selectedCat.key}</div>
+                        <div className="text-[11px] text-gray-400">İsimleri aşağıdan düzenleyin</div>
                       </div>
                     </div>
-
-                    {/* Delivery type breakdown */}
-                    <div>
-                      <SectionTitle>Teslimat Türü</SectionTitle>
-                      <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-                        <div className="flex items-center gap-3 px-4 py-3">
-                          <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Truck className="w-4 h-4 text-blue-500" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[12px] font-semibold text-gray-800">Eve Teslimat</p>
-                            <p className="text-[11px] text-gray-400">
-                              {fmtCount(platform.deliveryTypeBreakdown?.delivery?.count ?? 0)} sipariş
-                            </p>
-                          </div>
-                          <p className="text-[13px] font-bold text-gray-900 flex-shrink-0">
-                            {fmt(platform.deliveryTypeBreakdown?.delivery?.amount ?? 0)}
-                          </p>
-                        </div>
-                        <div className="border-t border-gray-50 flex items-center gap-3 px-4 py-3">
-                          <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Package className="w-4 h-4 text-emerald-500" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[12px] font-semibold text-gray-800">Gel-Al</p>
-                            <p className="text-[11px] text-gray-400">
-                              {fmtCount(platform.deliveryTypeBreakdown?.pickup?.count ?? 0)} sipariş
-                            </p>
-                          </div>
-                          <p className="text-[13px] font-bold text-gray-900 flex-shrink-0">
-                            {fmt(platform.deliveryTypeBreakdown?.pickup?.amount ?? 0)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+                    <button
+                      onClick={() => setAddModal({ type: "subcategory" })}
+                      className="flex items-center gap-1.5 text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 hover:bg-blue-100 transition-colors font-semibold"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Alt Kategori Ekle
+                    </button>
                   </div>
 
-                  {/* ── Tahsil Edilen Ödeme ──────────────────────────────── */}
-{platform.paymentReceivedBreakdown && (
-  <div>
-    <SectionTitle>Kurye Tahsilatı (Teslim Edilen Siparişler)</SectionTitle>
-    <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-      {[
-        { key: "cash",    label: "Nakit",       icon: ShoppingBag, color: "text-amber-500",  bg: "bg-amber-50"  },
-        { key: "card",    label: "Kart",         icon: CreditCard,  color: "text-violet-500", bg: "bg-violet-50" },
-        { key: "iban",    label: "IBAN",         icon: Receipt,     color: "text-blue-500",   bg: "bg-blue-50"   },
-        { key: "unknown", label: "Kaydedilmedi", icon: Package,     color: "text-gray-400",   bg: "bg-gray-50"   },
-      ].map(({ key, label, icon: Icon, color, bg }, idx) => {
-        const entry = platform.paymentReceivedBreakdown?.[key as keyof typeof platform.paymentReceivedBreakdown];
-        if (!entry || entry.count === 0) return null;
-        return (
-          <div key={key} className={`flex items-center gap-3 px-4 py-3 ${idx > 0 ? "border-t border-gray-50" : ""}`}>
-            <div className={`w-8 h-8 ${bg} rounded-lg flex items-center justify-center flex-shrink-0`}>
-              <Icon className={`w-4 h-4 ${color}`} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[12px] font-semibold text-gray-800">{label}</p>
-              <p className="text-[11px] text-gray-400">{fmtCount(entry.count)} sipariş</p>
-            </div>
-            <p className="text-[13px] font-bold text-gray-900 flex-shrink-0">
-              {fmt(entry.amount)}
-            </p>
-          </div>
-        );
-      })}
-    </div>
-  </div>
-)}
+                  <div className="p-4 flex flex-col gap-4">
 
-                  {/* ── En Çok Satan Ürünler ──────────────────────────── */}
-                  {platform.topItems?.length > 0 && (
-                    <div>
-                      <SectionTitle>En Çok Satan Ürünler</SectionTitle>
-                      <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-                        {platform.topItems.map((item, idx) => {
-                          const isExpanded = expandedItems.has(item.name);
-                          return (
-                            <React.Fragment key={item.name}>
-                              <div
-                                onClick={() => {
-                                  setExpandedItems((prev) => {
-                                    const next = new Set(prev);
-                                    if (next.has(item.name)) next.delete(item.name);
-                                    else next.add(item.name);
-                                    return next;
-                                  });
-                                }}
-                                className={`flex items-center gap-3 px-4 py-3 cursor-pointer select-none transition-colors ${
-                                  idx > 0 ? "border-t border-gray-50" : ""
-                                } ${isExpanded ? "bg-orange-50/40" : "hover:bg-gray-50/70"}`}
-                              >
-                                <span
-                                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                                    idx === 0
-                                      ? "bg-amber-100 text-amber-700"
-                                      : idx === 1
-                                        ? "bg-gray-100 text-gray-500"
-                                        : idx === 2
-                                          ? "bg-orange-50 text-orange-600"
-                                          : "bg-gray-50 text-gray-400"
-                                  }`}
-                                >
-                                  {idx === 0 ? (
-                                    <Award className="w-3.5 h-3.5" />
-                                  ) : (
-                                    idx + 1
-                                  )}
-                                </span>
-                                <p className="flex-1 text-[13px] font-semibold text-gray-800 truncate">
-                                  {item.name}
-                                </p>
-                                <div className="text-right flex-shrink-0">
-                                  <p className="text-[12px] font-bold text-gray-900">
-                                    {fmtCount(item.quantity)} adet
-                                  </p>
-                                  <p className="text-[10px] text-gray-400">{fmt(item.revenue)}</p>
+                    {/* Category labels edit */}
+                    <div className="border border-dashed border-blue-200 rounded-xl p-4 bg-blue-50/30">
+                      <div className="text-xs font-semibold text-blue-700 mb-2">
+                        Kategori İsimleri — {selectedCat.key}
+                      </div>
+                      <LabelInputs
+                        labels={selectedCat.labels ?? emptyLabels()}
+                        onChange={(lang, value) => updateCategoryLabel(selectedIndex!, lang, value)}
+                      />
+                    </div>
+
+                    {/* Subcategories */}
+                    {selectedCat.subcategories.length === 0 && (
+                      <div className="text-center py-6 text-gray-400 text-sm">
+                        Henüz alt kategori yok.
+                      </div>
+                    )}
+
+                    {selectedCat.subcategories.map((sub, si) => {
+                      const isOpen = expandedSubs.has(si);
+                      return (
+                        <div key={si} className="border border-gray-200 rounded-xl overflow-hidden hover:border-blue-200 transition-colors">
+
+                          {/* Sub header */}
+                          <div
+                            className="flex items-center gap-2 px-4 py-3 bg-gray-50 cursor-pointer select-none"
+                            onClick={() => toggleSub(si)}
+                          >
+                            <ChevronDown className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${isOpen ? "" : "-rotate-90"}`} />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-semibold text-gray-700">
+                                {sub.labels?.tr || sub.key}
+                              </div>
+                              <div className="text-[10px] text-gray-400">
+                                {sub.labels?.en} · {sub.subSubcategories.length} öğe
+                              </div>
+                            </div>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); deleteSubcategory(si); }}
+                              className="p-1 hover:bg-red-50 hover:text-red-500 text-gray-300 rounded transition-colors"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {isOpen && (
+                            <div className="px-4 py-4 border-t border-gray-100 flex flex-col gap-4">
+
+                              {/* Subcategory labels edit */}
+                              <div className="border border-dashed border-violet-200 rounded-xl p-3 bg-violet-50/30">
+                                <div className="text-xs font-semibold text-violet-700 mb-2">
+                                  Alt Kategori İsimleri — {sub.key}
                                 </div>
-                                <ChevronRight
-                                  className={`w-3.5 h-3.5 flex-shrink-0 ml-1 transition-transform ${
-                                    isExpanded ? "rotate-90 text-orange-500" : "text-gray-300"
-                                  }`}
+                                <LabelInputs
+                                  labels={sub.labels ?? emptyLabels()}
+                                  onChange={(lang, value) => updateSubcategoryLabel(si, lang, value)}
                                 />
                               </div>
-                              {isExpanded && (
-                                <div className="bg-gray-50/60 px-5 py-3 border-t border-gray-100">
-                                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
-                                    Restoran Katkıları
-                                  </p>
-                                  {item.contributors && item.contributors.length > 0 ? (
-                                    <div className="space-y-1.5">
-                                      {item.contributors.map((c, i) => (
-                                        <div key={c.restaurantId} className="flex items-center gap-3 text-[11px]">
-                                          <span className="w-5 text-gray-400 font-medium text-right">{i + 1}.</span>
-                                          <span className="flex-1 truncate text-gray-700 font-medium">
-                                            {c.restaurantName || c.restaurantId}
-                                          </span>
-                                          <span className="font-semibold text-gray-900 w-24 text-right">
-                                            {fmtCount(c.quantity)} adet
-                                          </span>
-                                          <span className="text-gray-400 w-24 text-right">{fmt(c.revenue)}</span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className="text-[11px] text-gray-400 italic">
-                                      Katkı verisi yok. Bu dönem önceki şema ile hesaplanmış olabilir — Yeniden Hesapla&apos;yı deneyin.
-                                    </p>
-                                  )}
+
+                              {/* Sub-sub tags */}
+                              <div>
+                                <div className="text-xs font-semibold text-gray-500 mb-2">
+                                  Alt-Alt Kategoriler
                                 </div>
-                              )}
-                            </React.Fragment>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+                                <div className="flex flex-wrap gap-1.5 mb-3">
+                                  {sub.subSubcategories.length === 0 && (
+                                    <span className="text-[11px] text-gray-400 italic">Henüz yok</span>
+                                  )}
+                                  {sub.subSubcategories.map((tag, ti) => (
+                                    <span
+                                      key={ti}
+                                      className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-600 group"
+                                      title={`TR: ${tag.labels?.tr}\nEN: ${tag.labels?.en}\nRU: ${tag.labels?.ru}`}
+                                    >
+                                      <span className="font-medium">{tag.labels?.tr || tag.key}</span>
+                                      <span className="text-slate-300">·</span>
+                                      <span className="text-slate-400">{tag.labels?.en || tag.key}</span>
+                                      <button
+                                        onClick={() => deleteSubSubcategory(si, ti)}
+                                        className="text-slate-300 hover:text-red-500 transition-colors ml-0.5"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </span>
+                                  ))}
+                                </div>
 
-                  {/* ── Durum Dağılımı ───────────────────────────────── */}
-                  {Object.keys(platform.statusBreakdown || {}).length > 0 && (
-                    <div>
-                      <SectionTitle>Durum Dağılımı</SectionTitle>
-                      <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-                        <div className="grid grid-cols-[1fr_70px_110px] gap-2 px-4 py-2 bg-gray-50 border-b border-gray-100">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase">Durum</span>
-                          <span className="text-[10px] font-bold text-gray-400 uppercase text-right">Sipariş</span>
-                          <span className="text-[10px] font-bold text-gray-400 uppercase text-right">Tutar</span>
-                        </div>
-                        {Object.entries(platform.statusBreakdown)
-                          .sort((a, b) => b[1].count - a[1].count)
-                          .map(([status, data], idx) => (
-                            <div
-                              key={status}
-                              className={`grid grid-cols-[1fr_70px_110px] gap-2 px-4 py-2.5 ${
-                                idx > 0 ? "border-t border-gray-50" : ""
-                              }`}
-                            >
-                              <span className="text-[12px] font-medium text-gray-700">
-                                {STATUS_TR[status] || status}
-                              </span>
-                              <span className="text-[12px] font-semibold text-gray-900 text-right">
-                                {fmtCount(data.count)}
-                              </span>
-                              <span className="text-[12px] text-gray-500 text-right">
-                                {fmt(data.amount)}
-                              </span>
+                                {/* Add sub-sub button */}
+                                <button
+                                  onClick={() => setAddModal({ type: "subsubcategory", subIdx: si })}
+                                  className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 hover:bg-emerald-100 transition-colors font-medium"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  Alt-Alt Kategori Ekle
+                                </button>
+                              </div>
                             </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                /* No platform doc — but may have restaurant docs */
-                !restsLoading && allRests.length === 0 && (
-                  <div className="flex flex-col items-center py-12 text-center">
-                    <AlertCircle className="w-8 h-8 text-amber-300 mb-2" />
-                    <p className="text-[13px] text-gray-500 font-medium">Platform özeti bulunamadı</p>
-                    <p className="text-[11px] text-gray-400 mt-1">
-                      Bu dönem belirli restoranlar için hesaplanmış olabilir
-                    </p>
-                  </div>
-                )
-              )}
-
-              {/* ── Restoran Dağılımı (only for yemek) ────────────────── */}
-              {category === "yemek" && (
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <SectionTitle>
-                    Restoran Dağılımı
-                    {allRests.length > 0 && (
-                      <span className="ml-1.5 normal-case font-normal text-gray-300">
-                        ({fmtCount(allRests.length)})
-                      </span>
-                    )}
-                  </SectionTitle>
-                  {restsLoading && (
-                    <Loader2 className="w-3.5 h-3.5 text-orange-400 animate-spin" />
-                  )}
-                </div>
-
-                {restsLoading && allRests.length === 0 ? (
-                  <div className="flex items-center justify-center py-10">
-                    <Loader2 className="w-5 h-5 text-orange-400 animate-spin" />
-                  </div>
-                ) : allRests.length === 0 ? (
-                  <div className="bg-white border border-gray-100 rounded-xl flex flex-col items-center py-10 text-center">
-                    <Store className="w-7 h-7 text-gray-200 mb-2" />
-                    <p className="text-[12px] text-gray-400">Bu dönemde restoran verisi yok</p>
-                  </div>
-                ) : (
-                  <>
-                    {/* Table */}
-                    <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-                      {/* Header */}
-                      <div className="grid grid-cols-[1fr_60px_60px_100px_80px_80px_80px_80px] gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-  <span className="text-[10px] font-bold text-gray-400 uppercase">Restoran</span>
-  <span className="text-[10px] font-bold text-gray-400 uppercase text-right">Toplam</span>
-  <span className="text-[10px] font-bold text-gray-400 uppercase text-right">Teslim</span>
-  <span className="text-[10px] font-bold text-gray-400 uppercase text-right">Ciro</span>
-  <span className="text-[10px] font-bold text-gray-400 uppercase text-right">Ort.</span>
-  <span className="text-[10px] font-bold text-amber-500 uppercase text-right">Nakit</span>
-  <span className="text-[10px] font-bold text-violet-500 uppercase text-right">Kart</span>
-  <span className="text-[10px] font-bold text-blue-500 uppercase text-right">IBAN</span>
-</div>
-
-                      {/* Rows */}
-                      {restSlice.map((rest, idx) => {
-  const isExpanded = expandedRests.has(rest.restaurantId);
-  return (
-    <React.Fragment key={rest.restaurantId}>
-      <div
-        onClick={() => {
-          setExpandedRests((prev) => {
-            const next = new Set(prev);
-            if (next.has(rest.restaurantId)) next.delete(rest.restaurantId);
-            else next.add(rest.restaurantId);
-            return next;
-          });
-        }}
-        className={`grid grid-cols-[1fr_60px_60px_100px_80px_80px_80px_80px] gap-2 px-4 py-3 cursor-pointer select-none transition-colors ${
-          idx > 0 ? "border-t border-gray-50" : ""
-        } ${isExpanded ? "bg-orange-50/40" : "hover:bg-gray-50/70"}`}
-      >
-        <div className="min-w-0 flex items-center gap-2">
-          <ChevronRight
-            className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${
-              isExpanded ? "rotate-90 text-orange-500" : "text-gray-300"
-            }`}
-          />
-          <div className="min-w-0">
-            <p className="text-[12px] font-semibold text-gray-900 truncate leading-tight">
-              {rest.restaurantName || rest.restaurantId}
-            </p>
-            {rest.cancelledOrders > 0 && (
-              <p className="text-[10px] text-red-400 leading-none mt-0.5">
-                {rest.cancelledOrders} iptal
-              </p>
-            )}
-          </div>
-        </div>
-        <p className="text-[12px] font-semibold text-gray-700 text-right self-center">
-          {fmtCount(rest.totalOrders)}
-        </p>
-        <p className="text-[12px] font-semibold text-emerald-600 text-right self-center">
-          {fmtCount(rest.completedOrders)}
-        </p>
-        <p className="text-[12px] font-bold text-gray-900 text-right self-center">
-          {fmt(rest.grossRevenue)}
-        </p>
-        <p className="text-[11px] text-gray-500 text-right self-center">
-          {fmt(rest.averageOrderValue)}
-        </p>
-        <p className="text-[11px] text-amber-600 font-semibold text-right self-center">
-          {rest.paymentReceivedBreakdown?.cash?.amount
-            ? fmt(rest.paymentReceivedBreakdown.cash.amount)
-            : "—"}
-        </p>
-        <p className="text-[11px] text-violet-600 font-semibold text-right self-center">
-          {rest.paymentReceivedBreakdown?.card?.amount
-            ? fmt(rest.paymentReceivedBreakdown.card.amount)
-            : "—"}
-        </p>
-        <p className="text-[11px] text-blue-600 font-semibold text-right self-center">
-          {rest.paymentReceivedBreakdown?.iban?.amount
-            ? fmt(rest.paymentReceivedBreakdown.iban.amount)
-            : "—"}
-        </p>
-      </div>
-      {isExpanded && (
-        <div className="bg-gray-50/60 px-5 py-3 border-t border-gray-100">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
-            En Çok Satan Ürünler
-          </p>
-          {rest.topItems && rest.topItems.length > 0 ? (
-            <div className="space-y-1.5">
-              {rest.topItems.map((item, i) => (
-                <div key={item.name} className="flex items-center gap-3 text-[11px]">
-                  <span className="w-5 text-gray-400 font-medium text-right">{i + 1}.</span>
-                  <span className="flex-1 truncate text-gray-700 font-medium">{item.name}</span>
-                  <span className="font-semibold text-gray-900 w-24 text-right">
-                    {fmtCount(item.quantity)} adet
-                  </span>
-                  <span className="text-gray-400 w-24 text-right">{fmt(item.revenue)}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-[11px] text-gray-400 italic">Bu restoran için ürün verisi yok.</p>
-          )}
-        </div>
-      )}
-    </React.Fragment>
-  );
-})}
-                    </div>
-
-                    {/* Pagination */}
-                    {restTotalPages > 1 && (
-                      <div className="flex items-center justify-between mt-3">
-                        <button
-                          onClick={() => setRestPage((p) => Math.max(0, p - 1))}
-                          disabled={restPage === 0}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 text-[11px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        >
-                          <ChevronLeft className="w-3.5 h-3.5" />
-                          Önceki
-                        </button>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] text-gray-400">
-                            {restPage + 1} / {restTotalPages}
-                          </span>
-                          <span className="text-[10px] text-gray-300">
-                            ({fmtCount(allRests.length)} restoran)
-                          </span>
+                          )}
                         </div>
-                        <button
-                          onClick={() =>
-                            setRestPage((p) => Math.min(restTotalPages - 1, p + 1))
-                          }
-                          disabled={(restPage + 1) * REST_UI_PAGE >= allRests.length}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 text-[11px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        >
-                          Sonraki
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
-
-              {/* Bottom spacer */}
-              <div className="h-4" />
             </div>
-          )}
-        </div>
+          </div>
+        </main>
+
+        {/* Toast */}
+        {toast && (
+          <div className={`fixed bottom-6 right-6 flex items-center gap-2.5 px-4 py-3 rounded-xl text-white text-sm font-medium shadow-xl z-50 ${
+            toast.type === "success" ? "bg-gray-900" : "bg-amber-600"
+          }`}>
+            {toast.type === "success"
+              ? <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              : <AlertCircle className="w-4 h-4 text-white" />}
+            {toast.msg}
+          </div>
+        )}
+
+        {/* Add Modal */}
+        {addModal && (
+          <AddModal
+            title={
+              addModal.type === "category"
+                ? "Yeni Alıcı Kategorisi"
+                : addModal.type === "subcategory"
+                ? "Yeni Alt Kategori"
+                : "Yeni Alt-Alt Kategori"
+            }
+            onConfirm={(key, labels) => {
+              if (addModal.type === "category") addBuyerCategory(key, labels);
+              else if (addModal.type === "subcategory") addSubcategory(key, labels);
+              else if (addModal.type === "subsubcategory" && addModal.subIdx !== undefined)
+                addSubSubcategory(addModal.subIdx, key, labels);
+            }}
+            onCancel={() => setAddModal(null)}
+          />
+        )}
+
       </div>
-    </div>
+    </ProtectedRoute>
   );
 }
