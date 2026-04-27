@@ -39,6 +39,13 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
   final Set<String> _locallyPickedUp = {};
   final Set<String> _locallyDelivered = {};
 
+  // Picked-up orders with no buyer GeoPoint — usually scanned-receipt orders
+  // where neither the QR nor the geocoder produced coords. The route service
+  // can't add a delivery stop without coords, so without this fallback they'd
+  // vanish from the screen and the courier would have no way to mark them
+  // delivered. Rendered as plain cards under the route stop list.
+  List<Map<String, dynamic>> _pinlessDeliveries = const [];
+
   // Pending action listeners (to confirm sync)
   final Map<String, StreamSubscription> _actionListeners = {};
 
@@ -196,12 +203,29 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
       }
     }
 
+    // Pinless deliveries — picked up but no buyer GeoPoint to route to.
+    final pinless = orders.where((o) {
+      if (o['pickedUpFromRestaurant'] != true) return false;
+      final addr = o['deliveryAddress'] as Map<String, dynamic>?;
+      final loc = addr?['location'];
+      if (loc is GeoPoint) return false;
+      if (loc is Map && loc['latitude'] != null && loc['longitude'] != null) return false;
+      return true;
+    }).toList(growable: false);
+
     final sig = orders.map((o) {
       final id = o['orderId'];
       final p = o['pickedUpFromRestaurant'] == true ? '1' : '0';
       return '$id:$p';
     }).toList()..sort();
     final sigStr = sig.join(',');
+
+    // Pinless list always reflects current state regardless of route caching.
+    final pinlessSig = pinless.map((o) => o['orderId']).join(',');
+    final prevPinlessSig = _pinlessDeliveries.map((o) => o['orderId']).join(',');
+    if (pinlessSig != prevPinlessSig) {
+      setState(() => _pinlessDeliveries = pinless);
+    }
 
     if (sigStr == _lastOrderSignature && _route != null) return;
     _lastOrderSignature = sigStr;
@@ -623,7 +647,8 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
         children: [
           if (_route != null) _buildSummaryStrip(isDark),
           Expanded(flex: 3, child: _buildMap(isDark)),
-          if (_route != null && _route!.orderedStops.isNotEmpty)
+          if ((_route != null && _route!.orderedStops.isNotEmpty) ||
+              _pinlessDeliveries.isNotEmpty)
             Expanded(flex: 2, child: _buildStopList(isDark)),
         ],
       ),
@@ -687,10 +712,24 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
       ]));
     }
     if (_route == null || _route!.orderedStops.isEmpty) {
+      // Pinless deliveries (orders picked up but with no buyer GeoPoint)
+      // show only in the bottom card list — the map has nothing to render
+      // for them, but the courier still needs to mark them delivered.
       return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Text('🛵', style: TextStyle(fontSize: 40)),
+        Text(_pinlessDeliveries.isNotEmpty ? '📍' : '🛵',
+            style: const TextStyle(fontSize: 40)),
         const SizedBox(height: 12),
-        Text('Aktif teslimat yok', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.grey[600])),
+        Text(
+          _pinlessDeliveries.isNotEmpty
+              ? 'Konumsuz teslimat${_pinlessDeliveries.length > 1 ? 'lar' : ''}'
+              : 'Aktif teslimat yok',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.grey[600]),
+        ),
+        if (_pinlessDeliveries.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text('Aşağıdaki listeden teslim edin',
+              style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+        ],
       ]));
     }
 
@@ -715,7 +754,11 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
   }
 
   Widget _buildStopList(bool isDark) {
-    final route = _route!;
+    final route = _route;
+    final routeStopCount = route?.orderedStops.length ?? 0;
+    final pinlessCount = _pinlessDeliveries.length;
+    final totalCount = routeStopCount + pinlessCount;
+
     return SafeArea(
       top: false,
       child: Container(
@@ -736,17 +779,148 @@ class _CourierRouteScreenState extends State<CourierRouteScreen> {
               Text('Duraklar', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold,
                   color: isDark ? Colors.grey[300] : Colors.grey[800])),
               const Spacer(),
-              Text('${route.orderedStops.length} durak', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+              Text('$totalCount durak', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
             ]),
           ),
           const SizedBox(height: 4),
           Expanded(child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            itemCount: route.orderedStops.length,
-            itemBuilder: (_, i) => _buildStopCard(i, route, isDark),
+            itemCount: totalCount,
+            itemBuilder: (_, i) {
+              if (route != null && i < routeStopCount) {
+                return _buildStopCard(i, route, isDark);
+              }
+              final pinlessIdx = i - routeStopCount;
+              return _buildPinlessDeliveryCard(
+                _pinlessDeliveries[pinlessIdx],
+                i,
+                i == totalCount - 1,
+                isDark,
+              );
+            },
           )),
         ]),
       ),
+    );
+  }
+
+  Widget _buildPinlessDeliveryCard(
+    Map<String, dynamic> order,
+    int index,
+    bool isLast,
+    bool isDark,
+  ) {
+    final orderId = order['orderId'] as String? ?? '';
+    final collection = (order['collection'] as String?) ?? 'orders-food';
+    final buyerName = order['buyerName'] as String? ?? '—';
+    final isBusy = _deliverBusyOrderId == orderId;
+    final color = _deliveryColor;
+
+    String? itemsSummary;
+    final items = order['items'] as List? ?? [];
+    if (items.isNotEmpty) {
+      itemsSummary = items.take(3).map((item) {
+        final m = item as Map<String, dynamic>;
+        final qty = (m['quantity'] as num?)?.toInt() ?? 1;
+        final name = m['name'] as String? ?? '';
+        return '$qty× $name';
+      }).join(', ');
+      if (items.length > 3) itemsSummary = '$itemsSummary +${items.length - 3}';
+    }
+
+    final price = order['totalPrice'] as num?;
+    final currency = order['currency'] as String? ?? 'TL';
+    final isPaid = order['isPaid'] as bool? ?? false;
+    final addressLine =
+        (order['deliveryAddress'] as Map<String, dynamic>?)?['addressLine1'] as String?;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(width: 28, child: Column(children: [
+          Container(width: 22, height: 22, decoration: BoxDecoration(
+            color: color.withOpacity(0.15), shape: BoxShape.circle,
+            border: Border.all(color: color, width: 2)),
+            child: Center(child: Text('${index + 1}',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color)))),
+          if (!isLast) Container(width: 2, height: 52, color: isDark ? Colors.grey[800] : Colors.grey[200]),
+        ])),
+        const SizedBox(width: 10),
+        Expanded(child: Container(
+          margin: const EdgeInsets.only(bottom: 6),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: isDark ? color.withOpacity(0.06) : color.withOpacity(0.04),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withOpacity(0.15))),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Icon(Icons.person_rounded, size: 13, color: color),
+              const SizedBox(width: 5),
+              Expanded(child: Text(buyerName,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.grey[200] : Colors.grey[900]),
+                  maxLines: 1, overflow: TextOverflow.ellipsis)),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(6)),
+                child: Text('TESLİM',
+                    style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: color))),
+              const SizedBox(width: 6),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(4)),
+                child: Text('PİNSİZ',
+                    style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold,
+                        color: Colors.amber[800]))),
+            ]),
+            if (addressLine != null && addressLine.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(addressLine, style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                  maxLines: 2, overflow: TextOverflow.ellipsis),
+            ],
+            if (itemsSummary != null) ...[
+              const SizedBox(height: 4),
+              Text(itemsSummary, style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+            ],
+            if (price != null && price > 0) ...[
+              const SizedBox(height: 3),
+              Row(children: [
+                Text('${price.toStringAsFixed(0)} $currency',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.grey[300] : Colors.grey[800])),
+                const SizedBox(width: 6),
+                Container(padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: isPaid ? Colors.green.withOpacity(0.12) : Colors.orange.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(4)),
+                  child: Text(isPaid ? 'ÖDENDİ' : 'NAKİT',
+                      style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold,
+                          color: isPaid ? Colors.green : Colors.orange))),
+              ]),
+            ],
+            const SizedBox(height: 8),
+            SizedBox(width: double.infinity, height: 36,
+              child: ElevatedButton.icon(
+                onPressed: isBusy ? null : () => _markDelivered(orderId, buyerName, collection),
+                icon: isBusy
+                    ? const SizedBox(width: 14, height: 14,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.delivery_dining_rounded, size: 16),
+                label: const Text('Teslim Et',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: Colors.green.withOpacity(0.5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 0, padding: const EdgeInsets.symmetric(horizontal: 12)),
+              ),
+            ),
+          ]),
+        )),
+      ]),
     );
   }
 

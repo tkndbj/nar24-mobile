@@ -26,6 +26,7 @@ class ReceiptScanResult {
   final String? detectedOrderId;
   final String? detectedPhone;
   final LatLng? detectedLatLng;
+  final List<String> detectedQrUrls;
   final List<Map<String, dynamic>> detectedItems;
   final double confidence;
 
@@ -36,6 +37,7 @@ class ReceiptScanResult {
     this.detectedOrderId,
     this.detectedPhone,
     this.detectedLatLng,
+    this.detectedQrUrls = const [],
     this.detectedItems = const [],
     required this.confidence,
   });
@@ -56,9 +58,12 @@ class ReceiptScannerService {
   final _barcodeScanner = BarcodeScanner(formats: [BarcodeFormat.qrCode]);
 
   Future<ReceiptScanResult?> scanFromCamera(BuildContext context) async {
+    // No imageQuality compression — QR codes occupy a small fraction of the
+    // frame and JPEG artifacts at 90% quality can break ML Kit's decoder.
+    // The receipt photo is already uploaded only to OCR + the scan CF, so
+    // the larger payload is only paid once per scan.
     final photo = await _picker.pickImage(
       source: ImageSource.camera,
-      imageQuality: 90,
       preferredCameraDevice: CameraDevice.rear,
     );
     if (photo == null) return null;
@@ -84,6 +89,16 @@ class ReceiptScannerService {
     final barcodes = results[1] as List<Barcode>;
     final rawText = recognized.text;
 
+    // Capture every QR raw value so the CF can fall back to server-side
+    // resolution when the client can't follow the redirect (KKTC streets
+    // missing from Google Geocoding make the QR the only reliable source).
+    final qrUrls = barcodes
+        .map((b) => b.rawValue)
+        .whereType<String>()
+        .where((v) => v.trim().isNotEmpty)
+        .toList(growable: false);
+    debugPrint('[QR] ML Kit detected ${qrUrls.length} barcode(s): $qrUrls');
+
     // Try to extract coordinates from any QR code found
     final coords = await _extractCoordsFromBarcodes(barcodes);
 
@@ -100,6 +115,7 @@ class ReceiptScannerService {
       detectedOrderId: extracted['order_id'] as String?,
       detectedPhone: extracted['phone'] as String?,
       detectedLatLng: coords,
+      detectedQrUrls: qrUrls,
       detectedItems: items,
       confidence: rawText.length > 100 ? 0.85 : 0.3,
     );
@@ -166,10 +182,13 @@ class ReceiptScannerService {
         debugPrint('[QR] Hop $i: $currentUrl');
 
         final request = http.Request('GET', Uri.parse(currentUrl))
-          ..followRedirects = false;
+          ..followRedirects = false
+          ..headers['User-Agent'] =
+              'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36'
+          ..headers['Accept-Language'] = 'tr-TR,tr;q=0.9,en;q=0.8';
 
         final response =
-            await client.send(request).timeout(const Duration(seconds: 5));
+            await client.send(request).timeout(const Duration(seconds: 8));
 
         debugPrint('[QR] Status: ${response.statusCode}');
         debugPrint('[QR] Location header: ${response.headers['location']}');
@@ -177,8 +196,14 @@ class ReceiptScannerService {
         final location = response.headers['location'];
 
         if (location == null) {
-          // No Location header — try reading body for JS redirect
+          // No Location header — extract from response body. Google Maps
+          // landing pages embed coords in og:url / canonical / inline JS.
           final body = await response.stream.bytesToString();
+          final fromBody = _tryExtractFromBody(body);
+          if (fromBody != null) {
+            debugPrint('[QR] Extracted from body: $fromBody');
+            return fromBody;
+          }
           debugPrint(
               '[QR] Body snippet: ${body.substring(0, body.length.clamp(0, 300))}');
           return currentUrl;
@@ -195,6 +220,42 @@ class ReceiptScannerService {
     } finally {
       client.close();
     }
+  }
+
+  // Look inside a redirect-target HTML body for coordinate hints.
+  // Google Maps landing pages embed coords in several stable places.
+  String? _tryExtractFromBody(String body) {
+    // Trim to first 50 KB so a malicious or huge page can't blow memory.
+    final scope = body.length > 50000 ? body.substring(0, 50000) : body;
+
+    // og:url meta with `?q=lat,lng` or `@lat,lng`
+    final og = RegExp(
+      r'''<meta[^>]*property=["']og:url["'][^>]*content=["']([^"']+)["']''',
+      caseSensitive: false,
+    ).firstMatch(scope);
+    if (og != null) {
+      final candidate = og.group(1)!;
+      if (_tryExtractFromUrl(candidate) != null) return candidate;
+    }
+
+    // <link rel="canonical" href="...">
+    final canonical = RegExp(
+      r'''<link[^>]*rel=["']canonical["'][^>]*href=["']([^"']+)["']''',
+      caseSensitive: false,
+    ).firstMatch(scope);
+    if (canonical != null) {
+      final candidate = canonical.group(1)!;
+      if (_tryExtractFromUrl(candidate) != null) return candidate;
+    }
+
+    // Inline @lat,lng pattern anywhere in the body — last resort.
+    final inline =
+        RegExp(r'@(-?\d{1,2}\.\d{4,}),(-?\d{1,3}\.\d{4,})').firstMatch(scope);
+    if (inline != null) {
+      return '@${inline.group(1)},${inline.group(2)}';
+    }
+
+    return null;
   }
 
   // ── Haiku extraction (via Cloud Function) ─────────────────────────────────
@@ -393,6 +454,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
       'detectedPhone': result.detectedPhone,
       'detectedLat': result.detectedLatLng?.lat,
       'detectedLng': result.detectedLatLng?.lng,
+      'detectedQrUrls': result.detectedQrUrls,
       'detectedItems': result.detectedItems,
     });
 

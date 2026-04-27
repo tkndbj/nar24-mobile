@@ -29,6 +29,180 @@ const REGION = 'europe-west3';
 const RATES_VERSION = 1;
 
 const anthropicApiKey = defineSecret('ANTHROPIC_API_KEY');
+const googleMapsKey   = defineSecret('GOOGLE_MAPS_GEOCODING_KEY');
+
+// Accept these Google Geocoding precision levels — `APPROXIMATE` is rejected
+// because it usually means Google only matched at city level, which is
+// useless for couriers.
+const ACCEPTABLE_LOCATION_TYPES = new Set([
+  'ROOFTOP',
+  'RANGE_INTERPOLATED',
+  'GEOMETRIC_CENTER',
+]);
+
+// Pull lat/lng straight from a URL string. Covers `geo:`, `?q=`, `@lat,lng`
+// patterns produced by Google Maps short-link landing pages.
+function tryExtractCoordsFromUrl(raw) {
+  if (!raw) return null;
+
+  const geoMatch = raw.match(/geo:(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if (geoMatch) {
+    const lat = parseFloat(geoMatch[1]);
+    const lng = parseFloat(geoMatch[2]);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+  }
+
+  const qMatch = raw.match(/[?&]q=(?:loc:)?(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if (qMatch) {
+    const lat = parseFloat(qMatch[1]);
+    const lng = parseFloat(qMatch[2]);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+  }
+
+  const atMatch = raw.match(/@(-?\d+\.\d{3,}),(-?\d+\.\d{3,})/);
+  if (atMatch) {
+    const lat = parseFloat(atMatch[1]);
+    const lng = parseFloat(atMatch[2]);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+  }
+
+  return null;
+}
+
+// Resolve a QR URL to coordinates. Tries direct extraction first, then
+// follows redirects (Cloud Functions egress is unrestricted, unlike a
+// mobile app). Falls back to scanning the final HTML body for og:url /
+// canonical / inline @lat,lng patterns. Returns { lat, lng, source } or null.
+async function resolveQrToCoords(qrUrl) {
+  const direct = tryExtractCoordsFromUrl(qrUrl);
+  if (direct) return { ...direct, source: 'qr_direct' };
+
+  // Only follow links that look like Google Maps short links; avoids
+  // following arbitrary URLs from a malicious receipt QR.
+  const isMapsShortLink =
+    /^https?:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps|maps\.google\.com)/i.test(qrUrl);
+  if (!isMapsShortLink) return null;
+
+  let currentUrl = qrUrl;
+  for (let hop = 0; hop < 5; hop++) {
+    let response;
+    try {
+      response = await fetch(currentUrl, {
+        method: 'GET',
+        redirect: 'manual',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36',
+          'Accept-Language': 'tr-TR,tr;q=0.9,en;q=0.8',
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+    } catch (err) {
+      console.warn(`[resolveQrToCoords] Hop ${hop} fetch failed:`, err.message);
+      return null;
+    }
+
+    const location = response.headers.get('location');
+    if (location) {
+      const fromLoc = tryExtractCoordsFromUrl(location);
+      if (fromLoc) return { ...fromLoc, source: `qr_redirect_hop${hop}` };
+      currentUrl = new URL(location, currentUrl).toString();
+      continue;
+    }
+
+    // No Location header — final page reached. Look at the body.
+    const body = await response.text().catch(() => '');
+    const scope = body.length > 100000 ? body.substring(0, 100000) : body;
+
+    const og = scope.match(/<meta[^>]*property=["']og:url["'][^>]*content=["']([^"']+)["']/i);
+    if (og) {
+      const fromOg = tryExtractCoordsFromUrl(og[1]);
+      if (fromOg) return { ...fromOg, source: 'qr_body_og' };
+    }
+    const canonical = scope.match(/<link[^>]*rel=["']canonical["'][^>]*href=["']([^"']+)["']/i);
+    if (canonical) {
+      const fromCan = tryExtractCoordsFromUrl(canonical[1]);
+      if (fromCan) return { ...fromCan, source: 'qr_body_canonical' };
+    }
+    const inline = scope.match(/@(-?\d{1,2}\.\d{4,}),(-?\d{1,3}\.\d{4,})/);
+    if (inline) {
+      const lat = parseFloat(inline[1]);
+      const lng = parseFloat(inline[2]);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        return { lat, lng, source: 'qr_body_inline' };
+      }
+    }
+    return null;
+  }
+  return null;
+}
+
+// Geocode a free-text address. Returns { lat, lng, locationType, formatted }
+// on success, or null on any failure (no result, API error, low precision).
+// `biasLat`/`biasLng` shift Google's interpretation toward a region — pass
+// the restaurant's coordinates so KKTC addresses don't get matched against
+// mainland Cyprus.
+async function geocodeAddress({ address, biasLat, biasLng, apiKey }) {
+  if (!address || typeof address !== 'string' || !apiKey) return null;
+
+  const params = new URLSearchParams({
+    address,
+    key: apiKey,
+    region: 'cy', // Cyprus regional code (covers both halves)
+    language: 'tr',
+  });
+
+  // Bias the search to a 25 km box around the restaurant. Strong locality
+  // hint without forbidding results outside the box (Google still returns
+  // them, just with lower priority).
+  if (typeof biasLat === 'number' && typeof biasLng === 'number') {
+    const dLat = 0.225; // ~25 km in latitude
+    const dLng = 0.275; // ~25 km in longitude at this latitude
+    params.set(
+      'bounds',
+      `${biasLat - dLat},${biasLng - dLng}|${biasLat + dLat},${biasLng + dLng}`,
+    );
+  }
+
+  let response;
+  try {
+    response = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`,
+      { signal: AbortSignal.timeout(8000) },
+    );
+  } catch (err) {
+    console.error('[geocodeAddress] Fetch failed:', err.message);
+    return null;
+  }
+
+  if (!response.ok) {
+    console.error(`[geocodeAddress] HTTP ${response.status}`);
+    return null;
+  }
+
+  const data = await response.json().catch(() => null);
+  if (!data || data.status !== 'OK' || !Array.isArray(data.results) || data.results.length === 0) {
+    console.warn(`[geocodeAddress] No result. status=${data?.status} address="${address}"`);
+    return null;
+  }
+
+  const top = data.results[0];
+  const locationType = top.geometry?.location_type;
+  if (!ACCEPTABLE_LOCATION_TYPES.has(locationType)) {
+    console.warn(`[geocodeAddress] Rejected low-precision result. location_type=${locationType} address="${address}"`);
+    return null;
+  }
+
+  const lat = top.geometry?.location?.lat;
+  const lng = top.geometry?.location?.lng;
+  if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+
+  return {
+    lat,
+    lng,
+    locationType,
+    formatted: top.formatted_address || address,
+  };
+}
 
 function money(n) {
   return Math.round(n * 100) / 100;
@@ -65,7 +239,12 @@ function buildFeesSnapshot({ subtotal, commissionRate, shipmentFeeRate, courierT
 }
 
 export const createScannedRestaurantOrder = onCall(
-  { region: REGION, memory: '512MiB', timeoutSeconds: 30 },
+  {
+    region: REGION,
+    memory: '512MiB',
+    timeoutSeconds: 30,
+    secrets: [googleMapsKey],
+  },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in.');
 
@@ -77,6 +256,7 @@ export const createScannedRestaurantOrder = onCall(
       detectedPhone = null,
       detectedLat = null,
       detectedLng = null,
+      detectedQrUrls = [],
       detectedItems = [],
     } = request.data;
 
@@ -114,6 +294,51 @@ export const createScannedRestaurantOrder = onCall(
       shipmentFeeRate,
       courierType: 'ours',
     });
+
+    // Resolve a GeoPoint for the delivery address. Priority:
+    //   1. Client-supplied lat/lng (e.g. client already followed a QR redirect)
+    //   2. Server-side QR resolution — receipt QRs printed by paper-receipt
+    //      vendors point to a Google Maps short link; we follow it server-
+    //      side because Cloud Functions has unrestricted egress and Google's
+    //      landing page exposes coords via og:url / canonical / inline.
+    //   3. Address geocoding — the long shot for KKTC, where many streets
+    //      aren't in Google's index at all.
+    //   4. null — courier sees the address text only.
+    let resolvedLocation = locationGeoPoint;
+    let qrResolution = null;
+    let geocodeResult = null;
+
+    if (!resolvedLocation && Array.isArray(detectedQrUrls) && detectedQrUrls.length > 0) {
+      for (const qrUrl of detectedQrUrls) {
+        if (typeof qrUrl !== 'string' || qrUrl.length === 0) continue;
+        try {
+          const resolved = await resolveQrToCoords(qrUrl);
+          if (resolved) {
+            qrResolution = { url: qrUrl, ...resolved };
+            resolvedLocation = new admin.firestore.GeoPoint(resolved.lat, resolved.lng);
+            console.log(`[ScannedOrder] QR resolved → ${resolved.lat},${resolved.lng} (${resolved.source}) url=${qrUrl}`);
+            break;
+          } else {
+            console.warn(`[ScannedOrder] QR could not be resolved: ${qrUrl}`);
+          }
+        } catch (err) {
+          console.error(`[ScannedOrder] QR resolution error for ${qrUrl}:`, err.message);
+        }
+      }
+    }
+
+    if (!resolvedLocation && detectedAddress) {
+      geocodeResult = await geocodeAddress({
+        address: detectedAddress,
+        biasLat: typeof restaurant.latitude  === 'number' ? restaurant.latitude  : null,
+        biasLng: typeof restaurant.longitude === 'number' ? restaurant.longitude : null,
+        apiKey: googleMapsKey.value(),
+      });
+      if (geocodeResult) {
+        resolvedLocation = new admin.firestore.GeoPoint(geocodeResult.lat, geocodeResult.lng);
+        console.log(`[ScannedOrder] Geocoded "${detectedAddress}" → ${geocodeResult.lat},${geocodeResult.lng} (${geocodeResult.locationType})`);
+      }
+    }
 
     await orderRef.set({
       sourceType: 'scanned_receipt',
@@ -171,13 +396,25 @@ export const createScannedRestaurantOrder = onCall(
         addressLine1: detectedAddress,
         city: '',
         phoneNumber: detectedPhone || '',
-        location: locationGeoPoint,
+        location: resolvedLocation,
       } : null,
 
       scannedReceipt: {
         rawText: scannedRawText.substring(0, 2000),
         detectedAddress: detectedAddress || null,
         detectedTotal: typeof detectedTotal === 'number' ? detectedTotal : null,
+        // Full diagnostic trail for the location resolution path — lets
+        // admins see exactly which fallback fired (or why none did).
+        detectedQrUrls: Array.isArray(detectedQrUrls) ?
+          detectedQrUrls.filter((u) => typeof u === 'string').slice(0, 10) :
+          [],
+        qrResolution: qrResolution || null,
+        geocode: geocodeResult ? {
+          lat: geocodeResult.lat,
+          lng: geocodeResult.lng,
+          locationType: geocodeResult.locationType,
+          formattedAddress: geocodeResult.formatted,
+        } : null,
         scannedAt: new Date().toISOString(),
       },
 
@@ -222,7 +459,13 @@ Rules:
   3. On YemekSepeti receipts the numbers appear in this order on one line: [ara toplam] [toplam] [kdv] — so if you see a sequence of numbers, the SECOND main amount is the final total, not the first.
   4. Fix garbled digits like 250,7: → 250.75, 295,0( → 295.00. Integer-only totals (e.g. "430") are fine — return as plain number.
   Return as a plain number with no currency symbol.
-- address: look for street names, district, city, postal code. In North Cyprus receipts look for KKTC, Kuzey Kıbrıs, Lefkoşa, Gazimağusa, Girne, İskele, KYK, yurdu, üniversite, DAÜ, GAÜ, NEU. Return the full address on one line.
+- address: return ONLY the geocodable street address. Critical rules:
+  1. DO NOT include the customer's name. Names appear right before the address (e.g. "Deniz Dilşa Okuryazar Nehir Sokak..." → drop "Deniz Dilşa Okuryazar"). A name is anything that looks like First+Last (1-3 capitalised words) preceding the street.
+  2. DO NOT include unit-level details that confuse geocoders: skip "Kat 1" (floor), "Daire 4" (apartment), "Apt 2", "No: 5". Keep only the building number when it's clearly a street number.
+  3. Start with the street name (cadde / sokak / bulvarı). If there are TWO consecutive street-like phrases (e.g. "Necmettin Erbakan Nehir Sokak"), they're a parent road + side street — keep only the SECOND, more specific one ("Nehir Sokak").
+  4. End with "Gazimağusa, KKTC" or "Lefkoşa, KKTC" / "Girne, KKTC" / "İskele, KKTC" — drop duplicated city tokens and full country names like "Kuzey Kıbrıs Türk Cumhuriyeti", abbreviate to "KKTC".
+  5. North Cyprus context: look for KKTC, Kuzey Kıbrıs, Lefkoşa, Gazimağusa, Girne, İskele, KYK, yurdu, üniversite, DAÜ, GAÜ, NEU.
+  Return the cleaned address on one line.
 - phone: look for TEL, telefon, GSM patterns. Include + prefix if present.
 - order_id: look for sipariş no, order no, receipt no, # prefixed codes.
 - items: extract every food/drink line you can identify. This is the most important field — be GENEROUS, not conservative.
