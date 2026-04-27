@@ -317,7 +317,7 @@ async function releaseReservation(courierId, dispatchId) {
 // CORE: pick best candidate from Redis
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function selectCandidate({ db, pickupLat, pickupLng, collection, excludeUid = null, dispatchId }) {
+async function selectCandidate({ db, pickupLat, pickupLng, collection, excludeUid = null, dispatchId, dispatchableSinceMs = null }) {
   const redis = getRedisClient();
   const tiers = RADIUS_TIERS_BY_COLLECTION[collection] || RADIUS_TIERS_KM_FOOD;
 
@@ -443,6 +443,23 @@ async function selectCandidate({ db, pickupLat, pickupLng, collection, excludeUi
           staleSeconds: Math.round((now - lastSeen) / 1000),
         });
         continue;
+      }
+
+      // Skip couriers who came online after the order became dispatchable
+      // (food: acceptedAt; market: createdAt). Missing shiftStartedAt —
+      // legacy hash from before this field was tracked, or first tick after
+      // deploy — is treated as eligible to avoid a brief assignment gap.
+      if (dispatchableSinceMs) {
+        const shiftStartedAt = parseInt(state.shiftStartedAt || '0', 10);
+        if (shiftStartedAt && shiftStartedAt > dispatchableSinceMs) {
+          rejects.push({
+            courierId: ordered[i].uid,
+            reason: 'shift_started_after_order',
+            shiftStartedAt,
+            dispatchableSinceMs,
+          });
+          continue;
+        }
       }
 
       const load = Math.max(0, parseInt(state.load || '0', 10));
@@ -582,8 +599,12 @@ async function autoAssignOrder(db, orderId, collection, { source = 'trigger' } =
     return { ok: false, reason: 'master_unassigned', dispatchId };
   }
 
-  const expectedStatus = collection === 'orders-food' ? 'accepted' : 'pending';
-  if (order.status !== expectedStatus) {
+  // Food orders can enter the auto-dispatch path in either 'accepted' or
+  // 'ready' state. 'ready' covers the courierType-flip case (restaurant
+  // switches from theirs → ours after marking the order ready). Market
+  // orders remain pending-only — markets have no ready state.
+  const expectedStatuses = collection === 'orders-food' ? ['accepted', 'ready'] : ['pending'];
+  if (!expectedStatuses.includes(order.status)) {
     emitSkip('wrong_status', { orderStatus: order.status });
     return { ok: false, reason: `wrong_status:${order.status}`, dispatchId };
   }
@@ -594,12 +615,26 @@ async function autoAssignOrder(db, orderId, collection, { source = 'trigger' } =
     return { ok: false, reason: 'missing_pickup_coords', dispatchId };
   }
 
+  // Food: time the restaurant accepted the order. Market: time the order
+  // was created (markets are dispatchable on creation). Couriers whose
+  // shift started after this point are filtered out in selectCandidate.
+  // Falls back to createdAt for legacy food orders that predate the
+  // acceptedAt write in updateFoodOrderStatus.
+  const dispatchableTs = collection === 'orders-food' ?
+    (order.acceptedAt || order.createdAt) :
+    order.createdAt;
+  const dispatchableSinceMs =
+    dispatchableTs && typeof dispatchableTs.toMillis === 'function' ?
+      dispatchableTs.toMillis() :
+      null;
+
   const best = await selectCandidate({
     db,
     pickupLat: pickup.lat,
     pickupLng: pickup.lng,
     collection,
     dispatchId,
+    dispatchableSinceMs,
   });
 
   if (!best) {
@@ -665,14 +700,23 @@ async function autoAssignOrder(db, orderId, collection, { source = 'trigger' } =
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TRIGGER 1: food order transitions pending → accepted
+// TRIGGER 1: food order entered the auto-dispatch path
+//
+// Two distinct entry points fire this trigger:
+//   1. Status transition pending → accepted with courierType:'ours' — the
+//      standard accept flow. Original behaviour, unchanged.
+//   2. courierType flipped 'theirs' → 'ours' on an in-flight order via
+//      switchFoodOrderCourier (CF-27). Status may be 'accepted' OR 'ready'
+//      at the moment of the flip. Without this second path, ready orders
+//      that flipped from theirs would never reach auto-assignment — the
+//      retry sweep is the safety net but adds 30-90s of latency.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const autoAssignOnFoodAccepted = onDocumentUpdated(
   {
     document: 'orders-food/{orderId}',
     region: REGION,
-    memory: '256MiB',
+    memory: '512MiB',
     timeoutSeconds: 30,
     vpcConnector: 'nar24-vpc',
     vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
@@ -681,22 +725,33 @@ export const autoAssignOnFoodAccepted = onDocumentUpdated(
     const before = event.data?.before?.data();
     const after = event.data?.after?.data();
     if (!before || !after) return;
-    if (before.status === after.status) return;
-    if (after.status !== 'accepted') return;
+
+    const statusBecameAccepted =
+      before.status !== after.status && after.status === 'accepted';
+    const flippedToOurs =
+      before.courierType === 'theirs' && after.courierType === 'ours';
+    if (!statusBecameAccepted && !flippedToOurs) return;
+
     if (after.cargoUserId) return; // already taken (e.g. master override)
     if (after.unassignedBy === 'master') return; // master pulled it back
     if (after.courierType !== 'ours') return; // restaurant using own courier — skip
+    // Only act on statuses where dispatch is meaningful. Anything past 'ready'
+    // (assigned, out_for_delivery, delivered) means a courier is already on
+    // the way and the flip — if it ever lands here from a future code path —
+    // shouldn't trigger reassignment.
+    if (!['accepted', 'ready'].includes(after.status)) return;
 
     const orderId = event.params.orderId;
+    const source = flippedToOurs ? 'courier_type_flip' : 'food_trigger';
     try {
-      await autoAssignOrder(admin.firestore(), orderId, 'orders-food', { source: 'food_trigger' });
+      await autoAssignOrder(admin.firestore(), orderId, 'orders-food', { source });
     } catch (err) {
       logError({
         component: COMPONENT,
         event: 'dispatch.trigger_failed',
         orderId,
         collection: 'orders-food',
-        source: 'food_trigger',
+        source,
         reason: 'exception',
         message: err.message,
       });
@@ -712,7 +767,7 @@ export const autoAssignOnMarketCreated = onDocumentCreated(
   {
     document: 'orders-market/{orderId}',
     region: REGION,
-    memory: '256MiB',
+    memory: '512MiB',
     timeoutSeconds: 30,
     vpcConnector: 'nar24-vpc',
     vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
@@ -748,7 +803,7 @@ export const autoAssignRetryUnassigned = onSchedule(
   {
     schedule: 'every 1 minutes',
     region: REGION,
-    memory: '256MiB',
+    memory: '512MiB',
     timeoutSeconds: 120,
     vpcConnector: 'nar24-vpc',
     vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
@@ -762,10 +817,15 @@ export const autoAssignRetryUnassigned = onSchedule(
     const stale = [
       {
         coll: 'orders-food',
-        status: 'accepted',
+        // Retries cover both 'accepted' (standard pending dispatch) and
+        // 'ready' (orders that flipped from theirs → ours mid-prep). The
+        // food trigger now fires on the flip too, so this is a safety net
+        // for cases where the trigger or dispatch failed. Firestore
+        // decomposes `in` into parallel == queries against the existing
+        // composite index — no new index needed.
         snap: await db
           .collection('orders-food')
-          .where('status', '==', 'accepted')
+          .where('status', 'in', ['accepted', 'ready'])
           .where('cargoUserId', '==', null)
           .where('courierType', '==', 'ours')
           .where('updatedAt', '<', cutoff)
@@ -848,7 +908,7 @@ export const autoAssignRebalance = onSchedule(
   {
     schedule: 'every 1 minutes',
     region: REGION,
-    memory: '256MiB',
+    memory: '512MiB',
     timeoutSeconds: 120,
     vpcConnector: 'nar24-vpc',
     vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
@@ -1010,6 +1070,14 @@ export const autoAssignRebalance = onSchedule(
           currentRecent * W_ROTATION +
           currentHeadingDelta;
 
+        const dispatchableTs = coll === 'orders-food' ?
+          (order.acceptedAt || order.createdAt) :
+          order.createdAt;
+        const dispatchableSinceMs =
+          dispatchableTs && typeof dispatchableTs.toMillis === 'function' ?
+            dispatchableTs.toMillis() :
+            null;
+
         const best = await selectCandidate({
           db,
           pickupLat: pickup.lat,
@@ -1017,6 +1085,7 @@ export const autoAssignRebalance = onSchedule(
           collection: coll,
           excludeUid: currentCourierId,
           dispatchId: rebalanceId,
+          dispatchableSinceMs,
         });
 
         if (!best) {
@@ -1173,7 +1242,7 @@ export const mirrorCourierLocations = onSchedule(
   {
     schedule: 'every 1 minutes',
     region: REGION,
-    memory: '256MiB',
+    memory: '512MiB',
     // Headroom for slow RTDB reads + slow Redis pipelines on the same tick.
     // Early-return cost is zero; a timeout mid-pipeline leaves Redis partly
     // updated until the next tick heals it.
@@ -1313,9 +1382,17 @@ export const mirrorCourierLocations = onSchedule(
 
       if (!isOnline || !isOnShift || lat === null || lng === null) {
         pipeline.zrem('couriers:geo', uid);
+        // Drop the shift-start stamp so the next on→off→on cycle gets a
+        // fresh timestamp. Auto-assigner uses this to skip couriers who
+        // came online after the order's dispatchable-since time.
+        pipeline.hdel(`courier:${uid}`, 'shiftStartedAt');
         unindexed++;
       } else {
         pipeline.geoadd('couriers:geo', lng, lat, uid);
+        // Stamp the first tick we see them on-shift; HSETNX preserves it
+        // across subsequent ticks so it reflects the actual shift start
+        // (within the 60 s mirror granularity), not the latest tick.
+        pipeline.hsetnx(`courier:${uid}`, 'shiftStartedAt', String(tickStart));
         indexed++;
       }
 
@@ -1328,7 +1405,7 @@ export const mirrorCourierLocations = onSchedule(
       // Initialise load only if not already set — we must not stomp the live
       // counter maintained by CF-40 and selectCandidate reservations.
       pipeline.hsetnx(`courier:${uid}`, 'load', '0');
-      opsInPipeline += 3;
+      opsInPipeline += 4;
       await maybeFlush();
     }
 

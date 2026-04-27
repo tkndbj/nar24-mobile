@@ -124,14 +124,14 @@ async function handleDeliveryUpdate(event, collection) {
 // ── Trigger: food order delivered ─────────────────────────────────────────
 
 export const onDeliveryCompleted = onDocumentUpdated(
-  { document: 'orders-food/{orderId}', region: REGION, memory: '256MiB' },
+  { document: 'orders-food/{orderId}', region: REGION, memory: '512MiB' },
   (event) => handleDeliveryUpdate(event, 'orders-food'),
 );
 
 // ── Trigger: market order delivered ───────────────────────────────────────
 
 export const onMarketDeliveryCompleted = onDocumentUpdated(
-  { document: 'orders-market/{orderId}', region: REGION, memory: '256MiB' },
+  { document: 'orders-market/{orderId}', region: REGION, memory: '512MiB' },
   (event) => handleDeliveryUpdate(event, 'orders-market'),
 );
 
@@ -273,7 +273,7 @@ export const recalcCourierStats = onCall(
 // ── Summary read: dashboard calls this instead of reading docs individually ─
 
 export const getCourierStatsSummary = onCall(
-  { region: REGION, memory: '256MiB', timeoutSeconds: 15 },
+  { region: REGION, memory: '512MiB', timeoutSeconds: 15 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in.');
 

@@ -865,7 +865,7 @@ export const updateMarketOrderStatus = onCall(
 export const submitMarketReview = onCall(
   {
     region: REGION,
-    memory: '256MiB',
+    memory: '512MiB',
     timeoutSeconds: 30,
   },
   async (request) => {

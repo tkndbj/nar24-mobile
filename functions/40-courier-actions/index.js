@@ -148,7 +148,7 @@ export const processCourierAction = onDocumentCreated(
   {
     document: 'courier_actions/{actionId}',
     region: REGION,
-    memory: '256MiB',
+    memory: '512MiB',
     timeoutSeconds: 30,
     vpcConnector: 'nar24-vpc',
     vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
@@ -291,8 +291,10 @@ export const processCourierAction = onDocumentCreated(
 
 function allowedSourceStatus(collection, assignedBy) {
   if (collection === 'orders-market') return ['pending'];
-  // orders-food
-  if (assignedBy === 'auto') return ['accepted'];
+  // orders-food: auto path now also accepts 'ready' so that orders flipped
+  // from courierType 'theirs' → 'ours' mid-flight (restaurant taps "Switch
+  // to Nar24" after marking ready) can still be picked up by CF-54.
+  if (assignedBy === 'auto') return ['accepted', 'ready'];
   return ['ready', 'accepted']; // master/self accept either ready or accepted
 }
 

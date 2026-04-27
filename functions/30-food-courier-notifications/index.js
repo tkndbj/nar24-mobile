@@ -277,7 +277,7 @@ export const createScannedRestaurantOrder = onCall(
 );
 
 export const cleanupExpiredCourierCalls = onScheduleFn(
-  { schedule: 'every 30 minutes', region: REGION, memory: '256MiB' },
+  { schedule: 'every 30 minutes', region: REGION, memory: '512MiB' },
   async () => {
     const db  = admin.firestore();
     const now = admin.firestore.Timestamp.now();
@@ -306,7 +306,7 @@ export const onFoodOrderStatusChange = onDocumentUpdated(
   {
     document: 'orders-food/{orderId}',
     region: REGION,
-    memory: '256MiB',
+    memory: '512MiB',
     timeoutSeconds: 30,
   },
   async (event) => {
@@ -353,7 +353,7 @@ export const onFoodOrderStatusChange = onDocumentUpdated(
 export const informFoodCourier = onCall(
   {
     region: REGION,
-    memory: '256MiB',
+    memory: '512MiB',
     timeoutSeconds: 20,
   },
   async (request) => {
@@ -435,7 +435,7 @@ export const cleanupExpiredCourierNotifications = onScheduleFn(
   {
     schedule: 'every 30 minutes',
     region: REGION,
-    memory: '256MiB',
+    memory: '512MiB',
     timeoutSeconds: 60,
   },
   async () => {

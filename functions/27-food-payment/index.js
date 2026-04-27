@@ -1982,6 +1982,12 @@ export const updateFoodOrderStatus = onCall(
  
         orderUpdate.courierType = courierType;
         orderUpdate.fees = fees;
+        // Frozen at first acceptance. Auto-assigner uses this as the
+        // dispatchable-since timestamp so couriers who came online after
+        // this point aren't considered. Revert paths (ready→accepted on
+        // unassign) must NOT touch this — that's why it lives in the
+        // pending→accepted branch.
+        orderUpdate.acceptedAt = admin.firestore.FieldValue.serverTimestamp();
       }
  
       tx.update(orderRef, orderUpdate);
@@ -2016,7 +2022,7 @@ export const updateFoodOrderStatus = onCall(
 export const submitRestaurantReview = onCall(
   {
     region: REGION,
-    memory: '256MiB',
+    memory: '512MiB',
     timeoutSeconds: 30,
   },
   async (request) => {
@@ -2124,7 +2130,7 @@ tx.set(notifRef, {
 const FLIPPABLE_STATUSES = new Set(['accepted', 'ready']);
  
 export const switchFoodOrderCourier = onCall(
-  { region: REGION, memory: '256MiB', concurrency: 80, timeoutSeconds: 30 },
+  { region: REGION, memory: '512MiB', concurrency: 80, timeoutSeconds: 30 },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be signed in.');

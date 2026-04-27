@@ -127,35 +127,46 @@ export const registerWithEmailPassword = onCall(
         throw new HttpsError('internal', 'Firestore write failed: ' + err.message);
       }
   
-      // 5) Generate verification code and send email via SendGrid
-      let emailSent = false;
-      let verificationCode = '';
-  
-      try {
-        // Generate 6-digit verification code
-        verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-  
-        // Store verification code in Firestore with expiration
-        await admin.firestore()
-          .collection('emailVerificationCodes')
-          .doc(uid)
-          .set({
-            code: verificationCode,
-            email,
-            createdAt: now,
-            expiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 5 * 60 * 1000)), // 5 minutes
-            used: false,
-          });
-  
-        // Send verification email via SendGrid using mail collection
-        await sendVerificationEmail(email, verificationCode, languageCode, `${name.trim()} ${surname.trim()}`);
-        emailSent = true;
-  
-        console.log(`Email verification sent to ${email} (user ${uid}) in ${languageCode}`);
-      } catch (err) {
-        console.warn('Could not send email verification:', err);
-        // Don't throw error - continue with registration
-      }
+      // 5) Generate verification code and queue email send.
+// Verification code creation is REQUIRED — without it the user can't
+// verify. Email enqueue (SendGrid via mail collection) is best-effort
+// since the resend flow can recover from transient SendGrid issues,
+// but the code MUST exist in Firestore before we return success.
+let emailSent = false;
+const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+try {
+  // Store verification code in Firestore with expiration.
+  // This is REQUIRED — failure here means user can't verify.
+  await admin.firestore()
+    .collection('emailVerificationCodes')
+    .doc(uid)
+    .set({
+      code: verificationCode,
+      email,
+      createdAt: now,
+      expiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 5 * 60 * 1000)),
+      used: false,
+    });
+} catch (err) {
+  // Hard rollback: code write failed, user has no way to verify.
+  await admin.firestore().collection('users').doc(uid).delete().catch(() => {});
+  await admin.auth().deleteUser(uid).catch(() => {});
+  throw new HttpsError(
+    'internal',
+    'Failed to create verification code: ' + err.message,
+  );
+}
+
+try {
+  // Email enqueue is best-effort. The resend flow recovers from
+  // transient SendGrid outages. We log but don't fail registration.
+  await sendVerificationEmail(email, verificationCode, languageCode, `${name.trim()} ${surname.trim()}`);
+  emailSent = true;
+  console.log(`Email verification sent to ${email} (user ${uid}) in ${languageCode}`);
+} catch (err) {
+  console.error('Email enqueue failed (resend flow can recover):', err);
+}
   
       // 6) Mint a Custom Token
       let customToken;
@@ -2039,7 +2050,7 @@ export const registerWithEmailPassword = onCall(
 // existing fields, only fills in what's missing. This is the canonical
 // path for user doc creation and self-healing on orphan Auth accounts.
 export const ensureUserDocument = onCall(
-    {region: 'europe-west3'},
+    {region: 'europe-west3', memory: '512MiB'},
     async (request) => {
       if (!request.auth || !request.auth.uid) {
         throw new HttpsError(

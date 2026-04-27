@@ -447,6 +447,7 @@ export const TEMPLATES = {
   export const sendNotificationOnCreation = onDocumentCreated({
     region: 'europe-west3',
     document: 'users/{userId}/notifications/{notificationId}',
+    memory: '512MiB',
     maxInstances: 100,
   }, async (event) => {
     const snap = event.data;
@@ -870,10 +871,10 @@ export const TEMPLATES = {
     }
   }
   
-  export const sendShopNotificationOnCreation = onDocumentCreated({  
+  export const sendShopNotificationOnCreation = onDocumentCreated({
     region: 'europe-west3',
     document: 'shop_notifications/{notificationId}',
-    memory: '256MiB',
+    memory: '512MiB',
     maxInstances: 100,
     timeoutSeconds: 60,
   }, async (event) => {
@@ -1211,7 +1212,7 @@ export const TEMPLATES = {
     {
       region: 'europe-west3',
       timeoutSeconds: 10,
-      memory: '256MiB',
+      memory: '512MiB',
     },
     async (req) => {
       const auth = req.auth;
@@ -1329,7 +1330,7 @@ export const TEMPLATES = {
     {
       region: 'europe-west3',
       timeoutSeconds: 5,
-      memory: '256MB',
+      memory: '512MiB',
     },
     async (req) => {
       const auth = req.auth;

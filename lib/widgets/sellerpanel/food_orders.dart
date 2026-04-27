@@ -1365,9 +1365,7 @@ class _OrderCard extends StatelessWidget {
               )),
             ],
 
-            // ── ACCEPTED: Mark As Ready + Inform Courier (delivery only) + Reject
-            // FIX 9: primary action changed from "Mark Delivered" → "Mark Ready"
-            // to match Next.js (accepted → ready, not accepted → delivered).
+            // ── ACCEPTED: Mark As Ready + (Switch to Nar24 if theirs) + Undo
             if (_isAccepted) ...[
               Expanded(
                   child: _ActionBtn(

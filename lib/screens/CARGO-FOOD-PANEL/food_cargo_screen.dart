@@ -17,7 +17,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -44,10 +43,6 @@ class FoodCargoScreen extends StatefulWidget {
 class _FoodCargoScreenState extends State<FoodCargoScreen>
     with WidgetsBindingObserver {
   final _messaging = FirebaseMessaging.instance;
-  bool _notifPanelOpen = false;
-  final _localReadController = BehaviorSubject<DateTime?>.seeded(null);
-  Stream<int>? _unreadCountStream;
-  late final Stream<QuerySnapshot<Map<String, dynamic>>> _courierNotifsStream;
   bool _isOnline = true;
   bool _onShift = false;
   bool _shiftBusy = false;
@@ -59,18 +54,7 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Per-courier notification feed (written by CF-40 / CF-46 via
-    // users/{uid}/notifications → this legacy collection is kept for the
-    // in-app bell list so the UI shows platform-wide heads-up messages).
-    _courierNotifsStream = FirebaseFirestore.instance
-        .collection('food_courier_notifications')
-        .where('isActive', isEqualTo: true)
-        .orderBy('createdAt', descending: true)
-        .limit(10)
-        .snapshots()
-        .shareReplay(maxSize: 1);
     _setupFcm();
-    _setupUnreadStream();
     // Opening this screen no longer implicitly starts a shift. bootOnShift()
     // reads the persisted flag and only resumes tracking if the courier was
     // on-shift in the previous session. Off-shift is the safe default — it
@@ -152,34 +136,20 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 5),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        action: SnackBarAction(
-          label: 'VIEW',
-          textColor: Colors.white,
-          onPressed: () {
-            if (isAssigned) {
-              final orderId = data['orderId'] as String?;
-              if (orderId != null && orderId.isNotEmpty) {
-                setState(() => _highlightedOrderId = orderId);
-              }
-            } else {
-              setState(() => _notifPanelOpen = true);
-              _markAllAsRead();
-            }
-          },
-        ),
+        action: isAssigned
+            ? SnackBarAction(
+                label: 'VIEW',
+                textColor: Colors.white,
+                onPressed: () {
+                  final orderId = data['orderId'] as String?;
+                  if (orderId != null && orderId.isNotEmpty) {
+                    setState(() => _highlightedOrderId = orderId);
+                  }
+                },
+              )
+            : null,
       ),
     );
-  }
-
-  Future<void> _markAllAsRead() async {
-    _localReadController.add(DateTime.now());
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    await FirebaseFirestore.instance
-        .collection('courier_notification_reads')
-        .doc(uid)
-        .set({'lastReadAt': FieldValue.serverTimestamp()},
-            SetOptions(merge: true));
   }
 
   void _handleNotificationTap(RemoteMessage message) {
@@ -192,43 +162,7 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
       if (orderId != null && orderId.isNotEmpty) {
         setState(() => _highlightedOrderId = orderId);
       }
-    } else {
-      setState(() => _notifPanelOpen = true);
     }
-  }
-
-  // ── Unread stream ─────────────────────────────────────────────────────────
-
-  void _setupUnreadStream() {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-
-    final readStream = FirebaseFirestore.instance
-        .collection('courier_notification_reads')
-        .doc(uid)
-        .snapshots();
-
-    _unreadCountStream = Rx.combineLatest3(
-      _courierNotifsStream,
-      readStream,
-      _localReadController.stream,
-      (QuerySnapshot notifs, DocumentSnapshot read, DateTime? localReadAt) {
-        final firestoreTs =
-            (read.data() as Map<String, dynamic>?)?['lastReadAt'] as Timestamp?;
-        DateTime? effectiveReadAt = firestoreTs?.toDate();
-        if (localReadAt != null) {
-          if (effectiveReadAt == null || localReadAt.isAfter(effectiveReadAt)) {
-            effectiveReadAt = localReadAt;
-          }
-        }
-        if (effectiveReadAt == null) return notifs.size;
-        return notifs.docs.where((doc) {
-          final createdAt = doc['createdAt'] as Timestamp?;
-          if (createdAt == null) return false;
-          return createdAt.toDate().isAfter(effectiveReadAt!);
-        }).length;
-      },
-    );
   }
 
   @override
@@ -248,7 +182,6 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
     // Shift tracking now survives across screens — nav'ing to profile/etc.
     // must not take the courier off-shift. Tracking is torn down only on
     // explicit toggle-off or logout.
-    _localReadController.close();
     super.dispose();
   }
 
@@ -277,48 +210,6 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
           ],
         ),
         actions: [
-          StreamBuilder<int>(
-            stream: _unreadCountStream,
-            builder: (context, snap) {
-              final count = snap.data ?? 0;
-              return Stack(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.notifications_rounded),
-                    tooltip: 'Notifications',
-                    onPressed: () {
-                      final opening = !_notifPanelOpen;
-                      setState(() => _notifPanelOpen = opening);
-                      if (opening) _markAllAsRead();
-                    },
-                  ),
-                  if (count > 0)
-                    Positioned(
-                      right: 8,
-                      top: 8,
-                      child: Container(
-                        width: 16,
-                        height: 16,
-                        decoration: const BoxDecoration(
-                          color: Colors.orange,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            count > 9 ? '9+' : '$count',
-                            style: const TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
           IconButton(
             icon: const Icon(Icons.history_rounded),
             tooltip: loc.pastFoodCargosTitle,
@@ -385,244 +276,6 @@ class _FoodCargoScreenState extends State<FoodCargoScreen>
                 ),
               ),
             ),
-          if (_notifPanelOpen)
-            _NotificationPanel(
-              isDark: isDark,
-              onClose: () => setState(() => _notifPanelOpen = false),
-              notifsStream: _courierNotifsStream,
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// NOTIFICATION PANEL
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _NotificationPanel extends StatelessWidget {
-  final bool isDark;
-  final VoidCallback onClose;
-  final Stream<QuerySnapshot<Map<String, dynamic>>> notifsStream;
-  const _NotificationPanel({
-    required this.isDark,
-    required this.onClose,
-    required this.notifsStream,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onClose,
-      child: Container(
-        color: Colors.black54,
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          child: GestureDetector(
-            onTap: () {},
-            child: Container(
-              height: MediaQuery.of(context).size.height * 0.6,
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF211F31) : Colors.white,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: Column(
-                children: [
-                  const SizedBox(height: 12),
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.grey[700] : Colors.grey[300],
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Notifications',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white : Colors.grey[900],
-                          ),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.close_rounded,
-                              color:
-                                  isDark ? Colors.grey[400] : Colors.grey[600]),
-                          onPressed: onClose,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(height: 16),
-                  Expanded(
-                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: notifsStream,
-                      builder: (context, snap) {
-                        if (snap.connectionState == ConnectionState.waiting) {
-                          return const Center(
-                              child: CircularProgressIndicator(
-                                  color: Colors.orange, strokeWidth: 2));
-                        }
-                        final docs = snap.data?.docs ?? [];
-                        if (docs.isEmpty) {
-                          return Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text('🔔',
-                                    style: TextStyle(fontSize: 40)),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'No active notifications',
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    color: isDark
-                                        ? Colors.grey[500]
-                                        : Colors.grey[500],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }
-                        return ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                          itemCount: docs.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 8),
-                          itemBuilder: (_, i) {
-                            final data = docs[i].data();
-                            return _NotifCard(
-                                data: data, isDark: isDark, onClose: onClose);
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// NOTIFICATION CARD
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _NotifCard extends StatelessWidget {
-  final Map<String, dynamic> data;
-  final bool isDark;
-  final VoidCallback onClose;
-  const _NotifCard(
-      {required this.data, required this.isDark, required this.onClose});
-
-  @override
-  Widget build(BuildContext context) {
-    final type = data['type'] as String? ?? '';
-    final restaurantName = data['restaurantName'] as String? ?? '';
-    final deliveryCity = data['deliveryCity'] as String? ?? '';
-    final msgTr = data['message_tr'] as String? ?? '';
-    final createdAt = data['createdAt'] as Timestamp?;
-    final color = type == 'heads_up' ? Colors.orange : Colors.blue;
-    final emoji = type == 'heads_up' ? '⏳' : '🔔';
-    final label = type == 'heads_up' ? 'YAKINDA HAZIR' : 'BİLDİRİM';
-    final timeStr =
-        createdAt != null ? DateFormat('HH:mm').format(createdAt.toDate()) : '';
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isDark ? color.withOpacity(0.08) : color.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Center(
-                child: Text(emoji, style: const TextStyle(fontSize: 20))),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(label,
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: color)),
-                    ),
-                    const Spacer(),
-                    Text(timeStr,
-                        style: TextStyle(
-                            fontSize: 11,
-                            color:
-                                isDark ? Colors.grey[500] : Colors.grey[500])),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(restaurantName,
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.grey[900])),
-                const SizedBox(height: 2),
-                Text(msgTr,
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.grey[400] : Colors.grey[600])),
-                if (deliveryCity.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(Icons.location_on_outlined,
-                          size: 13,
-                          color: isDark ? Colors.grey[500] : Colors.grey[500]),
-                      const SizedBox(width: 3),
-                      Text(deliveryCity,
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: isDark
-                                  ? Colors.grey[500]
-                                  : Colors.grey[500])),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
         ],
       ),
     );
