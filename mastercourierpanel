@@ -1,1902 +1,496 @@
 "use client";
 
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
-import { onIdTokenChanged } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import {
   collection,
-  doc,
-  getDoc,
   getDocs,
-  onSnapshot,
   query,
-  setDoc,
-  serverTimestamp,
-  Timestamp,
   where,
   orderBy,
   limit,
   startAfter,
+  Timestamp,
   QueryDocumentSnapshot,
   DocumentData,
 } from "@/lib/firestore-debug";
 import {
-  AlertCircle,
   BarChart2,
   CheckCircle2,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Clock,
-  Coffee,
-  MapPin,
+  CreditCard,
+  Loader2,
   Package,
-  PanelRightClose,
-  PanelRightOpen,
-  Power,
-  PowerOff,
-  RefreshCw,
-  Search,
-  TrendingUp,
-  UtensilsCrossed,
+  ShoppingBag,
   ShoppingCart,
+  TrendingUp,
+  Truck,
   Users,
+  UtensilsCrossed,
   WifiOff,
-  X,
-  UserCheck,
-  MousePointerClick,
-  Eye,
-  EyeOff,
+  CalendarDays,
+  ChevronLeft,
+  Hash,
+  RefreshCw,
+  ChevronDown,
+  Store,
 } from "lucide-react";
-import { useCourierLocations } from "@/hooks/use-courier-locations";
-import {
-  CourierMapManager,
-  type CourierSnapshot,
-} from "@/lib/courier-map-manager";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TYPES
-// ─────────────────────────────────────────────────────────────────────────────
+const functions = getFunctions(undefined, "europe-west3");
 
-interface CourierLocation {
-  lat: number;
-  lng: number;
-  heading: number;
-  speed: number;
-  isOnline: boolean;
-  isOnShift: boolean;
-  currentOrderId: string | null;
-  updatedAt: number;
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type AuthState = "loading" | "allowed" | "denied";
+
+interface AlltimeStat {
+  courierId: string;
+  courierName: string;
+  totalDeliveries: number;
+  foodDeliveries: number;
+  marketDeliveries: number;
+  totalRevenue: number;
+  foodRevenue: number;
+  marketRevenue: number;
+  cashRevenue: number;
+  cardRevenue: number;
+  ibanRevenue: number;
+  totalDeliveryTimeMs: number;
+  lastDeliveryAt: Timestamp | null;
+  updatedAt: Timestamp | null;
 }
 
-type OrderCollection = "orders-food" | "orders-market";
-
-type FoodPoolStatus =
-  | "pending"
-  | "accepted"
-  | "ready"
-  | "assigned"
-  | "out_for_delivery";
-type MarketPoolStatus = "pending" | "assigned" | "out_for_delivery";
-
-interface ActiveOrder {
-  id: string;
-  collection: OrderCollection;
-  restaurantName: string;
-  restaurantLat: number | null;
-  restaurantLng: number | null;
-  buyerName: string;
-  totalPrice: number;
-  currency: string;
-  isPaid: boolean;
-  assignedAt: Timestamp | null;
-  pickedUpAt: Timestamp | null;
-  status: string;
-  items: { name: string; quantity: number }[];
-  deliveryAddress: {
-    addressLine1: string;
-    city: string;
-    location: { latitude: number; longitude: number } | null;
-  } | null;
+interface RestaurantBreakdown {
+  name: string;
+  count: number;
+  foodCount: number;
+  marketCount: number;
+  totalRevenue: number;
+  cashRevenue: number;
+  cardRevenue: number;
+  ibanRevenue: number;
 }
 
-interface CourierStats {
+interface DailyStat {
+  courierId: string;
+  courierName: string;
+  date: string; // YYYY-MM-DD
   deliveredCount: number;
   foodDeliveredCount: number;
   marketDeliveredCount: number;
   totalRevenue: number;
   foodRevenue: number;
   marketRevenue: number;
+  cashRevenue: number;
+  cardRevenue: number;
+  ibanRevenue: number;
   totalDeliveryTimeMs: number;
+  orderIds: string[];
+  restaurants: Record<string, RestaurantBreakdown>;
+  lastDeliveryAt: Timestamp | null;
+  recalculatedAt: Timestamp | null;
 }
 
-interface CourierProfile {
-  uid: string;
-  displayName: string;
-  email: string;
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const DAILY_PAGE = 30;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmt(n: number): string {
+  return n.toLocaleString("tr-TR", { maximumFractionDigits: 0 }) + " ₺";
 }
 
-interface PoolOrder {
-  id: string;
-  collection: OrderCollection;
-  status: string;
-  displayName: string;
-  buyerName: string;
-  totalPrice: number;
-  currency: string;
-  itemCount: number;
-  isPaid: boolean;
-  createdAt: Timestamp;
-  courierType: "ours" | "theirs" | null;
-  deliveryAddress: {
-    addressLine1: string;
-    city: string;
-  } | null;
+function fmtCount(n: number): string {
+  return n.toLocaleString("tr-TR");
 }
 
-interface Courier {
-  uid: string;
-  profile: CourierProfile;
-  location: CourierLocation | null;
-  activeOrders: ActiveOrder[];
-  todayStats: CourierStats;
+function fmtTs(ts: Timestamp | null): string {
+  if (!ts) return "—";
+  return ts.toDate().toLocaleDateString("tr-TR", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
 }
 
-interface OSRMResult {
-  path: google.maps.LatLng[];
-  totalDurationSec: number;
-  totalDistanceM: number;
-  legDurations: number[]; // seconds per leg (between consecutive stops)
+function fmtDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  if (!y || !m || !d) return dateStr;
+  return new Date(y, m - 1, d).toLocaleDateString("tr-TR", {
+    weekday: "short", day: "numeric", month: "short", year: "numeric",
+  });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CONSTANTS & HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
-
-const MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
-const CYPRUS_CENTER = { lat: 35.22, lng: 33.8544 };
-const STATS_REFRESH_MS = 10 * 60 * 1000;
-const READY_PAGE_SIZE = 20;
-
-declare global {
-  interface Window {
-    google: typeof google;
-    __initGoogleMaps?: () => void;
-  }
+function fmtAvgTime(ms: number, count: number): string {
+  if (!ms || !count) return "—";
+  const avg = Math.round(ms / count / 60000);
+  if (avg < 60) return `${avg} dk`;
+  return `${Math.floor(avg / 60)}s ${avg % 60}dk`;
 }
 
-function getTodayKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function fmtAvgTimeMs(ms: number): string {
+  if (!ms) return "—";
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return `${mins} dk`;
+  return `${Math.floor(mins / 60)}s ${mins % 60}dk`;
 }
 
 function getInitials(name: string): string {
   return (name || "?")
     .split(" ")
+    .slice(0, 2)
     .map((n) => n[0] ?? "")
     .join("")
-    .toUpperCase()
-    .slice(0, 2);
+    .toUpperCase();
 }
 
-function timeSince(ms: number): string {
-  if (!ms) return "—";
-  const diff = Date.now() - ms;
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  return `${Math.floor(m / 60)}h ago`;
+function todayKey(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
 }
 
-function formatAvgTime(ms: number, count: number): string {
-  if (!ms || !count) return "—";
-  const avg = Math.round(ms / count / 60000);
-  if (avg < 60) return `${avg}m`;
-  return `${Math.floor(avg / 60)}h ${avg % 60}m`;
-}
-
-function formatOrderTime(ts: Timestamp): string {
-  const d = ts.toDate();
-  const h = String(d.getHours()).padStart(2, "0");
-  const m = String(d.getMinutes()).padStart(2, "0");
-  return `${h}:${m}`;
-}
-
-async function fetchRouteOSRM(
-  stops: google.maps.LatLng[],
-  signal?: AbortSignal,
-): Promise<OSRMResult> {
-  const empty: OSRMResult = {
-    path: [],
-    totalDurationSec: 0,
-    totalDistanceM: 0,
-    legDurations: [],
-  };
-  if (stops.length < 2) return empty;
-  const coords = stops.map((s) => `${s.lng()},${s.lat()}`).join(";");
-  const url = `https://osrm.nar24panel.com/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true`;
-
-  // Two attempts with jittered backoff on 5xx / network error. 4xx is a
-  // coding bug — no point retrying. Aborts propagate out immediately.
-  const maxAttempts = 2;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const res = await fetch(url, { signal });
-      if (!res.ok) {
-        if (res.status >= 500 && attempt < maxAttempts) {
-          await new Promise((r) =>
-            setTimeout(r, 300 * attempt + Math.random() * 200),
-          );
-          continue;
-        }
-        return empty;
-      }
-      const data = await res.json();
-      if (data.code !== "Ok" || !data.routes?.[0]) return empty;
-
-      const route = data.routes[0];
-      const path = route.geometry.coordinates.map(
-        ([lng, lat]: [number, number]) =>
-          new window.google.maps.LatLng(lat, lng),
-      );
-      const legDurations = route.legs.map(
-        (leg: { duration: number }) => leg.duration,
-      );
-      return {
-        path,
-        totalDurationSec: route.duration,
-        totalDistanceM: route.distance,
-        legDurations,
-      };
-    } catch (err) {
-      if ((err as Error).name === "AbortError") throw err;
-      if (attempt < maxAttempts) {
-        await new Promise((r) =>
-          setTimeout(r, 300 * attempt + Math.random() * 200),
-        );
-        continue;
-      }
-      return empty;
-    }
-  }
-  return empty;
+function cashRatio(cash: number, total: number): string {
+  if (!total) return "0%";
+  return `%${Math.round((cash / total) * 100)}`;
 }
 
 const AVATAR_COLORS = [
-  "bg-orange-500",
-  "bg-emerald-500",
-  "bg-blue-500",
-  "bg-violet-500",
-  "bg-rose-500",
-  "bg-amber-500",
-  "bg-teal-500",
-  "bg-cyan-500",
+  "bg-orange-500", "bg-emerald-500", "bg-blue-500", "bg-violet-500",
+  "bg-rose-500", "bg-amber-500", "bg-teal-500", "bg-cyan-500",
 ];
 
 function avatarColor(uid: string): string {
-  const idx =
-    (uid.charCodeAt(0) + uid.charCodeAt(uid.length - 1)) % AVATAR_COLORS.length;
+  const idx = (uid.charCodeAt(0) + uid.charCodeAt(uid.length - 1)) % AVATAR_COLORS.length;
   return AVATAR_COLORS[idx];
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SUB-COMPONENTS
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
-function Avatar({
-  profile,
-  size = "md",
-}: {
-  profile: CourierProfile;
-  size?: "sm" | "md" | "lg";
-}) {
-  const sz =
-    size === "sm"
-      ? "w-7 h-7 text-[10px]"
-      : size === "lg"
-        ? "w-12 h-12 text-sm"
-        : "w-9 h-9 text-xs";
+function Avatar({ name, uid, size = "md" }: { name: string; uid: string; size?: "sm" | "md" | "lg" }) {
+  const sz = size === "sm" ? "w-7 h-7 text-[10px]" : size === "lg" ? "w-12 h-12 text-sm" : "w-9 h-9 text-xs";
   return (
-    <div
-      className={`${sz} ${avatarColor(profile.uid)} rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 select-none`}
-    >
-      {getInitials(profile.displayName)}
+    <div className={`${sz} ${avatarColor(uid)} rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 select-none`}>
+      {getInitials(name)}
     </div>
   );
 }
 
-function StatusDot({
-  isConnected,
-  isOnShift,
-  hasOrder,
+function StatCard({
+  label, value, sub, icon: Icon, color,
 }: {
-  isConnected: boolean;
-  isOnShift: boolean;
-  hasOrder: boolean;
+  label: string; value: string; sub?: string;
+  icon: React.ElementType;
+  color: "orange" | "emerald" | "blue" | "violet" | "gray" | "amber" | "red";
 }) {
-  const color = !isConnected
-    ? "bg-gray-300"
-    : !isOnShift
-      ? "bg-amber-400"
-      : hasOrder
-        ? "bg-emerald-400"
-        : "bg-blue-400";
-  const pulse = isConnected ? "animate-pulse" : "";
-  return (
-    <span
-      className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-[1.5px] border-white ${color} ${pulse}`}
-    />
-  );
-}
-
-function MiniStat({
-  label,
-  value,
-  subValue,
-  icon,
-  color,
-}: {
-  label: string;
-  value: string;
-  subValue?: string;
-  icon: React.ReactNode;
-  color: "orange" | "emerald" | "blue";
-}) {
-  const cm = {
-    orange: "bg-orange-50 border-orange-100",
-    emerald: "bg-emerald-50 border-emerald-100",
-    blue: "bg-blue-50 border-blue-100",
-  }[color];
-  const tc = {
-    orange: "text-orange-700",
-    emerald: "text-emerald-700",
-    blue: "text-blue-700",
+  const styles = {
+    orange:  { wrap: "bg-orange-50  border-orange-100",  icon: "text-orange-500",  val: "text-orange-800" },
+    emerald: { wrap: "bg-emerald-50 border-emerald-100", icon: "text-emerald-500", val: "text-emerald-800" },
+    blue:    { wrap: "bg-blue-50    border-blue-100",    icon: "text-blue-500",    val: "text-blue-800" },
+    violet:  { wrap: "bg-violet-50  border-violet-100",  icon: "text-violet-500",  val: "text-violet-800" },
+    gray:    { wrap: "bg-gray-50    border-gray-100",    icon: "text-gray-400",    val: "text-gray-700" },
+    amber:   { wrap: "bg-amber-50   border-amber-100",   icon: "text-amber-500",   val: "text-amber-800" },
+    red:     { wrap: "bg-red-50     border-red-100",     icon: "text-red-500",     val: "text-red-800" },
   }[color];
   return (
-    <div className={`${cm} border rounded-xl px-3 py-2.5 flex flex-col gap-1`}>
-      <div className={`flex items-center gap-1 ${tc}`}>
-        <span className="opacity-70">{icon}</span>
-        <span className="text-[10px] font-semibold uppercase tracking-wide opacity-70">
-          {label}
-        </span>
+    <div className={`rounded-xl border p-4 ${styles.wrap}`}>
+      <div className="flex items-center gap-1.5 mb-2">
+        <Icon className={`w-3.5 h-3.5 ${styles.icon}`} />
+        <span className={`text-[10px] font-bold uppercase tracking-wider ${styles.icon} opacity-80`}>{label}</span>
       </div>
-      <p className={`text-[15px] font-bold ${tc} leading-none`}>{value}</p>
-      {subValue && (
-        <p className={`text-[10px] ${tc} opacity-60 leading-none`}>
-          {subValue}
-        </p>
-      )}
+      <p className={`text-xl font-bold ${styles.val} leading-none`}>{value}</p>
+      {sub && <p className={`text-[11px] mt-1.5 ${styles.icon} opacity-60`}>{sub}</p>}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// POOL ORDER CARD (bottom bar) — clickable for assignment when in pool state
-// ─────────────────────────────────────────────────────────────────────────────
-
-function PoolOrderCard({
-  order,
-  isSelected,
-  isAssignMode,
-  assignable,
-  onClick,
-}: {
-  order: PoolOrder;
-  isSelected: boolean;
-  isAssignMode: boolean;
-  assignable: boolean;
-  onClick: () => void;
-}) {
-  const waitMin = Math.floor(
-    (Date.now() - order.createdAt.toDate().getTime()) / 60000,
-  );
-  // Restaurant chose their own courier — master cannot assign this order.
-  const isTheirsCourier =
-    order.collection === "orders-food" && order.courierType === "theirs";
-
+function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={!assignable}
-      className={`flex-shrink-0 w-56 rounded-xl p-3 flex flex-col gap-1.5 transition-all text-left
-        ${
-          isSelected
-            ? "bg-emerald-50 border-2 border-emerald-400 shadow-md scale-[1.02]"
-            : !assignable
-              ? isTheirsCourier
-                ? "bg-blue-50/40 border border-blue-200 cursor-default"
-                : "bg-gray-50 border border-gray-200 cursor-default"
-              : isAssignMode
-                ? "bg-white border border-amber-200 hover:border-emerald-300 hover:shadow-sm opacity-70 hover:opacity-100"
-                : "bg-white border border-amber-200 hover:border-amber-300 hover:shadow-sm"
-        }`}
-    >
-      {/* Selection indicator */}
-      {isSelected && (
-        <div className="flex items-center gap-1 mb-0.5">
-          <CheckCircle2 className="w-3 h-3 text-emerald-500 flex-shrink-0" />
-          <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-wide">
-            Seçildi
-          </span>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between gap-1">
-        <p className="text-[12px] font-bold text-gray-900 truncate flex-1">
-          {order.displayName}
-        </p>
-        <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md flex-shrink-0">
-          {formatOrderTime(order.createdAt)}
-        </span>
-      </div>
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="text-[11px] text-gray-500 truncate">
-          {order.buyerName}
-        </span>
-        <span className="text-[10px] text-gray-300">·</span>
-        <span className="text-[11px] font-semibold text-gray-700">
-          {order.totalPrice.toFixed(0)} {order.currency}
-        </span>
-        {order.isPaid ? (
-          <span className="text-[8px] px-1 py-0.5 bg-emerald-100 text-emerald-700 rounded font-bold flex-shrink-0">
-            ÖDENDİ
-          </span>
-        ) : (
-          <span className="text-[8px] px-1 py-0.5 bg-amber-100 text-amber-700 rounded font-bold flex-shrink-0">
-            NAKİT
-          </span>
-        )}
-        {isTheirsCourier && (
-          <span className="text-[8px] px-1 py-0.5 bg-blue-100 text-blue-700 rounded font-bold flex-shrink-0">
-            KENDİ KURYESİ
-          </span>
-        )}
-      </div>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1 min-w-0">
-          <MapPin className="w-2.5 h-2.5 text-gray-400 flex-shrink-0" />
-          <span className="text-[10px] text-gray-500 truncate">
-            {order.deliveryAddress?.addressLine1 || "—"}
-          </span>
-        </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <Clock className="w-2.5 h-2.5 text-amber-500" />
-          <span
-            className={`text-[10px] font-semibold ${waitMin > 15 ? "text-red-500" : waitMin > 10 ? "text-amber-600" : "text-gray-500"}`}
-          >
-            {waitMin}dk
-          </span>
-        </div>
-      </div>
-    </button>
+    <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">
+      {children}
+    </h3>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// COURIER CARD — active orders now have unassign button
-// ─────────────────────────────────────────────────────────────────────────────
-
-function CourierCard({
-  courier,
-  isSelected,
-  onSelect,
-  onDoubleSelect,
-  orderEtas,
-  isHidden,
-  onToggleVisibility,
-  onUnassignOrder,
-  unassigningOrderId,
-}: {
-  courier: Courier;
-  isSelected: boolean;
-  onSelect: () => void;
-  onDoubleSelect: () => void;
-  orderEtas: Map<string, { etaMin: number; distKm: number }>;
-  isHidden: boolean;
-  onToggleVisibility: () => void;
-  onUnassignOrder: (order: ActiveOrder) => void;
-  unassigningOrderId: string | null;
-}) {
-  const isConnected = !!courier.location?.isOnline;
-  const isOnShift = !!courier.location?.isOnShift;
-  const hasOrder = courier.activeOrders.length > 0;
-  const avgTime = formatAvgTime(
-    courier.todayStats.totalDeliveryTimeMs,
-    courier.todayStats.deliveredCount,
-  );
-
+function EmptyRight() {
   return (
-    <div
-      className={`w-full text-left rounded-2xl border transition-all duration-200 overflow-hidden ${
-        isSelected
-          ? "bg-white border-orange-200 shadow-sm"
-          : "bg-white border-gray-100 hover:border-gray-200 hover:shadow-sm"
-      }`}
-    >
-      {/* Main row — clickable area for selection */}
-      <button
-        onClick={onSelect}
-        onDoubleClick={(e) => {
-          e.preventDefault();
-          onDoubleSelect();
-        }}
-        className="w-full text-left p-3 flex items-center gap-2.5"
-      >
-        <div className="relative">
-          <Avatar profile={courier.profile} size="md" />
-          <StatusDot
-            isConnected={isConnected}
-            isOnShift={isOnShift}
-            hasOrder={hasOrder}
-          />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <p
-              className={`text-[13px] font-semibold truncate leading-tight ${isHidden ? "text-gray-400" : "text-gray-900"}`}
-            >
-              {courier.profile.displayName}
-            </p>
-            {hasOrder && (
-              <span className="flex-shrink-0 px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 text-[9px] font-bold tracking-wide">
-                YOLDA
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-            {!isConnected ? (
-              <span className="flex items-center gap-1 text-[10px] font-semibold text-gray-400">
-                <PowerOff className="w-2.5 h-2.5" />
-                Çevrimdışı
-              </span>
-            ) : isOnShift ? (
-              <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600">
-                <Power className="w-2.5 h-2.5" />
-                Vardiyada
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-600">
-                <Coffee className="w-2.5 h-2.5" />
-                Molada
-              </span>
-            )}
-            {courier.location?.speed != null && courier.location.speed > 0 && (
-              <>
-                <span className="text-[10px] text-gray-300">·</span>
-                <span className="text-[10px] text-gray-400">
-                  {Math.round(courier.location.speed)} km/h
-                </span>
-              </>
-            )}
-            {courier.location?.updatedAt ? (
-              <>
-                <span className="text-[10px] text-gray-300">·</span>
-                <span className="text-[10px] text-gray-400">
-                  {timeSince(courier.location.updatedAt)}
-                </span>
-              </>
-            ) : null}
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
-          <span
-            className={`text-[13px] font-bold ${courier.activeOrders.length > 0 ? "text-emerald-600" : "text-gray-300"}`}
-          >
-            {courier.activeOrders.length}
-          </span>
-          <span className="text-[9px] text-gray-400 font-medium">aktif</span>
-        </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleVisibility();
-          }}
-          className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
-          title={isHidden ? "Haritada göster" : "Haritadan gizle"}
-        >
-          {isHidden ? (
-            <EyeOff className="w-3 h-3 text-gray-300" />
-          ) : (
-            <Eye className="w-3 h-3 text-gray-400" />
-          )}
-        </button>
-        <ChevronDown
-          className={`w-3.5 h-3.5 flex-shrink-0 text-gray-300 transition-transform duration-200 ${isSelected ? "rotate-180 text-orange-400" : ""}`}
-        />
-      </button>
-
-      {/* Active orders */}
-      {courier.activeOrders.map((order) => (
-        <div
-          key={order.id}
-          className="mx-3 mb-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2"
-        >
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <div className="flex items-center gap-1.5 min-w-0">
-              {order.collection === "orders-market" ? (
-                <ShoppingCart className="w-3 h-3 text-emerald-600 flex-shrink-0" />
-              ) : (
-                <Package className="w-3 h-3 text-emerald-600 flex-shrink-0" />
-              )}
-              <p className="text-[11px] font-semibold text-emerald-800 truncate">
-                {order.restaurantName}
-              </p>
-              <span
-                className={`text-[8px] font-bold px-1 py-0.5 rounded flex-shrink-0 ${
-                  order.status === "out_for_delivery"
-                    ? "bg-blue-100 text-blue-700"
-                    : "bg-amber-100 text-amber-700"
-                }`}
-              >
-                {order.status === "out_for_delivery" ? "YOLDA" : "ATANMIŞ"}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <span className="text-[11px] font-bold text-emerald-700">
-                {order.totalPrice.toFixed(0)} {order.currency}
-              </span>
-              {order.isPaid ? (
-                <span className="text-[9px] px-1 py-0.5 bg-emerald-200 text-emerald-800 rounded font-bold">
-                  ÖDENDİ
-                </span>
-              ) : (
-                <span className="text-[9px] px-1 py-0.5 bg-amber-100 text-amber-700 rounded font-bold">
-                  NAKİT
-                </span>
-              )}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onUnassignOrder(order);
-                }}
-                disabled={unassigningOrderId === order.id}
-                className="w-5 h-5 flex items-center justify-center rounded-md bg-white border border-emerald-200 text-emerald-600 hover:bg-red-50 hover:border-red-300 hover:text-red-600 disabled:opacity-50 disabled:cursor-wait transition-colors"
-                title="Atamayı kaldır"
-              >
-                {unassigningOrderId === order.id ? (
-                  <RefreshCw className="w-3 h-3 animate-spin" />
-                ) : (
-                  <X className="w-3 h-3" />
-                )}
-              </button>
-            </div>
-          </div>
-          {order.deliveryAddress && (
-            <div className="flex items-start gap-1">
-              <MapPin className="w-2.5 h-2.5 text-emerald-500 mt-px flex-shrink-0" />
-              <p className="text-[10px] text-emerald-700 leading-relaxed line-clamp-1">
-                {order.deliveryAddress.addressLine1}
-                {order.deliveryAddress.city
-                  ? `, ${order.deliveryAddress.city}`
-                  : ""}
-              </p>
-            </div>
-          )}
-          {(() => {
-            const isPickedUp = order.status === "out_for_delivery";
-            const stamp = isPickedUp
-              ? (order.pickedUpAt ?? order.assignedAt)
-              : order.assignedAt;
-            if (!stamp) return null;
-            return (
-              <div className="flex items-center gap-1 mt-1">
-                <Clock className="w-2.5 h-2.5 text-emerald-400" />
-                <span className="text-[9px] text-emerald-600">
-                  {isPickedUp ? "Teslim alındı" : "Atandı"}{" "}
-                  {timeSince(stamp.toDate().getTime())}
-                </span>
-              </div>
-            );
-          })()}
-          {(() => {
-            const eta = orderEtas.get(order.id);
-            if (!eta) return null;
-            return (
-              <div className="flex items-center gap-1 mt-1">
-                <Clock className="w-2.5 h-2.5 text-blue-400" />
-                <span className="text-[9px] font-semibold text-blue-600">
-                  ~{eta.etaMin} dk
-                </span>
-              </div>
-            );
-          })()}
-        </div>
-      ))}
-
-      {/* Expanded stats */}
-      {isSelected && (
-        <div className="px-3 pb-3 grid grid-cols-3 gap-1.5">
-          <MiniStat
-            label="Bugün"
-            value={String(courier.todayStats.deliveredCount)}
-            subValue={`Y${courier.todayStats.foodDeliveredCount}·M${courier.todayStats.marketDeliveredCount}`}
-            icon={<CheckCircle2 className="w-3 h-3" />}
-            color="orange"
-          />
-          <MiniStat
-            label="Ciro"
-            value={`${courier.todayStats.totalRevenue.toFixed(0)}₺`}
-            subValue={`Y${courier.todayStats.foodRevenue.toFixed(0)}·M${courier.todayStats.marketRevenue.toFixed(0)}`}
-            icon={<TrendingUp className="w-3 h-3" />}
-            color="emerald"
-          />
-          <MiniStat
-            label="Ort. Süre"
-            value={avgTime}
-            subValue="teslimatda"
-            icon={<Clock className="w-3 h-3" />}
-            color="blue"
-          />
-        </div>
-      )}
+    <div className="h-full flex flex-col items-center justify-center text-center px-8 py-16">
+      <div className="w-16 h-16 bg-orange-50 rounded-2xl flex items-center justify-center mb-4">
+        <Users className="w-7 h-7 text-orange-300" />
+      </div>
+      <p className="text-[15px] font-semibold text-gray-700">Kurye Seçin</p>
+      <p className="text-[12px] text-gray-400 mt-1.5 leading-relaxed max-w-[200px]">
+        Sol panelden bir kurye seçerek istatistiklerini görüntüleyin
+      </p>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// OSRM SCHEDULER
-//
-// Bounds load on the self-hosted OSRM VM so it can't be overwhelmed regardless
-// of fleet size. Three guarantees:
-//   1. Per-courier debounce — rapid signature changes (assign → pickup →
-//      deliver) collapse into one fetch per courier.
-//   2. Global concurrency cap — at most N fetches in flight against OSRM at
-//      any instant. Extras queue.
-//   3. Per-courier cancellation — if a newer signature arrives while a fetch
-//      is in flight, the stale fetch is aborted and its slot freed.
-//
-// Peak OSRM RPS is bounded to ~ maxConcurrent / avgLatencySeconds.
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
-interface OsrmTask {
-  uid: string;
-  run: (signal: AbortSignal) => Promise<void>;
-}
+export default function RestaurantCourierStatPage() {
+  const router = useRouter();
+  const [authState, setAuthState] = useState<AuthState>("loading");
 
-class OsrmScheduler {
-  private readonly debounceMs: number;
-  private readonly maxConcurrent: number;
+  // ── Courier list (all-time) ──────────────────────────────────────────────────
+  const [couriers, setCouriers]         = useState<AlltimeStat[]>([]);
+  const [couriersLoading, setCouriersLoading] = useState(false);
+  const [searchQuery, setSearchQuery]   = useState("");
+  const [isRecalculating, setIsRecalculating] = useState(false);
 
-  private pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  private queue: OsrmTask[] = [];
-  private inFlight = new Map<string, AbortController>();
-  private active = 0;
-  private destroyed = false;
-
-  constructor(opts: { debounceMs: number; maxConcurrent: number }) {
-    this.debounceMs = opts.debounceMs;
-    this.maxConcurrent = opts.maxConcurrent;
-  }
-
-  schedule(task: OsrmTask) {
-    if (this.destroyed) return;
-    const existing = this.pendingTimers.get(task.uid);
-    if (existing) clearTimeout(existing);
-
-    const t = setTimeout(() => {
-      this.pendingTimers.delete(task.uid);
-      this.enqueue(task);
-    }, this.debounceMs);
-
-    this.pendingTimers.set(task.uid, t);
-  }
-
-  cancel(uid: string) {
-    const t = this.pendingTimers.get(uid);
-    if (t) {
-      clearTimeout(t);
-      this.pendingTimers.delete(uid);
-    }
-    const ac = this.inFlight.get(uid);
-    if (ac) {
-      ac.abort();
-      this.inFlight.delete(uid);
-    }
-    this.queue = this.queue.filter((q) => q.uid !== uid);
-  }
-
-  destroy() {
-    this.destroyed = true;
-    for (const t of this.pendingTimers.values()) clearTimeout(t);
-    this.pendingTimers.clear();
-    for (const ac of this.inFlight.values()) ac.abort();
-    this.inFlight.clear();
-    this.queue = [];
-  }
-
-  private enqueue(task: OsrmTask) {
-    // Newer signature supersedes any in-flight fetch for the same courier.
-    const live = this.inFlight.get(task.uid);
-    if (live) live.abort();
-
-    // Dedupe: replace a queued task for this uid rather than adding a second.
-    const idx = this.queue.findIndex((q) => q.uid === task.uid);
-    if (idx >= 0) this.queue[idx] = task;
-    else this.queue.push(task);
-
-    this.drain();
-  }
-
-  private drain() {
-    while (this.active < this.maxConcurrent && this.queue.length > 0) {
-      const task = this.queue.shift()!;
-      this.runOne(task);
-    }
-  }
-
-  private async runOne(task: OsrmTask) {
-    this.active++;
-    const ac = new AbortController();
-    this.inFlight.set(task.uid, ac);
-
+  const handleRecalc = useCallback(async () => {
+    setIsRecalculating(true);
     try {
-      await task.run(ac.signal);
+      const fn = httpsCallable(functions, "recalcCourierStats");
+      await fn({});
     } catch (err) {
-      if ((err as Error)?.name !== "AbortError") {
-        console.warn(`[OSRM] route fetch failed for ${task.uid}:`, err);
-      }
+      console.error("Recalc failed:", err);
     } finally {
-      this.active--;
-      if (this.inFlight.get(task.uid) === ac) this.inFlight.delete(task.uid);
-      this.drain();
+      setIsRecalculating(false);
     }
-  }
-}
+  }, []);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN PAGE
-// ─────────────────────────────────────────────────────────────────────────────
+  // ── Selected courier ─────────────────────────────────────────────────────────
+  const [selId, setSelId]               = useState<string | null>(null);
+  const [selStat, setSelStat]           = useState<AlltimeStat | null>(null);
 
-export default function MasterCourierDashboardPage() {
-  // ── Auth ─────────────────────────────────────────────────────────────────
-  const [authState, setAuthState] = useState<"loading" | "allowed" | "denied">(
-    "loading",
-  );
+  // ── Daily history for selected courier ──────────────────────────────────────
+  const [dailyStats, setDailyStats]     = useState<DailyStat[]>([]);
+  const [dailyLoading, setDailyLoading] = useState(false);
+  const [dailyHasMore, setDailyHasMore] = useState(false);
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+  const dailyCursorRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
 
-  // ── Raw data ─────────────────────────────────────────────────────────────
-  const [courierProfiles, setCourierProfiles] = useState<
-    Map<string, CourierProfile>
-  >(new Map());
-  const [activeOrders, setActiveOrders] = useState<Map<string, ActiveOrder[]>>(
-    new Map(),
-  );
-  const [dailyStats, setDailyStats] = useState<Map<string, CourierStats>>(
-    new Map(),
-  );
+  const toggleDateExpanded = useCallback((date: string) => {
+    setExpandedDates((prev) => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date); else next.add(date);
+      return next;
+    });
+  }, []);
 
-  // ── UI state ──────────────────────────────────────────────────────────────
-  const [selectedCourierId, setSelectedCourierId] = useState<string | null>(
-    null,
-  );
-  const [searchQuery, setSearchQuery] = useState("");
-  const [hiddenCouriers, setHiddenCouriers] = useState<Set<string>>(new Set());
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [mapsLoaded, setMapsLoaded] = useState(false);
-  const [showLabels, setShowLabels] = useState(true);
-  const [sessionKey, setSessionKey] = useState(0);
+  // ── Date filter ──────────────────────────────────────────────────────────────
+  const [filterFrom, setFilterFrom] = useState("");
+  const [filterTo, setFilterTo]     = useState(todayKey());
+  const [filterApplied, setFilterApplied] = useState(false);
 
-  // ── Assignment state ──────────────────────────────────────────────────────
-  const [selectedPoolOrderId, setSelectedPoolOrderId] = useState<string | null>(
-    null,
-  );
-  const [assignBusy, setAssignBusy] = useState(false);
-  const [unassigningOrderId, setUnassigningOrderId] = useState<string | null>(
-    null,
-  );
-  const [assignToast, setAssignToast] = useState<{
-    ok: boolean;
-    text: string;
-  } | null>(null);
-
-  // Refs so map marker closures can read latest values
-  const selectedPoolOrderRef = useRef<{
-    id: string;
-    collection: OrderCollection;
-  } | null>(null);
-  const couriersRef = useRef<Map<string, Courier>>(new Map());
-
-  // ── Bottom bar tabs ───────────────────────────────────────────────────────
-  const [orderTab, setOrderTab] = useState<OrderCollection>("orders-food");
-  const [foodSubtab, setFoodSubtab] = useState<FoodPoolStatus>("ready");
-  const [marketSubtab, setMarketSubtab] = useState<MarketPoolStatus>("pending");
-
-  const activeSubStatus: string =
-    orderTab === "orders-food" ? foodSubtab : marketSubtab;
-
-  const isPoolTab =
-    (orderTab === "orders-food" && (foodSubtab === "ready" || foodSubtab === "accepted")) ||
-    (orderTab === "orders-market" && marketSubtab === "pending");
-
+  // ─── Auth ────────────────────────────────────────────────────────────────────
   useEffect(() => {
-    // Reset selection when switching tabs
-    setSelectedPoolOrderId(null);
-  }, [orderTab, foodSubtab, marketSubtab]);
-
-  // ── Pool orders (current tab) ─────────────────────────────────────────────
-  const [poolOrders, setPoolOrders] = useState<PoolOrder[]>([]);
-  const [poolPage, setPoolPage] = useState(0);
-  const [poolHasMore, setPoolHasMore] = useState(false);
-  const [poolLoading, setPoolLoading] = useState(false);
-  const poolCursorsRef = useRef<(QueryDocumentSnapshot<DocumentData> | null)[]>(
-    [null],
-  );
-
-  // ── Map refs ──────────────────────────────────────────────────────────────
-  const mapDivRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<google.maps.Map | null>(null);
-  const mapManagerRef = useRef<CourierMapManager | null>(null);
-  const orderSignaturesRef = useRef<Map<string, string>>(new Map());
-
-  // ── RTDB: courier locations ───────────────────────────────────────────────
-  const courierLocations = useCourierLocations(authState === "allowed");
-
-  // ── Profile fetch dedup ───────────────────────────────────────────────────
-  const fetchedUidsRef = useRef<Set<string>>(new Set());
-
-  // ── Derived: couriers ─────────────────────────────────────────────────────
-  const couriers = useMemo<Map<string, Courier>>(() => {
-    const result = new Map<string, Courier>();
-    for (const [uid] of courierLocations) {
-      const profile = courierProfiles.get(uid) ?? {
-        uid,
-        displayName: "Courier",
-        email: "",
-      };
-      result.set(uid, {
-        uid,
-        profile,
-        location: courierLocations.get(uid) ?? null,
-        activeOrders: activeOrders.get(uid) ?? [],
-        todayStats: dailyStats.get(uid) ?? {
-          deliveredCount: 0,
-          foodDeliveredCount: 0,
-          marketDeliveredCount: 0,
-          totalRevenue: 0,
-          foodRevenue: 0,
-          marketRevenue: 0,
-          totalDeliveryTimeMs: 0,
-        },
-      });
-    }
-    return result;
-  }, [courierLocations, courierProfiles, activeOrders, dailyStats]);
-
-  useEffect(() => {
-    couriersRef.current = couriers;
-  }, [couriers]);
-
-  const allCouriersArr = useMemo(
-    () => Array.from(couriers.values()),
-    [couriers],
-  );
-  // ── Assignment logic ──────────────────────────────────────────────────────
-  // Writes a `courier_actions` doc which the processCourierAction Firestore
-  // trigger picks up and atomically transitions the order into the `assigned`
-  // state. We subscribe to the action doc to surface completion/failure..
-
-  const assignOrderToCourier = useCallback(
-    async (
-      orderId: string,
-      orderCollection: OrderCollection,
-      courierId: string,
-    ) => {
-      // Guard: master cannot assign orders where the restaurant chose their
-      // own courier. UI already blocks this; this is defense-in-depth against
-      // stale state or direct tampering.
-      if (orderCollection === "orders-food") {
-        const order = poolOrders.find((o) => o.id === orderId);
-        if (order?.courierType === "theirs") {
-          setAssignToast({
-            ok: false,
-            text: "Bu sipariş restoranın kendi kuryesinin sorumluluğunda",
-          });
-          setSelectedPoolOrderId(null);
-          return;
-        }
-      }
-
-      const courierName =
-        couriersRef.current.get(courierId)?.profile.displayName || "Kurye";
-      setAssignBusy(true);
-
-      const actionRef = doc(collection(db, "courier_actions"));
-
-      let unsub: (() => void) | null = null;
-      let settled = false;
-      const finish = (ok: boolean, text: string) => {
-        if (settled) return;
-        settled = true;
-        if (unsub) unsub();
-        setAssignBusy(false);
-        if (ok) setSelectedPoolOrderId(null);
-        setAssignToast({ ok, text });
-      };
-
-      unsub = onSnapshot(
-        actionRef,
-        (snap) => {
-          const d = snap.data() as
-            | { status?: string; error?: string }
-            | undefined;
-          if (!d) return;
-          if (d.status === "completed") {
-            finish(true, `"${courierName}" üzerine atandı`);
-          } else if (d.status === "failed") {
-            const msg =
-              d.error === "already_taken"
-                ? "Bu sipariş zaten başka bir kurye tarafından alındı"
-                : d.error === "Order not found"
-                  ? "Sipariş bulunamadı"
-                  : "Atama başarısız — tekrar deneyin";
-            finish(false, msg);
-          }
-        },
-        (err) => {
-          console.error("[Assign] Snapshot error:", err);
-          finish(false, "Atama başarısız — tekrar deneyin");
-        },
-      );
-
+    return onAuthStateChanged(auth, async (user) => {
+      if (!user) { setAuthState("denied"); return; }
       try {
-        await setDoc(actionRef, {
-          type: "assign",
-          collection: orderCollection,
-          orderId,
-          courierId,
-          courierName,
-          assignedBy: "master",
-          status: "pending",
-          createdAt: serverTimestamp(),
-        });
-      } catch (err) {
-        console.error("[Assign] Write error:", err);
-        finish(false, "Atama başarısız — tekrar deneyin");
-        return;
-      }
-
-      // Safety timeout in case trigger never responds
-      setTimeout(() => {
-        if (!settled) finish(false, "Zaman aşımı — tekrar deneyin");
-      }, 15000);
-    },
-    [poolOrders],
-  );
-
-  // ── Unassignment logic ────────────────────────────────────────────────────
-  // Writes a `courier_actions` doc with type: 'unassign'. The backend trigger
-  // reverts the order to `accepted` (food) or `pending` (market) and clears
-  // the courier assignment atomically.
-  const unassignOrderFromCourier = useCallback(
-    async (order: ActiveOrder, courierId: string, courierName: string) => {
-      if (
-        !window.confirm(
-          `"${courierName}" kuryesinden bu siparişin atamasını kaldırmak istediğinize emin misiniz?`,
-        )
-      ) {
-        return;
-      }
-
-      setUnassigningOrderId(order.id);
-      const actionRef = doc(collection(db, "courier_actions"));
-
-      let unsub: (() => void) | null = null;
-      let settled = false;
-      const finish = (ok: boolean, text: string) => {
-        if (settled) return;
-        settled = true;
-        if (unsub) unsub();
-        setUnassigningOrderId(null);
-        setAssignToast({ ok, text });
-      };
-
-      unsub = onSnapshot(
-        actionRef,
-        (snap) => {
-          const d = snap.data() as
-            | { status?: string; error?: string }
-            | undefined;
-          if (!d) return;
-          if (d.status === "completed") {
-            finish(true, "Atama kaldırıldı");
-          } else if (d.status === "failed") {
-            const msg =
-              d.error === "Order not found"
-                ? "Sipariş bulunamadı"
-                : "Atama kaldırma başarısız — tekrar deneyin";
-            finish(false, msg);
-          }
-        },
-        (err) => {
-          console.error("[Unassign] Snapshot error:", err);
-          finish(false, "Atama kaldırma başarısız — tekrar deneyin");
-        },
-      );
-
-      try {
-        await setDoc(actionRef, {
-          type: "unassign",
-          collection: order.collection,
-          orderId: order.id,
-          courierId,
-          courierName,
-          unassignedBy: "master",
-          status: "pending",
-          createdAt: serverTimestamp(),
-        });
-      } catch (err) {
-        console.error("[Unassign] Write error:", err);
-        finish(false, "Atama kaldırma başarısız — tekrar deneyin");
-        return;
-      }
-
-      setTimeout(() => {
-        if (!settled) finish(false, "Zaman aşımı — tekrar deneyin");
-      }, 15000);
-    },
-    [],
-  );
-
-  // ── Toast auto-dismiss ────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!assignToast) return;
-    const t = setTimeout(() => setAssignToast(null), 3500);
-    return () => clearTimeout(t);
-  }, [assignToast]);
-
-  // ── Auth ──────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    return onIdTokenChanged(auth, async (user) => {
-      if (!user) {
-        setAuthState("denied");
-        return;
-      }
-      try {
-        const snap = await getDoc(doc(db, "users", user.uid));
-        if (snap.data()?.masterCourier === true) {
-          setAuthState("allowed");
-          setSessionKey((k) => k + 1);
-        } else {
-          setAuthState("denied");
-        }
+        const t = await user.getIdTokenResult(true);
+        const c = t.claims || {};
+        setAuthState(c.isAdmin === true || c.masterCourier === true ? "allowed" : "denied");
       } catch {
         setAuthState("denied");
       }
     });
   }, []);
 
-  // ── Google Maps ───────────────────────────────────────────────────────────
+  // ─── Load all couriers (all-time stats) ──────────────────────────────────────
+  const loadCouriers = useCallback(async () => {
+    setCouriersLoading(true);
+    try {
+      const snap = await getDocs(
+        query(collection(db, "courier_alltime_stats"), orderBy("totalRevenue", "desc"))
+      );
+      const items: AlltimeStat[] = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          courierId:           d.id,
+          courierName:         (data.courierName as string) || "Kurye",
+          totalDeliveries:     (data.totalDeliveries as number) || 0,
+          foodDeliveries:      (data.foodDeliveries as number) || 0,
+          marketDeliveries:    (data.marketDeliveries as number) || 0,
+          totalRevenue:        (data.totalRevenue as number) || 0,
+          foodRevenue:         (data.foodRevenue as number) || 0,
+          marketRevenue:       (data.marketRevenue as number) || 0,
+          cashRevenue:         (data.cashRevenue as number) || 0,
+          cardRevenue:         (data.cardRevenue as number) || 0,
+          ibanRevenue: (data.ibanRevenue as number) || 0,
+          totalDeliveryTimeMs: (data.totalDeliveryTimeMs as number) || 0,
+          lastDeliveryAt:      (data.lastDeliveryAt as Timestamp) || null,
+          updatedAt:           (data.updatedAt as Timestamp) || null,
+        };
+      });
+      setCouriers(items);
+    } catch (err) {
+      console.error("[CourierStat] Load couriers error:", err);
+    } finally {
+      setCouriersLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    if (authState !== "allowed" || typeof window === "undefined") return;
-    if (window.google?.maps) {
-      setMapsLoaded(true);
+    if (authState === "allowed") loadCouriers();
+  }, [authState, loadCouriers]);
+
+  // ─── Load daily stats for selected courier ───────────────────────────────────
+  const loadDailyPage = useCallback(async (
+    courierId: string,
+    reset: boolean,
+    from?: string,
+    to?: string,
+  ) => {
+    setDailyLoading(true);
+    try {
+      const cursor = reset ? null : dailyCursorRef.current;
+      const coll   = collection(db, "courier_daily_stats");
+
+      // Build query — composite index needed: courierId ASC + date DESC
+      let q;
+      if (from && to) {
+        q = cursor
+          ? query(coll,
+              where("courierId", "==", courierId),
+              where("date", ">=", from),
+              where("date", "<=", to),
+              orderBy("date", "desc"),
+              startAfter(cursor),
+              limit(DAILY_PAGE + 1))
+          : query(coll,
+              where("courierId", "==", courierId),
+              where("date", ">=", from),
+              where("date", "<=", to),
+              orderBy("date", "desc"),
+              limit(DAILY_PAGE + 1));
+      } else if (to) {
+        q = cursor
+          ? query(coll,
+              where("courierId", "==", courierId),
+              where("date", "<=", to),
+              orderBy("date", "desc"),
+              startAfter(cursor),
+              limit(DAILY_PAGE + 1))
+          : query(coll,
+              where("courierId", "==", courierId),
+              where("date", "<=", to),
+              orderBy("date", "desc"),
+              limit(DAILY_PAGE + 1));
+      } else {
+        q = cursor
+          ? query(coll,
+              where("courierId", "==", courierId),
+              orderBy("date", "desc"),
+              startAfter(cursor),
+              limit(DAILY_PAGE + 1))
+          : query(coll,
+              where("courierId", "==", courierId),
+              orderBy("date", "desc"),
+              limit(DAILY_PAGE + 1));
+      }
+
+      const snap    = await getDocs(q);
+      const hasMore = snap.docs.length > DAILY_PAGE;
+      const pageDocs = snap.docs.slice(0, DAILY_PAGE);
+
+      if (hasMore && pageDocs.length > 0) {
+        dailyCursorRef.current = pageDocs[pageDocs.length - 1];
+      } else {
+        dailyCursorRef.current = null;
+      }
+
+      const items: DailyStat[] = pageDocs.map((d) => {
+        const data = d.data();
+        return {
+          courierId:           (data.courierId as string) || courierId,
+          courierName:         (data.courierName as string) || "Kurye",
+          date:                (data.date as string) || "",
+          deliveredCount:      (data.deliveredCount as number) || 0,
+          foodDeliveredCount:  (data.foodDeliveredCount as number) || 0,
+          marketDeliveredCount:(data.marketDeliveredCount as number) || 0,
+          totalRevenue:        (data.totalRevenue as number) || 0,
+          foodRevenue:         (data.foodRevenue as number) || 0,
+          marketRevenue:       (data.marketRevenue as number) || 0,
+          cashRevenue:         (data.cashRevenue as number) || 0,
+          cardRevenue:         (data.cardRevenue as number) || 0,
+          ibanRevenue: (data.ibanRevenue as number) || 0,
+          totalDeliveryTimeMs: (data.totalDeliveryTimeMs as number) || 0,
+          orderIds:            (data.orderIds as string[]) || [],
+          restaurants:         (data.restaurants as Record<string, RestaurantBreakdown>) || {},
+          lastDeliveryAt:      (data.lastDeliveryAt as Timestamp) || null,
+          recalculatedAt:      (data.recalculatedAt as Timestamp) || null,
+        };
+      });
+
+      setDailyStats((prev) => reset ? items : [...prev, ...items]);
+      setDailyHasMore(hasMore);
+    } catch (err) {
+      console.error("[CourierStat] Daily load error:", err);
+    } finally {
+      setDailyLoading(false);
+    }
+  }, []);
+
+  // ─── Select courier ───────────────────────────────────────────────────────────
+  const selectCourier = useCallback((stat: AlltimeStat) => {
+    if (selId === stat.courierId) {
+      setSelId(null);
+      setSelStat(null);
+      setDailyStats([]);
+      setExpandedDates(new Set());
       return;
     }
-    window.__initGoogleMaps = () => setMapsLoaded(true);
-    const s = document.createElement("script");
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_API_KEY}&callback=__initGoogleMaps&libraries=geometry`;
-    s.async = true;
-    s.defer = true;
-    document.head.appendChild(s);
-    return () => {
-      delete window.__initGoogleMaps;
-    };
-  }, [authState]);
+    setSelId(stat.courierId);
+    setSelStat(stat);
+    setDailyStats([]);
+    setDailyHasMore(false);
+    setFilterApplied(false);
+    setExpandedDates(new Set());
+    dailyCursorRef.current = null;
+    loadDailyPage(stat.courierId, true, filterFrom || undefined, filterTo || undefined);
+  }, [selId, filterFrom, filterTo, loadDailyPage]);
 
-  // Stable ref so the map-init effect doesn't re-run when assignOrderToCourier
-  // changes (its useCallback depends on poolOrders, which updates constantly).
-  // Without this, the map manager was being destroyed and never recreated.
-  const assignOrderToCourierRef = useRef(assignOrderToCourier);
-  useEffect(() => {
-    assignOrderToCourierRef.current = assignOrderToCourier;
-  }, [assignOrderToCourier]);
+  // ─── Apply date filter ────────────────────────────────────────────────────────
+  const applyFilter = useCallback(() => {
+    if (!selId) return;
+    dailyCursorRef.current = null;
+    setDailyStats([]);
+    setFilterApplied(true);
+    loadDailyPage(selId, true, filterFrom || undefined, filterTo || undefined);
+  }, [selId, filterFrom, filterTo, loadDailyPage]);
 
-  useEffect(() => {
-    if (!mapsLoaded || !mapDivRef.current || mapRef.current) return;
-    const map = new window.google.maps.Map(mapDivRef.current, {
-      center: CYPRUS_CENTER,
-      zoom: 11,
-      disableDefaultUI: true,
-      zoomControl: true,
-      zoomControlOptions: {
-        position: window.google.maps.ControlPosition.RIGHT_BOTTOM,
-      },
-      styles: [
-        { featureType: "poi", stylers: [{ visibility: "off" }] },
-        { featureType: "transit", stylers: [{ visibility: "simplified" }] },
-        { elementType: "geometry", stylers: [{ color: "#f8f8f8" }] },
-        { elementType: "labels.text.fill", stylers: [{ color: "#717171" }] },
-        { elementType: "labels.text.stroke", stylers: [{ color: "#f8f8f8" }] },
-        {
-          featureType: "road",
-          elementType: "geometry",
-          stylers: [{ color: "#ffffff" }],
-        },
-        {
-          featureType: "road.highway",
-          elementType: "geometry",
-          stylers: [{ color: "#e8e8e8" }],
-        },
-        {
-          featureType: "road.arterial",
-          elementType: "geometry",
-          stylers: [{ color: "#eeeeee" }],
-        },
-        {
-          featureType: "water",
-          elementType: "geometry",
-          stylers: [{ color: "#d4e6f1" }],
-        },
-        {
-          featureType: "landscape",
-          elementType: "geometry",
-          stylers: [{ color: "#f0f0f0" }],
-        },
-      ],
-    });
-    mapRef.current = map;
+  // ─── Filtered courier list ───────────────────────────────────────────────────
+  const filteredCouriers = couriers.filter((c) =>
+    !searchQuery.trim() ||
+    c.courierName.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-    // ◀ NEW: Create the map manager
-    mapManagerRef.current = new CourierMapManager(map, (uid) => {
-      const pending = selectedPoolOrderRef.current;
-      if (pending) {
-        assignOrderToCourierRef.current(pending.id, pending.collection, uid);
-      } else {
-        setSelectedCourierId((prev) => (prev === uid ? null : uid));
-      }
-    });
-
-    return () => {
-      mapManagerRef.current?.destroy();
-      mapManagerRef.current = null;
-    };
-  }, [mapsLoaded]);
-
-  // ── Fetch profiles ────────────────────────────────────────────────────────
-  useEffect(() => {
-    const unknownUids = Array.from(courierLocations.keys()).filter(
-      (uid) => !fetchedUidsRef.current.has(uid),
-    );
-    if (unknownUids.length === 0) return;
-    unknownUids.forEach((uid) => fetchedUidsRef.current.add(uid));
-    Promise.all(
-      unknownUids.map(async (uid) => {
-        try {
-          const snap = await getDoc(doc(db, "users", uid));
-          if (snap.exists()) {
-            const d = snap.data() as {
-              displayName?: string;
-              name?: string;
-              email?: string;
-            };
-            return {
-              uid,
-              displayName: d.displayName || d.name || "Courier",
-              email: d.email || "",
-            };
-          }
-        } catch {
-          /* silent */
-        }
-        return { uid, displayName: "Courier", email: "" };
-      }),
-    ).then((profiles) => {
-      setCourierProfiles((prev) => {
-        const next = new Map(prev);
-        profiles.forEach((p) => next.set(p.uid, p));
-        return next;
-      });
-    });
-  }, [courierLocations]);
-
-  // ── Firestore: active orders (both collections, courier-owned states) ────
-  // Under the new lifecycle the sidebar shows every order that belongs to a
-  // courier — i.e. status ∈ {assigned, out_for_delivery}. We merge results
-  // from orders-food and orders-market into a single map keyed by courier id.
-  useEffect(() => {
-    if (authState !== "allowed") return;
-
-    const foodMap = new Map<string, ActiveOrder[]>();
-    const marketMap = new Map<string, ActiveOrder[]>();
-
-    const mergeAndSet = () => {
-      const merged = new Map<string, ActiveOrder[]>();
-      for (const [uid, list] of foodMap) merged.set(uid, [...list]);
-      for (const [uid, list] of marketMap) {
-        const existing = merged.get(uid) ?? [];
-        merged.set(uid, [...existing, ...list]);
-      }
-      setActiveOrders(merged);
-    };
-
-    const parseOrder = (
-      d: QueryDocumentSnapshot<DocumentData>,
-      orderCollection: OrderCollection,
-    ): ActiveOrder | null => {
-      const data = d.data();
-      if (!data.cargoUserId) return null;
-      const isMarket = orderCollection === "orders-market";
-      const loc = data.deliveryAddress?.location;
-      // Map market's marketLat/Lng/Name into the common restaurant* fields so
-      // route logic stays collection-agnostic (same pattern as courier app).
-      const pickupLat = isMarket
-        ? (data.marketLat as number | undefined)
-        : (data.restaurantLat as number | undefined);
-      const pickupLng = isMarket
-        ? (data.marketLng as number | undefined)
-        : (data.restaurantLng as number | undefined);
-      const pickupName = isMarket
-        ? (data.marketName as string) || "Market"
-        : (data.restaurantName as string) || "—";
-      return {
-        id: d.id,
-        collection: orderCollection,
-        restaurantName: pickupName,
-        restaurantLat: typeof pickupLat === "number" ? pickupLat : null,
-        restaurantLng: typeof pickupLng === "number" ? pickupLng : null,
-        buyerName: (data.buyerName as string) || "—",
-        totalPrice: (data.totalPrice as number) || 0,
-        currency: (data.currency as string) || "TL",
-        isPaid: (data.isPaid as boolean) || false,
-        assignedAt: (data.assignedAt as Timestamp) || null,
-        pickedUpAt: (data.pickedUpAt as Timestamp) || null,
-        status: (data.status as string) || "",
-        items: Array.isArray(data.items)
-          ? (data.items as { name?: string; quantity?: number }[]).map(
-              (item) => ({
-                name: (item.name as string) || "—",
-                quantity: (item.quantity as number) || 1,
-              }),
-            )
-          : [],
-        deliveryAddress: data.deliveryAddress
-          ? {
-              addressLine1: (data.deliveryAddress.addressLine1 as string) || "",
-              city: (data.deliveryAddress.city as string) || "",
-              location:
-                loc &&
-                typeof loc.latitude === "number" &&
-                typeof loc.longitude === "number"
-                  ? { latitude: loc.latitude, longitude: loc.longitude }
-                  : null,
-            }
-          : null,
-      };
-    };
-
-    const subscribe = (
-      orderCollection: OrderCollection,
-      target: Map<string, ActiveOrder[]>,
-    ) => {
-      // Time floor: ignore in-flight orders older than 12h. Anything older is
-      // almost certainly stuck — it's still visible in the bottom bar's
-      // assigned / out_for_delivery sub-tab for triage, just not streamed
-      // into the live sidebar + map routes.
-      const cutoff = Timestamp.fromMillis(Date.now() - 12 * 60 * 60 * 1000);
-      const q = query(
-        collection(db, orderCollection),
-        where("status", "in", ["assigned", "out_for_delivery"]),
-        where("updatedAt", ">=", cutoff),
-      );
-      return onSnapshot(q, (snap) => {
-        target.clear();
-        snap.docs.forEach((d) => {
-          const order = parseOrder(d, orderCollection);
-          if (!order) return;
-          const cargoUid = (d.data().cargoUserId as string) || "";
-          if (!cargoUid) return;
-          const existing = target.get(cargoUid) ?? [];
-          target.set(cargoUid, [...existing, order]);
-        });
-        mergeAndSet();
-      });
-    };
-
-    const unsubFood = subscribe("orders-food", foodMap);
-    const unsubMarket = subscribe("orders-market", marketMap);
-    return () => {
-      unsubFood();
-      unsubMarket();
-    };
-  }, [authState, sessionKey]);
-
-  // ── Daily stats ───────────────────────────────────────────────────────────
-  const fetchDailyStats = useCallback(async (uids: string[]) => {
-    if (uids.length === 0) return;
-    const today = getTodayKey();
-    const results = await Promise.allSettled(
-      uids.map(async (uid) => {
-        const snap = await getDoc(
-          doc(db, "courier_daily_stats", `${uid}_${today}`),
-        );
-        if (snap.exists()) {
-          const d = snap.data() as {
-            deliveredCount?: number;
-            foodDeliveredCount?: number;
-            marketDeliveredCount?: number;
-            totalRevenue?: number;
-            foodRevenue?: number;
-            marketRevenue?: number;
-            totalDeliveryTimeMs?: number;
-          };
-          return {
-            uid,
-            stats: {
-              deliveredCount: d.deliveredCount ?? 0,
-              foodDeliveredCount: d.foodDeliveredCount ?? 0,
-              marketDeliveredCount: d.marketDeliveredCount ?? 0,
-              totalRevenue: d.totalRevenue ?? 0,
-              foodRevenue: d.foodRevenue ?? 0,
-              marketRevenue: d.marketRevenue ?? 0,
-              totalDeliveryTimeMs: d.totalDeliveryTimeMs ?? 0,
-            },
-          };
-        }
-        return {
-          uid,
-          stats: {
-            deliveredCount: 0,
-            foodDeliveredCount: 0,
-            marketDeliveredCount: 0,
-            totalRevenue: 0,
-            foodRevenue: 0,
-            marketRevenue: 0,
-            totalDeliveryTimeMs: 0,
-          },
-        };
-      }),
-    );
-    setDailyStats((prev) => {
-      const next = new Map(prev);
-      results.forEach((r) => {
-        if (r.status === "fulfilled") next.set(r.value.uid, r.value.stats);
-      });
-      return next;
-    });
-  }, []);
-
-  const fetchCourierRoute = useCallback(
-    async (
-      courier: Courier,
-      courierPos: google.maps.LatLng,
-      signal?: AbortSignal,
-    ) => {
-      const orders = courier.activeOrders;
-      if (orders.length === 0) {
-        mapManagerRef.current?.routePaths.delete(courier.uid);
-        mapManagerRef.current?.updateRoutes();
-        return;
-      }
-
-      const toLatLng = (lat: number, lng: number) =>
-        new window.google.maps.LatLng(lat, lng);
-
-      const dist = (a: google.maps.LatLng, b: google.maps.LatLng) =>
-        window.google.maps.geometry.spherical.computeDistanceBetween(a, b);
-
-      // ── Build pickup/delivery stop pairs ─────────────────────────
-      interface Stop {
-        latLng: google.maps.LatLng;
-        orderId: string;
-        type: "pickup" | "delivery";
-      }
-
-      const stops: Stop[] = [];
-      // Orders that are already `out_for_delivery` have been picked up — their
-      // pickup stop is skipped, and the nearest-neighbor loop treats them as
-      // already picked up so the delivery stop is reachable immediately.
-      const alreadyPickedUp = new Set<string>();
-
-      for (const order of orders) {
-        const isAssigned = order.status === "assigned";
-        if (isAssigned && order.restaurantLat && order.restaurantLng) {
-          stops.push({
-            latLng: toLatLng(order.restaurantLat, order.restaurantLng),
-            orderId: order.id,
-            type: "pickup",
-          });
-        } else {
-          alreadyPickedUp.add(order.id);
-        }
-        if (order.deliveryAddress?.location) {
-          stops.push({
-            latLng: toLatLng(
-              order.deliveryAddress.location.latitude,
-              order.deliveryAddress.location.longitude,
-            ),
-            orderId: order.id,
-            type: "delivery",
-          });
-        }
-      }
-
-      if (stops.length === 0) {
-        mapManagerRef.current?.routePaths.delete(courier.uid);
-        mapManagerRef.current?.updateRoutes();
-        return;
-      }
-
-      // ── Nearest-neighbor with pickup-before-delivery constraint ──
-      const ordered: Stop[] = [];
-      const visited = new Set<number>();
-      const pickedUp = new Set<string>(alreadyPickedUp);
-      let current = courierPos;
-
-      while (ordered.length < stops.length) {
-        let bestIdx = -1;
-        let bestDist = Infinity;
-
-        for (let i = 0; i < stops.length; i++) {
-          if (visited.has(i)) continue;
-          const stop = stops[i];
-          if (stop.type === "delivery" && !pickedUp.has(stop.orderId)) continue;
-
-          const d = dist(current, stop.latLng);
-          if (d < bestDist) {
-            bestDist = d;
-            bestIdx = i;
-          }
-        }
-
-        if (bestIdx === -1) break;
-
-        const chosen = stops[bestIdx];
-        ordered.push(chosen);
-        visited.add(bestIdx);
-        current = chosen.latLng;
-
-        if (chosen.type === "pickup") {
-          pickedUp.add(chosen.orderId);
-        }
-      }
-
-      if (ordered.length === 0) return;
-
-      // ── OSRM route with ETA ─────────────────────────────────────
-      try {
-        const allStops = [courierPos, ...ordered.map((s) => s.latLng)];
-        const result = await fetchRouteOSRM(allStops, signal);
-        if (signal?.aborted) return;
-
-        const mgr = mapManagerRef.current;
-        if (result.path.length > 0 && mgr) {
-          mgr.routePaths.set(courier.uid, result.path);
-
-          let cumulativeSec = 0;
-          ordered.forEach((stop, i) => {
-            cumulativeSec += result.legDurations[i] ?? 0;
-            if (stop.type === "delivery") {
-              mgr.orderEtas.set(stop.orderId, {
-                etaMin: Math.round(cumulativeSec / 60),
-                distKm: +(result.totalDistanceM / 1000).toFixed(1),
-              });
-            }
-          });
-
-          mgr.updateRoutes();
-        } else if (mgr) {
-          mgr.routePaths.delete(courier.uid);
-          mgr.updateRoutes();
-        }
-      } catch (err) {
-        console.warn(`[Route] OSRM failed for ${courier.uid}:`, err);
-        mapManagerRef.current?.routePaths.delete(courier.uid);
-      }
+  // ─── Derived totals for filtered daily ───────────────────────────────────────
+  const dailyTotals = dailyStats.reduce(
+    (acc, d) => ({
+      deliveries:       acc.deliveries + d.deliveredCount,
+      foodDeliveries:   acc.foodDeliveries + d.foodDeliveredCount,
+      marketDeliveries: acc.marketDeliveries + d.marketDeliveredCount,
+      revenue:          acc.revenue + d.totalRevenue,
+      foodRevenue:      acc.foodRevenue + d.foodRevenue,
+      marketRevenue:    acc.marketRevenue + d.marketRevenue,
+      cash:             acc.cash + d.cashRevenue,
+      card:             acc.card + d.cardRevenue,
+      iban:             acc.iban + d.ibanRevenue,
+      timeMs:           acc.timeMs + d.totalDeliveryTimeMs,
+      orders:           acc.orders + d.orderIds.length,
+    }),
+    {
+      deliveries: 0,
+      foodDeliveries: 0,
+      marketDeliveries: 0,
+      revenue: 0,
+      foodRevenue: 0,
+      marketRevenue: 0,
+      cash: 0,
+      card: 0,
+      iban: 0,
+      timeMs: 0,
+      orders: 0,
     },
-    [],
   );
 
-  useEffect(() => {
-    const uids = Array.from(courierLocations.keys());
-    if (uids.length === 0) return;
-    fetchDailyStats(uids);
-    const interval = setInterval(() => fetchDailyStats(uids), STATS_REFRESH_MS);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courierLocations.size]);
-
-  // Scheduler owns all OSRM fetch orchestration: debounce, concurrency cap,
-  // cancellation. Instantiated once per component mount, torn down on unmount.
-  const osrmSchedulerRef = useRef<OsrmScheduler | null>(null);
-  useEffect(() => {
-    osrmSchedulerRef.current = new OsrmScheduler({
-      debounceMs: 1000,
-      maxConcurrent: 4,
-    });
-    return () => {
-      osrmSchedulerRef.current?.destroy();
-      osrmSchedulerRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!mapsLoaded) return;
-    const scheduler = osrmSchedulerRef.current;
-    if (!scheduler) return;
-
-    for (const courier of couriers.values()) {
-      if (!courier.location?.lat || !courier.location?.lng) continue;
-
-      const sig = courier.activeOrders
-        .map((o) => `${o.id}:${o.status}`)
-        .sort()
-        .join(",");
-      const prevSig = orderSignaturesRef.current.get(courier.uid);
-      if (sig === prevSig) continue;
-
-      orderSignaturesRef.current.set(courier.uid, sig);
-
-      const pos = new window.google.maps.LatLng(
-        courier.location.lat,
-        courier.location.lng,
-      );
-      const snapshot = courier; // capture — couriers map may mutate before fire
-      scheduler.schedule({
-        uid: courier.uid,
-        run: (signal) => fetchCourierRoute(snapshot, pos, signal),
-      });
-    }
-
-    // Drop signatures + cancel fetches for couriers that disappeared.
-    for (const uid of orderSignaturesRef.current.keys()) {
-      if (!couriers.has(uid)) {
-        orderSignaturesRef.current.delete(uid);
-        scheduler.cancel(uid);
-      }
-    }
-  }, [couriers, mapsLoaded, fetchCourierRoute]);
-
-  // ── Pool orders (tabbed) ──────────────────────────────────────────────────
-  const fetchPoolPage = useCallback(
-    async (
-      orderCollection: OrderCollection,
-      status: string,
-      pageIndex: number,
-    ) => {
-      setPoolLoading(true);
-      try {
-        const colRef = collection(db, orderCollection);
-        const cursor = poolCursorsRef.current[pageIndex];
-        const base = [
-          where("status", "==", status),
-          orderBy("createdAt", "desc"),
-        ];
-        const q = cursor
-          ? query(
-              colRef,
-              ...base,
-              startAfter(cursor),
-              limit(READY_PAGE_SIZE + 1),
-            )
-          : query(colRef, ...base, limit(READY_PAGE_SIZE + 1));
-        const snap = await getDocs(q);
-        const hasMore = snap.docs.length > READY_PAGE_SIZE;
-        const pageDocs = hasMore
-          ? snap.docs.slice(0, READY_PAGE_SIZE)
-          : snap.docs;
-        if (hasMore && pageDocs.length > 0)
-          poolCursorsRef.current[pageIndex + 1] = pageDocs[pageDocs.length - 1];
-        const isMarket = orderCollection === "orders-market";
-        const orders: PoolOrder[] = pageDocs.map((d) => {
-          const data = d.data();
-          const name = isMarket
-            ? (data.marketName as string) || "Market"
-            : (data.restaurantName as string) || "—";
-          return {
-            id: d.id,
-            collection: orderCollection,
-            status: (data.status as string) || status,
-            displayName: name,
-            buyerName: (data.buyerName as string) || "—",
-            totalPrice: (data.totalPrice as number) || 0,
-            currency: (data.currency as string) || "TL",
-            itemCount: (data.itemCount as number) || 0,
-            isPaid: (data.isPaid as boolean) || false,
-            createdAt: data.createdAt as Timestamp,
-            courierType:
-              (data.courierType as "ours" | "theirs" | null | undefined) ??
-              null,
-            deliveryAddress: data.deliveryAddress
-              ? {
-                  addressLine1:
-                    (data.deliveryAddress.addressLine1 as string) || "",
-                  city: (data.deliveryAddress.city as string) || "",
-                }
-              : null,
-          };
-        });
-        setPoolOrders(orders);
-        setPoolHasMore(hasMore);
-        setPoolPage(pageIndex);
-      } catch (err) {
-        console.error("Failed to fetch pool orders:", err);
-        setPoolOrders([]);
-        setPoolHasMore(false);
-        const msg =
-          err instanceof Error && /index/i.test(err.message)
-            ? "Firestore indexi eksik — konsolu kontrol edin"
-            : "Siparişler yüklenemedi";
-        setAssignToast({ ok: false, text: msg });
-      } finally {
-        setPoolLoading(false);
-      }
-    },
-    [],
-  );
-
-  // Reset + fetch whenever the active tab/sub-tab changes
-  useEffect(() => {
-    if (authState !== "allowed") return;
-    // Clear immediately so stale orders from the previous tab don't linger
-    // while the new fetch is in flight (or silently fails).
-    setPoolOrders([]);
-    setPoolHasMore(false);
-    setPoolPage(0);
-    poolCursorsRef.current = [null];
-    fetchPoolPage(orderTab, activeSubStatus, 0);
-  }, [authState, sessionKey, orderTab, activeSubStatus, fetchPoolPage]);
-
-  // Live-refresh page 0 when any order in the current tab/status list changes.
-  // Watches the full window (first page) so status transitions OUT of this
-  // status (e.g. accepted → assigned after auto-dispatch) correctly remove
-  // the order from the list.
-  useEffect(() => {
-    if (authState !== "allowed") return;
-    const q = query(
-      collection(db, orderTab),
-      where("status", "==", activeSubStatus),
-      orderBy("createdAt", "desc"),
-      limit(READY_PAGE_SIZE),
-    );
-    let first = true;
-    const unsub = onSnapshot(q, () => {
-      if (first) {
-        first = false;
-        return;
-      }
-      // Only refresh if we're looking at page 0 — pagination shouldn't get
-      // yanked back by background changes.
-      if (poolPage === 0) {
-        poolCursorsRef.current = [null];
-        fetchPoolPage(orderTab, activeSubStatus, 0);
-      }
-    });
-    return unsub;
-  }, [
-    authState,
-    sessionKey,
-    orderTab,
-    activeSubStatus,
-    fetchPoolPage,
-    poolPage,
-  ]);
-
-  // Clear selected order if it disappears from the current pool list
-  useEffect(() => {
-    if (!selectedPoolOrderId) return;
-    const stillHere = poolOrders.some((o) => o.id === selectedPoolOrderId);
-    if (!stillHere) setSelectedPoolOrderId(null);
-  }, [poolOrders, selectedPoolOrderId]);
-
-  const handlePoolNext = useCallback(() => {
-    if (poolHasMore && !poolLoading)
-      fetchPoolPage(orderTab, activeSubStatus, poolPage + 1);
-  }, [
-    poolHasMore,
-    poolLoading,
-    poolPage,
-    fetchPoolPage,
-    orderTab,
-    activeSubStatus,
-  ]);
-
-  const handlePoolPrev = useCallback(() => {
-    if (poolPage > 0 && !poolLoading)
-      fetchPoolPage(orderTab, activeSubStatus, poolPage - 1);
-  }, [poolPage, poolLoading, fetchPoolPage, orderTab, activeSubStatus]);
-
-  // ── Map sync (diffed — only touches what changed) ─────────────────────
-  useEffect(() => {
-    const mgr = mapManagerRef.current;
-    if (!mgr) return;
-
-    const snapshots = new Map<string, CourierSnapshot>();
-    for (const [uid, location] of courierLocations) {
-      // Only show online, on-shift couriers on the map. Offline / off-shift
-      // couriers are omitted from the sync; the manager will clean up their
-      // markers in the "stale couriers" pass of sync().
-      if (!location.isOnline || !location.isOnShift) continue;
-
-      const profile = courierProfiles.get(uid);
-      snapshots.set(uid, {
-        uid,
-        displayName: profile?.displayName ?? "Courier",
-        location,
-        orders: activeOrders.get(uid) ?? [],
-      });
-    }
-    mgr.sync(snapshots);
-  }, [courierLocations, courierProfiles, activeOrders]);
-
-  // ── Propagate UI state to manager (cheap, no re-sync) ─────────────────
-  useEffect(() => {
-    if (mapManagerRef.current) {
-      mapManagerRef.current.selectedCourierId = selectedCourierId;
-    }
-  }, [selectedCourierId]);
-
-  useEffect(() => {
-    if (mapManagerRef.current) {
-      mapManagerRef.current.isAssignMode = !!selectedPoolOrderId;
-    }
-  }, [selectedPoolOrderId]);
-
-  useEffect(() => {
-    if (mapManagerRef.current) {
-      mapManagerRef.current.hiddenCouriers = hiddenCouriers;
-    }
-  }, [hiddenCouriers]);
-  // ── Pan to selected courier ───────────────────────────────────────────────
-  const panToSelectedCourier = useCallback(
-    (uid: string) => {
-      mapManagerRef.current?.fitToCourier(uid, sidebarOpen);
-    },
-    [sidebarOpen],
-  );
-
-  useEffect(() => {
-    if (mapManagerRef.current) {
-      mapManagerRef.current.showLabels = showLabels;
-    }
-  }, [showLabels]);
-
-  // ── Filtered couriers ─────────────────────────────────────────────────────
-  const filteredCouriers = useMemo(() => {
-    return allCouriersArr
-      .filter((c) => c.location?.isOnline && c.location?.isOnShift)
-      .filter(
-        (c) =>
-          !searchQuery.trim() ||
-          c.profile.displayName
-            .toLowerCase()
-            .includes(searchQuery.toLowerCase()),
-      )
-      .sort((a, b) => {
-        const aDeliv = a.activeOrders.length > 0 ? 1 : 0;
-        const bDeliv = b.activeOrders.length > 0 ? 1 : 0;
-        if (aDeliv !== bDeliv) return bDeliv - aDeliv;
-        const aOnShift = a.location?.isOnline && a.location?.isOnShift ? 1 : 0;
-        const bOnShift = b.location?.isOnline && b.location?.isOnShift ? 1 : 0;
-        if (aOnShift !== bOnShift) return bOnShift - aOnShift;
-        const aConnected = a.location?.isOnline ? 1 : 0;
-        const bConnected = b.location?.isOnline ? 1 : 0;
-        if (aConnected !== bConnected) return bConnected - aConnected;
-        return a.profile.displayName.localeCompare(b.profile.displayName);
-      });
-  }, [allCouriersArr, searchQuery]);
-
-  // ── Selected pool order details (for assignment banner) ──────────────────
-  const selectedPoolOrder = useMemo(
-    () => poolOrders.find((o) => o.id === selectedPoolOrderId) ?? null,
-    [poolOrders, selectedPoolOrderId],
-  );
-
-  useEffect(() => {
-    selectedPoolOrderRef.current = selectedPoolOrder
-      ? { id: selectedPoolOrder.id, collection: selectedPoolOrder.collection }
-      : null;
-  }, [selectedPoolOrder]);
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // RENDER
-  // ─────────────────────────────────────────────────────────────────────────
-
+  // ─── Auth loading / denied ───────────────────────────────────────────────────
   if (authState === "loading") {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50">
@@ -1915,14 +509,11 @@ export default function MasterCourierDashboardPage() {
           <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <WifiOff className="w-6 h-6 text-red-400" />
           </div>
-          <h2 className="text-base font-bold text-gray-900 mb-1.5">
-            Erişim Reddedildi
-          </h2>
+          <h2 className="text-base font-bold text-gray-900 mb-1.5">Erişim Reddedildi</h2>
           <p className="text-[13px] text-gray-500 leading-relaxed">
-            Bu panele erişmek için{" "}
-            <code className="bg-gray-100 px-1 rounded text-xs">
-              masterCourier
-            </code>{" "}
+            Bu sayfaya erişmek için{" "}
+            <code className="bg-gray-100 px-1 rounded text-xs">isAdmin</code> veya{" "}
+            <code className="bg-gray-100 px-1 rounded text-xs">masterCourier</code>{" "}
             yetkisine ihtiyacınız var.
           </p>
         </div>
@@ -1930,425 +521,542 @@ export default function MasterCourierDashboardPage() {
     );
   }
 
+  // ─── Main render ─────────────────────────────────────────────────────────────
   return (
-    <div className="h-screen flex flex-col bg-gray-50 overflow-hidden pt-[55px]">
-      <div className="flex-1 flex overflow-hidden">
-        {/* ── Map ────────────────────────────────────────────────────────── */}
-        <div className="flex-1 relative">
-          <div ref={mapDivRef} className="w-full h-full" />
+    <div className="h-[100dvh] pt-[55px] flex flex-col bg-gray-50 overflow-hidden">
 
-          {/* ── Toggle courier name labels ─────────────────────────────── */}
-          {mapsLoaded && (
-            <button
-              onClick={() => setShowLabels((v) => !v)}
-              className="absolute top-4 left-4 z-20 bg-white border border-gray-200 rounded-xl shadow-sm px-3 py-2 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1.5"
-            >
-              {showLabels ? (
-                <EyeOff className="w-3.5 h-3.5 text-gray-400" />
-              ) : (
-                <Eye className="w-3.5 h-3.5 text-gray-400" />
-              )}
-              {showLabels ? "İsimleri Kapa" : "İsimleri Aç"}
-            </button>
-          )}
-
-          {/* ── Assignment mode banner ─────────────────────────────────── */}
-          {selectedPoolOrder && (
-            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 bg-emerald-600 text-white px-4 py-2.5 rounded-2xl shadow-lg border border-emerald-500">
-              {assignBusy ? (
-                <RefreshCw className="w-4 h-4 animate-spin flex-shrink-0" />
-              ) : (
-                <MousePointerClick className="w-4 h-4 flex-shrink-0" />
-              )}
-              <div className="min-w-0">
-                <p className="text-[12px] font-bold leading-tight">
-                  {assignBusy ? "Atanıyor..." : "Haritadan kurye seçin"}
-                </p>
-                <p className="text-[10px] opacity-80 truncate max-w-[220px]">
-                  {selectedPoolOrder.displayName} ·{" "}
-                  {selectedPoolOrder.buyerName}
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectedPoolOrderId(null)}
-                className="ml-1 w-6 h-6 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 transition-colors flex-shrink-0"
-                title="İptal"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-
-          {/* ── Toast notification ─────────────────────────────────────── */}
-          {assignToast && (
-            <div
-              className={`absolute bottom-28 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-lg text-white text-[12px] font-semibold transition-all ${assignToast.ok ? "bg-emerald-600" : "bg-red-500"}`}
-            >
-              {assignToast.ok ? (
-                <CheckCircle2 className="w-4 h-4" />
-              ) : (
-                <AlertCircle className="w-4 h-4" />
-              )}
-              {assignToast.text}
-            </div>
-          )}
-
-          {/* Map loading overlay */}
-          {!mapsLoaded && (
-            <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-8 h-8 border-[3px] border-orange-200 border-t-orange-500 rounded-full animate-spin" />
-                <p className="text-[12px] text-gray-400">Harita yükleniyor…</p>
-              </div>
-            </div>
-          )}
-
-          {/* Map legend */}
-          <div className="absolute bottom-5 left-4 bg-white/90 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-100 px-3 py-2">
-            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
-              Gösterge
-            </p>
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-1.5">
-                <div className="flex gap-0.5">
-                  {["#F97316", "#3B82F6", "#10B981", "#8B5CF6"].map((c) => (
-                    <span
-                      key={c}
-                      className="w-1.5 h-1.5 rounded-full"
-                      style={{ backgroundColor: c }}
-                    />
-                  ))}
-                </div>
-                <span className="text-[10px] text-gray-600">
-                  Kuryeler (her biri farklı renk)
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full flex-shrink-0 bg-gray-400" />
-                <span className="text-[10px] text-gray-600">Çevrimdışı</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full flex-shrink-0 bg-violet-600" />
-                <span className="text-[10px] text-gray-600">Restoran</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px]">👤</span>
-                <span className="text-[10px] text-gray-600">
-                  Müşteri (kurye rengiyle eşleşir)
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-gray-500">→ → →</span>
-                <span className="text-[10px] text-gray-600">
-                  Teslimat rotası
-                </span>
-              </div>
-              {selectedPoolOrderId && (
-                <div className="flex items-center gap-1.5 mt-1 pt-1 border-t border-gray-100">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0 bg-emerald-400" />
-                  <span className="text-[10px] text-emerald-700 font-semibold">
-                    Atanabilir
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {mapsLoaded && allCouriersArr.length === 0 && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white rounded-2xl shadow-sm border border-gray-100 px-4 py-3 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
-              <p className="text-[12px] text-gray-600 font-medium">
-                Henüz kurye yok — konum verisi bekleniyor
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* ── Sidebar ────────────────────────────────────────────────────── */}
-        <div className="relative flex-shrink-0 overflow-visible">
+      {/* ── Header ───────────────────────────────────────────────────────── */}
+      <div className="flex-shrink-0 bg-white border-b border-gray-100 px-4 sm:px-6 py-3">
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setSidebarOpen((prev) => !prev)}
-            className="absolute -left-8 top-3 z-10 bg-white border border-gray-200 rounded-l-xl p-1.5 shadow-sm hover:bg-gray-50 transition-colors"
+            onClick={() => router.back()}
+            className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center transition-colors"
+            title="Geri"
           >
-            {sidebarOpen ? (
-              <PanelRightOpen className="w-4 h-4 text-gray-400" />
-            ) : (
-              <PanelRightClose className="w-4 h-4 text-gray-400" />
-            )}
+            <ChevronLeft className="w-4 h-4 text-gray-600" />
           </button>
-
-          <div
-            className={`${sidebarOpen ? "w-80 xl:w-96" : "w-0"} bg-white border-l border-gray-100 flex flex-col overflow-hidden transition-all duration-300 ease-in-out h-full`}
-          >
-            {/* Search */}
-            <div className="flex-shrink-0 p-3 border-b border-gray-50">
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Kurye ara…"
-                  className="w-full pl-8 pr-3 py-2 text-[12px] bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:ring-1 focus:ring-orange-300 focus:border-orange-300 focus:bg-white transition-all placeholder:text-gray-300"
-                />
-              </div>
-            </div>
-
-            {/* Assignment mode hint in sidebar */}
-            {selectedPoolOrderId && (
-              <div className="flex-shrink-0 mx-3 mt-2 flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
-                <UserCheck className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                <p className="text-[11px] text-emerald-700 font-medium flex-1 leading-tight">
-                  Haritada bir kurye pinine tıklayın
-                </p>
-                <button
-                  onClick={() => setSelectedPoolOrderId(null)}
-                  className="text-emerald-500 hover:text-emerald-700"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-
-            {/* Section label */}
-            <div className="flex-shrink-0 px-3 py-2 flex items-center justify-between">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                Kuryeler
-              </p>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-gray-400">
-                  {filteredCouriers.length} gösteriliyor
-                </span>
-                <BarChart2 className="w-3 h-3 text-gray-300" />
-              </div>
-            </div>
-
-            {/* Courier list */}
-            <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-2">
-              {filteredCouriers.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mb-3">
-                    <Users className="w-5 h-5 text-gray-300" />
-                  </div>
-                  <p className="text-[12px] text-gray-400 font-medium">
-                    {allCouriersArr.length === 0
-                      ? "Henüz takip edilen kurye yok"
-                      : "Sonuç yok"}
-                  </p>
-                </div>
-              ) : (
-                filteredCouriers.map((courier) => (
-                  <CourierCard
-                    key={courier.uid}
-                    courier={courier}
-                    isSelected={selectedCourierId === courier.uid}
-                    onSelect={() =>
-                      setSelectedCourierId((prev) =>
-                        prev === courier.uid ? null : courier.uid,
-                      )
-                    }
-                    onDoubleSelect={() => panToSelectedCourier(courier.uid)}
-                    orderEtas={mapManagerRef.current?.orderEtas ?? new Map()}
-                    isHidden={hiddenCouriers.has(courier.uid)}
-                    onToggleVisibility={() =>
-                      setHiddenCouriers((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(courier.uid)) next.delete(courier.uid);
-                        else next.add(courier.uid);
-                        return next;
-                      })
-                    }
-                    onUnassignOrder={(order) =>
-                      unassignOrderFromCourier(
-                        order,
-                        courier.uid,
-                        courier.profile.displayName,
-                      )
-                    }
-                    unassigningOrderId={unassigningOrderId}
-                  />
-                ))
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="flex-shrink-0 px-3 py-2.5 border-t border-gray-50 bg-gray-50/50">
-              <p className="text-[10px] text-gray-400 text-center">
-                Konum güncellemeleri RTDB üzerinden ~10sn · İstatistikler 10dkda
-                bir yenilenir
-              </p>
-            </div>
+          <div className="w-8 h-8 bg-orange-50 rounded-xl flex items-center justify-center">
+            <Truck className="w-4 h-4 text-orange-500" />
           </div>
+          <div>
+            <h1 className="text-[15px] font-bold text-gray-900 leading-tight">Kurye İstatistikleri</h1>
+            <p className="text-[10px] text-gray-400">Günlük ve tüm zamanlar teslimat analizi</p>
+          </div>
+          {couriers.length > 0 && (
+            <span className="ml-auto text-[11px] text-gray-400 bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-full">
+              {couriers.length} kurye
+            </span>
+          )}
         </div>
       </div>
 
-      {/* ── Orders Bottom Bar (tabbed) ─────────────────────────────────── */}
-      <div className="flex-shrink-0 bg-white border-t border-gray-200 relative">
-        {/* Top tabs: Yemek / Market */}
-        <div className="flex items-center gap-1 px-3 pt-2 border-b border-gray-100">
-          {[
-            {
-              key: "orders-food" as const,
-              label: "Yemek",
-              icon: <UtensilsCrossed className="w-3.5 h-3.5" />,
-            },
-            {
-              key: "orders-market" as const,
-              label: "Market",
-              icon: <ShoppingCart className="w-3.5 h-3.5" />,
-            },
-          ].map((tab) => {
-            const active = orderTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setOrderTab(tab.key)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-t-lg border-b-2 text-[11px] font-bold uppercase tracking-wide transition-colors ${
-                  active
-                    ? "border-orange-500 text-orange-600 bg-orange-50/40"
-                    : "border-transparent text-gray-400 hover:text-gray-600"
-                }`}
-              >
-                {tab.icon}
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+      {/* ── Body ─────────────────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-[320px_1fr]">
 
-        {/* Sub-tabs */}
-        <div className="flex items-center gap-1 px-3 py-1.5 border-b border-gray-50 flex-wrap">
-          {(orderTab === "orders-food"
-            ? ([
-                { key: "pending", label: "Yeni Gelen" },
-                { key: "accepted", label: "Kabul Edilen" },
-                { key: "ready", label: "Hazır" },
-                { key: "assigned", label: "Atanmış" },
-                { key: "out_for_delivery", label: "Yolda" },
-              ] as { key: FoodPoolStatus; label: string }[])
-            : ([
-                { key: "pending", label: "Yeni Gelen" },
-                { key: "assigned", label: "Atanmış" },
-                { key: "out_for_delivery", label: "Yolda" },
-              ] as { key: MarketPoolStatus; label: string }[])
-          ).map((sub) => {
-            const active =
-              orderTab === "orders-food"
-                ? foodSubtab === sub.key
-                : marketSubtab === sub.key;
-            return (
-              <button
-                key={sub.key}
-                onClick={() => {
-                  if (orderTab === "orders-food")
-                    setFoodSubtab(sub.key as FoodPoolStatus);
-                  else setMarketSubtab(sub.key as MarketPoolStatus);
-                }}
-                className={`px-2.5 py-1 rounded-full text-[10px] font-semibold transition-colors ${
-                  active
-                    ? "bg-orange-100 text-orange-700 border border-orange-200"
-                    : "bg-gray-50 text-gray-500 border border-gray-100 hover:bg-gray-100"
-                }`}
-              >
-                {sub.label}
-              </button>
-            );
-          })}
-          <div className="ml-auto text-[10px] text-gray-400">
-            {isPoolTab ? (
-              selectedPoolOrderId ? (
-                <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                  <MousePointerClick className="w-3 h-3" /> Kurye seçin
-                </span>
-              ) : (
-                "Atamak için bir siparişe tıklayın"
-              )
-            ) : (
-              "Salt okunur"
-            )}
-          </div>
-        </div>
+        {/* ── Left panel: courier list ──────────────────────────────────── */}
+        <div className="overflow-y-auto border-r border-gray-100 bg-white">
+          <div className="p-3 space-y-3">
 
-        <div className="flex items-center h-[88px]">
-          {/* Prev button */}
-          <div className="flex-shrink-0 pl-2 pr-1 self-stretch flex items-center">
-            {poolPage > 0 ? (
-              <button
-                onClick={handlePoolPrev}
-                disabled={poolLoading}
-                className="p-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-500 disabled:opacity-50 transition-colors"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-              </button>
-            ) : (
-              <div className="w-8" />
-            )}
-          </div>
+            {/* Recalc button */}
+            <button
+              onClick={handleRecalc}
+              disabled={isRecalculating}
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-xl text-[11px] font-semibold text-orange-600 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw
+                className={`w-3.5 h-3.5 ${isRecalculating ? "animate-spin" : ""}`}
+              />
+              {isRecalculating ? "Hesaplanıyor..." : "Sipariş Durumunu Güncelle"}
+            </button>
 
-          {/* Scrollable cards */}
-          <div className="flex-1 overflow-x-auto overflow-y-hidden">
-            <div className="flex items-center gap-2.5 px-2 py-2 min-w-0">
-              {poolLoading && poolOrders.length === 0 ? (
-                <div className="flex items-center gap-2 px-4 py-3">
-                  <div className="w-4 h-4 border-2 border-amber-200 border-t-amber-500 rounded-full animate-spin" />
-                  <span className="text-[11px] text-gray-400">Yükleniyor…</span>
-                </div>
-              ) : poolOrders.length === 0 ? (
-                <div className="flex items-center gap-2 px-4 py-3">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span className="text-[12px] text-gray-400 font-medium">
-                    Sipariş yok
-                  </span>
-                </div>
-              ) : (
-                poolOrders.map((order) => {
-                  const isTheirsCourier =
-                    order.collection === "orders-food" &&
-                    order.courierType === "theirs";
-                  return (
-                    <PoolOrderCard
-                      key={order.id}
-                      order={order}
-                      assignable={isPoolTab && !isTheirsCourier}
-                      isSelected={selectedPoolOrderId === order.id}
-                      isAssignMode={
-                        !!selectedPoolOrderId &&
-                        selectedPoolOrderId !== order.id
-                      }
-                      onClick={() => {
-                        if (!isPoolTab) return;
-                        if (isTheirsCourier) return;
-                        setSelectedPoolOrderId((prev) =>
-                          prev === order.id ? null : order.id,
-                        );
-                      }}
-                    />
-                  );
-                })
-              )}
+            {/* Search */}
+            <div className="relative">
+              <Users className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Kurye ara..."
+                className="w-full pl-8 pr-3 py-2 text-[12px] bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:ring-1 focus:ring-orange-300 focus:border-orange-300 focus:bg-white transition-all placeholder:text-gray-300"
+              />
             </div>
-          </div>
 
-          {/* Next button */}
-          {poolHasMore && (
-            <div className="flex-shrink-0 pr-2 pl-1 self-stretch flex items-center">
-              <button
-                onClick={handlePoolNext}
-                disabled={poolLoading}
-                className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-600 disabled:opacity-50 transition-colors"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+            {/* List */}
+            {couriersLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-5 h-5 text-orange-400 animate-spin" />
+              </div>
+            ) : filteredCouriers.length === 0 ? (
+              <div className="flex flex-col items-center py-10 text-center">
+                <Users className="w-8 h-8 text-gray-200 mb-2" />
+                <p className="text-[12px] text-gray-400">
+                  {couriers.length === 0 ? "Henüz kurye istatistiği yok" : "Sonuç bulunamadı"}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {filteredCouriers.map((courier, idx) => {
+                  const isSelected = selId === courier.courierId;
+                  const avgTime = fmtAvgTime(courier.totalDeliveryTimeMs, courier.totalDeliveries);
+                  return (
+                    <button
+                      key={courier.courierId}
+                      onClick={() => selectCourier(courier)}
+                      className={`w-full text-left rounded-xl border px-3 py-3 transition-all ${
+                        isSelected
+                          ? "bg-orange-50 border-orange-200 shadow-sm"
+                          : "bg-white border-gray-100 hover:border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        {/* Rank badge */}
+                        <div className="relative flex-shrink-0">
+                          <Avatar name={courier.courierName} uid={courier.courierId} size="md" />
+                          {idx < 3 && (
+                            <span className={`absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold border border-white ${
+                              idx === 0 ? "bg-amber-400 text-white" :
+                              idx === 1 ? "bg-gray-300 text-gray-700" :
+                              "bg-orange-300 text-white"
+                            }`}>
+                              {idx + 1}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-[13px] font-semibold truncate leading-tight ${isSelected ? "text-orange-700" : "text-gray-900"}`}>
+                            {courier.courierName}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            <span className="text-[10px] text-gray-500">
+                              {fmtCount(courier.totalDeliveries)} teslimat
+                            </span>
+                            <span className="text-[10px] text-gray-300">·</span>
+                            <span className={`text-[10px] font-semibold ${isSelected ? "text-orange-600" : "text-emerald-600"}`}>
+                              {fmt(courier.totalRevenue)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="inline-flex items-center gap-0.5 text-[9px] text-amber-600">
+                              <UtensilsCrossed className="w-2.5 h-2.5" />
+                              {fmtCount(courier.foodDeliveries)}
+                            </span>
+                            <span className="inline-flex items-center gap-0.5 text-[9px] text-blue-600">
+                              <ShoppingCart className="w-2.5 h-2.5" />
+                              {fmtCount(courier.marketDeliveries)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-[10px] text-gray-400">{avgTime}</p>
+                          <p className="text-[9px] text-gray-300 mt-0.5">ort. süre</p>
+                        </div>
+                      </div>
+
+                      {/* Last delivery */}
+                      {courier.lastDeliveryAt && (
+                        <div className="flex items-center gap-1 mt-2 ml-[52px]">
+                          <Clock className="w-2.5 h-2.5 text-gray-300 flex-shrink-0" />
+                          <span className="text-[10px] text-gray-400">
+                            Son: {fmtTs(courier.lastDeliveryAt)}
+                          </span>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Right panel: selected courier detail ─────────────────────── */}
+        <div className="overflow-y-auto">
+          {!selId || !selStat ? (
+            <EmptyRight />
+          ) : (
+            <div className="p-4 sm:p-6 space-y-6">
+
+              {/* ── Courier header ────────────────────────────────────── */}
+              <div className="flex items-center gap-3">
+                <Avatar name={selStat.courierName} uid={selStat.courierId} size="lg" />
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">{selStat.courierName}</h2>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    Son güncelleme: {fmtTs(selStat.updatedAt)}
+                  </p>
+                </div>
+              </div>
+
+              {/* ── Tüm Zamanlar ─────────────────────────────────────── */}
+              <div>
+                <SectionTitle>Tüm Zamanlar</SectionTitle>
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                  <StatCard
+                    label="Toplam Teslimat"
+                    value={fmtCount(selStat.totalDeliveries)}
+                    sub={`Yemek ${fmtCount(selStat.foodDeliveries)} · Market ${fmtCount(selStat.marketDeliveries)}`}
+                    icon={Package}
+                    color="orange"
+                  />
+                  <StatCard
+                    label="Toplam Ciro"
+                    value={fmt(selStat.totalRevenue)}
+                    sub={`Yemek ${fmt(selStat.foodRevenue)} · Market ${fmt(selStat.marketRevenue)}`}
+                    icon={TrendingUp}
+                    color="emerald"
+                  />
+                  <StatCard
+                    label="Yemek Teslimat"
+                    value={fmtCount(selStat.foodDeliveries)}
+                    sub={fmt(selStat.foodRevenue)}
+                    icon={UtensilsCrossed}
+                    color="amber"
+                  />
+                  <StatCard
+                    label="Market Teslimat"
+                    value={fmtCount(selStat.marketDeliveries)}
+                    sub={fmt(selStat.marketRevenue)}
+                    icon={ShoppingCart}
+                    color="blue"
+                  />
+                  <StatCard
+                    label="Nakit Tahsilat"
+                    value={fmt(selStat.cashRevenue)}
+                    sub={cashRatio(selStat.cashRevenue, selStat.totalRevenue) + " nakit oranı"}
+                    icon={ShoppingBag}
+                    color="amber"
+                  />
+                  <StatCard
+                    label="Kart Tahsilat"
+                    value={fmt(selStat.cardRevenue)}
+                    icon={CreditCard}
+                    color="violet"
+                  />
+                  <StatCard
+  label="IBAN Tahsilat"
+  value={fmt(selStat.ibanRevenue)}
+  icon={CreditCard}
+  color="blue"
+/>
+                  <StatCard
+                    label="Ort. Teslimat Süresi"
+                    value={fmtAvgTime(selStat.totalDeliveryTimeMs, selStat.totalDeliveries)}
+                    sub={`${fmtCount(selStat.totalDeliveries)} teslimat üzerinden`}
+                    icon={Clock}
+                    color="blue"
+                  />
+                  <StatCard
+                    label="Son Teslimat"
+                    value={selStat.lastDeliveryAt
+                      ? selStat.lastDeliveryAt.toDate().toLocaleDateString("tr-TR", { day: "numeric", month: "short" })
+                      : "—"}
+                    sub={selStat.lastDeliveryAt
+                      ? selStat.lastDeliveryAt.toDate().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+                      : undefined}
+                    icon={CheckCircle2}
+                    color="gray"
+                  />
+                </div>
+              </div>
+
+              {/* ── Günlük Tarihçe ────────────────────────────────────── */}
+              <div>
+                {/* Filter bar */}
+                <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                  <SectionTitle>Günlük Tarihçe</SectionTitle>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                      <CalendarDays className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                      <input
+                        type="date"
+                        value={filterFrom}
+                        onChange={(e) => setFilterFrom(e.target.value)}
+                        className="px-2 py-1.5 text-[11px] bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-300"
+                        placeholder="Başlangıç"
+                      />
+                      <span className="text-[10px] text-gray-400">–</span>
+                      <input
+                        type="date"
+                        value={filterTo}
+                        onChange={(e) => setFilterTo(e.target.value)}
+                        className="px-2 py-1.5 text-[11px] bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-300"
+                      />
+                    </div>
+                    <button
+                      onClick={applyFilter}
+                      disabled={dailyLoading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-[11px] font-semibold rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {dailyLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <BarChart2 className="w-3 h-3" />}
+                      Filtrele
+                    </button>
+                    {filterApplied && (
+                      <button
+                        onClick={() => {
+                          setFilterFrom("");
+                          setFilterTo(todayKey());
+                          setFilterApplied(false);
+                          dailyCursorRef.current = null;
+                          setDailyStats([]);
+                          loadDailyPage(selId, true, undefined, todayKey());
+                        }}
+                        className="text-[11px] text-gray-400 hover:text-gray-600 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Temizle
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Summary totals for visible range */}
+                {dailyStats.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-4">
+                    <div className="bg-orange-50 border border-orange-100 rounded-xl px-3 py-2.5">
+                      <p className="text-[9px] font-bold text-orange-500 uppercase tracking-wide">Dönem Teslimat</p>
+                      <p className="text-[16px] font-bold text-orange-700 leading-tight mt-0.5">
+                        {fmtCount(dailyTotals.deliveries)}
+                      </p>
+                      <p className="text-[9px] text-orange-500/70 mt-0.5">
+                        Y {fmtCount(dailyTotals.foodDeliveries)} · M {fmtCount(dailyTotals.marketDeliveries)}
+                      </p>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5">
+                      <p className="text-[9px] font-bold text-amber-500 uppercase tracking-wide flex items-center gap-1">
+                        <UtensilsCrossed className="w-2.5 h-2.5" /> Yemek Ciro
+                      </p>
+                      <p className="text-[16px] font-bold text-amber-700 leading-tight mt-0.5">
+                        {fmt(dailyTotals.foodRevenue)}
+                      </p>
+                    </div>
+                    <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5">
+                      <p className="text-[9px] font-bold text-blue-500 uppercase tracking-wide flex items-center gap-1">
+                        <ShoppingCart className="w-2.5 h-2.5" /> Market Ciro
+                      </p>
+                      <p className="text-[16px] font-bold text-blue-700 leading-tight mt-0.5">
+                        {fmt(dailyTotals.marketRevenue)}
+                      </p>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2.5">
+                      <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-wide">Dönem Ciro</p>
+                      <p className="text-[16px] font-bold text-emerald-700 leading-tight mt-0.5">
+                        {fmt(dailyTotals.revenue)}
+                      </p>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5">
+                      <p className="text-[9px] font-bold text-amber-500 uppercase tracking-wide">Dönem Nakit</p>
+                      <p className="text-[16px] font-bold text-amber-700 leading-tight mt-0.5">
+                        {fmt(dailyTotals.cash)}
+                      </p>
+                    </div>
+                    <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5">
+  <p className="text-[9px] font-bold text-blue-500 uppercase tracking-wide">Dönem IBAN</p>
+  <p className="text-[16px] font-bold text-blue-700 leading-tight mt-0.5">
+    {fmt(dailyTotals.iban)}
+  </p>
+</div>
+                    <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5">
+                      <p className="text-[9px] font-bold text-blue-500 uppercase tracking-wide">Ort. Süre</p>
+                      <p className="text-[16px] font-bold text-blue-700 leading-tight mt-0.5">
+                        {fmtAvgTimeMs(dailyTotals.deliveries > 0 ? dailyTotals.timeMs / dailyTotals.deliveries : 0)}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Daily table */}
+                {dailyLoading && dailyStats.length === 0 ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-5 h-5 text-orange-400 animate-spin" />
+                  </div>
+                ) : dailyStats.length === 0 ? (
+                  <div className="bg-white border border-gray-100 rounded-xl flex flex-col items-center py-10 text-center">
+                    <CalendarDays className="w-7 h-7 text-gray-200 mb-2" />
+                    <p className="text-[12px] text-gray-400">Bu aralıkta veri yok</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+                      {/* Table header */}
+                      <div className="grid grid-cols-[16px_1fr_60px_100px_90px_80px_80px_80px] gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                        <span />
+                        <span className="text-[10px] font-bold text-gray-400 uppercase">Tarih</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase text-right">Teslimat</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase text-right">Ciro</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase text-right">Nakit</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase text-right">Kart</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase text-right">IBAN</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase text-right">Ort. Süre</span>
+                      </div>
+
+                      {/* Rows */}
+                      {dailyStats.map((day, idx) => {
+                        const avgTime = fmtAvgTime(day.totalDeliveryTimeMs, day.deliveredCount);
+                        const isToday = day.date === todayKey();
+                        const isExpanded = expandedDates.has(day.date);
+                        const restaurantList = Object.entries(day.restaurants || {})
+                          .map(([key, r]) => ({ key, ...r }))
+                          .sort((a, b) => b.totalRevenue - a.totalRevenue);
+                        return (
+                          <div
+                            key={day.date}
+                            className={`${idx > 0 ? "border-t border-gray-50" : ""} ${isToday ? "bg-orange-50/40" : ""}`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => toggleDateExpanded(day.date)}
+                              className="w-full grid grid-cols-[16px_1fr_60px_100px_90px_80px_80px_80px] gap-2 px-4 py-3 text-left transition-colors hover:bg-gray-50/50"
+                            >
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 text-gray-400 self-center transition-transform ${isExpanded ? "rotate-0" : "-rotate-90"}`}
+                              />
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-[12px] font-semibold text-gray-900 truncate">
+                                    {fmtDate(day.date)}
+                                  </p>
+                                  {isToday && (
+                                    <span className="text-[9px] px-1.5 py-0.5 bg-orange-100 text-orange-600 rounded font-bold flex-shrink-0">
+                                      BUGÜN
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <Hash className="w-2.5 h-2.5 text-gray-300 flex-shrink-0" />
+                                  <span className="text-[10px] text-gray-400">
+                                    {day.orderIds.length} sipariş
+                                  </span>
+                                  {day.recalculatedAt && (
+                                    <>
+                                      <span className="text-[10px] text-gray-300">·</span>
+                                      <span className="text-[10px] text-gray-400">
+                                        yeniden hesaplandı
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="text-right self-center">
+                                <p className="text-[12px] font-bold text-orange-600">
+                                  {fmtCount(day.deliveredCount)}
+                                </p>
+                                <p className="text-[9px] text-gray-400 leading-tight">
+                                  Y{fmtCount(day.foodDeliveredCount)}·M{fmtCount(day.marketDeliveredCount)}
+                                </p>
+                              </div>
+                              <p className="text-[12px] font-bold text-gray-900 text-right self-center">
+                                {fmt(day.totalRevenue)}
+                              </p>
+                              <p className="text-[12px] text-amber-600 font-semibold text-right self-center">
+                                {fmt(day.cashRevenue)}
+                              </p>
+                              <p className="text-[12px] text-violet-600 font-semibold text-right self-center">
+                                {fmt(day.cardRevenue)}
+                              </p>
+                              <p className="text-[12px] text-blue-600 font-semibold text-right self-center">
+                                {fmt(day.ibanRevenue)}
+                              </p>
+                              <p className="text-[11px] text-gray-500 text-right self-center">
+                                {avgTime}
+                              </p>
+                            </button>
+
+                            {isExpanded && (
+                              <div className="bg-gray-50/60 border-t border-gray-100 px-4 py-3">
+                                <div className="flex items-center gap-1.5 mb-2">
+                                  <Store className="w-3 h-3 text-gray-400" />
+                                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                    Restoran Dağılımı
+                                  </span>
+                                </div>
+                                {restaurantList.length === 0 ? (
+                                  <p className="text-[11px] text-gray-400 italic py-2">
+                                    Bu gün için restoran dağılımı yok. Backfill scriptini çalıştırın veya yeniden hesaplayın.
+                                  </p>
+                                ) : (
+                                  <div className="bg-white border border-gray-100 rounded-lg overflow-hidden">
+                                    <div className="grid grid-cols-[1fr_70px_100px_90px_80px_80px] gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100">
+                                      <span className="text-[9px] font-bold text-gray-400 uppercase">Restoran</span>
+                                      <span className="text-[9px] font-bold text-gray-400 uppercase text-right">Teslimat</span>
+                                      <span className="text-[9px] font-bold text-gray-400 uppercase text-right">Ciro</span>
+                                      <span className="text-[9px] font-bold text-gray-400 uppercase text-right">Nakit</span>
+                                      <span className="text-[9px] font-bold text-gray-400 uppercase text-right">Kart</span>
+                                      <span className="text-[9px] font-bold text-gray-400 uppercase text-right">IBAN</span>
+                                    </div>
+                                    {restaurantList.map((r, i) => (
+                                      <div
+                                        key={r.key}
+                                        className={`grid grid-cols-[1fr_70px_100px_90px_80px_80px] gap-2 px-3 py-2 ${
+                                          i > 0 ? "border-t border-gray-50" : ""
+                                        }`}
+                                      >
+                                        <div className="min-w-0">
+                                          <p className="text-[11px] font-semibold text-gray-800 truncate">
+                                            {r.name || r.key}
+                                          </p>
+                                          {(r.foodCount > 0 || r.marketCount > 0) && (
+                                            <p className="text-[9px] text-gray-400 leading-tight mt-0.5">
+                                              Y{fmtCount(r.foodCount)}·M{fmtCount(r.marketCount)}
+                                            </p>
+                                          )}
+                                        </div>
+                                        <p className="text-[11px] font-bold text-orange-600 text-right self-center">
+                                          {fmtCount(r.count)}
+                                        </p>
+                                        <p className="text-[11px] font-bold text-gray-900 text-right self-center">
+                                          {fmt(r.totalRevenue)}
+                                        </p>
+                                        <p className="text-[11px] text-amber-600 font-semibold text-right self-center">
+                                          {fmt(r.cashRevenue)}
+                                        </p>
+                                        <p className="text-[11px] text-violet-600 font-semibold text-right self-center">
+                                          {fmt(r.cardRevenue)}
+                                        </p>
+                                        <p className="text-[11px] text-blue-600 font-semibold text-right self-center">
+                                          {fmt(r.ibanRevenue)}
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Load more */}
+                    {dailyHasMore && (
+                      <button
+                        onClick={() => loadDailyPage(
+                          selId,
+                          false,
+                          filterFrom || undefined,
+                          filterTo || undefined,
+                        )}
+                        disabled={dailyLoading}
+                        className="w-full mt-2 py-2 text-[11px] font-medium text-orange-500 hover:text-orange-600 border border-dashed border-orange-200 rounded-xl hover:bg-orange-50 transition-colors disabled:opacity-50"
+                      >
+                        {dailyLoading ? (
+                          <span className="flex items-center justify-center gap-1.5">
+                            <Loader2 className="w-3 h-3 animate-spin" /> Yükleniyor...
+                          </span>
+                        ) : (
+                          "Daha Fazla Yükle"
+                        )}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Bottom spacer */}
+              <div className="h-4" />
             </div>
           )}
         </div>
-
-        {/* Loading overlay for page transitions */}
-        {poolLoading && poolOrders.length > 0 && (
-          <div className="absolute inset-0 bg-white/60 flex items-center justify-center pointer-events-none">
-            <div className="w-5 h-5 border-2 border-amber-200 border-t-amber-500 rounded-full animate-spin" />
-          </div>
-        )}
       </div>
     </div>
   );

@@ -68,7 +68,8 @@ const RADIUS_TIERS_BY_COLLECTION = {
   'orders-market': RADIUS_TIERS_KM_MARKET,
 };
 const CANDIDATE_LIMIT    = 20;            // top-N per GEOSEARCH
-const SOFT_LOAD_REF      = 3;             // load beyond this costs more
+const HARD_LOAD_CAP      = 2;             // hard ceiling — couriers at/above are skipped entirely
+const SOFT_LOAD_REF      = 3;             // load beyond this costs more (only relevant if HARD_LOAD_CAP is raised above it)
 const W_DISTANCE         = 1.0;           // km → score
 const W_LOAD             = 1.5;           // each active order
 const W_ROTATION         = 0.8;           // each recent assign in last 30m
@@ -463,6 +464,16 @@ async function selectCandidate({ db, pickupLat, pickupLng, collection, excludeUi
       }
 
       const load = Math.max(0, parseInt(state.load || '0', 10));
+
+      // Hard cap — couriers at or above HARD_LOAD_CAP are skipped entirely.
+      // Applies to both initial dispatch and rebalancer (both call this fn).
+      // Once a delivery completes and Redis `load` decrements, the courier
+      // becomes eligible again on the next dispatch tick.
+      if (load >= HARD_LOAD_CAP) {
+        rejects.push({ courierId: ordered[i].uid, reason: 'hard_load_cap', load });
+        continue;
+      }
+
       active.push({ ...ordered[i], load, recentAssigns });
       courierPositions.set(ordered[i].uid, { lat: ordered[i].lat, lng: ordered[i].lng });
     }

@@ -16,6 +16,7 @@ extension FoodOrderStatusX on FoodOrderStatus {
   static FoodOrderStatus fromString(String? value) {
     switch (value) {
       case 'accepted':
+      case 'assigned':
         return FoodOrderStatus.accepted;
       case 'rejected':
         return FoodOrderStatus.rejected;

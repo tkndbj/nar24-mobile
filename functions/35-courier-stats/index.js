@@ -50,6 +50,12 @@ async function aggregateDelivery(orderData, orderId, collection) {
 
   const isMarket = collection === 'orders-market';
 
+  // Restaurant breakdown key: real restaurant ID for food, sentinel for market.
+  const restaurantKey  = isMarket ? '__market__' : (orderData.restaurantId || '__unknown__');
+  const restaurantName = isMarket ?
+    (orderData.marketName || 'Market') :
+    (orderData.restaurantName || 'Restoran');
+
   const orderRef   = db.collection(collection).doc(orderId);
   const dailyRef   = db.collection('courier_daily_stats').doc(`${courierId}_${dateKey}`);
   const alltimeRef = db.collection('courier_alltime_stats').doc(courierId);
@@ -74,6 +80,18 @@ async function aggregateDelivery(orderData, orderId, collection) {
       ibanRevenue: inc(isIban ? revenue : 0),
       totalDeliveryTimeMs: inc(ms),
       orderIds: admin.firestore.FieldValue.arrayUnion(orderId),
+      restaurants: {
+        [restaurantKey]: {
+          name: restaurantName,
+          count: inc(1),
+          foodCount: inc(isMarket ? 0 : 1),
+          marketCount: inc(isMarket ? 1 : 0),
+          totalRevenue: inc(revenue),
+          cashRevenue: inc(isCash ? revenue : 0),
+          cardRevenue: inc(isCard ? revenue : 0),
+          ibanRevenue: inc(isIban ? revenue : 0),
+        },
+      },
       lastDeliveryAt: now,
       updatedAt: now,
     }, { merge: true });
@@ -206,6 +224,7 @@ export const recalcCourierStats = onCall(
           ibanRevenue: 0,
           totalDeliveryTimeMs: 0,
           orderIds: [],
+          restaurants: {},
           firstDeliveryAt: o.updatedAt,
           lastDeliveryAt: o.updatedAt,
         });
@@ -227,12 +246,48 @@ export const recalcCourierStats = onCall(
       e.totalDeliveryTimeMs += ms;
       e.orderIds.push(doc.id);
       e.lastDeliveryAt = o.updatedAt;
+
+      const rKey  = isMarket ? '__market__' : (o.restaurantId || '__unknown__');
+      const rName = isMarket ? (o.marketName || 'Market') : (o.restaurantName || 'Restoran');
+      if (!e.restaurants[rKey]) {
+        e.restaurants[rKey] = {
+          name: rName,
+          count: 0,
+          foodCount: 0,
+          marketCount: 0,
+          totalRevenue: 0,
+          cashRevenue: 0,
+          cardRevenue: 0,
+          ibanRevenue: 0,
+        };
+      }
+      const r = e.restaurants[rKey];
+      r.name = rName;
+      r.count += 1;
+      if (isMarket) r.marketCount += 1; else r.foodCount += 1;
+      r.totalRevenue += revenue;
+      r.cashRevenue  += isCash ? revenue : 0;
+      r.cardRevenue  += isCard ? revenue : 0;
+      r.ibanRevenue  += isIban ? revenue : 0;
     };
 
     for (const doc of foodSnap.docs)   ingest(doc, false);
     for (const doc of marketSnap.docs) ingest(doc, true);
 
     const round2 = (n) => Math.round(n * 100) / 100;
+    const roundRestaurants = (r) => {
+      const out = {};
+      for (const [k, v] of Object.entries(r)) {
+        out[k] = {
+          ...v,
+          totalRevenue: round2(v.totalRevenue),
+          cashRevenue: round2(v.cashRevenue),
+          cardRevenue: round2(v.cardRevenue),
+          ibanRevenue: round2(v.ibanRevenue),
+        };
+      }
+      return out;
+    };
     const now = admin.firestore.FieldValue.serverTimestamp();
     await Promise.all(
       Array.from(map.values()).map((s) =>
@@ -246,6 +301,7 @@ export const recalcCourierStats = onCall(
             cashRevenue: round2(s.cashRevenue),
             cardRevenue: round2(s.cardRevenue),
             ibanRevenue: round2(s.ibanRevenue),
+            restaurants: roundRestaurants(s.restaurants),
             updatedAt: now,
             recalculatedAt: now,
           }, { merge: false })

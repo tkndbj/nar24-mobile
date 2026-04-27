@@ -1,6 +1,5 @@
 // lib/screens/food/receipt_scanner.dart
 
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
@@ -45,16 +44,14 @@ class ReceiptScanResult {
 // ─────────────────────────────────────────────────────────────────────────────
 // SCANNER SERVICE
 // ML Kit does OCR (free, on-device)
-// Claude Haiku does extraction (intelligent, ~$0.00004 per scan)
+// CF parseReceiptText calls Claude Haiku server-side (~$0.00004 per scan).
+// Keeps the Anthropic key out of the app binary and surfaces extraction
+// failures in Cloud Logging.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ReceiptScannerService {
   final _recognizer = TextRecognizer(script: TextRecognitionScript.latin);
   final _picker = ImagePicker();
-
-  // API key passed via --dart-define=ANTHROPIC_API_KEY=...
-  static const _apiKey =
-      String.fromEnvironment('ANTHROPIC_API_KEY', defaultValue: '');
 
   final _barcodeScanner = BarcodeScanner(formats: [BarcodeFormat.qrCode]);
 
@@ -200,82 +197,21 @@ class ReceiptScannerService {
     }
   }
 
-  // ── Haiku extraction ───────────────────────────────────────────────────────
+  // ── Haiku extraction (via Cloud Function) ─────────────────────────────────
 
   Future<Map<String, dynamic>> _extractWithHaiku(String rawText) async {
-    if (_apiKey.isEmpty) {
-      debugPrint('[ReceiptScanner] No API key — falling back to regex');
-      return _fallbackRegex(rawText);
-    }
-
     try {
-      final response = await http
-          .post(
-            Uri.parse('https://api.anthropic.com/v1/messages'),
-            headers: {
-              'x-api-key': _apiKey,
-              'anthropic-version': '2023-06-01',
-              'content-type': 'application/json',
-            },
-            body: jsonEncode({
-              'model': 'claude-haiku-4-5-20251001',
-              'max_tokens': 1024,
-              'messages': [
-                {
-                  'role': 'user',
-                  'content':
-                      '''Extract delivery information from this receipt OCR text.
-The text may contain OCR errors (garbled characters, broken numbers, etc).
-Reply ONLY with a valid JSON object — no explanation, no markdown fences.
-
-{
-  "total": <grand total as a number, null if not found>,
-  "address": "<full delivery address, null if not found>",
-  "phone": "<customer phone number, null if not found>",
-  "order_id": "<order or receipt number, null if not found>",
-  "items": [
-    {"name": "<item name>", "quantity": <number>, "price": <unit price as number>}
-  ]
-}
-
-Rules:
-- total: find the FINAL amount the customer pays after any discounts. Rules in order:
-  1. NEVER return "Ara Toplam" (subtotal). 
-  2. If a discount percentage is mentioned (e.g. %15 indirim), the final total is LESS than the ara toplam — look for the smaller number after the discount line.
-  3. On YemekSepeti receipts the numbers appear in this order on one line: [ara toplam] [toplam] [kdv] — so if you see a sequence of numbers, the SECOND main amount is the final total, not the first.
-  4. Fix garbled digits like 250,7: → 250.75, 295,0( → 295.00.
-  Return as a plain number with no currency symbol.
-- address: look for street names, district, city, postal code. In North Cyprus receipts look for KKTC, Kuzey Kıbrıs, Lefkoşa, Gazimağusa, Girne, İskele, KYK, yurdu, üniversite, DAÜ, GAÜ, NEU. Return the full address on one line.
-- phone: look for TEL, telefon, GSM patterns. Include + prefix if present.
-- order_id: look for sipariş no, order no, receipt no, # prefixed codes.
-- items: extract each food/drink item with its name, quantity, and unit price. Skip non-food lines like delivery fee, discount, tax, subtotal, total. If quantity is not shown, assume 1. Fix OCR errors in names. Return empty array if no items found.
-
-Receipt OCR text:
-${rawText.length > 1500 ? rawText.substring(0, 1500) : rawText}'''
-                }
-              ],
-            }),
-          )
-          .timeout(const Duration(seconds: 15));
-
-      if (response.statusCode != 200) {
-        debugPrint(
-            '[ReceiptScanner] Haiku error ${response.statusCode}: ${response.body}');
-        return _fallbackRegex(rawText);
-      }
-
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final content = (data['content'] as List).first['text'] as String;
-
-      // Strip markdown fences if model adds them despite instructions
-      final clean =
-          content.replaceAll('```json', '').replaceAll('```', '').trim();
-
-      final parsed = jsonDecode(clean) as Map<String, dynamic>;
-      debugPrint('[ReceiptScanner] Haiku extracted: $parsed');
-      return parsed;
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+          .httpsCallable(
+        'parseReceiptText',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 25)),
+      );
+      final response = await callable.call({'rawText': rawText});
+      final data = Map<String, dynamic>.from(response.data as Map);
+      debugPrint('[ReceiptScanner] CF extracted: $data');
+      return data;
     } catch (e) {
-      debugPrint('[ReceiptScanner] Haiku failed: $e — using regex fallback');
+      debugPrint('[ReceiptScanner] CF failed: $e — using regex fallback');
       return _fallbackRegex(rawText);
     }
   }

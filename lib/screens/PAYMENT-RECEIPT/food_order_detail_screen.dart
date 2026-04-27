@@ -27,6 +27,7 @@ extension _FoodOrderStatusX on _FoodOrderStatus {
   static _FoodOrderStatus fromString(String? v) {
     switch (v) {
       case 'accepted':
+      case 'assigned':
         return _FoodOrderStatus.accepted;
       case 'rejected':
         return _FoodOrderStatus.rejected;
