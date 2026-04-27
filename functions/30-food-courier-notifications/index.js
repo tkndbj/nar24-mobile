@@ -225,7 +225,14 @@ Rules:
 - address: look for street names, district, city, postal code. In North Cyprus receipts look for KKTC, Kuzey Kıbrıs, Lefkoşa, Gazimağusa, Girne, İskele, KYK, yurdu, üniversite, DAÜ, GAÜ, NEU. Return the full address on one line.
 - phone: look for TEL, telefon, GSM patterns. Include + prefix if present.
 - order_id: look for sipariş no, order no, receipt no, # prefixed codes.
-- items: extract each food/drink item with its name, quantity, and unit price. Skip non-food lines like delivery fee, discount, tax, subtotal, total. If quantity is not shown, assume 1. Fix OCR errors in names. Return empty array if no items found.
+- items: extract every food/drink line you can identify. This is the most important field — be GENEROUS, not conservative.
+  1. Receipt OCR often splits item names from their prices: names appear in one block (sometimes preceded by a quantity like "1 Su (50 cl)" or "2 Pizza"), prices appear later in a column (e.g. "B 50  b380  B 430"). Match them by position when possible — first item gets first price, second item gets second price, etc.
+  2. Quantity rules: if the line starts with a small integer (1, 2, 3) treat it as quantity. Otherwise default quantity to 1.
+  3. Price rules: pull the per-line price from the price block in the same position. If a price is unreadable or missing, return price: 0 — DO NOT drop the item.
+  4. Names: clean up obvious OCR garbage (Çlkolatalı → Çikolatalı, Belçlka → Belçika, çllek → çilek). Keep parentheticals (e.g. "(50 cl)", "Muz,çilek").
+  5. Skip ONLY these non-item lines: delivery fee, ara toplam, toplam, KDV, tax, discount/indirim, ödenecek tutar, sipariş no, tarih.
+  6. Common Turkish/English food terms to recognise: pizza, burger, döner, kebap, lahmacun, pide, köfte, salata, çorba, börek, mantı, makarna, tavuk, balık, et, su, ayran, kola, çay, kahve, waffle, dondurma, tatlı.
+  7. Return empty array ONLY if you genuinely see no food/drink names in the OCR — not just because prices are messy.
 
 Receipt OCR text:
 ${rawText.length > 1500 ? rawText.substring(0, 1500) : rawText}`;
@@ -233,7 +240,7 @@ ${rawText.length > 1500 ? rawText.substring(0, 1500) : rawText}`;
 export const parseReceiptText = onCall(
   {
     region: REGION,
-    memory: '256MiB',
+    memory: '512MiB',
     timeoutSeconds: 30,
     secrets: [anthropicApiKey],
   },
