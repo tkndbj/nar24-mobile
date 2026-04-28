@@ -12874,6 +12874,42 @@ abstract class AppLocalizations {
   /// **'Hesabınızı ve tüm ilişkili verileri kalıcı olarak silin'**
   String get deleteAccountDesc;
 
+  /// No description provided for @checkingYourAccount.
+  ///
+  /// In tr, this message translates to:
+  /// **'Hesabınız kontrol ediliyor…'**
+  String get checkingYourAccount;
+
+  /// No description provided for @transferOwnershipTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sahipliği devret'**
+  String get transferOwnershipTitle;
+
+  /// No description provided for @transferOwnershipConfirmTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sahipliği devretmek istiyor musunuz?'**
+  String get transferOwnershipConfirmTitle;
+
+  /// No description provided for @transferOwnershipConfirmMessage.
+  ///
+  /// In tr, this message translates to:
+  /// **'{memberName} adlı kişiyi \"{entityName}\" işletmesinin yeni sahibi yapmak istiyor musunuz? Siz ortak sahip olacaksınız.'**
+  String transferOwnershipConfirmMessage(String memberName, String entityName);
+
+  /// No description provided for @transferAction.
+  ///
+  /// In tr, this message translates to:
+  /// **'Devret'**
+  String get transferAction;
+
+  /// No description provided for @ownershipTransferredSuccess.
+  ///
+  /// In tr, this message translates to:
+  /// **'\"{entityName}\" işletmesinin sahipliği {memberName} adlı kişiye devredildi.'**
+  String ownershipTransferredSuccess(String entityName, String memberName);
+
   /// No description provided for @faqShippingQuestion.
   ///
   /// In tr, this message translates to:
@@ -31283,6 +31319,90 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'İçecek silinemedi. Lütfen tekrar deneyin.'**
   String get deleteDrinkFailed;
+
+  /// Kimlik doğrulama dinleyicisi bir hata bildirdiğinde gösterilir.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kimlik doğrulama hatası: {error}'**
+  String authenticationError(Object error);
+
+  /// Excel raporu dışa aktarımı başarısız olduğunda gösterilir.
+  ///
+  /// In tr, this message translates to:
+  /// **'Excel dosyası oluşturulamadı.'**
+  String get excelExportFailed;
+
+  /// Ürün indirimi uygulama başarısız olduğunda gösterilir.
+  ///
+  /// In tr, this message translates to:
+  /// **'İndirim uygulanırken hata oluştu: {error}'**
+  String errorApplyingDiscount(Object error);
+
+  /// Ürün indirimini kaldırma başarısız olduğunda gösterilir.
+  ///
+  /// In tr, this message translates to:
+  /// **'İndirim kaldırılırken hata oluştu: {error}'**
+  String errorRemovingDiscount(Object error);
+
+  /// Ürünü kampanyadan kaldırma başarısız olduğunda gösterilir.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kampanyadan kaldırılırken hata oluştu: {error}'**
+  String errorRemovingFromCampaign(Object error);
+
+  /// Koleksiyon ürünlerinin toplu güncellenmesi başarısız olduğunda gösterilir.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ürünler güncellenemedi. Lütfen tekrar deneyin.'**
+  String get failedToUpdateProducts;
+
+  /// Kullanıcı izinleri listesinde mağaza sahibi için kompakt büyük harfli rozet etiketi.
+  ///
+  /// In tr, this message translates to:
+  /// **'SAHİBİ'**
+  String get ownerBadge;
+
+  /// Oluşturulan iş raporu e-posta ile gönderilemediğinde gösterilir.
+  ///
+  /// In tr, this message translates to:
+  /// **'E-posta gönderilemedi. Lütfen tekrar deneyin.'**
+  String get failedToSendReportEmail;
+
+  /// Mağazanın kayıtlı raporlar listesi alınamadığında gösterilir.
+  ///
+  /// In tr, this message translates to:
+  /// **'Mevcut raporlar yüklenemedi.'**
+  String get failedToLoadExistingReports;
+
+  /// PDF raporu oluşturan cloud function bir hata döndürdüğünde gösterilir.
+  ///
+  /// In tr, this message translates to:
+  /// **'Rapor oluşturulamadı: {error}'**
+  String failedToGenerateReport(Object error);
+
+  /// Belge referansı eksik olduğu için ürün güncellenemediğinde gösterilir.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ürün güncellenemez: geçersiz referans.'**
+  String get cannotUpdateProductInvalidReference;
+
+  /// İndirim işleminden önce ürünün mevcut durumu doğrulanırken hata oluştuğunda gösterilir.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ürün kontrol edilirken hata oluştu: {error}'**
+  String errorCheckingProduct(Object error);
+
+  /// Toplu indirim kaldırma başarılı olduğunda gösterilir.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tüm indirimler başarıyla kaldırıldı.'**
+  String get allDiscountsRemoved;
+
+  /// Toplu indirim kaldırma işlemi başarısız olduğunda gösterilir.
+  ///
+  /// In tr, this message translates to:
+  /// **'İndirimler kaldırılırken hata oluştu: {error}'**
+  String errorRemovingDiscounts(Object error);
 }
 
 class _AppLocalizationsDelegate

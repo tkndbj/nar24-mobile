@@ -97,6 +97,7 @@ export const grantUserCoupon = onCall(
       usedAt: null,
       orderId: null,
       isUsed: false,
+      celebratedAt: null,
     };
 
     const couponRef = await getDb()
@@ -200,6 +201,7 @@ export const grantFreeShipping = onCall(
       usedAt: null,
       orderId: null,
       isUsed: false,
+      celebratedAt: null,
       metadata: null,
     };
 

@@ -70,6 +70,7 @@ class _SellerPanelReceiptsScreenState extends State<SellerPanelReceiptsScreen> {
           .limit(_limit);
 
       QuerySnapshot snapshot = await query.get();
+      if (!mounted) return;
 
       if (snapshot.docs.isNotEmpty) {
         _lastDocument = snapshot.docs.last;
@@ -89,12 +90,14 @@ class _SellerPanelReceiptsScreenState extends State<SellerPanelReceiptsScreen> {
         });
       }
     } catch (e) {
-      print('Error fetching shop receipts: $e');
+      debugPrint('Error fetching shop receipts: $e');
+      if (!mounted) return;
       setState(() {
         _isInitialLoad = false;
       });
     }
 
+    if (!mounted) return;
     setState(() {
       _isLoading = false;
     });
@@ -117,6 +120,7 @@ class _SellerPanelReceiptsScreenState extends State<SellerPanelReceiptsScreen> {
           .limit(_limit);
 
       QuerySnapshot snapshot = await query.get();
+      if (!mounted) return;
 
       if (snapshot.docs.isNotEmpty) {
         _lastDocument = snapshot.docs.last;
@@ -134,9 +138,10 @@ class _SellerPanelReceiptsScreenState extends State<SellerPanelReceiptsScreen> {
         });
       }
     } catch (e) {
-      print('Error loading more shop receipts: $e');
+      debugPrint('Error loading more shop receipts: $e');
     }
 
+    if (!mounted) return;
     setState(() {
       _isLoading = false;
     });

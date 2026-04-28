@@ -6699,6 +6699,29 @@ class AppLocalizationsTr extends AppLocalizations {
       'Hesabınızı ve tüm ilişkili verileri kalıcı olarak silin';
 
   @override
+  String get checkingYourAccount => 'Hesabınız kontrol ediliyor…';
+
+  @override
+  String get transferOwnershipTitle => 'Sahipliği devret';
+
+  @override
+  String get transferOwnershipConfirmTitle =>
+      'Sahipliği devretmek istiyor musunuz?';
+
+  @override
+  String transferOwnershipConfirmMessage(String memberName, String entityName) {
+    return '$memberName adlı kişiyi \"$entityName\" işletmesinin yeni sahibi yapmak istiyor musunuz? Siz ortak sahip olacaksınız.';
+  }
+
+  @override
+  String get transferAction => 'Devret';
+
+  @override
+  String ownershipTransferredSuccess(String entityName, String memberName) {
+    return '\"$entityName\" işletmesinin sahipliği $memberName adlı kişiye devredildi.';
+  }
+
+  @override
   String get faqShippingQuestion => 'Kargo ne kadar sürer?';
 
   @override
@@ -16427,4 +16450,63 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get deleteDrinkFailed => 'İçecek silinemedi. Lütfen tekrar deneyin.';
+
+  @override
+  String authenticationError(Object error) {
+    return 'Kimlik doğrulama hatası: $error';
+  }
+
+  @override
+  String get excelExportFailed => 'Excel dosyası oluşturulamadı.';
+
+  @override
+  String errorApplyingDiscount(Object error) {
+    return 'İndirim uygulanırken hata oluştu: $error';
+  }
+
+  @override
+  String errorRemovingDiscount(Object error) {
+    return 'İndirim kaldırılırken hata oluştu: $error';
+  }
+
+  @override
+  String errorRemovingFromCampaign(Object error) {
+    return 'Kampanyadan kaldırılırken hata oluştu: $error';
+  }
+
+  @override
+  String get failedToUpdateProducts =>
+      'Ürünler güncellenemedi. Lütfen tekrar deneyin.';
+
+  @override
+  String get ownerBadge => 'SAHİBİ';
+
+  @override
+  String get failedToSendReportEmail =>
+      'E-posta gönderilemedi. Lütfen tekrar deneyin.';
+
+  @override
+  String get failedToLoadExistingReports => 'Mevcut raporlar yüklenemedi.';
+
+  @override
+  String failedToGenerateReport(Object error) {
+    return 'Rapor oluşturulamadı: $error';
+  }
+
+  @override
+  String get cannotUpdateProductInvalidReference =>
+      'Ürün güncellenemez: geçersiz referans.';
+
+  @override
+  String errorCheckingProduct(Object error) {
+    return 'Ürün kontrol edilirken hata oluştu: $error';
+  }
+
+  @override
+  String get allDiscountsRemoved => 'Tüm indirimler başarıyla kaldırıldı.';
+
+  @override
+  String errorRemovingDiscounts(Object error) {
+    return 'İndirimler kaldırılırken hata oluştu: $error';
+  }
 }

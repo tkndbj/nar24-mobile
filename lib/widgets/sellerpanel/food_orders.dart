@@ -572,10 +572,9 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
           .call({'orderId': orderId, 'newStatus': _statusToString(newStatus)});
     } catch (e) {
       if (mounted) {
-        final locale = Localizations.localeOf(context).languageCode;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-              locale == 'tr' ? 'Güncelleme başarısız' : 'Failed to update'),
+              AppLocalizations.of(context).restaurantDashboardUpdateFailed),
           backgroundColor: const Color(0xFFEF4444),
           behavior: SnackBarBehavior.floating,
         ));
@@ -609,10 +608,9 @@ class _FoodOrdersTabState extends State<FoodOrdersTab>
       });
     } catch (e) {
       if (mounted) {
-        final locale = Localizations.localeOf(context).languageCode;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-              locale == 'tr' ? 'Güncelleme başarısız' : 'Failed to update'),
+              AppLocalizations.of(context).restaurantDashboardUpdateFailed),
           backgroundColor: const Color(0xFFEF4444),
           behavior: SnackBarBehavior.floating,
         ));

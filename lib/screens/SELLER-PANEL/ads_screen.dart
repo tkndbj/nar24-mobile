@@ -286,13 +286,13 @@ class _AdsScreenState extends State<AdsScreen>
     try {
       final currentUserId = _auth.currentUser?.uid;
       if (currentUserId == null) {
-        setState(() => _isCheckingRole = false);
-        _initTabController();
+        // No user — fall through to finally which sets state and inits tabs.
         return;
       }
 
       final shopDoc =
           await _firestore.collection('shops').doc(widget.shopId).get();
+      if (!mounted) return;
       if (shopDoc.exists) {
         final shopData = shopDoc.data() as Map<String, dynamic>?;
         if (shopData != null) {
@@ -303,8 +303,10 @@ class _AdsScreenState extends State<AdsScreen>
     } catch (e) {
       debugPrint('Error checking user role: $e');
     } finally {
-      setState(() => _isCheckingRole = false);
-      _initTabController();
+      if (mounted) {
+        setState(() => _isCheckingRole = false);
+        _initTabController();
+      }
     }
   }
 
@@ -335,14 +337,18 @@ class _AdsScreenState extends State<AdsScreen>
           .collection('ad_submissions')
           .where('shopId', isEqualTo: widget.shopId)
           .orderBy('createdAt', descending: true)
+          .limit(100)
           .get();
 
+      if (!mounted) return;
       _submissions =
           snapshot.docs.map((doc) => AdSubmission.fromDocument(doc)).toList();
     } catch (e) {
       debugPrint('Error loading submissions: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -2664,12 +2670,15 @@ class _AdLinkSelectionSheetState extends State<AdLinkSelectionSheet> {
           .limit(50)
           .get();
 
+      if (!mounted) return;
       _products =
           snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
     } catch (e) {
       debugPrint('Error loading products: $e');
     } finally {
-      setState(() => _isLoadingProducts = false);
+      if (mounted) {
+        setState(() => _isLoadingProducts = false);
+      }
     }
   }
 

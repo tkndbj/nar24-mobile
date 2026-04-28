@@ -158,13 +158,16 @@ class _SellerPanelCreateBundleScreenState
           .limit(20);
 
       final snapshot = await query.get();
+      if (!mounted) return;
 
       final newProducts =
           snapshot.docs.map((doc) => Product.fromDocument(doc)).toList();
 
-      _availableProducts.addAll(newProducts);
-      _lastProductDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
-      _hasMoreProducts = snapshot.docs.length == 20;
+      setState(() {
+        _availableProducts.addAll(newProducts);
+        _lastProductDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
+        _hasMoreProducts = snapshot.docs.length == 20;
+      });
 
       _updateFilteredProducts();
     } catch (e) {

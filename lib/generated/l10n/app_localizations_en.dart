@@ -6690,6 +6690,28 @@ class AppLocalizationsEn extends AppLocalizations {
       'Permanently delete your account and all associated data';
 
   @override
+  String get checkingYourAccount => 'Checking your account…';
+
+  @override
+  String get transferOwnershipTitle => 'Transfer ownership';
+
+  @override
+  String get transferOwnershipConfirmTitle => 'Transfer ownership?';
+
+  @override
+  String transferOwnershipConfirmMessage(String memberName, String entityName) {
+    return 'Make $memberName the new owner of \"$entityName\"? You will become a co-owner.';
+  }
+
+  @override
+  String get transferAction => 'Transfer';
+
+  @override
+  String ownershipTransferredSuccess(String entityName, String memberName) {
+    return 'Ownership of \"$entityName\" transferred to $memberName.';
+  }
+
+  @override
   String get faqShippingQuestion => 'How long does shipping take?';
 
   @override
@@ -16398,4 +16420,63 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deleteDrinkFailed => 'Failed to delete drink. Please try again.';
+
+  @override
+  String authenticationError(Object error) {
+    return 'Authentication error: $error';
+  }
+
+  @override
+  String get excelExportFailed => 'Failed to generate Excel file.';
+
+  @override
+  String errorApplyingDiscount(Object error) {
+    return 'Error applying discount: $error';
+  }
+
+  @override
+  String errorRemovingDiscount(Object error) {
+    return 'Error removing discount: $error';
+  }
+
+  @override
+  String errorRemovingFromCampaign(Object error) {
+    return 'Error removing from campaign: $error';
+  }
+
+  @override
+  String get failedToUpdateProducts =>
+      'Failed to update products. Please try again.';
+
+  @override
+  String get ownerBadge => 'OWNER';
+
+  @override
+  String get failedToSendReportEmail =>
+      'Failed to send email. Please try again.';
+
+  @override
+  String get failedToLoadExistingReports => 'Failed to load existing reports.';
+
+  @override
+  String failedToGenerateReport(Object error) {
+    return 'Failed to generate report: $error';
+  }
+
+  @override
+  String get cannotUpdateProductInvalidReference =>
+      'Cannot update product: invalid reference.';
+
+  @override
+  String errorCheckingProduct(Object error) {
+    return 'Error checking product: $error';
+  }
+
+  @override
+  String get allDiscountsRemoved => 'All discounts removed successfully.';
+
+  @override
+  String errorRemovingDiscounts(Object error) {
+    return 'Error removing discounts: $error';
+  }
 }

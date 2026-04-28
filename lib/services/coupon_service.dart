@@ -313,6 +313,45 @@ bool isFreeShippingApplicable(double cartTotal) {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // CELEBRATION
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Mark the given coupons and benefits as celebrated (overlay shown and
+  /// dismissed). Writes `celebratedAt: serverTimestamp()` in a single batch
+  /// so the same items never trigger the overlay again on this or any other
+  /// device for this user.
+  Future<void> markCelebrated({
+    Iterable<String> couponIds = const [],
+    Iterable<String> benefitIds = const [],
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    if (couponIds.isEmpty && benefitIds.isEmpty) return;
+
+    final batch = _firestore.batch();
+    final userRef = _firestore.collection('users').doc(user.uid);
+
+    for (final id in couponIds) {
+      batch.update(
+        userRef.collection('coupons').doc(id),
+        {'celebratedAt': FieldValue.serverTimestamp()},
+      );
+    }
+    for (final id in benefitIds) {
+      batch.update(
+        userRef.collection('benefits').doc(id),
+        {'celebratedAt': FieldValue.serverTimestamp()},
+      );
+    }
+
+    try {
+      await batch.commit();
+    } catch (e) {
+      debugPrint('❌ Error marking coupons/benefits as celebrated: $e');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // CHECKOUT HELPERS
   // ═══════════════════════════════════════════════════════════════════════════
 

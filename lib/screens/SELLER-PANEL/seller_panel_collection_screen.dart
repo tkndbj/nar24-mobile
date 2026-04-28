@@ -2281,8 +2281,10 @@ class _ProductSelectorSheetState extends State<ProductSelectorSheet> {
           _isUpdating = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to update products. Please try again.'),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context).failedToUpdateProducts,
+            ),
             backgroundColor: Colors.red,
           ),
         );

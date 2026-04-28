@@ -878,8 +878,9 @@ class _SellerPanelUserPermissionState
                                     borderRadius:
                                         BorderRadius.circular(10),
                                   ),
-                                  child: Text('OWNER',
-                                      style: TextStyle(
+                                  child: Text(
+                                      AppLocalizations.of(context).ownerBadge,
+                                      style: const TextStyle(
                                           fontSize: 9,
                                           color: Colors.white,
                                           fontWeight: FontWeight.bold)),

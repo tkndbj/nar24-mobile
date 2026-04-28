@@ -26,6 +26,7 @@ class UserBenefit {
   final Timestamp? usedAt;
   final String? orderId;
   final bool isUsed;
+  final Timestamp? celebratedAt;
   final Map<String, dynamic>? metadata; // For future extensibility
 
   UserBenefit({
@@ -39,6 +40,7 @@ class UserBenefit {
     this.usedAt,
     this.orderId,
     required this.isUsed,
+    this.celebratedAt,
     this.metadata,
   });
 
@@ -106,6 +108,7 @@ class UserBenefit {
       usedAt: json['usedAt'] as Timestamp?,
       orderId: json['orderId'] as String?,
       isUsed: json['isUsed'] as bool? ?? false,
+      celebratedAt: json['celebratedAt'] as Timestamp?,
       metadata: json['metadata'] as Map<String, dynamic>?,
     );
   }
@@ -121,6 +124,7 @@ class UserBenefit {
       'usedAt': usedAt,
       'orderId': orderId,
       'isUsed': isUsed,
+      'celebratedAt': celebratedAt,
       'metadata': metadata,
     };
   }
@@ -136,6 +140,7 @@ class UserBenefit {
     Timestamp? usedAt,
     String? orderId,
     bool? isUsed,
+    Timestamp? celebratedAt,
     Map<String, dynamic>? metadata,
   }) {
     return UserBenefit(
@@ -149,6 +154,7 @@ class UserBenefit {
       usedAt: usedAt ?? this.usedAt,
       orderId: orderId ?? this.orderId,
       isUsed: isUsed ?? this.isUsed,
+      celebratedAt: celebratedAt ?? this.celebratedAt,
       metadata: metadata ?? this.metadata,
     );
   }

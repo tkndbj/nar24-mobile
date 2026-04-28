@@ -1529,7 +1529,8 @@ Widget _buildProductGrid(BuildContext context, List<Product> products,
       loadingOverlay?.remove();
 
       if (mounted) {
-        _safelyShowSnackBar(context, 'Error applying discount: $e');
+        _safelyShowSnackBar(
+            context, AppLocalizations.of(context).errorApplyingDiscount(e));
       }
     }
   }
@@ -2176,7 +2177,8 @@ void _clearSearch() {
       loadingOverlay?.remove();
 
       if (mounted) {
-        _safelyShowSnackBar(context, 'Error applying discount: $e');
+        _safelyShowSnackBar(
+            context, AppLocalizations.of(context).errorApplyingDiscount(e));
       }
     }
   }
@@ -2694,7 +2696,8 @@ void _clearSearch() {
     } catch (e) {
       loadingOverlay?.remove();
       if (mounted) {
-        _safelyShowSnackBar(context, 'Error applying discount: $e');
+        _safelyShowSnackBar(
+            context, AppLocalizations.of(context).errorApplyingDiscount(e));
       }
     }
   }
@@ -2743,7 +2746,8 @@ void _clearSearch() {
   if (!mounted) return;
 
   if (product.reference == null) {
-    _safelyShowSnackBar(context, 'Cannot update product: invalid reference');
+    _safelyShowSnackBar(context,
+        AppLocalizations.of(context).cannotUpdateProductInvalidReference);
     return;
   }
 
@@ -2908,7 +2912,8 @@ void _clearSearch() {
     }
     
     if (mounted) {
-      _safelyShowSnackBar(context, 'Error checking product: $e');
+      _safelyShowSnackBar(
+          context, AppLocalizations.of(context).errorCheckingProduct(e));
     }
   }
 }
@@ -3041,7 +3046,8 @@ Future<void> _processRemoveDiscountOnlyWithProvider(
     }
     
     if (mounted) {
-      _safelyShowSnackBar(context, 'Error removing discount: $e');
+      _safelyShowSnackBar(
+          context, AppLocalizations.of(context).errorRemovingDiscount(e));
     }
   }
 }
@@ -3175,7 +3181,8 @@ Future<void> _processRemoveFromCampaignAndDiscountWithProvider(
     }
     
     if (mounted) {
-      _safelyShowSnackBar(context, 'Error removing from campaign: $e');
+      _safelyShowSnackBar(context,
+          AppLocalizations.of(context).errorRemovingFromCampaign(e));
     }
   }
 }
@@ -3196,14 +3203,16 @@ Future<void> _processRemoveFromCampaignAndDiscountWithProvider(
       loadingOverlay = null;
 
       if (mounted) {
-        _safelyShowSnackBar(context, 'All discounts removed successfully');
+        _safelyShowSnackBar(
+            context, AppLocalizations.of(context).allDiscountsRemoved);
       }
     } catch (e) {
       debugPrint('Error in bulk remove discount: $e');
       loadingOverlay?.remove();
 
       if (mounted) {
-        _safelyShowSnackBar(context, 'Error removing discounts: $e');
+        _safelyShowSnackBar(
+            context, AppLocalizations.of(context).errorRemovingDiscounts(e));
       }
     }
   }

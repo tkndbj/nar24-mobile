@@ -185,81 +185,683 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     }
   }
 
+  // Cached callable region — single instance, reused across precheck / transfer / delete.
+  static final FirebaseFunctions _fns =
+      FirebaseFunctions.instanceFor(region: 'europe-west3');
+
+  // Orchestrates the full deletion flow:
+  //   1. precheckAccountDeletion  (read-only, learns ownership state)
+  //   2. transfer_required        → bottom sheet to transfer ownership, then re-precheck
+  //   3. solo_owner_warning       → server-localized warning, then continue
+  //   4. clear / accepted warning → email-confirm dialog, then deleteUserAccount
+  //
+  // Re-entrant via recursion after a successful transfer.
   Future<void> _showDeleteAccountDialog(BuildContext context) async {
     final localization = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final userEmail = FirebaseAuth.instance.currentUser?.email;
 
-    // Show confirmation modal first
-    final confirmed = await _showDeleteConfirmation(userEmail ?? '');
-    if (!confirmed) return;
+    if (userEmail == null) {
+      _showErrorSnackBar(localization.deleteAccountFailed);
+      return;
+    }
 
-    // Show loading modal
+    // Step 1 — precheck (with loading modal).
+    Map<String, dynamic>? precheck;
+    _showPrecheckLoadingModal();
+    try {
+      precheck = await _precheckAccountDeletion();
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) Navigator.of(context).pop();
+      _showErrorSnackBar(e.message ?? localization.deleteAccountFailed);
+      return;
+    } catch (_) {
+      if (mounted) Navigator.of(context).pop();
+      _showErrorSnackBar(localization.deleteAccountFailed);
+      return;
+    }
+    if (mounted) Navigator.of(context).pop(); // close loading
+    if (!mounted || precheck == null) return;
+
+    final status = precheck['status'] as String? ?? 'clear';
+    final messages = (precheck['messages'] as Map?)?.cast<String, dynamic>();
+
+    // Step 2 — transfer required: surface entities + members, transfer one, re-run.
+    if (status == 'transfer_required') {
+      final transferRequired =
+          ((precheck['transferRequired'] as List?) ?? const [])
+              .cast<Map<dynamic, dynamic>>()
+              .map((e) => e.cast<String, dynamic>())
+              .toList();
+
+      final didTransfer = await _showTransferOwnershipFlow(
+        transferRequired,
+        _pickServerMessage(messages),
+      );
+
+      if (didTransfer && mounted) {
+        // Re-run from the top — the precheck may now show solo_owner_warning or clear.
+        await _showDeleteAccountDialog(context);
+      }
+      return;
+    }
+
+    // Step 3 — solo owner warning: show server-localized confirmation.
+    bool confirmDisableOwned = false;
+    if (status == 'solo_owner_warning') {
+      final accepted = await _showSoloOwnerWarning(_pickServerMessage(messages));
+      if (!accepted || !mounted) return;
+      confirmDisableOwned = true;
+    }
+
+    // Step 4 — final email-confirmation gate, then call delete.
+    final confirmed = await _showDeleteConfirmation(userEmail);
+    if (!confirmed || !mounted) return;
+
+    await _callDeleteUserAccount(
+      email: userEmail,
+      confirmDisableOwned: confirmDisableOwned,
+    );
+  }
+
+  // Calls `precheckAccountDeletion`. Returns the parsed payload, or null on
+  // missing data. Throws FirebaseFunctionsException upward for the orchestrator
+  // to surface.
+  Future<Map<String, dynamic>?> _precheckAccountDeletion() async {
+    final result = await _fns.httpsCallable('precheckAccountDeletion').call({});
+    final data = result.data;
+    if (data is Map) return data.cast<String, dynamic>();
+    return null;
+  }
+
+  // Picks the localized message from the server payload using the active app
+  // locale, falling back to English then to an empty string.
+  String _pickServerMessage(Map<String, dynamic>? messages) {
+    if (messages == null) return '';
+    final code = Localizations.localeOf(context).languageCode;
+    final msg = messages[code] ?? messages['en'] ?? '';
+    return msg is String ? msg : '';
+  }
+
+  // Calls `deleteUserAccount`. Handles the full success path (logout + redirect)
+  // and any error including a stale-precheck `failed-precondition` (the server
+  // recheck saw a state change between our precheck and this call — re-runs the
+  // flow so the user sees up-to-date guidance).
+  Future<void> _callDeleteUserAccount({
+    required String email,
+    required bool confirmDisableOwned,
+  }) async {
+    final localization = AppLocalizations.of(context);
+
     _showDeletingAccountModal();
 
-    final functions = FirebaseFunctions.instanceFor(region: 'europe-west3');
+    try {
+      await _fns.httpsCallable('deleteUserAccount').call({
+        'email': email,
+        if (confirmDisableOwned) 'confirmDisableOwned': true,
+      });
+
+      if (!mounted) return;
+      Navigator.of(context).pop(); // close loading
+
+      await AuthService().logout();
+      if (!mounted) return;
+      context.go('/login');
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // close loading
+
+      // If state changed between precheck and now (e.g., a co-owner just
+      // accepted an invitation), re-run the orchestrator so the user sees
+      // current guidance instead of a raw error.
+      if (e.code == 'failed-precondition') {
+        await _showDeleteAccountDialog(context);
+        return;
+      }
+      _showErrorSnackBar(e.message ?? localization.deleteAccountFailed);
+    } catch (_) {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // close loading
+      _showErrorSnackBar(localization.deleteAccountFailed);
+    }
+  }
+
+  // Lightweight "checking your account" loading modal shown during precheck.
+  void _showPrecheckLoadingModal() {
+    final localization = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color:
+                isDark ? const Color.fromARGB(255, 33, 31, 49) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              ),
+              const SizedBox(width: 16),
+              Text(
+                localization.checkingYourAccount,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Server-localized warning shown when the user owns shop(s)/restaurant(s)
+  // with no other members. Returns true if the user accepts disabling them.
+  Future<bool> _showSoloOwnerWarning(String message) async {
+    final localization = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          margin: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color:
+                isDark ? const Color.fromARGB(255, 33, 31, 49) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color:
+                          isDark ? Colors.grey.shade700 : Colors.grey.shade300,
+                      width: 0.5,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Colors.orange, Colors.deepOrange],
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.warning_amber_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        localization.deleteAccount,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  message,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? Colors.white : Colors.black87,
+                    height: 1.45,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(
+                      color:
+                          isDark ? Colors.grey.shade700 : Colors.grey.shade300,
+                      width: 0.5,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: Text(
+                          localization.no,
+                          style: TextStyle(
+                            color:
+                                isDark ? Colors.grey[300] : Colors.grey[700],
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange.shade700,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: Text(
+                          localization.continueText,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    return result ?? false;
+  }
+
+  // Bottom sheet that lists each owned-with-members entity and its members.
+  // Tapping a member runs `transferOwnership` for that (entity, member) pair.
+  // Returns true if at least one transfer succeeded so the orchestrator
+  // re-runs the precheck.
+  Future<bool> _showTransferOwnershipFlow(
+    List<Map<String, dynamic>> transferRequired,
+    String headerMessage,
+  ) async {
+    if (transferRequired.isEmpty) return false;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor =
+        isDark ? const Color.fromARGB(255, 33, 31, 49) : Colors.white;
+
+    bool didTransfer = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.4,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (_, scrollController) {
+            return Container(
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
+              ),
+              child: Column(
+                children: [
+                  // Drag handle
+                  Container(
+                    margin: const EdgeInsets.only(top: 12, bottom: 8),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade400,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            FeatherIcons.userCheck,
+                            color: Colors.blue,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            AppLocalizations.of(context).transferOwnershipTitle,
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (headerMessage.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                      child: Text(
+                        headerMessage,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isDark
+                              ? Colors.white70
+                              : Colors.grey.shade700,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  Divider(
+                    height: 1,
+                    color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+                  ),
+                  // Entity + member list
+                  Expanded(
+                    child: ListView.builder(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: transferRequired.length,
+                      itemBuilder: (_, index) {
+                        final entity = transferRequired[index];
+                        return _buildEntityMembersBlock(
+                          entity: entity,
+                          isDark: isDark,
+                          onTransferred: () {
+                            didTransfer = true;
+                            Navigator.of(sheetContext).pop();
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    return didTransfer;
+  }
+
+  Widget _buildEntityMembersBlock({
+    required Map<String, dynamic> entity,
+    required bool isDark,
+    required VoidCallback onTransferred,
+  }) {
+    final entityId = entity['id'] as String? ?? '';
+    final entityType = entity['type'] as String? ?? 'shop';
+    final entityName = (entity['name'] as String?)?.trim().isNotEmpty == true
+        ? entity['name'] as String
+        : entityId;
+    final members = ((entity['members'] as List?) ?? const [])
+        .cast<Map<dynamic, dynamic>>()
+        .map((m) => m.cast<String, dynamic>())
+        .toList();
+
+    final typeIcon = entityType == 'restaurant'
+        ? FeatherIcons.coffee
+        : FeatherIcons.shoppingBag;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Entity header
+          Row(
+            children: [
+              Icon(typeIcon, size: 16, color: isDark ? Colors.white70 : Colors.grey.shade700),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  entityName,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...members.map((member) => _buildMemberTile(
+                entityId: entityId,
+                entityType: entityType,
+                entityName: entityName,
+                member: member,
+                isDark: isDark,
+                onTransferred: onTransferred,
+              )),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMemberTile({
+    required String entityId,
+    required String entityType,
+    required String entityName,
+    required Map<String, dynamic> member,
+    required bool isDark,
+    required VoidCallback onTransferred,
+  }) {
+    final memberUid = member['uid'] as String? ?? '';
+    final role = member['role'] as String? ?? '';
+    final displayName =
+        (member['displayName'] as String?)?.trim().isNotEmpty == true
+            ? member['displayName'] as String
+            : memberUid;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.04) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+        ),
+      ),
+      child: ListTile(
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        leading: CircleAvatar(
+          backgroundColor: Colors.blue.withOpacity(0.15),
+          child: Text(
+            displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+            style: const TextStyle(
+              color: Colors.blue,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        title: Text(
+          displayName,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
+        ),
+        subtitle: Text(
+          role,
+          style: TextStyle(
+            fontSize: 12,
+            color: isDark ? Colors.white60 : Colors.grey.shade600,
+          ),
+        ),
+        trailing: const Icon(
+          FeatherIcons.chevronRight,
+          size: 18,
+        ),
+        onTap: () => _handleMemberTransferTap(
+          entityId: entityId,
+          entityType: entityType,
+          entityName: entityName,
+          memberUid: memberUid,
+          memberDisplayName: displayName,
+          onTransferred: onTransferred,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleMemberTransferTap({
+    required String entityId,
+    required String entityType,
+    required String entityName,
+    required String memberUid,
+    required String memberDisplayName,
+    required VoidCallback onTransferred,
+  }) async {
+    final localization = AppLocalizations.of(context);
+
+    final confirmed = await _showTransferConfirmation(
+      entityName: entityName,
+      memberDisplayName: memberDisplayName,
+    );
+    if (!confirmed || !mounted) return;
+
+    // Loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) =>
+          const Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
+    );
 
     try {
-      await functions
-          .httpsCallable('deleteUserAccount')
-          .call({'email': userEmail});
+      await _fns.httpsCallable('transferOwnership').call({
+        'entityId': entityId,
+        'entityType': entityType,
+        'newOwnerId': memberUid,
+      });
 
-      if (context.mounted) {
-        Navigator.of(context).pop(); // Close loading modal
+      if (!mounted) return;
+      Navigator.of(context).pop(); // close loading
 
-        // Success - log out and redirect
-        await AuthService().logout();
-        context.go('/login');
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            localization.ownershipTransferredSuccess(
+              entityName,
+              memberDisplayName,
+            ),
+          ),
+          backgroundColor: Colors.green.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      onTransferred();
     } on FirebaseFunctionsException catch (e) {
-      if (context.mounted) {
-        Navigator.of(context).pop(); // Close loading modal
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(e.message ?? localization.deleteAccountFailed),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            duration: const Duration(seconds: 3),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.of(context).pop(); // Close loading modal
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(localization.deleteAccountFailed),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            duration: const Duration(seconds: 3),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        );
-      }
+      if (!mounted) return;
+      Navigator.of(context).pop(); // close loading
+      _showErrorSnackBar(e.message ?? localization.deleteAccountFailed);
+    } catch (_) {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // close loading
+      _showErrorSnackBar(localization.deleteAccountFailed);
     }
+  }
+
+  Future<bool> _showTransferConfirmation({
+    required String entityName,
+    required String memberDisplayName,
+  }) async {
+    final localization = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor:
+            isDark ? const Color.fromARGB(255, 33, 31, 49) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text(
+          localization.transferOwnershipConfirmTitle,
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
+        ),
+        content: Text(
+          localization.transferOwnershipConfirmMessage(
+            memberDisplayName,
+            entityName,
+          ),
+          style: TextStyle(
+            fontSize: 14,
+            color: isDark ? Colors.white70 : Colors.grey.shade700,
+            height: 1.4,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              localization.no,
+              style: TextStyle(
+                color: isDark ? Colors.grey[300] : Colors.grey[700],
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              localization.transferAction,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return result ?? false;
   }
 
   Future<bool> _showDeleteConfirmation(String userEmail) async {

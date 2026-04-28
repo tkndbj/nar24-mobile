@@ -617,7 +617,10 @@ Future<bool> _sendReportByEmail(String reportId, String email) async {
     }
   } catch (e) {
     debugPrint('Error sending report email: $e');
-    _showErrorSnackbar('Failed to send email. Please try again.');
+    if (mounted) {
+      _showErrorSnackbar(
+          AppLocalizations.of(context).failedToSendReportEmail);
+    }
     return false;
   }
 }
@@ -629,6 +632,7 @@ Future<bool> _sendReportByEmail(String reportId, String email) async {
           .doc(widget.shopId)
           .collection('reports')
           .orderBy('createdAt', descending: true)
+          .limit(50)
           .get();
 
       if (!mounted) return;
@@ -641,7 +645,8 @@ Future<bool> _sendReportByEmail(String reportId, String email) async {
       debugPrint('Error loading reports: $e');
       _endLoading();
       if (mounted) {
-        _showErrorSnackbar('Failed to load existing reports');
+        _showErrorSnackbar(
+            AppLocalizations.of(context).failedToLoadExistingReports);
       }
     }
   }
@@ -795,6 +800,8 @@ Future<bool> _sendReportByEmail(String reportId, String email) async {
         // Just refresh the reports list
         await _loadExistingReports();
 
+        if (!mounted) return;
+
         // Clear form
         _reportNameController.clear();
         _config = ReportConfiguration();
@@ -813,18 +820,20 @@ Future<bool> _sendReportByEmail(String reportId, String email) async {
       }
     } catch (e) {
       debugPrint('Error calling cloud function: $e');
-      
+
       // Update report status to failed
       await reportDoc.update({
         'status': 'failed',
         'error': e.toString(),
         'failedAt': FieldValue.serverTimestamp(),
       });
-      
+
       throw e;
     }
   } catch (e) {
     debugPrint('Error generating report: $e');
+
+    if (!mounted) return;
 
     setState(() {
       _isGeneratingReport = false;
@@ -833,7 +842,8 @@ Future<bool> _sendReportByEmail(String reportId, String email) async {
     // Hide loading modal
     _hideLoadingModal();
 
-    _showErrorSnackbar('Failed to generate report: ${_getUserFriendlyError(e)}');
+    _showErrorSnackbar(AppLocalizations.of(context)
+        .failedToGenerateReport(_getUserFriendlyError(e)));
   }
 }
 

@@ -82,6 +82,7 @@ class _SellerPanelCampaignSuccessScreenState
 
   void _startAnimationSequence() async {
     await _mainController.forward();
+    if (!mounted) return;
     _pulseController.repeat(reverse: true);
     setState(() => _showButtons = true);
     await _buttonController.forward();

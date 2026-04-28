@@ -487,7 +487,11 @@ class _SellerPanelProductDetailState extends State<SellerPanelProductDetail> {
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error applying discount: $e')),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context).errorApplyingDiscount(e),
+            ),
+          ),
         );
       }
     }
@@ -697,7 +701,11 @@ class _SellerPanelProductDetailState extends State<SellerPanelProductDetail> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error removing discount: $e')),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context).errorRemovingDiscount(e),
+            ),
+          ),
         );
       }
     }
@@ -851,7 +859,11 @@ class _SellerPanelProductDetailState extends State<SellerPanelProductDetail> {
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error removing from campaign: $e')),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context).errorRemovingFromCampaign(e),
+            ),
+          ),
         );
       }
     }

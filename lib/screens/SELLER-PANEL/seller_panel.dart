@@ -64,7 +64,11 @@ class _SellerPanelState extends State<SellerPanel>
     }, onError: (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Authentication error: $error')),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context).authenticationError(error),
+            ),
+          ),
         );
       }
     });

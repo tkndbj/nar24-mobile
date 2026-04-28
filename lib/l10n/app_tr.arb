@@ -2802,6 +2802,24 @@
   "enterEmailToConfirm": "Onaylamak için e-postanızı girin",
   "emailMismatch": "E-posta adresi hesabınızla eşleşmiyor",
   "deleteAccountFailed": "Hesap silme işlemi başarısız. Lütfen tekrar deneyin.",
+  "checkingYourAccount": "Hesabınız kontrol ediliyor…",
+  "transferOwnershipTitle": "Sahipliği devret",
+  "transferOwnershipConfirmTitle": "Sahipliği devretmek istiyor musunuz?",
+  "transferOwnershipConfirmMessage": "{memberName} adlı kişiyi \"{entityName}\" işletmesinin yeni sahibi yapmak istiyor musunuz? Siz ortak sahip olacaksınız.",
+  "@transferOwnershipConfirmMessage": {
+    "placeholders": {
+      "memberName": { "type": "String" },
+      "entityName": { "type": "String" }
+    }
+  },
+  "transferAction": "Devret",
+  "ownershipTransferredSuccess": "\"{entityName}\" işletmesinin sahipliği {memberName} adlı kişiye devredildi.",
+  "@ownershipTransferredSuccess": {
+    "placeholders": {
+      "entityName": { "type": "String" },
+      "memberName": { "type": "String" }
+    }
+  },
 
   "faqShippingQuestion": "Kargo ne kadar sürer?",
   "faqShippingAnswer": "Standart kargo genellikle 3-7 iş günü sürer. 1-2 iş günü için ekspres kargo mevcuttur. Kargo süreleri konumunuza ve ürün mevcudiyetine göre değişebilir.",
@@ -6990,5 +7008,82 @@
 "foodDeletedSuccess": "Yemek başarıyla silindi",
 "drinkDeletedSuccess": "İçecek başarıyla silindi",
 "deleteFoodFailed": "Yemek silinemedi. Lütfen tekrar deneyin.",
-"deleteDrinkFailed": "İçecek silinemedi. Lütfen tekrar deneyin."
+"deleteDrinkFailed": "İçecek silinemedi. Lütfen tekrar deneyin.",
+"authenticationError": "Kimlik doğrulama hatası: {error}",
+"@authenticationError": {
+  "description": "Kimlik doğrulama dinleyicisi bir hata bildirdiğinde gösterilir.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+},
+"excelExportFailed": "Excel dosyası oluşturulamadı.",
+"@excelExportFailed": {
+  "description": "Excel raporu dışa aktarımı başarısız olduğunda gösterilir."
+},
+"errorApplyingDiscount": "İndirim uygulanırken hata oluştu: {error}",
+"@errorApplyingDiscount": {
+  "description": "Ürün indirimi uygulama başarısız olduğunda gösterilir.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+},
+"errorRemovingDiscount": "İndirim kaldırılırken hata oluştu: {error}",
+"@errorRemovingDiscount": {
+  "description": "Ürün indirimini kaldırma başarısız olduğunda gösterilir.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+},
+"errorRemovingFromCampaign": "Kampanyadan kaldırılırken hata oluştu: {error}",
+"@errorRemovingFromCampaign": {
+  "description": "Ürünü kampanyadan kaldırma başarısız olduğunda gösterilir.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+},
+"failedToUpdateProducts": "Ürünler güncellenemedi. Lütfen tekrar deneyin.",
+"@failedToUpdateProducts": {
+  "description": "Koleksiyon ürünlerinin toplu güncellenmesi başarısız olduğunda gösterilir."
+},
+"ownerBadge": "SAHİBİ",
+"@ownerBadge": {
+  "description": "Kullanıcı izinleri listesinde mağaza sahibi için kompakt büyük harfli rozet etiketi."
+},
+"failedToSendReportEmail": "E-posta gönderilemedi. Lütfen tekrar deneyin.",
+"@failedToSendReportEmail": {
+  "description": "Oluşturulan iş raporu e-posta ile gönderilemediğinde gösterilir."
+},
+"failedToLoadExistingReports": "Mevcut raporlar yüklenemedi.",
+"@failedToLoadExistingReports": {
+  "description": "Mağazanın kayıtlı raporlar listesi alınamadığında gösterilir."
+},
+"failedToGenerateReport": "Rapor oluşturulamadı: {error}",
+"@failedToGenerateReport": {
+  "description": "PDF raporu oluşturan cloud function bir hata döndürdüğünde gösterilir.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+},
+"cannotUpdateProductInvalidReference": "Ürün güncellenemez: geçersiz referans.",
+"@cannotUpdateProductInvalidReference": {
+  "description": "Belge referansı eksik olduğu için ürün güncellenemediğinde gösterilir."
+},
+"errorCheckingProduct": "Ürün kontrol edilirken hata oluştu: {error}",
+"@errorCheckingProduct": {
+  "description": "İndirim işleminden önce ürünün mevcut durumu doğrulanırken hata oluştuğunda gösterilir.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+},
+"allDiscountsRemoved": "Tüm indirimler başarıyla kaldırıldı.",
+"@allDiscountsRemoved": {
+  "description": "Toplu indirim kaldırma başarılı olduğunda gösterilir."
+},
+"errorRemovingDiscounts": "İndirimler kaldırılırken hata oluştu: {error}",
+"@errorRemovingDiscounts": {
+  "description": "Toplu indirim kaldırma işlemi başarısız olduğunda gösterilir.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+}
 }

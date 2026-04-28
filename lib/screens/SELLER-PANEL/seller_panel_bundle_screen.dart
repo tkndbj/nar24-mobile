@@ -51,6 +51,8 @@ class _SellerPanelBundleScreenState extends State<SellerPanelBundleScreen> {
           .orderBy('createdAt', descending: true)
           .get();
 
+      if (!mounted) return;
+
       _bundles = snapshot.docs.map((doc) => Bundle.fromDocument(doc)).toList();
 
       // Calculate bundle statistics - count how many bundles each product is in
@@ -64,7 +66,9 @@ class _SellerPanelBundleScreenState extends State<SellerPanelBundleScreen> {
     } catch (e) {
       debugPrint('Error loading bundles: $e');
     } finally {
-      setState(() => _isLoadingBundles = false);
+      if (mounted) {
+        setState(() => _isLoadingBundles = false);
+      }
     }
   }
 

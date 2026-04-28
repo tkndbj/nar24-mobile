@@ -940,7 +940,9 @@ class _SellerPanelBusinessAccountingState
     debugPrint('Excel export error: $e');
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Excel oluşturulamadı.')),
+        SnackBar(
+          content: Text(AppLocalizations.of(context).excelExportFailed),
+        ),
       );
     }
   }

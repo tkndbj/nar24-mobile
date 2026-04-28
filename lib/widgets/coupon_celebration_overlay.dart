@@ -4,7 +4,6 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../services/coupon_service.dart';
@@ -16,10 +15,14 @@ import '../generated/l10n/app_localizations.dart';
 /// - Smooth slide-up animation from bottom
 /// - Pulsing/breathing animation on the coupon image
 /// - Semi-transparent dark overlay background
-/// - Dismissible with X button (persisted - never shows again)
-/// - Only shows if user has active coupons
+/// - Dismissible with X button
+/// - Only shows if user has active coupons that have not yet been celebrated
 ///
-/// Usage: Call `CouponCelebrationOverlay.show(context)` from market_screen
+/// "Celebrated" state lives on the Firestore coupon document itself
+/// (`celebratedAt`), so the overlay is correctly suppressed across devices and
+/// reinstalls — not in SharedPreferences.
+///
+/// Usage: Call `CouponCelebrationOverlay.showIfEligible(context)` from market_screen
 class CouponCelebrationOverlay extends StatefulWidget {
   final VoidCallback onDismiss;
 
@@ -28,50 +31,37 @@ class CouponCelebrationOverlay extends StatefulWidget {
     required this.onDismiss,
   }) : super(key: key);
 
-  /// Shows the overlay if conditions are met (user has coupon, not shown before)
-  /// Returns true if overlay was shown, false otherwise
+  /// Shows the overlay if conditions are met (user has uncelebrated active
+  /// coupons). Returns true if the overlay was shown, false otherwise.
   static Future<bool> showIfEligible(BuildContext context) async {
     // Safety check
     if (!context.mounted) return false;
 
     try {
-      // 1. Check if user is authenticated
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         if (kDebugMode) debugPrint('🎟️ Coupon overlay: No user logged in');
         return false;
       }
 
-      // 2. Get celebrated coupon IDs from SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      final celebratedKey = 'coupon_celebration_ids_${user.uid}';
-      final celebratedIdsJson = prefs.getStringList(celebratedKey) ?? [];
-      final celebratedIds = celebratedIdsJson.toSet();
-
-      if (kDebugMode) {
-        debugPrint('🎟️ Previously celebrated coupon IDs: $celebratedIds');
-      }
-
-      // 3. Check if user has NEW active coupons (not yet celebrated)
       final couponService = CouponService();
-      final newCouponIds = await _getNewCouponIds(couponService, celebratedIds);
+      final newCouponIds = await _getUncelebratedCouponIds(couponService);
 
       if (newCouponIds.isEmpty) {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint('🎟️ Coupon overlay: No new coupons to celebrate');
+        }
         return false;
       }
 
-      // 4. All conditions met - show the overlay
       if (!context.mounted) return false;
 
       if (kDebugMode) {
         debugPrint(
-            '🎟️ Coupon overlay: Showing celebration for ${newCouponIds.length} new coupons!');
+            '🎟️ Coupon overlay: Showing celebration for ${newCouponIds.length} new coupons');
       }
 
-      await _showOverlay(
-          context, prefs, celebratedKey, celebratedIds, newCouponIds);
+      await _showOverlay(context, couponService, newCouponIds);
       return true;
     } catch (e, stackTrace) {
       if (kDebugMode) {
@@ -82,11 +72,13 @@ class CouponCelebrationOverlay extends StatefulWidget {
     }
   }
 
-  /// Check if user has any active (unused, not expired) coupons
-  static Future<Set<String>> _getNewCouponIds(
-      CouponService service, Set<String> celebratedIds) async {
+  /// Returns the IDs of active (unused, not expired) coupons that have not
+  /// yet been marked celebrated on the server.
+  static Future<Set<String>> _getUncelebratedCouponIds(
+      CouponService service) async {
     try {
-      // Wait for coupon service to be ready (max 3 seconds)
+      // Wait for the coupon service stream to deliver its first snapshot
+      // (max 3 seconds).
       int attempts = 0;
       while (!service.isInitialized && attempts < 30) {
         await Future.delayed(const Duration(milliseconds: 100));
@@ -100,15 +92,11 @@ class CouponCelebrationOverlay extends StatefulWidget {
         return {};
       }
 
-      final coupons = service.userCoupons;
-
-      // Filter for active coupons (not used, not expired)
       final now = DateTime.now();
-      final activeCouponIds = coupons
+      return service.userCoupons
           .where((coupon) {
-            if (coupon.isUsed) {
-              return false;
-            }
+            if (coupon.isUsed) return false;
+            if (coupon.celebratedAt != null) return false;
             if (coupon.expiresAt != null &&
                 coupon.expiresAt!.toDate().isBefore(now)) {
               return false;
@@ -117,19 +105,6 @@ class CouponCelebrationOverlay extends StatefulWidget {
           })
           .map((coupon) => coupon.id)
           .toSet();
-
-      if (kDebugMode) {
-        debugPrint('🎟️ Active coupon IDs: $activeCouponIds');
-      }
-
-      // Return only NEW coupons (not in celebrated set)
-      final newCouponIds = activeCouponIds.difference(celebratedIds);
-
-      if (kDebugMode) {
-        debugPrint('🎟️ New (uncelebrated) coupon IDs: $newCouponIds');
-      }
-
-      return newCouponIds;
     } catch (e) {
       if (kDebugMode) debugPrint('🎟️ Error checking coupons: $e');
       return {};
@@ -139,15 +114,11 @@ class CouponCelebrationOverlay extends StatefulWidget {
   /// Shows the overlay using Navigator
   static Future<void> _showOverlay(
     BuildContext context,
-    SharedPreferences prefs,
-    String celebratedKey,
-    Set<String> previouslyCelebratedIds,
+    CouponService couponService,
     Set<String> newCouponIds,
   ) async {
-    // Use a Completer to wait for dismissal
     final completer = Completer<void>();
 
-    // Show as a full-screen route for proper lifecycle management
     Navigator.of(context, rootNavigator: true).push(
       PageRouteBuilder(
         opaque: false,
@@ -157,23 +128,29 @@ class CouponCelebrationOverlay extends StatefulWidget {
         reverseTransitionDuration: Duration.zero,
         pageBuilder: (context, _, __) => CouponCelebrationOverlay(
           onDismiss: () async {
-            // Mark new coupons as celebrated (add to existing set)
-            final allCelebratedIds =
-                previouslyCelebratedIds.union(newCouponIds);
-            await prefs.setStringList(celebratedKey, allCelebratedIds.toList());
+            // Persist the "celebrated" state on the Firestore docs themselves
+            // so this overlay is suppressed across devices/reinstalls.
+            // Fire-and-forget: pop immediately so the UI feels responsive,
+            // but await the write to surface errors in debug.
+            final writeFuture =
+                couponService.markCelebrated(couponIds: newCouponIds);
 
-            if (kDebugMode) {
-              debugPrint('🎟️ Marked as celebrated: $newCouponIds');
-              debugPrint('🎟️ Total celebrated IDs: $allCelebratedIds');
-            }
-
-            // Pop the overlay
             if (context.mounted) {
               Navigator.of(context, rootNavigator: true).pop();
             }
-
             if (!completer.isCompleted) {
               completer.complete();
+            }
+
+            try {
+              await writeFuture;
+              if (kDebugMode) {
+                debugPrint('🎟️ Marked as celebrated: $newCouponIds');
+              }
+            } catch (e) {
+              if (kDebugMode) {
+                debugPrint('🎟️ Failed to mark celebrated: $e');
+              }
             }
           },
         ),
@@ -181,14 +158,6 @@ class CouponCelebrationOverlay extends StatefulWidget {
     );
 
     return completer.future;
-  }
-
-  /// Reset the shown state for a user (for testing purposes)
-  static Future<void> resetForUser(String userId) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('coupon_celebration_ids_$userId');
-    if (kDebugMode)
-      debugPrint('🎟️ Reset coupon celebration for user: $userId');
   }
 
   @override

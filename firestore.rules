@@ -1168,16 +1168,29 @@ function isValidSellerInfo(sellerInfo) {
 match /coupons/{couponId} {
   // Users can read their own coupons
   allow read: if request.auth != null && request.auth.uid == userId;
-  
-  // Users can update their own coupons (for marking as used)
- allow update: if request.auth != null 
+
+  // Users can update their own coupons:
+  //  (a) mark-as-used during checkout, OR
+  //  (b) mark-as-celebrated when dismissing the celebration overlay.
+ allow update: if request.auth != null
     && request.auth.uid == userId
-    && request.resource.data.diff(resource.data).affectedKeys()
-         .hasOnly(['isUsed', 'usedAt', 'orderId'])
-    && request.resource.data.isUsed == true
-    && request.resource.data.usedAt is timestamp
-    && request.resource.data.orderId is string;
-  
+    && (
+      (
+        request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['isUsed', 'usedAt', 'orderId'])
+        && request.resource.data.isUsed == true
+        && request.resource.data.usedAt is timestamp
+        && request.resource.data.orderId is string
+      )
+      ||
+      (
+        request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['celebratedAt'])
+        && request.resource.data.celebratedAt is timestamp
+        && resource.data.celebratedAt == null
+      )
+    );
+
   // Only Cloud Functions (admin) can create or delete coupons
   allow create, delete: if false;
 }
@@ -1186,16 +1199,29 @@ match /coupons/{couponId} {
 match /benefits/{benefitId} {
   // Users can read their own benefits
   allow read: if request.auth != null && request.auth.uid == userId;
-  
-  // Users can update their own benefits (for marking as used)
-  allow update: if request.auth != null 
+
+  // Users can update their own benefits:
+  //  (a) mark-as-used during checkout, OR
+  //  (b) mark-as-celebrated when dismissing the celebration overlay.
+  allow update: if request.auth != null
     && request.auth.uid == userId
-    && request.resource.data.diff(resource.data).affectedKeys()
-         .hasOnly(['isUsed', 'usedAt', 'orderId'])
-    && request.resource.data.isUsed == true
-    && request.resource.data.usedAt is timestamp
-    && request.resource.data.orderId is string;
-  
+    && (
+      (
+        request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['isUsed', 'usedAt', 'orderId'])
+        && request.resource.data.isUsed == true
+        && request.resource.data.usedAt is timestamp
+        && request.resource.data.orderId is string
+      )
+      ||
+      (
+        request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['celebratedAt'])
+        && request.resource.data.celebratedAt is timestamp
+        && resource.data.celebratedAt == null
+      )
+    );
+
   // Only Cloud Functions (admin) can create or delete benefits
   allow create, delete: if false;
 }
@@ -1435,10 +1461,8 @@ match /mail/{docId} {
                   // OR admin/semi-admin approving applications
                   || isAdmin()
                   || isSemiAdmin()
-                );
-                
-                  allow update: if request.auth != null
-    && resource.data.userId == request.auth.uid;
+                );               
+                  
                 
                 function isValidDiscount() {
   // Check *existing* doc final state:
@@ -1463,9 +1487,7 @@ match /mail/{docId} {
 
   return oldValid && newValid;
 }
-
-
-                
+              
                 // Function to check allowed fields for product owner updates
 function isOwnerUpdatingAllowedFields() {
   let allowedFields = [  	
@@ -1564,15 +1586,6 @@ function isOwnerUpdatingAllowedFields() {
 
 }
 
-                function isIncrementingFollowerCount() {
-  return request.auth != null
-      && request.writeFields.hasOnly(['followerCount'])
-      // only allow ±1
-      && (
-           request.resource.data.followerCount == resource.data.followerCount + 1
-        || request.resource.data.followerCount == resource.data.followerCount - 1
-         );
-}
 
     // *** Rules for 'shops' Collection ***
    match /shops/{shopId} {
@@ -1583,24 +1596,7 @@ function isOwnerUpdatingAllowedFields() {
       allow create: if request.auth != null
                     && request.resource.data.ownerId == request.auth.uid;
 
-      // Replace BOTH allow update rules with this single combined rule:
-allow update: if request.auth != null && (
-  // Existing conditions
-  resource.data.ownerId == request.auth.uid
-  || isAdmin()
-  || isIncrementingFollowerCount()
-  
-  // NEW: Allow any authenticated user to update metrics fields
-  || (
-    request.writeFields.hasAll(['metrics.totalCartAdditions', 'metrics.lastUpdated'])
-    && request.writeFields.size() == 2
-  )
-  || (
-    request.writeFields.hasAll(['metrics.totalFavoriteAdditions', 'metrics.lastUpdated']) 
-    && request.writeFields.size() == 2
-  )
-);
-      
+     
 
       
       allow update: if request.auth != null
@@ -2065,10 +2061,6 @@ match /pendingFoodPayments/{paymentId} {
   allow write: if false;
 }
 
-match /food_courier_notifications/{id} {
-  allow read: if request.auth != null && request.auth.token.foodcargoguy == true;
-  allow write: if false; // Cloud Functions only (admin SDK bypasses rules)
-}
 
 match /courier_notification_reads/{courierId} {
   allow read, write: if request.auth != null 

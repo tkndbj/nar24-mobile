@@ -75,10 +75,12 @@ class _SellerPanelEditBundleScreenState
     try {
       // Validate all products in bundle
       await _validateBundleProducts();
+      if (!mounted) return;
 
       // Auto-cleanup invalid products if any found
       if (_invalidProductIds.isNotEmpty) {
         await _performAutoCleanup();
+        if (!mounted) return;
       }
 
       // Check if bundle still has minimum products after cleanup
@@ -92,10 +94,14 @@ class _SellerPanelEditBundleScreenState
       await _loadAvailableProducts();
     } catch (e) {
       debugPrint('Error loading data: $e');
-      final l10n = AppLocalizations.of(context);
-      _showErrorSnackBar(l10n.failedToLoadBundleData(e.toString()));
+      if (mounted) {
+        final l10n = AppLocalizations.of(context);
+        _showErrorSnackBar(l10n.failedToLoadBundleData(e.toString()));
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 

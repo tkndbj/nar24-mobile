@@ -8,12 +8,12 @@ import 'package:shimmer/shimmer.dart';
 import '../../utils/attribute_localization_utils.dart';
 
 class SellerPanelOrderDetailsScreen extends StatefulWidget {
-  final String? orderId; // Optional - if null, shows all sold shop products
-  final String shopId; // Required - the shop ID
+  final String orderId;
+  final String shopId;
 
   const SellerPanelOrderDetailsScreen({
     Key? key,
-    this.orderId,
+    required this.orderId,
     required this.shopId,
   }) : super(key: key);
 
@@ -27,26 +27,34 @@ class _SellerPanelOrderDetailsScreenState
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  late Future<QuerySnapshot> _itemsFuture;
+
   String? get _currentUserId => _auth.currentUser?.uid;
 
-  Stream<QuerySnapshot> _buildQuery() {
-    if (widget.orderId != null) {
-      // For specific order, query the items subcollection directly
-      return _firestore
-          .collection('orders')
-          .doc(widget.orderId)
-          .collection('items')
-          .where('shopId', isEqualTo: widget.shopId)
-          .orderBy('timestamp', descending: true)
-          .snapshots();
-    } else {
-      // For all sold shop products, use collectionGroup and filter by shop
-      return _firestore
-          .collectionGroup('items')
-          .where('shopId', isEqualTo: widget.shopId)
-          .orderBy('timestamp', descending: true)
-          .snapshots();
-    }
+  @override
+  void initState() {
+    super.initState();
+    _itemsFuture = _fetchItems();
+  }
+
+  // Every field rendered (productName, image, price, quantity, buyer,
+  // selectedAttributes, timestamp) is denormalized on the item doc at order
+  // creation. Live shipment status belongs on the Shipments tab; here we do a
+  // one-shot fetch and let pull-to-refresh / retry re-query.
+  Future<QuerySnapshot> _fetchItems() {
+    return _firestore
+        .collection('orders')
+        .doc(widget.orderId)
+        .collection('items')
+        .where('shopId', isEqualTo: widget.shopId)
+        .orderBy('timestamp', descending: true)
+        .get();
+  }
+
+  Future<void> _refresh() async {
+    final next = _fetchItems();
+    if (mounted) setState(() => _itemsFuture = next);
+    await next;
   }
 
   @override
@@ -65,8 +73,8 @@ class _SellerPanelOrderDetailsScreenState
             _currentUserId == null
                 ? SliverFillRemaining(child: _buildSignInPrompt(l10n, isDark))
                 : SliverToBoxAdapter(
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: _buildQuery(),
+                  child: FutureBuilder<QuerySnapshot>(
+                    future: _itemsFuture,
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return _buildLoadingState(isDark);
@@ -147,9 +155,7 @@ class _SellerPanelOrderDetailsScreenState
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         Text(
-                          widget.orderId != null
-                              ? l10n.orderDetails
-                              : l10n.shopSales,
+                          l10n.orderDetails,
                           style: const TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.w800,
@@ -450,7 +456,7 @@ class _SellerPanelOrderDetailsScreenState
           ),
           const SizedBox(height: 16),
           ElevatedButton.icon(
-            onPressed: () => setState(() {}),
+            onPressed: _refresh,
             icon: const Icon(Icons.refresh, size: 16),
             label: Text(l10n.retry),
             style: ElevatedButton.styleFrom(
@@ -502,9 +508,7 @@ class _SellerPanelOrderDetailsScreenState
           ),
           const SizedBox(height: 16),
           Text(
-            widget.orderId != null
-                ? l10n.noItemsInThisOrder
-                : l10n.noShopSalesYet,
+            l10n.noItemsInThisOrder,
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -513,9 +517,7 @@ class _SellerPanelOrderDetailsScreenState
           ),
           const SizedBox(height: 6),
           Text(
-            widget.orderId != null
-                ? l10n.orderDoesntContainShopItems
-                : l10n.soldProductsWillAppearHere,
+            l10n.orderDoesntContainShopItems,
             style: TextStyle(
               fontSize: 13,
               color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -530,7 +532,7 @@ class _SellerPanelOrderDetailsScreenState
   Widget _buildItemsList(List<QueryDocumentSnapshot> soldItems,
       AppLocalizations l10n, bool isDark) {
     return RefreshIndicator(
-      onRefresh: () async => setState(() {}),
+      onRefresh: _refresh,
       color: const Color(0xFF6366F1),
       child: Padding(
         padding: const EdgeInsets.all(16),

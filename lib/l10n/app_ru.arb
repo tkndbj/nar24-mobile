@@ -2642,6 +2642,24 @@
   "enterEmailToConfirm": "Введите свой адрес электронной почты для подтверждения",
   "emailMismatch": "Адрес электронной почты не соответствует вашей учетной записи",
   "deleteAccountFailed": "Ошибка при удалении учетной записи. Пожалуйста, попробуйте снова.",
+  "checkingYourAccount": "Проверка вашей учетной записи…",
+  "transferOwnershipTitle": "Передать право владения",
+  "transferOwnershipConfirmTitle": "Передать право владения?",
+  "transferOwnershipConfirmMessage": "Сделать пользователя {memberName} новым владельцем «{entityName}»? Вы станете соучредителем.",
+  "@transferOwnershipConfirmMessage": {
+    "placeholders": {
+      "memberName": { "type": "String" },
+      "entityName": { "type": "String" }
+    }
+  },
+  "transferAction": "Передать",
+  "ownershipTransferredSuccess": "Право владения «{entityName}» передано пользователю {memberName}.",
+  "@ownershipTransferredSuccess": {
+    "placeholders": {
+      "entityName": { "type": "String" },
+      "memberName": { "type": "String" }
+    }
+  },
   "faqShippingQuestion": "Сколько времени занимает доставка?",
   "faqShippingAnswer": "Стандартная доставка обычно занимает 3-7 рабочих дней. Для срочной доставки (1-2 рабочих дня) доступна опция экспресс-доставки. Сроки доставки могут варьироваться в зависимости от вашего местоположения и наличия товара.",
   "faqReturnQuestion": "Какова ваша политика возврата?",
@@ -6629,5 +6647,82 @@
 "foodDeletedSuccess": "Блюдо успешно удалено",
 "drinkDeletedSuccess": "Напиток успешно удалён",
 "deleteFoodFailed": "Не удалось удалить блюдо. Повторите попытку.",
-"deleteDrinkFailed": "Не удалось удалить напиток. Повторите попытку."
+"deleteDrinkFailed": "Не удалось удалить напиток. Повторите попытку.",
+"authenticationError": "Ошибка аутентификации: {error}",
+"@authenticationError": {
+  "description": "Показывается, когда слушатель состояния аутентификации сообщает об ошибке.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+},
+"excelExportFailed": "Не удалось создать файл Excel.",
+"@excelExportFailed": {
+  "description": "Показывается, когда экспорт бизнес-отчёта в Excel не удался."
+},
+"errorApplyingDiscount": "Ошибка применения скидки: {error}",
+"@errorApplyingDiscount": {
+  "description": "Показывается при сбое применения скидки на товар.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+},
+"errorRemovingDiscount": "Ошибка удаления скидки: {error}",
+"@errorRemovingDiscount": {
+  "description": "Показывается при сбое удаления скидки с товара.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+},
+"errorRemovingFromCampaign": "Ошибка удаления из кампании: {error}",
+"@errorRemovingFromCampaign": {
+  "description": "Показывается при сбое удаления товара из кампании.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+},
+"failedToUpdateProducts": "Не удалось обновить товары. Пожалуйста, попробуйте снова.",
+"@failedToUpdateProducts": {
+  "description": "Показывается при сбое массового обновления товаров коллекции."
+},
+"ownerBadge": "ВЛАДЕЛЕЦ",
+"@ownerBadge": {
+  "description": "Компактный значок в верхнем регистре для владельца магазина в списке прав пользователей."
+},
+"failedToSendReportEmail": "Не удалось отправить письмо. Пожалуйста, попробуйте снова.",
+"@failedToSendReportEmail": {
+  "description": "Показывается, когда не удалось отправить созданный бизнес-отчёт по электронной почте."
+},
+"failedToLoadExistingReports": "Не удалось загрузить существующие отчёты.",
+"@failedToLoadExistingReports": {
+  "description": "Показывается при сбое получения списка сохранённых отчётов магазина."
+},
+"failedToGenerateReport": "Не удалось создать отчёт: {error}",
+"@failedToGenerateReport": {
+  "description": "Показывается, когда облачная функция, создающая PDF-отчёт, возвращает ошибку.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+},
+"cannotUpdateProductInvalidReference": "Не удалось обновить товар: неверная ссылка.",
+"@cannotUpdateProductInvalidReference": {
+  "description": "Показывается, когда товар не может быть обновлён из-за отсутствующей ссылки на документ."
+},
+"errorCheckingProduct": "Ошибка проверки товара: {error}",
+"@errorCheckingProduct": {
+  "description": "Показывается при сбое проверки текущего состояния товара перед операцией со скидкой.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+},
+"allDiscountsRemoved": "Все скидки успешно удалены.",
+"@allDiscountsRemoved": {
+  "description": "Показывается после успешного массового удаления скидок."
+},
+"errorRemovingDiscounts": "Ошибка удаления скидок: {error}",
+"@errorRemovingDiscounts": {
+  "description": "Показывается при сбое массового удаления скидок.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+}
 }

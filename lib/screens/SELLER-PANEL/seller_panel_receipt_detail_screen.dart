@@ -49,6 +49,8 @@ class _SellerPanelReceiptDetailScreenState
           .doc(widget.receipt.orderId)
           .get();
 
+      if (!mounted) return;
+
       if (paymentDoc.exists) {
         final paymentData = paymentDoc.data();
         setState(() {
@@ -72,7 +74,8 @@ class _SellerPanelReceiptDetailScreenState
         });
       }
     } catch (e) {
-      print('Error fetching boost details: $e');
+      debugPrint('Error fetching boost details: $e');
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
@@ -98,6 +101,8 @@ class _SellerPanelReceiptDetailScreenState
               .get();
         }
 
+        if (!mounted) return;
+
         if (productDoc != null && productDoc.exists) {
           final productData = productDoc.data() as Map<String, dynamic>;
           updatedItems.add({
@@ -119,11 +124,12 @@ class _SellerPanelReceiptDetailScreenState
         }
       }
 
+      if (!mounted) return;
       setState(() {
         _boostedItems = updatedItems;
       });
     } catch (e) {
-      print('Error fetching product details: $e');
+      debugPrint('Error fetching product details: $e');
     }
   }
 

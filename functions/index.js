@@ -1,15 +1,15 @@
 // functions/index.js
-import {setGlobalOptions} from 'firebase-functions/v2';
+import { setGlobalOptions } from 'firebase-functions/v2';
 import { dedup } from './shared/redis.js';
-import {onDocumentUpdated } from 'firebase-functions/v2/firestore';
-import {onRequest, onCall, HttpsError} from 'firebase-functions/v2/https';
+import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
+import { onRequest } from 'firebase-functions/v2/https';
 import admin from 'firebase-admin';
-import {onObjectFinalized} from 'firebase-functions/v2/storage';
+import { onObjectFinalized } from 'firebase-functions/v2/storage';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
-import {getDominantColor} from './getDominantColor.js';
-import {FieldValue} from 'firebase-admin/firestore';
+import { getDominantColor} from './getDominantColor.js';
+import { FieldValue} from 'firebase-admin/firestore';
 
 setGlobalOptions({
   serviceAccount: 'emlak-mobile-app@appspot.gserviceaccount.com',
@@ -164,241 +164,6 @@ export const onGeneralProductStockChange = onDocumentUpdated(
     console.log(`General stock notification sent to user ${sellerId} for product ${productId}`);
   },
 );
-
-export const deleteUserAccount = onCall(
-  {
-    region: 'europe-west3',
-    timeoutSeconds: 540,
-    memory: '512MiB',
-    maxInstances: 5
-  },
-  async (request) => {
-    const {auth, data} = request;
- 
-    // === 1) Authentication check ===
-    if (!auth) {
-      throw new HttpsError('unauthenticated', 'Must be signed in.');
-    }
-    const callerUid = auth.uid;
- 
-    // === 2) Determine target UID (admin or self-delete) ===
-    let targetUid;
-    let isAdminDelete = false;
- 
-    if (data.uid) {
-      // — Admin path —
-      isAdminDelete = true;
- 
-      if (typeof data.uid !== 'string' || !data.uid.trim()) {
-        throw new HttpsError(
-          'invalid-argument',
-          'You must provide a valid target uid.',
-        );
-      }
- 
-      const adminDoc = await admin
-        .firestore()
-        .collection('users')
-        .doc(callerUid)
-        .get();
- 
-      if (!adminDoc.exists || adminDoc.data()?.isAdmin !== true) {
-        throw new HttpsError(
-          'permission-denied',
-          'Only admins can delete other users.',
-        );
-      }
- 
-      targetUid = data.uid.trim();
- 
-      if (targetUid === callerUid) {
-        throw new HttpsError(
-          'invalid-argument',
-          'Use self-delete to remove your own account.',
-        );
-      }
-    } else {
-      // — Self-delete path —
-      if (typeof data.email !== 'string' || !data.email.trim()) {
-        throw new HttpsError(
-          'invalid-argument',
-          'You must provide your email to confirm deletion.',
-        );
-      }
- 
-      const userRecord = await admin.auth().getUser(callerUid);
-      if (userRecord.email?.toLowerCase() !== data.email.trim().toLowerCase()) {
-        throw new HttpsError(
-          'permission-denied',
-          'Provided email does not match your account.',
-        );
-      }
- 
-      targetUid = callerUid;
-    }
- 
-    // === 3) Verify target user exists ===
-    try {
-      await admin.auth().getUser(targetUid);
-    } catch (err) {
-      if (err.code === 'auth/user-not-found') {
-        throw new HttpsError(
-          'not-found',
-          'Target user account does not exist.',
-        );
-      }
-      throw new HttpsError('internal', 'Failed to verify user account.');
-    }
- 
-    const db = admin.firestore();
-    const userDocRef = db.collection('users').doc(targetUid);
- 
-    // === 4) Remove user from all shops/restaurants (best-effort) ===
-    try {
-      const userSnap = await userDocRef.get();
-      if (userSnap.exists) {
-        const userData = userSnap.data();
-        const roleToField = {
-          'co-owner': 'coOwners',
-          'editor': 'editors',
-          'viewer': 'viewers',
-        };
- 
-        const removalPromises = [];
- 
-        // Remove from shops
-        const memberOfShops = userData.memberOfShops ?? {};
-        for (const [shopId, role] of Object.entries(memberOfShops)) {
-          const field = roleToField[role];
-          if (field) {
-            removalPromises.push(
-              db.collection('shops').doc(shopId).update({
-                [field]: admin.firestore.FieldValue.arrayRemove(targetUid),
-              }).catch((err) => {
-                console.warn(`Could not remove user from shop ${shopId}:`, err.message);
-              }),
-            );
-          }
-        }
- 
-        // Remove from restaurants
-        const memberOfRestaurants = userData.memberOfRestaurants ?? {};
-        for (const [restId, role] of Object.entries(memberOfRestaurants)) {
-          const field = roleToField[role];
-          if (field) {
-            removalPromises.push(
-              db.collection('restaurants').doc(restId).update({
-                [field]: admin.firestore.FieldValue.arrayRemove(targetUid),
-              }).catch((err) => {
-                console.warn(`Could not remove user from restaurant ${restId}:`, err.message);
-              }),
-            );
-          }
-        }
- 
-        // Cancel pending invitations sent TO this user
-        const invCollections = ['shopInvitations', 'restaurantInvitations'];
-        const invQueryResults = await Promise.all(
-          invCollections.map((coll) =>
-            db.collection(coll)
-              .where('userId', '==', targetUid)
-              .where('status', '==', 'pending')
-              .get(),
-          ),
-        );
-        for (const snapshot of invQueryResults) {
-          for (const doc of snapshot.docs) {
-            removalPromises.push(
-              doc.ref.update({status: 'cancelled'}).catch((err) => {
-                console.warn(`Could not cancel invitation ${doc.id}:`, err.message);
-              }),
-            );
-          }
-        }
- 
-        if (removalPromises.length > 0) {
-          await Promise.all(removalPromises);
-          console.log(`✓ Removed user ${targetUid} from ${removalPromises.length} shop/restaurant/invitation references`);
-        }
-      }
-    } catch (err) {
-      console.error('Warning: Failed to clean up shop/restaurant memberships:', err);
-      // Best-effort — don't block deletion
-    }
- 
-    // === 5) Delete Auth account FIRST ===
-    // Auth first so if Firestore fails, user just has orphaned data (harmless).
-    // If we did Firestore first and Auth failed, user could log in with no data (broken).
-    try {
-      await admin.auth().deleteUser(targetUid);
-      console.log(`✓ Deleted Auth record for uid=${targetUid}`);
-    } catch (err) {
-      if (err.code === 'auth/user-not-found') {
-        console.log('Auth user was already deleted, continuing with Firestore cleanup');
-      } else {
-        // Auth failed — nothing else was touched, user is fully intact
-        console.error('Auth deletion failed:', err);
-        throw new HttpsError(
-          'internal',
-          'Failed to delete authentication record.',
-        );
-      }
-    }
- 
-    // === 6) Delete Firestore data (including all subcollections) ===
-    // At this point Auth is already gone. If this fails, we have harmless
-    // orphaned data. We log a critical alert so ops can clean it up manually.
-    try {
-      const docSnapshot = await userDocRef.get();
- 
-      if (docSnapshot.exists || await hasSubcollections(userDocRef)) {
-        await db.recursiveDelete(userDocRef);
-        console.log(`✓ Deleted Firestore data (including subcollections) for uid=${targetUid}`);
-      } else {
-        console.log(`No Firestore data found for uid=${targetUid}`);
-      }
-    } catch (err) {
-      console.error('CRITICAL: Firestore deletion failed after Auth was already deleted:', err);
- 
-      // Alert ops — Auth is gone but data remains, needs manual cleanup
-      try {
-        await db.collection('_payment_alerts').add({
-          type: 'user_deletion_firestore_failed',
-          severity: 'high',
-          userId: targetUid,
-          isAdminDelete,
-          deletedBy: callerUid,
-          errorMessage: err.message,
-          message: `Auth deleted but Firestore cleanup failed for ${targetUid}. Manual cleanup required.`,
-          isRead: false,
-          isResolved: false,
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      } catch (_) {/* alerting must never throw */}
- 
-      // Still return success — the account (Auth) IS deleted, the user cannot log in.
-      // Orphaned Firestore data is a cleanup task, not a user-facing failure.
-      return {
-        success: true,
-        partial: true,
-        message: isAdminDelete ? `User account ${targetUid} has been deleted. Some data cleanup is pending.` : 'Your account has been deleted. Some data cleanup is pending.',
-        deletedUid: targetUid,
-      };
-    }
- 
-    // === 7) Return success ===
-    return {
-      success: true,
-      message: isAdminDelete ? `User account ${targetUid} has been deleted.` : 'Your account has been deleted.',
-      deletedUid: targetUid,
-    };
-  },
-);
- 
-async function hasSubcollections(docRef) {
-  const collections = await docRef.listCollections();
-  return collections.length > 0;
-}
 
 export const onBannerUpload = onObjectFinalized(
   {region: 'europe-west2'},
@@ -924,3 +689,11 @@ export {
   reconcileCourierLoads,
 } from './54-auto-assignment/index.js';
 export { getAreaAnalytics } from './55-area-analytics/index.js';
+export {
+  precheckAccountDeletion,
+  transferOwnership,
+  deleteUserAccount,
+  processAccountDeletionShopArchive,
+  processAccountDeletionUserProductArchive,
+  processAccountDataPurge,
+} from './56-account-deletion/index.js';

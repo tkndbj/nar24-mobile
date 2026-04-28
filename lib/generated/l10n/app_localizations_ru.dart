@@ -6732,6 +6732,28 @@ class AppLocalizationsRu extends AppLocalizations {
       'Постоянно удалите свою учетную запись и все связанные данные';
 
   @override
+  String get checkingYourAccount => 'Проверка вашей учетной записи…';
+
+  @override
+  String get transferOwnershipTitle => 'Передать право владения';
+
+  @override
+  String get transferOwnershipConfirmTitle => 'Передать право владения?';
+
+  @override
+  String transferOwnershipConfirmMessage(String memberName, String entityName) {
+    return 'Сделать пользователя $memberName новым владельцем «$entityName»? Вы станете соучредителем.';
+  }
+
+  @override
+  String get transferAction => 'Передать';
+
+  @override
+  String ownershipTransferredSuccess(String entityName, String memberName) {
+    return 'Право владения «$entityName» передано пользователю $memberName.';
+  }
+
+  @override
   String get faqShippingQuestion => 'Сколько времени занимает доставка?';
 
   @override
@@ -16504,4 +16526,64 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get deleteDrinkFailed =>
       'Не удалось удалить напиток. Повторите попытку.';
+
+  @override
+  String authenticationError(Object error) {
+    return 'Ошибка аутентификации: $error';
+  }
+
+  @override
+  String get excelExportFailed => 'Не удалось создать файл Excel.';
+
+  @override
+  String errorApplyingDiscount(Object error) {
+    return 'Ошибка применения скидки: $error';
+  }
+
+  @override
+  String errorRemovingDiscount(Object error) {
+    return 'Ошибка удаления скидки: $error';
+  }
+
+  @override
+  String errorRemovingFromCampaign(Object error) {
+    return 'Ошибка удаления из кампании: $error';
+  }
+
+  @override
+  String get failedToUpdateProducts =>
+      'Не удалось обновить товары. Пожалуйста, попробуйте снова.';
+
+  @override
+  String get ownerBadge => 'ВЛАДЕЛЕЦ';
+
+  @override
+  String get failedToSendReportEmail =>
+      'Не удалось отправить письмо. Пожалуйста, попробуйте снова.';
+
+  @override
+  String get failedToLoadExistingReports =>
+      'Не удалось загрузить существующие отчёты.';
+
+  @override
+  String failedToGenerateReport(Object error) {
+    return 'Не удалось создать отчёт: $error';
+  }
+
+  @override
+  String get cannotUpdateProductInvalidReference =>
+      'Не удалось обновить товар: неверная ссылка.';
+
+  @override
+  String errorCheckingProduct(Object error) {
+    return 'Ошибка проверки товара: $error';
+  }
+
+  @override
+  String get allDiscountsRemoved => 'Все скидки успешно удалены.';
+
+  @override
+  String errorRemovingDiscounts(Object error) {
+    return 'Ошибка удаления скидок: $error';
+  }
 }

@@ -783,6 +783,7 @@ if (ctx.mounted) {
     );
 
     if (picked != null) {
+      if (!mounted) return;
       setState(() {
         _currentStartDate = picked.start;
         _currentEndDate = picked.end;

@@ -2442,6 +2442,24 @@
   "enterEmailToConfirm": "Enter your email to confirm",
   "emailMismatch": "Email address doesn't match your account",
   "deleteAccountFailed": "Failed to delete account. Please try again.",
+  "checkingYourAccount": "Checking your account…",
+  "transferOwnershipTitle": "Transfer ownership",
+  "transferOwnershipConfirmTitle": "Transfer ownership?",
+  "transferOwnershipConfirmMessage": "Make {memberName} the new owner of \"{entityName}\"? You will become a co-owner.",
+  "@transferOwnershipConfirmMessage": {
+    "placeholders": {
+      "memberName": { "type": "String" },
+      "entityName": { "type": "String" }
+    }
+  },
+  "transferAction": "Transfer",
+  "ownershipTransferredSuccess": "Ownership of \"{entityName}\" transferred to {memberName}.",
+  "@ownershipTransferredSuccess": {
+    "placeholders": {
+      "entityName": { "type": "String" },
+      "memberName": { "type": "String" }
+    }
+  },
   "emailSupportMessage": "Email support request sent successfully!",
   "liveChatMessage": "Connecting you to live chat...",
 
@@ -6994,5 +7012,82 @@
 "foodDeletedSuccess": "Food deleted successfully",
 "drinkDeletedSuccess": "Drink deleted successfully",
 "deleteFoodFailed": "Failed to delete food. Please try again.",
-"deleteDrinkFailed": "Failed to delete drink. Please try again."
+"deleteDrinkFailed": "Failed to delete drink. Please try again.",
+"authenticationError": "Authentication error: {error}",
+"@authenticationError": {
+  "description": "Shown when an authentication state listener reports an error.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+},
+"excelExportFailed": "Failed to generate Excel file.",
+"@excelExportFailed": {
+  "description": "Shown when exporting a business report to Excel fails."
+},
+"errorApplyingDiscount": "Error applying discount: {error}",
+"@errorApplyingDiscount": {
+  "description": "Shown when applying a product discount fails.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+},
+"errorRemovingDiscount": "Error removing discount: {error}",
+"@errorRemovingDiscount": {
+  "description": "Shown when removing a product discount fails.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+},
+"errorRemovingFromCampaign": "Error removing from campaign: {error}",
+"@errorRemovingFromCampaign": {
+  "description": "Shown when removing a product from a campaign fails.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+},
+"failedToUpdateProducts": "Failed to update products. Please try again.",
+"@failedToUpdateProducts": {
+  "description": "Shown when bulk updating collection products fails."
+},
+"ownerBadge": "OWNER",
+"@ownerBadge": {
+  "description": "Compact uppercase badge label for the shop owner in the user permissions list."
+},
+"failedToSendReportEmail": "Failed to send email. Please try again.",
+"@failedToSendReportEmail": {
+  "description": "Shown when emailing a generated business report fails."
+},
+"failedToLoadExistingReports": "Failed to load existing reports.",
+"@failedToLoadExistingReports": {
+  "description": "Shown when fetching the saved reports list for the shop fails."
+},
+"failedToGenerateReport": "Failed to generate report: {error}",
+"@failedToGenerateReport": {
+  "description": "Shown when the cloud function that generates a PDF report returns an error.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+},
+"cannotUpdateProductInvalidReference": "Cannot update product: invalid reference.",
+"@cannotUpdateProductInvalidReference": {
+  "description": "Shown when a product cannot be updated because its document reference is missing."
+},
+"errorCheckingProduct": "Error checking product: {error}",
+"@errorCheckingProduct": {
+  "description": "Shown when verifying a product's current state before a discount operation fails.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+},
+"allDiscountsRemoved": "All discounts removed successfully.",
+"@allDiscountsRemoved": {
+  "description": "Shown after a successful bulk discount removal."
+},
+"errorRemovingDiscounts": "Error removing discounts: {error}",
+"@errorRemovingDiscounts": {
+  "description": "Shown when a bulk discount removal operation fails.",
+  "placeholders": {
+    "error": { "type": "Object" }
+  }
+}
 }

@@ -118,6 +118,7 @@ class _SellerPanelCampaignScreenState extends State<SellerPanelCampaignScreen>
   Future<void> _loadProducts() async {
     final provider = Provider.of<SellerPanelProvider>(context, listen: false);
     await provider.fetchStockProducts(shopId: provider.selectedShop?.id);
+    if (!mounted) return;
     _updateFilteredProducts();
   }
 
@@ -129,6 +130,7 @@ class _SellerPanelCampaignScreenState extends State<SellerPanelCampaignScreen>
     final provider = Provider.of<SellerPanelProvider>(context, listen: false);
     await provider.fetchNextStockPage(shopId: provider.selectedShop?.id);
 
+    if (!mounted) return;
     setState(() => _isLoadingMore = false);
     _updateFilteredProducts();
   }

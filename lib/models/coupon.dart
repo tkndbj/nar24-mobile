@@ -21,6 +21,7 @@ class Coupon {
   final Timestamp? usedAt;
   final String? orderId;
   final bool isUsed;
+  final Timestamp? celebratedAt;
 
   Coupon({
     required this.id,
@@ -35,6 +36,7 @@ class Coupon {
     this.usedAt,
     this.orderId,
     required this.isUsed,
+    this.celebratedAt,
   });
 
   /// Check if coupon is currently valid for use
@@ -71,6 +73,7 @@ class Coupon {
       usedAt: json['usedAt'] as Timestamp?,
       orderId: json['orderId'] as String?,
       isUsed: json['isUsed'] as bool? ?? false,
+      celebratedAt: json['celebratedAt'] as Timestamp?,
     );
   }
 
@@ -87,6 +90,7 @@ class Coupon {
       'usedAt': usedAt,
       'orderId': orderId,
       'isUsed': isUsed,
+      'celebratedAt': celebratedAt,
     };
   }
 
@@ -103,6 +107,7 @@ class Coupon {
     Timestamp? usedAt,
     String? orderId,
     bool? isUsed,
+    Timestamp? celebratedAt,
   }) {
     return Coupon(
       id: id ?? this.id,
@@ -117,6 +122,7 @@ class Coupon {
       usedAt: usedAt ?? this.usedAt,
       orderId: orderId ?? this.orderId,
       isUsed: isUsed ?? this.isUsed,
+      celebratedAt: celebratedAt ?? this.celebratedAt,
     );
   }
 
