@@ -1482,6 +1482,119 @@ export const mirrorCourierLocations = onSchedule(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SCHEDULED: reconcile Redis `load` counter against Firestore truth.
+//
+// The dispatch filter at HARD_LOAD_CAP reads Redis `load`. That counter is
+// maintained by side effects across CF-54 (reserve/release) and CF-40
+// (assign/unassign/complete). Any path that bypasses CF-40 leaves it stale:
+// manual Firestore deletions, function timeouts mid-processAssign, direct
+// cargoUserId edits in the console. Drift accumulates over time and a
+// busy-looking courier with phantom load is silently skipped by every
+// dispatch.
+//
+// This sweep recomputes truth from Firestore (count of active orders per
+// courier) and writes it back to Redis. Bounded scope: only on-shift
+// couriers in `couriers:geo`, since off-shift couriers aren't dispatched
+// anyway.
+//
+// Race window: between count() and HSET, a fresh dispatch could reserve +1;
+// the HSET would clobber it. At low traffic + 10-min cadence this is
+// negligible, and the next dispatch tick re-reserves anyway. Worst case is
+// one extra rotation-window assign to that courier — survivable.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const reconcileCourierLoads = onSchedule(
+  {
+    schedule: 'every 10 minutes',
+    region: REGION,
+    memory: '512MiB',
+    timeoutSeconds: 180,
+    vpcConnector: 'nar24-vpc',
+    vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
+  },
+  async () => {
+    const db = admin.firestore();
+    const redis = getRedisClient();
+
+    let uids;
+    try {
+      uids = await redis.zrange('couriers:geo', 0, -1);
+    } catch (err) {
+      logError({
+        component: COMPONENT,
+        event: 'reconcile.zrange_failed',
+        reason: 'redis_error',
+        message: err.message,
+      });
+      return;
+    }
+
+    if (!uids.length) {
+      logInfo({ component: COMPONENT, event: 'reconcile.swept', scanned: 0, corrected: 0 });
+      return;
+    }
+
+    const corrections = [];
+    let scanned = 0;
+    const BATCH = 10;
+
+    for (let i = 0; i < uids.length; i += BATCH) {
+      const batch = uids.slice(i, i + BATCH);
+      await Promise.all(batch.map(async (uid) => {
+        scanned++;
+        try {
+          const [foodAgg, marketAgg, redisLoadStr] = await Promise.all([
+            db.collection('orders-food')
+              .where('cargoUserId', '==', uid)
+              .where('status', 'in', ['assigned', 'out_for_delivery'])
+              .count()
+              .get(),
+            db.collection('orders-market')
+              .where('cargoUserId', '==', uid)
+              .where('status', 'in', ['assigned', 'out_for_delivery'])
+              .count()
+              .get(),
+            redis.hget(`courier:${uid}`, 'load'),
+          ]);
+
+          const trueCount = foodAgg.data().count + marketAgg.data().count;
+          const redisLoad = redisLoadStr !== null ? parseInt(redisLoadStr, 10) : 0;
+
+          // Race-aware correction: a fresh reservation in flight will show
+          // redisLoad = trueCount + 1 between selectCandidate's HINCRBY and
+          // CF-40's courier_actions commit (typically <1s). Skip that delta
+          // to avoid clobbering live dispatches. Real drift is ≥ 2.
+          // Upward corrections (Redis too low) are always safe — leaving it
+          // low risks over-assignment, which is the worse failure mode.
+          const drift = redisLoad - trueCount;
+          const shouldCorrect = drift >= 2 || drift < 0;
+          if (shouldCorrect) {
+            await redis.hset(`courier:${uid}`, 'load', String(trueCount));
+            corrections.push({ courierId: uid, was: redisLoad, now: trueCount });
+          }
+        } catch (err) {
+          logWarn({
+            component: COMPONENT,
+            event: 'reconcile.courier_failed',
+            courierId: uid,
+            reason: 'exception',
+            message: err.message,
+          });
+        }
+      }));
+    }
+
+    logInfo({
+      component: COMPONENT,
+      event: 'reconcile.swept',
+      scanned,
+      corrected: corrections.length,
+      ...(corrections.length ? { corrections } : {}),
+    });
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SCHEDULED: fleet gauge — snapshots the dispatch pool size once a minute.
 //
 // Powers the ops dashboard's "couriers on-shift" chart and the alert

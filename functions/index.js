@@ -921,5 +921,6 @@ export {
   autoAssignRebalance,
   mirrorCourierLocations,
   logFleetMetrics,
+  reconcileCourierLoads,
 } from './54-auto-assignment/index.js';
 export { getAreaAnalytics } from './55-area-analytics/index.js';

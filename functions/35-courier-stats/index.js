@@ -51,7 +51,9 @@ async function aggregateDelivery(orderData, orderId, collection) {
   const isMarket = collection === 'orders-market';
 
   // Restaurant breakdown key: real restaurant ID for food, sentinel for market.
-  const restaurantKey  = isMarket ? '__market__' : (orderData.restaurantId || '__unknown__');
+  // Sentinels avoid leading-and-trailing `__` because Firestore reserves those
+  // for internal field names (writes with such keys reject the whole txn).
+  const restaurantKey  = isMarket ? 'market' : (orderData.restaurantId || 'unknown');
   const restaurantName = isMarket ?
     (orderData.marketName || 'Market') :
     (orderData.restaurantName || 'Restoran');
@@ -247,7 +249,7 @@ export const recalcCourierStats = onCall(
       e.orderIds.push(doc.id);
       e.lastDeliveryAt = o.updatedAt;
 
-      const rKey  = isMarket ? '__market__' : (o.restaurantId || '__unknown__');
+      const rKey  = isMarket ? 'market' : (o.restaurantId || 'unknown');
       const rName = isMarket ? (o.marketName || 'Market') : (o.restaurantName || 'Restoran');
       if (!e.restaurants[rKey]) {
         e.restaurants[rKey] = {
