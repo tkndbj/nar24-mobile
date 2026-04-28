@@ -273,12 +273,40 @@ async function fetchNextStops(db, courierIds, courierPositions) {
 //     (already reserved) and releases -1 on its own failure branches.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Atomic check-and-increment. Returns true if the reservation took effect,
+// false if the courier was already at HARD_LOAD_CAP. Lua executes inside
+// Redis as one op, so two concurrent dispatches racing on the same courier
+// can't both pass — the second sees the first's increment.
+//
+// Falls back to true on Redis errors (degraded mode): we'd rather risk a
+// transient over-assignment than fail dispatch entirely. The retry sweep +
+// CF-40's `processAssign` re-validation are the safety nets.
 async function reserveCourier(courierId, dispatchId) {
   try {
-    await getRedisClient().hincrby(`courier:${courierId}`, 'load', 1);
-    logInfo({ component: COMPONENT, event: 'reservation.reserved', courierId, dispatchId });
+    const result = await getRedisClient().eval(
+      `local key = KEYS[1]
+       local cap = tonumber(ARGV[1])
+       local cur = tonumber(redis.call('HGET', key, 'load') or '0')
+       if cur >= cap then return 0 end
+       redis.call('HINCRBY', key, 'load', 1)
+       return 1`,
+      1,
+      `courier:${courierId}`,
+      String(HARD_LOAD_CAP),
+    );
+    if (Number(result) === 1) {
+      logInfo({ component: COMPONENT, event: 'reservation.reserved', courierId, dispatchId });
+      return true;
+    }
+    logInfo({
+      component: COMPONENT,
+      event: 'reservation.cap_hit',
+      courierId,
+      dispatchId,
+      cap: HARD_LOAD_CAP,
+    });
+    return false;
   } catch (err) {
-    // Degraded mode: race still possible but dispatch itself continues.
     logWarn({
       component: COMPONENT,
       event: 'reservation.reserve_failed',
@@ -287,6 +315,7 @@ async function reserveCourier(courierId, dispatchId) {
       reason: 'redis_error',
       message: err.message,
     });
+    return true;
   }
 }
 
@@ -506,10 +535,11 @@ async function selectCandidate({ db, pickupLat, pickupLng, collection, excludeUi
       nextStopByUid = await fetchNextStops(db, loadedUids, courierPositions);
     }
 
-    let best = null;
+    const scored = [];
     for (const c of active) {
       // Soft cap: beyond SOFT_LOAD_REF, each extra order costs more (not
-      // forbidden — someone still has to take the order).
+      // forbidden — someone still has to take the order). Only relevant if
+      // HARD_LOAD_CAP is raised above SOFT_LOAD_REF.
       const loadPenalty =
         c.load <= SOFT_LOAD_REF ?
           c.load * W_LOAD :
@@ -530,9 +560,7 @@ async function selectCandidate({ db, pickupLat, pickupLng, collection, excludeUi
         c.recentAssigns * W_ROTATION +
         hDelta;
 
-      if (!best || score < best.score) {
-        best = { ...c, score, headingDelta: hDelta, hasHeading: !!nextStop };
-      }
+      scored.push({ ...c, score, headingDelta: hDelta, hasHeading: !!nextStop });
     }
 
     if (rejects.length) {
@@ -547,12 +575,25 @@ async function selectCandidate({ db, pickupLat, pickupLng, collection, excludeUi
       });
     }
 
-    if (best) {
-      // Pre-reserve load on the winner so concurrent dispatches route elsewhere.
-      // Caller MUST releaseReservation on any failure between here and the
-      // courier_actions doc being written.
-      await reserveCourier(best.uid, dispatchId);
-      return best;
+    // Try to reserve in score order. Atomic reserveCourier returns false if
+    // the courier hit HARD_LOAD_CAP between scoring and our turn — common
+    // under burst load when many parallel dispatches race for the closest
+    // courier. Fall through to the next candidate; only after all in this
+    // tier are saturated do we expand to the next radius.
+    scored.sort((a, b) => a.score - b.score);
+    for (const candidate of scored) {
+      const reserved = await reserveCourier(candidate.uid, dispatchId);
+      if (reserved) return candidate;
+    }
+    if (scored.length > 0) {
+      logInfo({
+        component: COMPONENT,
+        event: 'select.all_candidates_saturated',
+        dispatchId,
+        collection,
+        radius,
+        candidateCount: scored.length,
+      });
     }
   }
 
