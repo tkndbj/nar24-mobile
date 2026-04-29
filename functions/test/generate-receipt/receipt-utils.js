@@ -267,7 +267,7 @@ function calculateTotals(data) {
 
 
 function formatPrice(amount, currency) {
-  return `${(amount || 0).toFixed(0)} ${currency}`;
+  return `${(amount || 0).toFixed(2)} ${currency}`;
 }
 
 

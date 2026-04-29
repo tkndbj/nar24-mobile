@@ -583,7 +583,7 @@ function extractUserSellerAddress(userData) {
 // ============================================================================
 
 function formatPaymentAmount(amount) {
-  return Math.round(parseFloat(amount)).toString();
+  return parseFloat(amount).toFixed(2);
 }
 
 // ============================================================================

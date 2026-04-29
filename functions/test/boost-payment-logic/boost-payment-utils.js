@@ -114,7 +114,7 @@ function calculatePricePerItem(boostDuration, pricePerProduct = BASE_PRICE_PER_P
 }
 
 function formatAmount(amount) {
-  return Math.round(amount).toString();
+  return Number(amount).toFixed(2);
 }
 
 // ============================================================================

@@ -373,7 +373,7 @@ function buildShopWelcomeMailDocument(email, shopId, shopName) {
 
 function formatPrice(amount, currency = 'TL') {
   if (amount === null || amount === undefined) return `0 ${currency}`;
-  return `${amount.toFixed(0)} ${currency}`;
+  return `${amount.toFixed(2)} ${currency}`;
 }
 
 // ============================================================================

@@ -1018,7 +1018,7 @@ await checkBoostPaymentRateLimit(db, userId);
         const orderNumber     = `BOOST-${Date.now()}-${request.auth.uid.substring(0, 8)}`;
         const rnd             = Date.now().toString();
         const totalPrice      = items.length * boostDuration * 1.0;
-        const formattedAmount = Math.round(totalPrice).toString();
+        const formattedAmount = totalPrice.toFixed(2);
         const baseUrl         = `https://europe-west3-emlak-mobile-app.cloudfunctions.net`;
         const okUrl           = `${baseUrl}/boostPaymentCallback`;
         const failUrl         = okUrl;

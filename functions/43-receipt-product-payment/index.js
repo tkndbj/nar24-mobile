@@ -568,8 +568,8 @@ export const generateReceiptBackground = onDocumentCreated(
         doc.fontSize(9)
           .text(adTypeLabel, 55, yPosition, {width: 200})
           .text(durationLabel, 260, yPosition, {width: 100})
-          .text(`${data.itemsSubtotal.toFixed(0)} ${data.currency}`, 365, yPosition, {width: 70, align: 'right'})
-          .text(`${data.itemsSubtotal.toFixed(0)} ${data.currency}`, 480, yPosition, {width: 65, align: 'right'});
+          .text(`${data.itemsSubtotal.toFixed(2)} ${data.currency}`, 365, yPosition, {width: 70, align: 'right'})
+          .text(`${data.itemsSubtotal.toFixed(2)} ${data.currency}`, 480, yPosition, {width: 65, align: 'right'});
       
         yPosition += 30;
       } else if (data.receiptType === 'boost' && data.boostData) {
@@ -604,8 +604,8 @@ export const generateReceiptBackground = onDocumentCreated(
           doc.fontSize(9)
             .text(item.productName || 'Boost Item', 55, yPosition, {width: 200})
             .text(`${data.boostData.boostDuration} ${lang === 'tr' ? 'dakika' : lang === 'ru' ? 'минут' : 'minutes'}`, 260, yPosition, {width: 100})
-            .text(`${item.unitPrice.toFixed(0)} ${data.currency}`, 365, yPosition, {width: 70, align: 'right'})
-            .text(`${item.totalPrice.toFixed(0)} ${data.currency}`, 480, yPosition, {width: 65, align: 'right'});
+            .text(`${item.unitPrice.toFixed(2)} ${data.currency}`, 365, yPosition, {width: 70, align: 'right'})
+            .text(`${item.totalPrice.toFixed(2)} ${data.currency}`, 480, yPosition, {width: 65, align: 'right'});
           
           yPosition += 20;
         }
@@ -696,8 +696,8 @@ export const generateReceiptBackground = onDocumentCreated(
             doc.fontSize(9)
               .fillColor('#000')
               .text(item.quantity.toString(), 365, yPosition, {width: 35, align: 'center'})
-              .text(`${item.unitPrice.toFixed(0)} ${data.currency}`, 405, yPosition, {width: 70, align: 'right'})
-              .text(`${item.totalPrice.toFixed(0)} ${data.currency}`, 480, yPosition, {width: 65, align: 'right'});
+              .text(`${item.unitPrice.toFixed(2)} ${data.currency}`, 405, yPosition, {width: 70, align: 'right'})
+              .text(`${item.totalPrice.toFixed(2)} ${data.currency}`, 480, yPosition, {width: 65, align: 'right'});
       
             yPosition += 20;
           }
@@ -734,7 +734,7 @@ export const generateReceiptBackground = onDocumentCreated(
         .fillColor('#666')
         .text(`${t.subtotal}:`, 390, yPosition)
         .fillColor('#333')
-        .text(`${subtotal.toFixed(0)} ${data.currency}`, 460, yPosition, {width: 80, align: 'right'});
+        .text(`${subtotal.toFixed(2)} ${data.currency}`, 460, yPosition, {width: 80, align: 'right'});
   
       yPosition += 20;
   
@@ -744,7 +744,7 @@ export const generateReceiptBackground = onDocumentCreated(
           .fillColor('#666')
           .text(`${t.couponDiscount}:`, 390, yPosition)
           .fillColor('#00A86B')
-          .text(`-${couponDiscount.toFixed(0)} ${data.currency}`, 460, yPosition, {width: 80, align: 'right'});
+          .text(`-${couponDiscount.toFixed(2)} ${data.currency}`, 460, yPosition, {width: 80, align: 'right'});
       
         yPosition += 20;
       }
@@ -760,10 +760,10 @@ export const generateReceiptBackground = onDocumentCreated(
           
           // Show original price with strikethrough effect (gray)
           doc.fillColor('#999')
-            .text(`${originalDeliveryPrice.toFixed(0)}`, 460, yPosition, {width: 40, align: 'right'});
+            .text(`${originalDeliveryPrice.toFixed(2)}`, 460, yPosition, {width: 40, align: 'right'});
           
           // Draw strikethrough line
-          const textWidth = doc.widthOfString(`${originalDeliveryPrice.toFixed(0)}`);
+          const textWidth = doc.widthOfString(`${originalDeliveryPrice.toFixed(2)}`);
           doc.moveTo(500 - textWidth, yPosition + 5)
             .lineTo(502, yPosition + 5)
             .strokeColor('#999')
@@ -784,7 +784,7 @@ export const generateReceiptBackground = onDocumentCreated(
           yPosition += 20;
         } else {
           // Normal delivery display (no free shipping benefit)
-          const deliveryText = deliveryPrice === 0 ? t.free : `${deliveryPrice.toFixed(0)} ${data.currency}`;
+          const deliveryText = deliveryPrice === 0 ? t.free : `${deliveryPrice.toFixed(2)} ${data.currency}`;
           const deliveryColor = deliveryPrice === 0 ? '#00A86B' : '#333';
       
           doc.font(titleFont)
@@ -805,7 +805,7 @@ export const generateReceiptBackground = onDocumentCreated(
       .fillColor('#666')
       .text(`${t.tax}:`, 390, yPosition)
       .fillColor('#333')
-      .text(`${data.taxAmount.toFixed(0)} ${data.currency}`, 460, yPosition, {width: 80, align: 'right'});
+      .text(`${data.taxAmount.toFixed(2)} ${data.currency}`, 460, yPosition, {width: 80, align: 'right'});
   
     yPosition += 20;
   }
@@ -832,7 +832,7 @@ export const generateReceiptBackground = onDocumentCreated(
         .text(`${t.total}:`, 390, yPosition)
         .fillColor('#00A86B')
         .fontSize(16)
-        .text(`${grandTotal.toFixed(0)} ${data.currency}`, 460, yPosition, {width: 80, align: 'right'});
+        .text(`${grandTotal.toFixed(2)} ${data.currency}`, 460, yPosition, {width: 80, align: 'right'});
   
       // Footer
       doc.fontSize(8)

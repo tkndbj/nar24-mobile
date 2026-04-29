@@ -509,15 +509,26 @@ export const approveArchivedProductEdit = onCall({
   }
 
   const userData = userDoc.data();
-  const {applicationId} = request.data;
+  const {applicationId, applicationCollection: rawAppCollection} = request.data;
 
   // Enhanced validation
   if (!applicationId || typeof applicationId !== 'string') {
     throw new HttpsError('invalid-argument', 'Valid Application ID is required');
   }
 
+  // applicationCollection tells us where to find the application doc.
+  // Default to the legacy shop collection so older clients keep working.
+  const validAppCollections = ['product_edit_applications', 'vitrin_edit_product_applications'];
+  const applicationCollection = rawAppCollection || 'product_edit_applications';
+  if (!validAppCollections.includes(applicationCollection)) {
+    throw new HttpsError(
+      'invalid-argument',
+      `applicationCollection must be one of ${validAppCollections.join(', ')}`,
+    );
+  }
+
   try {
-    const applicationRef = db.collection('product_edit_applications').doc(applicationId);
+    const applicationRef = db.collection(applicationCollection).doc(applicationId);
 
     // Use transaction for atomicity
     const result = await db.runTransaction(async (transaction) => {
@@ -532,10 +543,12 @@ export const approveArchivedProductEdit = onCall({
       // Idempotency check - already approved?
       if (applicationData.status === 'approved') {
         console.log(`Application ${applicationId} already approved, skipping`);
+        const hasShopAlready = typeof applicationData.shopId === 'string' && applicationData.shopId.trim() !== '';
         return {
           alreadyProcessed: true,
           productId: applicationData.originalProductId,
-          sourceCollection: applicationData.sourceCollection || 'paused_shop_products',
+          sourceCollection: hasShopAlready ? 'paused_shop_products' : 'paused_products',
+          destCollection: hasShopAlready ? 'shop_products' : 'products',
         };
       }
 
@@ -548,10 +561,28 @@ export const approveArchivedProductEdit = onCall({
         throw new HttpsError('invalid-argument', 'This function only handles archived product updates');
       }
 
-      const productId = applicationData.originalProductId;
-      const sourceCollection = applicationData.sourceCollection || 'paused_shop_products';
-      const destCollection = sourceCollection === 'paused_shop_products' ? 'shop_products' : 'products';
+      // ── Authoritative routing: derive product source/dest from the
+      //    application's shopId, not from the client-supplied
+      //    sourceCollection field. Cross-check applicationCollection so a
+      //    misrouted application can't silently move the wrong product.
+      const hasShop = typeof applicationData.shopId === 'string' && applicationData.shopId.trim() !== '';
+      const expectedAppCollection = hasShop ? 'product_edit_applications' : 'vitrin_edit_product_applications';
+      const sourceCollection = hasShop ? 'paused_shop_products' : 'paused_products';
+      const destCollection = hasShop ? 'shop_products' : 'products';
 
+      if (applicationCollection !== expectedAppCollection) {
+        console.error(
+          `Application/shop mismatch on archived approve for ${applicationId}: ` +
+          `client sent applicationCollection="${applicationCollection}" but appData.shopId=${JSON.stringify(applicationData.shopId ?? null)} ` +
+          `implies "${expectedAppCollection}". Refusing to approve.`,
+        );
+        throw new HttpsError(
+          'failed-precondition',
+          'Application is in the wrong collection for its shop status. Aborting to prevent data corruption.',
+        );
+      }
+
+      const productId = applicationData.originalProductId;
       const sourceRef = db.collection(sourceCollection).doc(productId);
       const destRef = db.collection(destCollection).doc(productId);
 
@@ -673,7 +704,7 @@ export const approveArchivedProductEdit = onCall({
         productId: result.productId,
         applicationId: applicationId,
         sourceCollection: result.sourceCollection,
-        destCollection: result.sourceCollection === 'paused_shop_products' ? 'shop_products' : 'products',
+        destCollection: result.destCollection,
         subcollectionDocsMoved: 0,
         message: 'Application was already approved (idempotent)',
       };
@@ -822,7 +853,6 @@ export const approveProductApplication = onCall({
   const adminData = adminDoc.data();
 
   try {
-    const isVitrin = sourceCollection === 'vitrin_product_applications';
     const applicationRef = db.collection(sourceCollection).doc(applicationId);
 
     // ── Transaction: read → validate → write ──
@@ -843,10 +873,28 @@ export const approveProductApplication = onCall({
         throw new HttpsError('failed-precondition', `Application is already ${appData.status}`);
       }
 
-      // ── Determine IDs and target collection ──
+      // ── Authoritative routing: derive target from the document, not the
+      //    client. Cross-check the client-supplied source so a mis-routed
+      //    submission can never silently land in the wrong collection.
+      const hasShop = typeof appData.shopId === 'string' && appData.shopId.trim() !== '';
+      const expectedSource = hasShop ? 'product_applications' : 'vitrin_product_applications';
+      const targetCollection = hasShop ? 'shop_products' : 'products';
+
+      if (sourceCollection !== expectedSource) {
+        console.error(
+          `Source/shop mismatch on approve for ${applicationId}: ` +
+          `client sent sourceCollection="${sourceCollection}" but appData.shopId=${JSON.stringify(appData.shopId ?? null)} ` +
+          `implies "${expectedSource}". Refusing to approve.`,
+        );
+        throw new HttpsError(
+          'failed-precondition',
+          'Application is in the wrong source collection for its shop status. Aborting to prevent data corruption.',
+        );
+      }
+
+      // ── Determine IDs ──
       const ilanNo = appData.ilan_no || appData.ilanNo || applicationSnap.id;
       const newDocId = ilanNo && ilanNo.trim() !== '' ? ilanNo : applicationSnap.id;
-      const targetCollection = isVitrin ? 'products' : 'shop_products';
 
       // ── Check duplicate ──
       const productRef = db.collection(targetCollection).doc(newDocId);
@@ -930,7 +978,7 @@ export const approveProductApplication = onCall({
     }
 
     // ── Post-transaction: Category index (shop products only, not vitrin) ──
-    if (result.shopId && result.shopId.trim() !== '' && !isVitrin) {
+    if (result.shopId && result.shopId.trim() !== '' && result.targetCollection === 'shop_products') {
       await updateCategoryShopsIndex(
         db,
         result.shopId,
@@ -1024,6 +1072,23 @@ export const rejectProductApplication = onCall({
       }
       if (appData.status && appData.status !== 'pending') {
         throw new HttpsError('failed-precondition', `Application is already ${appData.status}`);
+      }
+
+      // Cross-check source against the document's shop status. Reject can't
+      // corrupt downstream data, but a mismatch indicates a client bug we
+      // want to surface instead of silently flipping status on the wrong row.
+      const hasShop = typeof appData.shopId === 'string' && appData.shopId.trim() !== '';
+      const expectedSource = hasShop ? 'product_applications' : 'vitrin_product_applications';
+      if (sourceCollection !== expectedSource) {
+        console.error(
+          `Source/shop mismatch on reject for ${applicationId}: ` +
+          `client sent sourceCollection="${sourceCollection}" but appData.shopId=${JSON.stringify(appData.shopId ?? null)} ` +
+          `implies "${expectedSource}".`,
+        );
+        throw new HttpsError(
+          'failed-precondition',
+          'Application is in the wrong source collection for its shop status.',
+        );
       }
 
       transaction.update(applicationRef, {

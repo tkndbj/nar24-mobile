@@ -114,7 +114,14 @@ export function sanitizeString(value, fallback = '') {
       errors.push('Quantity must be greater than 0.');
     }
   
-    if (!data.imageUrls || !Array.isArray(data.imageUrls) || data.imageUrls.length === 0) {
+    // Post-Cloudinary refactor: clients send `imageStoragePaths` (Firebase
+    // Storage paths), not `imageUrls`. Accept either for backward compat
+    // with any older client that still sends the legacy field.
+    const hasStoragePaths =
+      Array.isArray(data.imageStoragePaths) && data.imageStoragePaths.length > 0;
+    const hasImageUrls =
+      Array.isArray(data.imageUrls) && data.imageUrls.length > 0;
+    if (!hasStoragePaths && !hasImageUrls) {
       errors.push('At least one product image is required.');
     }
   

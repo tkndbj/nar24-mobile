@@ -4843,7 +4843,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get askToSellerNoSellerError => 'Satıcı bilgileri yüklenemedi.';
 
   @override
-  String get askToSellerInfoStart => 'Siparişinle ilgili sorularını ';
+  String get askToSellerInfoStart => 'Sipariş durumu ile ilgili bilgiyi ';
 
   @override
   String get confirmDeleteMessage =>
@@ -6985,6 +6985,11 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get noFavoritesToShare => 'Paylaşılacak favori yok';
+
+  @override
+  String tooManyFavoritesToShare(int max) {
+    return 'Bu sepette paylaşılamayacak kadar çok ürün var. Lütfen ürün sayısını en fazla $max olacak şekilde azaltın.';
+  }
 
   @override
   String get favoritesShared => 'Favoriler başarıyla paylaşıldı!';

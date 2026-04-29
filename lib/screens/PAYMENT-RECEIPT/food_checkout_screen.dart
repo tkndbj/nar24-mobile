@@ -764,7 +764,7 @@ class _CartItemRow extends StatelessWidget {
                 onIncrease: () =>
                     cart.updateQuantity(item.foodId, item.quantity + 1)),
             const Spacer(),
-            Text(loc.foodPriceTL(lineTotal.toStringAsFixed(0)),
+            Text(loc.foodPriceTL(lineTotal.toStringAsFixed(2)),
                 style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
@@ -985,7 +985,7 @@ class _StickyBottomBar extends StatelessWidget {
                 style: TextStyle(
                     fontSize: 11,
                     color: isDark ? Colors.grey[500] : Colors.grey[700])),
-            Text(loc.foodPriceTL(subtotal.toStringAsFixed(0)),
+            Text(loc.foodPriceTL(subtotal.toStringAsFixed(2)),
                 style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,

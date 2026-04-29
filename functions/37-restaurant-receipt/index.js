@@ -457,7 +457,7 @@ function renderReceiptContent(doc, data, qrImageBuffer) {
     const lineTotal = item.itemTotal ?? unitPrice * item.quantity;
 
     const itemLabel  = `${item.quantity}x ${item.name}`;
-    const priceLabel = `${lineTotal.toFixed(0)} ${data.currency}`;
+    const priceLabel = `${lineTotal.toFixed(2)} ${data.currency}`;
 
     const lW = CW * 0.68;
     const rW = CW * 0.32;
@@ -495,8 +495,8 @@ function renderReceiptContent(doc, data, qrImageBuffer) {
 
   const deliveryFee = data.deliveryFee || 0;
   if (deliveryFee > 0) {
-    y = twoCol('Ara Toplam',     `${(data.subtotal || 0).toFixed(0)} ${data.currency}`, y);
-    y = twoCol('Teslimat Ucreti', `${deliveryFee.toFixed(0)} ${data.currency}`,          y);
+    y = twoCol('Ara Toplam',     `${(data.subtotal || 0).toFixed(2)} ${data.currency}`, y);
+    y = twoCol('Teslimat Ucreti', `${deliveryFee.toFixed(2)} ${data.currency}`,          y);
     y = dashed(y);
     y += 2;
   }
@@ -507,7 +507,7 @@ function renderReceiptContent(doc, data, qrImageBuffer) {
     .text('TOPLAM', M + 4, y + 3, { width: CW * 0.5 });
   doc.font('B').fontSize(13).fillColor('#00955a')
     .text(
-      `${(data.totalPrice || 0).toFixed(0)} ${data.currency}`,
+      `${(data.totalPrice || 0).toFixed(2)} ${data.currency}`,
       M + CW * 0.5, y + 2,
       { width: CW * 0.5, align: 'right' },
     );

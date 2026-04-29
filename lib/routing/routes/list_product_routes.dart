@@ -54,9 +54,20 @@ class ListProductRoutes {
         path: '/list_product_screen',
         name: 'list-product',
         pageBuilder: (context, state) {
+          // Personal route never carries a shopId, but it CAN carry an
+          // existingProduct + isFromArchivedCollection when editing a
+          // user-owned archived product (see archived_products_screen.dart).
+          final extra = state.extra as Map<String, dynamic>?;
+          final existingProduct = extra?['existingProduct'] as Product?;
+          final isFromArchivedCollection =
+              extra?['isFromArchivedCollection'] as bool? ?? false;
+
           return CustomTransitionPage(
             key: state.pageKey,
-            child: const ListProductScreen(),
+            child: ListProductScreen(
+              existingProduct: existingProduct,
+              isFromArchivedCollection: isFromArchivedCollection,
+            ),
             transitionsBuilder: _slideTransition,
             transitionDuration: const Duration(milliseconds: 200),
           );

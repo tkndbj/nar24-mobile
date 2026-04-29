@@ -506,7 +506,7 @@ class _OrderCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 5),
                         Text(
-                          '${order.totalPrice.toStringAsFixed(0)} ${order.currency}',
+                          '${order.totalPrice.toStringAsFixed(2)} ${order.currency}',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,

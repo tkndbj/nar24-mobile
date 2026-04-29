@@ -40,9 +40,6 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   final ScrollController _scrollController = ScrollController();
   late AnimationController _bottomSheetController;
   late Animation<Offset> _bottomSheetAnimation;
-  // Search
-  String _searchQuery = '';
-  Timer? _searchDebouncer;
 
   // Loading timeout
   Timer? _loadingTimeoutTimer;
@@ -53,6 +50,15 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
   // Provider reference (wired once, like cart screen)
   FavoriteProvider? _favoriteProvider;
+
+  // One-shot guard: didChangeDependencies fires on every inherited-widget
+  // change (theme, locale, MediaQuery, parent Provider rebuild). We only
+  // want the wire-up + initial load to run on first build.
+  //
+  // Tab re-visits still trigger a fresh load because MarketScreen disposes
+  // and remounts FavoritesScreen when the user navigates away — a new State
+  // is created, and this flag starts at false again.
+  bool _didInitialLoad = false;
 
   @override
   void initState() {
@@ -68,16 +74,13 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    final provider = Provider.of<FavoriteProvider>(context, listen: false);
+    if (_didInitialLoad) return;
+    _didInitialLoad = true;
 
-    if (_favoriteProvider == null) {
-      // First creation: wire up listener
-      _favoriteProvider = provider;
-      _favoriteProvider!.paginatedFavoritesNotifier.addListener(_handleFavoritesChanged);
-    }
+    _favoriteProvider = Provider.of<FavoriteProvider>(context, listen: false);
+    _favoriteProvider!.paginatedFavoritesNotifier
+        .addListener(_handleFavoritesChanged);
 
-    // Always reload on every screen visit (widget creation OR tab revisit)
-    // loadFavorites() resets state + fetches first page in one call
     _isInitialLoading = true;
     _startLoadingTimeout();
     _loadFirstPage();
@@ -295,79 +298,129 @@ Future<void> _resetPaginationAndLoad() async {
 
     final List<Map<String, dynamic>> results = [];
     final Map<String, Map<String, dynamic>> favoriteDetailsByProductId = {};
+    final Map<String, DocumentReference> favoriteRefByProductId = {};
+
+    // Bucket product IDs by the sourceCollection persisted on the favorite doc.
+    // Legacy favorites (missing the field) go into the unknown bucket and fall
+    // back to a dual-collection fetch + self-heal.
+    final productsBucket = <String>[];
+    final shopProductsBucket = <String>[];
+    final unknownBucket = <String>[];
 
     for (final doc in favoriteDocs) {
       final data = doc.data() as Map<String, dynamic>?;
-      if (data != null) {
-        final productId = data['productId'] as String?;
-        if (productId != null) {
-          favoriteDetailsByProductId[productId] =
-              Map<String, dynamic>.from(data)..remove('productId');
+      if (data == null) continue;
+      final productId = data['productId'] as String?;
+      if (productId == null) continue;
+
+      favoriteDetailsByProductId[productId] =
+          Map<String, dynamic>.from(data)..remove('productId');
+      favoriteRefByProductId[productId] = doc.reference;
+
+      final src = data['sourceCollection'] as String?;
+      if (src == 'products') {
+        productsBucket.add(productId);
+      } else if (src == 'shop_products') {
+        shopProductsBucket.add(productId);
+      } else {
+        unknownBucket.add(productId);
+      }
+    }
+
+    // Helper: chunk a list into groups of 10 (Firestore whereIn limit)
+    Iterable<List<String>> chunks(List<String> ids) sync* {
+      for (var i = 0; i < ids.length; i += 10) {
+        yield ids.skip(i).take(10).toList();
+      }
+    }
+
+    void addResultsFromSnapshot(QuerySnapshot snapshot) {
+      for (final doc in snapshot.docs) {
+        try {
+          final product = Product.fromDocument(doc);
+          final attributes = favoriteDetailsByProductId[doc.id] ?? {};
+          results.add({
+            'product': product,
+            'attributes': attributes,
+            'productId': doc.id,
+          });
+        } catch (e) {
+          debugPrint('Error parsing product ${doc.id}: $e');
         }
       }
     }
 
-    // Chunk IDs for Firestore 'in' queries (max 10)
-    for (var i = 0; i < productIds.length; i += 10) {
-      final chunk = productIds.skip(i).take(10).toList();
-
-      final futures = await Future.wait([
-        _firestore
-            .collection('products')
-            .where(FieldPath.documentId, whereIn: chunk)
-            .get(),
-        _firestore
-            .collection('shop_products')
-            .where(FieldPath.documentId, whereIn: chunk)
-            .get(),
-      ]);
+    // Targeted single-collection queries for known buckets
+    final futures = <Future<QuerySnapshot>>[];
+    for (final chunk in chunks(productsBucket)) {
+      futures.add(_firestore
+          .collection('products')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get());
+    }
+    for (final chunk in chunks(shopProductsBucket)) {
+      futures.add(_firestore
+          .collection('shop_products')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get());
+    }
+    if (futures.isNotEmpty) {
+      final snapshots = await Future.wait(futures);
+      var totalReads = 0;
+      for (final snap in snapshots) {
+        totalReads += snap.docs.length;
+        addResultsFromSnapshot(snap);
+      }
       FirestoreReadTracker.instance.trackRead(
-          'favorite_product_screen',
-          'hydrate favorites batch (${chunk.length})',
-          futures[0].docs.length + futures[1].docs.length);
+        'favorite_product_screen',
+        'hydrate favorites (targeted: products=${productsBucket.length}, shop_products=${shopProductsBucket.length})',
+        totalReads,
+      );
+    }
 
-      for (final snapshot in futures) {
-        for (final doc in snapshot.docs) {
-          try {
-            final product = Product.fromDocument(doc);
-            final attributes = favoriteDetailsByProductId[doc.id] ?? {};
-            results.add({
-              'product': product,
-              'attributes': attributes,
-              'productId': doc.id,
-            });
-          } catch (e) {
-            debugPrint('Error parsing product ${doc.id}: $e');
+    // Legacy fallback: dual-collection fetch for favorites without sourceCollection.
+    // We backfill each one so the next read is single-collection.
+    if (unknownBucket.isNotEmpty) {
+      for (final chunk in chunks(unknownBucket)) {
+        final dualResults = await Future.wait([
+          _firestore
+              .collection('products')
+              .where(FieldPath.documentId, whereIn: chunk)
+              .get(),
+          _firestore
+              .collection('shop_products')
+              .where(FieldPath.documentId, whereIn: chunk)
+              .get(),
+        ]);
+        FirestoreReadTracker.instance.trackRead(
+          'favorite_product_screen',
+          'hydrate favorites legacy (${chunk.length})',
+          dualResults[0].docs.length + dualResults[1].docs.length,
+        );
+
+        for (final snap in dualResults) {
+          for (final doc in snap.docs) {
+            // Self-heal: backfill sourceCollection (+ shopId if available) on
+            // the favorite doc so this product's next read is single-collection.
+            final favRef = favoriteRefByProductId[doc.id];
+            if (favRef != null) {
+              final resolvedCollection = doc.reference.parent.id;
+              final shopId =
+                  (doc.data() as Map<String, dynamic>?)?['shopId'] as String?;
+              favRef.update({
+                'sourceCollection': resolvedCollection,
+                if (shopId != null) 'shopId': shopId,
+              }).catchError((e) {
+                debugPrint('⚠️ Favorite backfill failed (non-critical): $e');
+              });
+            }
           }
+          addResultsFromSnapshot(snap);
         }
       }
     }
 
     return results;
-  }
-
-  // ========================================================================
-  // SEARCH
-  // ========================================================================
-
-  void _onSearchChanged(String query) {
-    _searchDebouncer?.cancel();
-    _searchDebouncer = Timer(const Duration(milliseconds: 300), () {
-      if (mounted) {
-        setState(() => _searchQuery = query.toLowerCase());
-      }
-    });
-  }
-
-  List<Map<String, dynamic>> _getFilteredItems(
-      List<Map<String, dynamic>> allItems) {
-    if (_searchQuery.isEmpty) return allItems;
-
-    return allItems.where((item) {
-      final product = item['product'] as Product;
-      return product.productName.toLowerCase().contains(_searchQuery) ||
-          (product.brandModel?.toLowerCase() ?? '').contains(_searchQuery);
-    }).toList();
   }
 
   // ========================================================================
@@ -408,28 +461,47 @@ Future<void> _addSelectedToCart() async {
       return;
     }
 
-    // ✅ STEP 1: Fetch FRESH product data (parallel search)
-    final results = await Future.wait([
-      FirebaseFirestore.instance
-          .collection('shop_products')
-          .doc(cachedProduct.id)
-          .get(),
-      FirebaseFirestore.instance
-          .collection('products')
-          .doc(cachedProduct.id)
-          .get(),
-    ]);
-    FirestoreReadTracker.instance.trackRead(
-        'favorite_product_screen', 'fresh product fetch before add-to-cart', 2);
-
-    final shopProductDoc = results[0];
-    final productDoc = results[1];
-
+    // ✅ STEP 1: Fetch FRESH product data — use the sourceCollection persisted
+    // on the favorite doc to do a single targeted read. Fall back to a
+    // parallel dual-fetch only for legacy favorites missing the field.
+    final cachedSourceCollection = attrs['sourceCollection'] as String?;
     DocumentSnapshot? freshProductDoc;
-    if (shopProductDoc.exists) {
-      freshProductDoc = shopProductDoc;
-    } else if (productDoc.exists) {
-      freshProductDoc = productDoc;
+
+    if (cachedSourceCollection == 'products' ||
+        cachedSourceCollection == 'shop_products') {
+      final doc = await FirebaseFirestore.instance
+          .collection(cachedSourceCollection!)
+          .doc(cachedProduct.id)
+          .get();
+      FirestoreReadTracker.instance.trackRead(
+          'favorite_product_screen',
+          'fresh product fetch before add-to-cart (targeted: $cachedSourceCollection)',
+          1);
+      if (doc.exists) freshProductDoc = doc;
+    } else {
+      final results = await Future.wait([
+        FirebaseFirestore.instance
+            .collection('shop_products')
+            .doc(cachedProduct.id)
+            .get(),
+        FirebaseFirestore.instance
+            .collection('products')
+            .doc(cachedProduct.id)
+            .get(),
+      ]);
+      FirestoreReadTracker.instance.trackRead(
+          'favorite_product_screen',
+          'fresh product fetch before add-to-cart (legacy dual)',
+          2);
+
+      final shopProductDoc = results[0];
+      final productDoc = results[1];
+
+      if (shopProductDoc.exists) {
+        freshProductDoc = shopProductDoc;
+      } else if (productDoc.exists) {
+        freshProductDoc = productDoc;
+      }
     }
 
     if (freshProductDoc == null || !freshProductDoc.exists) {
@@ -845,6 +917,16 @@ Future<void> _showTransferBasketDialog() async {
       if (!mounted) return;
       Navigator.pop(context);
 
+      // Specific error: basket exceeds the per-share item cap
+      if (shareUrl != null &&
+          shareUrl.startsWith(FavoritesSharingService.tooManyItemsErrorPrefix)) {
+        _showWarningSnackbar(
+          l10n.tooManyFavoritesToShare(
+              FavoritesSharingService.maxItemsPerShare),
+        );
+        return;
+      }
+
       if (shareUrl != null && shareUrl.trim().isNotEmpty) {
         final shareId = shareUrl.split('/').last;
         final sharedData =
@@ -1176,33 +1258,6 @@ Future<void> _showTransferBasketDialog() async {
     );
   }
 
-  Widget _buildSearchBar(AppLocalizations l10n) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: TextField(
-        onChanged: _onSearchChanged,
-        decoration: InputDecoration(
-          hintText: l10n.searchFavorites ?? 'Search favorites...',
-          prefixIcon: const Icon(Icons.search),
-          suffixIcon: _searchQuery.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () => _onSearchChanged(''),
-                )
-              : null,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          filled: true,
-          fillColor: Colors.grey[100],
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        ),
-      ),
-    );
-  }
-
   Widget _buildSelectableFavoriteItem(
     Map<String, dynamic> favoriteItem, int index) {
   final product = favoriteItem['product'] as Product;
@@ -1288,7 +1343,7 @@ Future<void> _showTransferBasketDialog() async {
   return ValueListenableBuilder<List<Map<String, dynamic>>>(
     valueListenable: favoriteProvider.paginatedFavoritesNotifier,
     builder: (context, allItems, _) {
-      final displayedItems = _getFilteredItems(allItems);
+      final displayedItems = allItems;
 
       // ✅ FIX: Show shimmer only if loading AND we haven't determined the list is empty yet
       // Once we know the list is empty (allItems.isEmpty and !hasMoreData), show empty state immediately
@@ -1528,16 +1583,6 @@ Widget build(BuildContext context) {
               }
             },
           ),
-          ValueListenableBuilder<List<Map<String, dynamic>>>(
-            valueListenable:
-                Provider.of<FavoriteProvider>(context, listen: false)
-                    .paginatedFavoritesNotifier,
-            builder: (context, items, child) {
-              return items.length > 20
-                  ? _buildSearchBar(l10n)
-                  : const SizedBox.shrink();
-            },
-          ),
           Expanded(child: _buildBody(context, l10n)),
         ],
       ),
@@ -1577,7 +1622,6 @@ Widget build(BuildContext context) {
     WidgetsBinding.instance.removeObserver(this);
     _authSubscription?.cancel();
     _scrollController.dispose();
-    _searchDebouncer?.cancel();
     _loadingTimeoutTimer?.cancel();
     _bottomSheetController.dispose();
     SystemChrome.setPreferredOrientations([

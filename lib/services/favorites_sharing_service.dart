@@ -10,6 +10,18 @@ class FavoritesSharingService {
   static const String baseUrl = 'https://app.nar24.com/shared-favorites';
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  /// Maximum number of items that can be packed into a single share document.
+  ///
+  /// Firestore caps a single document at 1 MiB. With typical favorite payloads
+  /// (~600 bytes each including attributes), 250 items leaves comfortable
+  /// headroom — keeping shares well under the limit even for items with
+  /// long color image URLs or extra attribute fields.
+  static const int maxItemsPerShare = 250;
+
+  /// Returned by [shareFavorites] when the basket exceeds [maxItemsPerShare].
+  /// Callers should detect this prefix and show a specific user-facing message.
+  static const String tooManyItemsErrorPrefix = 'TOO_MANY_ITEMS:';
+
   static Future<String?> shareFavorites({
     required String? basketId,
     required String senderName,
@@ -31,6 +43,17 @@ class FavoritesSharingService {
 
       final snapshot = await collection.get();
       if (snapshot.docs.isEmpty) return null;
+
+      // Defense layer: refuse to build an oversized share doc, even if a UI
+      // check is bypassed. Keeps the share doc safely under Firestore's 1 MiB
+      // single-document limit.
+      if (snapshot.docs.length > maxItemsPerShare) {
+        if (kDebugMode) {
+          debugPrint(
+              '⚠️ shareFavorites: ${snapshot.docs.length} items exceeds cap of $maxItemsPerShare');
+        }
+        return '$tooManyItemsErrorPrefix$maxItemsPerShare';
+      }
 
       // Get user's language code for localized content
       final userDoc = await _firestore.collection('users').doc(user.uid).get();

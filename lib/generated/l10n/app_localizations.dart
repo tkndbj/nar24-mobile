@@ -9499,7 +9499,7 @@ abstract class AppLocalizations {
   /// No description provided for @askToSellerInfoStart.
   ///
   /// In tr, this message translates to:
-  /// **'Siparişinle ilgili sorularını '**
+  /// **'Sipariş durumu ile ilgili bilgiyi '**
   String get askToSellerInfoStart;
 
   /// No description provided for @confirmDeleteMessage.
@@ -13389,6 +13389,12 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Paylaşılacak favori yok'**
   String get noFavoritesToShare;
+
+  /// No description provided for @tooManyFavoritesToShare.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bu sepette paylaşılamayacak kadar çok ürün var. Lütfen ürün sayısını en fazla {max} olacak şekilde azaltın.'**
+  String tooManyFavoritesToShare(int max);
 
   /// No description provided for @favoritesShared.
   ///

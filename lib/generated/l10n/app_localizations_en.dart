@@ -4838,8 +4838,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Seller information could not be loaded.';
 
   @override
-  String get askToSellerInfoStart =>
-      'You can ask questions about your order on the ';
+  String get askToSellerInfoStart => 'You view order status in ';
 
   @override
   String get confirmDeleteMessage =>
@@ -6974,6 +6973,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noFavoritesToShare => 'No favorites to share';
+
+  @override
+  String tooManyFavoritesToShare(int max) {
+    return 'This basket has too many items to share. Please remove some items so the total is at most $max.';
+  }
 
   @override
   String get favoritesShared => 'Favorites shared successfully!';

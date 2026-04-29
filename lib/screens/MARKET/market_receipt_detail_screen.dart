@@ -958,7 +958,7 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
                           fontSize: 11,
                           color: isDark ? Colors.grey[500] : Colors.grey[600])),
               ])),
-          Text('${item.total.toStringAsFixed(0)} ${_receipt!.currency}',
+          Text('${item.total.toStringAsFixed(2)} ${_receipt!.currency}',
               style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -970,7 +970,7 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
             padding: const EdgeInsets.only(left: 44),
             child: Text(
                 l10n.marketReceiptPerUnit(
-                    '${item.price.toStringAsFixed(0)} ${_receipt!.currency}'),
+                    '${item.price.toStringAsFixed(2)} ${_receipt!.currency}'),
                 style: TextStyle(
                     fontSize: 11,
                     color: isDark ? Colors.grey[500] : Colors.grey[400])),
@@ -1000,14 +1000,14 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
                 isDark,
                 l10n.marketOrderSubtotalLabel,
                 _infoText(
-                    '${r.subtotal.toStringAsFixed(0)} ${r.currency}', isDark)),
+                    '${r.subtotal.toStringAsFixed(2)} ${r.currency}', isDark)),
             _infoRow(
                 isDark,
                 l10n.marketOrderDeliveryLabel,
                 Text(
                     r.deliveryFee == 0
                         ? l10n.marketOrderDeliveryFree
-                        : '${r.deliveryFee.toStringAsFixed(0)} ${r.currency}',
+                        : '${r.deliveryFee.toStringAsFixed(2)} ${r.currency}',
                     style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -1039,7 +1039,7 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: isDark ? Colors.white : const Color(0xFF1A1A1A))),
-            Text('${r.totalPrice.toStringAsFixed(0)} ${r.currency}',
+            Text('${r.totalPrice.toStringAsFixed(2)} ${r.currency}',
                 style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,

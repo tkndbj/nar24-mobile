@@ -325,10 +325,10 @@ class DeepLinkHandler {
       'originalSender': senderUid,
     });
 
-    // ✅ PRODUCTION FIX: Track imported product IDs for global favorites update
+    // Track imported product IDs for global favorites update
     final importedProductIds = <String>{};
-    
-    // ✅ PRODUCTION FIX: Use a single batch operation to prevent race conditions
+
+    // Single atomic batch: subcollection writes + user doc array update
     final batch = FirebaseFirestore.instance.batch();
     int successCount = 0;
 
@@ -339,8 +339,7 @@ class DeepLinkHandler {
           if (favoriteItem is Map) {
             final favoriteMap = Map<String, dynamic>.from(favoriteItem);
             final favRef = basketRef.collection('favorites').doc();
-            
-            // ✅ Extract productId for global favorites tracking
+
             final productId = favoriteMap['productId'] as String?;
             if (productId != null && productId.isNotEmpty) {
               importedProductIds.add(productId);
@@ -360,26 +359,33 @@ class DeepLinkHandler {
       }
     }
 
-    // ✅ PRODUCTION FIX: Execute batch atomically
+    // Atomically sync the user doc's denormalized favoriteItemIds array.
+    // This keeps the read-side cache (used everywhere for heart-icon state)
+    // consistent with the subcollection writes — no drift, no reconciliation.
+    if (importedProductIds.isNotEmpty) {
+      batch.update(
+        FirebaseFirestore.instance.collection('users').doc(currentUser.uid),
+        {
+          'favoriteItemIds':
+              FieldValue.arrayUnion(importedProductIds.toList()),
+        },
+      );
+    }
+
     if (successCount > 0) {
       await batch.commit();
       debugPrint('Successfully imported $successCount favorites');
-      
-      // ✅ CRITICAL FIX: Update global favorites notifier so UI reflects the import
+
+      // Instant local sync: update the in-memory globalFavoriteIdsNotifier so
+      // heart icons flip immediately. The user doc snapshot listener will
+      // confirm the same value shortly after.
       if (importedProductIds.isNotEmpty && context.mounted) {
         try {
-          final favoriteProvider = Provider.of<FavoriteProvider>(context, listen: false);
+          final favoriteProvider =
+              Provider.of<FavoriteProvider>(context, listen: false);
           favoriteProvider.addToGlobalFavorites(importedProductIds);
-          debugPrint('✅ Updated global favorites with ${importedProductIds.length} imported products');
         } catch (e) {
-          debugPrint('⚠️ Could not update FavoriteProvider: $e');
-          // Fallback: trigger a full refresh of global favorites
-          try {
-            final favoriteProvider = Provider.of<FavoriteProvider>(context, listen: false);
-            await favoriteProvider.refreshGlobalFavorites();
-          } catch (e2) {
-            debugPrint('⚠️ Fallback refresh also failed: $e2');
-          }
+          debugPrint('⚠️ In-memory notifier sync failed (non-critical): $e');
         }
       }
     }

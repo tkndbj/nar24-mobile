@@ -212,8 +212,12 @@ export async function processSalesAccounting(
 
         const sid = item.sellerId;
         const qty = item.quantity || 1;
-        const unitPrice = item.price || 0;
-        const revenue = unitPrice * qty;
+        // Prefer the actual paid line total (post bulk/bundle discounts).
+        // Fallback to raw price * qty for orders created before unitPrice/itemTotal
+        // were persisted on order items.
+        const revenue = (typeof item.itemTotal === 'number') ?
+          item.itemTotal :
+          ((item.price || 0) * qty);
         const commission = item.ourComission || 0;
 
         if (!sellerMap.has(sid)) {

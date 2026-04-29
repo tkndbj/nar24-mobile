@@ -427,6 +427,23 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
     productData['ibanOwnerName'] = widget.ibanOwnerName;
     productData['ibanOwnerSurname'] = widget.ibanOwnerSurname;
     productData['iban'] = widget.iban;
+
+    // Denormalize display URLs from storage paths so the admin web (and any
+    // other legacy consumer that reads `imageUrls`/`videoUrl`/`colorImages`)
+    // can render thumbnails without resolving Cloudinary paths. This mirrors
+    // what the shop submitProduct/submitProductEdit Cloud Functions do — see
+    // functions/26-list-product/index.js.
+    const bucketBase =
+        'https://storage.googleapis.com/emlak-mobile-app.appspot.com';
+    productData['imageUrls'] = upload.imageStoragePaths
+        .map((p) => '$bucketBase/$p')
+        .toList();
+    productData['videoUrl'] = upload.videoStoragePath != null
+        ? '$bucketBase/${upload.videoStoragePath}'
+        : null;
+    productData['colorImages'] = upload.colorImageStoragePaths.map(
+      (color, p) => MapEntry(color, ['$bucketBase/$p']),
+    );
     productData['campaign'] =
         widget.isEditMode ? (widget.originalProduct?.campaign ?? '') : '';
     productData['campaignName'] =
@@ -459,7 +476,10 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
 
       if (widget.isFromArchivedCollection) {
         productData['editType'] = 'archived_product_update';
-        productData['sourceCollection'] = 'paused_shop_products';
+        // This is the personal/vitrin path — archived personal products live
+        // in `paused_products`, not `paused_shop_products`. The CF that
+        // approves these reads this hint, so it must be correct.
+        productData['sourceCollection'] = 'paused_products';
         productData['needsUpdate'] = false;
         productData['archiveReason'] = null;
         productData['archivedByAdmin'] = false;
@@ -468,7 +488,7 @@ class _ListProductPreviewScreenState extends State<ListProductPreviewScreen> {
         productData['paused'] = false;
       } else {
         productData['editType'] = 'product_edit';
-        productData['sourceCollection'] = 'shop_products';
+        productData['sourceCollection'] = 'products';
       }
 
       await _firestore

@@ -564,7 +564,7 @@ class _ArchivedProductsScreenState extends State<ArchivedProductsScreen> {
 
   void _navigateToUpdateProduct(Product product) {
     context.push(
-      '/list-product',
+      '/list_product_screen',
       extra: {
         'existingProduct': product,
         'isFromArchivedCollection': true,

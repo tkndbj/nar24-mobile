@@ -11,7 +11,6 @@ import '../services/cart_favorite_metrics_service.dart';
 import '../services/user_activity_service.dart';
 import '../services/lifecycle_aware.dart';
 import '../services/app_lifecycle_manager.dart';
-import '../services/firestore_read_tracker.dart';
 import '../user_provider.dart';
 
 // ============================================================================
@@ -105,8 +104,10 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
   // Concurrency control
   final Map<String, Completer<void>> _favoriteLocks = {};
 
-  // Request coalescing
-  final Map<String, Completer<void>> _pendingFetches = {};
+  // Request coalescing for [loadFavorites]: when a first-page load is in
+  // flight, additional callers await the same completer and receive the
+  // same result map — no fake-empty payloads, no empty-state flashes.
+  Completer<Map<String, dynamic>>? _loadFavoritesInFlight;
 
   // Pagination state
   DocumentSnapshot? _lastDocument;
@@ -119,7 +120,6 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
 
   // Timers
   Timer? _removeFavoriteTimer;
-  Timer? _cleanupTimer;
 
   bool _disposed = false;
 
@@ -150,10 +150,6 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
           onError: (e) => debugPrint('❌ Auth stream error: $e'),
         );
 
-    _cleanupTimer = Timer.periodic(Duration(seconds: 30), (_) {
-      _cleanupStaleOperations();
-    });
-
     markInitialized();
   }
 
@@ -164,13 +160,8 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
   @override
   Future<void> onPause() async {
     await super.onPause();
-
-    // Pause cleanup timer
-    _cleanupTimer?.cancel();
-    _cleanupTimer = null;
-
     if (kDebugMode) {
-      debugPrint('⏸️ FavoriteProvider: Listener and timer paused');
+      debugPrint('⏸️ FavoriteProvider: paused');
     }
   }
 
@@ -181,11 +172,6 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
     final user = _auth.currentUser;
     if (user == null) return;
 
-    // Restart cleanup timer
-    _cleanupTimer ??= Timer.periodic(Duration(seconds: 30), (_) {
-      _cleanupStaleOperations();
-    });
-
     // Re-populate IDs from user doc (0 reads)
     final ids = _userProvider.favoriteItemIdsNotifier.value;
     globalFavoriteIdsNotifier.value = ids;
@@ -195,202 +181,23 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
     }
 
     if (kDebugMode) {
-      debugPrint('▶️ FavoriteProvider: Listener and timer resumed');
+      debugPrint('▶️ FavoriteProvider: resumed');
     }
   }
-
-  void _cleanupStaleOperations() {
-    // Force cleanup locks older than 10 seconds
-    _favoriteLocks.removeWhere((key, completer) {
-      if (!completer.isCompleted) {
-        completer.complete();
-        return true;
-      }
-      return false;
-    });
-
-    // Cleanup old notifiers
-    final activeIds = favoriteIdsNotifier.value;
-    _favoriteStatusNotifiers.removeWhere((id, _) => !activeIds.contains(id));
-
-    // Cleanup pagination cache if too large
-    if (_paginatedFavoritesMap.length > _maxPaginatedCache) {
-      final keysToRemove = _paginatedFavoritesMap.keys.take(50).toList();
-      for (final key in keysToRemove) {
-        _paginatedFavoritesMap.remove(key);
-      }
-    }
-  }
-
-  // ========================================================================
-  // SMART REAL-TIME LISTENER (Auto-manages connection)
-  // ========================================================================
 
   // ========================================================================
   // INITIALIZATION
   // ========================================================================
-
-  Future<void> initializeIfNeeded() async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-
-    // Request coalescing
-    if (_pendingFetches.containsKey('init')) {
-      debugPrint('⏳ Already initializing, waiting...');
-      await _pendingFetches['init']!.future;
-      return;
-    }
-
-    final completer = Completer<void>();
-    _pendingFetches['init'] = completer;
-
-    try {
-      // _loadGlobalFavoriteIds reads default + all baskets, and also populates
-      // favoriteIdsNotifier when no basket is selected (avoids duplicate read).
-      await _loadGlobalFavoriteIds();
-
-      // Only read the specific basket collection if a basket is actively selected,
-      // since _loadGlobalFavoriteIds already covered the default case.
-      if (selectedBasketNotifier.value != null) {
-        await _loadFavoriteIds();
-      }
-
-      // Self-healing: reconcile user doc array with actual subcollection
-      _reconcileFavoriteIds();
-
-      completer.complete();
-    } catch (e) {
-      debugPrint('❌ Init error: $e');
-      completer.completeError(e);
-    } finally {
-      _pendingFetches.remove('init');
-    }
-  }
-
-  /// Reconcile user doc favoriteItemIds with actual favorites subcollections.
-  /// Runs silently in the background on every favorites page visit.
-  Future<void> _reconcileFavoriteIds() async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-
-    try {
-      // globalFavoriteIdsNotifier was just populated by _loadGlobalFavoriteIds
-      final subcollectionIds = globalFavoriteIdsNotifier.value;
-      final userDocIds = _userProvider.favoriteItemIdsNotifier.value;
-
-      if (!_setsEqual(subcollectionIds, userDocIds)) {
-        debugPrint('🔧 Favorites reconciliation: fixing drift (subcollection: ${subcollectionIds.length}, userDoc: ${userDocIds.length})');
-
-        await _firestore.collection('users').doc(user.uid).update({
-          'favoriteItemIds': subcollectionIds.toList(),
-        });
-
-        _userProvider.updateLocalProfileField('favoriteItemIds', subcollectionIds.toList());
-      }
-    } catch (e) {
-      debugPrint('⚠️ Favorites reconciliation failed (non-critical): $e');
-    }
-  }
-
-  bool _setsEqual(Set<String> a, Set<String> b) {
-    if (a.length != b.length) return false;
-    return a.containsAll(b);
-  }
-
-  /// Loads all favorite IDs across default + all baskets.
-  /// Also populates [favoriteIdsNotifier] from the default collection
-  /// when no basket is selected, avoiding a redundant Firestore read.
-  Future<void> _loadGlobalFavoriteIds() async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-
-    try {
-      final allIds = <String>{};
-      final defaultIds = <String>{};
-
-      // 1. Load default favorites
-      final defaultSnapshot = await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('favorites')
-          .get();
-
-      for (final doc in defaultSnapshot.docs) {
-        final productId = doc.data()['productId'] as String?;
-        if (productId != null) {
-          defaultIds.add(productId);
-          allIds.add(productId);
-        }
-      }
-
-      // 2. Load ALL basket favorites
-      final basketsSnapshot = await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('favorite_baskets')
-          .get();
-
-      int readCount = defaultSnapshot.docs.length + 1; // +1 for the query itself
-
-      for (final basketDoc in basketsSnapshot.docs) {
-        final basketFavoritesSnapshot =
-            await basketDoc.reference.collection('favorites').get();
-        readCount += basketFavoritesSnapshot.docs.length + 1; // +1 per sub-query
-
-        for (final favDoc in basketFavoritesSnapshot.docs) {
-          final productId = favDoc.data()['productId'] as String?;
-          if (productId != null) allIds.add(productId);
-        }
-      }
-      readCount += basketsSnapshot.docs.length + 1; // baskets query itself
-
-      globalFavoriteIdsNotifier.value = allIds;
-
-      // If no basket is selected, reuse the default favorites we already fetched
-      // instead of making a separate _loadFavoriteIds() call.
-      if (selectedBasketNotifier.value == null) {
-        favoriteIdsNotifier.value = defaultIds;
-        favoriteCountNotifier.value = defaultIds.length;
-        notifyListeners();
-      }
-
-      FirestoreReadTracker.instance.trackRead('FavoriteProvider', 'default: ${defaultSnapshot.docs.length}, baskets: ${basketsSnapshot.docs.length}, total IDs: ${allIds.length}', readCount);
-    } catch (e) {
-      debugPrint('❌ Error loading global favorites: $e');
-    }
-  }
-
-  Future<void> _loadFavoriteIds() async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-
-    try {
-      final basketId = selectedBasketNotifier.value;
-
-      // Fetch from Firestore (with cache-first strategy built-in)
-      final collection = basketId == null
-          ? 'favorites'
-          : 'favorite_baskets/$basketId/favorites';
-
-      final snapshot = await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection(collection)
-          .get(); // Firestore automatically uses cache when offline
-
-      final ids = snapshot.docs
-          .map((doc) => (doc.data()['productId'] as String?))
-          .whereType<String>()
-          .toSet();
-
-      favoriteIdsNotifier.value = ids;
-      favoriteCountNotifier.value = ids.length;
-
-      notifyListeners();
-    } catch (e) {
-      debugPrint('❌ Load favorites error: $e');
-    }
-  }
+  //
+  // No bulk subcollection scan on init. The user doc's denormalized
+  // `favoriteItemIds` array is the read-side source of truth for heart-icon
+  // state and is kept in sync by atomic batch writes on every add/remove.
+  //
+  // Population happens via [_populateFromUserDoc] (called from auth-change),
+  // which subscribes to UserProvider's notifier — Firestore push updates
+  // propagate automatically. Paginated favorite item data (for the favorites
+  // screen) is loaded on-demand via [loadFavorites] / [loadNextPage].
+  // ========================================================================
 
   void _handleUserChange(User? user) {
     if (user == null) {
@@ -440,31 +247,51 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
   // ADD/REMOVE FAVORITES (Optimistic + Firestore)
   // ========================================================================
 
-  Future<Map<String, String?>> _getProductMetadata(String productId) async {
+  /// Fetches product metadata for tracking/metrics.
+  ///
+  /// When [sourceCollection] is known (from a stored favorite doc), a single
+  /// targeted read is issued. Otherwise we fall back to a parallel dual-fetch
+  /// — needed only for first-time adds or legacy favorites without the field.
+  Future<Map<String, String?>> _getProductMetadata(
+    String productId, {
+    String? sourceCollection,
+  }) async {
     try {
-      // Parallel fetch from both collections
-      final results = await Future.wait([
-        _firestore.collection('products').doc(productId).get(),
-        _firestore.collection('shop_products').doc(productId).get(),
-      ]);
+      Map<String, dynamic>? data;
+      String? resolvedCollection;
 
-      final productDoc = results[0];
-      final shopProductDoc = results[1];
+      if (sourceCollection == 'products' ||
+          sourceCollection == 'shop_products') {
+        final doc =
+            await _firestore.collection(sourceCollection!).doc(productId).get();
+        if (doc.exists) {
+          data = doc.data();
+          resolvedCollection = sourceCollection;
+        }
+      } else {
+        // Unknown collection — parallel fetch from both (legacy / first-time add)
+        final results = await Future.wait([
+          _firestore.collection('products').doc(productId).get(),
+          _firestore.collection('shop_products').doc(productId).get(),
+        ]);
 
-      // Use whichever exists (prefer products collection)
-      final Map<String, dynamic>? data = productDoc.exists
-          ? productDoc.data()
-          : shopProductDoc.exists
-              ? shopProductDoc.data()
-              : null;
+        if (results[0].exists) {
+          data = results[0].data();
+          resolvedCollection = 'products';
+        } else if (results[1].exists) {
+          data = results[1].data();
+          resolvedCollection = 'shop_products';
+        }
+      }
 
       if (data == null) return {};
 
       return {
+        'sourceCollection': resolvedCollection,
         'shopId': data['shopId'] as String?,
         'productName': data['productName'] as String?,
         'category': data['category'] as String?,
-        'subcategory': data['subcategory'] as String?, // ✅ ADD
+        'subcategory': data['subcategory'] as String?,
         'subsubcategory': data['subsubcategory'] as String?,
         'brand': data['brandModel'] as String?,
         'gender': data['gender'] as String?,
@@ -572,10 +399,20 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
           ..remove(productId);
         globalFavoriteIdsNotifier.value = newGlobalIds;
 
-        final metadata = await _getProductMetadata(productId);
-        final shopId = metadata['shopId'];
-        final productName =
-            existingSnap.docs.first.data()['productName'] as String?;
+        // Prefer values stored on the favorite doc itself (cheap, no extra reads).
+        // Fall back to a dual-collection lookup only for legacy docs missing them.
+        final existingData = existingSnap.docs.first.data();
+        final storedCollection = existingData['sourceCollection'] as String?;
+        final storedShopId = existingData['shopId'] as String?;
+        final productName = existingData['productName'] as String?;
+
+        final needsMetadataLookup = storedCollection == null;
+        final metadata = needsMetadataLookup
+            ? await _getProductMetadata(productId)
+            : <String, String?>{};
+
+        final shopId = storedShopId ?? metadata['shopId'];
+
         UserActivityService.instance.trackUnfavorite(
           productId: productId,
           shopId: shopId,
@@ -592,19 +429,33 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
         _circuitBreaker.recordSuccess();
         showDebouncedRemoveFavoriteSnackbar(context);
       } else {
-        // STEP 1: Optimistic add
+        // STEP 1: Optimistic add (UI updates immediately)
         final newIds = Set<String>.from(favoriteIdsNotifier.value)
           ..add(productId);
         favoriteIdsNotifier.value = newIds;
         favoriteCountNotifier.value = newIds.length;
         _updateProductFavoriteStatus(productId, true);
 
-        // STEP 2: Add to Firestore
+        // STEP 2: Fetch product metadata once. We persist sourceCollection +
+        // shopId on the favorite doc so future reads (hydration, transfer,
+        // remove, add-to-cart) only hit a single collection.
+        final metadata = await _getProductMetadata(productId);
+        final resolvedCollection = metadata['sourceCollection'];
+        final resolvedShopId = metadata['shopId'];
+
+        // STEP 3: Build favorite document
         final favoriteData = <String, dynamic>{
           'productId': productId,
           'addedAt': FieldValue.serverTimestamp(),
           'quantity': quantity ?? 1,
         };
+
+        if (resolvedCollection != null) {
+          favoriteData['sourceCollection'] = resolvedCollection;
+        }
+        if (resolvedShopId != null) {
+          favoriteData['shopId'] = resolvedShopId;
+        }
 
         if (selectedColor != null) {
           favoriteData['selectedColor'] = selectedColor;
@@ -615,13 +466,19 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
 
         if (additionalAttributes != null) {
           additionalAttributes.forEach((k, v) {
-            if (!['addedAt', 'productId', 'quantity'].contains(k)) {
+            if (![
+              'addedAt',
+              'productId',
+              'quantity',
+              'sourceCollection',
+              'shopId',
+            ].contains(k)) {
               favoriteData[k] = v;
             }
           });
         }
 
-        // Batched write: add to subcollection + update user doc array (atomic)
+        // STEP 4: Batched write: add to subcollection + update user doc array (atomic)
         final addBatch = _firestore.batch();
         addBatch.set(collection.doc(), favoriteData);
         addBatch.update(_firestore.collection('users').doc(user.uid), {
@@ -639,11 +496,9 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
           ..add(productId);
         globalFavoriteIdsNotifier.value = newGlobalIds;
 
-        final metadata = await _getProductMetadata(productId);
-        final shopId = metadata['shopId'];
         UserActivityService.instance.trackFavorite(
           productId: productId,
-          shopId: metadata['shopId'],
+          shopId: resolvedShopId,
           productName: metadata['productName'],
           category: metadata['category'],
           subcategory: metadata['subcategory'],
@@ -653,7 +508,7 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
         );
         _metricsService.logFavoriteAdded(
           productId: productId,
-          shopId: shopId,
+          shopId: resolvedShopId,
         );
 
         // STEP 4: Add to pagination cache
@@ -707,18 +562,7 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
     final previousGlobalIds = Set<String>.from(globalFavoriteIdsNotifier.value);
 
     try {
-      // Fetch metadata for all products
-      final metadataMap = <String, Map<String, String?>>{};
-      for (final productId in productIds) {
-        metadataMap[productId] = await _getProductMetadata(productId);
-      }
-
-      // Extract shopIds for metrics
-      final shopIds = Map.fromEntries(
-        productIds.map((id) => MapEntry(id, metadataMap[id]?['shopId'])),
-      );
-
-      // Optimistic removal from BOTH notifiers
+      // Optimistic removal from BOTH notifiers (UI updates immediately)
       final newIds = Set<String>.from(favoriteIdsNotifier.value)
         ..removeAll(productIds);
       favoriteIdsNotifier.value = newIds;
@@ -733,11 +577,14 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
       }
       removePaginatedItems(productIds);
 
-      // Batch delete from Firestore
+      // Batch delete from Firestore. Each batch returns the shopIds it
+      // extracted from the favorite docs it just deleted — no extra reads.
+      final shopIds = <String, String?>{};
       const batchSize = 50;
       for (var i = 0; i < productIds.length; i += batchSize) {
         final chunk = productIds.skip(i).take(batchSize).toList();
-        await _removeMultipleBatch(chunk);
+        final extractedShopIds = await _removeMultipleBatch(chunk);
+        shopIds.addAll(extractedShopIds);
       }
 
       _metricsService.logBatchFavoriteRemovals(
@@ -758,9 +605,12 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
     }
   }
 
-  Future<void> _removeMultipleBatch(List<String> productIds) async {
+  /// Deletes the given favorite docs and returns a map of productId -> shopId
+  /// extracted from each doc (used for metrics tracking without extra reads).
+  Future<Map<String, String?>> _removeMultipleBatch(
+      List<String> productIds) async {
     final user = _auth.currentUser;
-    if (user == null) return;
+    if (user == null) return const {};
 
     final basketId = selectedBasketNotifier.value;
     final collection = basketId == null
@@ -773,6 +623,7 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
             .collection('favorites');
 
     final batch = _firestore.batch();
+    final extractedShopIds = <String, String?>{};
 
     // Process in chunks of 10 (Firestore limit for whereIn)
     for (var i = 0; i < productIds.length; i += 10) {
@@ -780,6 +631,11 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
       final snap = await collection.where('productId', whereIn: chunk).get();
 
       for (var doc in snap.docs) {
+        final data = doc.data();
+        final pid = data['productId'] as String?;
+        if (pid != null) {
+          extractedShopIds[pid] = data['shopId'] as String?;
+        }
         batch.delete(doc.reference);
       }
     }
@@ -798,6 +654,8 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
           .where((id) => !productIds.contains(id))
           .toList(),
     );
+
+    return extractedShopIds;
   }
 
   // ========================================================================
@@ -1064,7 +922,11 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
   }
 
   /// Resets pagination and fetches the first page of favorites from server.
-  /// Safe to call repeatedly — has dedup guard to prevent concurrent loads.
+  ///
+  /// Safe to call repeatedly. If a load is already in flight, additional
+  /// callers await the same completer and receive the **same** result map —
+  /// no fake-empty payload, no empty-state flash on the screen.
+  ///
   /// Mirrors CartProvider.loadCart() pattern: reset + fetch in one call.
   Future<Map<String, dynamic>> loadFavorites({int limit = 50}) async {
     final user = _auth.currentUser;
@@ -1072,19 +934,18 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
       return {'docs': <DocumentSnapshot>[], 'hasMore': false, 'error': null};
     }
 
-    if (_pendingFetches.containsKey('init')) {
-      await _pendingFetches['init']!.future;
-      return {
-        'docs': <DocumentSnapshot>[],
-        'hasMore': false,
-        'error': null,
-      };
+    // Coalesce concurrent calls — every caller gets the real result.
+    final inFlight = _loadFavoritesInFlight;
+    if (inFlight != null) {
+      return inFlight.future;
     }
 
-    final completer = Completer<void>();
-    _pendingFetches['init'] = completer;
+    final completer = Completer<Map<String, dynamic>>();
+    _loadFavoritesInFlight = completer;
     isLoadingMoreNotifier.value = true;
     notifyListeners();
+
+    Map<String, dynamic> resultMap;
 
     try {
       // Reset pagination state
@@ -1095,7 +956,6 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
       _isInitialLoadComplete = false;
       _currentBasketId = selectedBasketNotifier.value;
 
-      // Fetch first page (like loadCart does)
       final result = await fetchPaginatedFavorites(limit: limit);
       final docs = result['docs'] as List<DocumentSnapshot>;
       final hasMore = result['hasMore'] as bool;
@@ -1109,9 +969,8 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
 
       isLoadingMoreNotifier.value = false;
       notifyListeners();
-      completer.complete();
 
-      return {
+      resultMap = {
         'docs': docs,
         'hasMore': hasMore,
         'productIds': result['productIds'],
@@ -1122,16 +981,20 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
       isLoadingMoreNotifier.value = false;
       hasMoreDataNotifier.value = false;
       notifyListeners();
-      completer.completeError(e);
 
-      return {
+      resultMap = {
         'docs': <DocumentSnapshot>[],
         'hasMore': false,
         'error': e.toString(),
       };
     } finally {
-      _pendingFetches.remove('init');
+      _loadFavoritesInFlight = null;
     }
+
+    // Complete after clearing the in-flight slot, so any caller that arrives
+    // exactly here starts a fresh load instead of awaiting a completed one.
+    completer.complete(resultMap);
+    return resultMap;
   }
 
   /// Fetches the next page of favorites (for scroll pagination).
@@ -1233,22 +1096,49 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
 
       final favoriteData = favDoc.docs.first.data();
 
-      // Fetch product
-      final productRefs = await Future.wait([
-        _firestore.collection('products').doc(productId).get(),
-        _firestore.collection('shop_products').doc(productId).get(),
-      ]);
-
+      // Use stored sourceCollection for a single targeted query.
+      // Legacy favorites without it fall back to dual-fetch and self-heal below.
+      final storedCollection = favoriteData['sourceCollection'] as String?;
       DocumentSnapshot? productDoc;
-      if (productRefs[0].exists) {
-        productDoc = productRefs[0];
-      } else if (productRefs[1].exists) {
-        productDoc = productRefs[1];
+      bool needsBackfill = false;
+
+      if (storedCollection == 'products' ||
+          storedCollection == 'shop_products') {
+        final doc = await _firestore
+            .collection(storedCollection!)
+            .doc(productId)
+            .get();
+        if (doc.exists) productDoc = doc;
+      } else {
+        final productRefs = await Future.wait([
+          _firestore.collection('products').doc(productId).get(),
+          _firestore.collection('shop_products').doc(productId).get(),
+        ]);
+        if (productRefs[0].exists) {
+          productDoc = productRefs[0];
+        } else if (productRefs[1].exists) {
+          productDoc = productRefs[1];
+        }
+        needsBackfill = productDoc != null;
       }
 
       if (productDoc == null || !productDoc.exists) return;
 
       final product = Product.fromDocument(productDoc);
+
+      // Self-heal legacy doc: persist sourceCollection + shopId for future reads.
+      if (needsBackfill) {
+        final resolvedCollection = productDoc.reference.parent.id;
+        final shopId = (productDoc.data()
+                as Map<String, dynamic>?)?['shopId'] as String?;
+        favDoc.docs.first.reference.update({
+          'sourceCollection': resolvedCollection,
+          if (shopId != null) 'shopId': shopId,
+        }).catchError((e) {
+          debugPrint('⚠️ Backfill failed (non-critical): $e');
+        });
+      }
+
       final attributes = Map<String, dynamic>.from(favoriteData)
         ..remove('productId');
 
@@ -1462,11 +1352,6 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
     debugPrint('✅ Added ${productIds.length} products to global favorites');
   }
 
-  /// Refresh global favorites from Firestore (useful after external changes)
-  Future<void> refreshGlobalFavorites() async {
-    await _loadGlobalFavoriteIds();
-  }
-
   /// Check if product is favorited (default favorites or any basket)
   bool isGloballyFavorited(String productId) {
     return globalFavoriteIdsNotifier.value
@@ -1534,15 +1419,22 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
     }
   }
 
-  /// Remove from favorites (works for default and baskets)
+  /// Removes a product from default favorites and every basket it lives in,
+  /// atomically, in a single batched commit.
+  ///
+  /// All read queries run in parallel. All deletes + the user-doc array update
+  /// commit together — so the operation either fully succeeds or fully fails.
+  /// shopId for metrics is pulled from the favorite docs themselves (no extra
+  /// product-collection reads needed).
   Future<void> removeGloballyFromFavorites(String productId) async {
     final user = _auth.currentUser;
     if (user == null) return;
 
-    // Optimistic removal from BOTH notifiers
+    // Snapshot for rollback
     final previousIds = Set<String>.from(favoriteIdsNotifier.value);
     final previousGlobalIds = Set<String>.from(globalFavoriteIdsNotifier.value);
 
+    // Optimistic removal (UI updates immediately)
     favoriteIdsNotifier.value = Set<String>.from(previousIds)
       ..remove(productId);
     favoriteCountNotifier.value = favoriteIdsNotifier.value.length;
@@ -1552,45 +1444,56 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
     removeItemFromPaginatedCache(productId);
 
     try {
-      final metadata = await _getProductMetadata(productId);
-      final shopId = metadata['shopId'];
+      final userRef = _firestore.collection('users').doc(user.uid);
 
-      // Remove from default favorites
-      final defaultFavsSnap = await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('favorites')
-          .where('productId', isEqualTo: productId)
-          .get();
-
-      for (final doc in defaultFavsSnap.docs) {
-        await doc.reference.delete();
-      }
-
-      // Remove from all baskets
-      final basketsSnapshot = await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('favorite_baskets')
-          .get();
-
-      for (final basketDoc in basketsSnapshot.docs) {
-        final favoriteSnapshot = await basketDoc.reference
+      // STEP 1: parallel reads — default-favorites match + all baskets list
+      final initialReads = await Future.wait([
+        userRef
             .collection('favorites')
             .where('productId', isEqualTo: productId)
-            .get();
+            .get(),
+        userRef.collection('favorite_baskets').get(),
+      ]);
+      final defaultFavsSnap = initialReads[0];
+      final basketsSnapshot = initialReads[1];
 
-        for (final favDoc in favoriteSnapshot.docs) {
-          await favDoc.reference.delete();
+      // STEP 2: parallel per-basket lookup for matching favorite docs
+      final basketMatches = await Future.wait(
+        basketsSnapshot.docs.map(
+          (basketDoc) => basketDoc.reference
+              .collection('favorites')
+              .where('productId', isEqualTo: productId)
+              .get(),
+        ),
+      );
+
+      // STEP 3: collect refs to delete + extract shopId from any match
+      final docsToDelete = <DocumentReference>[];
+      String? shopId;
+
+      for (final doc in defaultFavsSnap.docs) {
+        docsToDelete.add(doc.reference);
+        shopId ??= doc.data()['shopId'] as String?;
+      }
+      for (final snap in basketMatches) {
+        for (final doc in snap.docs) {
+          docsToDelete.add(doc.reference);
+          shopId ??= doc.data()['shopId'] as String?;
         }
       }
 
-      // Sync user doc array
-      await _firestore.collection('users').doc(user.uid).update({
+      // STEP 4: single atomic batch — all deletes + user-doc array sync.
+      // Bounded size: max 1 default + 10 baskets + 1 user-doc update = 12 ops.
+      final batch = _firestore.batch();
+      for (final ref in docsToDelete) {
+        batch.delete(ref);
+      }
+      batch.update(userRef, {
         'favoriteItemIds': FieldValue.arrayRemove([productId]),
       });
+      await batch.commit();
 
-      // Optimistic local sync
+      // Local mirror of the user doc array (snapshot listener will confirm)
       _userProvider.updateLocalProfileField(
         'favoriteItemIds',
         ((_userProvider.profileData?['favoriteItemIds'] as List?) ?? [])
@@ -1603,11 +1506,12 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
         shopId: shopId,
       );
 
-      debugPrint('✅ Removed $productId from all favorites');
+      debugPrint(
+          '✅ Removed $productId from ${docsToDelete.length} favorite doc(s)');
     } catch (e) {
       debugPrint('❌ Error removing from favorites: $e');
 
-      // Rollback BOTH notifiers
+      // Rollback optimistic state
       favoriteIdsNotifier.value = previousIds;
       favoriteCountNotifier.value = previousIds.length;
       globalFavoriteIdsNotifier.value = previousGlobalIds;
@@ -1626,7 +1530,6 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
 
     debugPrint('🧹 FavoriteProvider disposing...');
 
-    _cleanupTimer?.cancel();
     _removeFavoriteTimer?.cancel();
     _authSubscription?.cancel();
     _userProvider.favoriteItemIdsNotifier.removeListener(_onUserDocFavIdsChanged);

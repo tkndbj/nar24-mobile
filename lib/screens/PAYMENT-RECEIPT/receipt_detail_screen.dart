@@ -1394,7 +1394,7 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
                 ),
               ),
               Text(
-                '${subtotal.toStringAsFixed(0)} ${widget.receipt.currency}',
+                '${subtotal.toStringAsFixed(2)} ${widget.receipt.currency}',
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
@@ -1431,7 +1431,7 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
                   ],
                 ),
                 Text(
-                  '-${couponDiscount.toStringAsFixed(0)} ${widget.receipt.currency}',
+                  '-${couponDiscount.toStringAsFixed(2)} ${widget.receipt.currency}',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
@@ -1473,7 +1473,7 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
                     // Show original price struck through if free shipping applied
                     if (freeShippingApplied && originalDeliveryPrice > 0) ...[
                       Text(
-                        '${originalDeliveryPrice.toStringAsFixed(0)} ${widget.receipt.currency}',
+                        '${originalDeliveryPrice.toStringAsFixed(2)} ${widget.receipt.currency}',
                         style: TextStyle(
                           fontSize: 13,
                           color: theme.textTheme.bodyMedium?.color
@@ -1486,7 +1486,7 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
                     Text(
                       deliveryPrice == 0
                           ? l10n.free ?? 'Free'
-                          : '${deliveryPrice.toStringAsFixed(0)} ${widget.receipt.currency}',
+                          : '${deliveryPrice.toStringAsFixed(2)} ${widget.receipt.currency}',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -1575,7 +1575,7 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
                       ],
                     ),
                     Text(
-                      '${totalSavings.toStringAsFixed(0)} ${widget.receipt.currency}',
+                      '${totalSavings.toStringAsFixed(2)} ${widget.receipt.currency}',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -1623,7 +1623,7 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
                   ),
                 ),
                 Text(
-                  '${grandTotal.toStringAsFixed(0)} ${widget.receipt.currency}',
+                  '${grandTotal.toStringAsFixed(2)} ${widget.receipt.currency}',
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,

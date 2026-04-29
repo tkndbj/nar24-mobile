@@ -7017,6 +7017,11 @@ class AppLocalizationsRu extends AppLocalizations {
   String get noFavoritesToShare => 'Нет избранного для публикации';
 
   @override
+  String tooManyFavoritesToShare(int max) {
+    return 'В этой корзине слишком много товаров для публикации. Удалите некоторые товары, чтобы их количество не превышало $max.';
+  }
+
+  @override
   String get favoritesShared => 'Избранное успешно поделено!';
 
   @override

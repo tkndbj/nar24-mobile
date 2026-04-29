@@ -801,7 +801,7 @@ class _FoodCartItemCard extends StatelessWidget {
                             if (ext.price > 0) ...[
                               const SizedBox(width: 3),
                               Text(
-                                loc.foodPriceTL(ext.price.toStringAsFixed(0)),
+                                loc.foodPriceTL(ext.price.toStringAsFixed(2)),
                                 style: TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.w600,
@@ -1341,7 +1341,7 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
                                       fontWeight: FontWeight.bold)),
                             ),
                             Text(
-                              loc.foodPriceTL(widget.item.price.toStringAsFixed(0)),
+                              loc.foodPriceTL(widget.item.price.toStringAsFixed(2)),
                               style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -1396,7 +1396,7 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
                                             : Colors.grey[900])),
                                 subtitle: Text(
                                     price > 0
-                                        ? loc.foodExtraPriceTL(price.toStringAsFixed(0))
+                                        ? loc.foodExtraPriceTL(price.toStringAsFixed(2))
                                         : loc.foodFreeExtra,
                                     style: TextStyle(
                                         fontSize: 12,
@@ -1475,7 +1475,7 @@ class _FoodExtrasSheetModalState extends State<_FoodExtrasSheetModal> {
                                 height: 20,
                                 child: CircularProgressIndicator(
                                     color: Colors.white, strokeWidth: 2))
-                            : Text('Update — ${loc.foodPriceTL(total.toStringAsFixed(0))}',
+                            : Text('Update — ${loc.foodPriceTL(total.toStringAsFixed(2))}',
                                 style: const TextStyle(
                                     fontSize: 15, fontWeight: FontWeight.bold)),
                       ),

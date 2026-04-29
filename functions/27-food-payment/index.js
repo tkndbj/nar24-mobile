@@ -727,7 +727,7 @@ export const initializeFoodPayment = onCall(
         .substring(0, 50) || 'Customer';
     })();
 
-    const formattedAmount = Math.round(serverFinalTotal).toString();
+    const formattedAmount = serverFinalTotal.toFixed(2);
     const rnd = Date.now().toString();
 
     const baseUrl = `https://${REGION}-emlak-mobile-app.cloudfunctions.net`;
@@ -1717,13 +1717,13 @@ async function generateFoodReceipt(data) {
       doc.font(normalFont).fontSize(9).fillColor('#000')
         .text(String(item.quantity), COL.qty, midRowY, { width: 30, align: 'center' })
         .text(
-          `${effectiveUnitPrice.toFixed(0)} ${data.currency}`,
+          `${effectiveUnitPrice.toFixed(2)} ${data.currency}`,
           COL.unitPrice,
           midRowY,
           { width: 80, align: 'right' },
         )
         .text(
-          `${(item.itemTotal || effectiveUnitPrice * item.quantity).toFixed(0)} ${data.currency}`,
+          `${(item.itemTotal || effectiveUnitPrice * item.quantity).toFixed(2)} ${data.currency}`,
           COL.total,
           midRowY,
           { width: 65, align: 'right' },
@@ -1770,7 +1770,7 @@ async function generateFoodReceipt(data) {
       .text(`${t.subtotal}:`, totalLabelX, yPos)
       .fillColor('#333')
       .text(
-        `${(data.subtotal || 0).toFixed(0)} ${data.currency}`,
+        `${(data.subtotal || 0).toFixed(2)} ${data.currency}`,
         totalValueX,
         yPos,
         { width: totalValueWidth, align: 'right' },
@@ -1780,7 +1780,7 @@ async function generateFoodReceipt(data) {
     // Delivery fee
     const deliveryFee = data.deliveryFee || 0;
     const deliveryText =
-      deliveryFee === 0 ? t.free : `${deliveryFee.toFixed(0)} ${data.currency}`;
+      deliveryFee === 0 ? t.free : `${deliveryFee.toFixed(2)} ${data.currency}`;
     const deliveryColor = deliveryFee === 0 ? '#00A86B' : '#333';
 
     if (data.deliveryType === 'delivery') {
@@ -1809,7 +1809,7 @@ async function generateFoodReceipt(data) {
       .fillColor('#00A86B')
       .fontSize(16)
       .text(
-        `${(data.totalPrice || 0).toFixed(0)} ${data.currency}`,
+        `${(data.totalPrice || 0).toFixed(2)} ${data.currency}`,
         totalValueX,
         yPos,
         { width: totalValueWidth, align: 'right' },

@@ -1133,7 +1133,7 @@ try {
                       <table cellpadding="0" cellspacing="0" border="0" width="100%">
                         <tr>
                           <td style="color:#1a1a1a;font-size:14px;font-weight:600;">${content.totalLabel}</td>
-                          <td align="right" style="color:#ff6b35;font-size:22px;font-weight:700;letter-spacing:-0.3px;">${receiptData.totalPrice.toFixed(0)} ${receiptData.currency || 'TL'}</td>
+                          <td align="right" style="color:#ff6b35;font-size:22px;font-weight:700;letter-spacing:-0.3px;">${receiptData.totalPrice.toFixed(2)} ${receiptData.currency || 'TL'}</td>
                         </tr>
                       </table>
                     </td>

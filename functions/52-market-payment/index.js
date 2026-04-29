@@ -428,7 +428,7 @@ export const initializeMarketPayment = onCall(
         .substring(0, 50) || 'Customer';
     })();
 
-    const formattedAmount = Math.round(serverFinalTotal).toString();
+    const formattedAmount = serverFinalTotal.toFixed(2);
     const rnd = Date.now().toString();
 
     const baseUrl = `https://${REGION}-emlak-mobile-app.cloudfunctions.net`;
@@ -1321,8 +1321,8 @@ async function generateMarketReceipt(data) {
 
       doc.font(normalFont).fontSize(9).fillColor('#000')
         .text(String(item.quantity), COL.qty, yPos, { width: 40, align: 'center' })
-        .text(`${item.price.toFixed(0)} ${data.currency}`, COL.unitPrice, yPos, { width: 80, align: 'right' })
-        .text(`${(item.itemTotal || item.price * item.quantity).toFixed(0)} ${data.currency}`, COL.total, yPos, { width: 65, align: 'right' });
+        .text(`${item.price.toFixed(2)} ${data.currency}`, COL.unitPrice, yPos, { width: 80, align: 'right' })
+        .text(`${(item.itemTotal || item.price * item.quantity).toFixed(2)} ${data.currency}`, COL.total, yPos, { width: 65, align: 'right' });
 
       yPos += 20;
 
@@ -1351,14 +1351,14 @@ async function generateMarketReceipt(data) {
     doc.font(titleFont).fontSize(11).fillColor('#666')
       .text(`${t.subtotal}:`, tLX, yPos)
       .fillColor('#333')
-      .text(`${(data.subtotal || 0).toFixed(0)} ${data.currency}`, tVX, yPos, { width: 80, align: 'right' });
+      .text(`${(data.subtotal || 0).toFixed(2)} ${data.currency}`, tVX, yPos, { width: 80, align: 'right' });
     yPos += 20;
 
     const deliveryFee = data.deliveryFee || 0;
     doc.font(titleFont).fontSize(11).fillColor('#666')
       .text(`${t.deliveryFee}:`, tLX, yPos)
       .fillColor(deliveryFee === 0 ? '#00A86B' : '#333')
-      .text(deliveryFee === 0 ? t.free : `${deliveryFee.toFixed(0)} ${data.currency}`, tVX, yPos, { width: 80, align: 'right' });
+      .text(deliveryFee === 0 ? t.free : `${deliveryFee.toFixed(2)} ${data.currency}`, tVX, yPos, { width: 80, align: 'right' });
     yPos += 20;
 
     doc.moveTo(tLX, yPos).lineTo(PAGE_RIGHT, yPos).strokeColor('#333').lineWidth(1.5).stroke();
@@ -1369,7 +1369,7 @@ async function generateMarketReceipt(data) {
     doc.font(titleFont).fontSize(14).fillColor('#333')
       .text(`${t.grandTotal}:`, tLX + 10, yPos)
       .fillColor('#00A86B').fontSize(16)
-      .text(`${(data.totalPrice || 0).toFixed(0)} ${data.currency}`, tVX, yPos, { width: 80, align: 'right' });
+      .text(`${(data.totalPrice || 0).toFixed(2)} ${data.currency}`, tVX, yPos, { width: 80, align: 'right' });
 
     yPos += 36;
     doc.fontSize(9).font(normalFont)

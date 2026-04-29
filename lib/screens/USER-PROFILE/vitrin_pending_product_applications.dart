@@ -342,7 +342,7 @@ class _VitrinPendingProductApplicationsState
           .get();
 
       final editAppsQuery = await _firestore
-          .collection('vitrin_product_edit_applications')
+          .collection('vitrin_edit_product_applications')
           .where('userId', isEqualTo: userId)
           .get();
 
@@ -449,10 +449,10 @@ class _VitrinPendingProductApplicationsState
         _tabHasMoreNewApps[tab] = false;
       }
 
-      // Build query for vitrin_product_edit_applications (only if there might be more)
+      // Build query for vitrin_edit_product_applications (only if there might be more)
       if (_tabHasMoreEditApps[tab] ?? false) {
         Query editAppsQuery = _firestore
-            .collection('vitrin_product_edit_applications')
+            .collection('vitrin_edit_product_applications')
             .where('userId', isEqualTo: userId)
             .where('status', isEqualTo: tab.name);
 

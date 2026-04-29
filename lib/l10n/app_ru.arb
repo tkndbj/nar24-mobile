@@ -2722,6 +2722,8 @@
   },
   "errorImportingFavorites": "Ошибка при импорте избранного",
   "noFavoritesToShare": "Нет избранного для публикации",
+  "tooManyFavoritesToShare": "В этой корзине слишком много товаров для публикации. Удалите некоторые товары, чтобы их количество не превышало {max}.",
+  "@tooManyFavoritesToShare": { "placeholders": { "max": { "type": "int" } } },
   "favoritesShared": "Избранное успешно поделено!",
   "myOrders": "Заказы на продукцию",
   "addNewAddress": "Добавить новый адрес",

@@ -72,7 +72,6 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
   final ValueNotifier<List<Product>> relatedProductsNotifier =
       ValueNotifier([]);
   final ValueNotifier<bool> isLoadingRelatedNotifier = ValueNotifier(false);
-  Timer? _cleanupTimer;
 
   final ValueNotifier<CartTotals?> cartTotalsNotifier = ValueNotifier(null);
   final ValueNotifier<bool> isTotalsLoadingNotifier = ValueNotifier(false);
@@ -88,6 +87,10 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
 
   // Concurrency control for quantity updates
   final Map<String, Completer<String>> _quantityUpdateLocks = {};
+
+  // Latest desired quantity per product — coalesces rapid taps into the
+  // final value so an in-flight write loop picks them up without spamming Firestore.
+  final Map<String, int> _pendingQuantityWrites = {};
 
   // Request coalescing (prevents duplicate fetches)
   final Map<String, Completer<void>> _pendingFetches = {};
@@ -122,9 +125,6 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
           _handleUserChange,
           onError: (e) => debugPrint('❌ Auth stream error: $e'),
         );
-    _cleanupTimer = Timer.periodic(Duration(seconds: 30), (_) {
-      _cleanupStaleOperations();
-    });
 
     markInitialized();
   }
@@ -137,12 +137,8 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
   Future<void> onPause() async {
     await super.onPause();
 
-    // Pause cleanup timer
-    _cleanupTimer?.cancel();
-    _cleanupTimer = null;
-
     if (kDebugMode) {
-      debugPrint('⏸️ CartProvider: Listener and timer paused');
+      debugPrint('⏸️ CartProvider: paused');
     }
   }
 
@@ -153,18 +149,13 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
     final user = _auth.currentUser;
     if (user == null) return;
 
-    // Restart cleanup timer
-    _cleanupTimer ??= Timer.periodic(Duration(seconds: 30), (_) {
-      _cleanupStaleOperations();
-    });
-
     // Re-populate IDs from user doc (0 reads)
     final ids = _userProvider.cartItemIdsNotifier.value;
     cartProductIdsNotifier.value = ids;
     cartCountNotifier.value = ids.length;
 
     if (kDebugMode) {
-      debugPrint('▶️ CartProvider: Listener and timer resumed');
+      debugPrint('▶️ CartProvider: resumed');
     }
   }
 
@@ -225,26 +216,6 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
       _totalsCache.invalidateForUser(user.uid);
     }
   }
-
-  void _cleanupStaleOperations() {
-    final now = DateTime.now();
-    _optimisticTimeouts.removeWhere((key, timer) {
-      if (!timer.isActive) {
-        _optimisticCache.remove(key);
-        return true;
-      }
-      return false;
-    });
-
-    _quantityUpdateLocks.removeWhere((key, completer) {
-      if (!completer.isCompleted) {
-        completer.complete('Timeout');
-        return true;
-      }
-      return false;
-    });
-  }
-
 
 
   void _updateCartIds(List<QueryDocumentSnapshot> docs) {
@@ -601,6 +572,7 @@ void _sortCartItems(List<Map<String, dynamic>> items) {
     }
     _optimisticTimeouts.clear();
     _quantityUpdateLocks.clear();
+    _pendingQuantityWrites.clear();
 
     // Clear totals cache
     _totalsCache.clearAll();
@@ -1028,52 +1000,65 @@ Future<String> addToCart({
       return 'Please wait';
     }
 
-    if (_quantityUpdateLocks.containsKey(productId)) {
-      return await _quantityUpdateLocks[productId]!.future;
+    // Step 1: Optimistic UI update — runs for every tap, including ones that
+    // arrive while a previous write is still in flight.
+    _applyOptimisticQuantityChange(productId, newQuantity);
+
+    // Step 2: Immediately recalculate totals (optimistic)
+    if (_currentTotalsProductIds.isNotEmpty) {
+      final optimistic =
+          _calculateOptimisticTotals(_currentTotalsProductIds.toList());
+      cartTotalsNotifier.value = optimistic;
     }
 
+    // Step 3: Record the latest desired quantity. If a write loop is already
+    // running for this product, it will pick up this value when it loops.
+    _pendingQuantityWrites[productId] = newQuantity;
+
+    final inFlight = _quantityUpdateLocks[productId];
+    if (inFlight != null) {
+      return await inFlight.future;
+    }
+
+    // Step 4: Start the write loop. Drains _pendingQuantityWrites[productId]
+    // until empty — guarantees the final desired qty lands on the server.
     final completer = Completer<String>();
     _quantityUpdateLocks[productId] = completer;
 
+    String resultMessage = 'Quantity updated';
     try {
-      // Step 1: Optimistic UI update
-      _applyOptimisticQuantityChange(productId, newQuantity);
+      while (_pendingQuantityWrites.containsKey(productId)) {
+        final qtyToWrite = _pendingQuantityWrites.remove(productId)!;
 
-      // Step 2: Immediately recalculate totals (optimistic)
-      if (_currentTotalsProductIds.isNotEmpty) {
-        final optimistic =
-            _calculateOptimisticTotals(_currentTotalsProductIds.toList());
-        cartTotalsNotifier.value = optimistic;
+        await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('cart')
+            .doc(productId)
+            .update({
+          'quantity': qtyToWrite,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        debugPrint('✅ Updated quantity: $productId = $qtyToWrite');
       }
 
-      // Step 3: Persist to Firestore
-      await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('cart')
-          .doc(productId)
-          .update({
-        'quantity': newQuantity,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      debugPrint('✅ Updated quantity: $productId = $newQuantity');
-
-      // Step 4: Invalidate cache & verify with server (non-blocking)
+      // Step 5: Invalidate cache & verify with server (non-blocking)
       _totalsCache.invalidateForUser(user.uid);
-
-      // Debounced server verification (prevents spam during rapid +/- taps)
       _debouncedTotalsVerification();
-
-      completer.complete('Quantity updated');
-      return 'Quantity updated';
     } catch (e) {
       debugPrint('❌ Update quantity error: $e');
-      completer.complete('Failed to update quantity');
-      return 'Failed to update quantity';
+      resultMessage = 'Failed to update quantity';
+      // Drop pending writes on error to avoid an infinite retry loop.
+      _pendingQuantityWrites.remove(productId);
     } finally {
       _quantityUpdateLocks.remove(productId);
+      if (!completer.isCompleted) {
+        completer.complete(resultMessage);
+      }
     }
+
+    return resultMessage;
   }
 
   void _debouncedTotalsVerification() {
@@ -1849,9 +1834,6 @@ final result = await callable.call({
 
     debugPrint('🧹 CartProvider disposing...');
 
-    _cleanupStaleOperations();
-    _cleanupTimer?.cancel();
-
     _authSubscription?.cancel();
     _userProvider.cartItemIdsNotifier.removeListener(_onUserDocCartIdsChanged);
     for (final timer in _optimisticTimeouts.values) {
@@ -1860,6 +1842,7 @@ final result = await callable.call({
     _optimisticTimeouts.clear();
     _optimisticCache.clear();
     _quantityUpdateLocks.clear();
+    _pendingQuantityWrites.clear();
 
     // ✅ Dispose cache
     _totalsCache.dispose();

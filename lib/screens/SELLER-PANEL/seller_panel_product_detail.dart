@@ -79,10 +79,26 @@ class _SellerPanelProductDetailState extends State<SellerPanelProductDetail> {
     }
   }
 
-  /// Sets up a real-time listener for the product document
+  /// Sets up a real-time listener for the product document.
+  ///
+  /// Constructs the document reference from the product id + collection
+  /// instead of relying on `widget.product.reference`, because products
+  /// loaded from Typesense (the seller panel grid path) never carry a
+  /// Firestore reference. Without this, _liveProduct never hydrates and
+  /// any field excluded from the Typesense `include_fields` whitelist
+  /// (notably `description`, full `attributes`, etc.) stays empty.
   void _setupProductListener() {
-    final productRef = widget.product.reference;
-    if (productRef == null) return;
+    final productId = widget.product.id;
+    if (productId.isEmpty) return;
+
+    // Prefer an existing reference if the parent did supply one (e.g. the
+    // few code paths that build Product directly from Firestore). Otherwise
+    // construct it from the product's known collection — shop products in
+    // the seller panel always live in `shop_products`.
+    final DocumentReference productRef = widget.product.reference ??
+        FirebaseFirestore.instance
+            .collection(widget.product.sourceCollection ?? 'shop_products')
+            .doc(productId);
 
     _productSubscription = productRef.snapshots().listen(
       (snapshot) {
@@ -1557,9 +1573,13 @@ class _SellerPanelProductDetailState extends State<SellerPanelProductDetail> {
                       return;
                     }
 
+                    // Pass the live product (Firestore-listener-backed) — not
+                    // widget.product, which may be a partial Product from the
+                    // grid/list that opened this screen and can be missing
+                    // fields like description.
                     context.push('/edit-product-shop', extra: {
-                      'product': widget.product,
-                      'shopId': widget.product.shopId,
+                      'product': currentProduct,
+                      'shopId': currentProduct.shopId,
                     });
                   },
                 ),

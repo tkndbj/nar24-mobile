@@ -2566,7 +2566,7 @@
   "selectJewelryType": "Select Type",
   "selectJewelryMaterial": "Select Material",
   "askToSellerNoSellerError": "Seller information could not be loaded.",
-  "askToSellerInfoStart": "You can ask questions about your order on the ",
+  "askToSellerInfoStart": "You view order status in ",
   "productHasExistingDiscount": "This product already has {percentage}% discount applied. Enter a new value to update it or leave empty to keep the existing discount.",
 "productHasValidDiscount": "This product has {percentage}% discount applied. Leave empty to keep it or enter a new value to update.",
 "@productHasValidDiscount": {
@@ -5247,6 +5247,8 @@
   },
   "errorImportingFavorites": "Error importing favorites",
   "noFavoritesToShare": "No favorites to share",
+  "tooManyFavoritesToShare": "This basket has too many items to share. Please remove some items so the total is at most {max}.",
+  "@tooManyFavoritesToShare": { "placeholders": { "max": { "type": "int" } } },
   
   "noActiveBoostMessage": "You have no active boost. Boost a product and reach to your target audience to amplify your sales.",
   "boostProductButton": "Boost a product",

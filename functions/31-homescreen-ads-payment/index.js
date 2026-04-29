@@ -311,7 +311,7 @@ async function generateHashVer3(params) {
           .trim()
           .substring(0, 50) || 'Customer';
   
-        const formattedAmount = Math.round(parseFloat(amount) * 1.2).toString(); // Include 20% tax
+        const formattedAmount = (parseFloat(amount) * 1.2).toFixed(2); // Include 20% tax
         const rnd = Date.now().toString();
   
         const baseUrl = `https://europe-west3-emlak-mobile-app.cloudfunctions.net`;

@@ -697,3 +697,4 @@ export {
   processAccountDeletionUserProductArchive,
   processAccountDataPurge,
 } from './56-account-deletion/index.js';
+export { cleanupSharedFavorites } from './57-shared-favorites-cleanup/index.js';

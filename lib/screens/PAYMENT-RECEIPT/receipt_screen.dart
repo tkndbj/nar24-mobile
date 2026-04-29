@@ -966,7 +966,7 @@ class _ReceiptScreenState extends State<ReceiptScreen>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          '${receipt.totalPrice.toStringAsFixed(0)} ${receipt.currency}',
+                          '${receipt.totalPrice.toStringAsFixed(2)} ${receipt.currency}',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -1508,7 +1508,7 @@ class _ReceiptScreenState extends State<ReceiptScreen>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          '${receipt.totalPrice.toStringAsFixed(0)} ${receipt.currency}',
+                          '${receipt.totalPrice.toStringAsFixed(2)} ${receipt.currency}',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -1755,7 +1755,7 @@ class _ReceiptScreenState extends State<ReceiptScreen>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      '${receipt.totalPrice.toStringAsFixed(0)} ${receipt.currency}',
+                      '${receipt.totalPrice.toStringAsFixed(2)} ${receipt.currency}',
                       style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,

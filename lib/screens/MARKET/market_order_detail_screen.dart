@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:intl/intl.dart';
 import '../../constants/market_categories.dart';
@@ -286,7 +287,7 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
     }
   }
 
-  String _fmt(double v) => NumberFormat('#,##0').format(v);
+  String _fmt(double v) => NumberFormat('#,##0.00').format(v);
   String _fmtDate(Timestamp ts) =>
       DateFormat('dd/MM/yy HH:mm').format(ts.toDate());
 
@@ -331,7 +332,13 @@ class _MarketOrderDetailScreenState extends State<MarketOrderDetailScreen>
           border: Border.all(color: Colors.white.withOpacity(0.2)),
         ),
         child: IconButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/');
+            }
+          },
           icon: const Icon(Icons.arrow_back_ios_new,
               size: 18, color: Colors.white),
         ),

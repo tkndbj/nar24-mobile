@@ -370,28 +370,28 @@ class ProductPaymentProvider with ChangeNotifier {
           userData?['displayName'] ?? userData?['name'] ?? 'Customer';
       final customerEmail = user.email ?? '';
 
-      // Prepare cart data
+      // Cart payload sent to server. Pricing fields are NOT sent — server
+      // recomputes the items subtotal, delivery price, and final total from
+      // authoritative product/coupon/settings docs. Client may suggest a total
+      // via clientExpectedTotal (below) for cross-check only.
       final cartData = {
         'items': itemsPayload,
-        'cartCalculatedTotal': cartCalculatedTotal,
         'deliveryOption': selectedDeliveryOption ?? 'normal',
-        'deliveryPrice':
-            getEffectiveDeliveryPrice(), // Changed from getDeliveryPrice()
         'address': addressPayload,
         'paymentMethod': 'Card',
         'saveAddress': saveAddress,
         'couponId': appliedCoupon?.id,
         'freeShippingBenefitId':
             useFreeShipping ? _usedFreeShippingBenefit?.id : null,
-        'clientDeliveryPrice': getDeliveryPrice(),
       };
 
       // Initialize İşbank payment
       final HttpsCallable initPayment =
           _functions.httpsCallable('initializeIsbankPayment');
       final initResponse = await initPayment.call({
-        'amount':
-            finalTotal, // Server will recalculate — this is for logging/comparison only
+        // Server-side cross-check only. Server hard-blocks if its own
+        // calculation diverges from this by more than the tolerance.
+        'clientExpectedTotal': finalTotal,
         'orderNumber': orderNumber,
         'customerName': customerName,
         'customerEmail': customerEmail,

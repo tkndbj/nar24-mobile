@@ -9,6 +9,15 @@ import {createQRCodeTask} from '../16-qr-for-orders/index.js';
 import { CloudTasksClient } from '@google-cloud/tasks';
 import { setPaymentExpiresAt } from '../33-payment-cleanup/index.js';
 import { reversePayment } from '../shared/isbank-void.js';
+import {
+  calculateTotalsWithDiscounts,
+  findBestApplicableBundle,
+  roundCurrency,
+} from '../shared/cart-pricing.js';
+
+// Tolerance (TL) for client-vs-server total cross-check.
+// Anything above this hard-blocks the payment.
+const PRICE_DISCREPANCY_TOLERANCE = 0.05;
 
 const tasksClient = new CloudTasksClient();
 
@@ -476,6 +485,36 @@ async function createOrderTransaction(buyerId, requestData) {
     productsMeta = await batchFetchProducts(tx, db, items);
     await batchFetchSellers(db, productsMeta);
 
+    // ── Resolved per-item prices (server-authoritative, set at payment init) ─
+    // Map<productId, {unitPrice, itemTotal, isBundleItem, currency}>.
+    // If absent (defensive fallback only), per-item prices fall back to data.price.
+    const resolvedPriceMap = new Map();
+    if (preCalc?.itemPrices && Array.isArray(preCalc.itemPrices)) {
+      for (const ip of preCalc.itemPrices) {
+        if (ip?.productId) resolvedPriceMap.set(ip.productId, ip);
+      }
+    }
+    const appliedBundleProductIds = new Set(
+      Array.isArray(preCalc?.appliedBundle?.productIds) ? preCalc.appliedBundle.productIds : [],
+    );
+
+    const resolvePriceFor = (productId, dataPrice, qty) => {
+      const r = resolvedPriceMap.get(productId);
+      if (r) {
+        return {
+          unitPrice: parseFloat(r.unitPrice) || 0,
+          itemTotal: parseFloat(r.itemTotal) || 0,
+          isBundleItem: !!r.isBundleItem,
+        };
+      }
+      const fallbackUnit = parseFloat(dataPrice) || 0;
+      return {
+        unitPrice: fallbackUnit,
+        itemTotal: fallbackUnit * qty,
+        isBundleItem: appliedBundleProductIds.has(productId),
+      };
+    };
+
     // ── Stock validation + seller group accumulation ─────────────────────────
     let totalQuantity = 0;
     const sellerGroups = new Map();
@@ -520,11 +559,12 @@ async function createOrderTransaction(buyerId, requestData) {
           dynAttrs[key] = item[key];
         }
       });
+      const sg = resolvePriceFor(meta.item.productId, data.price, qty);
       sellerGroups.get(sellerId).items.push({
         productName: data.productName || 'Unknown Product',
         quantity: item.quantity || 1,
-        unitPrice: item.calculatedUnitPrice || data.price,
-        totalPrice: item.calculatedTotal || ((data.price || 0) * (item.quantity || 1)),
+        unitPrice: sg.unitPrice,
+        totalPrice: sg.itemTotal,
         selectedAttributes: dynAttrs,
         sellerName: meta.sellerName,
         sellerId: data.shopId || data.userId,
@@ -605,12 +645,18 @@ async function createOrderTransaction(buyerId, requestData) {
         productImage = data.imageUrls[0];
       }
 
+      const resolved = resolvePriceFor(ref.id, data.price, qty);
+      const originalPrice = parseFloat(data.price) || 0;
+      const wasInBundle = resolved.isBundleItem && resolved.unitPrice < originalPrice;
+
       const orderItemData = {
         orderId: orderRef.id,
         buyerId,
         productId: ref.id,
         productName: data.productName || 'Unknown Product',
-        price: data.price || 0,
+        price: data.price || 0,           // raw list price (kept for historical reference)
+        unitPrice: resolved.unitPrice,    // actual paid unit price (post bulk/bundle discount)
+        itemTotal: resolved.itemTotal,    // actual paid line total — use this for revenue
         currency: data.currency || 'TL',
         quantity: qty,
         sellerName,
@@ -629,24 +675,26 @@ async function createOrderTransaction(buyerId, requestData) {
         shopId: data.shopId || null,
         isShopProduct: !!data.shopId,
         ourComission: item.ourComission || 0,
-        bundleInfo: item.isBundleItem && item.calculatedUnitPrice && item.calculatedUnitPrice < data.price ? {
+        bundleInfo: wasInBundle ? {
           wasInBundle: true,
-          originalPrice: data.price,
-          bundlePrice: item.calculatedUnitPrice,
-          bundleDiscount: Math.round(((data.price - item.calculatedUnitPrice) / data.price) * 100),
-          bundleDiscountAmount: data.price - item.calculatedUnitPrice,
+          originalPrice,
+          bundlePrice: resolved.unitPrice,
+          bundleDiscount: originalPrice > 0 ?
+            Math.round(((originalPrice - resolved.unitPrice) / originalPrice) * 100) :
+            0,
+          bundleDiscountAmount: originalPrice - resolved.unitPrice,
           originalBundleDiscountPercentage: data.bundleDiscount || null,
         } : null,
         salePreferenceInfo: (() => {
           const salePrefs = item.salePreferences;
           if (salePrefs?.discountThreshold && salePrefs?.discountPercentage) {
             const quantity = Math.max(1, item.quantity || 1);
+            const discountedReference = originalPrice * (1 - (salePrefs.discountPercentage / 100));
             return {
               discountThreshold: salePrefs.discountThreshold,
               discountPercentage: salePrefs.discountPercentage,
               discountApplied: quantity >= salePrefs.discountThreshold,
-              wasSalePrefUsed: item.calculatedUnitPrice &&
-                item.calculatedUnitPrice < (data.price * (1 - (salePrefs.discountPercentage / 100))) + 0.01,
+              wasSalePrefUsed: resolved.unitPrice < discountedReference + 0.01,
             };
           }
           return null;
@@ -673,8 +721,8 @@ async function createOrderTransaction(buyerId, requestData) {
       receiptItems.push({
         productName: data.productName || 'Unknown Product',
         quantity: qty,
-        unitPrice: item.calculatedUnitPrice || data.price,
-        totalPrice: item.calculatedTotal || (data.price * qty),
+        unitPrice: resolved.unitPrice,
+        totalPrice: resolved.itemTotal,
         selectedAttributes: dynAttrs,
         sellerName,
         sellerId: data.shopId || data.userId,
@@ -751,13 +799,24 @@ async function createOrderTransaction(buyerId, requestData) {
 
   // Build serializable seller metrics — computed here so productsMeta
   // doesn't need to be passed through the task payload.
+  // Uses server-authoritative resolved prices (postTxData.preCalc.itemPrices) when present.
+  const postTxPreCalc = postTxData?.preCalc || null;
   const sellerMetrics = [];
   {
+    const itemPriceLookup = new Map();
+    if (Array.isArray(postTxPreCalc?.itemPrices)) {
+      for (const ip of postTxPreCalc.itemPrices) {
+        if (ip?.productId) itemPriceLookup.set(ip.productId, parseFloat(ip.itemTotal) || 0);
+      }
+    }
+
     const userTotals = new Map();
     const shopTotals = new Map();
-    for (const { data, item } of productsMeta) {
-      const qty   = Math.max(1, item.quantity || 1);
-      const price = item.calculatedTotal || ((data.price || 0) * qty);
+    for (const { ref, data, item } of productsMeta) {
+      const qty = Math.max(1, item.quantity || 1);
+      const price = itemPriceLookup.has(ref.id) ?
+        itemPriceLookup.get(ref.id) :
+        (parseFloat(data.price) || 0) * qty;
       if (data.shopId) {
         const e = shopTotals.get(data.shopId) || { qty: 0, price: 0 };
         e.qty += qty; e.price += price;
@@ -807,16 +866,21 @@ async function createOrderTransaction(buyerId, requestData) {
       pickupPoint: deliveryOption === 'pickup' ? pickupPoint : null,
       address: deliveryOption !== 'pickup' ? address    : null,
     },
-    activityItems: productsMeta.map(({ data, item }) => ({
-      productId: data.id || item.productId,
-      shopId: data.shopId || null,
-      category: data.category,
-      subcategory: data.subcategory,
-      subsubcategory: data.subsubcategory,
-      brandModel: data.brandModel,
-      price: item.calculatedUnitPrice || data.price,
-      quantity: item.quantity || 1,
-    })),
+    activityItems: productsMeta.map(({ ref, data, item }) => {
+      const resolved = (Array.isArray(postTxPreCalc?.itemPrices) ?
+        postTxPreCalc.itemPrices.find((ip) => ip?.productId === ref.id) :
+        null);
+      return {
+        productId: data.id || item.productId,
+        shopId: data.shopId || null,
+        category: data.category,
+        subcategory: data.subcategory,
+        subsubcategory: data.subsubcategory,
+        brandModel: data.brandModel,
+        price: resolved ? (parseFloat(resolved.unitPrice) || 0) : (data.price || 0),
+        quantity: item.quantity || 1,
+      };
+    }),
     adConversion: {
       productIds: items.map((i) => i.productId),
       shopIds: [...new Set(productsMeta.filter((m) => m.data.shopId).map((m) => m.data.shopId))],
@@ -1139,7 +1203,15 @@ export const initializeIsbankPayment = onCall(
 
       await checkPaymentRateLimit(userId);
 
-      const { amount, orderNumber, customerName, customerEmail, customerPhone, cartData } = request.data;
+      const {
+        clientExpectedTotal,
+        amount, // legacy alias for clientExpectedTotal — kept for backward compat during rollout
+        orderNumber,
+        customerName,
+        customerEmail,
+        customerPhone,
+        cartData,
+      } = request.data;
 
       const sanitizedCustomerName = (() => {
         if (!customerName) return 'Customer';
@@ -1151,20 +1223,15 @@ export const initializeIsbankPayment = onCall(
         throw new HttpsError('invalid-argument', 'orderNumber and cartData are required');
       }
 
-      const cartCalculatedTotal = parseFloat(cartData.cartCalculatedTotal) || 0;
       const deliveryOption = cartData.deliveryOption || 'normal';
       const couponId = cartData.couponId || null;
       const freeShippingBenefitId = cartData.freeShippingBenefitId || null;
 
-      // ── Pre-payment stock validation ─────────────────────────────────────
-      // Catches out-of-stock BEFORE charging the card, avoiding the
-      // charge → reverse cycle that happens when stock runs out mid-checkout.
-      // Note: this is an advisory check — final authoritative check still
-      // runs inside createOrderTransaction with proper atomic reads.
       if (!Array.isArray(cartData.items) || cartData.items.length === 0) {
         throw new HttpsError('invalid-argument', 'Cart is empty');
       }
 
+      // ── Fetch products (try `products` first, fall back to `shop_products`) ──
       const productRefs = cartData.items.map((item) => {
         if (!item.productId || typeof item.productId !== 'string') {
           throw new HttpsError('invalid-argument', 'Invalid productId in cart');
@@ -1174,7 +1241,6 @@ export const initializeIsbankPayment = onCall(
 
       const productSnaps = await Promise.all(productRefs.map((ref) => ref.get()));
 
-      // Fallback to shop_products for missing docs
       const missingIndices = [];
       productSnaps.forEach((snap, i) => {if (!snap.exists) missingIndices.push(i);});
 
@@ -1185,10 +1251,8 @@ export const initializeIsbankPayment = onCall(
         );
       }
 
-      for (let i = 0; i < cartData.items.length; i++) {
-        const item = cartData.items[i];
-        const qty = Math.max(1, item.quantity || 1);
-
+      // Resolve every cart item to its authoritative product data.
+      const resolvedItems = cartData.items.map((item, i) => {
         let productData = productSnaps[i].exists ? productSnaps[i].data() : null;
         if (!productData) {
           const shopIdx = missingIndices.indexOf(i);
@@ -1196,14 +1260,17 @@ export const initializeIsbankPayment = onCall(
             productData = shopProductSnaps[shopIdx].data();
           }
         }
-
         if (!productData) {
           throw new HttpsError('not-found', `Product ${item.productId} no longer exists`);
         }
+        return { item, productData };
+      });
 
-        // Curtains have no stock limit
+      // ── Stock check (advisory; transaction does the atomic check) ───────
+      for (const { item, productData } of resolvedItems) {
         if (productData.subsubcategory === 'Curtains') continue;
 
+        const qty = Math.max(1, item.quantity || 1);
         const colorKey = (item.selectedColor && item.selectedColor !== 'default') ? item.selectedColor : null;
         const hasColorVariant = colorKey && productData.colorQuantities &&
           Object.prototype.hasOwnProperty.call(productData.colorQuantities, colorKey);
@@ -1219,6 +1286,30 @@ export const initializeIsbankPayment = onCall(
         }
       }
 
+      // ── SERVER-AUTHORITATIVE PRICING ────────────────────────────────────
+      // Build pricing-shaped items by merging cart input with product fields.
+      // The shared module reads price/discountThreshold/bulkDiscountPercentage/
+      // bundleData/bundleIds/currency from these objects.
+      const pricingItems = resolvedItems.map(({ item, productData }) => ({
+        productId: item.productId,
+        quantity: Math.max(1, item.quantity || 1),
+        productName: productData.productName,
+        currency: productData.currency || 'TL',
+        price: productData.price,
+        discountThreshold: productData.discountThreshold,
+        bulkDiscountPercentage: productData.bulkDiscountPercentage,
+        bundleData: productData.bundleData,
+        bundleIds: productData.bundleIds,
+      }));
+
+      const selectedBundle = await findBestApplicableBundle(db, pricingItems);
+      const totalsResult = calculateTotalsWithDiscounts(pricingItems, selectedBundle);
+
+      const serverItemsSubtotal = totalsResult.total;
+      const serverItemPrices = totalsResult.itemPrices; // per-cartItem resolved prices
+      const cartCurrency = totalsResult.currency || 'TL';
+
+      // ── Delivery (server-computed) ──────────────────────────────────────
       let deliverySettings = null;
       try {
         const deliveryDoc = await db.collection('settings').doc('delivery').get();
@@ -1227,8 +1318,9 @@ export const initializeIsbankPayment = onCall(
         console.error('Failed to fetch delivery settings:', e);
       }
 
-      const serverDeliveryPriceRaw = calculateDeliveryPrice(deliveryOption, cartCalculatedTotal, deliverySettings);
+      const serverDeliveryPriceRaw = calculateDeliveryPrice(deliveryOption, serverItemsSubtotal, deliverySettings);
 
+      // ── Coupon + free-shipping (already server-side) ────────────────────
       let serverCouponDiscount = 0;
       let serverFreeShippingApplied = false;
       let couponCode = null;
@@ -1238,7 +1330,7 @@ export const initializeIsbankPayment = onCall(
         if (couponDoc.exists) {
           const coupon = couponDoc.data();
           if (!coupon.isUsed && (!coupon.expiresAt || coupon.expiresAt.toDate() >= new Date())) {
-            serverCouponDiscount = Math.min(coupon.amount || 0, cartCalculatedTotal);
+            serverCouponDiscount = Math.min(coupon.amount || 0, serverItemsSubtotal);
             couponCode = coupon.code || null;
           }
         }
@@ -1255,15 +1347,39 @@ export const initializeIsbankPayment = onCall(
       }
 
       const serverDeliveryPrice = serverFreeShippingApplied ? 0 : serverDeliveryPriceRaw;
-      const serverFinalTotal = Math.max(0, cartCalculatedTotal - serverCouponDiscount) + serverDeliveryPrice;
+      const serverFinalTotal = roundCurrency(
+        Math.max(0, serverItemsSubtotal - serverCouponDiscount) + serverDeliveryPrice,
+      );
 
-      const clientAmount = parseFloat(amount) || 0;
-      const discrepancy = Math.abs(serverFinalTotal - clientAmount);
-      if (discrepancy > 0.01) {
-        console.warn(`⚠️ PRICE DISCREPANCY: client=${clientAmount}, server=${serverFinalTotal}, diff=${discrepancy.toFixed(2)}`);
+      // ── Cross-check vs client claim — HARD BLOCK on mismatch ────────────
+      // Anti-spoof: client may suggest a total but server's calculation wins.
+      const clientClaim = parseFloat(clientExpectedTotal ?? amount);
+      if (Number.isFinite(clientClaim) && clientClaim > 0) {
+        const discrepancy = Math.abs(serverFinalTotal - clientClaim);
+        if (discrepancy > PRICE_DISCREPANCY_TOLERANCE) {
+          try {
+            await db.collection('_payment_alerts').add({
+              type: 'price_discrepancy_blocked',
+              severity: 'high',
+              orderNumber,
+              userId,
+              clientClaim,
+              serverFinalTotal,
+              discrepancy,
+              isRead: false,
+              isResolved: false,
+              timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          } catch (_) {/* alerting must never throw */}
+
+          throw new HttpsError(
+            'failed-precondition',
+            'Cart total has changed. Please return to your cart and try again.',
+          );
+        }
       }
 
-      const formattedAmount = Math.round(serverFinalTotal).toString();
+      const formattedAmount = serverFinalTotal.toFixed(2);
       const rnd = Date.now().toString();
       const callbackUrl = `https://europe-west3-emlak-mobile-app.cloudfunctions.net/isbankPaymentCallback`;
       const config = getIsbankConfig();
@@ -1309,18 +1425,28 @@ export const initializeIsbankPayment = onCall(
         tel: customerPhone || '',
       };
 
+      // Persist a sanitized cartData where pricing fields hold SERVER values.
+      // Downstream (createOrderTransaction, receiptTask) reads cartData.cartCalculatedTotal
+      // and treats it as authoritative — we ensure it always is.
+      const sanitizedCartData = {
+        ...cartData,
+        cartCalculatedTotal: serverItemsSubtotal,
+        deliveryPrice: serverDeliveryPrice,
+        clientDeliveryPrice: serverDeliveryPriceRaw,
+      };
+
       const docData = {
         userId,
         amount: serverFinalTotal,
         formattedAmount,
-        clientAmount,
+        clientExpectedTotal: Number.isFinite(clientClaim) ? clientClaim : null,
         orderNumber,
         status: 'awaiting_3d',
         paymentParams,
-        cartData,
+        cartData: sanitizedCartData,
         customerInfo: { name: sanitizedCustomerName, email: customerEmail, phone: customerPhone },
         serverCalculation: {
-          itemsSubtotal: cartCalculatedTotal,
+          itemsSubtotal: serverItemsSubtotal,
           couponDiscount: serverCouponDiscount,
           couponCode,
           deliveryPrice: serverDeliveryPrice,
@@ -1328,6 +1454,9 @@ export const initializeIsbankPayment = onCall(
           freeShippingApplied: serverFreeShippingApplied,
           finalTotal: serverFinalTotal,
           deliveryOption,
+          currency: cartCurrency,
+          itemPrices: serverItemPrices,
+          appliedBundle: totalsResult.appliedBundle,
           calculatedAt: new Date().toISOString(),
         },
         createdAt: admin.firestore.FieldValue.serverTimestamp(),

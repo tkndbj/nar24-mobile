@@ -1182,7 +1182,7 @@ class _FoodReceiptDetailScreenState extends State<FoodReceiptDetailScreen>
                 ),
               ),
               Text(
-                '${item.total.toStringAsFixed(0)} ${_receipt!.currency}',
+                '${item.total.toStringAsFixed(2)} ${_receipt!.currency}',
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -1196,7 +1196,7 @@ class _FoodReceiptDetailScreenState extends State<FoodReceiptDetailScreen>
             Padding(
               padding: const EdgeInsets.only(left: 44),
               child: Text(
-                '${item.effectiveUnit.toStringAsFixed(0)} ${_receipt!.currency} ${l10n.each}',
+                '${item.effectiveUnit.toStringAsFixed(2)} ${_receipt!.currency} ${l10n.each}',
                 style: TextStyle(
                   fontSize: 11,
                   color: isDark ? Colors.grey[500] : Colors.grey[400],
@@ -1222,7 +1222,7 @@ class _FoodReceiptDetailScreenState extends State<FoodReceiptDetailScreen>
                     [
                       localizeExtra(ext.name, l10n),
                       if (ext.quantity > 1) '×${ext.quantity}',
-                      if (ext.price > 0) '+${ext.price.toStringAsFixed(0)}',
+                      if (ext.price > 0) '+${ext.price.toStringAsFixed(2)}',
                     ].join(' '),
                     style: TextStyle(
                       fontSize: 10,
@@ -1284,7 +1284,7 @@ class _FoodReceiptDetailScreenState extends State<FoodReceiptDetailScreen>
                   isDark: isDark,
                   label: l10n.subtotal,
                   value: _infoText(
-                      '${r.subtotal.toStringAsFixed(0)} ${r.currency}', isDark),
+                      '${r.subtotal.toStringAsFixed(2)} ${r.currency}', isDark),
                 ),
                 if (!r.isPickup)
                   _buildInfoRow(
@@ -1293,7 +1293,7 @@ class _FoodReceiptDetailScreenState extends State<FoodReceiptDetailScreen>
                     value: Text(
                       r.deliveryFee == 0
                           ? l10n.free
-                          : '${r.deliveryFee.toStringAsFixed(0)} ${r.currency}',
+                          : '${r.deliveryFee.toStringAsFixed(2)} ${r.currency}',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -1335,7 +1335,7 @@ class _FoodReceiptDetailScreenState extends State<FoodReceiptDetailScreen>
                   ),
                 ),
                 Text(
-                  '${r.totalPrice.toStringAsFixed(0)} ${r.currency}',
+                  '${r.totalPrice.toStringAsFixed(2)} ${r.currency}',
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,

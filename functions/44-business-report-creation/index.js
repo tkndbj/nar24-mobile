@@ -543,7 +543,7 @@ const ReportTranslations = {
               [t(lang, 'productName'), t(lang, 'price'), t(lang, 'quantity'), t(lang, 'views'), t(lang, 'sales'), t(lang, 'favorites'), t(lang, 'cartAdds')],
               (item) => [
                 item.productName || t(lang, 'notSpecified'),
-                `${item.price || 0} ${item.currency || 'TL'}`,
+                `${(Number(item.price) || 0).toFixed(2)} ${item.currency || 'TL'}`,
                 String(item.quantity || 0),
                 String(item.clickCount || 0),
                 String(item.purchaseCount || 0),
@@ -556,14 +556,21 @@ const ReportTranslations = {
             doc.addPage();
             addSection(doc, t(lang, 'orders'), reportData.orders,
               [t(lang, 'product'), t(lang, 'buyer'), t(lang, 'quantity'), t(lang, 'price'), t(lang, 'status'), t(lang, 'date')],
-              (item) => [
-                item.productName || t(lang, 'notSpecified'),
-                item.buyerName || t(lang, 'notSpecified'),
-                String(item.quantity || 0),
-                `${item.price || 0} ${item.currency || 'TL'}`,
-                localizeShipmentStatus(item.shipmentStatus, lang),
-                item.timestamp ? formatDate(item.timestamp.toDate(), lang) : t(lang, 'notSpecified'),
-              ], lang);
+              (item) => {
+                // Prefer the actual paid unit price (post bulk/bundle discounts).
+                // Fallback to raw price for orders created before unitPrice was persisted.
+                const paidUnit = (typeof item.unitPrice === 'number') ?
+                  item.unitPrice :
+                  (Number(item.price) || 0);
+                return [
+                  item.productName || t(lang, 'notSpecified'),
+                  item.buyerName || t(lang, 'notSpecified'),
+                  String(item.quantity || 0),
+                  `${paidUnit.toFixed(2)} ${item.currency || 'TL'}`,
+                  localizeShipmentStatus(item.shipmentStatus, lang),
+                  item.timestamp ? formatDate(item.timestamp.toDate(), lang) : t(lang, 'notSpecified'),
+                ];
+              }, lang);
           }
     
           if (config.includeBoostHistory && reportData.boostHistory) {
@@ -573,7 +580,7 @@ const ReportTranslations = {
               (item) => [
                 item.itemName || t(lang, 'notSpecified'),
                 String(item.boostDuration || 0),
-                `${item.boostPrice || 0} ${item.currency || 'TL'}`,
+                `${(Number(item.boostPrice) || 0).toFixed(2)} ${item.currency || 'TL'}`,
                 String(item.impressionsDuringBoost || 0),
                 String(item.clicksDuringBoost || 0),
                 item.createdAt ? formatDate(item.createdAt.toDate(), lang) : t(lang, 'notSpecified'),
