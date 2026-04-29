@@ -10,8 +10,9 @@ import '../utils/app_image_cache_manager.dart';
 import '../utils/cloudinary_url_builder.dart';
 import 'cloudinary_image.dart';
 
-// Hero banner target width — covers up to 1200px logical × ~1.3 DPR.
-const int _kAdsBannerCdnWidth = 1600;
+// Hero banner target width — covers the largest phone widths (~1290
+// physical px) without wasting bytes. Banners aren't pinch-zoomed.
+const int _kAdsBannerCdnWidth = 1200;
 
 class AdsBannerWidget extends StatefulWidget {
   final ValueNotifier<Color> backgroundColorNotifier;

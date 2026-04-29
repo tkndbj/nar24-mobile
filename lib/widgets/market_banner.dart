@@ -55,7 +55,9 @@ class _MarketBannerSliverState extends State<MarketBannerSliver>
 
   // CDN target width — Cloudinary serves bytes at this width, so decode is
   // already correct. The old _imageCacheHeight is no longer needed.
-  static const int _imageCacheWidth = 1600;
+  // 1200 covers the largest phone widths (~1290 physical px) without
+  // wasting bytes; full-width banners aren't pinch-zoomed.
+  static const int _imageCacheWidth = 1200;
 
   final Set<String> _prefetchedUrls = {};
 

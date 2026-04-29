@@ -61,6 +61,16 @@
 
         <!-- Deep linking configuration -->
         <meta-data android:name="flutter_deeplinking_enabled" android:value="true" />
+
+        <!-- Impeller disabled on Android: Adreno+Vulkan path corrupts texture
+             uploads under sustained image load (product feed, banners), which
+             showed up as "matrixy/glitchy" frames in image widgets that healed
+             on backgrounding (surface destroyed → textures re-uploaded). Skia
+             is stable for this workload. Revisit if Flutter ships an Impeller
+             fix for Adreno texture upload races. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
         
         <activity
             android:name=".MainActivity"
