@@ -173,12 +173,6 @@ class _VitrinPendingProductApplicationsState
   // Track tabs currently being loaded to prevent duplicate fetches
   final Set<VitrinApplicationTab> _tabsBeingLoaded = {};
 
-  Map<VitrinApplicationTab, int> _counts = {
-    VitrinApplicationTab.pending: 0,
-    VitrinApplicationTab.approved: 0,
-    VitrinApplicationTab.rejected: 0,
-  };
-
   VitrinApplicationTab _activeTab = VitrinApplicationTab.pending;
   static const int _pageSize = 10;
 
@@ -211,8 +205,9 @@ class _VitrinPendingProductApplicationsState
 
     _lastUserId = _currentUserId;
     _setupAuthListener();
-    _fetchCounts();
-    // Load first tab (pending) immediately
+    // Load first tab (pending) immediately. Other tabs stay idle until
+    // _onTabChanged / _onTabAnimation fires for them — keeps Firestore
+    // reads bounded to what the user actually visits.
     _loadTabDataIfNeeded(VitrinApplicationTab.pending);
   }
 
@@ -257,15 +252,9 @@ class _VitrinPendingProductApplicationsState
               _tabIsLoading[tab] = false;
               _tabIsLoadingMore[tab] = false;
             }
-            _counts = {
-              VitrinApplicationTab.pending: 0,
-              VitrinApplicationTab.approved: 0,
-              VitrinApplicationTab.rejected: 0,
-            };
           });
 
           if (newUserId != null) {
-            _fetchCounts();
             _loadTabDataIfNeeded(_activeTab);
           }
         }
@@ -328,64 +317,6 @@ class _VitrinPendingProductApplicationsState
     }
 
     _fetchApplications(tab: tab);
-  }
-
-  Future<void> _fetchCounts() async {
-    final userId = _currentUserId;
-    if (userId == null) return;
-
-    try {
-      // Fetch from both collections
-      final newAppsQuery = await _firestore
-          .collection('vitrin_product_applications')
-          .where('userId', isEqualTo: userId)
-          .get();
-
-      final editAppsQuery = await _firestore
-          .collection('vitrin_edit_product_applications')
-          .where('userId', isEqualTo: userId)
-          .get();
-
-      int pending = 0;
-      int approved = 0;
-      int rejected = 0;
-
-      // Count new applications
-      for (final doc in newAppsQuery.docs) {
-        final status = doc.data()['status'] as String?;
-        if (status == 'pending') {
-          pending++;
-        } else if (status == 'approved') {
-          approved++;
-        } else if (status == 'rejected') {
-          rejected++;
-        }
-      }
-
-      // Count edit applications
-      for (final doc in editAppsQuery.docs) {
-        final status = doc.data()['status'] as String?;
-        if (status == 'pending') {
-          pending++;
-        } else if (status == 'approved') {
-          approved++;
-        } else if (status == 'rejected') {
-          rejected++;
-        }
-      }
-
-      if (mounted) {
-        setState(() {
-          _counts = {
-            VitrinApplicationTab.pending: pending,
-            VitrinApplicationTab.approved: approved,
-            VitrinApplicationTab.rejected: rejected,
-          };
-        });
-      }
-    } catch (e) {
-      debugPrint('Error fetching counts: $e');
-    }
   }
 
   Future<void> _fetchApplications({
@@ -659,21 +590,28 @@ class _VitrinPendingProductApplicationsState
     final applications = _tabApplications[tab] ?? [];
     final hasLoaded = _loadedTabs.contains(tab);
 
-    // Show loading skeleton if:
-    // 1. Tab is currently loading
-    // 2. Tab is being loaded (fetch in progress)
-    // 3. Tab hasn't been loaded yet (will be triggered by animation listener)
-    if (isLoading || isBeingLoaded || !hasLoaded) {
-      // Trigger loading if not already in progress
-      // This is a safety net in case animation listener didn't trigger
-      if (!hasLoaded && !isBeingLoaded && !isLoading) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _loadTabDataIfNeeded(tab);
-          }
-        });
-      }
+    // Show loading skeleton if the tab is actively fetching, OR if it's
+    // the active tab and hasn't been loaded yet (the load is about to fire
+    // via _onTabChanged / _onTabAnimation / initState).
+    //
+    // Crucially, we do NOT auto-trigger fetches for non-active tabs from
+    // here. TabBarView builds all children, so doing so would fire reads
+    // for every tab on first render — exactly the cost we're avoiding.
+    if (isLoading || isBeingLoaded) {
       return _buildLoadingSkeleton(isDark);
+    }
+    if (!hasLoaded) {
+      if (tab == _activeTab) {
+        // Safety net: active tab missed its trigger somehow (rare race
+        // between initState and first build). Re-arm the load.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _loadTabDataIfNeeded(tab);
+        });
+        return _buildLoadingSkeleton(isDark);
+      }
+      // Inactive, never visited — render nothing. The user has to switch
+      // here for the load to fire.
+      return const SizedBox.shrink();
     }
 
     if (applications.isEmpty) {
@@ -758,27 +696,15 @@ class _VitrinPendingProductApplicationsState
         overlayColor: WidgetStateProperty.all(Colors.transparent),
         indicatorSize: TabBarIndicatorSize.tab,
         tabs: [
-          _buildModernTab(
-            l10n.pending,
-            Icons.hourglass_empty_rounded,
-            _counts[VitrinApplicationTab.pending] ?? 0,
-          ),
-          _buildModernTab(
-            l10n.approved,
-            Icons.check_circle_outline_rounded,
-            _counts[VitrinApplicationTab.approved] ?? 0,
-          ),
-          _buildModernTab(
-            l10n.rejected,
-            Icons.cancel_outlined,
-            _counts[VitrinApplicationTab.rejected] ?? 0,
-          ),
+          _buildModernTab(l10n.pending, Icons.hourglass_empty_rounded),
+          _buildModernTab(l10n.approved, Icons.check_circle_outline_rounded),
+          _buildModernTab(l10n.rejected, Icons.cancel_outlined),
         ],
       ),
     );
   }
 
-  Widget _buildModernTab(String text, IconData icon, int count) {
+  Widget _buildModernTab(String text, IconData icon) {
     return Tab(
       height: 40,
       child: Container(
@@ -789,23 +715,6 @@ class _VitrinPendingProductApplicationsState
             Icon(icon, size: 16),
             const SizedBox(width: 6),
             Text(text),
-            if (count > 0) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  count.toString(),
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -919,7 +828,6 @@ class _VitrinPendingProductApplicationsState
 
     return RefreshIndicator(
       onRefresh: () async {
-        await _fetchCounts();
         // Reset tab state completely for fresh reload
         _loadedTabs.remove(tab);
         _tabsBeingLoaded.remove(tab);
@@ -987,22 +895,8 @@ class _VitrinPendingProductApplicationsState
                 ),
               ),
             ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 24),
-              child: Center(
-                child: Text(
-                  l10n.showingResults(
-                    applications.length.toString(),
-                    (_counts[tab] ?? 0).toString(),
-                  ),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.grey[500] : Colors.grey[600],
-                  ),
-                ),
-              ),
-            ),
+          const SliverToBoxAdapter(
+            child: SizedBox(height: 24),
           ),
         ],
       ),

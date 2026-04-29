@@ -172,13 +172,6 @@ class _SellerPanelPendingProductApplicationsState
   // Track which tabs have been loaded (for lazy loading)
   final Set<ApplicationTab> _loadedTabs = {};
 
-  Map<ApplicationTab, int> _counts = {
-    ApplicationTab.all: 0,
-    ApplicationTab.pending: 0,
-    ApplicationTab.approved: 0,
-    ApplicationTab.rejected: 0,
-  };
-
   ApplicationTab _activeTab = ApplicationTab.all;
   static const int _pageSize = 10;
 
@@ -202,8 +195,9 @@ class _SellerPanelPendingProductApplicationsState
       _tabHasMoreEditApps[tab] = true;
     }
 
-    _fetchCounts();
-    // Load first tab (all) immediately
+    // Load first tab (all) immediately. Other tabs stay idle until
+    // _onTabChanged fires for them — keeps Firestore reads bounded to
+    // what the seller actually visits.
     _loadTabDataIfNeeded(ApplicationTab.all);
   }
 
@@ -246,62 +240,6 @@ class _SellerPanelPendingProductApplicationsState
     if (!_loadedTabs.contains(tab)) {
       _loadedTabs.add(tab);
       _fetchApplications(tab: tab);
-    }
-  }
-
-  Future<void> _fetchCounts() async {
-    try {
-      // Fetch from both collections
-      final newAppsQuery = await _firestore
-          .collection('product_applications')
-          .where('shopId', isEqualTo: widget.shopId)
-          .get();
-
-      final editAppsQuery = await _firestore
-          .collection('product_edit_applications')
-          .where('shopId', isEqualTo: widget.shopId)
-          .get();
-
-      int pending = 0;
-      int approved = 0;
-      int rejected = 0;
-
-      // Count new applications
-      for (final doc in newAppsQuery.docs) {
-        final status = doc.data()['status'] as String?;
-        if (status == 'pending') {
-          pending++;
-        } else if (status == 'approved') {
-          approved++;
-        } else if (status == 'rejected') {
-          rejected++;
-        }
-      }
-
-      // Count edit applications
-      for (final doc in editAppsQuery.docs) {
-        final status = doc.data()['status'] as String?;
-        if (status == 'pending') {
-          pending++;
-        } else if (status == 'approved') {
-          approved++;
-        } else if (status == 'rejected') {
-          rejected++;
-        }
-      }
-
-      if (mounted) {
-        setState(() {
-          _counts = {
-            ApplicationTab.all: pending + approved + rejected,
-            ApplicationTab.pending: pending,
-            ApplicationTab.approved: approved,
-            ApplicationTab.rejected: rejected,
-          };
-        });
-      }
-    } catch (e) {
-      debugPrint('Error fetching counts: $e');
     }
   }
 
@@ -499,25 +437,33 @@ class _SellerPanelPendingProductApplicationsState
     );
   }
 
-  /// Build content for each tab with lazy loading support
+  /// Build content for each tab with lazy loading support.
+  ///
+  /// We do NOT auto-trigger fetches for non-active tabs from here.
+  /// TabBarView builds all children, so doing so would fire reads for
+  /// every tab on first render — exactly the cost we're avoiding.
+  /// The active tab loads via initState / _onTabChanged.
   Widget _buildTabContent(
       ApplicationTab tab, bool isDark, AppLocalizations l10n) {
     final isLoading = _tabIsLoading[tab] ?? false;
     final applications = _tabApplications[tab] ?? [];
     final hasLoaded = _loadedTabs.contains(tab);
 
-    // If tab hasn't been loaded yet, show loading indicator
-    // This triggers lazy loading when the tab is first swiped to
-    if (!hasLoaded) {
-      // Schedule loading after build
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _loadTabDataIfNeeded(tab);
-      });
-      return _buildLoadingSkeleton(isDark);
-    }
-
     if (isLoading) {
       return _buildLoadingSkeleton(isDark);
+    }
+    if (!hasLoaded) {
+      if (tab == _activeTab) {
+        // Safety net: active tab missed its trigger somehow (rare race
+        // between initState and first build). Re-arm the load.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _loadTabDataIfNeeded(tab);
+        });
+        return _buildLoadingSkeleton(isDark);
+      }
+      // Inactive, never visited — render nothing. The user has to
+      // switch here for the load to fire.
+      return const SizedBox.shrink();
     }
 
     if (applications.isEmpty) {
@@ -602,32 +548,16 @@ class _SellerPanelPendingProductApplicationsState
         overlayColor: WidgetStateProperty.all(Colors.transparent),
         indicatorSize: TabBarIndicatorSize.tab,
         tabs: [
-          _buildModernTab(
-            l10n.all,
-            Icons.apps_rounded,
-            _counts[ApplicationTab.all] ?? 0,
-          ),
-          _buildModernTab(
-            l10n.pending,
-            Icons.hourglass_empty_rounded,
-            _counts[ApplicationTab.pending] ?? 0,
-          ),
-          _buildModernTab(
-            l10n.approved,
-            Icons.check_circle_outline_rounded,
-            _counts[ApplicationTab.approved] ?? 0,
-          ),
-          _buildModernTab(
-            l10n.rejected,
-            Icons.cancel_outlined,
-            _counts[ApplicationTab.rejected] ?? 0,
-          ),
+          _buildModernTab(l10n.all, Icons.apps_rounded),
+          _buildModernTab(l10n.pending, Icons.hourglass_empty_rounded),
+          _buildModernTab(l10n.approved, Icons.check_circle_outline_rounded),
+          _buildModernTab(l10n.rejected, Icons.cancel_outlined),
         ],
       ),
     );
   }
 
-  Widget _buildModernTab(String text, IconData icon, int count) {
+  Widget _buildModernTab(String text, IconData icon) {
     return Tab(
       height: 40,
       child: Container(
@@ -638,23 +568,6 @@ class _SellerPanelPendingProductApplicationsState
             Icon(icon, size: 16),
             const SizedBox(width: 6),
             Text(text),
-            if (count > 0) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  count.toString(),
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -773,7 +686,6 @@ class _SellerPanelPendingProductApplicationsState
 
     return RefreshIndicator(
       onRefresh: () async {
-        await _fetchCounts();
         // Reset tab state and reload
         _loadedTabs.remove(tab);
         _loadTabDataIfNeeded(tab);
@@ -834,22 +746,8 @@ class _SellerPanelPendingProductApplicationsState
                 ),
               ),
             ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 24),
-              child: Center(
-                child: Text(
-                  l10n.showingResults(
-                    applications.length.toString(),
-                    (_counts[tab] ?? 0).toString(),
-                  ),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.grey[500] : Colors.grey[600],
-                  ),
-                ),
-              ),
-            ),
+          const SliverToBoxAdapter(
+            child: SizedBox(height: 24),
           ),
         ],
       ),
