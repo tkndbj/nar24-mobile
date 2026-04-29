@@ -427,44 +427,50 @@ class _VitrinPendingProductApplicationsState
     }
 
     try {
-      final List<VitrinProductApplication> newBatch = [];
+      // Both collections share a composite index on
+      // (userId asc, status asc, createdAt desc) — same shape used by the
+      // web app's pending-product-applications page. Each source paginates
+      // independently via a Firestore cursor; results are merged and
+      // sorted client-side by submittedAt with id as tie-breaker so the
+      // same item never reorders between renders.
       final List<Future<QuerySnapshot>> futures = [];
       final List<String> futureTypes = [];
 
-      // All tabs are filtered by status — query by status without orderBy
-      // to avoid composite index. Results are sorted client-side.
-
-      // Build query for vitrin_product_applications (only if there might be more)
       if (_tabHasMoreNewApps[tab] ?? false) {
         Query newAppsQuery = _firestore
             .collection('vitrin_product_applications')
             .where('userId', isEqualTo: userId)
-            .where('status', isEqualTo: tab.name);
+            .where('status', isEqualTo: tab.name)
+            .orderBy('createdAt', descending: true)
+            .limit(_pageSize);
 
-        if (!isLoadMore) {
-          futures.add(newAppsQuery.get());
-          futureTypes.add('new');
+        final cursor = _tabLastNewAppDoc[tab];
+        if (cursor != null) {
+          newAppsQuery = newAppsQuery.startAfterDocument(cursor);
         }
-        // Load all at once (no pagination for status-filtered queries)
-        _tabHasMoreNewApps[tab] = false;
+
+        futures.add(newAppsQuery.get());
+        futureTypes.add('new');
       }
 
-      // Build query for vitrin_edit_product_applications (only if there might be more)
       if (_tabHasMoreEditApps[tab] ?? false) {
         Query editAppsQuery = _firestore
             .collection('vitrin_edit_product_applications')
             .where('userId', isEqualTo: userId)
-            .where('status', isEqualTo: tab.name);
+            .where('status', isEqualTo: tab.name)
+            .orderBy('createdAt', descending: true)
+            .limit(_pageSize);
 
-        if (!isLoadMore) {
-          futures.add(editAppsQuery.get());
-          futureTypes.add('edit');
+        final cursor = _tabLastEditAppDoc[tab];
+        if (cursor != null) {
+          editAppsQuery = editAppsQuery.startAfterDocument(cursor);
         }
-        // Load all at once (no pagination for status-filtered queries)
-        _tabHasMoreEditApps[tab] = false;
+
+        futures.add(editAppsQuery.get());
+        futureTypes.add('edit');
       }
 
-      // No more data to fetch
+      // Both sources exhausted — nothing left to fetch.
       if (futures.isEmpty) {
         _tabsBeingLoaded.remove(tab);
         _loadedTabs.add(tab);
@@ -480,7 +486,12 @@ class _VitrinPendingProductApplicationsState
 
       final results = await Future.wait(futures);
 
-      // Process results based on their type
+      final List<VitrinProductApplication> newBatch = [];
+      DocumentSnapshot? nextNewDoc = _tabLastNewAppDoc[tab];
+      DocumentSnapshot? nextEditDoc = _tabLastEditAppDoc[tab];
+      bool nextHasMoreNew = _tabHasMoreNewApps[tab] ?? false;
+      bool nextHasMoreEdit = _tabHasMoreEditApps[tab] ?? false;
+
       for (int i = 0; i < results.length; i++) {
         final snapshot = results[i];
         final type = futureTypes[i];
@@ -490,30 +501,56 @@ class _VitrinPendingProductApplicationsState
             newBatch
                 .add(VitrinProductApplication.fromDocument(doc, isEdit: false));
           }
+          if (snapshot.docs.isNotEmpty) {
+            nextNewDoc = snapshot.docs.last;
+          }
+          // Short page means we've hit the end of this source.
+          nextHasMoreNew = snapshot.docs.length == _pageSize;
         } else if (type == 'edit') {
           for (final doc in snapshot.docs) {
             newBatch
                 .add(VitrinProductApplication.fromDocument(doc, isEdit: true));
           }
+          if (snapshot.docs.isNotEmpty) {
+            nextEditDoc = snapshot.docs.last;
+          }
+          nextHasMoreEdit = snapshot.docs.length == _pageSize;
         }
       }
 
-      // Sort combined results by submittedAt descending (client-side sorting)
-      newBatch.sort((a, b) => b.submittedAt.compareTo(a.submittedAt));
+      _tabLastNewAppDoc[tab] = nextNewDoc;
+      _tabLastEditAppDoc[tab] = nextEditDoc;
+      _tabHasMoreNewApps[tab] = nextHasMoreNew;
+      _tabHasMoreEditApps[tab] = nextHasMoreEdit;
+      _tabHasMore[tab] = nextHasMoreNew || nextHasMoreEdit;
 
-      // Update overall hasMore for this tab
-      _tabHasMore[tab] =
-          (_tabHasMoreNewApps[tab] ?? false) || (_tabHasMoreEditApps[tab] ?? false);
-
-      // Mark tab as loaded
       _tabsBeingLoaded.remove(tab);
       _loadedTabs.add(tab);
+
+      // Stable ordering: submittedAt desc, ties broken by id so re-renders
+      // don't shuffle the list. Mirrors sortApps() in the web page.
+      int cmp(VitrinProductApplication a, VitrinProductApplication b) {
+        final diff = b.submittedAt.compareTo(a.submittedAt);
+        return diff != 0 ? diff : a.id.compareTo(b.id);
+      }
 
       if (mounted) {
         setState(() {
           if (isLoadMore) {
-            _tabApplications[tab]!.addAll(newBatch);
+            // Defensive dedupe: cursors should make duplicates impossible,
+            // but a stale render or repeated load-more tap could surface
+            // the same id twice and trip a duplicate-key in the grid.
+            final merged = List<VitrinProductApplication>.from(
+              _tabApplications[tab]!,
+            );
+            final seen = <String>{for (final a in merged) a.id};
+            for (final a in newBatch) {
+              if (seen.add(a.id)) merged.add(a);
+            }
+            merged.sort(cmp);
+            _tabApplications[tab] = merged;
           } else {
+            newBatch.sort(cmp);
             _tabApplications[tab] = newBatch;
           }
           _tabIsLoading[tab] = false;
