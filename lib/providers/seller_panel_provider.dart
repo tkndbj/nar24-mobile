@@ -497,17 +497,13 @@ class SellerPanelProvider with ChangeNotifier {
       if (timestamp != null) {
         final date = timestamp.toDate();
         if (date.isAfter(todayStart) && date.isBefore(todayEnd)) {
-          // Use calculatedTotal from selectedAttributes or fallback to price * quantity
-          final selectedAttributes =
-              data['selectedAttributes'] as Map<String, dynamic>?;
-          final calculatedTotal =
-              selectedAttributes?['calculatedTotal'] as num?;
-
-          if (calculatedTotal != null) {
-            // Use the denormalized calculatedTotal which includes all discounts
-            total += calculatedTotal.toDouble();
+          // Prefer the actual paid line total (post bulk/bundle discounts) —
+          // written by createOrderTransaction. Fallback to raw price * quantity
+          // for orders created before itemTotal was persisted.
+          final itemTotal = (data['itemTotal'] as num?)?.toDouble();
+          if (itemTotal != null) {
+            total += itemTotal;
           } else {
-            // Fallback to price * quantity if calculatedTotal is not available
             final itemPrice = (data['price'] as num?)?.toDouble() ?? 0.0;
             final quantity = (data['quantity'] as num?)?.toInt() ?? 1;
             total += itemPrice * quantity;

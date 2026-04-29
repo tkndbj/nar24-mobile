@@ -97,7 +97,7 @@ class _ShipmentStatusScreenState extends State<ShipmentStatusScreen>
   }
 
   String _formatCurrency(double amount) {
-    return NumberFormat('#,##0').format(amount);
+    return NumberFormat('#,##0.00').format(amount);
   }
 
   String _formatDate(Timestamp? timestamp) {
@@ -728,7 +728,11 @@ class _ShipmentStatusScreenState extends State<ShipmentStatusScreen>
     final selectedAttributes =
         item['selectedAttributes'] as Map<String, dynamic>? ?? {};
 
-    final totalAmount = price * quantity;
+    // Prefer the actual paid line total (post bulk/bundle discounts) — written
+    // by createOrderTransaction. Fallback to raw price * quantity for orders
+    // created before itemTotal was persisted.
+    final itemTotal = (item['itemTotal'] as num?)?.toDouble();
+    final totalAmount = itemTotal ?? (price * quantity);
 
     return Container(
       decoration: BoxDecoration(

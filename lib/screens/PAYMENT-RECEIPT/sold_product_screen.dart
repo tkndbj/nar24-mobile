@@ -52,7 +52,8 @@ class _SoldProductsScreenState extends State<SoldProductsScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF1C1A29) : const Color(0xFFF8FAFC),
+      backgroundColor:
+          isDark ? const Color(0xFF1C1A29) : const Color(0xFFF8FAFC),
       body: CustomScrollView(
         slivers: [
           _buildModernSliverAppBar(context, l10n, isDark),
@@ -85,7 +86,8 @@ class _SoldProductsScreenState extends State<SoldProductsScreen> {
     );
   }
 
-  Widget _buildModernSliverAppBar(BuildContext context, AppLocalizations l10n, bool isDark) {
+  Widget _buildModernSliverAppBar(
+      BuildContext context, AppLocalizations l10n, bool isDark) {
     return SliverAppBar(
       expandedHeight: 120,
       floating: true,
@@ -100,10 +102,14 @@ class _SoldProductsScreenState extends State<SoldProductsScreen> {
       leading: Container(
         margin: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05),
+          color: isDark
+              ? Colors.white.withOpacity(0.1)
+              : Colors.black.withOpacity(0.05),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.1),
+            color: isDark
+                ? Colors.white.withOpacity(0.1)
+                : Colors.black.withOpacity(0.1),
           ),
         ),
         child: IconButton(
@@ -135,13 +141,15 @@ class _SoldProductsScreenState extends State<SoldProductsScreen> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         Text(
-                          widget.orderId != null ? l10n.orderDetails : l10n.soldProducts,
+                          widget.orderId != null
+                              ? l10n.orderDetails
+                              : l10n.soldProducts,
                           style: const TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.w800,
                             color: Colors.white,
                           ),
-                        ),                        
+                        ),
                       ],
                     ),
                   ),
@@ -175,7 +183,9 @@ class _SoldProductsScreenState extends State<SoldProductsScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: isDark ? Colors.black.withOpacity(0.3) : Colors.black.withOpacity(0.06),
+            color: isDark
+                ? Colors.black.withOpacity(0.3)
+                : Colors.black.withOpacity(0.06),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -220,130 +230,135 @@ class _SoldProductsScreenState extends State<SoldProductsScreen> {
   }
 
   Widget _buildLoadingState(bool isDark) {
-  return Padding(
-    padding: const EdgeInsets.all(16),
-    child: Column(
-      children: List.generate(5, (index) => Padding(
-        padding: EdgeInsets.only(bottom: index == 4 ? 0 : 12),
-        child: _buildShimmerCard(isDark),
-      )),
-    ),
-  );
-}
-
-Widget _buildShimmerCard(bool isDark) {
-  return Shimmer.fromColors(
-    baseColor: isDark ? Color.fromARGB(255, 33, 31, 49)  : Colors.grey[300]!,
-    highlightColor: isDark ? Color.fromARGB(255, 52, 48, 75)  : Colors.grey[100]!,
-    child: Container(
+    return Padding(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? Color.fromARGB(255, 33, 31, 49) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1),
+      child: Column(
+        children: List.generate(
+            5,
+            (index) => Padding(
+                  padding: EdgeInsets.only(bottom: index == 4 ? 0 : 12),
+                  child: _buildShimmerCard(isDark),
+                )),
+      ),
+    );
+  }
+
+  Widget _buildShimmerCard(bool isDark) {
+    return Shimmer.fromColors(
+      baseColor: isDark ? Color.fromARGB(255, 33, 31, 49) : Colors.grey[300]!,
+      highlightColor:
+          isDark ? Color.fromARGB(255, 52, 48, 75) : Colors.grey[100]!,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? Color.fromARGB(255, 33, 31, 49) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withOpacity(0.05)
+                : Colors.grey.withOpacity(0.1),
+          ),
+        ),
+        child: Column(
+          children: [
+            // Header Row Shimmer
+            Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        height: 10,
+                        width: 80,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  height: 24,
+                  width: 60,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Details Row Shimmer
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Action Row Shimmer
+            Row(
+              children: [
+                Container(
+                  height: 12,
+                  width: 100,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  height: 28,
+                  width: 60,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
-      child: Column(
-        children: [
-          // Header Row Shimmer
-          Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Container(
-                      height: 10,
-                      width: 80,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                height: 24,
-                width: 60,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Details Row Shimmer
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Container(
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Action Row Shimmer
-          Row(
-            children: [
-              Container(
-                height: 12,
-                width: 100,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              const Spacer(),
-              Container(
-                height: 28,
-                width: 60,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildErrorState(AppLocalizations l10n, bool isDark) {
     return Container(
@@ -354,7 +369,9 @@ Widget _buildShimmerCard(bool isDark) {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: isDark ? Colors.black.withOpacity(0.3) : Colors.black.withOpacity(0.06),
+            color: isDark
+                ? Colors.black.withOpacity(0.3)
+                : Colors.black.withOpacity(0.06),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -422,7 +439,9 @@ Widget _buildShimmerCard(bool isDark) {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: isDark ? Colors.black.withOpacity(0.3) : Colors.black.withOpacity(0.06),
+            color: isDark
+                ? Colors.black.withOpacity(0.3)
+                : Colors.black.withOpacity(0.06),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -470,7 +489,8 @@ Widget _buildShimmerCard(bool isDark) {
     );
   }
 
-  Widget _buildItemsList(List<QueryDocumentSnapshot> soldItems, AppLocalizations l10n, bool isDark) {
+  Widget _buildItemsList(List<QueryDocumentSnapshot> soldItems,
+      AppLocalizations l10n, bool isDark) {
     return RefreshIndicator(
       onRefresh: () async => setState(() {}),
       color: const Color(0xFF10B981),
@@ -481,7 +501,8 @@ Widget _buildShimmerCard(bool isDark) {
             final index = entry.key;
             final item = entry.value.data() as Map<String, dynamic>;
             return Padding(
-              padding: EdgeInsets.only(bottom: index == soldItems.length - 1 ? 0 : 12),
+              padding: EdgeInsets.only(
+                  bottom: index == soldItems.length - 1 ? 0 : 12),
               child: _buildCompactSoldItemCard(context, item, l10n, isDark),
             );
           }).toList(),
@@ -490,8 +511,8 @@ Widget _buildShimmerCard(bool isDark) {
     );
   }
 
-  Widget _buildCompactSoldItemCard(
-      BuildContext context, Map<String, dynamic> item, AppLocalizations l10n, bool isDark) {
+  Widget _buildCompactSoldItemCard(BuildContext context,
+      Map<String, dynamic> item, AppLocalizations l10n, bool isDark) {
     final productName = item['productName'] ?? l10n.unknownProduct;
     final productImage = item['productImage'] ?? '';
     final price = (item['price'] ?? 0).toDouble();
@@ -503,18 +524,23 @@ Widget _buildShimmerCard(bool isDark) {
     final selectedColor = item['selectedColor'];
     final selectedSize = item['selectedSize'];
 
-    final totalAmount = price * quantity;
+    final itemTotal = (item['itemTotal'] as num?)?.toDouble();
+    final totalAmount = itemTotal ?? (price * quantity);
 
     return Container(
       decoration: BoxDecoration(
         color: isDark ? const Color.fromARGB(255, 33, 31, 49) : Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1),
+          color: isDark
+              ? Colors.white.withOpacity(0.05)
+              : Colors.grey.withOpacity(0.1),
         ),
         boxShadow: [
           BoxShadow(
-            color: isDark ? Colors.black.withOpacity(0.2) : Colors.black.withOpacity(0.04),
+            color: isDark
+                ? Colors.black.withOpacity(0.2)
+                : Colors.black.withOpacity(0.04),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -547,7 +573,9 @@ Widget _buildShimmerCard(bool isDark) {
                             errorBuilder: (context, error, stackTrace) {
                               return Icon(
                                 Icons.image_not_supported_outlined,
-                                color: isDark ? Colors.grey[600] : Colors.grey[400],
+                                color: isDark
+                                    ? Colors.grey[600]
+                                    : Colors.grey[400],
                                 size: 20,
                               );
                             },
@@ -570,7 +598,8 @@ Widget _buildShimmerCard(bool isDark) {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                          color:
+                              isDark ? Colors.white : const Color(0xFF1A1A1A),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -633,7 +662,9 @@ Widget _buildShimmerCard(bool isDark) {
                   child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF8FAFC),
+                      color: isDark
+                          ? Colors.white.withOpacity(0.05)
+                          : const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Column(
@@ -651,7 +682,8 @@ Widget _buildShimmerCard(bool isDark) {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                            color:
+                                isDark ? Colors.white : const Color(0xFF1A1A1A),
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -664,7 +696,9 @@ Widget _buildShimmerCard(bool isDark) {
             ),
 
             // Variants & Date Row
-            if (selectedColor != null || selectedSize != null || timestamp != null) ...[
+            if (selectedColor != null ||
+                selectedSize != null ||
+                timestamp != null) ...[
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -676,7 +710,8 @@ Widget _buildShimmerCard(bool isDark) {
                         children: [
                           if (selectedColor != null)
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
                                 color: const Color(0xFF10B981).withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(4),
@@ -692,7 +727,8 @@ Widget _buildShimmerCard(bool isDark) {
                             ),
                           if (selectedSize != null)
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
                                 color: const Color(0xFF059669).withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(4),
@@ -742,7 +778,8 @@ Widget _buildShimmerCard(bool isDark) {
     );
   }
 
-  Widget _buildCompactStatusChip(String status, AppLocalizations l10n, bool isDark) {
+  Widget _buildCompactStatusChip(
+      String status, AppLocalizations l10n, bool isDark) {
     Color backgroundColor;
     Color textColor;
     String displayText;
@@ -807,5 +844,4 @@ Widget _buildShimmerCard(bool isDark) {
       ),
     );
   }
-
 }
