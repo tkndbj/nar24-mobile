@@ -668,10 +668,12 @@ Future<void> _showTransferBasketDialog() async {
     // ✅ Build options list
     List<Map<String, dynamic>> options = [];
     
-    // Add "General/Default" option if currently in a basket
+    // Add "General/Default" option if currently in a basket.
+    // Use a sentinel id so we can distinguish "user picked General" from
+    // "user dismissed the sheet" (both would otherwise return null).
     if (currentBasketId != null) {
       options.add({
-        'id': null,
+        'id': '__default__',
         'name': l10n.general ?? 'General',
       });
     }
@@ -717,18 +719,22 @@ Future<void> _showTransferBasketDialog() async {
       return; // Don't do optimistic update or transfer
     }
 
+    // Translate the General sentinel back to null for the provider call.
+    final String? targetBasketId =
+        selectedTarget == '__default__' ? null : selectedTarget;
+
     // ✅ OPTIMISTIC UPDATE: Remove from UI immediately (only if not cancelled)
     if (mounted) {
       // Remove from local state immediately
       favoriteProvider.removePaginatedItems([selectedProductId]);
-      
+
       setState(() => _selectedProductId = null);
       _bottomSheetController.reverse();
       _showSuccessSnackbar(l10n.transferredToBasket ?? 'Transferred successfully');
     }
 
     // ✅ Transfer in background
-    final result = await favoriteProvider.transferToBasket(selectedProductId, selectedTarget);
+    final result = await favoriteProvider.transferToBasket(selectedProductId, targetBasketId);
     
     // If transfer failed, show error (item already removed from UI, but will reload on next refresh)
     if (mounted && result != 'Transferred successfully') {

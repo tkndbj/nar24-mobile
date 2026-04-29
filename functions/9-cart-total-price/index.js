@@ -49,14 +49,13 @@ export const calculateCartTotals = onCall(
     // ═══════════════════════════════════════════════════════════════════════
     // 3. RATE LIMITING (Redis)
     // ═══════════════════════════════════════════════════════════════════════
-    // 5 requests per 10 seconds per user (same as original sliding window)
-    const rateLimitPassed = await redisRateLimit(`cart_totals:${userId}`, 5, 10);
-    if (!rateLimitPassed) {
-      throw new HttpsError(
-        'resource-exhausted',
-        'Too many requests. Please wait a few seconds and try again.'
-      );
-    }
+    const rateLimitPassed = await redisRateLimit(`cart_totals:${userId}`, 20, 10);
+if (!rateLimitPassed) {
+  throw new HttpsError(
+    'resource-exhausted',
+    'Too many requests. Please wait a few seconds and try again.'
+  );
+}
 
    // ═══════════════════════════════════════════════════════════════════════════
 // 4. FETCH SELECTED CART ITEMS (Direct lookup — no collection scan)

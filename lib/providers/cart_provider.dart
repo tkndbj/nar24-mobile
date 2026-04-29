@@ -4,7 +4,6 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import '../services/cart_totals_cache.dart'; // NEW: Local cache
 import '../models/product.dart';
 import '../services/cart_validation_service.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -51,10 +50,6 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
 
   @override
   LifecyclePriority get lifecyclePriority => LifecyclePriority.normal;
-
-  // ✅ NEW: Local cache instead of Redis
-  final CartTotalsCache _totalsCache = CartTotalsCache();
-
   bool _validating = false;
 
   // Rate limiters to prevent spam
@@ -117,9 +112,6 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
   }
 
   void _initializeProvider() {
-    // ✅ Initialize local cache
-    _totalsCache.initialize();
-
     _authSubscription?.cancel();
     _authSubscription = _auth.userChanges().distinct().listen(
           _handleUserChange,
@@ -159,36 +151,42 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
     }
   }
 
-  Future<T> _retryWithBackoff<T>({
-    required Future<T> Function() operation,
-    required String operationName,
-    int maxRetries = 3,
-    Duration initialDelay = const Duration(milliseconds: 500),
-  }) async {
-    int attempt = 0;
-    Duration delay = initialDelay;
+Future<T> _retryWithBackoff<T>({
+  required Future<T> Function() operation,
+  required String operationName,
+  int maxRetries = 3,
+  Duration initialDelay = const Duration(milliseconds: 500),
+}) async {
+  int attempt = 0;
+  Duration delay = initialDelay;
 
-    while (attempt < maxRetries) {
-      try {
-        return await operation();
-      } catch (e) {
-        attempt++;
+  while (attempt < maxRetries) {
+    try {
+      return await operation();
+    } catch (e) {
+      attempt++;
 
-        if (attempt >= maxRetries) {
-          debugPrint('❌ $operationName failed after $maxRetries attempts: $e');
-          rethrow;
-        }
-
-        debugPrint(
-            '⚠️ $operationName failed (attempt $attempt/$maxRetries). Retrying in ${delay.inMilliseconds}ms...');
-        await Future.delayed(delay);
-
-        delay = delay * 2;
+      // Don't retry rate-limit errors — retrying makes it worse
+      if (e is FirebaseFunctionsException && e.code == 'resource-exhausted') {
+        debugPrint('⚠️ $operationName rate limited — not retrying');
+        rethrow;
       }
-    }
 
-    throw Exception('$operationName failed after $maxRetries attempts');
+      if (attempt >= maxRetries) {
+        debugPrint('❌ $operationName failed after $maxRetries attempts: $e');
+        rethrow;
+      }
+
+      debugPrint(
+          '⚠️ $operationName failed (attempt $attempt/$maxRetries). Retrying in ${delay.inMilliseconds}ms...');
+      await Future.delayed(delay);
+
+      delay = delay * 2;
+    }
   }
+
+  throw Exception('$operationName failed after $maxRetries attempts');
+}
 
   void clearLocalCache() {
     debugPrint('🗑️ Clearing cart local cache');
@@ -209,12 +207,6 @@ class CartProvider with ChangeNotifier, LifecycleAwareMixin {
     // Reset pagination
     _lastDocument = null;
     _hasMore = true;
-
-    // ✅ Invalidate totals cache
-    final user = _auth.currentUser;
-    if (user != null) {
-      _totalsCache.invalidateForUser(user.uid);
-    }
   }
 
 
@@ -573,9 +565,6 @@ void _sortCartItems(List<Map<String, dynamic>> items) {
     _optimisticTimeouts.clear();
     _quantityUpdateLocks.clear();
     _pendingQuantityWrites.clear();
-
-    // Clear totals cache
-    _totalsCache.clearAll();
   }
 
   // ========================================================================
@@ -790,11 +779,6 @@ Future<String> addToCart({
         shopId: productData['shopId'] as String?,
       );
 
-      debugPrint('✅ Added to cart: $productId');
-
-      // ✅ Invalidate cache
-      _totalsCache.invalidateForUser(user.uid);
-
       unawaited(_backgroundRefreshTotals());
 
       return 'Added to cart';
@@ -925,9 +909,6 @@ Future<String> addToCart({
         shopId: shopId,
       );
 
-      // ✅ Invalidate cache
-      _totalsCache.invalidateForUser(user.uid);
-
       unawaited(_backgroundRefreshTotals());
 
       return 'Removed from cart';
@@ -1043,8 +1024,6 @@ Future<String> addToCart({
         debugPrint('✅ Updated quantity: $productId = $qtyToWrite');
       }
 
-      // Step 5: Invalidate cache & verify with server (non-blocking)
-      _totalsCache.invalidateForUser(user.uid);
       _debouncedTotalsVerification();
     } catch (e) {
       debugPrint('❌ Update quantity error: $e');
@@ -1165,8 +1144,6 @@ Future<String> addToCart({
 
       debugPrint('✅ Removed ${productIds.length} items');
 
-      // ✅ Invalidate cache
-      _totalsCache.invalidateForUser(user.uid);
 
       unawaited(_backgroundRefreshTotals());
 
@@ -1216,137 +1193,84 @@ Future<String> addToCart({
   // TOTALS CALCULATION (with Local Caching)
   // ========================================================================
 
-  Future<CartTotals> calculateCartTotals({
-    List<String>? excludedProductIds,
-  }) async {
-    final user = _auth.currentUser;
-    if (user == null) {
-      return CartTotals(total: 0, items: [], currency: 'TL');
-    }
+ Future<CartTotals> calculateCartTotals({
+  List<String>? excludedProductIds,
+}) async {
+  final user = _auth.currentUser;
+  if (user == null) {
+    return CartTotals(total: 0, items: [], currency: 'TL');
+  }
 
-    // Build cache key based on excluded IDs (empty = all items)
-// Build cache key based on excluded IDs (empty = all items)
-    final excludedSorted = List<String>.from(excludedProductIds ?? <String>[])
-      ..sort();
-    final cacheKey = 'all_minus_${excludedSorted.join(",")}';
+  // Build a stable key for request deduplication only (not result caching).
+  // Two simultaneous calls for the same selection share one CF invocation;
+  // the result is never cached across calls.
+  final excludedSorted = List<String>.from(excludedProductIds ?? <String>[])
+    ..sort();
+  final dedupKey = 'totals_all_minus_${excludedSorted.join(",")}';
 
-    // ✅ Check local cache first
-    final cached = _totalsCache.get(user.uid, [cacheKey]);
-    if (cached != null) {
-      debugPrint('⚡ Cache hit - instant total');
-      return CartTotals(
-        total: cached.total,
-        currency: cached.currency,
-        items: cached.items
-            .map((i) => CartItemTotal(
-                  productId: i.productId,
-                  unitPrice: i.unitPrice,
-                  total: i.total,
-                  quantity: i.quantity,
-                  isBundleItem: i.isBundleItem,
-                ))
-            .toList(),
-      );
-    }
-
-    // Request deduplication
-    if (_pendingFetches.containsKey('totals_$cacheKey')) {
-      debugPrint('⏳ Waiting for existing totals calculation...');
-      await _pendingFetches['totals_$cacheKey']!.future;
-
-      final cachedAfterWait = _totalsCache.get(user.uid, [cacheKey]);
-      if (cachedAfterWait != null) {
-        return CartTotals(
-          total: cachedAfterWait.total,
-          currency: cachedAfterWait.currency,
-          items: cachedAfterWait.items
-              .map((i) => CartItemTotal(
-                    productId: i.productId,
-                    unitPrice: i.unitPrice,
-                    total: i.total,
-                    quantity: i.quantity,
-                    isBundleItem: i.isBundleItem,
-                  ))
-              .toList(),
-        );
-      }
-    }
-
-    final completer = Completer<void>();
-    _pendingFetches['totals_$cacheKey'] = completer;
-
+  // Request deduplication — share in-flight CF call
+  if (_pendingFetches.containsKey(dedupKey)) {
+    debugPrint('⏳ Joining in-flight totals calculation...');
     try {
-      final totals = await _retryWithBackoff(
-        operation: () async {
-          final token = await user.getIdToken();
-          if (token == null) {
-            throw Exception('No auth token available');
-          }
-
-         final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-    .httpsCallable('calculateCartTotals');
-
-// Convert excluded IDs to selected IDs for direct lookup
-final selectedIds = excludedProductIds == null
-    ? cartProductIds.toList()
-    : cartProductIds
-        .where((id) => !excludedProductIds.contains(id))
-        .toList();
-
-final result = await callable.call({
-  'selectedProductIds': selectedIds,
-});
-
-          final dynamic rawData = result.data;
-          Map<String, dynamic> totalsData;
-
-          if (rawData is Map<String, dynamic>) {
-            totalsData = rawData;
-          } else if (rawData is Map) {
-            totalsData = _deepConvertMap(rawData);
-          } else {
-            throw Exception('Unexpected response type: ${rawData.runtimeType}');
-          }
-
-          final totals = CartTotals.fromJson(totalsData);
-
-          // ✅ Cache result locally
-          _totalsCache.set(
-            user.uid,
-            [cacheKey],
-            CachedCartTotals(
-              total: totals.total,
-              currency: totals.currency,
-              items: totals.items
-                  .map((i) => CachedItemTotal(
-                        productId: i.productId,
-                        unitPrice: i.unitPrice,
-                        total: i.total,
-                        quantity: i.quantity,
-                        isBundleItem: i.isBundleItem,
-                      ))
-                  .toList(),
-            ),
-          );
-
-          return totals;
-        },
-        operationName: 'Calculate Totals',
-        maxRetries: 3,
-      );
-
-      debugPrint('✅ Total calculated: ${totals.total} ${totals.currency}');
-      completer.complete();
-      return totals;
-    } catch (e, stackTrace) {
-      debugPrint('❌ Cloud Function failed after retries: $e');
-      debugPrint('Stack trace: $stackTrace');
-      completer.completeError(e);
-      rethrow;
-    } finally {
-      _pendingFetches.remove('totals_$cacheKey');
+      await _pendingFetches[dedupKey]!.future;
+    } catch (_) {
+      // Fall through and retry on our own
     }
   }
+
+  final completer = Completer<void>();
+  _pendingFetches[dedupKey] = completer;
+
+  try {
+    final totals = await _retryWithBackoff(
+      operation: () async {
+        final token = await user.getIdToken();
+        if (token == null) {
+          throw Exception('No auth token available');
+        }
+
+        final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+            .httpsCallable('calculateCartTotals');
+
+        final selectedIds = excludedProductIds == null
+            ? cartProductIds.toList()
+            : cartProductIds
+                .where((id) => !excludedProductIds.contains(id))
+                .toList();
+
+        final result = await callable.call({
+          'selectedProductIds': selectedIds,
+        });
+
+        final dynamic rawData = result.data;
+        Map<String, dynamic> totalsData;
+
+        if (rawData is Map<String, dynamic>) {
+          totalsData = rawData;
+        } else if (rawData is Map) {
+          totalsData = _deepConvertMap(rawData);
+        } else {
+          throw Exception('Unexpected response type: ${rawData.runtimeType}');
+        }
+
+        return CartTotals.fromJson(totalsData);
+      },
+      operationName: 'Calculate Totals',
+      maxRetries: 3,
+    );
+
+    debugPrint('✅ Total calculated: ${totals.total} ${totals.currency}');
+    completer.complete();
+    return totals;
+  } catch (e, stackTrace) {
+    debugPrint('❌ Cloud Function failed after retries: $e');
+    debugPrint('Stack trace: $stackTrace');
+    completer.completeError(e);
+    rethrow;
+  } finally {
+    _pendingFetches.remove(dedupKey);
+  }
+}
 
   Map<String, dynamic> _deepConvertMap(Map<dynamic, dynamic> map) {
     final result = <String, dynamic>{};
@@ -1470,8 +1394,7 @@ final result = await callable.call({
       );
 
       if (success) {
-        // ✅ Invalidate cache
-        _totalsCache.invalidateForUser(user.uid);
+  
 
         await refresh();
       }
@@ -1843,9 +1766,6 @@ final result = await callable.call({
     _optimisticCache.clear();
     _quantityUpdateLocks.clear();
     _pendingQuantityWrites.clear();
-
-    // ✅ Dispose cache
-    _totalsCache.dispose();
     _totalsVerificationTimer?.cancel();
     super.dispose();
   }

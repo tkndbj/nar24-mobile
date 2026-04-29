@@ -13,6 +13,13 @@ import '../services/lifecycle_aware.dart';
 import '../services/app_lifecycle_manager.dart';
 import '../user_provider.dart';
 
+
+  class _BatchRemoveResult {
+  final Map<String, String?> shopIds;
+  final List<String> removedFromUserDoc;
+  _BatchRemoveResult(this.shopIds, this.removedFromUserDoc);
+}
+
 // ============================================================================
 // RATE LIMITER (Prevents spam)
 // ============================================================================
@@ -302,6 +309,40 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
     }
   }
 
+  Future<bool> _existsElsewhere(
+  String productId,
+  String? excludeBasketId,
+) async {
+  final user = _auth.currentUser;
+  if (user == null) return false;
+ 
+  final userRef = _firestore.collection('users').doc(user.uid);
+ 
+  // Always check default favorites unless that's where we're removing from
+  if (excludeBasketId != null) {
+    final defaultSnap = await userRef
+        .collection('favorites')
+        .where('productId', isEqualTo: productId)
+        .limit(1)
+        .get();
+    if (defaultSnap.docs.isNotEmpty) return true;
+  }
+ 
+  // Check all baskets except the excluded one
+  final basketsSnap = await userRef.collection('favorite_baskets').get();
+  for (final bDoc in basketsSnap.docs) {
+    if (bDoc.id == excludeBasketId) continue;
+    final favSnap = await bDoc.reference
+        .collection('favorites')
+        .where('productId', isEqualTo: productId)
+        .limit(1)
+        .get();
+    if (favSnap.docs.isNotEmpty) return true;
+  }
+ 
+  return false;
+}
+
   Future<void> addToFavorites(
     String productId, {
     required BuildContext context,
@@ -371,64 +412,73 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
       isRemoving = existingSnap.docs.isNotEmpty;
 
       if (isRemoving) {
-        // STEP 1: Optimistic removal
-        final newIds = Set<String>.from(favoriteIdsNotifier.value)
-          ..remove(productId);
-        favoriteIdsNotifier.value = newIds;
-        favoriteCountNotifier.value = newIds.length;
-        _updateProductFavoriteStatus(productId, false);
-        removeItemFromPaginatedCache(productId);
-
-        // STEP 2: Delete from Firestore + remove from user doc array (atomic)
-        final removeBatch = _firestore.batch();
-        removeBatch.delete(existingSnap.docs.first.reference);
-        removeBatch.update(_firestore.collection('users').doc(user.uid), {
-          'favoriteItemIds': FieldValue.arrayRemove([productId]),
-        });
-        await removeBatch.commit();
-
-        // Optimistic local sync
-        _userProvider.updateLocalProfileField(
-          'favoriteItemIds',
-          ((_userProvider.profileData?['favoriteItemIds'] as List?) ?? [])
-              .where((id) => id != productId)
-              .toList(),
-        );
-
-        final newGlobalIds = Set<String>.from(globalFavoriteIdsNotifier.value)
-          ..remove(productId);
-        globalFavoriteIdsNotifier.value = newGlobalIds;
-
-        // Prefer values stored on the favorite doc itself (cheap, no extra reads).
-        // Fall back to a dual-collection lookup only for legacy docs missing them.
-        final existingData = existingSnap.docs.first.data();
-        final storedCollection = existingData['sourceCollection'] as String?;
-        final storedShopId = existingData['shopId'] as String?;
-        final productName = existingData['productName'] as String?;
-
-        final needsMetadataLookup = storedCollection == null;
-        final metadata = needsMetadataLookup
-            ? await _getProductMetadata(productId)
-            : <String, String?>{};
-
-        final shopId = storedShopId ?? metadata['shopId'];
-
-        UserActivityService.instance.trackUnfavorite(
-          productId: productId,
-          shopId: shopId,
-          productName: productName,
-          category: metadata['category'],
-          brand: metadata['brand'],
-          gender: metadata['gender'],
-        );
-        _metricsService.logFavoriteRemoved(
-          productId: productId,
-          shopId: shopId,
-        );
-
-        _circuitBreaker.recordSuccess();
-        showDebouncedRemoveFavoriteSnackbar(context);
-      } else {
+  // Smart check: only strip from user doc array if the product is gone
+  // from every container.
+  final stillElsewhere = await _existsElsewhere(productId, basketId);
+ 
+  removeItemFromPaginatedCache(productId);
+  if (!stillElsewhere) {
+    final newIds = Set<String>.from(favoriteIdsNotifier.value)
+      ..remove(productId);
+    favoriteIdsNotifier.value = newIds;
+    favoriteCountNotifier.value = newIds.length;
+    _updateProductFavoriteStatus(productId, false);
+  }
+ 
+  // STEP 2: Atomic batch — delete favorite doc + (conditionally) update user doc
+  final removeBatch = _firestore.batch();
+  removeBatch.delete(existingSnap.docs.first.reference);
+  if (!stillElsewhere) {
+    removeBatch.update(_firestore.collection('users').doc(user.uid), {
+      'favoriteItemIds': FieldValue.arrayRemove([productId]),
+    });
+  }
+  await removeBatch.commit();
+ 
+  // Optimistic local sync of the user doc array (only if we actually removed)
+  if (!stillElsewhere) {
+    _userProvider.updateLocalProfileField(
+      'favoriteItemIds',
+      ((_userProvider.profileData?['favoriteItemIds'] as List?) ?? [])
+          .where((id) => id != productId)
+          .toList(),
+    );
+ 
+    final newGlobalIds = Set<String>.from(globalFavoriteIdsNotifier.value)
+      ..remove(productId);
+    globalFavoriteIdsNotifier.value = newGlobalIds;
+  }
+ 
+  // (Metadata + tracking + circuit breaker code stays IDENTICAL to current)
+  final existingData = existingSnap.docs.first.data();
+  final storedCollection = existingData['sourceCollection'] as String?;
+  final storedShopId = existingData['shopId'] as String?;
+  final productName = existingData['productName'] as String?;
+ 
+  final needsMetadataLookup = storedCollection == null;
+  final metadata = needsMetadataLookup
+      ? await _getProductMetadata(productId)
+      : <String, String?>{};
+ 
+  final shopId = storedShopId ?? metadata['shopId'];
+ 
+  UserActivityService.instance.trackUnfavorite(
+    productId: productId,
+    shopId: shopId,
+    productName: productName,
+    category: metadata['category'],
+    brand: metadata['brand'],
+    gender: metadata['gender'],
+  );
+  _metricsService.logFavoriteRemoved(
+    productId: productId,
+    shopId: shopId,
+  );
+ 
+  _circuitBreaker.recordSuccess();
+  showDebouncedRemoveFavoriteSnackbar(context);
+}
+  else {
         // STEP 1: Optimistic add (UI updates immediately)
         final newIds = Set<String>.from(favoriteIdsNotifier.value)
           ..add(productId);
@@ -549,114 +599,164 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
   // BATCH OPERATIONS
   // ========================================================================
 
-  Future<String> removeMultipleFromFavorites(List<String> productIds) async {
-    final user = _auth.currentUser;
-    if (user == null) return 'pleaseLoginFirst';
-    if (productIds.isEmpty) return 'noProductsSelected';
+ Future<String> removeMultipleFromFavorites(List<String> productIds) async {
+  final user = _auth.currentUser;
+  if (user == null) return 'pleaseLoginFirst';
+  if (productIds.isEmpty) return 'noProductsSelected';
 
-    if (!_removeFavoriteLimiter.canProceed('batch_remove')) {
-      return 'pleaseWait';
+  if (!_removeFavoriteLimiter.canProceed('batch_remove')) {
+    return 'pleaseWait';
+  }
+
+  // Snapshot for rollback (only the paginated cache state)
+  final previousPaginated =
+      Map<String, Map<String, dynamic>>.from(_paginatedFavoritesMap);
+
+  try {
+    // Optimistic: remove from CURRENT VIEW only.
+    // The notifier sync happens after the batch tells us what actually
+    // got stripped from favoriteItemIds.
+    removePaginatedItems(productIds);
+
+    // Batch delete from Firestore. Returns shopIds extracted from deleted
+    // docs AND the list of ids that were actually stripped from the user
+    // doc array.
+    final shopIds = <String, String?>{};
+    final actuallyRemoved = <String>{};
+    const batchSize = 50;
+    for (var i = 0; i < productIds.length; i += batchSize) {
+      final chunk = productIds.skip(i).take(batchSize).toList();
+      final result = await _removeMultipleBatch(chunk);
+      shopIds.addAll(result.shopIds);
+      actuallyRemoved.addAll(result.removedFromUserDoc);
     }
 
-    final previousIds = Set<String>.from(favoriteIdsNotifier.value);
-    final previousGlobalIds = Set<String>.from(globalFavoriteIdsNotifier.value);
-
-    try {
-      // Optimistic removal from BOTH notifiers (UI updates immediately)
+    // Now sync notifiers to match what the server actually has
+    if (actuallyRemoved.isNotEmpty) {
       final newIds = Set<String>.from(favoriteIdsNotifier.value)
-        ..removeAll(productIds);
+        ..removeAll(actuallyRemoved);
       favoriteIdsNotifier.value = newIds;
       favoriteCountNotifier.value = newIds.length;
 
       final newGlobalIds = Set<String>.from(globalFavoriteIdsNotifier.value)
-        ..removeAll(productIds);
+        ..removeAll(actuallyRemoved);
       globalFavoriteIdsNotifier.value = newGlobalIds;
 
-      for (final id in productIds) {
+      for (final id in actuallyRemoved) {
         _updateProductFavoriteStatus(id, false);
       }
-      removePaginatedItems(productIds);
+    }
 
-      // Batch delete from Firestore. Each batch returns the shopIds it
-      // extracted from the favorite docs it just deleted — no extra reads.
-      final shopIds = <String, String?>{};
-      const batchSize = 50;
-      for (var i = 0; i < productIds.length; i += batchSize) {
-        final chunk = productIds.skip(i).take(batchSize).toList();
-        final extractedShopIds = await _removeMultipleBatch(chunk);
-        shopIds.addAll(extractedShopIds);
+    _metricsService.logBatchFavoriteRemovals(
+      productIds: productIds,
+      shopIds: shopIds,
+    );
+
+    return 'Products removed from favorites';
+  } catch (e) {
+    debugPrint('❌ Batch remove error: $e');
+    // Rollback paginated cache
+    _paginatedFavoritesMap
+      ..clear()
+      ..addAll(previousPaginated);
+    paginatedFavoritesNotifier.value = _paginatedFavoritesMap.values.toList();
+    return 'errorRemovingFavorites';
+  }
+}
+
+Future<_BatchRemoveResult> _removeMultipleBatch(List<String> productIds) async {
+  final user = _auth.currentUser;
+  if (user == null) return _BatchRemoveResult(const {}, const []);
+
+  final basketId = selectedBasketNotifier.value;
+  final collection = basketId == null
+      ? _firestore.collection('users').doc(user.uid).collection('favorites')
+      : _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('favorite_baskets')
+          .doc(basketId)
+          .collection('favorites');
+
+  final batch = _firestore.batch();
+  final extractedShopIds = <String, String?>{};
+
+  for (var i = 0; i < productIds.length; i += 10) {
+    final chunk = productIds.skip(i).take(10).toList();
+    final snap = await collection.where('productId', whereIn: chunk).get();
+    for (var doc in snap.docs) {
+      final data = doc.data();
+      final pid = data['productId'] as String?;
+      if (pid != null) {
+        extractedShopIds[pid] = data['shopId'] as String?;
       }
-
-      _metricsService.logBatchFavoriteRemovals(
-        productIds: productIds,
-        shopIds: shopIds,
-      );
-
-      return 'Products removed from favorites';
-    } catch (e) {
-      debugPrint('❌ Batch remove error: $e');
-
-      // Rollback BOTH notifiers
-      favoriteIdsNotifier.value = previousIds;
-      favoriteCountNotifier.value = previousIds.length;
-      globalFavoriteIdsNotifier.value = previousGlobalIds;
-
-      return 'errorRemovingFavorites';
+      batch.delete(doc.reference);
     }
   }
 
-  /// Deletes the given favorite docs and returns a map of productId -> shopId
-  /// extracted from each doc (used for metrics tracking without extra reads).
-  Future<Map<String, String?>> _removeMultipleBatch(
-      List<String> productIds) async {
-    final user = _auth.currentUser;
-    if (user == null) return const {};
+  // Smart-check (only when removing from a basket)
+  List<String> idsToRemoveFromUserDoc = productIds;
+  if (basketId != null) {
+    final idsStillElsewhere = <String>{};
 
-    final basketId = selectedBasketNotifier.value;
-    final collection = basketId == null
-        ? _firestore.collection('users').doc(user.uid).collection('favorites')
-        : _firestore
-            .collection('users')
-            .doc(user.uid)
-            .collection('favorite_baskets')
-            .doc(basketId)
-            .collection('favorites');
-
-    final batch = _firestore.batch();
-    final extractedShopIds = <String, String?>{};
-
-    // Process in chunks of 10 (Firestore limit for whereIn)
     for (var i = 0; i < productIds.length; i += 10) {
       final chunk = productIds.skip(i).take(10).toList();
-      final snap = await collection.where('productId', whereIn: chunk).get();
-
-      for (var doc in snap.docs) {
-        final data = doc.data();
-        final pid = data['productId'] as String?;
-        if (pid != null) {
-          extractedShopIds[pid] = data['shopId'] as String?;
-        }
-        batch.delete(doc.reference);
+      final defaultSnap = await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('favorites')
+          .where('productId', whereIn: chunk)
+          .get();
+      for (var doc in defaultSnap.docs) {
+        final pid = doc.data()['productId'] as String?;
+        if (pid != null) idsStillElsewhere.add(pid);
       }
     }
 
-    // Sync user doc array
+    final basketsSnap = await _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('favorite_baskets')
+        .get();
+    for (final bDoc in basketsSnap.docs) {
+      if (bDoc.id == basketId) continue;
+      for (var i = 0; i < productIds.length; i += 10) {
+        final chunk = productIds.skip(i).take(10).toList();
+        final favSnap = await bDoc.reference
+            .collection('favorites')
+            .where('productId', whereIn: chunk)
+            .get();
+        for (var doc in favSnap.docs) {
+          final pid = doc.data()['productId'] as String?;
+          if (pid != null) idsStillElsewhere.add(pid);
+        }
+      }
+    }
+
+    idsToRemoveFromUserDoc =
+        productIds.where((id) => !idsStillElsewhere.contains(id)).toList();
+  }
+
+  if (idsToRemoveFromUserDoc.isNotEmpty) {
     batch.update(_firestore.collection('users').doc(user.uid), {
-      'favoriteItemIds': FieldValue.arrayRemove(productIds),
+      'favoriteItemIds': FieldValue.arrayRemove(idsToRemoveFromUserDoc),
     });
+  }
 
-    await batch.commit();
+  await batch.commit();
 
-    // Optimistic local sync
+  if (idsToRemoveFromUserDoc.isNotEmpty) {
+    final removeSet = idsToRemoveFromUserDoc.toSet();
     _userProvider.updateLocalProfileField(
       'favoriteItemIds',
       ((_userProvider.profileData?['favoriteItemIds'] as List?) ?? [])
-          .where((id) => !productIds.contains(id))
+          .where((id) => !removeSet.contains(id))
           .toList(),
     );
-
-    return extractedShopIds;
   }
+
+  return _BatchRemoveResult(extractedShopIds, idsToRemoveFromUserDoc);
+}
 
   // ========================================================================
   // BASKET MANAGEMENT
@@ -777,103 +877,127 @@ class FavoriteProvider with ChangeNotifier, LifecycleAwareMixin {
     }
   }
 
-  Future<String> deleteFavoriteBasket(
-    String basketId, {
-    BuildContext? context,
-  }) async {
-    final user = _auth.currentUser;
-    if (user == null) return 'pleaseLoginFirst';
+ Future<String> deleteFavoriteBasket(
+  String basketId, {
+  BuildContext? context,
+}) async {
+  final user = _auth.currentUser;
+  if (user == null) return 'pleaseLoginFirst';
 
-    try {
-      final userRef = _firestore.collection('users').doc(user.uid);
-      final basketRef = userRef.collection('favorite_baskets').doc(basketId);
+  try {
+    final userRef = _firestore.collection('users').doc(user.uid);
+    final basketRef = userRef.collection('favorite_baskets').doc(basketId);
 
-      // STEP 1: Fetch all favorites inside the basket subcollection
-      final favoritesSnap = await basketRef.collection('favorites').get();
+    // STEP 1: Fetch all favorites inside the basket subcollection
+    final favoritesSnap = await basketRef.collection('favorites').get();
 
-      List<String> idsToRemoveFromUserDoc = [];
+    List<String> idsToRemoveFromUserDoc = [];
 
-      if (favoritesSnap.docs.isNotEmpty) {
-        final basketProductIds = favoritesSnap.docs
-            .map((doc) => doc.data()['productId'] as String?)
-            .where((id) => id != null)
-            .cast<String>()
-            .toList();
+    if (favoritesSnap.docs.isNotEmpty) {
+      final basketProductIds = favoritesSnap.docs
+          .map((doc) => doc.data()['productId'] as String?)
+          .where((id) => id != null)
+          .cast<String>()
+          .toList();
 
-        // STEP 2: Check which products also exist in general favorites
-        // so we don't incorrectly remove them from favoriteItemIds
-        final Set<String> idsInGeneral = {};
+      // STEP 2: Smart-check — find products that still live in default
+      // favorites OR any OTHER basket. Only the products gone from every
+      // remaining container should be stripped from `favoriteItemIds`.
+      final Set<String> idsStillElsewhere = {};
+
+      // Check default favorites
+      for (var i = 0; i < basketProductIds.length; i += 10) {
+        final chunk = basketProductIds.skip(i).take(10).toList();
+        final defaultSnap = await userRef
+            .collection('favorites')
+            .where('productId', whereIn: chunk)
+            .get();
+        for (var doc in defaultSnap.docs) {
+          final pid = doc.data()['productId'] as String?;
+          if (pid != null) idsStillElsewhere.add(pid);
+        }
+      }
+
+      // Check all OTHER baskets (skip the one being deleted)
+      final basketsSnap = await userRef.collection('favorite_baskets').get();
+      for (final bDoc in basketsSnap.docs) {
+        if (bDoc.id == basketId) continue;
         for (var i = 0; i < basketProductIds.length; i += 10) {
           final chunk = basketProductIds.skip(i).take(10).toList();
-          final generalSnap = await userRef
+          final favSnap = await bDoc.reference
               .collection('favorites')
               .where('productId', whereIn: chunk)
               .get();
-          for (var doc in generalSnap.docs) {
+          for (var doc in favSnap.docs) {
             final pid = doc.data()['productId'] as String?;
-            if (pid != null) idsInGeneral.add(pid);
+            if (pid != null) idsStillElsewhere.add(pid);
           }
         }
+      }
 
-        idsToRemoveFromUserDoc = basketProductIds
-            .where((id) => !idsInGeneral.contains(id))
-            .toList();
+      idsToRemoveFromUserDoc = basketProductIds
+          .where((id) => !idsStillElsewhere.contains(id))
+          .toList();
 
-        // STEP 3: Delete subcollection docs in batches
-        for (var i = 0; i < favoritesSnap.docs.length; i += 500) {
-          final batch = _firestore.batch();
-          final chunk = favoritesSnap.docs.skip(i).take(500).toList();
-          for (var doc in chunk) {
-            batch.delete(doc.reference);
-          }
-          await batch.commit();
+      // STEP 3: Delete subcollection docs in batches of 500
+      for (var i = 0; i < favoritesSnap.docs.length; i += 500) {
+        final batch = _firestore.batch();
+        final chunk = favoritesSnap.docs.skip(i).take(500).toList();
+        for (var doc in chunk) {
+          batch.delete(doc.reference);
         }
+        await batch.commit();
       }
-
-      // STEP 4: Atomically remove from favoriteItemIds + delete basket doc
-      final finalBatch = _firestore.batch();
-      if (idsToRemoveFromUserDoc.isNotEmpty) {
-        finalBatch.update(userRef, {
-          'favoriteItemIds': FieldValue.arrayRemove(idsToRemoveFromUserDoc),
-        });
-      }
-      finalBatch.delete(basketRef);
-      await finalBatch.commit();
-
-      // STEP 5: Optimistic local sync
-      if (idsToRemoveFromUserDoc.isNotEmpty) {
-        final removeSet = idsToRemoveFromUserDoc.toSet();
-        _userProvider.updateLocalProfileField(
-          'favoriteItemIds',
-          ((_userProvider.profileData?['favoriteItemIds'] as List?) ?? [])
-              .where((id) => !removeSet.contains(id))
-              .toList(),
-        );
-
-        final newGlobalIds =
-            Set<String>.from(globalFavoriteIdsNotifier.value)
-              ..removeAll(removeSet);
-        globalFavoriteIdsNotifier.value = newGlobalIds;
-
-        for (final pid in idsToRemoveFromUserDoc) {
-          _updateProductFavoriteStatus(pid, false);
-        }
-      }
-
-      if (selectedBasketNotifier.value == basketId) {
-        setSelectedBasket(null);
-      }
-
-      if (context != null && context.mounted) {
-        _showDebouncedBasketDeletionSnackbar(context);
-      }
-
-      return 'Basket deleted';
-    } catch (e) {
-      debugPrint('Error deleting basket: $e');
-      return 'errorDeletingBasket';
     }
+
+    // STEP 4: Atomically remove from favoriteItemIds + delete basket doc
+    final finalBatch = _firestore.batch();
+    if (idsToRemoveFromUserDoc.isNotEmpty) {
+      finalBatch.update(userRef, {
+        'favoriteItemIds': FieldValue.arrayRemove(idsToRemoveFromUserDoc),
+      });
+    }
+    finalBatch.delete(basketRef);
+    await finalBatch.commit();
+
+    // STEP 5: Optimistic local sync
+    if (idsToRemoveFromUserDoc.isNotEmpty) {
+      final removeSet = idsToRemoveFromUserDoc.toSet();
+      _userProvider.updateLocalProfileField(
+        'favoriteItemIds',
+        ((_userProvider.profileData?['favoriteItemIds'] as List?) ?? [])
+            .where((id) => !removeSet.contains(id))
+            .toList(),
+      );
+
+      final newGlobalIds = Set<String>.from(globalFavoriteIdsNotifier.value)
+        ..removeAll(removeSet);
+      globalFavoriteIdsNotifier.value = newGlobalIds;
+
+      final newIds = Set<String>.from(favoriteIdsNotifier.value)
+        ..removeAll(removeSet);
+      favoriteIdsNotifier.value = newIds;
+      favoriteCountNotifier.value = newIds.length;
+
+      for (final pid in idsToRemoveFromUserDoc) {
+        _updateProductFavoriteStatus(pid, false);
+      }
+    }
+
+    if (selectedBasketNotifier.value == basketId) {
+      setSelectedBasket(null);
+    }
+
+    if (context != null && context.mounted) {
+      _showDebouncedBasketDeletionSnackbar(context);
+    }
+
+    return 'Basket deleted';
+  } catch (e) {
+    debugPrint('Error deleting basket: $e');
+    return 'errorDeletingBasket';
   }
+}
 
   // ========================================================================
   // PAGINATION

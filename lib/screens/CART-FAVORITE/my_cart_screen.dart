@@ -60,19 +60,17 @@ void didChangeDependencies() {
   final provider = Provider.of<CartProvider>(context, listen: false);
 
   if (_cartProvider == null) {
-    // First creation: wire up listener
     _cartProvider = provider;
     _cartProvider!.cartItemsNotifier.addListener(_handleCartItemsChanged);
   }
 
-  // Always reload on every screen visit (widget creation OR tab revisit)
-  // loadCart() is safe to call repeatedly — it has its own pending-fetch
-  // dedup guard inside the provider
+  // Always reload cart contents on every screen visit
   _cartProvider!.loadCart();
 
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     if (mounted && _cartProvider != null) {
       _syncSelections(_cartProvider!.cartItems);
+      // Force a fresh server total on entry — no cache to worry about now
       _updateTotalsForCurrentSelection();
       setState(() {});
     }
