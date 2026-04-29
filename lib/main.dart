@@ -150,13 +150,22 @@ Future<void> main() async {
       );
       FirebaseFunctions.instanceFor(region: 'europe-west3');
 
-      await FirebaseAppCheck.instance.activate(
-        androidProvider: kReleaseMode
-            ? AndroidProvider.playIntegrity
-            : AndroidProvider.debug,
-        appleProvider:
-            kReleaseMode ? AppleProvider.deviceCheck : AppleProvider.debug,
-      );
+      try {
+        await FirebaseAppCheck.instance.activate(
+          androidProvider: kReleaseMode
+              ? AndroidProvider.playIntegrity
+              : AndroidProvider.debug,
+          appleProvider:
+              kReleaseMode ? AppleProvider.deviceCheck : AppleProvider.debug,
+        );
+        // Touch a token immediately so failures surface here, not later
+        // inside Firestore as cryptic PERMISSION_DENIED.
+        await FirebaseAppCheck.instance.getToken(true);
+        debugPrint('✅ AppCheck activated and token obtained');
+      } catch (e, st) {
+        debugPrint('❌ AppCheck activate/getToken failed: $e\n$st');
+        FirebaseCrashlytics.instance.recordError(e, st, fatal: false);
+      }
 
       // ✅ ADD CRASHLYTICS HERE
       if (!kIsWeb) {
