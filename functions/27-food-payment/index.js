@@ -1764,19 +1764,44 @@ async function generateFoodReceipt(data) {
     yPos += 20;
 
     const totalLabelX = 380;
-    const totalValueX = 460;
-    const totalValueWidth = 80;
+    const totalRightX = PAGE_RIGHT - 10; // value's right edge
+
+    // Right-anchor the amount; auto-shrink only if it would otherwise hit the label.
+    const drawAmountRow = (label, value, y, opts = {}) => {
+      const lFont = opts.labelFont || titleFont;
+      const lSize = opts.labelSize || 11;
+      const lColor = opts.labelColor || '#666';
+      const vFont = opts.valueFont || titleFont;
+      const vColor = opts.valueColor || '#333';
+      const lX = opts.labelX != null ? opts.labelX : totalLabelX;
+      const rX = opts.rightX || totalRightX;
+      const minVS = opts.minValueSize || 9;
+      let vSize = opts.valueSize || 11;
+
+      doc.font(lFont).fontSize(lSize);
+      const lEnd = lX + doc.widthOfString(label);
+
+      doc.font(vFont).fontSize(vSize);
+      let vw = doc.widthOfString(value);
+      while (rX - vw < lEnd + 8 && vSize > minVS) {
+        vSize -= 1;
+        doc.fontSize(vSize);
+        vw = doc.widthOfString(value);
+      }
+      const vx = rX - vw;
+
+      doc.font(lFont).fontSize(lSize).fillColor(lColor)
+        .text(label, lX, y, { lineBreak: false });
+      doc.font(vFont).fontSize(vSize).fillColor(vColor)
+        .text(value, vx, y, { lineBreak: false });
+    };
 
     // Subtotal
-    doc.font(titleFont).fontSize(11).fillColor('#666')
-      .text(`${t.subtotal}:`, totalLabelX, yPos)
-      .fillColor('#333')
-      .text(
-        `${(data.subtotal || 0).toFixed(2)} ${data.currency}`,
-        totalValueX,
-        yPos,
-        { width: totalValueWidth, align: 'right' },
-      );
+    drawAmountRow(
+      `${t.subtotal}:`,
+      `${(data.subtotal || 0).toFixed(2)} ${data.currency}`,
+      yPos,
+    );
     yPos += 20;
 
     // Delivery fee
@@ -1786,10 +1811,12 @@ async function generateFoodReceipt(data) {
     const deliveryColor = deliveryFee === 0 ? '#00A86B' : '#333';
 
     if (data.deliveryType === 'delivery') {
-      doc.font(titleFont).fontSize(11).fillColor('#666')
-        .text(`${t.deliveryFee}:`, totalLabelX, yPos)
-        .fillColor(deliveryColor)
-        .text(deliveryText, totalValueX, yPos, { width: totalValueWidth, align: 'right' });
+      drawAmountRow(
+        `${t.deliveryFee}:`,
+        deliveryText,
+        yPos,
+        { valueColor: deliveryColor },
+      );
       yPos += 20;
     }
 
@@ -1806,16 +1833,19 @@ async function generateFoodReceipt(data) {
       .fillColor('#f0f8f0')
       .fill();
 
-    doc.font(titleFont).fontSize(14).fillColor('#333')
-      .text(`${t.grandTotal}:`, totalLabelX + 10, yPos)
-      .fillColor('#00A86B')
-      .fontSize(16)
-      .text(
-        `${(data.totalPrice || 0).toFixed(2)} ${data.currency}`,
-        totalValueX,
-        yPos,
-        { width: totalValueWidth, align: 'right' },
-      );
+    drawAmountRow(
+      `${t.grandTotal}:`,
+      `${(data.totalPrice || 0).toFixed(2)} ${data.currency}`,
+      yPos,
+      {
+        labelX: totalLabelX + 10,
+        labelSize: 14,
+        labelColor: '#333',
+        valueSize: 16,
+        valueColor: '#00A86B',
+        minValueSize: 11,
+      },
+    );
 
     // Payment status note below total
     yPos += 36;

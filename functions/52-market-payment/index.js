@@ -1348,19 +1348,52 @@ async function generateMarketReceipt(data) {
     yPos += 20;
 
     const tLX = 380;
-    const tVX = 460;
+    const tRX = PAGE_RIGHT - 10;
 
-    doc.font(titleFont).fontSize(11).fillColor('#666')
-      .text(`${t.subtotal}:`, tLX, yPos)
-      .fillColor('#333')
-      .text(`${(data.subtotal || 0).toFixed(2)} ${data.currency}`, tVX, yPos, { width: 80, align: 'right' });
+    // Right-anchor the amount; auto-shrink only if it would otherwise hit the label.
+    const drawAmountRow = (label, value, y, opts = {}) => {
+      const lFont = opts.labelFont || titleFont;
+      const lSize = opts.labelSize || 11;
+      const lColor = opts.labelColor || '#666';
+      const vFont = opts.valueFont || titleFont;
+      const vColor = opts.valueColor || '#333';
+      const lX = opts.labelX != null ? opts.labelX : tLX;
+      const rX = opts.rightX || tRX;
+      const minVS = opts.minValueSize || 9;
+      let vSize = opts.valueSize || 11;
+
+      doc.font(lFont).fontSize(lSize);
+      const lEnd = lX + doc.widthOfString(label);
+
+      doc.font(vFont).fontSize(vSize);
+      let vw = doc.widthOfString(value);
+      while (rX - vw < lEnd + 8 && vSize > minVS) {
+        vSize -= 1;
+        doc.fontSize(vSize);
+        vw = doc.widthOfString(value);
+      }
+      const vx = rX - vw;
+
+      doc.font(lFont).fontSize(lSize).fillColor(lColor)
+        .text(label, lX, y, { lineBreak: false });
+      doc.font(vFont).fontSize(vSize).fillColor(vColor)
+        .text(value, vx, y, { lineBreak: false });
+    };
+
+    drawAmountRow(
+      `${t.subtotal}:`,
+      `${(data.subtotal || 0).toFixed(2)} ${data.currency}`,
+      yPos,
+    );
     yPos += 20;
 
     const deliveryFee = data.deliveryFee || 0;
-    doc.font(titleFont).fontSize(11).fillColor('#666')
-      .text(`${t.deliveryFee}:`, tLX, yPos)
-      .fillColor(deliveryFee === 0 ? '#00A86B' : '#333')
-      .text(deliveryFee === 0 ? t.free : `${deliveryFee.toFixed(2)} ${data.currency}`, tVX, yPos, { width: 80, align: 'right' });
+    drawAmountRow(
+      `${t.deliveryFee}:`,
+      deliveryFee === 0 ? t.free : `${deliveryFee.toFixed(2)} ${data.currency}`,
+      yPos,
+      { valueColor: deliveryFee === 0 ? '#00A86B' : '#333' },
+    );
     yPos += 20;
 
     doc.moveTo(tLX, yPos).lineTo(PAGE_RIGHT, yPos).strokeColor('#333').lineWidth(1.5).stroke();
@@ -1368,10 +1401,19 @@ async function generateMarketReceipt(data) {
 
     doc.rect(tLX, yPos - 8, PAGE_RIGHT - tLX, 34).fillColor('#f0f8f0').fill();
 
-    doc.font(titleFont).fontSize(14).fillColor('#333')
-      .text(`${t.grandTotal}:`, tLX + 10, yPos)
-      .fillColor('#00A86B').fontSize(16)
-      .text(`${(data.totalPrice || 0).toFixed(2)} ${data.currency}`, tVX, yPos, { width: 80, align: 'right' });
+    drawAmountRow(
+      `${t.grandTotal}:`,
+      `${(data.totalPrice || 0).toFixed(2)} ${data.currency}`,
+      yPos,
+      {
+        labelX: tLX + 10,
+        labelSize: 14,
+        labelColor: '#333',
+        valueSize: 16,
+        valueColor: '#00A86B',
+        minValueSize: 11,
+      },
+    );
 
     yPos += 36;
     doc.fontSize(9).font(normalFont)

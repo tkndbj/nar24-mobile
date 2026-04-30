@@ -729,25 +729,55 @@ export const generateReceiptBackground = onDocumentCreated(
   const freeShippingApplied = data.freeShippingApplied || false;
   const subtotal = data.itemsSubtotal || (data.totalPrice - deliveryPrice + couponDiscount);
   const grandTotal = data.totalPrice;
-  
+
+      // Right-anchor the amount; auto-shrink only if it would otherwise hit the label.
+      const TOTAL_RIGHT_X = 540;
+      const drawAmountRow = (label, value, y, opts = {}) => {
+        const lFont = opts.labelFont || titleFont;
+        const lSize = opts.labelSize || 11;
+        const lColor = opts.labelColor || '#666';
+        const vFont = opts.valueFont || titleFont;
+        const vColor = opts.valueColor || '#333';
+        const lX = opts.labelX != null ? opts.labelX : 390;
+        const rX = opts.rightX || TOTAL_RIGHT_X;
+        const minVS = opts.minValueSize || 9;
+        let vSize = opts.valueSize || 11;
+
+        doc.font(lFont).fontSize(lSize);
+        const lEnd = lX + doc.widthOfString(label);
+
+        doc.font(vFont).fontSize(vSize);
+        let vw = doc.widthOfString(value);
+        while (rX - vw < lEnd + 8 && vSize > minVS) {
+          vSize -= 1;
+          doc.fontSize(vSize);
+          vw = doc.widthOfString(value);
+        }
+        const vx = rX - vw;
+
+        doc.font(lFont).fontSize(lSize).fillColor(lColor)
+          .text(label, lX, y, { lineBreak: false });
+        doc.font(vFont).fontSize(vSize).fillColor(vColor)
+          .text(value, vx, y, { lineBreak: false });
+      };
+
       // Subtotal row
-      doc.font(titleFont)
-        .fontSize(11)
-        .fillColor('#666')
-        .text(`${t.subtotal}:`, 390, yPosition)
-        .fillColor('#333')
-        .text(`${subtotal.toFixed(2)} ${data.currency}`, 460, yPosition, {width: 80, align: 'right'});
-  
+      drawAmountRow(
+        `${t.subtotal}:`,
+        `${subtotal.toFixed(2)} ${data.currency}`,
+        yPosition,
+      );
+
       yPosition += 20;
-  
+
       if (couponDiscount > 0) {
-        doc.font(titleFont)
-          .fontSize(11)
-          .fillColor('#666')
-          .text(`${t.couponDiscount}:`, 390, yPosition)
-          .fillColor('#00A86B')
-          .text(`-${couponDiscount.toFixed(2)} ${data.currency}`, 460, yPosition, {width: 80, align: 'right'});
-      
+        drawAmountRow(
+          `${t.couponDiscount}:`,
+          `-${couponDiscount.toFixed(2)} ${data.currency}`,
+          yPosition,
+          { valueColor: '#00A86B' },
+        );
+
         yPosition += 20;
       }
   
@@ -788,27 +818,26 @@ export const generateReceiptBackground = onDocumentCreated(
           // Normal delivery display (no free shipping benefit)
           const deliveryText = deliveryPrice === 0 ? t.free : `${deliveryPrice.toFixed(2)} ${data.currency}`;
           const deliveryColor = deliveryPrice === 0 ? '#00A86B' : '#333';
-      
-          doc.font(titleFont)
-            .fontSize(11)
-            .fillColor('#666')
-            .text(`${t.deliveryPrice}:`, 390, yPosition)
-            .fillColor(deliveryColor)
-            .text(deliveryText, 460, yPosition, {width: 80, align: 'right'});
-      
+
+          drawAmountRow(
+            `${t.deliveryPrice}:`,
+            deliveryText,
+            yPosition,
+            { valueColor: deliveryColor },
+          );
+
           yPosition += 25;
         }
       }
-  
+
       // Tax row (for ad receipts)
   if (data.receiptType === 'ad' && data.taxAmount) {
-    doc.font(titleFont)
-      .fontSize(11)
-      .fillColor('#666')
-      .text(`${t.tax}:`, 390, yPosition)
-      .fillColor('#333')
-      .text(`${data.taxAmount.toFixed(2)} ${data.currency}`, 460, yPosition, {width: 80, align: 'right'});
-  
+    drawAmountRow(
+      `${t.tax}:`,
+      `${data.taxAmount.toFixed(2)} ${data.currency}`,
+      yPosition,
+    );
+
     yPosition += 20;
   }
       
@@ -827,14 +856,19 @@ export const generateReceiptBackground = onDocumentCreated(
       doc.rect(380, yPosition - 10, 170, 35)
         .fillColor('#f0f8f0')
         .fill();
-      
-      doc.font(titleFont)
-        .fontSize(14)
-        .fillColor('#333')
-        .text(`${t.total}:`, 390, yPosition)
-        .fillColor('#00A86B')
-        .fontSize(16)
-        .text(`${grandTotal.toFixed(2)} ${data.currency}`, 460, yPosition, {width: 80, align: 'right'});
+
+      drawAmountRow(
+        `${t.total}:`,
+        `${grandTotal.toFixed(2)} ${data.currency}`,
+        yPosition,
+        {
+          labelSize: 14,
+          labelColor: '#333',
+          valueSize: 16,
+          valueColor: '#00A86B',
+          minValueSize: 11,
+        },
+      );
   
       // Footer
       doc.fontSize(8)
