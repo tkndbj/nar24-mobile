@@ -40,10 +40,32 @@
         android:name="android.hardware.location.network"
         android:required="false" />
 
-    <application        
-        android:label="Nar24"        
+    <application
+        android:label="Nar24"
         android:icon="@mipmap/ic_launcher"
         android:name="${applicationName}">
+
+        <!-- Firebase Analytics: opt out of advertising ID collection.
+             We don't run ads in this app, so we both (a) strip the
+             AD_ID permission via tools:node="remove" above, and (b)
+             tell Analytics never to attempt AD ID collection. Without
+             (b), Analytics tries to read the ID at runtime, fails the
+             permission check, logs a warning, and Play Console flags
+             the app as potentially collecting AD ID — which means it
+             keeps prompting for an advertising-ID data-safety
+             declaration on every release. -->
+        <meta-data
+            android:name="google_analytics_adid_collection_enabled"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_default_allow_ad_personalization_signals"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_default_allow_ad_storage"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_default_allow_ad_user_data"
+            android:value="false" />
 
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
