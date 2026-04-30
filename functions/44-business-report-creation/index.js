@@ -408,8 +408,10 @@ const ReportTranslations = {
          reportData.boostHistory = sortBoosts(boosts, config.boostSortBy || 'date', config.boostSortDescending !== false);
        }
   
-        // Set up GCS stream first — PDF pipes into it as it's generated
-        const bucket = storage.bucket(`${process.env.GCLOUD_PROJECT}.appspot.com`);
+        // Set up GCS stream first — PDF pipes into it as it's generated.
+        // Sensitive business reports live in a private bucket, separate
+        // from the public marketplace assets bucket.
+        const bucket = storage.bucket('emlak-mobile-app-private');
         const timestamp = Date.now();
         const fileName = `reports/${shopId}/${reportId}_${timestamp}.pdf`;
         const file = bucket.file(fileName);

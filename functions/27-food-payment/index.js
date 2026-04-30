@@ -1155,7 +1155,9 @@ export const generateFoodReceiptBackground = onDocumentCreated(
       const receiptPdf = await generateFoodReceipt({ ...taskData, orderDate });
 
       // ── Save PDF to Cloud Storage ───────────────────────────────
-      const bucket = admin.storage().bucket();
+      // Sensitive customer receipts live in a private bucket, separate
+      // from the public marketplace assets bucket.
+      const bucket = admin.storage().bucket('emlak-mobile-app-private');
       const receiptFileName = `food-receipts/${taskData.buyerId}/${taskData.orderId}.pdf`;
       const file = bucket.file(receiptFileName);
 

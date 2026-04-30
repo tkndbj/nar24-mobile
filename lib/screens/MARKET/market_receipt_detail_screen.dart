@@ -276,7 +276,11 @@ class _MarketReceiptDetailScreenState extends State<MarketReceiptDetailScreen>
       final path = _receipt?.filePath;
       if (path != null && path.isNotEmpty) {
         try {
-          url = await FirebaseStorage.instance.ref(path).getDownloadURL();
+          // Market receipts live in the private bucket.
+          url = await FirebaseStorage.instanceFor(
+                  bucket: 'gs://emlak-mobile-app-private')
+              .ref(path)
+              .getDownloadURL();
         } catch (_) {
           // PDF not available
         }

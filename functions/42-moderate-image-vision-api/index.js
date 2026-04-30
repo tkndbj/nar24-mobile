@@ -4,7 +4,7 @@ import { checkRateLimit } from '../shared/redis.js';
 const visionClient = new vision.ImageAnnotatorClient();
 
 export const moderateImage = onCall(
-    {region: 'europe-west3'},
+    {region: 'europe-west3', memory: '512MiB', enforceAppCheck: true},
     async (req) => {
       const auth = req.auth;
       if (!auth) {

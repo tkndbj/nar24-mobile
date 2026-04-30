@@ -589,7 +589,11 @@ void _showSubmittingModal() {
 
       String fileName =
           'shop_applications/${user.uid}/${folder}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      Reference storageRef = FirebaseStorage.instance.ref().child(fileName);
+      // Sensitive shop-application docs live in the private bucket.
+      Reference storageRef = FirebaseStorage.instanceFor(
+              bucket: 'gs://emlak-mobile-app-private')
+          .ref()
+          .child(fileName);
       UploadTask uploadTask = storageRef.putFile(
         fileToUpload,
         SettableMetadata(contentType: _getContentType(fileToUpload.path)),

@@ -1030,7 +1030,9 @@ export const generateMarketReceiptBackground = onDocumentCreated(
 
       const receiptPdf = await generateMarketReceipt({ ...taskData, orderDate });
 
-      const bucket = admin.storage().bucket();
+      // Sensitive market receipts live in a private bucket, separate
+      // from the public marketplace assets bucket.
+      const bucket = admin.storage().bucket('emlak-mobile-app-private');
       const receiptFileName = `market-receipts/${taskData.buyerId}/${taskData.orderId}.pdf`;
       const file = bucket.file(receiptFileName);
 

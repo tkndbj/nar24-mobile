@@ -328,7 +328,11 @@ class _FoodReceiptDetailScreenState extends State<FoodReceiptDetailScreen>
       final path = _receipt?.filePath;
       if (path != null && path.isNotEmpty) {
         try {
-          url = await FirebaseStorage.instance.ref(path).getDownloadURL();
+          // Food receipts live in the private bucket.
+          url = await FirebaseStorage.instanceFor(
+                  bucket: 'gs://emlak-mobile-app-private')
+              .ref(path)
+              .getDownloadURL();
         } catch (_) {}
       }
     }

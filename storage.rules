@@ -13,6 +13,11 @@ match /receipts/{fileName} {
       // No deletion from client side
       allow delete: if false;
     }
+    
+match /market-receipts/{userId}/{orderId} {
+  allow read: if request.auth != null && request.auth.uid == userId;
+  allow write: if false; // Cloud Functions only
+}    
 
 match /restaurant_banners/{fileName} {
   // Anyone can read (mobile app + web app)
@@ -27,6 +32,18 @@ match /restaurant_banners/{fileName} {
   // Only admins can delete
   allow delete: if request.auth != null
                 && request.auth.token.isAdmin == true;
+}
+
+match /market-items/{itemId}/{fileName} {
+  allow read: if true;
+  allow write: if request.auth != null
+               && (request.auth.token.isAdmin == true
+                   || request.auth.token.isSemiAdmin == true)
+               && request.resource.size < 10 * 1024 * 1024
+               && request.resource.contentType.matches('image/.*');
+  allow delete: if request.auth != null
+                && (request.auth.token.isAdmin == true
+                    || request.auth.token.isSemiAdmin == true);
 }
 
 match /restaurant_reviews/{restaurantId}/{fileName} {

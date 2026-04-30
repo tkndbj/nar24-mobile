@@ -89,7 +89,9 @@ export const generateRestaurantReceiptBackground = onDocumentCreated(
       const receiptPdf = await generateRestaurantReceipt({ ...taskData, orderDate });
 
       // ── 2. Save to Cloud Storage ────────────────────────────────
-      const bucket          = admin.storage().bucket();
+      // Sensitive restaurant receipts live in a private bucket, separate
+      // from the public marketplace assets bucket.
+      const bucket          = admin.storage().bucket('emlak-mobile-app-private');
       const receiptFileName = `restaurant-receipts/${taskData.restaurantId}/${taskData.orderId}.pdf`;
       const file            = bucket.file(receiptFileName);
       const downloadToken   = uuidv4();

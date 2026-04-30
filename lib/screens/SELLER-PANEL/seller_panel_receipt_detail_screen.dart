@@ -166,7 +166,11 @@ class _SellerPanelReceiptDetailScreenState
     String? url;
     if (path != null && path.isNotEmpty) {
       try {
-        url = await FirebaseStorage.instance.ref(path).getDownloadURL();
+        // Receipts live in the private bucket.
+        url = await FirebaseStorage.instanceFor(
+                bucket: 'gs://emlak-mobile-app-private')
+            .ref(path)
+            .getDownloadURL();
       } catch (_) {}
     }
     if (url != null && url.isNotEmpty) {

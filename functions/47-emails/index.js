@@ -1,11 +1,24 @@
-import {onCall, HttpsError} from 'firebase-functions/v2/https';                                                                                                                                                                                           
+import {onCall, HttpsError} from 'firebase-functions/v2/https';
 import admin from 'firebase-admin';
 import {Storage} from '@google-cloud/storage';
+import {checkRateLimit} from '../shared/redis.js';
 const storage = new Storage();
 
 export const registerWithEmailPassword = onCall(
-    {region: 'europe-west3'},
+    {region: 'europe-west3', memory: '512MiB', enforceAppCheck: true},
     async (request) => {
+      const ip = request.rawRequest?.ip ||
+        request.rawRequest?.headers?.['x-forwarded-for']?.split(',')[0]?.trim() ||
+        'unknown';
+
+      const ipOk = await checkRateLimit(`signup:ip:${ip}`, 5, 3600);
+      if (!ipOk) {
+        throw new HttpsError(
+            'resource-exhausted',
+            'Too many signup attempts from this network. Please try again later.',
+        );
+      }
+
       const {
         email,
         password,
@@ -173,6 +186,11 @@ try {
       try {
         customToken = await admin.auth().createCustomToken(uid);
       } catch (err) {
+        // Hard rollback: token creation failed, user can't sign in.
+        // Roll back everything so the user can retry without "email in use" errors.
+        await admin.firestore().collection('emailVerificationCodes').doc(uid).delete().catch(() => {});
+        await admin.firestore().collection('users').doc(uid).delete().catch(() => {});
+        await admin.auth().deleteUser(uid).catch(() => {});
         throw new HttpsError('internal', 'Custom token creation failed: ' + err.message);
       }
   
@@ -433,7 +451,7 @@ try {
   
   
   export const verifyEmailCode = onCall(
-    {region: 'europe-west3'},
+    {region: 'europe-west3', memory: '512MiB'},
     async (request) => {
       const {code} = request.data;
       const context = request.auth;
@@ -548,7 +566,7 @@ try {
   
   // Function to resend verification code
   export const resendEmailVerificationCode = onCall(
-    {region: 'europe-west3'},
+    {region: 'europe-west3', memory: '512MiB'},
     async (request) => {
       const context = request.auth;
   
@@ -956,11 +974,12 @@ try {
           console.warn('Could not get logo URL:', err.message);
         }
   
-        // Get PDF download URL
+        // Get PDF download URL.
+        // Receipts live in the private bucket (not the public marketplace bucket).
         let pdfUrl = null;
         try {
-          const bucket = storage.bucket(`${process.env.GCLOUD_PROJECT}.appspot.com`);
-  
+          const bucket = storage.bucket('emlak-mobile-app-private');
+
           if (receiptData.filePath) {
             const file = bucket.file(receiptData.filePath);
             const [url] = await file.getSignedUrl({
@@ -1370,11 +1389,12 @@ try {
         if (reportData.includeBoostHistory) includedTags.push(content.boostHistory);
         const includedText = includedTags.join(', ');
   
-        // Generate report URL
+        // Generate report URL.
+        // Reports live in the private bucket (not the public marketplace bucket).
         let pdfUrl = null;
         try {
-          const bucket = storage.bucket(`${process.env.GCLOUD_PROJECT}.appspot.com`);
-  
+          const bucket = storage.bucket('emlak-mobile-app-private');
+
           if (reportData.filePath) {
             const file = bucket.file(reportData.filePath);
             const [url] = await file.getSignedUrl({
