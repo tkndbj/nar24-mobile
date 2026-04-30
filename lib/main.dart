@@ -152,44 +152,6 @@ Future<void> main() async {
       FirebaseFunctions.instanceFor(region: 'europe-west3');
     }
 
-    // App Check MUST run on every app start, even when Firebase was
-    // already auto-initialized natively (firebase_core, FCM, Crashlytics
-    // all do this before main() runs). If we leave activate() inside the
-    // `Firebase.apps.isEmpty` branch, it gets skipped → no provider →
-    // Firestore returns PERMISSION_DENIED with App Check enforcement on.
-    //
-    // Triple-redundant logging: `print` (stdout via Flutter engine),
-    // `developer.log` (always reaches logcat as I/flutter), and
-    // Crashlytics (visible in dashboard even if logcat is broken).
-    void diag(String msg) {
-      print('NAR24_APPCHECK: $msg');
-      developer.log(msg, name: 'NAR24_APPCHECK');
-      try {
-        FirebaseCrashlytics.instance.log('NAR24_APPCHECK: $msg');
-      } catch (_) {/* Crashlytics not ready yet */}
-    }
-
-    diag('about to call activate()');
-    try {
-      await FirebaseAppCheck.instance.activate(
-        androidProvider: kReleaseMode
-            ? AndroidProvider.playIntegrity
-            : AndroidProvider.debug,
-        appleProvider:
-            kReleaseMode ? AppleProvider.deviceCheck : AppleProvider.debug,
-      );
-      diag('activate() returned, requesting token');
-      final token = await FirebaseAppCheck.instance.getToken(true);
-      diag('token obtained, length=${token?.length ?? 0}');
-    } catch (e, st) {
-      diag('ERROR $e');
-      diag('STACK $st');
-      try {
-        FirebaseCrashlytics.instance.recordError(e, st, fatal: false);
-      } catch (_) {/* Crashlytics not ready yet */}
-    }
-    diag('block finished');
-
     if (Firebase.apps.isNotEmpty && !_firebaseInitialized) {
       _firebaseInitialized = true;
     }
@@ -293,6 +255,47 @@ Future<void> main() async {
       debugPrint("Firebase initialization or App Check error: ${e.toString()}");
       debugPrint("Stacktrace: $stacktrace");
     }
+  }
+
+  // App Check — placed AFTER the outer try/catch for the same reason as
+  // FirestoreReadTracker below: the outer catch swallows
+  // `Firebase.initializeApp` "duplicate-app" exceptions (because the
+  // native SDK auto-initialized first), which would skip everything else
+  // in the try block. Running it here guarantees activate() executes on
+  // every cold start.
+  //
+  // Triple-redundant logging so failures surface even if one channel is
+  // suppressed in release: print → stdout, developer.log → I/flutter,
+  // Crashlytics.log → dashboard breadcrumb.
+  if (Firebase.apps.isNotEmpty) {
+    void diag(String msg) {
+      print('NAR24_APPCHECK: $msg');
+      developer.log(msg, name: 'NAR24_APPCHECK');
+      try {
+        FirebaseCrashlytics.instance.log('NAR24_APPCHECK: $msg');
+      } catch (_) {/* Crashlytics not ready yet */}
+    }
+
+    diag('about to call activate()');
+    try {
+      await FirebaseAppCheck.instance.activate(
+        androidProvider: kReleaseMode
+            ? AndroidProvider.playIntegrity
+            : AndroidProvider.debug,
+        appleProvider:
+            kReleaseMode ? AppleProvider.deviceCheck : AppleProvider.debug,
+      );
+      diag('activate() returned, requesting token');
+      final token = await FirebaseAppCheck.instance.getToken(true);
+      diag('token obtained, length=${token?.length ?? 0}');
+    } catch (e, st) {
+      diag('ERROR $e');
+      diag('STACK $st');
+      try {
+        FirebaseCrashlytics.instance.recordError(e, st, fatal: false);
+      } catch (_) {/* Crashlytics not ready yet */}
+    }
+    diag('block finished');
   }
 
   // Firestore usage tracker — writes one aggregated doc per session.
